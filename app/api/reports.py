@@ -60,7 +60,7 @@ def admin_dashboard():
             Defect.status.in_(['open', 'in_progress'])
         ).count(),
         'active_leaves': Leave.query.filter_by(status='approved').filter(
-            Leave.start_date <= today, Leave.end_date >= today
+            Leave.date_from <= today, Leave.date_to >= today
         ).count(),
     }
     return jsonify({
