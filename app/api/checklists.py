@@ -21,7 +21,7 @@ def list_templates():
     lang = get_language()
     return jsonify({
         'status': 'success',
-        'templates': [t.to_dict(include_items=True, language=lang) for t in templates]
+        'data': [t.to_dict(include_items=True, language=lang) for t in templates]
     }), 200
 
 

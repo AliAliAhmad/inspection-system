@@ -7,6 +7,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.utils.decorators import admin_required, get_current_user, role_required
 from app.services.analytics_service import AnalyticsService
+from app.extensions import db
 
 bp = Blueprint('reports', __name__)
 
@@ -45,10 +46,26 @@ def dashboard():
 @admin_required()
 def admin_dashboard():
     """Full admin dashboard with all metrics."""
-    stats = AnalyticsService.admin_dashboard()
+    from app.models import User, Equipment, Inspection, Defect, Leave
+    from datetime import date
+
+    today = date.today()
+    stats = {
+        'users_count': User.query.filter_by(is_active=True).count(),
+        'equipment_count': Equipment.query.count(),
+        'inspections_today': Inspection.query.filter(
+            db.func.date(Inspection.created_at) == today
+        ).count(),
+        'open_defects': Defect.query.filter(
+            Defect.status.in_(['open', 'in_progress'])
+        ).count(),
+        'active_leaves': Leave.query.filter_by(status='approved').filter(
+            Leave.start_date <= today, Leave.end_date >= today
+        ).count(),
+    }
     return jsonify({
         'status': 'success',
-        'stats': stats
+        'data': stats
     }), 200
 
 
@@ -58,9 +75,17 @@ def admin_dashboard():
 def pause_analytics():
     """Pause pattern analysis."""
     analytics = AnalyticsService.pause_analytics()
+    # Flatten by_category to {key: count} for frontend
+    by_category = {}
+    for cat, info in analytics.get('by_category', {}).items():
+        by_category[cat] = info['count'] if isinstance(info, dict) else info
     return jsonify({
         'status': 'success',
-        'data': analytics
+        'data': {
+            'total_pauses': analytics.get('total_pauses', 0),
+            'average_duration_minutes': analytics.get('average_duration_minutes', 0),
+            'by_category': by_category,
+        }
     }), 200
 
 
@@ -70,9 +95,24 @@ def pause_analytics():
 def defect_analytics():
     """Defect pattern analysis."""
     analytics = AnalyticsService.defect_analytics()
+    # Flatten by_severity to {key: count} for frontend
+    by_severity = {}
+    for sev, info in analytics.get('by_severity', {}).items():
+        by_severity[sev] = info['count'] if isinstance(info, dict) else info
+    # Build by_status from defects
+    from app.models import Defect
+    by_status = {}
+    for status in ['open', 'in_progress', 'resolved', 'closed']:
+        count = Defect.query.filter_by(status=status).count()
+        if count > 0:
+            by_status[status] = count
     return jsonify({
         'status': 'success',
-        'data': analytics
+        'data': {
+            'total_defects': analytics.get('total', 0),
+            'by_severity': by_severity,
+            'by_status': by_status,
+        }
     }), 200
 
 
@@ -84,7 +124,15 @@ def capacity_report():
     from app.services.coverage_service import CoverageService
     shift = request.args.get('shift')
     analysis = CoverageService.get_capacity_analysis(shift)
+    total = analysis.get('total', 0)
+    available = analysis.get('available', 0)
+    on_leave = analysis.get('on_leave', 0)
     return jsonify({
         'status': 'success',
-        'data': analysis
+        'data': {
+            'total_staff': total,
+            'available': available,
+            'on_leave': on_leave,
+            'utilization_rate': available / total if total > 0 else 0,
+        }
     }), 200

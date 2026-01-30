@@ -41,7 +41,7 @@ def list_equipment():
 
     return jsonify({
         'status': 'success',
-        'equipment': [eq.to_dict(language=lang) for eq in items],
+        'data': [eq.to_dict(language=lang) for eq in items],
         'pagination': pagination
     }), 200
 

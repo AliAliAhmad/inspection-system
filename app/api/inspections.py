@@ -226,7 +226,7 @@ def list_inspections():
 
     return jsonify({
         'status': 'success',
-        'inspections': [inspection.to_dict(language=lang) for inspection in inspections]
+        'data': [inspection.to_dict(language=lang) for inspection in inspections]
     }), 200
 
 

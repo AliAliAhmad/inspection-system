@@ -43,7 +43,7 @@ def get_notifications():
     return jsonify({
         'status': 'success',
         'unread_count': unread_count,
-        'notifications': [n.to_dict(language=lang) for n in items],
+        'data': [n.to_dict(language=lang) for n in items],
         'pagination': pagination_meta
     }), 200
 

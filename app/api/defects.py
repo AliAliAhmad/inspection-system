@@ -54,7 +54,7 @@ def list_defects():
 
     return jsonify({
         'status': 'success',
-        'defects': [defect.to_dict(language=lang) for defect in items],
+        'data': [defect.to_dict(language=lang) for defect in items],
         'pagination': pagination
     }), 200
 

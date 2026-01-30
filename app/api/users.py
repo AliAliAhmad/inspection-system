@@ -22,7 +22,7 @@ def list_users():
     items, pagination = paginate(query)
     return jsonify({
         'status': 'success',
-        'users': [user.to_dict() for user in items],
+        'data': [user.to_dict() for user in items],
         'pagination': pagination
     }), 200
 
