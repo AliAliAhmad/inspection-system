@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Spin } from 'antd';
 import MainLayout from '../layouts/MainLayout';
 import { useAuth } from '../providers/AuthProvider';
+import { canAccess, UserRole } from '@inspection/shared';
 
 // Lazy-loaded pages for code splitting
 // Shared pages
@@ -58,7 +59,7 @@ function PageLoader() {
 
 function RoleGuard({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user } = useAuth();
-  if (!user || !roles.includes(user.role)) {
+  if (!user || !canAccess(user, ...(roles as UserRole[]))) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;

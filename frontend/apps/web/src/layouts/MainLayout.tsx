@@ -24,9 +24,11 @@ import {
   AlertOutlined,
 } from '@ant-design/icons';
 import { Badge, Dropdown, Avatar, Space, Button } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../providers/AuthProvider';
 import { useLanguage } from '../providers/LanguageProvider';
 import { useTranslation } from 'react-i18next';
+import { notificationsApi } from '@inspection/shared';
 
 function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] {
   const shared: MenuDataItem[] = [
@@ -92,6 +94,14 @@ export default function MainLayout() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: () => notificationsApi.list({ unread_only: true, per_page: 1 }),
+    refetchInterval: 30_000,
+    enabled: !!user,
+  });
+  const unreadCount = (unreadData?.data as any)?.pagination?.total ?? 0;
+
   if (!user) return null;
 
   const menuItems = getMenuItems(user.role, t);
@@ -116,7 +126,7 @@ export default function MainLayout() {
         <div onClick={() => item.path && navigate(item.path)}>{dom}</div>
       )}
       actionsRender={() => [
-        <Badge key="notifications" count={0} size="small">
+        <Badge key="notifications" count={unreadCount} size="small">
           <BellOutlined style={{ fontSize: 18 }} onClick={() => navigate('/notifications')} />
         </Badge>,
         <Dropdown

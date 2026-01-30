@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Card,
   Typography,
@@ -47,6 +47,15 @@ export default function InspectionChecklistPage() {
   const queryClient = useQueryClient();
   const assignmentId = Number(id);
   const isArabic = i18n.language === 'ar';
+
+  // Warn on page close/refresh if inspection is in draft status
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // Fetch inspection data
   const {

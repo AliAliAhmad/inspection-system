@@ -4,6 +4,7 @@ import { UserOutlined, LockOutlined, GlobalOutlined } from '@ant-design/icons';
 import { useAuth } from '../../providers/AuthProvider';
 import { useLanguage } from '../../providers/LanguageProvider';
 import { useTranslation } from 'react-i18next';
+import { loginRateLimiter } from '../../utils/rate-limiter';
 
 const { Title } = Typography;
 
@@ -16,10 +17,20 @@ export default function LoginPage() {
 
   const onFinish = async (values: { username: string; password: string }) => {
     setError(null);
+
+    const rateCheck = loginRateLimiter.check();
+    if (!rateCheck.allowed) {
+      const seconds = Math.ceil((rateCheck.retryAfterMs ?? 0) / 1000);
+      setError(t('auth.rate_limited', `Too many attempts. Try again in ${seconds}s.`));
+      return;
+    }
+
     setLoading(true);
     try {
       await login(values.username, values.password);
+      loginRateLimiter.reset();
     } catch (err: any) {
+      loginRateLimiter.recordFailure();
       setError(err?.response?.data?.error || t('auth.login_failed'));
     } finally {
       setLoading(false);
