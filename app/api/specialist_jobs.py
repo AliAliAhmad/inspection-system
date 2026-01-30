@@ -33,10 +33,7 @@ def get_jobs():
 
     return jsonify({
         'status': 'success',
-        'data': {
-            'jobs': [job.to_dict(include_details=False) for job in items],
-            'total': pagination_meta['total']
-        },
+        'data': [job.to_dict(include_details=False) for job in items],
         'pagination': pagination_meta
     }), 200
 
@@ -499,10 +496,7 @@ def get_pending_planned_time():
 
     return jsonify({
         'status': 'success',
-        'data': {
-            'jobs': [job.to_dict(include_details=False) for job in jobs],
-            'total': len(jobs)
-        }
+        'data': [job.to_dict(include_details=False) for job in jobs],
     }), 200
 
 
@@ -518,8 +512,5 @@ def get_active_jobs():
 
     return jsonify({
         'status': 'success',
-        'data': {
-            'jobs': [job.to_dict(include_details=True) for job in jobs],
-            'total': len(jobs)
-        }
+        'data': [job.to_dict(include_details=True) for job in jobs],
     }), 200
