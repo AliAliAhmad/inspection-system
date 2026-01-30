@@ -20,7 +20,7 @@ class Equipment(db.Model):
     equipment_type = db.Column(db.String(50), nullable=False, index=True)
     equipment_type_ar = db.Column(db.String(50), nullable=True)
     serial_number = db.Column(db.String(50), unique=True, nullable=False)
-    location = db.Column(db.String(100), nullable=False)
+    location = db.Column(db.String(100), nullable=True)
     location_ar = db.Column(db.String(100), nullable=True)
 
     # Berth system

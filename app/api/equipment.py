@@ -95,16 +95,10 @@ def create_equipment():
     """
     data = request.get_json()
     
-    required_fields = ['name', 'equipment_type', 'serial_number', 'location']
+    required_fields = ['name', 'equipment_type', 'serial_number']
     for field in required_fields:
         if field not in data:
             raise ValidationError(f"{field} is required")
-    
-    # Auto-translate location only (name and equipment_type are technical identifiers, always English)
-    location_ar = data.get('location_ar')
-    if not location_ar:
-        from app.services.translation_service import TranslationService
-        location_ar = TranslationService.translate_to_arabic(data['location'])
 
     equipment = Equipment(
         name=data['name'],
@@ -112,8 +106,12 @@ def create_equipment():
         equipment_type=data['equipment_type'],
         equipment_type_ar=data.get('equipment_type_ar'),
         serial_number=data['serial_number'],
-        location=data['location'],
-        location_ar=location_ar,
+        location=data.get('location'),
+        location_ar=data.get('location_ar'),
+        berth=data.get('berth'),
+        home_berth=data.get('home_berth'),
+        manufacturer=data.get('manufacturer'),
+        model_number=data.get('model_number'),
         status=data.get('status', 'active'),
         assigned_technician_id=data.get('assigned_technician_id')
     )
@@ -125,6 +123,97 @@ def create_equipment():
         'status': 'success',
         'message': 'Equipment created',
         'equipment': equipment.to_dict()
+    }), 201
+
+
+@bp.route('/bulk-upload', methods=['POST'])
+@jwt_required()
+@admin_required()
+def bulk_upload_equipment():
+    """
+    Bulk create equipment from Excel file (.xlsx). Admin only.
+
+    The Excel file must have a header row with columns:
+        name, equipment_type, serial_number (required)
+        manufacturer, model_number, berth, home_berth, status (optional)
+
+    Returns:
+        {
+            "status": "success",
+            "created": 10,
+            "errors": [...]
+        }
+    """
+    if 'file' not in request.files:
+        raise ValidationError("No file uploaded. Send an Excel file with key 'file'.")
+
+    file = request.files['file']
+    if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
+        raise ValidationError("File must be an Excel file (.xlsx or .xls)")
+
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(file, read_only=True)
+        ws = wb.active
+    except Exception as e:
+        raise ValidationError(f"Could not read Excel file: {str(e)}")
+
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 2:
+        raise ValidationError("Excel file must have a header row and at least one data row")
+
+    # Parse header
+    header = [str(h).strip().lower() if h else '' for h in rows[0]]
+    required_cols = ['name', 'equipment_type', 'serial_number']
+    for col in required_cols:
+        if col not in header:
+            raise ValidationError(f"Missing required column: '{col}'. Headers found: {header}")
+
+    created = 0
+    errors = []
+
+    for row_num, row in enumerate(rows[1:], start=2):
+        row_data = {}
+        for i, val in enumerate(row):
+            if i < len(header) and header[i]:
+                row_data[header[i]] = str(val).strip() if val is not None else None
+
+        # Skip empty rows
+        if not row_data.get('name'):
+            continue
+
+        # Validate required fields
+        missing = [f for f in required_cols if not row_data.get(f)]
+        if missing:
+            errors.append(f"Row {row_num}: missing {', '.join(missing)}")
+            continue
+
+        # Check duplicate serial number
+        if Equipment.query.filter_by(serial_number=row_data['serial_number']).first():
+            errors.append(f"Row {row_num}: serial_number '{row_data['serial_number']}' already exists")
+            continue
+
+        equip = Equipment(
+            name=row_data['name'],
+            equipment_type=row_data['equipment_type'],
+            serial_number=row_data['serial_number'],
+            manufacturer=row_data.get('manufacturer'),
+            model_number=row_data.get('model_number'),
+            berth=row_data.get('berth'),
+            home_berth=row_data.get('home_berth'),
+            status=row_data.get('status', 'active'),
+        )
+        db.session.add(equip)
+        created += 1
+
+    if created > 0:
+        safe_commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'{created} equipment created',
+        'created': created,
+        'errors': errors
     }), 201
 
 

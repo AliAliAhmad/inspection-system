@@ -51,30 +51,42 @@ def create_user():
     """
     data = request.get_json()
     
-    required_fields = ['email', 'password', 'full_name', 'role']
+    required_fields = ['email', 'password', 'full_name', 'role', 'role_id']
     for field in required_fields:
         if field not in data:
             raise ValidationError(f"{field} is required")
-    
+
     # Check if email already exists
     existing = User.query.filter_by(email=data['email']).first()
     if existing:
         raise ValidationError(f"User with email {data['email']} already exists")
-    
+
+    # Check if role_id already exists
+    existing_role_id = User.query.filter_by(role_id=data['role_id']).first()
+    if existing_role_id:
+        raise ValidationError(f"role_id '{data['role_id']}' already in use")
+
     # Validate role
-    if data['role'] not in ['admin', 'technician']:
-        raise ValidationError("role must be 'admin' or 'technician'")
-    
+    valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer']
+    if data['role'] not in valid_roles:
+        raise ValidationError(f"role must be one of: {', '.join(valid_roles)}")
+
     # Validate language
     language = data.get('language', 'en')
     if language not in ['en', 'ar']:
         raise ValidationError("language must be 'en' or 'ar'")
-    
+
     user = User(
         email=data['email'],
         full_name=data['full_name'],
         role=data['role'],
+        role_id=data['role_id'],
         language=language,
+        phone=data.get('phone'),
+        shift=data.get('shift'),
+        specialization=data.get('specialization'),
+        minor_role=data.get('minor_role'),
+        minor_role_id=data.get('minor_role_id'),
         is_active=True
     )
     user.set_password(data['password'])
@@ -120,8 +132,9 @@ def update_user(user_id):
     if 'full_name' in data:
         user.full_name = data['full_name']
     if 'role' in data:
-        if data['role'] not in ['admin', 'technician']:
-            raise ValidationError("role must be 'admin' or 'technician'")
+        valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer']
+        if data['role'] not in valid_roles:
+            raise ValidationError(f"role must be one of: {', '.join(valid_roles)}")
         user.role = data['role']
     if 'language' in data:
         if data['language'] not in ['en', 'ar']:

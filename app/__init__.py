@@ -134,7 +134,8 @@ def create_app(config_name='development'):
 
     @app.errorhandler(500)
     def internal_error(error):
-        app.logger.error(f'Internal server error: {error}')
+        import traceback
+        app.logger.error(f'Internal server error: {error}\n{traceback.format_exc()}')
         return jsonify({'status': 'error', 'message': 'Internal server error'}), 500
 
     @app.errorhandler(422)
