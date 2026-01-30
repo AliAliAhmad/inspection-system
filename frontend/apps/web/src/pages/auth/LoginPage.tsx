@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onFinish = async (values: { username: string; password: string }) => {
+  const onFinish = async (values: { email: string; password: string }) => {
     setError(null);
 
     const rateCheck = loginRateLimiter.check();
@@ -27,7 +27,7 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      await login(values.username, values.password);
+      await login(values.email, values.password);
       loginRateLimiter.reset();
     } catch (err: any) {
       loginRateLimiter.recordFailure();
@@ -59,12 +59,15 @@ export default function LoginPage() {
 
         <Form layout="vertical" onFinish={onFinish} autoComplete="off">
           <Form.Item
-            name="username"
-            rules={[{ required: true, message: t('auth.username_required') }]}
+            name="email"
+            rules={[
+              { required: true, message: t('auth.email_required', 'Email is required') },
+              { type: 'email', message: t('auth.email_invalid', 'Please enter a valid email') },
+            ]}
           >
             <Input
               prefix={<UserOutlined />}
-              placeholder={t('auth.username')}
+              placeholder={t('auth.email', 'Email')}
               size="large"
             />
           </Form.Item>

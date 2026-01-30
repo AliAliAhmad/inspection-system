@@ -11,7 +11,7 @@ import {
 const tokenStorage = new WebTokenStorage();
 
 interface AuthContextValue extends AuthState {
-  login: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -51,10 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [setUser]);
 
   const login = useCallback(
-    async (username: string, password: string) => {
+    async (email: string, password: string) => {
       setLoading(true);
       try {
-        const res = await authApi.login({ username, password });
+        const res = await authApi.login({ email, password });
         const data = res.data;
         await tokenStorage.setAccessToken(data.access_token);
         await tokenStorage.setRefreshToken(data.refresh_token);
