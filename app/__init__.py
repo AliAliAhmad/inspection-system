@@ -220,6 +220,28 @@ def create_app(config_name='development'):
             'timestamp': datetime.utcnow().isoformat()
         }), status_code
 
+    # CLI commands
+    @app.cli.command('seed-admin')
+    def seed_admin():
+        """Create the initial admin user."""
+        from werkzeug.security import generate_password_hash
+        from app.models.user import User as UserModel
+        user = UserModel.query.filter_by(email='admin@inspection.com').first()
+        if user:
+            print(f'Admin already exists (id={user.id})')
+            return
+        admin = UserModel(
+            email='admin@inspection.com',
+            password_hash=generate_password_hash('Admin1234'),
+            full_name='System Admin',
+            role='admin',
+            role_id='ADM-001',
+            is_active=True,
+        )
+        db.session.add(admin)
+        db.session.commit()
+        print(f'Admin user created (id={admin.id})')
+
     return app
 
 
