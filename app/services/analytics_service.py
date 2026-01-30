@@ -259,7 +259,9 @@ class AnalyticsService:
                 'full_name': u.full_name,
                 'role': u.role,
                 'role_id': u.role_id,
+                'employee_id': u.role_id,
                 'points': points,
+                'total_points': points,
                 'specialization': u.specialization,
             })
 
