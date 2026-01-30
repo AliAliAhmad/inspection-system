@@ -46,11 +46,9 @@ services:
     runtime: static
     repo: https://github.com/AliAliAhmad/inspection-system
     rootDir: frontend
-    buildCommand: >
-      corepack enable &&
-      corepack prepare pnpm@9 --activate &&
-      pnpm install --frozen-lockfile &&
-      pnpm --filter @inspection/shared build 2>/dev/null || true &&
+    buildCommand: |
+      npm install -g pnpm@9 &&
+      pnpm install --no-frozen-lockfile &&
       VITE_API_URL=https://inspection-api.onrender.com pnpm --filter @inspection/web build
     staticPublishPath: apps/web/dist
     pullRequestPreviewsEnabled: true
