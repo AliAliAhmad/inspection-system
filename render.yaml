@@ -1,6 +1,6 @@
 databases:
   - name: inspection-db
-    plan: starter
+    plan: free
     databaseName: inspection
     user: inspection
     ipAllowList: []
