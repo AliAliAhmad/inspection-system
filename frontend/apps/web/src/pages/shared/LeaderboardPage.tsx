@@ -102,7 +102,7 @@ export default function LeaderboardPage() {
       />
       <Table
         columns={columns}
-        dataSource={data ?? []}
+        dataSource={Array.isArray(data) ? data : []}
         loading={isLoading}
         rowKey="user_id"
         pagination={{ pageSize: 20 }}
