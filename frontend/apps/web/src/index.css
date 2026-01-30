@@ -1,0 +1,12 @@
+@import 'antd/dist/reset.css';
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* RTL support */
+html[dir='rtl'] {
+  direction: rtl;
+}

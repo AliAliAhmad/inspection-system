@@ -1,0 +1,26 @@
+{
+  "name": "@inspection/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --project tsconfig.json --outDir dist --declaration",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "axios": "^1.6.0",
+    "i18next": "^23.0.0",
+    "react": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "axios": "^1.7.0",
+    "i18next": "^23.16.0",
+    "react": "^18.3.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
+  }
+}

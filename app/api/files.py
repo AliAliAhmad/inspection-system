@@ -1,0 +1,119 @@
+"""
+File upload and download endpoints.
+"""
+
+from flask import Blueprint, request, jsonify, send_file
+from flask_jwt_extended import jwt_required
+from app.services.file_service import FileService
+from app.utils.decorators import get_current_user
+from app.models import File
+
+bp = Blueprint('files', __name__)
+
+
+@bp.route('/upload', methods=['POST'])
+@jwt_required()
+def upload_file():
+    """
+    Upload a file.
+    Multipart form: file, related_type, related_id, category
+    """
+    user = get_current_user()
+
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file in request'}), 400
+
+    file = request.files['file']
+    related_type = request.form.get('related_type')
+    related_id = request.form.get('related_id')
+    category = request.form.get('category', 'general')
+
+    file_record = FileService.upload_file(
+        file=file,
+        uploaded_by=user.id,
+        related_type=related_type,
+        related_id=int(related_id) if related_id else None,
+        category=category
+    )
+
+    return jsonify({
+        'status': 'success',
+        'message': 'File uploaded',
+        'data': file_record.to_dict()
+    }), 201
+
+
+@bp.route('/upload-multiple', methods=['POST'])
+@jwt_required()
+def upload_multiple():
+    """Upload multiple files."""
+    user = get_current_user()
+
+    files = request.files.getlist('files')
+    if not files:
+        return jsonify({'status': 'error', 'message': 'No files in request'}), 400
+
+    related_type = request.form.get('related_type')
+    related_id = request.form.get('related_id')
+    category = request.form.get('category', 'general')
+
+    results = FileService.upload_multiple(
+        files=files,
+        uploaded_by=user.id,
+        related_type=related_type,
+        related_id=int(related_id) if related_id else None,
+        category=category
+    )
+
+    return jsonify({
+        'status': 'success',
+        'message': f'{len(results)} files uploaded',
+        'data': [f.to_dict() for f in results]
+    }), 201
+
+
+@bp.route('/<int:file_id>/download', methods=['GET'])
+@jwt_required()
+def download_file(file_id):
+    """Download a file."""
+    file_record = File.query.get_or_404(file_id)
+
+    return send_file(
+        file_record.file_path,
+        download_name=file_record.original_filename,
+        as_attachment=True
+    )
+
+
+@bp.route('', methods=['GET'])
+@jwt_required()
+def list_files():
+    """List files by related entity."""
+    related_type = request.args.get('related_type')
+    related_id = request.args.get('related_id')
+
+    if related_type and related_id:
+        files = FileService.get_files(related_type, int(related_id))
+    else:
+        user = get_current_user()
+        files = File.query.filter_by(uploaded_by=user.id).order_by(
+            File.created_at.desc()
+        ).limit(50).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': [f.to_dict() for f in files]
+    }), 200
+
+
+@bp.route('/<int:file_id>', methods=['DELETE'])
+@jwt_required()
+def delete_file(file_id):
+    """Delete a file."""
+    user = get_current_user()
+    FileService.delete_file(file_id, user.id)
+
+    return jsonify({
+        'status': 'success',
+        'message': 'File deleted'
+    }), 200

@@ -1,0 +1,10 @@
+{
+  "name": "inspection-system-frontend",
+  "private": true,
+  "scripts": {
+    "web:dev": "pnpm --filter @inspection/web dev",
+    "mobile:start": "pnpm --filter @inspection/mobile start",
+    "shared:build": "pnpm --filter @inspection/shared build",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

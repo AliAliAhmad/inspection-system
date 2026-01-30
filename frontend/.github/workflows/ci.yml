@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck shared package
+        working-directory: frontend
+        run: pnpm --filter @inspection/shared exec tsc --noEmit
+
+      - name: Typecheck web app
+        working-directory: frontend
+        run: pnpm --filter @inspection/web exec tsc --noEmit
+
+      - name: Run shared tests
+        working-directory: frontend
+        run: pnpm --filter @inspection/shared test
+
+      - name: Build web app
+        working-directory: frontend
+        run: pnpm --filter @inspection/web build

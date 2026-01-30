@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(diff:*)",
+      "Bash(textutil:*)",
+      "Bash(mkdir:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(pip freeze:*)",
+      "Bash(FLASK_APP=run.py flask db migrate:*)",
+      "Bash(FLASK_APP=run.py flask db:*)",
+      "Bash(xargs:*)",
+      "Bash(pnpm:*)",
+      "Bash(npm:*)",
+      "Bash(node:*)",
+      "Bash(npx:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

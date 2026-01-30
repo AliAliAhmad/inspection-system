@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://inspection:inspection@db:5432/inspection
+      - REDIS_URL=redis://redis:6379/0
+      - RATELIMIT_STORAGE_URI=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - uploads:/app/instance/uploads
+      - logs:/app/instance/logs
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: inspection
+      POSTGRES_PASSWORD: inspection
+      POSTGRES_DB: inspection
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inspection"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:
+  logs:
