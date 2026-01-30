@@ -9,12 +9,3 @@ export interface Schedule {
   last_completed: string | null;
 }
 
-export interface InspectionRoutine {
-  id: number;
-  routine_name: string;
-  asset_types: string[];
-  template_id: number;
-  frequency: string;
-  shift: 'day' | 'night' | 'both';
-  is_active: boolean;
-}

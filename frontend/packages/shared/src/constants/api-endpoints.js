@@ -1,0 +1,23 @@
+export const API = {
+    AUTH: '/api/auth',
+    USERS: '/api/users',
+    EQUIPMENT: '/api/equipment',
+    CHECKLISTS: '/api/checklists',
+    INSPECTIONS: '/api/inspections',
+    DEFECTS: '/api/defects',
+    SCHEDULES: '/api/schedules',
+    RATINGS: '/api/ratings',
+    NOTIFICATIONS: '/api/notifications',
+    SPECIALIST_JOBS: '/api/jobs',
+    ENGINEER_JOBS: '/api/engineer-jobs',
+    INSPECTION_ASSIGNMENTS: '/api/inspection-assignments',
+    ASSESSMENTS: '/api/assessments',
+    DEFECT_ASSESSMENTS: '/api/defect-assessments',
+    QUALITY_REVIEWS: '/api/quality-reviews',
+    LEAVES: '/api/leaves',
+    LEADERBOARDS: '/api/leaderboards',
+    BONUS_STARS: '/api/bonus-stars',
+    REPORTS: '/api/reports',
+    FILES: '/api/files',
+};
+//# sourceMappingURL=api-endpoints.js.map

@@ -80,7 +80,9 @@
     "pending_reviews": "المراجعات المعلّقة",
     "overdue_reviews": "المراجعات المتأخرة",
     "bonus_requests": "طلبات المكافآت",
-    "defect_assessments": "تقييمات العيوب"
+    "defect_assessments": "تقييمات العيوب",
+    "routines": "روتينات الفحص",
+    "quick_links": "وصول سريع"
   },
   "status": {
     "active": "نشط",

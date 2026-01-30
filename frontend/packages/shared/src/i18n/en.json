@@ -80,7 +80,9 @@
     "pending_reviews": "Pending Reviews",
     "overdue_reviews": "Overdue Reviews",
     "bonus_requests": "Bonus Requests",
-    "defect_assessments": "Defect Assessments"
+    "defect_assessments": "Defect Assessments",
+    "routines": "Inspection Routines",
+    "quick_links": "Quick Access"
   },
   "status": {
     "active": "Active",
