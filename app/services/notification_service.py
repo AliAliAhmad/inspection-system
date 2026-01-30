@@ -3,10 +3,13 @@ Service for managing notifications.
 Supports priority levels and persistent notifications.
 """
 
+import logging
 from app.models import Notification, User
 from app.extensions import db
 from app.exceptions.api_exceptions import NotFoundError, ForbiddenError
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
@@ -70,6 +73,7 @@ class NotificationService:
 
         db.session.add(notification)
         db.session.commit()
+        logger.debug("Notification created: id=%s user_id=%s type=%s priority=%s", notification.id, user_id, type, priority)
 
         return notification
 
@@ -125,6 +129,7 @@ class NotificationService:
             notifications.append(n)
 
         db.session.commit()
+        logger.info("Bulk notifications sent: type=%s recipient_count=%s", type, len(user_ids))
         return notifications
 
     @staticmethod

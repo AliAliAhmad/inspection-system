@@ -3,10 +3,13 @@ Service for leave management.
 Handles leave requests, approvals, and company-wide notifications.
 """
 
+import logging
 from app.models import Leave, User
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime, date
+
+logger = logging.getLogger(__name__)
 
 
 class LeaveService:
@@ -60,6 +63,7 @@ class LeaveService:
         )
         db.session.add(leave)
         db.session.commit()
+        logger.info("Leave requested: leave_id=%s user_id=%s type=%s from=%s to=%s", leave.id, user_id, leave_type, date_from, date_to)
 
         # Notify admins
         from app.services.notification_service import NotificationService
@@ -110,6 +114,8 @@ class LeaveService:
 
         db.session.commit()
 
+        logger.info("Leave approved: leave_id=%s user_id=%s approved_by=%s", leave_id, leave.user_id, approved_by)
+
         # Company-wide notification
         from app.services.notification_service import NotificationService
         all_active = User.query.filter_by(is_active=True).all()
@@ -139,6 +145,7 @@ class LeaveService:
         leave.approved_by_id = rejected_by
         leave.approved_at = datetime.utcnow()
         db.session.commit()
+        logger.info("Leave rejected: leave_id=%s user_id=%s rejected_by=%s", leave_id, leave.user_id, rejected_by)
 
         from app.services.notification_service import NotificationService
         NotificationService.create_notification(
@@ -173,6 +180,7 @@ class LeaveService:
                 coverage.leave_coverage_for = None
 
         db.session.commit()
+        logger.info("Leave ended: leave_id=%s user_id=%s", leave_id, leave.user_id)
         return leave
 
     @staticmethod

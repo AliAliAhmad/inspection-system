@@ -5,7 +5,7 @@ Checklist template management endpoints (Admin only).
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import ChecklistTemplate, ChecklistItem, User
-from app.extensions import db
+from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
 from app.utils.decorators import admin_required, get_language
 
@@ -78,7 +78,7 @@ def create_template():
     )
 
     db.session.add(template)
-    db.session.commit()
+    safe_commit()
 
     return jsonify({
         'status': 'success',
@@ -152,7 +152,7 @@ def add_item_to_template(template_id):
     )
     
     db.session.add(item)
-    db.session.commit()
+    safe_commit()
     
     return jsonify({
         'status': 'success',
@@ -205,7 +205,7 @@ def update_item(template_id, item_id):
     if 'critical_failure' in data:
         item.critical_failure = data['critical_failure']
     
-    db.session.commit()
+    safe_commit()
     
     return jsonify({
         'status': 'success',
@@ -232,7 +232,7 @@ def delete_item(template_id, item_id):
         raise NotFoundError(f"Item with ID {item_id} not found in template {template_id}")
     
     db.session.delete(item)
-    db.session.commit()
+    safe_commit()
     
     return jsonify({
         'status': 'success',

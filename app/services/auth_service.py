@@ -2,10 +2,13 @@
 Authentication service for user login and token management.
 """
 
+import logging
 from app.models import User
 from app.extensions import db
 from flask_jwt_extended import create_access_token, create_refresh_token
 from app.exceptions.api_exceptions import ValidationError, UnauthorizedError
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -34,15 +37,18 @@ class AuthService:
         user = User.query.filter_by(email=email).first()
         
         if not user or not user.check_password(password):
+            logger.warning("Login failed for email=%s: invalid credentials", email)
             raise UnauthorizedError("Invalid email or password")
-        
+
         if not user.is_active:
+            logger.warning("Login failed for email=%s user_id=%s: account deactivated", email, user.id)
             raise UnauthorizedError("Account is deactivated")
         
         # Create JWT tokens (convert user.id to string for JWT)
         access_token = create_access_token(identity=str(user.id))
         refresh_token = create_refresh_token(identity=str(user.id))
         
+        logger.info("Login successful for email=%s user_id=%s", email, user.id)
         return {
             'access_token': access_token,
             'refresh_token': refresh_token,

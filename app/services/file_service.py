@@ -3,6 +3,7 @@ Service for secure file upload handling.
 Handles cleaning photos, evidence photos, defect photos, etc.
 """
 
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -12,6 +13,8 @@ from app.models import File
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError
 
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
@@ -53,6 +56,7 @@ def _validate_mime_type(file_path, extension):
                 return
 
     os.remove(file_path)
+    logger.warning("MIME validation failed: file_path=%s claimed_extension=%s", file_path, extension)
     raise ValidationError(
         f"File content does not match .{extension} format. "
         "The file may be corrupted or have an incorrect extension."
@@ -127,6 +131,7 @@ class FileService:
         )
         db.session.add(file_record)
         db.session.commit()
+        logger.info("File uploaded: file_id=%s filename=%s size=%s user_id=%s related_type=%s", file_record.id, file.filename, file_size, uploaded_by, related_type)
 
         return file_record
 
@@ -162,3 +167,4 @@ class FileService:
 
         db.session.delete(file_record)
         db.session.commit()
+        logger.info("File deleted: file_id=%s by user_id=%s", file_id, user_id)

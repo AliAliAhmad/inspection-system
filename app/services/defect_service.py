@@ -184,10 +184,9 @@ class DefectService:
         
         db.session.commit()
         
-        # Create notification for admins (NEW - ADD THIS)
+        # Create notification for admins
         from app.services.notification_service import NotificationService
-        from app.models import User
-        
+
         admins = User.query.filter_by(role='admin', is_active=True).all()
         for admin in admins:
             NotificationService.create_notification(

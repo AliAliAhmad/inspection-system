@@ -95,7 +95,7 @@ def get_current_user():
 def logout():
     """Revoke the current access token."""
     from app.models import TokenBlocklist
-    from app.extensions import db
+    from app.extensions import db, safe_commit
     from datetime import datetime, timezone
 
     jwt_data = get_jwt()
@@ -106,6 +106,6 @@ def logout():
         expires_at=datetime.fromtimestamp(jwt_data['exp'], tz=timezone.utc),
     )
     db.session.add(token_blocklist)
-    db.session.commit()
+    safe_commit()
 
     return jsonify({'status': 'success', 'message': 'Logged out'}), 200

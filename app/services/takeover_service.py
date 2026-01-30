@@ -5,10 +5,13 @@ Queue-based: first come first serve, admin approves.
 +3 stars bonus for successful completion.
 """
 
+import logging
 from app.models import JobTakeover, SpecialistJob, EngineerJob, InspectionAssignment, User, PauseLog
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 class TakeoverService:
@@ -105,6 +108,7 @@ class TakeoverService:
         )
         db.session.add(takeover)
         db.session.commit()
+        logger.info("Takeover requested: takeover_id=%s job_type=%s job_id=%s by user_id=%s queue_pos=%s", takeover.id, job_type, job_id, requested_by, takeover.queue_position)
 
         # Notify admins
         from app.services.notification_service import NotificationService
@@ -189,6 +193,7 @@ class TakeoverService:
             req.approved_at = datetime.utcnow()
 
         db.session.commit()
+        logger.info("Takeover approved: takeover_id=%s job_type=%s job_id=%s admin_id=%s new_owner=%s", takeover_id, takeover.job_type, takeover.job_id, admin_id, takeover.requested_by)
 
         # Notify requester
         from app.services.notification_service import NotificationService
@@ -252,6 +257,7 @@ class TakeoverService:
             user.add_points(3, role)
 
         db.session.commit()
+        logger.info("Takeover completed: takeover_id=%s job_type=%s job_id=%s user_id=%s bonus=+3", takeover_id, takeover.job_type, takeover.job_id, takeover.requested_by)
 
         from app.services.notification_service import NotificationService
         NotificationService.create_notification(

@@ -5,6 +5,7 @@ Three job types: custom_project, system_review, special_task.
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.extensions import limiter
 from app.services.engineer_job_service import EngineerJobService
 from app.utils.decorators import get_current_user, admin_required, engineer_required, role_required, get_language
 from app.models import EngineerJob
@@ -42,6 +43,7 @@ def list_jobs():
 
 
 @bp.route('', methods=['POST'])
+@limiter.limit("20 per minute")
 @jwt_required()
 @role_required('admin', 'engineer')
 def create_job():

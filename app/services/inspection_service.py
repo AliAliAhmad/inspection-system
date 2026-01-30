@@ -3,11 +3,14 @@ Core business logic for inspection workflow.
 This is the heart of the application.
 """
 
+import logging
 from app.models import Inspection, InspectionAnswer, Equipment, ChecklistTemplate, ChecklistItem, User
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime, timedelta
 from app.services.defect_service import DefectService
+
+logger = logging.getLogger(__name__)
 
 
 class InspectionService:
@@ -74,7 +77,9 @@ class InspectionService:
         
         db.session.add(inspection)
         db.session.commit()
-        
+
+        logger.info("Inspection started: inspection_id=%s equipment_id=%s technician_id=%s", inspection.id, equipment_id, technician_id)
+
         # Get user's language preference
         language = technician.language if hasattr(technician, 'language') and technician.language else 'en'
         
@@ -302,8 +307,9 @@ class InspectionService:
                 related_id=inspection.id
             )
         
+        logger.info("Inspection submitted: inspection_id=%s result=%s technician_id=%s", inspection.id, inspection.result, inspection.technician_id)
         return inspection
-    
+
     @staticmethod
     def _validate_completeness(inspection):
         """
@@ -413,8 +419,9 @@ class InspectionService:
             inspection.notes = notes
         
         db.session.commit()
+        logger.info("Inspection reviewed: inspection_id=%s reviewer_id=%s", inspection.id, reviewer_id)
         return inspection
-    
+
     @staticmethod
     def delete_inspection(inspection_id, current_user_id):
         """
@@ -442,3 +449,4 @@ class InspectionService:
         
         db.session.delete(inspection)
         db.session.commit()
+        logger.warning("Inspection deleted: inspection_id=%s by user_id=%s", inspection_id, current_user_id)

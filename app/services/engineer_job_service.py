@@ -3,10 +3,13 @@ Service for engineer job lifecycle.
 Three job types: custom_project, system_review, special_task.
 """
 
+import logging
 from app.models import EngineerJob, User, Equipment
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class EngineerJobService:
@@ -69,6 +72,7 @@ class EngineerJobService:
         )
         db.session.add(job)
         db.session.commit()
+        logger.info("Engineer job created: job_id=%s engineer_id=%s type=%s category=%s", job.id, engineer_id, job_type, category)
 
         from app.services.notification_service import NotificationService
         NotificationService.create_notification(
@@ -115,6 +119,7 @@ class EngineerJobService:
         job.started_at = datetime.utcnow()
         job.status = 'in_progress'
         db.session.commit()
+        logger.info("Engineer job started: job_id=%s engineer_id=%s", job_id, engineer_id)
         return job
 
     @staticmethod
@@ -145,6 +150,7 @@ class EngineerJobService:
         job.time_rating = job.calculate_time_rating()
 
         db.session.commit()
+        logger.info("Engineer job completed: job_id=%s engineer_id=%s actual_hours=%s time_rating=%s", job_id, engineer_id, job.actual_time_hours, job.time_rating)
 
         # Auto-create quality review
         from app.services.quality_service import QualityService

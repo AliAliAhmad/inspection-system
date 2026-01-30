@@ -4,10 +4,13 @@ QE reviews completed specialist/engineer jobs.
 Admin validates QE rejections.
 """
 
+import logging
 from app.models import QualityReview, SpecialistJob, EngineerJob, User
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 class QualityService:
@@ -127,6 +130,7 @@ class QualityService:
                 job.status = 'qc_approved'
 
         db.session.commit()
+        logger.info("Quality review approved: review_id=%s qe_id=%s rating=%s job_type=%s job_id=%s", review_id, qe_id, qc_rating, review.job_type, review.job_id)
 
         # Notify the worker
         if review.job_type == 'specialist':
@@ -181,6 +185,7 @@ class QualityService:
         review.sla_met = datetime.utcnow() <= review.sla_deadline if review.sla_deadline else True
 
         db.session.commit()
+        logger.info("Quality review rejected: review_id=%s qe_id=%s category=%s job_type=%s job_id=%s", review_id, qe_id, rejection_category, review.job_type, review.job_id)
 
         # Notify admins for validation
         from app.services.notification_service import NotificationService
@@ -245,6 +250,7 @@ class QualityService:
                 qe.add_points(-2, 'quality_engineer')
 
         db.session.commit()
+        logger.info("Rejection validated: review_id=%s admin_id=%s is_valid=%s qe_id=%s", review_id, admin_id, is_valid, review.qe_id)
 
         # Notify QE of validation result
         from app.services.notification_service import NotificationService
@@ -271,7 +277,10 @@ class QualityService:
     def get_overdue_reviews():
         """Get reviews past their SLA deadline."""
         now = datetime.utcnow()
-        return QualityReview.query.filter(
+        overdue = QualityReview.query.filter(
             QualityReview.status == 'pending',
             QualityReview.sla_deadline < now
         ).all()
+        if overdue:
+            logger.warning("Overdue quality reviews detected: count=%s review_ids=%s", len(overdue), [r.id for r in overdue])
+        return overdue

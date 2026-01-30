@@ -5,7 +5,7 @@ Admin/Engineer award directly (1-10), QE requests admin to award.
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.extensions import db
+from app.extensions import db, safe_commit, limiter
 from app.models import BonusStar, User
 from app.utils.decorators import get_current_user, admin_required, role_required
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
@@ -34,6 +34,7 @@ def list_bonus_stars():
 
 
 @bp.route('', methods=['POST'])
+@limiter.limit("20 per minute")
 @jwt_required()
 @role_required('admin', 'engineer')
 def award_bonus():
@@ -70,7 +71,7 @@ def award_bonus():
 
     # Add points to user
     target_user.add_points(amount, target_user.role)
-    db.session.commit()
+    safe_commit()
 
     # Auto-translate reason
     from app.utils.bilingual import auto_translate_and_save
@@ -95,6 +96,7 @@ def award_bonus():
 
 
 @bp.route('/request', methods=['POST'])
+@limiter.limit("20 per minute")
 @jwt_required()
 @role_required('quality_engineer')
 def request_bonus():
@@ -124,7 +126,7 @@ def request_bonus():
         related_job_id=data.get('related_job_id')
     )
     db.session.add(bonus)
-    db.session.commit()
+    safe_commit()
 
     # Auto-translate reason
     from app.utils.bilingual import auto_translate_and_save
@@ -171,7 +173,7 @@ def approve_bonus_request(bonus_id):
     if target_user:
         target_user.add_points(bonus.amount, target_user.role)
 
-    db.session.commit()
+    safe_commit()
 
     from app.services.notification_service import NotificationService
     NotificationService.create_notification(
@@ -202,7 +204,7 @@ def deny_bonus_request(bonus_id):
         raise ValidationError("Not a pending QE request")
 
     bonus.request_status = 'denied'
-    db.session.commit()
+    safe_commit()
 
     from app.services.notification_service import NotificationService
     NotificationService.create_notification(

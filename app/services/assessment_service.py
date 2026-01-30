@@ -3,10 +3,13 @@ Service for final equipment assessment by both inspectors.
 Safety-first: if either inspector says URGENT, equipment stops.
 """
 
+import logging
 from app.models import FinalAssessment, InspectionAssignment, Equipment, User
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class AssessmentService:
@@ -40,6 +43,7 @@ class AssessmentService:
         db.session.add(assessment)
         assignment.status = 'assessment_pending'
         db.session.commit()
+        logger.info("Assessment created: assessment_id=%s assignment_id=%s equipment_id=%s", assessment.id, assignment_id, assignment.equipment_id)
 
         # Notify both inspectors
         from app.services.notification_service import NotificationService
@@ -105,6 +109,7 @@ class AssessmentService:
             AssessmentService._apply_final_status(assessment)
 
         db.session.commit()
+        logger.info("Verdict submitted: assessment_id=%s inspector_id=%s verdict=%s", assessment_id, inspector_id, verdict)
         return assessment
 
     @staticmethod
@@ -115,6 +120,7 @@ class AssessmentService:
 
         if assessment.final_status == 'urgent':
             equipment.status = 'stopped'
+            logger.warning("Equipment stopped due to urgent assessment: equipment_id=%s assessment_id=%s", assessment.equipment_id, assessment.id)
             # Notify admins
             from app.services.notification_service import NotificationService
             admins = User.query.filter_by(role='admin', is_active=True).all()

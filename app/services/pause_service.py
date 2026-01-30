@@ -4,10 +4,13 @@ Specialist must provide mandatory reason for pausing.
 Admin or delegated engineer can approve.
 """
 
+import logging
 from app.models import PauseLog, SpecialistJob, EngineerJob, User
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class PauseService:
@@ -64,6 +67,7 @@ class PauseService:
         )
         db.session.add(pause)
         db.session.commit()
+        logger.info("Pause requested: pause_id=%s job_type=%s job_id=%s by user_id=%s reason=%s", pause.id, job_type, job_id, requested_by, reason_category)
 
         # Notify admins and engineers
         from app.services.notification_service import NotificationService
@@ -108,6 +112,7 @@ class PauseService:
             job.paused_at = datetime.utcnow()
 
         db.session.commit()
+        logger.info("Pause approved: pause_id=%s job_type=%s job_id=%s approved_by=%s", pause_id, pause.job_type, pause.job_id, approved_by)
 
         # Notify requester
         from app.services.notification_service import NotificationService
@@ -178,6 +183,7 @@ class PauseService:
             job.paused_duration_minutes = (job.paused_duration_minutes or 0) + (pause.duration_minutes or 0)
 
         db.session.commit()
+        logger.info("Job resumed: pause_id=%s job_type=%s job_id=%s duration_minutes=%s", pause_id, pause.job_type, pause.job_id, pause.duration_minutes)
         return pause
 
     @staticmethod
@@ -206,6 +212,7 @@ class PauseService:
         job.status = 'paused'
         job.paused_at = datetime.utcnow()
         db.session.commit()
+        logger.info("Admin force-paused: job_type=%s job_id=%s admin_id=%s reason=%s", job_type, job_id, admin_id, reason)
 
         return pause
 

@@ -72,7 +72,7 @@ def create_app(config_name='development'):
         reports, schedules, ratings, notifications, specialist_jobs,
         inspection_assignments, assessments, defect_assessments,
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
-        files
+        files, sync
     )
 
     # Core
@@ -110,6 +110,9 @@ def create_app(config_name='development'):
 
     # File management
     app.register_blueprint(files.bp, url_prefix='/api/files')
+
+    # Offline sync
+    app.register_blueprint(sync.bp, url_prefix='/api/sync')
 
     # Initialize background scheduler (not in testing)
     if config_name != 'testing':
@@ -201,12 +204,21 @@ def create_app(config_name='development'):
     @app.route('/health')
     def health():
         """Health check endpoint - returns system status."""
+        from sqlalchemy import text
+        db_ok = False
+        try:
+            db.session.execute(text('SELECT 1'))
+            db_ok = True
+        except Exception:
+            app.logger.warning("Health check: database unreachable")
+
+        status_code = 200 if db_ok else 503
         return jsonify({
-            'status': 'healthy',
+            'status': 'healthy' if db_ok else 'degraded',
             'version': '2.0.0',
-            'database': 'connected',
+            'database': 'connected' if db_ok else 'unreachable',
             'timestamp': datetime.utcnow().isoformat()
-        }), 200
+        }), status_code
 
     return app
 

@@ -6,7 +6,7 @@ pause/resume, incomplete completion, admin timer control, and cleaning.
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.extensions import db
+from app.extensions import db, safe_commit
 from app.models import SpecialistJob, Defect, User, PauseLog
 from app.services.pause_service import PauseService
 from app.services.takeover_service import TakeoverService
@@ -97,7 +97,7 @@ def enter_planned_time(job_id):
     if job.defect and job.defect.inspection and job.defect.inspection.equipment:
         job.defect.inspection.equipment.status = 'under_maintenance'
 
-    db.session.commit()
+    safe_commit()
 
     return jsonify({
         'status': 'success',
@@ -125,7 +125,7 @@ def start_job(job_id):
 
     job.started_at = datetime.utcnow()
     job.status = 'in_progress'
-    db.session.commit()
+    safe_commit()
 
     return jsonify({
         'status': 'success',
@@ -172,7 +172,7 @@ def complete_job(job_id):
         job.defect.inspection.equipment.status = 'active'
         job.defect.status = 'resolved'
 
-    db.session.commit()
+    safe_commit()
 
     # Auto-translate work notes
     from app.utils.bilingual import auto_translate_and_save
@@ -232,7 +232,7 @@ def mark_incomplete(job_id):
     job.completion_status = 'incomplete'
     job.incomplete_reason = reason
     job.completed_at = datetime.utcnow()
-    db.session.commit()
+    safe_commit()
 
     # Auto-translate incomplete reason
     from app.utils.bilingual import auto_translate_and_save
@@ -309,7 +309,7 @@ def upload_cleaning(job_id):
     data = request.get_json()
     # Cleaning photos would be handled via file upload in production
     # For now, just note that cleaning was submitted
-    db.session.commit()
+    safe_commit()
 
     return jsonify({
         'status': 'success',
@@ -360,7 +360,7 @@ def admin_cleaning_rating(job_id):
     if specialist and rating > 0:
         specialist.add_points(rating, 'specialist')
 
-    db.session.commit()
+    safe_commit()
 
     return jsonify({
         'status': 'success',
@@ -387,7 +387,7 @@ def admin_bonus(job_id):
     if specialist and bonus > 0:
         specialist.add_points(bonus, 'specialist')
 
-    db.session.commit()
+    safe_commit()
 
     return jsonify({
         'status': 'success',

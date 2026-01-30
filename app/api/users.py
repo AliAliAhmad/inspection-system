@@ -5,7 +5,7 @@ User management endpoints (Admin only).
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.models import User
-from app.extensions import db
+from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate
@@ -80,7 +80,7 @@ def create_user():
     user.set_password(data['password'])
     
     db.session.add(user)
-    db.session.commit()
+    safe_commit()
     
     return jsonify({
         'status': 'success',
@@ -132,7 +132,7 @@ def update_user(user_id):
     if 'password' in data:
         user.set_password(data['password'])
     
-    db.session.commit()
+    safe_commit()
     
     return jsonify({
         'status': 'success',
@@ -159,7 +159,7 @@ def deactivate_user(user_id):
         raise NotFoundError(f"User with ID {user_id} not found")
     
     user.is_active = False
-    db.session.commit()
+    safe_commit()
     
     return jsonify({
         'status': 'success',

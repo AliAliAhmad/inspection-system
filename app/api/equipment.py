@@ -5,7 +5,7 @@ Equipment management endpoints.
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.models import Equipment
-from app.extensions import db
+from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
 from app.utils.decorators import get_current_user, admin_required, get_language
 from app.utils.pagination import paginate
@@ -119,7 +119,7 @@ def create_equipment():
     )
 
     db.session.add(equipment)
-    db.session.commit()
+    safe_commit()
     
     return jsonify({
         'status': 'success',
@@ -169,7 +169,7 @@ def update_equipment(equipment_id):
     if 'assigned_technician_id' in data:
         equipment.assigned_technician_id = data['assigned_technician_id']
     
-    db.session.commit()
+    safe_commit()
     
     return jsonify({
         'status': 'success',
@@ -194,11 +194,13 @@ def delete_equipment(equipment_id):
     equipment = Equipment.query.get(equipment_id)
     if not equipment:
         raise NotFoundError(f"Equipment with ID {equipment_id} not found")
-    
-    db.session.delete(equipment)
-    db.session.commit()
-    
+
+    # Soft-delete: mark as out_of_service instead of hard-deleting
+    # This preserves FK references from inspections, defects, jobs, and assignments
+    equipment.status = 'out_of_service'
+    safe_commit()
+
     return jsonify({
         'status': 'success',
-        'message': 'Equipment deleted'
+        'message': 'Equipment decommissioned'
     }), 200

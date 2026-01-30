@@ -4,6 +4,7 @@ File upload and download endpoints.
 
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required
+from app.extensions import limiter
 from app.services.file_service import FileService
 from app.utils.decorators import get_current_user
 from app.models import File
@@ -12,6 +13,7 @@ bp = Blueprint('files', __name__)
 
 
 @bp.route('/upload', methods=['POST'])
+@limiter.limit("10 per minute")
 @jwt_required()
 def upload_file():
     """
@@ -44,6 +46,7 @@ def upload_file():
 
 
 @bp.route('/upload-multiple', methods=['POST'])
+@limiter.limit("5 per minute")
 @jwt_required()
 def upload_multiple():
     """Upload multiple files."""

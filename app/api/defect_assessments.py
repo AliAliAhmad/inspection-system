@@ -5,7 +5,7 @@ Specialist reviews defect validity before starting work.
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.extensions import db
+from app.extensions import db, safe_commit
 from app.models import DefectAssessment, Defect, SpecialistJob, User
 from app.utils.decorators import get_current_user, specialist_required, get_language
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
@@ -132,7 +132,7 @@ def create_assessment():
         defect.assessment_status = 'minor'
         defect.priority = 'low'
 
-    db.session.commit()
+    safe_commit()
 
     # Auto-translate technical notes
     if technical_notes:
