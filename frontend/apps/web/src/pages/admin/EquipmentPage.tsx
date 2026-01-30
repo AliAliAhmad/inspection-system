@@ -190,10 +190,7 @@ export default function EquipmentPage() {
       <Form.Item name="serial_number" label={t('equipment.serialNumber', 'Serial Number')} rules={[{ required: true }]}>
         <Input />
       </Form.Item>
-      <Form.Item name="location" label={t('equipment.location', 'Location')} rules={[{ required: true }]}>
-        <Input />
-      </Form.Item>
-      <Form.Item name="location_ar" label={t('equipment.locationAr', 'Location (Arabic)')}>
+      <Form.Item name="location" label={t('equipment.location', 'Location')}>
         <Input />
       </Form.Item>
       <Form.Item name="status" label={t('equipment.status', 'Status')}>

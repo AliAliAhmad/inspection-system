@@ -124,6 +124,7 @@ class User(db.Model):
             'phone': self.phone,
             'role': self.role,
             'role_id': self.role_id,
+            'employee_id': self.role_id,
             'minor_role': self.minor_role,
             'minor_role_id': self.minor_role_id,
             'specialization': self.specialization,

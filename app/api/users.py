@@ -51,6 +51,10 @@ def create_user():
     """
     data = request.get_json()
     
+    # Accept employee_id as alias for role_id (frontend uses employee_id)
+    if 'employee_id' in data and 'role_id' not in data:
+        data['role_id'] = data['employee_id']
+
     required_fields = ['email', 'password', 'full_name', 'role', 'role_id']
     for field in required_fields:
         if field not in data:
@@ -64,7 +68,7 @@ def create_user():
     # Check if role_id already exists
     existing_role_id = User.query.filter_by(role_id=data['role_id']).first()
     if existing_role_id:
-        raise ValidationError(f"role_id '{data['role_id']}' already in use")
+        raise ValidationError(f"Employee ID '{data['role_id']}' already in use")
 
     # Validate role
     valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer']
