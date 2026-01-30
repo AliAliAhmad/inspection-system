@@ -110,7 +110,7 @@ def add_item_to_template(template_id):
             "item": {...}
         }
     """
-    template = ChecklistTemplate.query.get(template_id)
+    template = db.session.get(ChecklistTemplate, template_id)
     if not template:
         raise NotFoundError(f"Template with ID {template_id} not found")
     

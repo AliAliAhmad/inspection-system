@@ -20,7 +20,7 @@ class AssessmentService:
         """
         Create a final assessment record when both inspectors complete their checklists.
         """
-        assignment = InspectionAssignment.query.get(assignment_id)
+        assignment = db.session.get(InspectionAssignment, assignment_id)
         if not assignment:
             raise NotFoundError(f"Assignment {assignment_id} not found")
 
@@ -70,7 +70,7 @@ class AssessmentService:
             verdict: 'operational' or 'urgent'
             urgent_reason: Required if verdict is 'urgent' (min 50 chars)
         """
-        assessment = FinalAssessment.query.get(assessment_id)
+        assessment = db.session.get(FinalAssessment, assessment_id)
         if not assessment:
             raise NotFoundError(f"Assessment {assessment_id} not found")
 
@@ -115,8 +115,8 @@ class AssessmentService:
     @staticmethod
     def _apply_final_status(assessment):
         """Apply the final assessment status to equipment and assignment."""
-        equipment = Equipment.query.get(assessment.equipment_id)
-        assignment = InspectionAssignment.query.get(assessment.inspection_assignment_id)
+        equipment = db.session.get(Equipment, assessment.equipment_id)
+        assignment = db.session.get(InspectionAssignment, assessment.inspection_assignment_id)
 
         if assessment.final_status == 'urgent':
             equipment.status = 'stopped'
@@ -155,8 +155,8 @@ class AssessmentService:
         """Award points to inspectors based on completion."""
         base_points = 1  # 1 point per completed asset
 
-        mech = User.query.get(assignment.mechanical_inspector_id)
-        elec = User.query.get(assignment.electrical_inspector_id)
+        mech = db.session.get(User, assignment.mechanical_inspector_id)
+        elec = db.session.get(User, assignment.electrical_inspector_id)
 
         if mech:
             mech.add_points(base_points, 'inspector')
@@ -176,11 +176,11 @@ class AssessmentService:
             decision: 'operational' or 'urgent'
             notes: Admin notes
         """
-        assessment = FinalAssessment.query.get(assessment_id)
+        assessment = db.session.get(FinalAssessment, assessment_id)
         if not assessment:
             raise NotFoundError(f"Assessment {assessment_id} not found")
 
-        admin = User.query.get(admin_id)
+        admin = db.session.get(User, admin_id)
         if not admin or admin.role != 'admin':
             raise ForbiddenError("Admin access required")
 

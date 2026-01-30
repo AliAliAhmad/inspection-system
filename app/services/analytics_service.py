@@ -103,7 +103,7 @@ class AnalyticsService:
     @staticmethod
     def inspector_dashboard(inspector_id):
         """Dashboard stats for inspectors."""
-        user = User.query.get(inspector_id)
+        user = db.session.get(User, inspector_id)
         today = date.today()
 
         # Get assignments for this inspector
@@ -134,7 +134,7 @@ class AnalyticsService:
     @staticmethod
     def specialist_dashboard(specialist_id):
         """Dashboard stats for specialists."""
-        user = User.query.get(specialist_id)
+        user = db.session.get(User, specialist_id)
         return {
             'my_jobs': {
                 'total': SpecialistJob.query.filter_by(specialist_id=specialist_id).count(),
@@ -167,7 +167,7 @@ class AnalyticsService:
                 QualityReview.status == 'pending',
                 QualityReview.sla_deadline < datetime.utcnow()
             ).count(),
-            'total_points': User.query.get(qe_id).qe_points if User.query.get(qe_id) else 0,
+            'total_points': db.session.get(User, qe_id).qe_points if db.session.get(User, qe_id) else 0,
         }
 
     @staticmethod

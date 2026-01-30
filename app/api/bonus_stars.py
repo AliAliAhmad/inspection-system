@@ -55,7 +55,7 @@ def award_bonus():
     if not isinstance(amount, int) or amount < 1 or amount > 10:
         raise ValidationError("Amount must be between 1 and 10")
 
-    target_user = User.query.get(target_user_id)
+    target_user = db.session.get(User, target_user_id)
     if not target_user:
         raise NotFoundError(f"User {target_user_id} not found")
 
@@ -159,7 +159,7 @@ def approve_bonus_request(bonus_id):
     """Admin approves QE bonus request."""
     user = get_current_user()
 
-    bonus = BonusStar.query.get(bonus_id)
+    bonus = db.session.get(BonusStar, bonus_id)
     if not bonus:
         raise NotFoundError(f"Bonus star {bonus_id} not found")
     if not bonus.is_qe_request or bonus.request_status != 'pending':
@@ -169,7 +169,7 @@ def approve_bonus_request(bonus_id):
     bonus.awarded_by = user.id
 
     # Apply bonus
-    target_user = User.query.get(bonus.user_id)
+    target_user = db.session.get(User, bonus.user_id)
     if target_user:
         target_user.add_points(bonus.amount, target_user.role)
 
@@ -197,7 +197,7 @@ def approve_bonus_request(bonus_id):
 @admin_required()
 def deny_bonus_request(bonus_id):
     """Admin denies QE bonus request."""
-    bonus = BonusStar.query.get(bonus_id)
+    bonus = db.session.get(BonusStar, bonus_id)
     if not bonus:
         raise NotFoundError(f"Bonus star {bonus_id} not found")
     if not bonus.is_qe_request or bonus.request_status != 'pending':

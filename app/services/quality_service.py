@@ -35,15 +35,15 @@ class QualityService:
         if job_type not in ('specialist', 'engineer'):
             raise ValidationError("job_type must be 'specialist' or 'engineer'")
 
-        qe = User.query.get(qe_id)
+        qe = db.session.get(User, qe_id)
         if not qe or not qe.has_role('quality_engineer'):
             raise ValidationError("Invalid quality engineer")
 
         # Verify job exists and is completed
         if job_type == 'specialist':
-            job = SpecialistJob.query.get(job_id)
+            job = db.session.get(SpecialistJob, job_id)
         else:
-            job = EngineerJob.query.get(job_id)
+            job = db.session.get(EngineerJob, job_id)
 
         if not job:
             raise NotFoundError(f"Job {job_id} not found")
@@ -101,7 +101,7 @@ class QualityService:
             qc_rating: Quality rating (1-5)
             notes: Optional notes
         """
-        review = QualityReview.query.get(review_id)
+        review = db.session.get(QualityReview, review_id)
         if not review:
             raise NotFoundError(f"Review {review_id} not found")
         if review.qe_id != qe_id:
@@ -119,12 +119,12 @@ class QualityService:
 
         # Update job QC rating
         if review.job_type == 'specialist':
-            job = SpecialistJob.query.get(review.job_id)
+            job = db.session.get(SpecialistJob, review.job_id)
             if job:
                 job.qc_rating = qc_rating
                 job.status = 'qc_approved'
         else:
-            job = EngineerJob.query.get(review.job_id)
+            job = db.session.get(EngineerJob, review.job_id)
             if job:
                 job.qc_rating = qc_rating
                 job.status = 'qc_approved'
@@ -134,9 +134,9 @@ class QualityService:
 
         # Notify the worker
         if review.job_type == 'specialist':
-            worker_id = SpecialistJob.query.get(review.job_id).specialist_id
+            worker_id = db.session.get(SpecialistJob, review.job_id).specialist_id
         else:
-            worker_id = EngineerJob.query.get(review.job_id).engineer_id
+            worker_id = db.session.get(EngineerJob, review.job_id).engineer_id
 
         from app.services.notification_service import NotificationService
         NotificationService.create_notification(
@@ -163,7 +163,7 @@ class QualityService:
             rejection_category: Predefined category
             evidence_photos: Optional JSON list of photo paths
         """
-        review = QualityReview.query.get(review_id)
+        review = db.session.get(QualityReview, review_id)
         if not review:
             raise NotFoundError(f"Review {review_id} not found")
         if review.qe_id != qe_id:
@@ -216,13 +216,13 @@ class QualityService:
             admin_id: Admin user ID
             is_valid: True if QE rejection was valid, False if wrong
         """
-        review = QualityReview.query.get(review_id)
+        review = db.session.get(QualityReview, review_id)
         if not review:
             raise NotFoundError(f"Review {review_id} not found")
         if review.status != 'rejected':
             raise ValidationError("Only rejected reviews can be validated")
 
-        admin = User.query.get(admin_id)
+        admin = db.session.get(User, admin_id)
         if not admin or admin.role != 'admin':
             raise ForbiddenError("Admin access required")
 
@@ -230,16 +230,16 @@ class QualityService:
         review.admin_validation_by = admin_id
         review.admin_validated_at = datetime.utcnow()
 
-        qe = User.query.get(review.qe_id)
+        qe = db.session.get(User, review.qe_id)
 
         if is_valid:
             # QE was right: specialist -2, QE +2
             if review.job_type == 'specialist':
-                worker = User.query.get(SpecialistJob.query.get(review.job_id).specialist_id)
+                worker = db.session.get(User, db.session.get(SpecialistJob, review.job_id).specialist_id)
                 if worker:
                     worker.add_points(-2, 'specialist')
             else:
-                worker = User.query.get(EngineerJob.query.get(review.job_id).engineer_id)
+                worker = db.session.get(User, db.session.get(EngineerJob, review.job_id).engineer_id)
                 if worker:
                     worker.add_points(-2, 'engineer')
             if qe:

@@ -93,7 +93,7 @@ class InspectionListService:
     @staticmethod
     def get_list(list_id):
         """Get inspection list with assignments."""
-        inspection_list = InspectionList.query.get(list_id)
+        inspection_list = db.session.get(InspectionList, list_id)
         if not inspection_list:
             raise NotFoundError(f"Inspection list {list_id} not found")
         return inspection_list
@@ -115,7 +115,7 @@ class InspectionListService:
             electrical_inspector_id: User ID of electrical inspector
             assigned_by_id: Engineer assigning the team
         """
-        assignment = InspectionAssignment.query.get(assignment_id)
+        assignment = db.session.get(InspectionAssignment, assignment_id)
         if not assignment:
             raise NotFoundError(f"Assignment {assignment_id} not found")
 
@@ -123,7 +123,7 @@ class InspectionListService:
             raise ValidationError("Assignment cannot be reassigned in current status")
 
         # Validate mechanical inspector
-        mech = User.query.get(mechanical_inspector_id)
+        mech = db.session.get(User, mechanical_inspector_id)
         if not mech or not mech.has_role('inspector'):
             raise ValidationError("Invalid mechanical inspector")
         if mech.specialization != 'mechanical':
@@ -132,7 +132,7 @@ class InspectionListService:
             raise ValidationError(f"{mech.full_name} is currently on leave")
 
         # Validate electrical inspector
-        elec = User.query.get(electrical_inspector_id)
+        elec = db.session.get(User, electrical_inspector_id)
         if not elec or not elec.has_role('inspector'):
             raise ValidationError("Invalid electrical inspector")
         if elec.specialization != 'electrical':
@@ -189,7 +189,7 @@ class InspectionListService:
     @staticmethod
     def update_berth(assignment_id, new_berth, engineer_id):
         """Engineer updates the verified berth during assignment."""
-        assignment = InspectionAssignment.query.get(assignment_id)
+        assignment = db.session.get(InspectionAssignment, assignment_id)
         if not assignment:
             raise NotFoundError(f"Assignment {assignment_id} not found")
 
@@ -237,7 +237,7 @@ class InspectionListService:
         Mark one inspector's portion as complete.
         Updates status based on which inspectors have finished.
         """
-        assignment = InspectionAssignment.query.get(assignment_id)
+        assignment = db.session.get(InspectionAssignment, assignment_id)
         if not assignment:
             raise NotFoundError(f"Assignment {assignment_id} not found")
 

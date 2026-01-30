@@ -110,7 +110,7 @@ def update_user(user_id):
             "user": {...}
         }
     """
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         raise NotFoundError(f"User with ID {user_id} not found")
     
@@ -154,7 +154,7 @@ def deactivate_user(user_id):
             "message": "User deactivated"
         }
     """
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         raise NotFoundError(f"User with ID {user_id} not found")
     

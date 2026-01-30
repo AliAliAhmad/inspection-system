@@ -51,7 +51,7 @@ def pending_assessments():
         if job.defect_id:
             existing = DefectAssessment.query.filter_by(defect_id=job.defect_id).first()
             if not existing:
-                defect = Defect.query.get(job.defect_id)
+                defect = db.session.get(Defect, job.defect_id)
                 if defect:
                     pending.append({
                         'job_id': job.id,
@@ -86,7 +86,7 @@ def create_assessment():
     if verdict not in ('confirm', 'reject', 'minor'):
         raise ValidationError("Verdict must be 'confirm', 'reject', or 'minor'")
 
-    defect = Defect.query.get(defect_id)
+    defect = db.session.get(Defect, defect_id)
     if not defect:
         raise NotFoundError(f"Defect {defect_id} not found")
 
@@ -114,7 +114,7 @@ def create_assessment():
 
         # Inspector loses 1 star
         if defect.inspection:
-            inspector = User.query.get(defect.inspection.technician_id)
+            inspector = db.session.get(User, defect.inspection.technician_id)
             if inspector:
                 inspector.add_points(-1, 'inspector')
 

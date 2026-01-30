@@ -25,7 +25,7 @@ class DefectService:
         Returns:
             Created Defect object
         """
-        item = ChecklistItem.query.get(checklist_item_id)
+        item = db.session.get(ChecklistItem, checklist_item_id)
         if not item:
             raise NotFoundError("Checklist item not found")
         
@@ -104,12 +104,12 @@ class DefectService:
         Returns:
             Updated Defect object
         """
-        defect = Defect.query.get(defect_id)
+        defect = db.session.get(Defect, defect_id)
         if not defect:
             raise NotFoundError(f"Defect with ID {defect_id} not found")
         
         # Only admin can update
-        user = User.query.get(current_user_id)
+        user = db.session.get(User, current_user_id)
         if user.role != 'admin':
             raise ForbiddenError("Only admins can update defects")
         
@@ -136,15 +136,15 @@ class DefectService:
         Returns:
             Updated Defect object
         """
-        defect = Defect.query.get(defect_id)
+        defect = db.session.get(Defect, defect_id)
         if not defect:
             raise NotFoundError(f"Defect with ID {defect_id} not found")
         
-        technician = User.query.get(technician_id)
+        technician = db.session.get(User, technician_id)
         if not technician or technician.role != 'technician':
             raise ValidationError("Invalid technician")
         
-        user = User.query.get(current_user_id)
+        user = db.session.get(User, current_user_id)
         if user.role != 'admin':
             raise ForbiddenError("Only admins can assign defects")
         
@@ -165,11 +165,11 @@ class DefectService:
         Returns:
             Updated Defect object
         """
-        defect = Defect.query.get(defect_id)
+        defect = db.session.get(Defect, defect_id)
         if not defect:
             raise NotFoundError(f"Defect with ID {defect_id} not found")
         
-        user = User.query.get(current_user_id)
+        user = db.session.get(User, current_user_id)
         
         # Technician can only resolve their assigned defects
         if user.role == 'technician' and defect.assigned_to_id != current_user_id:
@@ -212,11 +212,11 @@ class DefectService:
         Returns:
             Updated Defect object
         """
-        defect = Defect.query.get(defect_id)
+        defect = db.session.get(Defect, defect_id)
         if not defect:
             raise NotFoundError(f"Defect with ID {defect_id} not found")
         
-        user = User.query.get(current_user_id)
+        user = db.session.get(User, current_user_id)
         if user.role != 'admin':
             raise ForbiddenError("Only admins can close defects")
         

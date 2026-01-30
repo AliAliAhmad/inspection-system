@@ -100,7 +100,7 @@ def init_scheduler(app):
             Leave.date_from == today
         ).all()
         for leave in starting:
-            user = User.query.get(leave.user_id)
+            user = db.session.get(User, leave.user_id)
             if user and not user.is_on_leave:
                 user.is_on_leave = True
                 logger.info(f"Activated leave for {user.full_name}")

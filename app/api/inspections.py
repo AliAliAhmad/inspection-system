@@ -8,6 +8,7 @@ from app.services.inspection_service import InspectionService
 from app.models import Inspection, User
 from app.exceptions.api_exceptions import ValidationError
 from app.utils.decorators import get_current_user, admin_required, get_language
+from app.extensions import db
 
 bp = Blueprint('inspections', __name__)
 
@@ -243,7 +244,7 @@ def get_inspection(inspection_id):
     """
     from app.exceptions.api_exceptions import NotFoundError, ForbiddenError
     
-    inspection = Inspection.query.get(inspection_id)
+    inspection = db.session.get(Inspection, inspection_id)
     if not inspection:
         raise NotFoundError(f"Inspection with ID {inspection_id} not found")
     

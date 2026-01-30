@@ -58,7 +58,7 @@ def get_equipment(equipment_id):
             "equipment": {...}
         }
     """
-    equipment = Equipment.query.get(equipment_id)
+    equipment = db.session.get(Equipment, equipment_id)
     if not equipment:
         raise NotFoundError(f"Equipment with ID {equipment_id} not found")
     
@@ -149,7 +149,7 @@ def update_equipment(equipment_id):
             "equipment": {...}
         }
     """
-    equipment = Equipment.query.get(equipment_id)
+    equipment = db.session.get(Equipment, equipment_id)
     if not equipment:
         raise NotFoundError(f"Equipment with ID {equipment_id} not found")
     
@@ -191,7 +191,7 @@ def delete_equipment(equipment_id):
             "message": "Equipment deleted"
         }
     """
-    equipment = Equipment.query.get(equipment_id)
+    equipment = db.session.get(Equipment, equipment_id)
     if not equipment:
         raise NotFoundError(f"Equipment with ID {equipment_id} not found")
 

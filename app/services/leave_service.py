@@ -67,7 +67,7 @@ class LeaveService:
 
         # Notify admins
         from app.services.notification_service import NotificationService
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         admins = User.query.filter_by(role='admin', is_active=True).all()
         for admin in admins:
             NotificationService.create_notification(
@@ -87,13 +87,13 @@ class LeaveService:
         Approve a leave request.
         Optionally assign coverage.
         """
-        leave = Leave.query.get(leave_id)
+        leave = db.session.get(Leave, leave_id)
         if not leave:
             raise NotFoundError(f"Leave {leave_id} not found")
         if leave.status != 'pending':
             raise ValidationError("Leave is not pending")
 
-        approver = User.query.get(approved_by)
+        approver = db.session.get(User, approved_by)
         if not approver or approver.role != 'admin':
             raise ForbiddenError("Admin access required")
 
@@ -102,13 +102,13 @@ class LeaveService:
         leave.approved_at = datetime.utcnow()
 
         if coverage_user_id:
-            coverage_user = User.query.get(coverage_user_id)
+            coverage_user = db.session.get(User, coverage_user_id)
             if not coverage_user:
                 raise ValidationError("Coverage user not found")
             leave.coverage_user_id = coverage_user_id
 
         # Mark user as on leave if leave starts today or earlier
-        user = User.query.get(leave.user_id)
+        user = db.session.get(User, leave.user_id)
         if leave.date_from <= date.today():
             user.is_on_leave = True
 
@@ -135,7 +135,7 @@ class LeaveService:
     @staticmethod
     def reject_leave(leave_id, rejected_by, reason=None):
         """Reject a leave request."""
-        leave = Leave.query.get(leave_id)
+        leave = db.session.get(Leave, leave_id)
         if not leave:
             raise NotFoundError(f"Leave {leave_id} not found")
         if leave.status != 'pending':
@@ -165,17 +165,17 @@ class LeaveService:
         End a leave (called when leave period expires or manually).
         Restores user status.
         """
-        leave = Leave.query.get(leave_id)
+        leave = db.session.get(Leave, leave_id)
         if not leave:
             raise NotFoundError(f"Leave {leave_id} not found")
 
-        user = User.query.get(leave.user_id)
+        user = db.session.get(User, leave.user_id)
         user.is_on_leave = False
         user.leave_coverage_for = None
 
         # Restore coverage user if any
         if leave.coverage_user_id:
-            coverage = User.query.get(leave.coverage_user_id)
+            coverage = db.session.get(User, leave.coverage_user_id)
             if coverage:
                 coverage.leave_coverage_for = None
 

@@ -42,7 +42,7 @@ class EngineerJobService:
             category: major or minor
             major_reason: Required if category is major
         """
-        engineer = User.query.get(engineer_id)
+        engineer = db.session.get(User, engineer_id)
         if not engineer or not engineer.has_role('engineer'):
             raise ValidationError("Invalid engineer")
 
@@ -54,7 +54,7 @@ class EngineerJobService:
             raise ValidationError("Reason required for major category jobs")
 
         if equipment_id:
-            equip = Equipment.query.get(equipment_id)
+            equip = db.session.get(Equipment, equipment_id)
             if not equip:
                 raise NotFoundError(f"Equipment {equipment_id} not found")
 
@@ -89,7 +89,7 @@ class EngineerJobService:
     @staticmethod
     def enter_planned_time(job_id, engineer_id, planned_time_days, planned_time_hours):
         """Enter planned time estimate before viewing job details."""
-        job = EngineerJob.query.get(job_id)
+        job = db.session.get(EngineerJob, job_id)
         if not job:
             raise NotFoundError(f"Job {job_id} not found")
         if job.engineer_id != engineer_id:
@@ -106,7 +106,7 @@ class EngineerJobService:
     @staticmethod
     def start_job(job_id, engineer_id):
         """Start the engineer job timer."""
-        job = EngineerJob.query.get(job_id)
+        job = db.session.get(EngineerJob, job_id)
         if not job:
             raise NotFoundError(f"Job {job_id} not found")
         if job.engineer_id != engineer_id:
@@ -125,7 +125,7 @@ class EngineerJobService:
     @staticmethod
     def complete_job(job_id, engineer_id, work_notes):
         """Complete an engineer job."""
-        job = EngineerJob.query.get(job_id)
+        job = db.session.get(EngineerJob, job_id)
         if not job:
             raise NotFoundError(f"Job {job_id} not found")
         if job.engineer_id != engineer_id:

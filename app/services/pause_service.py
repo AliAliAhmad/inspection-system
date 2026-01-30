@@ -37,9 +37,9 @@ class PauseService:
 
         # Validate job exists and is in progress
         if job_type == 'specialist':
-            job = SpecialistJob.query.get(job_id)
+            job = db.session.get(SpecialistJob, job_id)
         elif job_type == 'engineer':
-            job = EngineerJob.query.get(job_id)
+            job = db.session.get(EngineerJob, job_id)
         else:
             raise ValidationError("job_type must be 'specialist' or 'engineer'")
 
@@ -87,13 +87,13 @@ class PauseService:
     @staticmethod
     def approve_pause(pause_id, approved_by):
         """Approve a pause request. Admin or delegated engineer."""
-        pause = PauseLog.query.get(pause_id)
+        pause = db.session.get(PauseLog, pause_id)
         if not pause:
             raise NotFoundError(f"Pause request {pause_id} not found")
         if pause.status != 'pending':
             raise ValidationError("Pause request is not pending")
 
-        approver = User.query.get(approved_by)
+        approver = db.session.get(User, approved_by)
         if not approver or approver.role not in ('admin', 'engineer'):
             raise ForbiddenError("Only admins or engineers can approve pauses")
 
@@ -103,9 +103,9 @@ class PauseService:
 
         # Update job status
         if pause.job_type == 'specialist':
-            job = SpecialistJob.query.get(pause.job_id)
+            job = db.session.get(SpecialistJob, pause.job_id)
         else:
-            job = EngineerJob.query.get(pause.job_id)
+            job = db.session.get(EngineerJob, pause.job_id)
 
         if job:
             job.status = 'paused'
@@ -130,7 +130,7 @@ class PauseService:
     @staticmethod
     def deny_pause(pause_id, denied_by):
         """Deny a pause request."""
-        pause = PauseLog.query.get(pause_id)
+        pause = db.session.get(PauseLog, pause_id)
         if not pause:
             raise NotFoundError(f"Pause request {pause_id} not found")
         if pause.status != 'pending':
@@ -156,7 +156,7 @@ class PauseService:
     @staticmethod
     def resume_job(pause_id, resumed_by):
         """Resume a paused job."""
-        pause = PauseLog.query.get(pause_id)
+        pause = db.session.get(PauseLog, pause_id)
         if not pause:
             raise NotFoundError(f"Pause request {pause_id} not found")
         if pause.status != 'approved':
@@ -172,9 +172,9 @@ class PauseService:
 
         # Update job
         if pause.job_type == 'specialist':
-            job = SpecialistJob.query.get(pause.job_id)
+            job = db.session.get(SpecialistJob, pause.job_id)
         else:
-            job = EngineerJob.query.get(pause.job_id)
+            job = db.session.get(EngineerJob, pause.job_id)
 
         if job:
             job.status = 'in_progress'
@@ -190,9 +190,9 @@ class PauseService:
     def admin_force_pause(job_type, job_id, admin_id, reason='Admin forced pause'):
         """Admin force-pauses a job without approval flow."""
         if job_type == 'specialist':
-            job = SpecialistJob.query.get(job_id)
+            job = db.session.get(SpecialistJob, job_id)
         else:
-            job = EngineerJob.query.get(job_id)
+            job = db.session.get(EngineerJob, job_id)
 
         if not job:
             raise NotFoundError(f"Job {job_id} not found")

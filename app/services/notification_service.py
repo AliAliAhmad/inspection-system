@@ -159,7 +159,7 @@ class NotificationService:
     @staticmethod
     def mark_as_read(notification_id, user_id):
         """Mark notification as read."""
-        notification = Notification.query.get(notification_id)
+        notification = db.session.get(Notification, notification_id)
         if not notification:
             raise NotFoundError(f"Notification with ID {notification_id} not found")
 
@@ -197,7 +197,7 @@ class NotificationService:
     @staticmethod
     def delete_notification(notification_id, user_id):
         """Delete a notification."""
-        notification = Notification.query.get(notification_id)
+        notification = db.session.get(Notification, notification_id)
         if not notification:
             raise NotFoundError(f"Notification with ID {notification_id} not found")
 

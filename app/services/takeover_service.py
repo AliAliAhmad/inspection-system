@@ -113,7 +113,7 @@ class TakeoverService:
         # Notify admins
         from app.services.notification_service import NotificationService
         admins = User.query.filter_by(role='admin', is_active=True).all()
-        requester = User.query.get(requested_by)
+        requester = db.session.get(User, requested_by)
         for admin in admins:
             NotificationService.create_notification(
                 user_id=admin.id,
@@ -133,13 +133,13 @@ class TakeoverService:
         Reassigns the job to the new person.
         Denies all other pending requests for the same job.
         """
-        takeover = JobTakeover.query.get(takeover_id)
+        takeover = db.session.get(JobTakeover, takeover_id)
         if not takeover:
             raise NotFoundError(f"Takeover request {takeover_id} not found")
         if takeover.status != 'pending':
             raise ValidationError("Takeover request is not pending")
 
-        admin = User.query.get(admin_id)
+        admin = db.session.get(User, admin_id)
         if not admin or admin.role != 'admin':
             raise ForbiddenError("Admin access required")
 
@@ -149,19 +149,19 @@ class TakeoverService:
 
         # Reassign job
         if takeover.job_type == 'specialist':
-            job = SpecialistJob.query.get(takeover.job_id)
+            job = db.session.get(SpecialistJob, takeover.job_id)
             if job:
                 job.specialist_id = takeover.requested_by
                 job.status = 'assigned'
                 job.paused_at = None
         elif takeover.job_type == 'engineer':
-            job = EngineerJob.query.get(takeover.job_id)
+            job = db.session.get(EngineerJob, takeover.job_id)
             if job:
                 job.engineer_id = takeover.requested_by
                 job.status = 'assigned'
                 job.paused_at = None
         elif takeover.job_type == 'inspection':
-            assignment = InspectionAssignment.query.get(takeover.job_id)
+            assignment = db.session.get(InspectionAssignment, takeover.job_id)
             if assignment:
                 # Create new assignment as takeover
                 new_assignment = InspectionAssignment(
@@ -211,7 +211,7 @@ class TakeoverService:
     @staticmethod
     def deny_takeover(takeover_id, admin_id):
         """Deny a takeover request."""
-        takeover = JobTakeover.query.get(takeover_id)
+        takeover = db.session.get(JobTakeover, takeover_id)
         if not takeover:
             raise NotFoundError(f"Takeover request {takeover_id} not found")
         if takeover.status != 'pending':
@@ -240,7 +240,7 @@ class TakeoverService:
         Mark takeover as completed and award +3 bonus stars.
         Called when the taken-over job is completed.
         """
-        takeover = JobTakeover.query.get(takeover_id)
+        takeover = db.session.get(JobTakeover, takeover_id)
         if not takeover:
             raise NotFoundError(f"Takeover request {takeover_id} not found")
         if takeover.status != 'approved':
@@ -251,7 +251,7 @@ class TakeoverService:
         takeover.bonus_awarded = True
 
         # Award +3 bonus stars
-        user = User.query.get(takeover.requested_by)
+        user = db.session.get(User, takeover.requested_by)
         if user:
             role = 'specialist' if takeover.job_type == 'specialist' else 'inspector'
             user.add_points(3, role)

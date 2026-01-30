@@ -28,7 +28,7 @@ class ScheduleService:
             ValidationError: If day_of_week invalid or schedule exists
         """
         # Validate equipment exists
-        equipment = Equipment.query.get(equipment_id)
+        equipment = db.session.get(Equipment, equipment_id)
         if not equipment:
             raise NotFoundError(f"Equipment with ID {equipment_id} not found")
         
@@ -170,7 +170,7 @@ class ScheduleService:
         Args:
             inspection_id: ID of submitted inspection
         """
-        inspection = Inspection.query.get(inspection_id)
+        inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             return
         
@@ -220,11 +220,11 @@ class ScheduleService:
         from app.models import User
         from app.exceptions.api_exceptions import ForbiddenError
         
-        schedule = InspectionSchedule.query.get(schedule_id)
+        schedule = db.session.get(InspectionSchedule, schedule_id)
         if not schedule:
             raise NotFoundError(f"Schedule with ID {schedule_id} not found")
         
-        user = User.query.get(int(current_user_id))
+        user = db.session.get(User, int(current_user_id))
         if user.role != 'admin':
             raise ForbiddenError("Only admins can delete schedules")
         

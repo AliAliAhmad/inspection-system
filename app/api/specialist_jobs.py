@@ -356,7 +356,7 @@ def admin_cleaning_rating(job_id):
     job.cleaning_rating = rating
 
     # Add cleaning points to specialist
-    specialist = User.query.get(job.specialist_id)
+    specialist = db.session.get(User, job.specialist_id)
     if specialist and rating > 0:
         specialist.add_points(rating, 'specialist')
 
@@ -383,7 +383,7 @@ def admin_bonus(job_id):
     job = SpecialistJob.query.get_or_404(job_id)
     job.admin_bonus = bonus
 
-    specialist = User.query.get(job.specialist_id)
+    specialist = db.session.get(User, job.specialist_id)
     if specialist and bonus > 0:
         specialist.add_points(bonus, 'specialist')
 

@@ -34,12 +34,12 @@ class InspectionService:
             ConflictError: If draft already exists for this equipment
         """
         # Validate equipment exists
-        equipment = Equipment.query.get(equipment_id)
+        equipment = db.session.get(Equipment, equipment_id)
         if not equipment:
             raise NotFoundError(f"Equipment with ID {equipment_id} not found")
         
         # Validate technician
-        technician = User.query.get(technician_id)
+        technician = db.session.get(User, technician_id)
         if not technician or technician.role != 'technician':
             raise ValidationError("Invalid technician")
         
@@ -112,7 +112,7 @@ class InspectionService:
             ForbiddenError: If user not authorized
         """
         # Validate inspection exists
-        inspection = Inspection.query.get(inspection_id)
+        inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError(f"Inspection with ID {inspection_id} not found")
         
@@ -122,12 +122,12 @@ class InspectionService:
         
         # Verify user is the assigned technician (unless admin)
         if current_user_id:
-            user = User.query.get(int(current_user_id))
+            user = db.session.get(User, int(current_user_id))
             if user.role != 'admin' and inspection.technician_id != int(current_user_id):
                 raise ForbiddenError("You can only answer your own inspections")
         
         # Validate checklist item exists and belongs to the template
-        item = ChecklistItem.query.get(checklist_item_id)
+        item = db.session.get(ChecklistItem, checklist_item_id)
         if not item:
             raise NotFoundError(f"Checklist item with ID {checklist_item_id} not found")
         
@@ -204,7 +204,7 @@ class InspectionService:
         Returns:
             Dictionary with progress information
         """
-        inspection = Inspection.query.get(inspection_id)
+        inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError(f"Inspection with ID {inspection_id} not found")
         
@@ -253,7 +253,7 @@ class InspectionService:
             ForbiddenError: If user not authorized
         """
         # Validate inspection exists
-        inspection = Inspection.query.get(inspection_id)
+        inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError(f"Inspection with ID {inspection_id} not found")
         
@@ -263,7 +263,7 @@ class InspectionService:
         
         # Verify user is the assigned technician (unless admin)
         if current_user_id:
-            user = User.query.get(int(current_user_id))
+            user = db.session.get(User, int(current_user_id))
             if user.role != 'admin' and inspection.technician_id != int(current_user_id):
                 raise ForbiddenError("You can only submit your own inspections")
         
@@ -398,7 +398,7 @@ class InspectionService:
             ForbiddenError: If reviewer not admin
         """
         # Validate inspection exists
-        inspection = Inspection.query.get(inspection_id)
+        inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError(f"Inspection with ID {inspection_id} not found")
         
@@ -407,7 +407,7 @@ class InspectionService:
             raise ValidationError("Can only review inspections in submitted status")
         
         # Validate reviewer is admin
-        reviewer = User.query.get(int(reviewer_id))
+        reviewer = db.session.get(User, int(reviewer_id))
         if not reviewer or reviewer.role != 'admin':
             raise ForbiddenError("Only admins can review inspections")
         
@@ -436,14 +436,14 @@ class InspectionService:
             ValidationError: If inspection not draft
             ForbiddenError: If user not authorized
         """
-        inspection = Inspection.query.get(inspection_id)
+        inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError(f"Inspection with ID {inspection_id} not found")
         
         if inspection.status != 'draft':
             raise ValidationError("Can only delete draft inspections")
         
-        user = User.query.get(int(current_user_id))
+        user = db.session.get(User, int(current_user_id))
         if user.role != 'admin' and inspection.technician_id != int(current_user_id):
             raise ForbiddenError("You can only delete your own inspections")
         

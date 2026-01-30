@@ -31,12 +31,12 @@ class RatingService:
             ForbiddenError: If user not admin
         """
         # Validate admin
-        admin = User.query.get(int(rated_by_id))
+        admin = db.session.get(User, int(rated_by_id))
         if not admin or admin.role != 'admin':
             raise ForbiddenError("Only admins can rate inspections")
         
         # Validate inspection exists
-        inspection = Inspection.query.get(inspection_id)
+        inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError(f"Inspection with ID {inspection_id} not found")
         
@@ -92,7 +92,7 @@ class RatingService:
             Updated InspectionRating object
         """
         # Validate admin
-        admin = User.query.get(int(rated_by_id))
+        admin = db.session.get(User, int(rated_by_id))
         if not admin or admin.role != 'admin':
             raise ForbiddenError("Only admins can update ratings")
         

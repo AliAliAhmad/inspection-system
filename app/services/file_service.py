@@ -157,7 +157,7 @@ class FileService:
     @staticmethod
     def delete_file(file_id, user_id):
         """Delete a file."""
-        file_record = File.query.get(file_id)
+        file_record = db.session.get(File, file_id)
         if not file_record:
             raise ValidationError(f"File {file_id} not found")
 

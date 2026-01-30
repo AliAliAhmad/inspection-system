@@ -20,11 +20,11 @@ class CoverageService:
         Priority: same shift > same specialization > fewest active defects.
         Specialists with 0 defects are preferred for inspector coverage.
         """
-        leave = Leave.query.get(leave_id)
+        leave = db.session.get(Leave, leave_id)
         if not leave:
             raise NotFoundError(f"Leave {leave_id} not found")
 
-        absent_user = User.query.get(leave.user_id)
+        absent_user = db.session.get(User, leave.user_id)
 
         # Find available users (same shift, not on leave, active)
         candidates = User.query.filter(
@@ -89,14 +89,14 @@ class CoverageService:
         Assign a coverage user for a leave.
         May temporarily switch their role if needed.
         """
-        leave = Leave.query.get(leave_id)
+        leave = db.session.get(Leave, leave_id)
         if not leave:
             raise NotFoundError(f"Leave {leave_id} not found")
         if leave.status != 'approved':
             raise ValidationError("Leave must be approved first")
 
-        absent_user = User.query.get(leave.user_id)
-        coverage_user = User.query.get(coverage_user_id)
+        absent_user = db.session.get(User, leave.user_id)
+        coverage_user = db.session.get(User, coverage_user_id)
 
         if not coverage_user:
             raise NotFoundError(f"Coverage user {coverage_user_id} not found")
@@ -134,12 +134,12 @@ class CoverageService:
         End coverage assignment. Restore original roles.
         Called when leave ends.
         """
-        leave = Leave.query.get(leave_id)
+        leave = db.session.get(Leave, leave_id)
         if not leave:
             raise NotFoundError(f"Leave {leave_id} not found")
 
         if leave.coverage_user_id:
-            coverage_user = User.query.get(leave.coverage_user_id)
+            coverage_user = db.session.get(User, leave.coverage_user_id)
             if coverage_user:
                 coverage_user.leave_coverage_for = None
                 # Remove temporary minor role if it was for coverage
