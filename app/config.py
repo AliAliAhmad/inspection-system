@@ -54,14 +54,11 @@ class ProductionConfig(Config):
     SECRET_KEY = os.getenv('SECRET_KEY', '')
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '')
 
-    @staticmethod
-    def _fix_database_url(url: str) -> str:
-        """Fix Render/Heroku postgres:// URI for SQLAlchemy 2.x."""
-        if url.startswith('postgres://'):
-            return url.replace('postgres://', 'postgresql://', 1)
-        return url
-
-    SQLALCHEMY_DATABASE_URI = _fix_database_url.__func__(os.getenv('DATABASE_URL', ''))
+    # Fix Render/Heroku postgres:// URI for SQLAlchemy 2.x
+    _db_url = os.getenv('DATABASE_URL', '')
+    if _db_url.startswith('postgres://'):
+        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = _db_url
 
     # Security
     SESSION_COOKIE_SECURE = True
