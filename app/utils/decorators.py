@@ -18,7 +18,7 @@ def admin_required():
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             from app.models import User
-            user = db.session.get(User, current_user_id)
+            user = db.session.get(User, int(current_user_id))
             if not user:
                 raise UnauthorizedError("User not found")
             if user.role != 'admin':
@@ -36,7 +36,7 @@ def inspector_required():
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             from app.models import User
-            user = db.session.get(User, current_user_id)
+            user = db.session.get(User, int(current_user_id))
             if not user:
                 raise UnauthorizedError("User not found")
             if not user.has_role('inspector'):
@@ -54,7 +54,7 @@ def specialist_required():
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             from app.models import User
-            user = db.session.get(User, current_user_id)
+            user = db.session.get(User, int(current_user_id))
             if not user:
                 raise UnauthorizedError("User not found")
             if not user.has_role('specialist'):
@@ -72,7 +72,7 @@ def engineer_required():
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             from app.models import User
-            user = db.session.get(User, current_user_id)
+            user = db.session.get(User, int(current_user_id))
             if not user:
                 raise UnauthorizedError("User not found")
             if not user.has_role('engineer'):
@@ -90,7 +90,7 @@ def quality_engineer_required():
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             from app.models import User
-            user = db.session.get(User, current_user_id)
+            user = db.session.get(User, int(current_user_id))
             if not user:
                 raise UnauthorizedError("User not found")
             if not user.has_role('quality_engineer'):
@@ -108,7 +108,7 @@ def role_required(*roles):
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             from app.models import User
-            user = db.session.get(User, current_user_id)
+            user = db.session.get(User, int(current_user_id))
             if not user:
                 raise UnauthorizedError("User not found")
             if not any(user.has_role(r) for r in roles):
@@ -126,7 +126,7 @@ def technician_or_admin_required():
             verify_jwt_in_request()
             current_user_id = get_jwt_identity()
             from app.models import User
-            user = db.session.get(User, current_user_id)
+            user = db.session.get(User, int(current_user_id))
             if not user:
                 raise UnauthorizedError("User not found")
             if user.role not in ['admin', 'technician']:
