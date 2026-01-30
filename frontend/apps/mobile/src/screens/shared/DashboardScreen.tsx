@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../providers/AuthProvider';
 import { reportsApi, DashboardData, AdminDashboardData } from '@inspection/shared';
 
@@ -20,9 +21,19 @@ function StatCard({ title, value, color }: { title: string; value: string | numb
   );
 }
 
+function QuickLink({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.quickLink} onPress={onPress} activeOpacity={0.7}>
+      <Text style={styles.quickLinkText}>{label}</Text>
+      <Text style={styles.quickLinkArrow}>›</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function DashboardScreen() {
   const { user } = useAuth();
   const { t } = useTranslation();
+  const navigation = useNavigation<any>();
   const isAdmin = user?.role === 'admin';
 
   const { data: dashData, isLoading: dashLoading, refetch: dashRefetch } = useQuery({
@@ -59,6 +70,11 @@ export default function DashboardScreen() {
           <StatCard title={t('nav.defects')} value={adminData.open_defects} color={adminData.open_defects > 0 ? '#cf1322' : undefined} />
           <StatCard title={t('nav.leaves')} value={adminData.active_leaves} />
         </View>
+        <>
+          <Text style={styles.sectionTitle}>{t('nav.quick_links', 'Quick Access')}</Text>
+          <QuickLink label={t('nav.routines', 'Inspection Routines')} onPress={() => navigation.navigate('InspectionRoutines')} />
+          <QuickLink label={t('nav.defects', 'Defects')} onPress={() => navigation.navigate('Defects')} />
+        </>
       ) : dashData ? (
         <View style={styles.grid}>
           <StatCard title={t('nav.inspections')} value={dashData.total_inspections} />
@@ -89,4 +105,20 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 28, fontWeight: 'bold', color: '#1a1a1a' },
   statTitle: { fontSize: 13, color: '#666', marginTop: 4 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#424242', marginTop: 20, marginBottom: 10 },
+  quickLink: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickLinkText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1976D2' },
+  quickLinkArrow: { fontSize: 22, color: '#999' },
 });

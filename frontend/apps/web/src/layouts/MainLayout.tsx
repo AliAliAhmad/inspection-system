@@ -22,6 +22,8 @@ import {
   PauseCircleOutlined,
   ClockCircleOutlined,
   AlertOutlined,
+  BugOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { Badge, Dropdown, Avatar, Space, Button } from 'antd';
 import { useQuery } from '@tanstack/react-query';
@@ -51,6 +53,8 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/quality-reviews', name: t('nav.quality_reviews'), icon: <AuditOutlined /> },
     { path: '/admin/leave-approvals', name: t('nav.leave_approvals'), icon: <SafetyCertificateOutlined /> },
     { path: '/admin/bonus-approvals', name: t('nav.bonus_approvals'), icon: <StarOutlined /> },
+    { path: '/admin/routines', name: t('nav.routines', 'Inspection Routines'), icon: <SyncOutlined /> },
+    { path: '/admin/defects', name: t('nav.defects', 'Defects'), icon: <BugOutlined /> },
     { path: '/admin/reports', name: t('nav.reports'), icon: <BarChartOutlined /> },
   ];
 

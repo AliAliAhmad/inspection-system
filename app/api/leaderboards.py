@@ -24,12 +24,7 @@ def overall_leaderboard():
 
     return jsonify({
         'status': 'success',
-        'data': {
-            'role_filter': role,
-            'period': period,
-            'rankings': rankings,
-            'total': len(rankings)
-        }
+        'data': rankings
     }), 200
 
 

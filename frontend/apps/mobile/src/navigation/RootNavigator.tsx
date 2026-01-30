@@ -11,6 +11,8 @@ import CreateJobScreen from '../screens/engineer/CreateJobScreen';
 import TeamAssignmentScreen from '../screens/engineer/TeamAssignmentScreen';
 import ReviewDetailScreen from '../screens/quality_engineer/ReviewDetailScreen';
 import OverdueReviewsScreen from '../screens/quality_engineer/OverdueReviewsScreen';
+import InspectionRoutinesScreen from '../screens/admin/InspectionRoutinesScreen';
+import DefectsScreen from '../screens/admin/DefectsScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -22,6 +24,8 @@ export type RootStackParamList = {
   TeamAssignment: undefined;
   ReviewDetail: { id: number };
   OverdueReviews: undefined;
+  InspectionRoutines: undefined;
+  Defects: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -38,6 +42,8 @@ export default function RootNavigator() {
       <Stack.Screen name="TeamAssignment" component={TeamAssignmentScreen} options={{ headerShown: true, title: 'Team Assignment' }} />
       <Stack.Screen name="ReviewDetail" component={ReviewDetailScreen} options={{ headerShown: true, title: 'Review' }} />
       <Stack.Screen name="OverdueReviews" component={OverdueReviewsScreen} options={{ headerShown: true, title: 'Overdue Reviews' }} />
+      <Stack.Screen name="InspectionRoutines" component={InspectionRoutinesScreen} options={{ headerShown: true, title: 'Inspection Routines' }} />
+      <Stack.Screen name="Defects" component={DefectsScreen} options={{ headerShown: true, title: 'Defects' }} />
     </Stack.Navigator>
   );
 }

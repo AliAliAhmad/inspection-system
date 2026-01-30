@@ -72,7 +72,7 @@ def create_app(config_name='development'):
         reports, schedules, ratings, notifications, specialist_jobs,
         inspection_assignments, assessments, defect_assessments,
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
-        files, sync
+        files, sync, inspection_routines
     )
 
     # Core
@@ -110,6 +110,9 @@ def create_app(config_name='development'):
 
     # File management
     app.register_blueprint(files.bp, url_prefix='/api/files')
+
+    # Inspection routines
+    app.register_blueprint(inspection_routines.bp, url_prefix='/api/inspection-routines')
 
     # Offline sync
     app.register_blueprint(sync.bp, url_prefix='/api/sync')

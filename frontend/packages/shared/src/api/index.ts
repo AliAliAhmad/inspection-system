@@ -73,3 +73,8 @@ export type {
 } from './reports.api';
 export { filesApi } from './files.api';
 export type { FileListParams } from './files.api';
+export { inspectionRoutinesApi } from './inspection-routines.api';
+export type {
+  InspectionRoutine,
+  CreateRoutinePayload,
+} from './inspection-routines.api';

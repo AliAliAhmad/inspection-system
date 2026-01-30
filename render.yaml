@@ -32,7 +32,7 @@ services:
       - key: FLASK_ENV
         value: production
       - key: CORS_ORIGINS
-        value: https://inspection-web.onrender.com
+        value: https://inspection-web.onrender.com,https://inspection-web-*.onrender.com
       - key: GUNICORN_WORKERS
         value: "2"
       - key: GUNICORN_THREADS
@@ -49,7 +49,7 @@ services:
     buildCommand: |
       npm install -g pnpm@9 &&
       pnpm install --no-frozen-lockfile &&
-      VITE_API_URL=https://inspection-api.onrender.com pnpm --filter @inspection/web build
+      VITE_API_URL=https://inspection-api-o3hz.onrender.com pnpm --filter @inspection/web build
     staticPublishPath: apps/web/dist
     pullRequestPreviewsEnabled: true
     headers:
@@ -64,7 +64,7 @@ services:
         value: strict-origin-when-cross-origin
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://inspection-api.onrender.com; frame-ancestors 'self';"
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://inspection-api-o3hz.onrender.com; frame-ancestors 'self';"
     routes:
       - type: rewrite
         source: /*
@@ -73,6 +73,6 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: VITE_API_URL
-        value: https://inspection-api.onrender.com
+        value: https://inspection-api-o3hz.onrender.com
       - key: VITE_APP_TITLE
         value: Inspection System
