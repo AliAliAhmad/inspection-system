@@ -53,7 +53,15 @@ class ProductionConfig(Config):
     # Require explicit secrets — validated at startup via init_app
     SECRET_KEY = os.getenv('SECRET_KEY', '')
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '')
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', '')
+
+    @staticmethod
+    def _fix_database_url(url: str) -> str:
+        """Fix Render/Heroku postgres:// URI for SQLAlchemy 2.x."""
+        if url.startswith('postgres://'):
+            return url.replace('postgres://', 'postgresql://', 1)
+        return url
+
+    SQLALCHEMY_DATABASE_URI = _fix_database_url.__func__(os.getenv('DATABASE_URL', ''))
 
     # Security
     SESSION_COOKIE_SECURE = True

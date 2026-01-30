@@ -17,6 +17,9 @@ COPY . .
 # Create instance directories
 RUN mkdir -p instance/uploads instance/logs
 
+# Make start script executable
+RUN chmod +x start.sh
+
 # Non-root user
 RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app
@@ -24,4 +27,4 @@ USER appuser
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:create_app('production')"]
+CMD ["bash", "./start.sh"]
