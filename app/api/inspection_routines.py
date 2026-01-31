@@ -431,8 +431,10 @@ def upcoming_inspections():
 
     return jsonify({
         'status': 'success',
-        'today': _get_day_entries(today_dow),
-        'today_date': today.isoformat(),
-        'tomorrow': _get_day_entries(tomorrow_dow),
-        'tomorrow_date': tomorrow.isoformat(),
+        'data': {
+            'today': _get_day_entries(today_dow),
+            'today_date': today.isoformat(),
+            'tomorrow': _get_day_entries(tomorrow_dow),
+            'tomorrow_date': tomorrow.isoformat(),
+        },
     }), 200
