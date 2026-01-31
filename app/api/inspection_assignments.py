@@ -17,17 +17,24 @@ bp = Blueprint('inspection_assignments', __name__)
 @jwt_required()
 @role_required('admin', 'engineer')
 def get_lists():
-    """Get inspection lists. Filter by date."""
+    """Get inspection lists with assignments. Filter by date."""
     target = request.args.get('date')
+    language = get_language()
     if target:
         target_date = date.fromisoformat(target)
         lists = InspectionListService.get_lists_for_date(target_date)
     else:
         lists = InspectionList.query.order_by(InspectionList.target_date.desc()).limit(20).all()
 
+    result = []
+    for il in lists:
+        d = il.to_dict()
+        d['assignments'] = [a.to_dict(language=language) for a in il.assignments.all()]
+        result.append(d)
+
     return jsonify({
         'status': 'success',
-        'data': [il.to_dict() for il in lists]
+        'data': result
     }), 200
 
 

@@ -106,15 +106,15 @@ export default function InspectionAssignmentsPage() {
     },
     {
       title: t('assignments.mechInspector', 'Mech Inspector'),
-      dataIndex: 'mechanical_inspector_id',
-      key: 'mechanical_inspector_id',
-      render: (v: number | null) => v ? `#${v}` : '-',
+      dataIndex: 'mechanical_inspector',
+      key: 'mechanical_inspector',
+      render: (v: any) => v ? `${v.full_name} (${v.employee_id ?? v.role_id})` : '-',
     },
     {
       title: t('assignments.elecInspector', 'Elec Inspector'),
-      dataIndex: 'electrical_inspector_id',
-      key: 'electrical_inspector_id',
-      render: (v: number | null) => v ? `#${v}` : '-',
+      dataIndex: 'electrical_inspector',
+      key: 'electrical_inspector',
+      render: (v: any) => v ? `${v.full_name} (${v.employee_id ?? v.role_id})` : '-',
     },
     {
       title: t('common.actions', 'Actions'),
@@ -162,9 +162,9 @@ export default function InspectionAssignmentsPage() {
 
   const lists = data?.data?.data || [];
   const pagination = data?.data?.pagination;
-  const inspectors = inspectorsData?.data?.data || [];
-  const mechInspectors = inspectors.filter((u) => u.specialization === 'mechanical' || !u.specialization);
-  const elecInspectors = inspectors.filter((u) => u.specialization === 'electrical' || !u.specialization);
+  const inspectors = (inspectorsData?.data as any)?.data || [];
+  const mechInspectors = inspectors.filter((u: any) => u.specialization === 'mechanical');
+  const elecInspectors = inspectors.filter((u: any) => u.specialization === 'electrical');
 
   return (
     <Card
@@ -263,9 +263,9 @@ export default function InspectionAssignmentsPage() {
             rules={[{ required: true }]}
           >
             <Select showSearch optionFilterProp="children" placeholder={t('assignments.selectInspector', 'Select inspector')}>
-              {mechInspectors.map((u) => (
+              {mechInspectors.map((u: any) => (
                 <Select.Option key={u.id} value={u.id}>
-                  {u.full_name} ({u.employee_id})
+                  {u.full_name} ({u.employee_id ?? u.role_id})
                 </Select.Option>
               ))}
             </Select>
@@ -276,9 +276,9 @@ export default function InspectionAssignmentsPage() {
             rules={[{ required: true }]}
           >
             <Select showSearch optionFilterProp="children" placeholder={t('assignments.selectInspector', 'Select inspector')}>
-              {elecInspectors.map((u) => (
+              {elecInspectors.map((u: any) => (
                 <Select.Option key={u.id} value={u.id}>
-                  {u.full_name} ({u.employee_id})
+                  {u.full_name} ({u.employee_id ?? u.role_id})
                 </Select.Option>
               ))}
             </Select>
