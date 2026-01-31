@@ -5,8 +5,8 @@ Inspection endpoints for the core workflow.
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.inspection_service import InspectionService
-from app.models import Inspection, User
-from app.exceptions.api_exceptions import ValidationError
+from app.models import Inspection, InspectionAssignment, User
+from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from app.utils.decorators import get_current_user, admin_required, get_language
 from app.extensions import db
 
@@ -47,6 +47,55 @@ def start_inspection():
         'message': 'Inspection started',
         'inspection': inspection
     }), 201
+
+
+@bp.route('/by-assignment/<int:assignment_id>', methods=['GET'])
+@jwt_required()
+def get_or_start_by_assignment(assignment_id):
+    """
+    Get or auto-create inspection for an assignment.
+    If the inspector hasn't started yet, creates a draft inspection.
+    If already started, returns the existing inspection.
+    """
+    current_user = get_current_user()
+    language = get_language(current_user)
+
+    assignment = db.session.get(InspectionAssignment, assignment_id)
+    if not assignment:
+        raise NotFoundError(f"Assignment {assignment_id} not found")
+
+    # Check the current user is one of the assigned inspectors
+    if current_user.id not in (assignment.mechanical_inspector_id, assignment.electrical_inspector_id):
+        raise ForbiddenError("You are not assigned to this inspection")
+
+    # Check for existing inspection for this assignment + user
+    existing = Inspection.query.filter_by(
+        equipment_id=assignment.equipment_id,
+        technician_id=current_user.id,
+    ).filter(Inspection.status.in_(['draft', 'submitted'])).first()
+
+    if existing:
+        inspection_dict = existing.to_dict(include_answers=True, language=language)
+        # Add checklist items
+        from app.models import ChecklistItem
+        template_items = ChecklistItem.query.filter_by(
+            template_id=existing.template_id
+        ).order_by(ChecklistItem.order_index).all()
+        inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
+        return jsonify({'status': 'success', 'data': inspection_dict}), 200
+
+    # Auto-create: start a new inspection
+    inspection_dict = InspectionService.start_inspection(
+        equipment_id=assignment.equipment_id,
+        technician_id=current_user.id
+    )
+
+    # Update assignment status to in_progress
+    if assignment.status == 'assigned':
+        assignment.status = 'in_progress'
+        db.session.commit()
+
+    return jsonify({'status': 'success', 'data': inspection_dict}), 201
 
 
 @bp.route('/<int:inspection_id>/answer', methods=['POST'])

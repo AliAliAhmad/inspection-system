@@ -56,35 +56,37 @@ export default function InspectionChecklistPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Fetch inspection data
+  // Fetch inspection data by assignment ID (auto-creates if needed)
   const {
     data: inspection,
     isLoading,
     error,
     refetch: refetchInspection,
   } = useQuery({
-    queryKey: ['inspection', assignmentId],
+    queryKey: ['inspection', 'by-assignment', assignmentId],
     queryFn: () =>
-      inspectionsApi.get(assignmentId).then((r) => r.data.data as Inspection),
+      inspectionsApi.getByAssignment(assignmentId).then((r) => (r.data as any).data as Inspection),
   });
 
-  // Fetch progress
+  const inspectionId = inspection?.id;
+
+  // Fetch progress using actual inspection ID
   const { data: progress, refetch: refetchProgress } = useQuery({
-    queryKey: ['inspection-progress', assignmentId],
+    queryKey: ['inspection-progress', inspectionId],
     queryFn: () =>
       inspectionsApi
-        .getProgress(assignmentId)
-        .then((r) => r.data.data as InspectionProgress),
-    enabled: !!inspection,
+        .getProgress(inspectionId!)
+        .then((r) => (r.data as any).data ?? r.data.data as InspectionProgress),
+    enabled: !!inspectionId,
   });
 
-  // Answer mutation
+  // Answer mutation using actual inspection ID
   const answerMutation = useMutation({
     mutationFn: (payload: {
       checklist_item_id: number;
       answer_value: string;
       comment?: string;
-    }) => inspectionsApi.answerQuestion(assignmentId, payload),
+    }) => inspectionsApi.answerQuestion(inspectionId!, payload),
     onSuccess: () => {
       refetchProgress();
       refetchInspection();
@@ -94,9 +96,9 @@ export default function InspectionChecklistPage() {
     },
   });
 
-  // Submit mutation
+  // Submit mutation using actual inspection ID
   const submitMutation = useMutation({
-    mutationFn: () => inspectionsApi.submit(assignmentId),
+    mutationFn: () => inspectionsApi.submit(inspectionId!),
     onSuccess: () => {
       message.success(t('inspection.submit'));
       navigate('/inspector/assignments');
@@ -158,16 +160,17 @@ export default function InspectionChecklistPage() {
   const answeredMap = new Map<number, InspectionAnswer>();
   answers.forEach((a) => answeredMap.set(a.checklist_item_id, a));
 
-  // Collect all checklist items from answers
-  const checklistItems: ChecklistItem[] = answers
+  // Get checklist items: prefer checklist_items from response, fallback to extracting from answers
+  const rawChecklistItems: ChecklistItem[] = (inspection as any).checklist_items ?? [];
+  const itemsFromAnswers: ChecklistItem[] = answers
     .filter((a) => a.checklist_item !== null)
-    .map((a) => a.checklist_item as ChecklistItem)
-    .sort((a, b) => a.order_index - b.order_index);
+    .map((a) => a.checklist_item as ChecklistItem);
 
-  // Deduplicate checklist items by id
+  // Merge and deduplicate by id, sorted by order_index
+  const allItems = [...rawChecklistItems, ...itemsFromAnswers];
   const uniqueItems = Array.from(
-    new Map(checklistItems.map((item) => [item.id, item])).values(),
-  );
+    new Map(allItems.map((item) => [item.id, item])).values(),
+  ).sort((a, b) => a.order_index - b.order_index);
 
   const canSubmit =
     progress &&
