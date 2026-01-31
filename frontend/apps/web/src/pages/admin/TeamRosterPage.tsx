@@ -95,11 +95,12 @@ export default function TeamRosterPage() {
   });
 
   // Fetch active users for coverage dropdown
-  const { data: activeUsersData } = useQuery({
+  const { data: activeUsersRaw } = useQuery({
     queryKey: ['users', 'active-list'],
-    queryFn: () => usersApi.list({ per_page: 500, is_active: true }).then((r) => r.data.data ?? (r.data as any).data),
+    queryFn: () => usersApi.list({ per_page: 500 }),
     enabled: !!selectedUserId,
   });
+  const allActiveUsers: any[] = (activeUsersRaw?.data as any)?.data ?? [];
 
   // Upload mutation
   const uploadMutation = useMutation({
@@ -165,7 +166,7 @@ export default function TeamRosterPage() {
   const rangeEnd = dates.length > 0 ? dayjs(dates[dates.length - 1]) : rangeStart.add(7, 'day');
 
   // Coverage user options: inspectors covered by specialists, specialists covered by inspectors
-  const coverageUsers = (activeUsersData?.items ?? activeUsersData ?? []).filter((u: any) => {
+  const coverageUsers = allActiveUsers.filter((u: any) => {
     if (u.id === selectedUserId) return false;
     if (selectedUserRole === 'inspector') return u.role === 'specialist';
     if (selectedUserRole === 'specialist') return u.role === 'inspector';
