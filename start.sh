@@ -41,6 +41,16 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('equipment_type already nullable')
+
+    # Make inspection_routines shift and days_of_week nullable
+    for col in ['shift', 'days_of_week']:
+        try:
+            db.session.execute(text(f'ALTER TABLE inspection_routines ALTER COLUMN {col} DROP NOT NULL'))
+            db.session.commit()
+            print(f'Made inspection_routines.{col} nullable')
+        except Exception:
+            db.session.rollback()
+            print(f'inspection_routines.{col} already nullable')
 "
 
 echo "Starting gunicorn..."
