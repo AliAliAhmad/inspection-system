@@ -12,6 +12,10 @@ import {
   DatePicker,
   message,
   Typography,
+  Statistic,
+  Row,
+  Col,
+  Alert,
 } from 'antd';
 import { PlusOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -42,6 +46,17 @@ export default function LeavesPage() {
     queryKey: ['leaves', page, statusFilter],
     queryFn: () => leavesApi.list({ page, per_page: 15, status: statusFilter }).then(r => r.data),
   });
+
+  // Fetch current user's leave balance
+  const { data: balanceData } = useQuery({
+    queryKey: ['leaves', 'balance', user?.id],
+    queryFn: () => leavesApi.getBalance(user!.id).then(r => r.data.data ?? (r.data as any).data),
+    enabled: !!user?.id,
+  });
+
+  const totalBalance = balanceData?.total_balance ?? 0;
+  const usedDays = balanceData?.used ?? 0;
+  const remaining = balanceData?.remaining ?? 0;
 
   // Fetch all active users for coverage dropdown
   const { data: allUsersData } = useQuery({
@@ -114,6 +129,56 @@ export default function LeavesPage() {
 
   return (
     <>
+      <Card style={{ marginBottom: 16 }}>
+        <Row gutter={32}>
+          <Col>
+            <Statistic
+              title={t('leaves.totalBalance', 'Total Balance')}
+              value={totalBalance}
+              suffix={t('leaves.daysUnit', 'days')}
+            />
+          </Col>
+          <Col>
+            <Statistic
+              title={t('leaves.used', 'Used')}
+              value={usedDays}
+              suffix={t('leaves.daysUnit', 'days')}
+              valueStyle={usedDays > 0 ? { color: '#faad14' } : undefined}
+            />
+          </Col>
+          <Col>
+            <Statistic
+              title={t('leaves.remaining', 'Remaining')}
+              value={remaining}
+              suffix={t('leaves.daysUnit', 'days')}
+              valueStyle={remaining === 0 ? { color: '#ff4d4f' } : { color: '#52c41a' }}
+            />
+          </Col>
+          <Col>
+            <Statistic
+              title={t('leaves.employeeId', 'Employee ID')}
+              value={user?.employee_id ?? '-'}
+              valueStyle={{ fontSize: 16 }}
+            />
+          </Col>
+          <Col>
+            <Statistic
+              title={t('leaves.role', 'Role')}
+              value={user?.role ?? '-'}
+              valueStyle={{ fontSize: 16 }}
+            />
+          </Col>
+        </Row>
+        {remaining === 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            message={t('leaves.noBalanceRemaining', 'No leave balance remaining')}
+            style={{ marginTop: 12 }}
+          />
+        )}
+      </Card>
+
       <Card
         title={
           <Space>
@@ -135,7 +200,7 @@ export default function LeavesPage() {
                 { value: 'rejected', label: t('status.rejected') },
               ]}
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)} disabled={remaining === 0}>
               {t('leave.request')}
             </Button>
           </Space>
