@@ -74,6 +74,7 @@ def create_template():
     template = ChecklistTemplate(
         name=name,
         name_ar=name_ar,
+        description=data.get('description'),
         equipment_type=data['equipment_type'],
         version=data['version'],
         is_active=data.get('is_active', True),

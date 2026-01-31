@@ -249,6 +249,12 @@ export default function ChecklistsPage() {
           <Form.Item name="equipment_type" label={t('checklists.equipmentType', 'Equipment Type')} rules={[{ required: true }]}>
             <Input placeholder="e.g. Centrifugal Pump" />
           </Form.Item>
+          <Form.Item name="name" label={t('checklists.title', 'Title')}>
+            <Input placeholder="e.g. Daily Pump Inspection (auto-generated if empty)" />
+          </Form.Item>
+          <Form.Item name="description" label={t('checklists.description', 'Description')}>
+            <Input.TextArea rows={3} placeholder="What this checklist covers" />
+          </Form.Item>
           <Form.Item name="version" label={t('checklists.version', 'Version')} rules={[{ required: true }]} initialValue="1.0">
             <Input placeholder="e.g. 1.0" />
           </Form.Item>

@@ -12,5 +12,21 @@ export FLASK_APP="app:create_app('production')"
 echo "Running database migrations..."
 flask db upgrade
 
+echo "Applying schema patches..."
+python -c "
+from app import create_app
+from app.extensions import db
+from sqlalchemy import text
+app = create_app('production')
+with app.app_context():
+    try:
+        db.session.execute(text('ALTER TABLE checklist_templates ADD COLUMN description TEXT'))
+        db.session.commit()
+        print('Added description column to checklist_templates')
+    except Exception:
+        db.session.rollback()
+        print('description column already exists')
+"
+
 echo "Starting gunicorn..."
 exec gunicorn -c gunicorn.conf.py "app:create_app('production')"
