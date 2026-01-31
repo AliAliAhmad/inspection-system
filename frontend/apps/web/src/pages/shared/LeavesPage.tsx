@@ -197,7 +197,12 @@ export default function LeavesPage() {
               placeholder={t('leave.assign_coverage', 'Select coverage employee')}
             >
               {allUsers
-                .filter((u: any) => u.id !== user?.id)
+                .filter((u: any) => {
+                  if (u.id === user?.id) return false;
+                  if (user?.role === 'inspector') return u.role === 'specialist';
+                  if (user?.role === 'specialist') return u.role === 'inspector';
+                  return true;
+                })
                 .map((u: any) => (
                   <Select.Option key={u.id} value={u.id}>
                     {u.full_name} — {u.employee_id} ({u.role})

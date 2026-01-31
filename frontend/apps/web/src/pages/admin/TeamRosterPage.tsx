@@ -69,6 +69,7 @@ export default function TeamRosterPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string>('');
+  const [selectedUserRole, setSelectedUserRole] = useState<string>('');
   const [uploadResult, setUploadResult] = useState<{
     imported: number;
     users_processed: number;
@@ -163,10 +164,13 @@ export default function TeamRosterPage() {
   const rangeStart = dates.length > 0 ? dayjs(dates[0]) : dayjs().add(weekOffset * 7, 'day');
   const rangeEnd = dates.length > 0 ? dayjs(dates[dates.length - 1]) : rangeStart.add(7, 'day');
 
-  // Coverage user options (exclude selected employee)
-  const coverageUsers = (activeUsersData?.items ?? activeUsersData ?? []).filter(
-    (u: any) => u.id !== selectedUserId,
-  );
+  // Coverage user options: inspectors covered by specialists, specialists covered by inspectors
+  const coverageUsers = (activeUsersData?.items ?? activeUsersData ?? []).filter((u: any) => {
+    if (u.id === selectedUserId) return false;
+    if (selectedUserRole === 'inspector') return u.role === 'specialist';
+    if (selectedUserRole === 'specialist') return u.role === 'inspector';
+    return true;
+  });
 
   // Leave history columns
   const leaveHistoryColumns = [
@@ -251,6 +255,7 @@ export default function TeamRosterPage() {
               onClick={() => {
                 setSelectedUserId(record.id);
                 setSelectedUserName(record.full_name);
+                setSelectedUserRole(record.role);
               }}
             >
               {record.full_name}
@@ -353,6 +358,7 @@ export default function TeamRosterPage() {
         onClose={() => {
           setSelectedUserId(null);
           setSelectedUserName('');
+          setSelectedUserRole('');
           leaveForm.resetFields();
           addDaysForm.resetFields();
         }}

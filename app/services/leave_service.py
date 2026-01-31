@@ -50,6 +50,15 @@ class LeaveService:
         if coverage_user.id == user_id:
             raise ValidationError("Coverage user cannot be the same as the requesting user")
 
+        # Cross-coverage rule: inspectors covered by specialists, specialists covered by inspectors
+        user = db.session.get(User, user_id)
+        if not user:
+            raise ValidationError("User not found")
+        if user.role == 'inspector' and coverage_user.role != 'specialist':
+            raise ValidationError("Inspectors can only be covered by specialists")
+        if user.role == 'specialist' and coverage_user.role != 'inspector':
+            raise ValidationError("Specialists can only be covered by inspectors")
+
         # Check for overlapping leaves
         overlap = Leave.query.filter(
             Leave.user_id == user_id,
@@ -59,11 +68,6 @@ class LeaveService:
         ).first()
         if overlap:
             raise ValidationError("You have an overlapping leave request")
-
-        # Check leave balance (only for annual leave type)
-        user = db.session.get(User, user_id)
-        if not user:
-            raise ValidationError("User not found")
 
         # Calculate used leave days this year
         from datetime import date as date_type
