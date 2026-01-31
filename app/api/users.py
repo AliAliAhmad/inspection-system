@@ -2,10 +2,11 @@
 User management endpoints (Admin only).
 """
 
+from datetime import date
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from sqlalchemy.exc import IntegrityError
-from app.models import User
+from app.models import User, Leave
 from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
 from app.utils.decorators import admin_required
@@ -68,9 +69,46 @@ def list_users():
     """List all users. Admin only."""
     query = User.query.filter_by(is_active=True)
     items, pagination = paginate(query)
+
+    # Find active leave coverage for on-leave users
+    today = date.today()
+    active_leaves = Leave.query.filter(
+        Leave.status == 'approved',
+        Leave.date_from <= today,
+        Leave.date_to >= today,
+        Leave.coverage_user_id.isnot(None)
+    ).all()
+
+    # Build maps: on-leave user -> cover info, cover user -> who they cover
+    leave_cover_map = {}  # user_id -> { cover user info }
+    covering_for_map = {}  # cover_user_id -> { on-leave user info }
+    for lv in active_leaves:
+        if lv.coverage_user:
+            leave_cover_map[lv.user_id] = {
+                'id': lv.coverage_user.id,
+                'full_name': lv.coverage_user.full_name,
+                'role_id': lv.coverage_user.role_id,
+            }
+        user_on_leave = db.session.get(User, lv.user_id)
+        if user_on_leave and lv.coverage_user_id:
+            covering_for_map[lv.coverage_user_id] = {
+                'id': user_on_leave.id,
+                'full_name': user_on_leave.full_name,
+                'role_id': user_on_leave.role_id,
+            }
+
+    user_list = []
+    for u in items:
+        d = u.to_dict()
+        if u.id in leave_cover_map:
+            d['leave_cover'] = leave_cover_map[u.id]
+        if u.id in covering_for_map:
+            d['covering_for'] = covering_for_map[u.id]
+        user_list.append(d)
+
     return jsonify({
         'status': 'success',
-        'data': [user.to_dict() for user in items],
+        'data': user_list,
         'pagination': pagination
     }), 200
 

@@ -104,6 +104,12 @@ export default function InspectionAssignmentsPage() {
   const mechInspectors = allInspectors.filter((u: any) => u.role === 'inspector' && u.specialization === 'mechanical');
   const elecInspectors = allInspectors.filter((u: any) => u.role === 'inspector' && u.specialization === 'electrical');
 
+  // Build set of user IDs who are covering for someone on leave
+  const coverUserIds = new Set<number>();
+  for (const u of allInspectors) {
+    if (u.covering_for) coverUserIds.add(u.id);
+  }
+
   const statusColor = (s: string) => {
     switch (s) {
       case 'completed': return 'green';
@@ -307,11 +313,23 @@ export default function InspectionAssignmentsPage() {
               optionFilterProp="children"
               placeholder={t('assignments.selectInspector', 'Select mechanical inspector')}
             >
-              {mechInspectors.map((u: any) => (
-                <Select.Option key={u.id} value={u.id}>
-                  {u.full_name} ({u.employee_id ?? u.role_id})
-                </Select.Option>
-              ))}
+              {mechInspectors.map((u: any) => {
+                const onLeave = u.is_on_leave;
+                const isCover = coverUserIds.has(u.id);
+                return (
+                  <Select.Option key={u.id} value={u.id} disabled={onLeave}>
+                    <span style={{
+                      color: onLeave ? '#ff4d4f' : isCover ? '#52c41a' : undefined,
+                      fontWeight: onLeave || isCover ? 600 : undefined,
+                    }}>
+                      {u.full_name} ({u.employee_id ?? u.role_id})
+                      {onLeave && u.leave_cover ? ` — Cover: ${u.leave_cover.full_name}` : ''}
+                      {onLeave && !u.leave_cover ? ' — On Leave' : ''}
+                      {isCover && u.covering_for ? ` — Covering ${u.covering_for.full_name}` : ''}
+                    </span>
+                  </Select.Option>
+                );
+              })}
             </Select>
           </Form.Item>
           <Form.Item
@@ -324,11 +342,23 @@ export default function InspectionAssignmentsPage() {
               optionFilterProp="children"
               placeholder={t('assignments.selectInspector', 'Select electrical inspector')}
             >
-              {elecInspectors.map((u: any) => (
-                <Select.Option key={u.id} value={u.id}>
-                  {u.full_name} ({u.employee_id ?? u.role_id})
-                </Select.Option>
-              ))}
+              {elecInspectors.map((u: any) => {
+                const onLeave = u.is_on_leave;
+                const isCover = coverUserIds.has(u.id);
+                return (
+                  <Select.Option key={u.id} value={u.id} disabled={onLeave}>
+                    <span style={{
+                      color: onLeave ? '#ff4d4f' : isCover ? '#52c41a' : undefined,
+                      fontWeight: onLeave || isCover ? 600 : undefined,
+                    }}>
+                      {u.full_name} ({u.employee_id ?? u.role_id})
+                      {onLeave && u.leave_cover ? ` — Cover: ${u.leave_cover.full_name}` : ''}
+                      {onLeave && !u.leave_cover ? ' — On Leave' : ''}
+                      {isCover && u.covering_for ? ` — Covering ${u.covering_for.full_name}` : ''}
+                    </span>
+                  </Select.Option>
+                );
+              })}
             </Select>
           </Form.Item>
         </Form>
