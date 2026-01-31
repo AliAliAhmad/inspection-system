@@ -89,7 +89,22 @@ export default function LeavesPage() {
     });
   };
 
+  const isAdmin = user?.role === 'admin';
+
   const columns = [
+    ...(isAdmin ? [{
+      title: t('leave.employee', 'Employee'),
+      dataIndex: 'user',
+      key: 'user',
+      render: (u: any) => u ? (
+        <Space direction="vertical" size={0}>
+          <Typography.Text strong>{u.full_name}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {u.employee_id ?? u.role_id} · {u.role}
+          </Typography.Text>
+        </Space>
+      ) : '-',
+    }] : []),
     {
       title: t('leave.type'),
       dataIndex: 'leave_type',
@@ -114,6 +129,18 @@ export default function LeavesPage() {
       title: t('leave.reason'),
       dataIndex: 'reason',
       ellipsis: true,
+    },
+    {
+      title: t('leaves.coverage', 'Coverage'),
+      dataIndex: 'coverage_user',
+      key: 'coverage_user',
+      render: (u: any) => u ? u.full_name : '-',
+    },
+    {
+      title: t('leave.scope', 'Scope'),
+      dataIndex: 'scope',
+      key: 'scope',
+      render: (s: string) => s === 'major_only' ? 'Major Only' : 'Full',
     },
     {
       title: t('common.status'),
