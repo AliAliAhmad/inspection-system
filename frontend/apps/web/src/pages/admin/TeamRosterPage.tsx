@@ -22,7 +22,7 @@ import {
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { rosterApi, leavesApi, type RosterWeekUser } from '@inspection/shared';
+import { rosterApi, leavesApi, usersApi, type RosterWeekUser } from '@inspection/shared';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -91,6 +91,13 @@ export default function TeamRosterPage() {
         .then((r) => r.data.data),
     enabled: !!drawerDate,
   });
+
+  // Fetch all active users for leave request dropdown
+  const { data: allUsersData } = useQuery({
+    queryKey: ['users', 'all-active'],
+    queryFn: () => usersApi.list({ per_page: 500, is_active: true }),
+  });
+  const allUsers = (allUsersData?.data as any)?.data ?? [];
 
   // Upload mutation
   const uploadMutation = useMutation({
@@ -425,9 +432,9 @@ export default function TeamRosterPage() {
               optionFilterProp="children"
               placeholder={t('roster.selectMember', 'Select team member')}
             >
-              {sortedUsers.map((u) => (
+              {allUsers.map((u: any) => (
                 <Select.Option key={u.id} value={u.id}>
-                  {u.full_name} ({u.role})
+                  {u.full_name} — {u.employee_id} ({u.role})
                 </Select.Option>
               ))}
             </Select>
