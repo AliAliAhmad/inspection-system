@@ -311,9 +311,6 @@ export default function UsersPage() {
           <Form.Item name="full_name" label={t('users.fullName', 'Full Name')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="employee_id" label={t('users.employeeId', 'Employee ID')} rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
           <Form.Item name="role" label={t('users.role', 'Role')} rules={[{ required: true }]}>
             <Select>
               {ROLES.map((r) => (

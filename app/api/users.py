@@ -12,6 +12,40 @@ from app.utils.pagination import paginate
 
 bp = Blueprint('users', __name__)
 
+# Prefix mapping for auto-generating employee IDs
+_ROLE_PREFIXES = {
+    'admin': 'ADM',
+    'inspector': 'INS',
+    'specialist': 'SPC',
+    'engineer': 'ENG',
+    'quality_engineer': 'QE',
+}
+
+
+def _generate_role_id(role):
+    """Auto-generate the next employee ID for a given role, e.g. INS001, SPC002."""
+    prefix = _ROLE_PREFIXES.get(role)
+    if not prefix:
+        raise ValidationError(f"Unknown role: {role}")
+
+    # Find the highest existing number for this prefix
+    latest = (
+        User.query
+        .filter(User.role_id.like(f'{prefix}%'))
+        .order_by(User.role_id.desc())
+        .first()
+    )
+
+    if latest and latest.role_id.startswith(prefix):
+        try:
+            num = int(latest.role_id[len(prefix):]) + 1
+        except ValueError:
+            num = 1
+    else:
+        num = 1
+
+    return f'{prefix}{num:03d}'
+
 
 @bp.route('', methods=['GET'])
 @jwt_required()
@@ -51,29 +85,31 @@ def create_user():
     """
     data = request.get_json()
     
-    # Accept employee_id as alias for role_id (frontend uses employee_id)
-    if 'employee_id' in data and 'role_id' not in data:
-        data['role_id'] = data['employee_id']
-
-    required_fields = ['email', 'password', 'full_name', 'role', 'role_id']
+    required_fields = ['email', 'password', 'full_name', 'role']
     for field in required_fields:
         if field not in data:
             raise ValidationError(f"{field} is required")
+
+    # Validate role
+    valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer']
+    if data['role'] not in valid_roles:
+        raise ValidationError(f"role must be one of: {', '.join(valid_roles)}")
 
     # Check if email already exists
     existing = User.query.filter_by(email=data['email']).first()
     if existing:
         raise ValidationError(f"User with email {data['email']} already exists")
 
-    # Check if role_id already exists
-    existing_role_id = User.query.filter_by(role_id=data['role_id']).first()
-    if existing_role_id:
-        raise ValidationError(f"Employee ID '{data['role_id']}' already in use")
+    # Auto-generate role_id based on role
+    role_id = _generate_role_id(data['role'])
 
-    # Validate role
-    valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer']
-    if data['role'] not in valid_roles:
-        raise ValidationError(f"role must be one of: {', '.join(valid_roles)}")
+    # Auto-generate minor_role_id if minor_role is provided
+    minor_role = data.get('minor_role')
+    minor_role_id = None
+    if minor_role:
+        if minor_role not in valid_roles:
+            raise ValidationError(f"minor_role must be one of: {', '.join(valid_roles)}")
+        minor_role_id = _generate_role_id(minor_role)
 
     # Validate language
     language = data.get('language', 'en')
@@ -84,13 +120,13 @@ def create_user():
         email=data['email'],
         full_name=data['full_name'],
         role=data['role'],
-        role_id=data['role_id'],
+        role_id=role_id,
         language=language,
         phone=data.get('phone'),
         shift=data.get('shift'),
         specialization=data.get('specialization'),
-        minor_role=data.get('minor_role'),
-        minor_role_id=data.get('minor_role_id'),
+        minor_role=minor_role,
+        minor_role_id=minor_role_id,
         is_active=True
     )
     user.set_password(data['password'])

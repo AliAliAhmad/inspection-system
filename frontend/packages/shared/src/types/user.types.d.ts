@@ -24,7 +24,6 @@ export interface CreateUserPayload {
     email: string;
     password: string;
     full_name: string;
-    employee_id: string;
     role: UserRole;
     minor_role?: UserRole;
     specialization?: Specialization;
