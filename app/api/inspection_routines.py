@@ -15,22 +15,10 @@ bp = Blueprint('inspection_routines', __name__)
 def _validate_routine_data(data, partial=False):
     """Validate routine request data. If partial=True, only validate fields that are present."""
     if not partial:
-        required_fields = ['name', 'asset_types', 'shift', 'days_of_week', 'template_id']
+        required_fields = ['name', 'asset_types', 'template_id']
         for field in required_fields:
             if field not in data:
                 raise ValidationError(f"{field} is required")
-
-    if 'shift' in data:
-        if data['shift'] not in ('day', 'night'):
-            raise ValidationError("shift must be 'day' or 'night'")
-
-    if 'days_of_week' in data:
-        days = data['days_of_week']
-        if not isinstance(days, list) or len(days) == 0:
-            raise ValidationError("days_of_week must be a non-empty list of integers 0-6")
-        for d in days:
-            if not isinstance(d, int) or d < 0 or d > 6:
-                raise ValidationError("days_of_week must contain integers between 0 and 6")
 
     if 'asset_types' in data:
         asset_types = data['asset_types']
@@ -99,8 +87,6 @@ def create_routine():
         name=data['name'],
         name_ar=data.get('name_ar'),
         asset_types=data['asset_types'],
-        shift=data['shift'],
-        days_of_week=data['days_of_week'],
         template_id=data['template_id'],
         is_active=data.get('is_active', True),
         created_by_id=int(current_user_id)
@@ -155,10 +141,6 @@ def update_routine(routine_id):
         routine.name_ar = data['name_ar']
     if 'asset_types' in data:
         routine.asset_types = data['asset_types']
-    if 'shift' in data:
-        routine.shift = data['shift']
-    if 'days_of_week' in data:
-        routine.days_of_week = data['days_of_week']
     if 'template_id' in data:
         routine.template_id = data['template_id']
     if 'is_active' in data:

@@ -4,8 +4,6 @@ export interface InspectionRoutine {
     name: string;
     name_ar: string | null;
     asset_types: string[];
-    shift: 'day' | 'night';
-    days_of_week: number[];
     template_id: number;
     is_active: boolean;
     created_at: string;
@@ -14,8 +12,6 @@ export interface CreateRoutinePayload {
     name: string;
     name_ar?: string;
     asset_types: string[];
-    shift: 'day' | 'night';
-    days_of_week: number[];
     template_id: number;
 }
 export declare const inspectionRoutinesApi: {

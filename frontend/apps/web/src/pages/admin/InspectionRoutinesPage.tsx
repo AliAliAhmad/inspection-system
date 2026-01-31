@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Card,
   Table,
@@ -25,8 +25,6 @@ import {
   type CreateRoutinePayload,
   type ChecklistTemplate,
 } from '@inspection/shared';
-
-const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function InspectionRoutinesPage() {
   const { t } = useTranslation();
@@ -95,8 +93,6 @@ export default function InspectionRoutinesPage() {
       name: record.name,
       name_ar: record.name_ar,
       asset_types: record.asset_types,
-      shift: record.shift,
-      days_of_week: record.days_of_week,
       template_id: record.template_id,
       is_active: record.is_active,
     });
@@ -117,25 +113,6 @@ export default function InspectionRoutinesPage() {
       render: (types: string[]) =>
         types?.map((type) => (
           <Tag key={type}>{type}</Tag>
-        )) || '-',
-    },
-    {
-      title: t('routines.shift', 'Shift'),
-      dataIndex: 'shift',
-      key: 'shift',
-      render: (shift: 'day' | 'night') => (
-        <Tag color={shift === 'day' ? 'blue' : 'purple'}>
-          {shift === 'day' ? t('routines.day', 'Day') : t('routines.night', 'Night')}
-        </Tag>
-      ),
-    },
-    {
-      title: t('routines.daysOfWeek', 'Days of Week'),
-      dataIndex: 'days_of_week',
-      key: 'days_of_week',
-      render: (days: number[]) =>
-        days?.map((day) => (
-          <Tag key={day}>{dayNames[day]}</Tag>
         )) || '-',
     },
     {
@@ -196,21 +173,6 @@ export default function InspectionRoutinesPage() {
         >
           {(equipmentTypes || []).map((et: string) => (
             <Select.Option key={et} value={et}>{et}</Select.Option>
-          ))}
-        </Select>
-      </Form.Item>
-      <Form.Item name="shift" label={t('routines.shift', 'Shift')} rules={[{ required: true }]}>
-        <Select>
-          <Select.Option value="day">{t('routines.day', 'Day')}</Select.Option>
-          <Select.Option value="night">{t('routines.night', 'Night')}</Select.Option>
-        </Select>
-      </Form.Item>
-      <Form.Item name="days_of_week" label={t('routines.daysOfWeek', 'Days of Week')} rules={[{ required: true }]}>
-        <Select mode="multiple" placeholder={t('routines.selectDays', 'Select days')}>
-          {dayNames.map((day, index) => (
-            <Select.Option key={index} value={index}>
-              {day}
-            </Select.Option>
           ))}
         </Select>
       </Form.Item>

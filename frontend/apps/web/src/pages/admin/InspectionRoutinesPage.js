@@ -5,7 +5,6 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { inspectionRoutinesApi, checklistsApi, equipmentApi, } from '@inspection/shared';
-const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export default function InspectionRoutinesPage() {
     const { t } = useTranslation();
     const queryClient = useQueryClient();
@@ -63,8 +62,6 @@ export default function InspectionRoutinesPage() {
             name: record.name,
             name_ar: record.name_ar,
             asset_types: record.asset_types,
-            shift: record.shift,
-            days_of_week: record.days_of_week,
             template_id: record.template_id,
             is_active: record.is_active,
         });
@@ -82,18 +79,6 @@ export default function InspectionRoutinesPage() {
             dataIndex: 'asset_types',
             key: 'asset_types',
             render: (types) => types?.map((type) => (_jsx(Tag, { children: type }, type))) || '-',
-        },
-        {
-            title: t('routines.shift', 'Shift'),
-            dataIndex: 'shift',
-            key: 'shift',
-            render: (shift) => (_jsx(Tag, { color: shift === 'day' ? 'blue' : 'purple', children: shift === 'day' ? t('routines.day', 'Day') : t('routines.night', 'Night') })),
-        },
-        {
-            title: t('routines.daysOfWeek', 'Days of Week'),
-            dataIndex: 'days_of_week',
-            key: 'days_of_week',
-            render: (days) => days?.map((day) => (_jsx(Tag, { children: dayNames[day] }, day))) || '-',
         },
         {
             title: t('routines.templateId', 'Template ID'),
@@ -114,7 +99,7 @@ export default function InspectionRoutinesPage() {
     ];
     const routines = data || [];
     const templateOptions = templates || [];
-    const routineFormFields = (_jsxs(_Fragment, { children: [_jsx(Form.Item, { name: "name", label: t('routines.name', 'Name'), rules: [{ required: true }], children: _jsx(Input, {}) }), _jsx(Form.Item, { name: "name_ar", label: t('routines.nameAr', 'Name (Arabic)'), children: _jsx(Input, {}) }), _jsx(Form.Item, { name: "asset_types", label: t('routines.equipmentType', 'Equipment Type'), rules: [{ required: true }], children: _jsx(Select, { mode: "multiple", placeholder: t('routines.selectEquipmentType', 'Select equipment type'), showSearch: true, optionFilterProp: "children", children: (equipmentTypes || []).map((et) => (_jsx(Select.Option, { value: et, children: et }, et))) }) }), _jsx(Form.Item, { name: "shift", label: t('routines.shift', 'Shift'), rules: [{ required: true }], children: _jsxs(Select, { children: [_jsx(Select.Option, { value: "day", children: t('routines.day', 'Day') }), _jsx(Select.Option, { value: "night", children: t('routines.night', 'Night') })] }) }), _jsx(Form.Item, { name: "days_of_week", label: t('routines.daysOfWeek', 'Days of Week'), rules: [{ required: true }], children: _jsx(Select, { mode: "multiple", placeholder: t('routines.selectDays', 'Select days'), children: dayNames.map((day, index) => (_jsx(Select.Option, { value: index, children: day }, index))) }) }), _jsx(Form.Item, { name: "template_id", label: t('routines.template', 'Template'), rules: [{ required: true }], children: _jsx(Select, { showSearch: true, optionFilterProp: "children", placeholder: t('routines.selectTemplate', 'Select template'), children: templateOptions.map((tpl) => (_jsx(Select.Option, { value: tpl.id, children: tpl.name }, tpl.id))) }) })] }));
+    const routineFormFields = (_jsxs(_Fragment, { children: [_jsx(Form.Item, { name: "name", label: t('routines.name', 'Name'), rules: [{ required: true }], children: _jsx(Input, {}) }), _jsx(Form.Item, { name: "name_ar", label: t('routines.nameAr', 'Name (Arabic)'), children: _jsx(Input, {}) }), _jsx(Form.Item, { name: "asset_types", label: t('routines.equipmentType', 'Equipment Type'), rules: [{ required: true }], children: _jsx(Select, { mode: "multiple", placeholder: t('routines.selectEquipmentType', 'Select equipment type'), showSearch: true, optionFilterProp: "children", children: (equipmentTypes || []).map((et) => (_jsx(Select.Option, { value: et, children: et }, et))) }) }), _jsx(Form.Item, { name: "template_id", label: t('routines.template', 'Template'), rules: [{ required: true }], children: _jsx(Select, { showSearch: true, optionFilterProp: "children", placeholder: t('routines.selectTemplate', 'Select template'), children: templateOptions.map((tpl) => (_jsx(Select.Option, { value: tpl.id, children: tpl.name }, tpl.id))) }) })] }));
     return (_jsxs(Card, { title: _jsx(Typography.Title, { level: 4, children: t('nav.inspectionRoutines', 'Inspection Routines') }), extra: _jsx(Button, { type: "primary", icon: _jsx(PlusOutlined, {}), onClick: () => setCreateModalOpen(true), children: t('routines.create', 'Create Routine') }), children: [_jsx(Table, { rowKey: "id", columns: columns, dataSource: routines, loading: isLoading, locale: { emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }, pagination: { pageSize: 20, showSizeChanger: true }, scroll: { x: 1000 } }), _jsx(Modal, { title: t('routines.create', 'Create Routine'), open: createModalOpen, onCancel: () => { setCreateModalOpen(false); createForm.resetFields(); }, onOk: () => createForm.submit(), confirmLoading: createMutation.isPending, destroyOnClose: true, children: _jsx(Form, { form: createForm, layout: "vertical", onFinish: (v) => createMutation.mutate(v), children: routineFormFields }) }), _jsx(Modal, { title: t('routines.edit', 'Edit Routine'), open: editModalOpen, onCancel: () => { setEditModalOpen(false); setEditingRoutine(null); editForm.resetFields(); }, onOk: () => editForm.submit(), confirmLoading: updateMutation.isPending, destroyOnClose: true, children: _jsxs(Form, { form: editForm, layout: "vertical", onFinish: (v) => editingRoutine && updateMutation.mutate({ id: editingRoutine.id, payload: v }), children: [routineFormFields, _jsx(Form.Item, { name: "is_active", label: t('routines.active', 'Active'), children: _jsxs(Select, { children: [_jsx(Select.Option, { value: true, children: t('common.yes', 'Yes') }), _jsx(Select.Option, { value: false, children: t('common.no', 'No') })] }) })] }) })] }));
 }
 //# sourceMappingURL=InspectionRoutinesPage.js.map

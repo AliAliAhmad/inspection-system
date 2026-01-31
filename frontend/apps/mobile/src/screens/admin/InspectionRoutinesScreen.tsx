@@ -17,8 +17,6 @@ import type {
   InspectionRoutine,
 } from '@inspection/shared';
 
-const dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
 function Badge({ label, color, textColor }: { label: string; color: string; textColor?: string }) {
   return (
     <View style={[styles.badge, { backgroundColor: color }]}>
@@ -37,10 +35,6 @@ function RoutineCard({
   isToggling: boolean;
 }) {
   const { t } = useTranslation();
-
-  const daysText = routine.days_of_week
-    .map((d) => dayAbbr[d] ?? `${d}`)
-    .join(', ');
 
   return (
     <View style={styles.card}>
@@ -77,18 +71,6 @@ function RoutineCard({
           ))}
         </View>
       )}
-
-      {/* Shift & Days */}
-      <View style={styles.detailRow}>
-        <Badge
-          label={routine.shift === 'day'
-            ? t('routines.day_shift', 'Day')
-            : t('routines.night_shift', 'Night')}
-          color={routine.shift === 'day' ? '#FFF9C4' : '#311B92'}
-          textColor={routine.shift === 'day' ? '#F57F17' : '#fff'}
-        />
-        <Text style={styles.daysText}>{daysText}</Text>
-      </View>
 
       {/* Template ID */}
       <Text style={styles.templateText}>
@@ -228,17 +210,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '600',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 10,
-  },
-  daysText: {
-    fontSize: 13,
-    color: '#616161',
-    fontWeight: '500',
   },
   templateText: {
     fontSize: 12,
