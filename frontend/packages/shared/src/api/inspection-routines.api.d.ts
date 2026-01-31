@@ -14,6 +14,11 @@ export interface CreateRoutinePayload {
     asset_types: string[];
     template_id: number;
 }
+export interface UploadScheduleResult {
+    created: number;
+    equipment_processed: number;
+    errors: string[];
+}
 export declare const inspectionRoutinesApi: {
     list(): Promise<import("axios").AxiosResponse<ApiResponse<InspectionRoutine[]>, any, {}>>;
     create(payload: CreateRoutinePayload): Promise<import("axios").AxiosResponse<ApiResponse<InspectionRoutine>, any, {}>>;
@@ -21,5 +26,6 @@ export declare const inspectionRoutinesApi: {
         is_active: boolean;
     }>): Promise<import("axios").AxiosResponse<ApiResponse<InspectionRoutine>, any, {}>>;
     delete(id: number): Promise<import("axios").AxiosResponse<ApiResponse<void>, any, {}>>;
+    uploadSchedule(file: File): Promise<import("axios").AxiosResponse<ApiResponse<UploadScheduleResult>, any, {}>>;
 };
 //# sourceMappingURL=inspection-routines.api.d.ts.map

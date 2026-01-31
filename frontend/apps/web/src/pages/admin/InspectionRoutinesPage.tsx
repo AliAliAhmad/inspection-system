@@ -10,10 +10,12 @@ import {
   Tag,
   Space,
   Popconfirm,
+  Upload,
   message,
   Typography,
+  Alert,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
@@ -33,6 +35,7 @@ export default function InspectionRoutinesPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState<InspectionRoutine | null>(null);
+  const [uploadResult, setUploadResult] = useState<{ created: number; equipment_processed: number; errors: string[] } | null>(null);
 
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -85,6 +88,22 @@ export default function InspectionRoutinesPage() {
       message.success(t('routines.deleteSuccess', 'Routine deleted successfully'));
     },
     onError: () => message.error(t('routines.deleteError', 'Failed to delete routine')),
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => inspectionRoutinesApi.uploadSchedule(file),
+    onSuccess: (res) => {
+      const result = res.data as any;
+      setUploadResult({
+        created: result.created ?? 0,
+        equipment_processed: result.equipment_processed ?? 0,
+        errors: result.errors ?? [],
+      });
+      message.success(
+        t('routines.uploadSuccess', '{{count}} schedule entries created', { count: result.created ?? 0 }),
+      );
+    },
+    onError: () => message.error(t('routines.uploadError', 'Failed to upload schedule')),
   });
 
   const openEditModal = (record: InspectionRoutine) => {
@@ -196,9 +215,23 @@ export default function InspectionRoutinesPage() {
     <Card
       title={<Typography.Title level={4}>{t('nav.inspectionRoutines', 'Inspection Routines')}</Typography.Title>}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-          {t('routines.create', 'Create Routine')}
-        </Button>
+        <Space>
+          <Upload
+            accept=".xlsx,.xls"
+            showUploadList={false}
+            beforeUpload={(file) => {
+              uploadMutation.mutate(file);
+              return false;
+            }}
+          >
+            <Button icon={<UploadOutlined />} loading={uploadMutation.isPending}>
+              {t('routines.importSchedule', 'Import Schedule')}
+            </Button>
+          </Upload>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+            {t('routines.create', 'Create Routine')}
+          </Button>
+        </Space>
       }
     >
       <Table
@@ -253,6 +286,39 @@ export default function InspectionRoutinesPage() {
             </Select>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Upload Result Modal */}
+      <Modal
+        title={t('routines.uploadResult', 'Schedule Upload Result')}
+        open={uploadResult !== null}
+        onCancel={() => setUploadResult(null)}
+        onOk={() => setUploadResult(null)}
+        cancelButtonProps={{ style: { display: 'none' } }}
+      >
+        {uploadResult && (
+          <>
+            <p>
+              <strong>{uploadResult.created}</strong> {t('routines.entriesCreated', 'schedule entries created')}
+              {' '}{t('routines.forEquipment', 'for')}{' '}
+              <strong>{uploadResult.equipment_processed}</strong> {t('routines.equipment', 'equipment')}.
+            </p>
+            {uploadResult.errors.length > 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                message={t('routines.uploadWarnings', '{{count}} warnings', { count: uploadResult.errors.length })}
+                description={
+                  <ul style={{ maxHeight: 200, overflow: 'auto', paddingLeft: 16, margin: 0 }}>
+                    {uploadResult.errors.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                }
+              />
+            )}
+          </>
+        )}
       </Modal>
     </Card>
   );

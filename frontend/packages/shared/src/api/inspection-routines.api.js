@@ -12,5 +12,10 @@ export const inspectionRoutinesApi = {
     delete(id) {
         return getApiClient().delete(`/api/inspection-routines/${id}`);
     },
+    uploadSchedule(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        return getApiClient().post('/api/inspection-routines/upload-schedule', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    },
 };
 //# sourceMappingURL=inspection-routines.api.js.map

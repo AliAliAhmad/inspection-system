@@ -18,6 +18,12 @@ export interface CreateRoutinePayload {
   template_id: number;
 }
 
+export interface UploadScheduleResult {
+  created: number;
+  equipment_processed: number;
+  errors: string[];
+}
+
 export const inspectionRoutinesApi = {
   list() {
     return getApiClient().get<ApiResponse<InspectionRoutine[]>>('/api/inspection-routines');
@@ -30,5 +36,14 @@ export const inspectionRoutinesApi = {
   },
   delete(id: number) {
     return getApiClient().delete<ApiResponse<void>>(`/api/inspection-routines/${id}`);
+  },
+  uploadSchedule(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return getApiClient().post<ApiResponse<UploadScheduleResult>>(
+      '/api/inspection-routines/upload-schedule',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
   },
 };

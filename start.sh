@@ -51,6 +51,15 @@ with app.app_context():
         except Exception:
             db.session.rollback()
             print(f'inspection_routines.{col} already nullable')
+
+    # Add shift column to inspection_schedules
+    try:
+        db.session.execute(text(\"ALTER TABLE inspection_schedules ADD COLUMN shift VARCHAR(20) DEFAULT 'day'\"))
+        db.session.commit()
+        print('Added shift column to inspection_schedules')
+    except Exception:
+        db.session.rollback()
+        print('inspection_schedules.shift already exists')
 "
 
 echo "Starting gunicorn..."

@@ -10,12 +10,13 @@ from datetime import datetime
 
 
 class InspectionSchedule(db.Model):
-    """Legacy weekly schedule for equipment inspections."""
+    """Weekly schedule for equipment inspections. Imported from Excel."""
     __tablename__ = 'inspection_schedules'
 
     id = db.Column(db.Integer, primary_key=True)
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
     day_of_week = db.Column(db.Integer, nullable=False)
+    shift = db.Column(db.String(20), nullable=True, default='day')  # 'day' or 'night'
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -34,6 +35,7 @@ class InspectionSchedule(db.Model):
             'equipment': self.equipment.to_dict() if self.equipment else None,
             'day_of_week': self.day_of_week,
             'day_name': days[self.day_of_week],
+            'shift': self.shift,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
