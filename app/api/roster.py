@@ -101,18 +101,20 @@ def upload_roster():
         return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
 
     file = request.files['file']
-    if not file.filename.endswith('.xlsx'):
+    if not file.filename.endswith(('.xlsx', '.xls')):
         return jsonify({'status': 'error', 'message': 'Only .xlsx files are supported'}), 400
 
     try:
         import openpyxl
     except ImportError:
+        logger.error("openpyxl not installed")
         return jsonify({'status': 'error', 'message': 'openpyxl is required for Excel parsing'}), 500
 
     try:
         wb = openpyxl.load_workbook(file, data_only=True)
         ws = wb.active
     except Exception as e:
+        logger.exception("Failed to read Excel file")
         return jsonify({'status': 'error', 'message': f'Failed to read Excel file: {str(e)}'}), 400
 
     rows = list(ws.iter_rows(values_only=True))
@@ -120,6 +122,8 @@ def upload_roster():
         return jsonify({'status': 'error', 'message': 'Empty spreadsheet'}), 400
 
     headers = rows[0]
+    logger.info("Roster upload: %d rows, %d columns. First 5 headers: %s",
+                len(rows), len(headers), list(headers[:5]))
 
     # Parse date columns (columns from index 3 onward)
     date_columns = []  # list of (col_index, date_obj)
@@ -128,8 +132,15 @@ def upload_roster():
         if parsed:
             date_columns.append((col_idx, parsed))
 
+    logger.info("Parsed %d date columns out of %d header columns", len(date_columns), len(headers) - 3)
+
     if not date_columns:
-        return jsonify({'status': 'error', 'message': 'No valid date columns found in headers'}), 400
+        return jsonify({
+            'status': 'error',
+            'message': f'No valid date columns found in headers. '
+                       f'Expected date headers from column 4 onward. '
+                       f'Found headers: {[str(h) for h in headers[:6]]}'
+        }), 400
 
     errors = []
     imported = 0
@@ -175,7 +186,13 @@ def upload_roster():
             db.session.add(entry)
             imported += 1
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Roster upload DB commit failed")
+        return jsonify({'status': 'error', 'message': f'Database error: {str(e)}'}), 500
+
     logger.info("Roster uploaded: %d entries imported for %d users", imported, users_processed)
 
     return jsonify({

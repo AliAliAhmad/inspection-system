@@ -107,7 +107,10 @@ export default function TeamRosterPage() {
         t('roster.uploadSuccess', '{{count}} entries imported', { count: result.imported ?? 0 }),
       );
     },
-    onError: () => message.error(t('roster.uploadError', 'Failed to upload roster')),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to upload roster';
+      message.error(msg);
+    },
   });
 
   // Leave request mutation
