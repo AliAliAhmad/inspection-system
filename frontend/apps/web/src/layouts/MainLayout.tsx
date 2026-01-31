@@ -47,7 +47,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/users', name: t('nav.users'), icon: <TeamOutlined /> },
     { path: '/admin/equipment', name: t('nav.equipment'), icon: <ToolOutlined /> },
     { path: '/admin/checklists', name: t('nav.checklists'), icon: <CheckCircleOutlined /> },
-    { path: '/admin/schedules', name: t('nav.schedules'), icon: <ScheduleOutlined /> },
+    { path: '/admin/schedules', name: t('nav.inspectionSchedule'), icon: <ScheduleOutlined /> },
     { path: '/admin/assignments', name: t('nav.inspection_assignments'), icon: <AppstoreOutlined /> },
     { path: '/admin/inspections', name: t('nav.all_inspections'), icon: <FileTextOutlined /> },
     { path: '/admin/specialist-jobs', name: t('nav.specialist_jobs'), icon: <ExperimentOutlined /> },

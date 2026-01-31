@@ -79,6 +79,8 @@ export type {
   InspectionRoutine,
   CreateRoutinePayload,
   EquipmentSchedule,
+  UpcomingEntry,
+  UpcomingData,
 } from './inspection-routines.api';
 export { rosterApi } from './roster.api';
 export type {

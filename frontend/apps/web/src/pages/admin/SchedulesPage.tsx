@@ -4,204 +4,294 @@ import {
   Table,
   Button,
   Modal,
-  Form,
-  Select,
+  Upload,
   Tag,
-  Popconfirm,
+  Row,
+  Col,
+  Alert,
   message,
   Typography,
-  Spin,
+  List,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  schedulesApi,
-  equipmentApi,
-  type Schedule,
-  type CreateSchedulePayload,
+  inspectionRoutinesApi,
+  type EquipmentSchedule,
+  type UpcomingEntry,
 } from '@inspection/shared';
 
-const DAYS_OF_WEEK = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-];
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly'];
+const shiftTag = (value: string | undefined) => {
+  if (!value) return <Tag>-</Tag>;
+  switch (value) {
+    case 'day':
+      return <Tag color="blue">D</Tag>;
+    case 'night':
+      return <Tag color="purple">N</Tag>;
+    case 'both':
+      return <Tag color="orange">D+N</Tag>;
+    default:
+      return <Tag>{value}</Tag>;
+  }
+};
 
 export default function SchedulesPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [form] = Form.useForm();
+  const [uploadResult, setUploadResult] = useState<{
+    created: number;
+    equipment_processed: number;
+    errors: string[];
+  } | null>(null);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['schedules', 'weekly'],
-    queryFn: () => schedulesApi.getWeekly(),
+  // Equipment schedule grid
+  const { data: schedules, isLoading: schedulesLoading } = useQuery({
+    queryKey: ['inspection-schedules'],
+    queryFn: () =>
+      inspectionRoutinesApi
+        .getSchedules()
+        .then((r) => (r.data as any).data as EquipmentSchedule[]),
   });
 
-  const { data: equipmentData, isLoading: equipmentLoading } = useQuery({
-    queryKey: ['equipment', 'all'],
-    queryFn: () => equipmentApi.list({ per_page: 500 }),
-    enabled: addModalOpen,
+  // Today & tomorrow inspections
+  const { data: upcomingData, isLoading: upcomingLoading } = useQuery({
+    queryKey: ['inspection-schedules', 'upcoming'],
+    queryFn: () =>
+      inspectionRoutinesApi.getUpcoming().then((r) => (r.data as any).data),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (payload: CreateSchedulePayload) => schedulesApi.create(payload),
-    onSuccess: () => {
-      message.success(t('schedules.createSuccess', 'Schedule created successfully'));
-      queryClient.invalidateQueries({ queryKey: ['schedules'] });
-      setAddModalOpen(false);
-      form.resetFields();
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => inspectionRoutinesApi.uploadSchedule(file),
+    onSuccess: (res) => {
+      const result = res.data as any;
+      setUploadResult({
+        created: result.created ?? 0,
+        equipment_processed: result.equipment_processed ?? 0,
+        errors: result.errors ?? [],
+      });
+      queryClient.invalidateQueries({ queryKey: ['inspection-schedules'] });
+      message.success(
+        t('schedules.uploadSuccess', '{{count}} schedule entries created', {
+          count: result.created ?? 0,
+        }),
+      );
     },
-    onError: () => message.error(t('schedules.createError', 'Failed to create schedule')),
+    onError: () =>
+      message.error(
+        t('schedules.uploadError', 'Failed to upload schedule'),
+      ),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => schedulesApi.remove(id),
-    onSuccess: () => {
-      message.success(t('schedules.deleteSuccess', 'Schedule deleted successfully'));
-      queryClient.invalidateQueries({ queryKey: ['schedules'] });
-    },
-    onError: () => message.error(t('schedules.deleteError', 'Failed to delete schedule')),
-  });
-
-  const columns: ColumnsType<Schedule> = [
+  const scheduleColumns: ColumnsType<EquipmentSchedule> = [
     {
-      title: t('schedules.equipment', 'Equipment'),
+      title: t('equipment.name', 'Equipment'),
       dataIndex: 'equipment_name',
       key: 'equipment_name',
+      fixed: 'left',
+      width: 180,
       sorter: (a, b) => a.equipment_name.localeCompare(b.equipment_name),
     },
     {
-      title: t('schedules.dayOfWeek', 'Day of Week'),
-      dataIndex: 'day_of_week',
-      key: 'day_of_week',
-      render: (day: number) => DAYS_OF_WEEK[day] || day,
-      sorter: (a, b) => a.day_of_week - b.day_of_week,
+      title: t('equipment.type', 'Type'),
+      dataIndex: 'equipment_type',
+      key: 'equipment_type',
+      width: 130,
+      render: (v: string) => (v ? <Tag>{v}</Tag> : '-'),
+      filters: [
+        ...new Set(
+          (schedules || []).map((s) => s.equipment_type).filter(Boolean),
+        ),
+      ].map((tp) => ({ text: tp!, value: tp! })),
+      onFilter: (value, record) => record.equipment_type === value,
     },
     {
-      title: t('schedules.frequency', 'Frequency'),
-      dataIndex: 'frequency',
-      key: 'frequency',
-      render: (f: string) => <Tag color="blue">{f.toUpperCase()}</Tag>,
+      title: t('equipment.berth', 'Berth'),
+      dataIndex: 'berth',
+      key: 'berth',
+      width: 100,
+      render: (v: string) => v || '-',
+      filters: [
+        ...new Set(
+          (schedules || []).map((s) => s.berth).filter(Boolean),
+        ),
+      ].map((b) => ({ text: b!, value: b! })),
+      onFilter: (value, record) => record.berth === value,
     },
-    {
-      title: t('schedules.active', 'Active'),
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (v: boolean) => (
-        <Tag color={v ? 'green' : 'default'}>
-          {v ? t('common.yes', 'Yes') : t('common.no', 'No')}
-        </Tag>
-      ),
-    },
-    {
-      title: t('schedules.nextDue', 'Next Due'),
-      dataIndex: 'next_due',
-      key: 'next_due',
-      render: (v: string | null) => v || '-',
-    },
-    {
-      title: t('schedules.lastCompleted', 'Last Completed'),
-      dataIndex: 'last_completed',
-      key: 'last_completed',
-      render: (v: string | null) => v || '-',
-    },
-    {
-      title: t('common.actions', 'Actions'),
-      key: 'actions',
-      render: (_: unknown, record: Schedule) => (
-        <Popconfirm
-          title={t('schedules.deleteConfirm', 'Delete this schedule?')}
-          onConfirm={() => deleteMutation.mutate(record.id)}
-          okText={t('common.yes', 'Yes')}
-          cancelText={t('common.no', 'No')}
-        >
-          <Button type="link" danger icon={<DeleteOutlined />}>
-            {t('common.delete', 'Delete')}
-          </Button>
-        </Popconfirm>
-      ),
-    },
+    ...DAY_NAMES.map((day, idx) => ({
+      title: day,
+      key: `day_${idx}`,
+      width: 70,
+      align: 'center' as const,
+      render: (_: unknown, record: EquipmentSchedule) =>
+        shiftTag(record.days[String(idx)]),
+    })),
   ];
 
-  const schedules = data?.data?.data || [];
-  const equipmentOptions = equipmentData?.data?.data || [];
+  const todayEntries: UpcomingEntry[] = upcomingData?.today ?? [];
+  const tomorrowEntries: UpcomingEntry[] = upcomingData?.tomorrow ?? [];
+  const todayDate: string = upcomingData?.today_date ?? '';
+  const tomorrowDate: string = upcomingData?.tomorrow_date ?? '';
+
+  const renderUpcomingItem = (item: UpcomingEntry) => (
+    <List.Item>
+      <List.Item.Meta
+        title={item.equipment_name}
+        description={
+          <>
+            {item.equipment_type && <Tag>{item.equipment_type}</Tag>}
+            {item.berth && <Tag color="geekblue">{item.berth}</Tag>}
+            <Tag color={item.shift === 'day' ? 'gold' : 'purple'}>
+              {item.shift.toUpperCase()}
+            </Tag>
+          </>
+        }
+      />
+    </List.Item>
+  );
 
   return (
-    <Card
-      title={<Typography.Title level={4}>{t('nav.schedules', 'Schedules')}</Typography.Title>}
-      extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
-          {t('schedules.add', 'Add Schedule')}
-        </Button>
-      }
-    >
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={schedules}
-        loading={isLoading}
-        locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
-        pagination={{ pageSize: 20, showSizeChanger: true }}
-        scroll={{ x: 900 }}
-      />
-
-      <Modal
-        title={t('schedules.add', 'Add Schedule')}
-        open={addModalOpen}
-        onCancel={() => { setAddModalOpen(false); form.resetFields(); }}
-        onOk={() => form.submit()}
-        confirmLoading={createMutation.isPending}
-        destroyOnClose
-      >
-        <Spin spinning={equipmentLoading}>
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={(v: CreateSchedulePayload) => createMutation.mutate(v)}
+    <div>
+      {/* Today & Tomorrow Inspections */}
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={12}>
+          <Card
+            title={
+              <Typography.Text strong>
+                {t('schedules.todayInspections', "Today's Inspections")}
+                {todayDate && ` — ${todayDate}`}
+              </Typography.Text>
+            }
+            size="small"
+            loading={upcomingLoading}
           >
-            <Form.Item name="equipment_id" label={t('schedules.equipment', 'Equipment')} rules={[{ required: true }]}>
-              <Select
-                showSearch
-                optionFilterProp="children"
-                placeholder={t('schedules.selectEquipment', 'Select equipment')}
-              >
-                {equipmentOptions.map((eq) => (
-                  <Select.Option key={eq.id} value={eq.id}>
-                    {eq.name} ({eq.serial_number})
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-            <Form.Item name="day_of_week" label={t('schedules.dayOfWeek', 'Day of Week')} rules={[{ required: true }]}>
-              <Select>
-                {DAYS_OF_WEEK.map((day, index) => (
-                  <Select.Option key={index} value={index}>
-                    {day}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-            <Form.Item name="frequency" label={t('schedules.frequency', 'Frequency')} rules={[{ required: true }]}>
-              <Select>
-                {FREQUENCIES.map((f) => (
-                  <Select.Option key={f} value={f}>
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Form>
-        </Spin>
+            {todayEntries.length === 0 ? (
+              <Typography.Text type="secondary">
+                {t('schedules.noInspectionsToday', 'No inspections scheduled for today')}
+              </Typography.Text>
+            ) : (
+              <List
+                size="small"
+                dataSource={todayEntries}
+                renderItem={renderUpcomingItem}
+              />
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card
+            title={
+              <Typography.Text strong>
+                {t('schedules.tomorrowInspections', "Tomorrow's Inspections")}
+                {tomorrowDate && ` — ${tomorrowDate}`}
+              </Typography.Text>
+            }
+            size="small"
+            loading={upcomingLoading}
+          >
+            {tomorrowEntries.length === 0 ? (
+              <Typography.Text type="secondary">
+                {t('schedules.noInspectionsTomorrow', 'No inspections scheduled for tomorrow')}
+              </Typography.Text>
+            ) : (
+              <List
+                size="small"
+                dataSource={tomorrowEntries}
+                renderItem={renderUpcomingItem}
+              />
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Equipment Schedule Grid */}
+      <Card
+        title={
+          <Typography.Title level={4} style={{ margin: 0 }}>
+            {t('nav.inspectionSchedule', 'Inspection Schedule')}
+          </Typography.Title>
+        }
+        extra={
+          <Upload
+            accept=".xlsx,.xls"
+            showUploadList={false}
+            beforeUpload={(file) => {
+              uploadMutation.mutate(file);
+              return false;
+            }}
+          >
+            <Button
+              icon={<UploadOutlined />}
+              loading={uploadMutation.isPending}
+              type="primary"
+            >
+              {t('schedules.importSchedule', 'Import Schedule')}
+            </Button>
+          </Upload>
+        }
+      >
+        <Table
+          rowKey="equipment_id"
+          columns={scheduleColumns}
+          dataSource={schedules || []}
+          loading={schedulesLoading}
+          locale={{
+            emptyText: t(
+              'schedules.noSchedule',
+              'No schedule imported yet. Click "Import Schedule" to upload an Excel file.',
+            ),
+          }}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
+          scroll={{ x: 900 }}
+          size="small"
+        />
+      </Card>
+
+      {/* Upload Result Modal */}
+      <Modal
+        title={t('schedules.uploadResult', 'Schedule Upload Result')}
+        open={uploadResult !== null}
+        onCancel={() => setUploadResult(null)}
+        onOk={() => setUploadResult(null)}
+        cancelButtonProps={{ style: { display: 'none' } }}
+      >
+        {uploadResult && (
+          <>
+            <p>
+              <strong>{uploadResult.created}</strong>{' '}
+              {t('schedules.entriesCreated', 'schedule entries created')} {t('schedules.forEquipment', 'for')}{' '}
+              <strong>{uploadResult.equipment_processed}</strong>{' '}
+              {t('schedules.equipment', 'equipment')}.
+            </p>
+            {uploadResult.errors.length > 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                message={t('schedules.uploadWarnings', '{{count}} warnings', {
+                  count: uploadResult.errors.length,
+                })}
+                description={
+                  <ul
+                    style={{
+                      maxHeight: 200,
+                      overflow: 'auto',
+                      paddingLeft: 16,
+                      margin: 0,
+                    }}
+                  >
+                    {uploadResult.errors.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                }
+              />
+            )}
+          </>
+        )}
       </Modal>
-    </Card>
+    </div>
   );
 }

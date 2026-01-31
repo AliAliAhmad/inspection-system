@@ -24,5 +24,11 @@ export const leavesApi = {
     getCapacity(shift) {
         return getApiClient().get('/api/leaves/capacity', { params: shift ? { shift } : undefined });
     },
+    getBalance(userId) {
+        return getApiClient().get(`/api/leaves/user/${userId}/balance`);
+    },
+    addDays(userId, days, reason) {
+        return getApiClient().post(`/api/leaves/user/${userId}/add-days`, { days, reason });
+    },
 };
 //# sourceMappingURL=leaves.api.js.map

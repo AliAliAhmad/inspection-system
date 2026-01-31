@@ -84,7 +84,8 @@
     "routines": "روتينات الفحص",
     "quick_links": "وصول سريع",
     "backlog": "عمليات الفحص المتأخرة",
-    "roster": "قائمة الفريق"
+    "roster": "قائمة الفريق",
+    "inspectionSchedule": "جدول التفتيش"
   },
   "status": {
     "active": "نشط",

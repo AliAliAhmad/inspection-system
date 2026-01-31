@@ -2,6 +2,7 @@
 Inspection routine management endpoints (Admin only).
 """
 
+from datetime import date, timedelta
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import InspectionRoutine, InspectionSchedule, ChecklistTemplate, Equipment
@@ -389,4 +390,49 @@ def list_schedules():
     return jsonify({
         'status': 'success',
         'data': list(equipment_map.values()),
+    }), 200
+
+
+@bp.route('/schedules/upcoming', methods=['GET'])
+@jwt_required()
+@admin_required()
+def upcoming_inspections():
+    """
+    Get equipment needing inspection today and tomorrow based on imported schedule.
+
+    Returns:
+        {
+            "status": "success",
+            "today": [ { equipment_name, berth, shift, equipment_type } ],
+            "tomorrow": [ ... ]
+        }
+    """
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    today_dow = today.weekday()     # 0=Monday
+    tomorrow_dow = tomorrow.weekday()
+
+    def _get_day_entries(day_of_week):
+        entries = InspectionSchedule.query.filter_by(
+            day_of_week=day_of_week,
+            is_active=True,
+        ).all()
+        results = []
+        for s in entries:
+            equip = s.equipment
+            results.append({
+                'equipment_id': s.equipment_id,
+                'equipment_name': equip.name if equip else str(s.equipment_id),
+                'equipment_type': equip.equipment_type if equip else None,
+                'berth': s.berth,
+                'shift': s.shift,
+            })
+        return results
+
+    return jsonify({
+        'status': 'success',
+        'today': _get_day_entries(today_dow),
+        'today_date': today.isoformat(),
+        'tomorrow': _get_day_entries(tomorrow_dow),
+        'tomorrow_date': tomorrow.isoformat(),
     }), 200

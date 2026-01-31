@@ -33,6 +33,21 @@ export interface EquipmentSchedule {
   days: Record<string, string>; // "0"-"6" -> "day"|"night"|"both"
 }
 
+export interface UpcomingEntry {
+  equipment_id: number;
+  equipment_name: string;
+  equipment_type: string | null;
+  berth: string | null;
+  shift: string;
+}
+
+export interface UpcomingData {
+  today: UpcomingEntry[];
+  today_date: string;
+  tomorrow: UpcomingEntry[];
+  tomorrow_date: string;
+}
+
 export const inspectionRoutinesApi = {
   list() {
     return getApiClient().get<ApiResponse<InspectionRoutine[]>>('/api/inspection-routines');
@@ -57,5 +72,8 @@ export const inspectionRoutinesApi = {
   },
   getSchedules() {
     return getApiClient().get<ApiResponse<EquipmentSchedule[]>>('/api/inspection-routines/schedules');
+  },
+  getUpcoming() {
+    return getApiClient().get<ApiResponse<UpcomingData>>('/api/inspection-routines/schedules/upcoming');
   },
 };

@@ -6,6 +6,9 @@ export const inspectionsApi = {
     get(id) {
         return getApiClient().get(`/api/inspections/${id}`);
     },
+    getByAssignment(assignmentId) {
+        return getApiClient().get(`/api/inspections/by-assignment/${assignmentId}`);
+    },
     start(payload) {
         return getApiClient().post('/api/inspections/start', payload);
     },

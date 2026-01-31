@@ -84,7 +84,8 @@
     "routines": "Inspection Routines",
     "quick_links": "Quick Access",
     "backlog": "Overdue Inspections",
-    "roster": "Team Roster"
+    "roster": "Team Roster",
+    "inspectionSchedule": "Inspection Schedule"
   },
   "status": {
     "active": "Active",

@@ -22,7 +22,7 @@ function getMenuItems(role, t) {
         { path: '/admin/users', name: t('nav.users'), icon: _jsx(TeamOutlined, {}) },
         { path: '/admin/equipment', name: t('nav.equipment'), icon: _jsx(ToolOutlined, {}) },
         { path: '/admin/checklists', name: t('nav.checklists'), icon: _jsx(CheckCircleOutlined, {}) },
-        { path: '/admin/schedules', name: t('nav.schedules'), icon: _jsx(ScheduleOutlined, {}) },
+        { path: '/admin/schedules', name: t('nav.inspectionSchedule'), icon: _jsx(ScheduleOutlined, {}) },
         { path: '/admin/assignments', name: t('nav.inspection_assignments'), icon: _jsx(AppstoreOutlined, {}) },
         { path: '/admin/inspections', name: t('nav.all_inspections'), icon: _jsx(FileTextOutlined, {}) },
         { path: '/admin/specialist-jobs', name: t('nav.specialist_jobs'), icon: _jsx(ExperimentOutlined, {}) },

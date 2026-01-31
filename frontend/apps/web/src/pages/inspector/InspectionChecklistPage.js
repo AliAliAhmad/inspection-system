@@ -21,22 +21,30 @@ export default function InspectionChecklistPage() {
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, []);
-    // Fetch inspection data
+    // Fetch inspection data by assignment ID (auto-creates if needed)
     const { data: inspection, isLoading, error, refetch: refetchInspection, } = useQuery({
-        queryKey: ['inspection', assignmentId],
-        queryFn: () => inspectionsApi.get(assignmentId).then((r) => r.data.data),
+        queryKey: ['inspection', 'by-assignment', assignmentId],
+        queryFn: () => inspectionsApi.getByAssignment(assignmentId).then((r) => r.data.data),
     });
-    // Fetch progress
+    const inspectionId = inspection?.id;
+    // Fetch progress using actual inspection ID
     const { data: progress, refetch: refetchProgress } = useQuery({
-        queryKey: ['inspection-progress', assignmentId],
+        queryKey: ['inspection-progress', inspectionId],
         queryFn: () => inspectionsApi
-            .getProgress(assignmentId)
-            .then((r) => r.data.data),
-        enabled: !!inspection,
+            .getProgress(inspectionId)
+            .then((r) => {
+            const raw = r.data.data ?? r.data.progress;
+            return {
+                total_items: raw.total_items,
+                answered_items: raw.answered_items,
+                percentage: raw.percentage ?? raw.progress_percentage ?? 0,
+            };
+        }),
+        enabled: !!inspectionId,
     });
-    // Answer mutation
+    // Answer mutation using actual inspection ID
     const answerMutation = useMutation({
-        mutationFn: (payload) => inspectionsApi.answerQuestion(assignmentId, payload),
+        mutationFn: (payload) => inspectionsApi.answerQuestion(inspectionId, payload),
         onSuccess: () => {
             refetchProgress();
             refetchInspection();
@@ -45,9 +53,9 @@ export default function InspectionChecklistPage() {
             message.error(t('common.error'));
         },
     });
-    // Submit mutation
+    // Submit mutation using actual inspection ID
     const submitMutation = useMutation({
-        mutationFn: () => inspectionsApi.submit(assignmentId),
+        mutationFn: () => inspectionsApi.submit(inspectionId),
         onSuccess: () => {
             message.success(t('inspection.submit'));
             navigate('/inspector/assignments');
@@ -90,13 +98,14 @@ export default function InspectionChecklistPage() {
     const answers = inspection.answers ?? [];
     const answeredMap = new Map();
     answers.forEach((a) => answeredMap.set(a.checklist_item_id, a));
-    // Collect all checklist items from answers
-    const checklistItems = answers
+    // Get checklist items: prefer checklist_items from response, fallback to extracting from answers
+    const rawChecklistItems = inspection.checklist_items ?? [];
+    const itemsFromAnswers = answers
         .filter((a) => a.checklist_item !== null)
-        .map((a) => a.checklist_item)
-        .sort((a, b) => a.order_index - b.order_index);
-    // Deduplicate checklist items by id
-    const uniqueItems = Array.from(new Map(checklistItems.map((item) => [item.id, item])).values());
+        .map((a) => a.checklist_item);
+    // Merge and deduplicate by id, sorted by order_index
+    const allItems = [...rawChecklistItems, ...itemsFromAnswers];
+    const uniqueItems = Array.from(new Map(allItems.map((item) => [item.id, item])).values()).sort((a, b) => a.order_index - b.order_index);
     const canSubmit = progress &&
         progress.answered_items >= progress.total_items &&
         inspection.status === 'draft';
