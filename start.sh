@@ -61,6 +61,15 @@ with app.app_context():
         db.session.rollback()
         print('inspection_schedules.shift already exists')
 
+    # Add berth column to inspection_schedules
+    try:
+        db.session.execute(text(\"ALTER TABLE inspection_schedules ADD COLUMN berth VARCHAR(50)\"))
+        db.session.commit()
+        print('Added berth column to inspection_schedules')
+    except Exception:
+        db.session.rollback()
+        print('inspection_schedules.berth already exists')
+
     # Create roster_entries table
     try:
         db.session.execute(text('''

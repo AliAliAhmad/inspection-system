@@ -76,7 +76,14 @@ export default function InspectionChecklistPage() {
     queryFn: () =>
       inspectionsApi
         .getProgress(inspectionId!)
-        .then((r) => (r.data as any).data ?? r.data.data as InspectionProgress),
+        .then((r) => {
+          const raw = (r.data as any).data ?? (r.data as any).progress;
+          return {
+            total_items: raw.total_items,
+            answered_items: raw.answered_items,
+            percentage: raw.percentage ?? raw.progress_percentage ?? 0,
+          } as InspectionProgress;
+        }),
     enabled: !!inspectionId,
   });
 

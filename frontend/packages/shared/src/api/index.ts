@@ -78,6 +78,7 @@ export { inspectionRoutinesApi } from './inspection-routines.api';
 export type {
   InspectionRoutine,
   CreateRoutinePayload,
+  EquipmentSchedule,
 } from './inspection-routines.api';
 export { rosterApi } from './roster.api';
 export type {

@@ -5,7 +5,7 @@ Triggered daily at 1:00 PM for next shift inspections.
 
 from app.models import (
     InspectionList, InspectionAssignment, InspectionRoutine,
-    Equipment, User, RosterEntry, Leave
+    InspectionSchedule, Equipment, User, RosterEntry, Leave
 )
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
@@ -91,12 +91,26 @@ class InspectionListService:
         db.session.add(inspection_list)
         db.session.flush()
 
+        # Build berth lookup from imported schedule for this day+shift
+        schedule_berth_map = {}
+        schedule_entries = InspectionSchedule.query.filter(
+            InspectionSchedule.equipment_id.in_([e.id for e in equipment_list]),
+            InspectionSchedule.day_of_week == day_of_week,
+            InspectionSchedule.shift == shift,
+            InspectionSchedule.is_active == True,
+        ).all()
+        for se in schedule_entries:
+            if se.berth:
+                schedule_berth_map[se.equipment_id] = se.berth
+
         # Create unassigned assignments for each equipment
         for equip in equipment_list:
+            # Prefer berth from imported schedule, fallback to equipment record
+            berth = schedule_berth_map.get(equip.id) or equip.berth
             assignment = InspectionAssignment(
                 inspection_list_id=inspection_list.id,
                 equipment_id=equip.id,
-                berth=equip.berth,
+                berth=berth,
                 shift=shift,
                 status='unassigned'
             )

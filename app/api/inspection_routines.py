@@ -201,7 +201,8 @@ def upload_schedule():
 
     Excel format (grid):
       - Column A: equipment name (individual assets)
-      - Columns B-H: days of week (Mon, Tue, Wed, Thu, Fri, Sat, Sun)
+      - Column B: berth (required, e.g. B1, B2)
+      - Columns C onwards: days of week (Mon, Tue, Wed, Thu, Fri, Sat, Sun)
       - Cell values: D (day shift), N (night shift), D+N (both), empty (off)
 
     Replaces existing schedule entries for each equipment found in the file.
@@ -235,9 +236,18 @@ def upload_schedule():
     # ── Parse header row ──────────────────────────────────────
     header = [str(h).strip() if h else '' for h in rows[0]]
 
+    # Column B must be "Berth"
+    if len(header) < 2 or header[1].lower().strip() not in ('berth', 'رصيف'):
+        raise ValidationError(
+            "Column B must be 'Berth'. "
+            "Expected format: Equipment | Berth | Mon | Tue | ... | Sun"
+        )
+    berth_col_idx = 1
+    day_start = 2  # day columns start after berth
+
     # First column is equipment name; remaining columns should be day names
     day_columns = {}  # col_index -> day_of_week int
-    for col_idx in range(1, len(header)):
+    for col_idx in range(day_start, len(header)):
         day_key = header[col_idx].lower().strip()
         if day_key in _DAY_MAP:
             day_columns[col_idx] = _DAY_MAP[day_key]
@@ -257,6 +267,12 @@ def upload_schedule():
     for row_num, row in enumerate(rows[1:], start=2):
         equipment_name = str(row[0]).strip() if row and row[0] else None
         if not equipment_name:
+            continue
+
+        # Read berth from column B (mandatory)
+        row_berth = str(row[berth_col_idx]).strip() if berth_col_idx < len(row) and row[berth_col_idx] else None
+        if not row_berth:
+            errors.append(f"Row {row_num}: berth is required for '{equipment_name}'")
             continue
 
         # Look up equipment by name (case-insensitive)
@@ -298,6 +314,7 @@ def upload_schedule():
                     equipment_id=equipment.id,
                     day_of_week=day_int,
                     shift=shift,
+                    berth=row_berth,
                     is_active=True,
                 )
                 db.session.add(schedule)
@@ -313,3 +330,63 @@ def upload_schedule():
         'equipment_processed': equipment_processed,
         'errors': errors,
     }), 201
+
+
+@bp.route('/schedules', methods=['GET'])
+@jwt_required()
+@admin_required()
+def list_schedules():
+    """
+    List imported equipment schedules grouped by equipment.
+    Returns equipment details with their weekly schedule grid.
+
+    Returns:
+        {
+            "status": "success",
+            "data": [
+                {
+                    "equipment_id": 1,
+                    "equipment_name": "Crane-01",
+                    "equipment_type": "Crane",
+                    "berth": "B1",
+                    "location": "...",
+                    "days": {
+                        "0": "day",     // Monday
+                        "1": "night",   // Tuesday
+                        ...
+                    }
+                }
+            ]
+        }
+    """
+    schedules = InspectionSchedule.query.filter_by(is_active=True)\
+        .order_by(InspectionSchedule.equipment_id, InspectionSchedule.day_of_week).all()
+
+    # Group by equipment
+    equipment_map = {}
+    for s in schedules:
+        eid = s.equipment_id
+        if eid not in equipment_map:
+            equip = s.equipment
+            equipment_map[eid] = {
+                'equipment_id': eid,
+                'equipment_name': equip.name if equip else str(eid),
+                'equipment_type': equip.equipment_type if equip else None,
+                'berth': s.berth,
+                'location': equip.location if equip else None,
+                'days': {},
+            }
+        day_key = str(s.day_of_week)
+        existing = equipment_map[eid]['days'].get(day_key)
+        if existing and existing != s.shift:
+            equipment_map[eid]['days'][day_key] = 'both'
+        else:
+            equipment_map[eid]['days'][day_key] = s.shift
+        # Use berth from any schedule entry for this equipment
+        if s.berth and not equipment_map[eid]['berth']:
+            equipment_map[eid]['berth'] = s.berth
+
+    return jsonify({
+        'status': 'success',
+        'data': list(equipment_map.values()),
+    }), 200

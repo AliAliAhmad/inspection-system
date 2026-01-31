@@ -86,7 +86,7 @@ class Inspection(db.Model):
             'notes': self.notes
         }
         if include_answers:
-            data['answers'] = [answer.to_dict(language=language) for answer in self.answers]
+            data['answers'] = [answer.to_dict(language=language) for answer in self.answers.all()]
         return data
     
     def __repr__(self):

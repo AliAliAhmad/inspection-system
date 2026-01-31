@@ -17,6 +17,7 @@ class InspectionSchedule(db.Model):
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
     day_of_week = db.Column(db.Integer, nullable=False)
     shift = db.Column(db.String(20), nullable=True, default='day')  # 'day' or 'night'
+    berth = db.Column(db.String(50), nullable=True)  # from Excel import
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -36,6 +37,7 @@ class InspectionSchedule(db.Model):
             'day_of_week': self.day_of_week,
             'day_name': days[self.day_of_week],
             'shift': self.shift,
+            'berth': self.berth,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

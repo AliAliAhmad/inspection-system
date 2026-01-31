@@ -24,6 +24,15 @@ export interface UploadScheduleResult {
   errors: string[];
 }
 
+export interface EquipmentSchedule {
+  equipment_id: number;
+  equipment_name: string;
+  equipment_type: string | null;
+  berth: string | null;
+  location: string | null;
+  days: Record<string, string>; // "0"-"6" -> "day"|"night"|"both"
+}
+
 export const inspectionRoutinesApi = {
   list() {
     return getApiClient().get<ApiResponse<InspectionRoutine[]>>('/api/inspection-routines');
@@ -45,5 +54,8 @@ export const inspectionRoutinesApi = {
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } },
     );
+  },
+  getSchedules() {
+    return getApiClient().get<ApiResponse<EquipmentSchedule[]>>('/api/inspection-routines/schedules');
   },
 };
