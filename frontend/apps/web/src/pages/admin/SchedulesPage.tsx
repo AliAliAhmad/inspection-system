@@ -11,7 +11,6 @@ import {
   Alert,
   message,
   Typography,
-  List,
 } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -136,22 +135,61 @@ export default function SchedulesPage() {
   const todayDate: string = upcomingData?.today_date ?? '';
   const tomorrowDate: string = upcomingData?.tomorrow_date ?? '';
 
-  const renderUpcomingItem = (item: UpcomingEntry) => (
-    <List.Item>
-      <List.Item.Meta
-        title={item.equipment_name}
-        description={
-          <>
-            {item.equipment_type && <Tag>{item.equipment_type}</Tag>}
-            {item.berth && <Tag color="geekblue">{item.berth}</Tag>}
-            <Tag color={item.shift === 'day' ? 'gold' : 'purple'}>
-              {item.shift.toUpperCase()}
+  // Group entries by berth with day/night columns
+  type BerthRow = { berth: string; day: UpcomingEntry[]; night: UpcomingEntry[] };
+  const groupByBerth = (entries: UpcomingEntry[]): BerthRow[] => {
+    const map: Record<string, { day: UpcomingEntry[]; night: UpcomingEntry[] }> = {};
+    for (const e of entries) {
+      const key = e.berth || 'Unknown';
+      if (!map[key]) map[key] = { day: [], night: [] };
+      if (e.shift === 'day') map[key].day.push(e);
+      else map[key].night.push(e);
+    }
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([berth, shifts]) => ({ berth, ...shifts }));
+  };
+
+  const berthColumns: ColumnsType<BerthRow> = [
+    {
+      title: t('schedules.berth', 'Berth'),
+      dataIndex: 'berth',
+      key: 'berth',
+      width: 90,
+      render: (v: string) => <Tag color="geekblue">{v}</Tag>,
+    },
+    {
+      title: <><Tag color="gold">D</Tag> {t('schedules.dayShift', 'Day')}</>,
+      key: 'day',
+      render: (_: unknown, record: BerthRow) =>
+        record.day.length === 0 ? (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ) : (
+          record.day.map((e) => (
+            <Tag key={e.equipment_id} style={{ marginBottom: 4 }}>
+              {e.equipment_name}
             </Tag>
-          </>
-        }
-      />
-    </List.Item>
-  );
+          ))
+        ),
+    },
+    {
+      title: <><Tag color="purple">N</Tag> {t('schedules.nightShift', 'Night')}</>,
+      key: 'night',
+      render: (_: unknown, record: BerthRow) =>
+        record.night.length === 0 ? (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ) : (
+          record.night.map((e) => (
+            <Tag key={e.equipment_id} style={{ marginBottom: 4 }}>
+              {e.equipment_name}
+            </Tag>
+          ))
+        ),
+    },
+  ];
+
+  const todayBerths = groupByBerth(todayEntries);
+  const tomorrowBerths = groupByBerth(tomorrowEntries);
 
   return (
     <div>
@@ -168,15 +206,18 @@ export default function SchedulesPage() {
             size="small"
             loading={upcomingLoading}
           >
-            {todayEntries.length === 0 ? (
+            {todayBerths.length === 0 ? (
               <Typography.Text type="secondary">
                 {t('schedules.noInspectionsToday', 'No inspections scheduled for today')}
               </Typography.Text>
             ) : (
-              <List
+              <Table
+                rowKey="berth"
+                columns={berthColumns}
+                dataSource={todayBerths}
+                pagination={false}
                 size="small"
-                dataSource={todayEntries}
-                renderItem={renderUpcomingItem}
+                bordered
               />
             )}
           </Card>
@@ -192,15 +233,18 @@ export default function SchedulesPage() {
             size="small"
             loading={upcomingLoading}
           >
-            {tomorrowEntries.length === 0 ? (
+            {tomorrowBerths.length === 0 ? (
               <Typography.Text type="secondary">
                 {t('schedules.noInspectionsTomorrow', 'No inspections scheduled for tomorrow')}
               </Typography.Text>
             ) : (
-              <List
+              <Table
+                rowKey="berth"
+                columns={berthColumns}
+                dataSource={tomorrowBerths}
+                pagination={false}
                 size="small"
-                dataSource={tomorrowEntries}
-                renderItem={renderUpcomingItem}
+                bordered
               />
             )}
           </Card>
