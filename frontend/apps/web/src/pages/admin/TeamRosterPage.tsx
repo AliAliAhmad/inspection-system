@@ -250,15 +250,7 @@ export default function TeamRosterPage() {
         const leaveBalance = record.leave_remaining ?? 0;
         return (
           <Space direction="vertical" size={2}>
-            <Text
-              strong
-              style={{ cursor: 'pointer', color: '#1677ff' }}
-              onClick={() => {
-                setSelectedUserId(record.id);
-                setSelectedUserName(record.full_name);
-                setSelectedUserRole(record.role);
-              }}
-            >
+            <Text strong>
               {record.full_name}
             </Text>
             <Space size={4}>
@@ -350,6 +342,14 @@ export default function TeamRosterPage() {
         size="small"
         bordered
         locale={{ emptyText: t('common.noData', 'No data available') }}
+        onRow={(record) => ({
+          onClick: () => {
+            setSelectedUserId(record.id);
+            setSelectedUserName(record.full_name);
+            setSelectedUserRole(record.role);
+          },
+          style: { cursor: 'pointer' },
+        })}
       />
 
       {/* Employee Leave Drawer */}
