@@ -23,28 +23,32 @@ _ROLE_PREFIXES = {
 
 
 def _generate_role_id(role):
-    """Auto-generate the next employee ID for a given role, e.g. INS001, SPC002."""
+    """Auto-generate the next employee ID for a given role, e.g. INS-001, SPC-002."""
     prefix = _ROLE_PREFIXES.get(role)
     if not prefix:
         raise ValidationError(f"Unknown role: {role}")
 
-    # Find the highest existing number for this prefix
-    latest = (
+    # Find the highest existing number for this prefix (handles both ADM-001 and ADM001)
+    existing = (
         User.query
         .filter(User.role_id.like(f'{prefix}%'))
-        .order_by(User.role_id.desc())
-        .first()
+        .all()
     )
 
-    if latest and latest.role_id.startswith(prefix):
+    max_num = 0
+    for u in existing:
+        # Strip prefix and optional hyphen, then parse the number
+        suffix = u.role_id[len(prefix):]
+        if suffix.startswith('-'):
+            suffix = suffix[1:]
         try:
-            num = int(latest.role_id[len(prefix):]) + 1
+            num = int(suffix)
+            if num > max_num:
+                max_num = num
         except ValueError:
-            num = 1
-    else:
-        num = 1
+            continue
 
-    return f'{prefix}{num:03d}'
+    return f'{prefix}-{max_num + 1:03d}'
 
 
 @bp.route('', methods=['GET'])
