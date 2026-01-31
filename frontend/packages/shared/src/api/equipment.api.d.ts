@@ -10,5 +10,6 @@ export declare const equipmentApi: {
     create(payload: CreateEquipmentPayload): Promise<import("axios").AxiosResponse<ApiResponse<Equipment>, any, {}>>;
     update(id: number, payload: Partial<CreateEquipmentPayload>): Promise<import("axios").AxiosResponse<ApiResponse<Equipment>, any, {}>>;
     remove(id: number): Promise<import("axios").AxiosResponse<ApiResponse<unknown>, any, {}>>;
+    getTypes(): Promise<import("axios").AxiosResponse<ApiResponse<string[]>, any, {}>>;
 };
 //# sourceMappingURL=equipment.api.d.ts.map

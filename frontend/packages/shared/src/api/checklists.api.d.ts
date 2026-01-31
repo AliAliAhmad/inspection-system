@@ -6,16 +6,19 @@ export interface ChecklistListParams extends PaginationParams {
 export interface CreateTemplatePayload {
     name: string;
     name_ar?: string;
-    description?: string;
+    function: string;
+    assembly: string;
+    part?: string;
+    description: string;
+    version: string;
     is_active?: boolean;
 }
 export interface CreateChecklistItemPayload {
     question_text: string;
     question_text_ar?: string;
-    answer_type: 'yes_no' | 'rating' | 'text' | 'number';
+    answer_type: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
     category?: 'mechanical' | 'electrical';
-    is_critical?: boolean;
-    order?: number;
+    critical_failure?: boolean;
 }
 export interface UpdateChecklistItemPayload extends Partial<CreateChecklistItemPayload> {
 }

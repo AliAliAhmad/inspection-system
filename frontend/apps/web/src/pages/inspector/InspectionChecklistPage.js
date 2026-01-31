@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useCallback, useEffect } from 'react';
-import { Card, Typography, Progress, Button, Radio, Rate, Input, InputNumber, Upload, Tag, Space, Spin, Alert, List, Badge, message, Popconfirm, Descriptions, } from 'antd';
+import { Card, Typography, Progress, Button, Radio, Input, InputNumber, Upload, Tag, Space, Spin, Alert, List, Badge, message, Popconfirm, Descriptions, } from 'antd';
 import { CameraOutlined, StarFilled, CheckCircleOutlined, ArrowLeftOutlined, SendOutlined, } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -94,7 +94,7 @@ export default function InspectionChecklistPage() {
     const checklistItems = answers
         .filter((a) => a.checklist_item !== null)
         .map((a) => a.checklist_item)
-        .sort((a, b) => a.order - b.order);
+        .sort((a, b) => a.order_index - b.order_index);
     // Deduplicate checklist items by id
     const uniqueItems = Array.from(new Map(checklistItems.map((item) => [item.id, item])).values());
     const canSubmit = progress &&
@@ -121,15 +121,15 @@ function ChecklistItemCard({ item, existingAnswer, getQuestionText, onAnswer, on
         switch (item.answer_type) {
             case 'yes_no':
                 return (_jsxs(Radio.Group, { value: currentValue || undefined, onChange: (e) => onAnswer(item.id, e.target.value, comment || undefined), disabled: disabled, children: [_jsx(Radio.Button, { value: "yes", children: "Yes" }), _jsx(Radio.Button, { value: "no", children: "No" })] }));
-            case 'rating':
-                return (_jsx(Rate, { value: currentValue ? Number(currentValue) : 0, onChange: (val) => onAnswer(item.id, String(val), comment || undefined), disabled: disabled }));
+            case 'pass_fail':
+                return (_jsxs(Radio.Group, { value: currentValue || undefined, onChange: (e) => onAnswer(item.id, e.target.value, comment || undefined), disabled: disabled, children: [_jsx(Radio.Button, { value: "pass", children: "Pass" }), _jsx(Radio.Button, { value: "fail", children: "Fail" })] }));
             case 'text':
                 return (_jsx(Input.TextArea, { defaultValue: currentValue, rows: 2, placeholder: t('inspection.answer', 'Enter answer'), disabled: disabled, onBlur: (e) => {
                         if (e.target.value && e.target.value !== currentValue) {
                             onAnswer(item.id, e.target.value, comment || undefined);
                         }
                     } }));
-            case 'number':
+            case 'numeric':
                 return (_jsx(InputNumber, { defaultValue: currentValue ? Number(currentValue) : undefined, placeholder: t('inspection.answer', 'Enter value'), disabled: disabled, onBlur: (e) => {
                         const val = e.target.value;
                         if (val && val !== currentValue) {
@@ -140,7 +140,7 @@ function ChecklistItemCard({ item, existingAnswer, getQuestionText, onAnswer, on
                 return null;
         }
     };
-    return (_jsx(Card, { style: { marginBottom: 12 }, size: "small", title: _jsxs(Space, { wrap: true, children: [_jsx(Typography.Text, { strong: true, children: getQuestionText(item) }), item.category && (_jsx(Tag, { color: item.category === 'mechanical' ? 'blue' : 'gold', children: item.category })), item.is_critical && (_jsx(Badge, { count: _jsx(StarFilled, { style: { color: '#f5222d', fontSize: 14 } }) })), existingAnswer && (_jsx(CheckCircleOutlined, { style: { color: '#52c41a' } }))] }), children: _jsxs(Space, { direction: "vertical", style: { width: '100%' }, size: "middle", children: [renderAnswerInput(), _jsxs(Space, { children: [_jsx(Button, { size: "small", type: "link", onClick: () => setShowComment(!showComment), children: t('inspection.comment', 'Comment') }), !isSubmitted && (_jsx(Upload, { accept: "image/*", showUploadList: false, beforeUpload: (file) => onUpload(file, item.id), children: _jsx(Button, { size: "small", type: "link", icon: _jsx(CameraOutlined, {}), children: t('inspection.photo', 'Photo') }) })), existingAnswer?.photo_path && (_jsxs(Tag, { color: "green", children: [t('inspection.photo', 'Photo'), " uploaded"] }))] }), showComment && (_jsx(Input.TextArea, { value: comment, onChange: (e) => setComment(e.target.value), placeholder: t('inspection.comment', 'Add a comment...'), rows: 2, disabled: isSubmitted, onBlur: () => {
+    return (_jsx(Card, { style: { marginBottom: 12 }, size: "small", title: _jsxs(Space, { wrap: true, children: [_jsx(Typography.Text, { strong: true, children: getQuestionText(item) }), item.category && (_jsx(Tag, { color: item.category === 'mechanical' ? 'blue' : 'gold', children: item.category })), item.critical_failure && (_jsx(Badge, { count: _jsx(StarFilled, { style: { color: '#f5222d', fontSize: 14 } }) })), existingAnswer && (_jsx(CheckCircleOutlined, { style: { color: '#52c41a' } }))] }), children: _jsxs(Space, { direction: "vertical", style: { width: '100%' }, size: "middle", children: [renderAnswerInput(), _jsxs(Space, { children: [_jsx(Button, { size: "small", type: "link", onClick: () => setShowComment(!showComment), children: t('inspection.comment', 'Comment') }), !isSubmitted && (_jsx(Upload, { accept: "image/*", showUploadList: false, beforeUpload: (file) => onUpload(file, item.id), children: _jsx(Button, { size: "small", type: "link", icon: _jsx(CameraOutlined, {}), children: t('inspection.photo', 'Photo') }) })), existingAnswer?.photo_path && (_jsxs(Tag, { color: "green", children: [t('inspection.photo', 'Photo'), " uploaded"] }))] }), showComment && (_jsx(Input.TextArea, { value: comment, onChange: (e) => setComment(e.target.value), placeholder: t('inspection.comment', 'Add a comment...'), rows: 2, disabled: isSubmitted, onBlur: () => {
                         if (existingAnswer &&
                             comment !== (existingAnswer.comment ?? '')) {
                             onAnswer(item.id, existingAnswer.answer_value, comment || undefined);

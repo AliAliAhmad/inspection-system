@@ -5,7 +5,6 @@ import {
   Progress,
   Button,
   Radio,
-  Rate,
   Input,
   InputNumber,
   Upload,
@@ -163,7 +162,7 @@ export default function InspectionChecklistPage() {
   const checklistItems: ChecklistItem[] = answers
     .filter((a) => a.checklist_item !== null)
     .map((a) => a.checklist_item as ChecklistItem)
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) => a.order_index - b.order_index);
 
   // Deduplicate checklist items by id
   const uniqueItems = Array.from(
@@ -329,15 +328,16 @@ function ChecklistItemCard({
             <Radio.Button value="no">No</Radio.Button>
           </Radio.Group>
         );
-      case 'rating':
+      case 'pass_fail':
         return (
-          <Rate
-            value={currentValue ? Number(currentValue) : 0}
-            onChange={(val) =>
-              onAnswer(item.id, String(val), comment || undefined)
-            }
+          <Radio.Group
+            value={currentValue || undefined}
+            onChange={(e) => onAnswer(item.id, e.target.value, comment || undefined)}
             disabled={disabled}
-          />
+          >
+            <Radio.Button value="pass">Pass</Radio.Button>
+            <Radio.Button value="fail">Fail</Radio.Button>
+          </Radio.Group>
         );
       case 'text':
         return (
@@ -353,7 +353,7 @@ function ChecklistItemCard({
             }}
           />
         );
-      case 'number':
+      case 'numeric':
         return (
           <InputNumber
             defaultValue={currentValue ? Number(currentValue) : undefined}
@@ -385,7 +385,7 @@ function ChecklistItemCard({
               {item.category}
             </Tag>
           )}
-          {item.is_critical && (
+          {item.critical_failure && (
             <Badge
               count={
                 <StarFilled style={{ color: '#f5222d', fontSize: 14 }} />

@@ -258,21 +258,26 @@ export default function InspectionChecklistScreen() {
     );
   };
 
-  const renderRating = (item: ChecklistItem) => {
-    const val = parseInt(localAnswers[item.id]?.answer_value || '0', 10);
+  const renderPassFail = (item: ChecklistItem) => {
+    const val = localAnswers[item.id]?.answer_value;
     return (
-      <View style={styles.ratingRow}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <TouchableOpacity
-            key={star}
-            onPress={() => handleAnswer(item.id, String(star))}
-            style={styles.starButton}
-          >
-            <Text style={[styles.starText, star <= val && styles.starFilled]}>
-              {star <= val ? '\u2605' : '\u2606'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.yesNoRow}>
+        <TouchableOpacity
+          style={[styles.toggleBtn, val === 'pass' && styles.toggleBtnActiveGreen]}
+          onPress={() => handleAnswer(item.id, 'pass')}
+        >
+          <Text style={[styles.toggleBtnText, val === 'pass' && styles.toggleBtnTextActive]}>
+            Pass
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleBtn, val === 'fail' && styles.toggleBtnActiveRed]}
+          onPress={() => handleAnswer(item.id, 'fail')}
+        >
+          <Text style={[styles.toggleBtnText, val === 'fail' && styles.toggleBtnTextActive]}>
+            Fail
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -308,11 +313,11 @@ export default function InspectionChecklistScreen() {
     switch (item.answer_type) {
       case 'yes_no':
         return renderYesNo(item);
-      case 'rating':
-        return renderRating(item);
+      case 'pass_fail':
+        return renderPassFail(item);
       case 'text':
         return renderTextInput(item);
-      case 'number':
+      case 'numeric':
         return renderNumberInput(item);
       default:
         return null;
@@ -343,7 +348,7 @@ export default function InspectionChecklistScreen() {
                 <Text style={styles.categoryChipText}>{item.category}</Text>
               </View>
             ) : null}
-            {item.is_critical ? (
+            {item.critical_failure ? (
               <View style={styles.criticalBadge}>
                 <Text style={styles.criticalBadgeText}>CRITICAL</Text>
               </View>
@@ -422,7 +427,7 @@ export default function InspectionChecklistScreen() {
   const checklistItems = (inspData.answers ?? [])
     .map((a: InspectionAnswer) => a.checklist_item)
     .filter((item): item is ChecklistItem => item !== null)
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) => a.order_index - b.order_index);
 
   // If no checklist items from answers, we still show the equipment info
   const progressData = progress as InspectionProgress | undefined;

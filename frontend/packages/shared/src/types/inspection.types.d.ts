@@ -32,6 +32,9 @@ export interface ChecklistTemplate {
     name: string;
     name_ar: string | null;
     description: string | null;
+    function: string | null;
+    assembly: string | null;
+    part: string | null;
     is_active: boolean;
     items: ChecklistItem[];
     created_at: string;
@@ -41,10 +44,10 @@ export interface ChecklistItem {
     template_id: number;
     question_text: string;
     question_text_ar: string | null;
-    answer_type: 'yes_no' | 'rating' | 'text' | 'number';
+    answer_type: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
     category: 'mechanical' | 'electrical' | null;
-    is_critical: boolean;
-    order: number;
+    critical_failure: boolean;
+    order_index: number;
 }
 export interface AnswerPayload {
     checklist_item_id: number;

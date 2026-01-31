@@ -15,5 +15,8 @@ export const equipmentApi = {
     remove(id) {
         return getApiClient().delete(`/api/equipment/${id}`);
     },
+    getTypes() {
+        return getApiClient().get('/api/equipment/types');
+    },
 };
 //# sourceMappingURL=equipment.api.js.map
