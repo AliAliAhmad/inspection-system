@@ -70,6 +70,7 @@ export default function TeamRosterPage() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedUserName, setSelectedUserName] = useState<string>('');
   const [selectedUserRole, setSelectedUserRole] = useState<string>('');
+  const [selectedUserSpec, setSelectedUserSpec] = useState<string>('');
   const [uploadResult, setUploadResult] = useState<{
     imported: number;
     users_processed: number;
@@ -166,10 +167,15 @@ export default function TeamRosterPage() {
   const rangeEnd = dates.length > 0 ? dayjs(dates[dates.length - 1]) : rangeStart.add(7, 'day');
 
   // Coverage user options: inspectors covered by specialists, specialists covered by inspectors
+  // Same specialization required for inspector/specialist
   const coverageUsers = allActiveUsers.filter((u: any) => {
     if (u.id === selectedUserId) return false;
-    if (selectedUserRole === 'inspector') return u.role === 'specialist';
-    if (selectedUserRole === 'specialist') return u.role === 'inspector';
+    if (selectedUserRole === 'inspector') {
+      return u.role === 'specialist' && (!selectedUserSpec || !u.specialization || u.specialization === selectedUserSpec);
+    }
+    if (selectedUserRole === 'specialist') {
+      return u.role === 'inspector' && (!selectedUserSpec || !u.specialization || u.specialization === selectedUserSpec);
+    }
     return true;
   });
 
@@ -347,6 +353,7 @@ export default function TeamRosterPage() {
             setSelectedUserId(record.id);
             setSelectedUserName(record.full_name);
             setSelectedUserRole(record.role);
+            setSelectedUserSpec(record.specialization ?? '');
           },
           style: { cursor: 'pointer' },
         })}
@@ -360,6 +367,7 @@ export default function TeamRosterPage() {
           setSelectedUserId(null);
           setSelectedUserName('');
           setSelectedUserRole('');
+          setSelectedUserSpec('');
           leaveForm.resetFields();
           addDaysForm.resetFields();
         }}

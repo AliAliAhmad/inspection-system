@@ -51,13 +51,20 @@ class LeaveService:
             raise ValidationError("Coverage user cannot be the same as the requesting user")
 
         # Cross-coverage rule: inspectors covered by specialists, specialists covered by inspectors
+        # Same specialization required (mechanical↔mechanical, electrical↔electrical)
         user = db.session.get(User, user_id)
         if not user:
             raise ValidationError("User not found")
-        if user.role == 'inspector' and coverage_user.role != 'specialist':
-            raise ValidationError("Inspectors can only be covered by specialists")
-        if user.role == 'specialist' and coverage_user.role != 'inspector':
-            raise ValidationError("Specialists can only be covered by inspectors")
+        if user.role == 'inspector':
+            if coverage_user.role != 'specialist':
+                raise ValidationError("Inspectors can only be covered by specialists")
+            if user.specialization and coverage_user.specialization and user.specialization != coverage_user.specialization:
+                raise ValidationError(f"Coverage specialist must have the same specialization ({user.specialization})")
+        elif user.role == 'specialist':
+            if coverage_user.role != 'inspector':
+                raise ValidationError("Specialists can only be covered by inspectors")
+            if user.specialization and coverage_user.specialization and user.specialization != coverage_user.specialization:
+                raise ValidationError(f"Coverage inspector must have the same specialization ({user.specialization})")
 
         # Check for overlapping leaves
         overlap = Leave.query.filter(

@@ -294,8 +294,12 @@ export default function LeavesPage() {
               {allUsers
                 .filter((u: any) => {
                   if (u.id === user?.id) return false;
-                  if (user?.role === 'inspector') return u.role === 'specialist';
-                  if (user?.role === 'specialist') return u.role === 'inspector';
+                  if (user?.role === 'inspector') {
+                    return u.role === 'specialist' && (!user.specialization || !u.specialization || u.specialization === user.specialization);
+                  }
+                  if (user?.role === 'specialist') {
+                    return u.role === 'inspector' && (!user.specialization || !u.specialization || u.specialization === user.specialization);
+                  }
                   return true;
                 })
                 .map((u: any) => (
