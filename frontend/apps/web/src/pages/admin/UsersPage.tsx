@@ -69,8 +69,9 @@ export default function UsersPage() {
       setCreateModalOpen(false);
       createForm.resetFields();
     },
-    onError: () => {
-      message.error(t('users.createError', 'Failed to create user'));
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to create user';
+      message.error(msg);
     },
   });
 
