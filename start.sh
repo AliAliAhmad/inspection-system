@@ -81,7 +81,7 @@ with app.app_context():
 
     # Add annual_leave_balance column to users
     try:
-        db.session.execute(text("ALTER TABLE users ADD COLUMN annual_leave_balance INTEGER DEFAULT 24 NOT NULL"))
+        db.session.execute(text('ALTER TABLE users ADD COLUMN annual_leave_balance INTEGER DEFAULT 24 NOT NULL'))
         db.session.commit()
         print('Added annual_leave_balance column')
     except Exception:
