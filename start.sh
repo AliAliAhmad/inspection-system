@@ -19,13 +19,28 @@ from app.extensions import db
 from sqlalchemy import text
 app = create_app('production')
 with app.app_context():
+    cols = [
+        ('description', 'TEXT'),
+        ('function', 'VARCHAR(200)'),
+        ('assembly', 'VARCHAR(200)'),
+        ('part', 'VARCHAR(200)'),
+    ]
+    for col_name, col_type in cols:
+        try:
+            db.session.execute(text(f'ALTER TABLE checklist_templates ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added {col_name} column')
+        except Exception:
+            db.session.rollback()
+            print(f'{col_name} column already exists')
+    # Make equipment_type nullable
     try:
-        db.session.execute(text('ALTER TABLE checklist_templates ADD COLUMN description TEXT'))
+        db.session.execute(text('ALTER TABLE checklist_templates ALTER COLUMN equipment_type DROP NOT NULL'))
         db.session.commit()
-        print('Added description column to checklist_templates')
+        print('Made equipment_type nullable')
     except Exception:
         db.session.rollback()
-        print('description column already exists')
+        print('equipment_type already nullable')
 "
 
 echo "Starting gunicorn..."

@@ -15,7 +15,10 @@ class ChecklistTemplate(db.Model):
     name = db.Column(db.String(200), nullable=False)
     name_ar = db.Column(db.String(200), nullable=True)
     description = db.Column(db.Text, nullable=True)
-    equipment_type = db.Column(db.String(50), nullable=False, index=True)
+    function = db.Column(db.String(200), nullable=True)
+    assembly = db.Column(db.String(200), nullable=True)
+    part = db.Column(db.String(200), nullable=True)
+    equipment_type = db.Column(db.String(50), nullable=True, index=True)
     version = db.Column(db.String(20), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
@@ -42,7 +45,11 @@ class ChecklistTemplate(db.Model):
         data = {
             'id': self.id,
             'name': self.name_ar if language == 'ar' and self.name_ar else self.name,
+            'name_ar': self.name_ar,
             'description': self.description,
+            'function': self.function,
+            'assembly': self.assembly,
+            'part': self.part,
             'equipment_type': self.equipment_type,
             'version': self.version,
             'is_active': self.is_active,

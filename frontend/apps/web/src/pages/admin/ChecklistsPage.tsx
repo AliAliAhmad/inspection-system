@@ -151,9 +151,11 @@ export default function ChecklistsPage() {
   const pagination = data?.data?.pagination;
 
   const templateColumns: ColumnsType<ChecklistTemplate> = [
-    { title: t('checklists.name', 'Name'), dataIndex: 'name', key: 'name' },
-    { title: t('checklists.nameAr', 'Name (AR)'), dataIndex: 'name_ar', key: 'name_ar', render: (v: string | null) => v || '-' },
-    { title: t('checklists.description', 'Description'), dataIndex: 'description', key: 'description', render: (v: string | null) => v || '-' },
+    { title: t('checklists.title', 'Title'), dataIndex: 'name', key: 'name' },
+    { title: t('checklists.function', 'Function'), dataIndex: 'function', key: 'function', render: (v: string | null) => v || '-' },
+    { title: t('checklists.assembly', 'Assembly'), dataIndex: 'assembly', key: 'assembly', render: (v: string | null) => v || '-' },
+    { title: t('checklists.part', 'Part'), dataIndex: 'part', key: 'part', render: (v: string | null) => v || '-' },
+    { title: t('checklists.description', 'Description'), dataIndex: 'description', key: 'description', ellipsis: true, render: (v: string | null) => v || '-' },
     {
       title: t('checklists.active', 'Active'),
       dataIndex: 'is_active',
@@ -246,13 +248,22 @@ export default function ChecklistsPage() {
         destroyOnClose
       >
         <Form form={templateForm} layout="vertical" onFinish={(v: CreateTemplatePayload) => createTemplateMutation.mutate(v)}>
-          <Form.Item name="equipment_type" label={t('checklists.equipmentType', 'Equipment Type')} rules={[{ required: true }]}>
-            <Input placeholder="e.g. Centrifugal Pump" />
+          <Form.Item name="name" label={t('checklists.title', 'Title')} rules={[{ required: true }]}>
+            <Input />
           </Form.Item>
-          <Form.Item name="name" label={t('checklists.title', 'Title')}>
-            <Input placeholder="e.g. Daily Pump Inspection (auto-generated if empty)" />
+          <Form.Item name="name_ar" label={t('checklists.titleAr', 'Title (Arabic)')}>
+            <Input dir="rtl" />
           </Form.Item>
-          <Form.Item name="description" label={t('checklists.description', 'Description')}>
+          <Form.Item name="function" label={t('checklists.function', 'Function')} rules={[{ required: true }]}>
+            <Input placeholder="e.g. Pumping, Cooling" />
+          </Form.Item>
+          <Form.Item name="assembly" label={t('checklists.assembly', 'Assembly')} rules={[{ required: true }]}>
+            <Input placeholder="e.g. Motor Assembly, Valve Assembly" />
+          </Form.Item>
+          <Form.Item name="part" label={t('checklists.part', 'Part')}>
+            <Input placeholder="e.g. Impeller, Bearing (optional)" />
+          </Form.Item>
+          <Form.Item name="description" label={t('checklists.description', 'Description')} rules={[{ required: true }]}>
             <Input.TextArea rows={3} placeholder="What this checklist covers" />
           </Form.Item>
           <Form.Item name="version" label={t('checklists.version', 'Version')} rules={[{ required: true }]} initialValue="1.0">
