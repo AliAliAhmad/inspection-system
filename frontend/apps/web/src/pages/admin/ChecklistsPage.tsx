@@ -117,21 +117,20 @@ export default function ChecklistsPage() {
       question_text_ar: item.question_text_ar,
       answer_type: item.answer_type,
       category: item.category,
-      is_critical: item.is_critical,
-      order: item.order,
+      critical_failure: item.critical_failure,
     });
     setEditItemOpen(true);
   };
 
   const itemColumns: ColumnsType<ChecklistItem> = [
-    { title: t('checklists.order', 'Order'), dataIndex: 'order', key: 'order', width: 70 },
+    { title: '#', dataIndex: 'order_index', key: 'order_index', width: 50 },
     { title: t('checklists.question', 'Question'), dataIndex: 'question_text', key: 'question_text' },
     { title: t('checklists.questionAr', 'Question (AR)'), dataIndex: 'question_text_ar', key: 'question_text_ar', render: (v: string | null) => v || '-' },
     {
       title: t('checklists.answerType', 'Answer Type'),
       dataIndex: 'answer_type',
       key: 'answer_type',
-      render: (v: string) => <Tag>{v.toUpperCase()}</Tag>,
+      render: (v: string) => <Tag>{v?.replace('_', ' ').toUpperCase()}</Tag>,
     },
     {
       title: t('checklists.category', 'Category'),
@@ -141,8 +140,8 @@ export default function ChecklistsPage() {
     },
     {
       title: t('checklists.critical', 'Critical'),
-      dataIndex: 'is_critical',
-      key: 'is_critical',
+      dataIndex: 'critical_failure',
+      key: 'critical_failure',
       render: (v: boolean) => v ? <Tag color="red">{t('common.yes', 'Yes')}</Tag> : <Tag>{t('common.no', 'No')}</Tag>,
     },
   ];
@@ -299,10 +298,10 @@ export default function ChecklistsPage() {
           </Form.Item>
           <Form.Item name="answer_type" label={t('checklists.answerType', 'Answer Type')} rules={[{ required: true }]}>
             <Select>
+              <Select.Option value="pass_fail">Pass / Fail</Select.Option>
               <Select.Option value="yes_no">Yes / No</Select.Option>
-              <Select.Option value="rating">Rating</Select.Option>
+              <Select.Option value="numeric">Numeric</Select.Option>
               <Select.Option value="text">Text</Select.Option>
-              <Select.Option value="number">Number</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item name="category" label={t('checklists.category', 'Category')}>
@@ -311,11 +310,8 @@ export default function ChecklistsPage() {
               <Select.Option value="electrical">{t('checklists.electrical', 'Electrical')}</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="is_critical" label={t('checklists.critical', 'Critical')} valuePropName="checked" initialValue={false}>
+          <Form.Item name="critical_failure" label={t('checklists.critical', 'Critical Failure')} valuePropName="checked" initialValue={false}>
             <Switch />
-          </Form.Item>
-          <Form.Item name="order" label={t('checklists.order', 'Order')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Form>
       </Modal>
@@ -346,10 +342,10 @@ export default function ChecklistsPage() {
           </Form.Item>
           <Form.Item name="answer_type" label={t('checklists.answerType', 'Answer Type')}>
             <Select>
+              <Select.Option value="pass_fail">Pass / Fail</Select.Option>
               <Select.Option value="yes_no">Yes / No</Select.Option>
-              <Select.Option value="rating">Rating</Select.Option>
+              <Select.Option value="numeric">Numeric</Select.Option>
               <Select.Option value="text">Text</Select.Option>
-              <Select.Option value="number">Number</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item name="category" label={t('checklists.category', 'Category')}>
@@ -358,11 +354,8 @@ export default function ChecklistsPage() {
               <Select.Option value="electrical">{t('checklists.electrical', 'Electrical')}</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="is_critical" label={t('checklists.critical', 'Critical')} valuePropName="checked">
+          <Form.Item name="critical_failure" label={t('checklists.critical', 'Critical Failure')} valuePropName="checked">
             <Switch />
-          </Form.Item>
-          <Form.Item name="order" label={t('checklists.order', 'Order')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Form>
       </Modal>

@@ -111,24 +111,23 @@ def add_item_to_template(template_id):
     
     data = request.get_json()
     
-    required_fields = ['question_text', 'answer_type', 'order_index']
+    required_fields = ['question_text', 'answer_type']
     for field in required_fields:
         if field not in data:
             raise ValidationError(f"{field} is required")
-    
+
     # Validate answer_type
     valid_types = ['pass_fail', 'yes_no', 'numeric', 'text']
     if data['answer_type'] not in valid_types:
         raise ValidationError(f"answer_type must be one of: {', '.join(valid_types)}")
-    
-    # Check if order_index already exists
-    existing = ChecklistItem.query.filter_by(
-        template_id=template_id,
-        order_index=data['order_index']
-    ).first()
-    
-    if existing:
-        raise ValidationError(f"Item with order_index {data['order_index']} already exists in this template")
+
+    # Auto-generate order_index if not provided
+    order_index = data.get('order_index')
+    if order_index is None:
+        max_order = db.session.query(db.func.max(ChecklistItem.order_index)).filter_by(
+            template_id=template_id
+        ).scalar()
+        order_index = (max_order or 0) + 1
     
     # Auto-translate question to Arabic if not provided
     question_text_ar = data.get('question_text_ar')
@@ -142,7 +141,8 @@ def add_item_to_template(template_id):
         question_text_ar=question_text_ar,
         answer_type=data['answer_type'],
         is_required=data.get('is_required', True),
-        order_index=data['order_index'],
+        order_index=order_index,
+        category=data.get('category'),
         critical_failure=data.get('critical_failure', False)
     )
     
