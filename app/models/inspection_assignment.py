@@ -23,6 +23,9 @@ class InspectionAssignment(db.Model):
     # Equipment
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
 
+    # Checklist template (from routine)
+    template_id = db.Column(db.Integer, db.ForeignKey('checklist_templates.id'), nullable=True)
+
     # Verified berth (engineer can update during assignment)
     berth = db.Column(db.String(20), nullable=True)
 
@@ -61,6 +64,7 @@ class InspectionAssignment(db.Model):
 
     # Relationships
     equipment = db.relationship('Equipment')
+    template = db.relationship('ChecklistTemplate')
     mechanical_inspector = db.relationship('User', foreign_keys=[mechanical_inspector_id])
     electrical_inspector = db.relationship('User', foreign_keys=[electrical_inspector_id])
     assigner = db.relationship('User', foreign_keys=[assigned_by])
@@ -72,6 +76,7 @@ class InspectionAssignment(db.Model):
             'inspection_list_id': self.inspection_list_id,
             'equipment_id': self.equipment_id,
             'equipment': self.equipment.to_dict(language=language) if self.equipment else None,
+            'template_id': self.template_id,
             'berth': self.berth,
             'mechanical_inspector_id': self.mechanical_inspector_id,
             'mechanical_inspector': self.mechanical_inspector.to_dict() if self.mechanical_inspector else None,

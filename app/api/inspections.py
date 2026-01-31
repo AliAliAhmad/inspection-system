@@ -84,10 +84,11 @@ def get_or_start_by_assignment(assignment_id):
         inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
         return jsonify({'status': 'success', 'data': inspection_dict}), 200
 
-    # Auto-create: start a new inspection
+    # Auto-create: start a new inspection using template from assignment
     inspection_dict = InspectionService.start_inspection(
         equipment_id=assignment.equipment_id,
-        technician_id=current_user.id
+        technician_id=current_user.id,
+        template_id=assignment.template_id
     )
 
     # Update assignment status to in_progress

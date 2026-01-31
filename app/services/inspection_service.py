@@ -17,21 +17,21 @@ class InspectionService:
     """Service for managing inspection lifecycle and workflow."""
     
     @staticmethod
-    def start_inspection(equipment_id, technician_id):
+    def start_inspection(equipment_id, technician_id, template_id=None):
         """
         Start a new inspection (creates draft).
-        
+
         Args:
             equipment_id: ID of equipment to inspect
             technician_id: ID of technician performing inspection
-        
+            template_id: ID of checklist template (from assignment/routine)
+
         Returns:
             Created Inspection dict with checklist items in user's language
-        
+
         Raises:
             NotFoundError: If equipment or template not found
             ValidationError: If equipment not assigned to technician
-            ConflictError: If draft already exists for this equipment
         """
         # Validate equipment exists
         equipment = db.session.get(Equipment, equipment_id)
@@ -54,26 +54,36 @@ class InspectionService:
         ).first()
         if not assignment:
             raise ForbiddenError("You are not assigned to inspect this equipment")
-        
+
         # Check for existing draft inspection
         existing_draft = Inspection.query.filter_by(
             equipment_id=equipment_id,
             technician_id=technician_id,
             status='draft'
         ).first()
-        
+
         if existing_draft:
             raise ValidationError("Draft inspection already exists for this equipment")
-        
-        # Get active checklist template for equipment type
-        template = ChecklistTemplate.query.filter_by(
-            equipment_type=equipment.equipment_type,
-            is_active=True
-        ).first()
-        
-        if not template:
-            raise NotFoundError(f"No active checklist template found for {equipment.equipment_type}")
-        
+
+        # Get template: prefer explicit template_id (from assignment), then assignment's template_id
+        if not template_id and assignment.template_id:
+            template_id = assignment.template_id
+
+        if template_id:
+            template = db.session.get(ChecklistTemplate, template_id)
+            if not template:
+                raise NotFoundError(f"Checklist template with ID {template_id} not found")
+        else:
+            # Fallback: look up by equipment type (legacy)
+            template = ChecklistTemplate.query.filter_by(
+                equipment_type=equipment.equipment_type,
+                is_active=True
+            ).first()
+            if not template:
+                raise NotFoundError(
+                    f"No checklist template found. Please assign a template in the inspection routine."
+                )
+
         # Create new inspection
         inspection = Inspection(
             equipment_id=equipment_id,

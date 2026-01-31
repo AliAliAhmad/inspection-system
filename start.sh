@@ -70,6 +70,15 @@ with app.app_context():
         db.session.rollback()
         print('inspection_schedules.berth already exists')
 
+    # Add template_id column to inspection_assignments
+    try:
+        db.session.execute(text(\"ALTER TABLE inspection_assignments ADD COLUMN template_id INTEGER REFERENCES checklist_templates(id)\"))
+        db.session.commit()
+        print('Added template_id column to inspection_assignments')
+    except Exception:
+        db.session.rollback()
+        print('inspection_assignments.template_id already exists')
+
     # Create roster_entries table
     try:
         db.session.execute(text('''

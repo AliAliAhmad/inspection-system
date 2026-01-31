@@ -54,11 +54,13 @@ class InspectionListService:
                 continue
             applicable_routines.append(routine)
 
-        # Collect all asset types from applicable routines
+        # Collect all asset types from applicable routines + map asset_type → template_id
         asset_types = set()
+        asset_type_template_map = {}  # equipment_type -> template_id (from routine)
         for routine in applicable_routines:
             for at in (routine.asset_types or []):
                 asset_types.add(at)
+                asset_type_template_map[at] = routine.template_id
 
         if not asset_types:
             raise ValidationError(
@@ -107,9 +109,12 @@ class InspectionListService:
         for equip in equipment_list:
             # Prefer berth from imported schedule, fallback to equipment record
             berth = schedule_berth_map.get(equip.id) or equip.berth
+            # Get template from the routine that matched this equipment type
+            tmpl_id = asset_type_template_map.get(equip.equipment_type)
             assignment = InspectionAssignment(
                 inspection_list_id=inspection_list.id,
                 equipment_id=equip.id,
+                template_id=tmpl_id,
                 berth=berth,
                 shift=shift,
                 status='unassigned'
