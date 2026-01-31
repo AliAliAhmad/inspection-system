@@ -65,7 +65,8 @@ def request_leave():
         date_from=date.fromisoformat(data['date_from']),
         date_to=date.fromisoformat(data['date_to']),
         reason=data['reason'],
-        scope=data.get('scope', 'full')
+        scope=data.get('scope', 'full'),
+        coverage_user_id=data.get('coverage_user_id')
     )
 
     # If caller is admin, auto-approve the leave

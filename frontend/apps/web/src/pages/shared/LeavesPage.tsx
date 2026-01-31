@@ -17,7 +17,7 @@ import { PlusOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../providers/AuthProvider';
-import { leavesApi, Leave, LeaveStatus, LeaveType } from '@inspection/shared';
+import { leavesApi, usersApi, Leave, LeaveStatus, LeaveType } from '@inspection/shared';
 import { formatDate } from '@inspection/shared';
 import dayjs from 'dayjs';
 
@@ -43,6 +43,13 @@ export default function LeavesPage() {
     queryFn: () => leavesApi.list({ page, per_page: 15, status: statusFilter }).then(r => r.data),
   });
 
+  // Fetch all active users for coverage dropdown
+  const { data: allUsersData } = useQuery({
+    queryKey: ['users', 'all-active'],
+    queryFn: () => usersApi.list({ per_page: 500, is_active: true }),
+  });
+  const allUsers = (allUsersData?.data as any)?.data ?? [];
+
   const requestMutation = useMutation({
     mutationFn: leavesApi.request,
     onSuccess: () => {
@@ -63,6 +70,7 @@ export default function LeavesPage() {
       date_to: values.dates[1].format('YYYY-MM-DD'),
       reason: values.reason,
       scope: values.scope,
+      coverage_user_id: values.coverage_user_id,
     });
   };
 
@@ -176,6 +184,26 @@ export default function LeavesPage() {
             rules={[{ required: true }]}
           >
             <Input.TextArea rows={3} />
+          </Form.Item>
+
+          <Form.Item
+            name="coverage_user_id"
+            label={t('leave.coverage', 'Coverage Employee')}
+            rules={[{ required: true, message: t('leave.coverageRequired', 'Please select a coverage employee') }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder={t('leave.assign_coverage', 'Select coverage employee')}
+            >
+              {allUsers
+                .filter((u: any) => u.id !== user?.id)
+                .map((u: any) => (
+                  <Select.Option key={u.id} value={u.id}>
+                    {u.full_name} — {u.employee_id} ({u.role})
+                  </Select.Option>
+                ))}
+            </Select>
           </Form.Item>
 
           <Form.Item name="scope" label="Scope" initialValue="full">

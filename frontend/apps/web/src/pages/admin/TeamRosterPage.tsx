@@ -7,10 +7,6 @@ import {
   Space,
   Upload,
   Modal,
-  Form,
-  Select,
-  DatePicker,
-  Input,
   Drawer,
   Radio,
   Collapse,
@@ -22,7 +18,7 @@ import {
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { rosterApi, leavesApi, usersApi, type RosterWeekUser } from '@inspection/shared';
+import { rosterApi, type RosterWeekUser } from '@inspection/shared';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -65,14 +61,11 @@ export default function TeamRosterPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
   const [drawerShift, setDrawerShift] = useState<string>('all');
-  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
     imported: number;
     users_processed: number;
     errors: string[];
   } | null>(null);
-
-  const [leaveForm] = Form.useForm();
 
   const baseDate = dayjs().add(weekOffset * 7, 'day').format('YYYY-MM-DD');
 
@@ -91,13 +84,6 @@ export default function TeamRosterPage() {
         .then((r) => r.data.data),
     enabled: !!drawerDate,
   });
-
-  // Fetch all active users for leave request dropdown
-  const { data: allUsersData } = useQuery({
-    queryKey: ['users', 'all-active'],
-    queryFn: () => usersApi.list({ per_page: 500, is_active: true }),
-  });
-  const allUsers = (allUsersData?.data as any)?.data ?? [];
 
   // Upload mutation
   const uploadMutation = useMutation({
@@ -118,32 +104,6 @@ export default function TeamRosterPage() {
       const msg = err?.response?.data?.message || err?.message || 'Failed to upload roster';
       message.error(msg);
     },
-  });
-
-  // Leave request mutation
-  const leaveMutation = useMutation({
-    mutationFn: (values: {
-      user_id: number;
-      leave_type: string;
-      dates: [dayjs.Dayjs, dayjs.Dayjs];
-      reason: string;
-      scope: string;
-    }) =>
-      leavesApi.request({
-        user_id: values.user_id,
-        leave_type: values.leave_type as any,
-        date_from: values.dates[0].format('YYYY-MM-DD'),
-        date_to: values.dates[1].format('YYYY-MM-DD'),
-        reason: values.reason,
-        scope: values.scope as any,
-      }),
-    onSuccess: () => {
-      message.success(t('roster.leaveRequested', 'Leave request submitted'));
-      setLeaveModalOpen(false);
-      leaveForm.resetFields();
-      queryClient.invalidateQueries({ queryKey: ['roster'] });
-    },
-    onError: () => message.error(t('roster.leaveError', 'Failed to submit leave request')),
   });
 
   // Sort users by role order
@@ -258,11 +218,7 @@ export default function TeamRosterPage() {
         open={!!drawerDate}
         onClose={() => setDrawerDate(null)}
         width={480}
-        footer={
-          <Button type="primary" block onClick={() => setLeaveModalOpen(true)}>
-            {t('leave.request', 'Request Leave')}
-          </Button>
-        }
+        footer={null}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Radio.Group
@@ -404,84 +360,6 @@ export default function TeamRosterPage() {
           )}
         </Space>
       </Drawer>
-
-      {/* Request Leave Modal */}
-      <Modal
-        title={t('leave.request', 'Request Leave')}
-        open={leaveModalOpen}
-        onCancel={() => {
-          setLeaveModalOpen(false);
-          leaveForm.resetFields();
-        }}
-        onOk={() => leaveForm.submit()}
-        confirmLoading={leaveMutation.isPending}
-        destroyOnClose
-      >
-        <Form
-          form={leaveForm}
-          layout="vertical"
-          onFinish={(values) => leaveMutation.mutate(values)}
-        >
-          <Form.Item
-            name="user_id"
-            label={t('roster.teamMember', 'Team Member')}
-            rules={[{ required: true, message: t('roster.selectMember', 'Please select a team member') }]}
-          >
-            <Select
-              showSearch
-              optionFilterProp="children"
-              placeholder={t('roster.selectMember', 'Select team member')}
-            >
-              {allUsers.map((u: any) => (
-                <Select.Option key={u.id} value={u.id}>
-                  {u.full_name} — {u.employee_id} ({u.role})
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="leave_type"
-            label={t('leave.type', 'Leave Type')}
-            rules={[{ required: true, message: t('roster.selectLeaveType', 'Please select leave type') }]}
-          >
-            <Select placeholder={t('roster.selectLeaveType', 'Select leave type')}>
-              <Select.Option value="sick">{t('leave.sick', 'Sick Leave')}</Select.Option>
-              <Select.Option value="annual">{t('leave.annual', 'Annual Leave')}</Select.Option>
-              <Select.Option value="emergency">{t('leave.emergency', 'Emergency Leave')}</Select.Option>
-              <Select.Option value="training">{t('leave.training', 'Training Leave')}</Select.Option>
-              <Select.Option value="other">{t('leave.other', 'Other')}</Select.Option>
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="dates"
-            label={t('roster.dateRange', 'Date Range')}
-            rules={[{ required: true, message: t('roster.selectDates', 'Please select date range') }]}
-          >
-            <DatePicker.RangePicker style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item
-            name="reason"
-            label={t('leave.reason', 'Reason')}
-            rules={[{ required: true, message: t('roster.enterReason', 'Please enter a reason') }]}
-          >
-            <Input.TextArea rows={3} />
-          </Form.Item>
-
-          <Form.Item
-            name="scope"
-            label={t('roster.scope', 'Scope')}
-            initialValue="full"
-          >
-            <Select>
-              <Select.Option value="full">{t('roster.scopeFull', 'Full')}</Select.Option>
-              <Select.Option value="major_only">{t('roster.scopeMajorOnly', 'Major Only')}</Select.Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
 
       {/* Upload Result Modal */}
       <Modal

@@ -27,5 +27,6 @@ export interface LeaveRequestPayload {
     date_to: string;
     reason: string;
     scope?: 'major_only' | 'full';
+    coverage_user_id: number;
 }
 //# sourceMappingURL=leave.types.d.ts.map

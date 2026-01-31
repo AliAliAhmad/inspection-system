@@ -19,7 +19,7 @@ class LeaveService:
     VALID_SCOPES = ['major_only', 'full']
 
     @staticmethod
-    def request_leave(user_id, leave_type, date_from, date_to, reason, scope='full'):
+    def request_leave(user_id, leave_type, date_from, date_to, reason, scope='full', coverage_user_id=None):
         """
         Submit a leave request.
 
@@ -30,6 +30,7 @@ class LeaveService:
             date_to: End date
             reason: Reason for leave
             scope: major_only (only major role covered) or full (all duties)
+            coverage_user_id: Required — the user who will cover during leave
         """
         if leave_type not in LeaveService.VALID_TYPES:
             raise ValidationError(f"Leave type must be one of: {', '.join(LeaveService.VALID_TYPES)}")
@@ -38,6 +39,16 @@ class LeaveService:
 
         if date_from > date_to:
             raise ValidationError("Start date must be before end date")
+
+        # Coverage employee is mandatory
+        if not coverage_user_id:
+            raise ValidationError("A coverage employee must be assigned before requesting leave")
+
+        coverage_user = db.session.get(User, coverage_user_id)
+        if not coverage_user:
+            raise ValidationError("Coverage user not found")
+        if coverage_user.id == user_id:
+            raise ValidationError("Coverage user cannot be the same as the requesting user")
 
         # Check for overlapping leaves
         overlap = Leave.query.filter(
@@ -59,11 +70,13 @@ class LeaveService:
             total_days=total_days,
             reason=reason,
             scope=scope,
+            coverage_user_id=coverage_user_id,
             status='pending'
         )
         db.session.add(leave)
         db.session.commit()
-        logger.info("Leave requested: leave_id=%s user_id=%s type=%s from=%s to=%s", leave.id, user_id, leave_type, date_from, date_to)
+        logger.info("Leave requested: leave_id=%s user_id=%s type=%s from=%s to=%s coverage=%s",
+                     leave.id, user_id, leave_type, date_from, date_to, coverage_user_id)
 
         # Notify admins
         from app.services.notification_service import NotificationService
@@ -78,6 +91,16 @@ class LeaveService:
                 related_type='leave',
                 related_id=leave.id
             )
+
+        # Notify coverage employee
+        NotificationService.create_notification(
+            user_id=coverage_user_id,
+            type='leave_coverage_assigned',
+            title='Leave Coverage Assigned',
+            message=f'You have been assigned as coverage for {user.full_name} from {date_from} to {date_to}',
+            related_type='leave',
+            related_id=leave.id
+        )
 
         return leave
 
