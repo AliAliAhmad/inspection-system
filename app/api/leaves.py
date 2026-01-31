@@ -48,17 +48,20 @@ def list_leaves():
 def request_leave():
     """Submit a leave request.
 
-    If caller is admin or engineer, they can specify user_id in the body
-    to create a leave on behalf of another user.
+    Only admins and engineers can create leave requests.
+    They can request for themselves or on behalf of inspectors/specialists.
     If caller is admin, the leave is auto-approved.
     """
     user = get_current_user()
     data = request.get_json()
 
-    # Determine the target user
-    target_user_id = user.id
-    if data.get('user_id') and user.role in ('admin', 'engineer'):
-        target_user_id = int(data['user_id'])
+    if user.role not in ('admin', 'engineer'):
+        return jsonify({'status': 'error', 'message': 'Only admins and engineers can request leaves'}), 403
+
+    # Determine the target user (self or on behalf of another)
+    target_user_id = data.get('user_id', user.id)
+    if target_user_id:
+        target_user_id = int(target_user_id)
 
     leave = LeaveService.request_leave(
         user_id=target_user_id,

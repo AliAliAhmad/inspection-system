@@ -90,6 +90,7 @@ export default function LeavesPage() {
   };
 
   const isAdmin = user?.role === 'admin';
+  const canRequestLeave = user?.role === 'admin' || user?.role === 'engineer';
 
   const columns = [
     ...(isAdmin ? [{
@@ -227,9 +228,11 @@ export default function LeavesPage() {
                 { value: 'rejected', label: t('status.rejected') },
               ]}
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)} disabled={remaining === 0}>
-              {t('leave.request')}
-            </Button>
+            {canRequestLeave && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)} disabled={remaining === 0}>
+                {t('leave.request')}
+              </Button>
+            )}
           </Space>
         }
       >
