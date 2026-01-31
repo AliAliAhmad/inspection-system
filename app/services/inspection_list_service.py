@@ -39,18 +39,20 @@ class InspectionListService:
         # Get day of week (0=Monday, 6=Sunday)
         day_of_week = target_date.weekday()
 
-        # Find active routines for this shift and day
-        routines = InspectionRoutine.query.filter_by(
-            shift=shift,
-            is_active=True
-        ).all()
+        # Find active routines — match shift exactly or routines with no shift set
+        routines = InspectionRoutine.query.filter_by(is_active=True).all()
 
-        # Filter routines that include this day of week
+        # Filter routines that match this shift and day
         applicable_routines = []
         for routine in routines:
-            days = routine.days_of_week or []
-            if day_of_week in days:
-                applicable_routines.append(routine)
+            # Shift filter: match if routine shift equals requested shift, or routine has no shift
+            if routine.shift and routine.shift != shift:
+                continue
+            # Day filter: match if routine includes this day, or routine has no days_of_week set (every day)
+            days = routine.days_of_week
+            if days and day_of_week not in days:
+                continue
+            applicable_routines.append(routine)
 
         # Collect all asset types from applicable routines
         asset_types = set()
@@ -58,11 +60,24 @@ class InspectionListService:
             for at in (routine.asset_types or []):
                 asset_types.add(at)
 
+        if not asset_types:
+            raise ValidationError(
+                f"No matching routines found for {target_date.strftime('%A')} {shift} shift. "
+                f"Found {len(routines)} active routines total but none match this shift/day. "
+                f"Please create inspection routines first."
+            )
+
         # Find equipment matching these asset types
         equipment_list = Equipment.query.filter(
             Equipment.equipment_type.in_(list(asset_types)),
             Equipment.status.in_(['active', 'under_maintenance'])
         ).all()
+
+        if not equipment_list:
+            raise ValidationError(
+                f"No equipment found matching asset types: {', '.join(asset_types)}. "
+                f"Check that equipment exists with these types and is active."
+            )
 
         # Create inspection list
         inspection_list = InspectionList(
