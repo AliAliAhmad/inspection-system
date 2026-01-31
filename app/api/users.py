@@ -131,7 +131,8 @@ def create_user():
         specialization=data.get('specialization'),
         minor_role=minor_role,
         minor_role_id=minor_role_id,
-        is_active=True
+        is_active=True,
+        annual_leave_balance=24,
     )
     user.set_password(data['password'])
     

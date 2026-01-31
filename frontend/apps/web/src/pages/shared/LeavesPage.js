@@ -5,7 +5,7 @@ import { PlusOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../providers/AuthProvider';
-import { leavesApi } from '@inspection/shared';
+import { leavesApi, usersApi } from '@inspection/shared';
 import { formatDate } from '@inspection/shared';
 const statusColors = {
     pending: 'orange',
@@ -25,6 +25,12 @@ export default function LeavesPage() {
         queryKey: ['leaves', page, statusFilter],
         queryFn: () => leavesApi.list({ page, per_page: 15, status: statusFilter }).then(r => r.data),
     });
+    // Fetch all active users for coverage dropdown
+    const { data: allUsersData } = useQuery({
+        queryKey: ['users', 'all-active'],
+        queryFn: () => usersApi.list({ per_page: 500, is_active: true }),
+    });
+    const allUsers = allUsersData?.data?.data ?? [];
     const requestMutation = useMutation({
         mutationFn: leavesApi.request,
         onSuccess: () => {
@@ -44,6 +50,7 @@ export default function LeavesPage() {
             date_to: values.dates[1].format('YYYY-MM-DD'),
             reason: values.reason,
             scope: values.scope,
+            coverage_user_id: values.coverage_user_id,
         });
     };
     const columns = [
@@ -89,7 +96,9 @@ export default function LeavesPage() {
                         total: pagination.total,
                         pageSize: pagination.per_page,
                         onChange: setPage,
-                    } : false }) }), _jsx(Modal, { title: t('leave.request'), open: modalOpen, onCancel: () => setModalOpen(false), footer: null, children: _jsxs(Form, { form: form, layout: "vertical", onFinish: handleSubmit, children: [_jsx(Form.Item, { name: "leave_type", label: t('leave.type'), rules: [{ required: true }], children: _jsx(Select, { options: leaveTypes.map(lt => ({ value: lt, label: t(`leave.${lt}`) })) }) }), _jsx(Form.Item, { name: "dates", label: `${t('leave.date_from')} - ${t('leave.date_to')}`, rules: [{ required: true }], children: _jsx(DatePicker.RangePicker, { style: { width: '100%' } }) }), _jsx(Form.Item, { name: "reason", label: t('leave.reason'), rules: [{ required: true }], children: _jsx(Input.TextArea, { rows: 3 }) }), _jsx(Form.Item, { name: "scope", label: "Scope", initialValue: "full", children: _jsx(Select, { options: [
+                    } : false }) }), _jsx(Modal, { title: t('leave.request'), open: modalOpen, onCancel: () => setModalOpen(false), footer: null, children: _jsxs(Form, { form: form, layout: "vertical", onFinish: handleSubmit, children: [_jsx(Form.Item, { name: "leave_type", label: t('leave.type'), rules: [{ required: true }], children: _jsx(Select, { options: leaveTypes.map(lt => ({ value: lt, label: t(`leave.${lt}`) })) }) }), _jsx(Form.Item, { name: "dates", label: `${t('leave.date_from')} - ${t('leave.date_to')}`, rules: [{ required: true }], children: _jsx(DatePicker.RangePicker, { style: { width: '100%' } }) }), _jsx(Form.Item, { name: "reason", label: t('leave.reason'), rules: [{ required: true }], children: _jsx(Input.TextArea, { rows: 3 }) }), _jsx(Form.Item, { name: "coverage_user_id", label: t('leave.coverage', 'Coverage Employee'), rules: [{ required: true, message: t('leave.coverageRequired', 'Please select a coverage employee') }], children: _jsx(Select, { showSearch: true, optionFilterProp: "children", placeholder: t('leave.assign_coverage', 'Select coverage employee'), children: allUsers
+                                    .filter((u) => u.id !== user?.id)
+                                    .map((u) => (_jsxs(Select.Option, { value: u.id, children: [u.full_name, " \u2014 ", u.employee_id, " (", u.role, ")"] }, u.id))) }) }), _jsx(Form.Item, { name: "scope", label: "Scope", initialValue: "full", children: _jsx(Select, { options: [
                                     { value: 'full', label: 'Full Leave' },
                                     { value: 'major_only', label: 'Major Tasks Only' },
                                 ] }) }), _jsx(Form.Item, { children: _jsx(Button, { type: "primary", htmlType: "submit", loading: requestMutation.isPending, block: true, children: t('common.submit') }) })] }) })] }));

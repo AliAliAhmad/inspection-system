@@ -51,6 +51,8 @@ class User(db.Model):
 
     # Leave Status
     is_on_leave = db.Column(db.Boolean, default=False)
+    # Leave Balance
+    annual_leave_balance = db.Column(db.Integer, default=24, nullable=False)
     leave_coverage_for = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # Status
@@ -135,6 +137,7 @@ class User(db.Model):
             'engineer_points': self.engineer_points,
             'qe_points': self.qe_points,
             'is_on_leave': self.is_on_leave,
+            'annual_leave_balance': self.annual_leave_balance,
             'is_active': self.is_active,
             'language': self.language,
             'created_at': self.created_at.isoformat() if self.created_at else None,

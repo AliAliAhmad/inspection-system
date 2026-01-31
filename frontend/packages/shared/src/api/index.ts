@@ -58,6 +58,7 @@ export type {
   LeaveApprovePayload,
   LeaveRejectPayload,
   CapacityInfo,
+  LeaveBalanceData,
 } from './leaves.api';
 export { leaderboardsApi } from './leaderboards.api';
 export type { LeaderboardParams, LeaderboardEntry } from './leaderboards.api';

@@ -9,6 +9,7 @@ from app.services.leave_service import LeaveService
 from app.services.coverage_service import CoverageService
 from app.utils.decorators import get_current_user, admin_required, get_language
 from app.models import Leave
+from app.extensions import db
 from app.utils.pagination import paginate
 from datetime import date
 
@@ -181,4 +182,93 @@ def capacity_analysis():
     return jsonify({
         'status': 'success',
         'data': analysis
+    }), 200
+
+
+@bp.route('/user/<int:user_id>/balance', methods=['GET'])
+@jwt_required()
+def get_leave_balance(user_id):
+    """Get leave balance for a user."""
+    from app.models import User
+    user = get_current_user()
+
+    # Allow users to see own balance or admins/engineers to see anyone's
+    if user.id != user_id and user.role not in ('admin', 'engineer'):
+        return jsonify({'status': 'error', 'message': 'Access denied'}), 403
+
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify({'status': 'error', 'message': 'User not found'}), 404
+
+    from datetime import date as date_type
+    from app.extensions import db as _db
+    current_year = date_type.today().year
+
+    used = _db.session.query(
+        _db.func.coalesce(_db.func.sum(Leave.total_days), 0)
+    ).filter(
+        Leave.user_id == user_id,
+        Leave.status.in_(['pending', 'approved']),
+        Leave.date_from >= date_type(current_year, 1, 1),
+        Leave.date_to <= date_type(current_year, 12, 31)
+    ).scalar()
+
+    total = target.annual_leave_balance or 24
+    remaining = total - used
+
+    # Get leave history for this year
+    leaves = Leave.query.filter(
+        Leave.user_id == user_id,
+        Leave.date_from >= date_type(current_year, 1, 1)
+    ).order_by(Leave.date_from.desc()).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'total_balance': total,
+            'used': used,
+            'remaining': remaining,
+            'leaves': [l.to_dict() for l in leaves]
+        }
+    }), 200
+
+
+@bp.route('/user/<int:user_id>/add-days', methods=['POST'])
+@jwt_required()
+@admin_required()
+def add_leave_days(user_id):
+    """Add extra leave days to a user's balance. Admin only."""
+    from app.models import User
+    from app.extensions import db as _db
+
+    target = _db.session.get(User, user_id)
+    if not target:
+        return jsonify({'status': 'error', 'message': 'User not found'}), 404
+
+    data = request.get_json()
+    days = data.get('days')
+    reason = data.get('reason', '')
+
+    if not days or not isinstance(days, int) or days <= 0:
+        return jsonify({'status': 'error', 'message': 'days must be a positive integer'}), 400
+
+    target.annual_leave_balance = (target.annual_leave_balance or 24) + days
+    _db.session.commit()
+
+    # Notify the user
+    from app.services.notification_service import NotificationService
+    admin = get_current_user()
+    NotificationService.create_notification(
+        user_id=user_id,
+        type='leave_balance_updated',
+        title='Leave Balance Updated',
+        message=f'{admin.full_name} added {days} leave days to your balance. Reason: {reason}' if reason else f'{admin.full_name} added {days} leave days to your balance.',
+        related_type='user',
+        related_id=user_id
+    )
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Added {days} days to leave balance',
+        'data': {'annual_leave_balance': target.annual_leave_balance}
     }), 200

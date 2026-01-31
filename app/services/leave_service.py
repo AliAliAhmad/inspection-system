@@ -60,7 +60,29 @@ class LeaveService:
         if overlap:
             raise ValidationError("You have an overlapping leave request")
 
+        # Check leave balance (only for annual leave type)
+        user = db.session.get(User, user_id)
+        if not user:
+            raise ValidationError("User not found")
+
+        # Calculate used leave days this year
+        from datetime import date as date_type
+        current_year_start = date_type(date_from.year, 1, 1)
+        current_year_end = date_type(date_from.year, 12, 31)
+        used_leaves = db.session.query(
+            db.func.coalesce(db.func.sum(Leave.total_days), 0)
+        ).filter(
+            Leave.user_id == user_id,
+            Leave.status.in_(['pending', 'approved']),
+            Leave.date_from >= current_year_start,
+            Leave.date_to <= current_year_end
+        ).scalar()
+
         total_days = (date_to - date_from).days + 1
+
+        remaining = (user.annual_leave_balance or 24) - used_leaves
+        if remaining < total_days:
+            raise ValidationError(f"Insufficient leave balance. Remaining: {remaining} days, Requested: {total_days} days")
 
         leave = Leave(
             user_id=user_id,

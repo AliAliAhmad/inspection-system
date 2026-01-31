@@ -274,6 +274,25 @@ def get_week_roster():
     else:
         users = User.query.filter(User.is_active == True).all()
 
+    # Calculate leave balance for each user
+    current_year = date.today().year
+    year_start = date(current_year, 1, 1)
+    year_end = date(current_year, 12, 31)
+
+    leave_used_map = {}
+    if user_ids:
+        used_rows = db.session.query(
+            Leave.user_id,
+            db.func.coalesce(db.func.sum(Leave.total_days), 0)
+        ).filter(
+            Leave.user_id.in_(user_ids),
+            Leave.status.in_(['pending', 'approved']),
+            Leave.date_from >= year_start,
+            Leave.date_to <= year_end
+        ).group_by(Leave.user_id).all()
+        for uid, used in used_rows:
+            leave_used_map[uid] = int(used)
+
     result_users = []
     for u in users:
         entries = {}
@@ -286,13 +305,19 @@ def get_week_roster():
             elif d_str in user_roster:
                 entries[d_str] = user_roster[d_str]
 
+        total_balance = u.annual_leave_balance or 24
+        used = leave_used_map.get(u.id, 0)
+
         result_users.append({
             'id': u.id,
             'full_name': u.full_name,
             'role': u.role,
             'specialization': u.specialization,
             'is_on_leave': u.is_on_leave,
-            'entries': entries
+            'entries': entries,
+            'annual_leave_balance': total_balance,
+            'leave_used': used,
+            'leave_remaining': total_balance - used,
         })
 
     return jsonify({

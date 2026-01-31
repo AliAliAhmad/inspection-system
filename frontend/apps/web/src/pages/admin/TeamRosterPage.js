@@ -1,10 +1,10 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState } from 'react';
-import { Card, Table, Tag, Button, Space, Upload, Modal, Form, Select, DatePicker, Input, Drawer, Radio, Collapse, message, Typography, Alert, Badge, } from 'antd';
+import { Card, Table, Tag, Button, Space, Upload, Modal, Drawer, Radio, Collapse, message, Typography, Alert, Badge, } from 'antd';
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { rosterApi, leavesApi } from '@inspection/shared';
+import { rosterApi } from '@inspection/shared';
 import dayjs from 'dayjs';
 const { Text } = Typography;
 const ROLE_ORDER = {
@@ -42,9 +42,7 @@ export default function TeamRosterPage() {
     const [weekOffset, setWeekOffset] = useState(0);
     const [drawerDate, setDrawerDate] = useState(null);
     const [drawerShift, setDrawerShift] = useState('all');
-    const [leaveModalOpen, setLeaveModalOpen] = useState(false);
     const [uploadResult, setUploadResult] = useState(null);
-    const [leaveForm] = Form.useForm();
     const baseDate = dayjs().add(weekOffset * 7, 'day').format('YYYY-MM-DD');
     // Fetch week data
     const { data: weekData, isLoading } = useQuery({
@@ -72,25 +70,10 @@ export default function TeamRosterPage() {
             queryClient.invalidateQueries({ queryKey: ['roster'] });
             message.success(t('roster.uploadSuccess', '{{count}} entries imported', { count: result.imported ?? 0 }));
         },
-        onError: () => message.error(t('roster.uploadError', 'Failed to upload roster')),
-    });
-    // Leave request mutation
-    const leaveMutation = useMutation({
-        mutationFn: (values) => leavesApi.request({
-            user_id: values.user_id,
-            leave_type: values.leave_type,
-            date_from: values.dates[0].format('YYYY-MM-DD'),
-            date_to: values.dates[1].format('YYYY-MM-DD'),
-            reason: values.reason,
-            scope: values.scope,
-        }),
-        onSuccess: () => {
-            message.success(t('roster.leaveRequested', 'Leave request submitted'));
-            setLeaveModalOpen(false);
-            leaveForm.resetFields();
-            queryClient.invalidateQueries({ queryKey: ['roster'] });
+        onError: (err) => {
+            const msg = err?.response?.data?.message || err?.message || 'Failed to upload roster';
+            message.error(msg);
         },
-        onError: () => message.error(t('roster.leaveError', 'Failed to submit leave request')),
     });
     // Sort users by role order
     const sortedUsers = [...(weekData?.users ?? [])].sort((a, b) => (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99));
@@ -121,7 +104,7 @@ export default function TeamRosterPage() {
     return (_jsxs(Card, { title: _jsx(Typography.Title, { level: 4, style: { margin: 0 }, children: t('nav.roster', 'Team Roster') }), extra: _jsx(Space, { children: _jsx(Upload, { accept: ".xlsx,.xls", showUploadList: false, beforeUpload: (file) => {
                     uploadMutation.mutate(file);
                     return false;
-                }, children: _jsx(Button, { icon: _jsx(UploadOutlined, {}), loading: uploadMutation.isPending, children: t('roster.importRoster', 'Import Roster') }) }) }), children: [_jsxs(Space, { style: { marginBottom: 16, display: 'flex', justifyContent: 'center' }, children: [_jsx(Button, { icon: _jsx(LeftOutlined, {}), onClick: () => setWeekOffset((o) => o - 1), children: t('roster.prevWeek', 'Prev Week') }), _jsx(Button, { type: "text", onClick: () => setWeekOffset(0), children: _jsxs(Text, { strong: true, children: [rangeStart.format('DD MMM'), " - ", rangeEnd.format('DD MMM YYYY')] }) }), _jsxs(Button, { onClick: () => setWeekOffset((o) => o + 1), children: [t('roster.nextWeek', 'Next Week'), " ", _jsx(RightOutlined, {})] })] }), _jsx(Table, { rowKey: "id", columns: columns, dataSource: sortedUsers, loading: isLoading, pagination: false, scroll: { x: 900 }, size: "small", bordered: true, locale: { emptyText: t('common.noData', 'No data available') } }), _jsx(Drawer, { title: `${t('roster.teamAvailability', 'Team Availability')} - ${drawerDate ? dayjs(drawerDate).format('dddd, DD MMM YYYY') : ''}`, open: !!drawerDate, onClose: () => setDrawerDate(null), width: 480, footer: _jsx(Button, { type: "primary", block: true, onClick: () => setLeaveModalOpen(true), children: t('leave.request', 'Request Leave') }), children: _jsxs(Space, { direction: "vertical", style: { width: '100%' }, size: "middle", children: [_jsxs(Radio.Group, { value: drawerShift, onChange: (e) => setDrawerShift(e.target.value), optionType: "button", buttonStyle: "solid", children: [_jsx(Radio.Button, { value: "all", children: t('common.all', 'All') }), _jsx(Radio.Button, { value: "day", children: t('roster.dayShift', 'Day') }), _jsx(Radio.Button, { value: "night", children: t('roster.nightShift', 'Night') })] }), dayLoading ? (_jsx(Text, { type: "secondary", children: t('common.loading', 'Loading...') })) : (_jsx(Collapse, { defaultActiveKey: ['available', 'on_leave', 'off'], items: [
+                }, children: _jsx(Button, { icon: _jsx(UploadOutlined, {}), loading: uploadMutation.isPending, children: t('roster.importRoster', 'Import Roster') }) }) }), children: [_jsxs(Space, { style: { marginBottom: 16, display: 'flex', justifyContent: 'center' }, children: [_jsx(Button, { icon: _jsx(LeftOutlined, {}), onClick: () => setWeekOffset((o) => o - 1), children: t('roster.prevWeek', 'Prev Week') }), _jsx(Button, { type: "text", onClick: () => setWeekOffset(0), children: _jsxs(Text, { strong: true, children: [rangeStart.format('DD MMM'), " - ", rangeEnd.format('DD MMM YYYY')] }) }), _jsxs(Button, { onClick: () => setWeekOffset((o) => o + 1), children: [t('roster.nextWeek', 'Next Week'), " ", _jsx(RightOutlined, {})] })] }), _jsx(Table, { rowKey: "id", columns: columns, dataSource: sortedUsers, loading: isLoading, pagination: false, scroll: { x: 900 }, size: "small", bordered: true, locale: { emptyText: t('common.noData', 'No data available') } }), _jsx(Drawer, { title: `${t('roster.teamAvailability', 'Team Availability')} - ${drawerDate ? dayjs(drawerDate).format('dddd, DD MMM YYYY') : ''}`, open: !!drawerDate, onClose: () => setDrawerDate(null), width: 480, footer: null, children: _jsxs(Space, { direction: "vertical", style: { width: '100%' }, size: "middle", children: [_jsxs(Radio.Group, { value: drawerShift, onChange: (e) => setDrawerShift(e.target.value), optionType: "button", buttonStyle: "solid", children: [_jsx(Radio.Button, { value: "all", children: t('common.all', 'All') }), _jsx(Radio.Button, { value: "day", children: t('roster.dayShift', 'Day') }), _jsx(Radio.Button, { value: "night", children: t('roster.nightShift', 'Night') })] }), dayLoading ? (_jsx(Text, { type: "secondary", children: t('common.loading', 'Loading...') })) : (_jsx(Collapse, { defaultActiveKey: ['available', 'on_leave', 'off'], items: [
                                 {
                                     key: 'available',
                                     label: (_jsxs(Space, { children: [_jsx(Badge, { status: "success" }), t('roster.available', 'Available'), _jsx(Tag, { children: dayAvailability?.available?.length ?? 0 })] })),
@@ -153,10 +136,7 @@ export default function TeamRosterPage() {
                                                 borderBottom: '1px solid #f0f0f0',
                                             }, children: _jsxs(Space, { direction: "vertical", size: 0, children: [_jsx(Text, { strong: true, children: u.full_name }), _jsxs(Space, { size: 4, children: [_jsx(Tag, { color: ROLE_COLORS[u.role] ?? 'default', children: u.role }), u.specialization && _jsx(Tag, { children: u.specialization })] })] }) }, u.id)))) })),
                                 },
-                            ] }))] }) }), _jsx(Modal, { title: t('leave.request', 'Request Leave'), open: leaveModalOpen, onCancel: () => {
-                    setLeaveModalOpen(false);
-                    leaveForm.resetFields();
-                }, onOk: () => leaveForm.submit(), confirmLoading: leaveMutation.isPending, destroyOnClose: true, children: _jsxs(Form, { form: leaveForm, layout: "vertical", onFinish: (values) => leaveMutation.mutate(values), children: [_jsx(Form.Item, { name: "user_id", label: t('roster.teamMember', 'Team Member'), rules: [{ required: true, message: t('roster.selectMember', 'Please select a team member') }], children: _jsx(Select, { showSearch: true, optionFilterProp: "children", placeholder: t('roster.selectMember', 'Select team member'), children: sortedUsers.map((u) => (_jsxs(Select.Option, { value: u.id, children: [u.full_name, " (", u.role, ")"] }, u.id))) }) }), _jsx(Form.Item, { name: "leave_type", label: t('leave.type', 'Leave Type'), rules: [{ required: true, message: t('roster.selectLeaveType', 'Please select leave type') }], children: _jsxs(Select, { placeholder: t('roster.selectLeaveType', 'Select leave type'), children: [_jsx(Select.Option, { value: "sick", children: t('leave.sick', 'Sick Leave') }), _jsx(Select.Option, { value: "annual", children: t('leave.annual', 'Annual Leave') }), _jsx(Select.Option, { value: "emergency", children: t('leave.emergency', 'Emergency Leave') }), _jsx(Select.Option, { value: "training", children: t('leave.training', 'Training Leave') }), _jsx(Select.Option, { value: "other", children: t('leave.other', 'Other') })] }) }), _jsx(Form.Item, { name: "dates", label: t('roster.dateRange', 'Date Range'), rules: [{ required: true, message: t('roster.selectDates', 'Please select date range') }], children: _jsx(DatePicker.RangePicker, { style: { width: '100%' } }) }), _jsx(Form.Item, { name: "reason", label: t('leave.reason', 'Reason'), rules: [{ required: true, message: t('roster.enterReason', 'Please enter a reason') }], children: _jsx(Input.TextArea, { rows: 3 }) }), _jsx(Form.Item, { name: "scope", label: t('roster.scope', 'Scope'), initialValue: "full", children: _jsxs(Select, { children: [_jsx(Select.Option, { value: "full", children: t('roster.scopeFull', 'Full') }), _jsx(Select.Option, { value: "major_only", children: t('roster.scopeMajorOnly', 'Major Only') })] }) })] }) }), _jsx(Modal, { title: t('roster.uploadResult', 'Roster Upload Result'), open: uploadResult !== null, onCancel: () => setUploadResult(null), onOk: () => setUploadResult(null), cancelButtonProps: { style: { display: 'none' } }, children: uploadResult && (_jsxs(_Fragment, { children: [_jsxs("p", { children: [_jsx("strong", { children: uploadResult.imported }), ' ', t('roster.entriesImported', 'entries imported'), " ", t('roster.forUsers', 'for'), ' ', _jsx("strong", { children: uploadResult.users_processed }), " ", t('roster.users', 'users'), "."] }), uploadResult.errors.length > 0 && (_jsx(Alert, { type: "warning", showIcon: true, message: t('roster.uploadWarnings', '{{count}} warnings', {
+                            ] }))] }) }), _jsx(Modal, { title: t('roster.uploadResult', 'Roster Upload Result'), open: uploadResult !== null, onCancel: () => setUploadResult(null), onOk: () => setUploadResult(null), cancelButtonProps: { style: { display: 'none' } }, children: uploadResult && (_jsxs(_Fragment, { children: [_jsxs("p", { children: [_jsx("strong", { children: uploadResult.imported }), ' ', t('roster.entriesImported', 'entries imported'), " ", t('roster.forUsers', 'for'), ' ', _jsx("strong", { children: uploadResult.users_processed }), " ", t('roster.users', 'users'), "."] }), uploadResult.errors.length > 0 && (_jsx(Alert, { type: "warning", showIcon: true, message: t('roster.uploadWarnings', '{{count}} warnings', {
                                 count: uploadResult.errors.length,
                             }), description: _jsx("ul", { style: {
                                     maxHeight: 200,

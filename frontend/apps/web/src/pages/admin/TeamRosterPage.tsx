@@ -8,20 +8,27 @@ import {
   Upload,
   Modal,
   Drawer,
-  Radio,
-  Collapse,
+  Form,
+  Select,
+  DatePicker,
+  Input,
+  InputNumber,
   message,
   Typography,
   Alert,
-  Badge,
+  Statistic,
+  Divider,
 } from 'antd';
 import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { rosterApi, type RosterWeekUser } from '@inspection/shared';
+import { rosterApi, leavesApi, usersApi, type RosterWeekUser, type LeaveRequestPayload } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
+const { TextArea } = Input;
 
 const ROLE_ORDER: Record<string, number> = {
   inspector: 0,
@@ -57,15 +64,19 @@ function shiftTag(value: string | undefined) {
 export default function TeamRosterPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
 
   const [weekOffset, setWeekOffset] = useState(0);
-  const [drawerDate, setDrawerDate] = useState<string | null>(null);
-  const [drawerShift, setDrawerShift] = useState<string>('all');
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedUserName, setSelectedUserName] = useState<string>('');
   const [uploadResult, setUploadResult] = useState<{
     imported: number;
     users_processed: number;
     errors: string[];
   } | null>(null);
+
+  const [leaveForm] = Form.useForm();
+  const [addDaysForm] = Form.useForm();
 
   const baseDate = dayjs().add(weekOffset * 7, 'day').format('YYYY-MM-DD');
 
@@ -75,14 +86,18 @@ export default function TeamRosterPage() {
     queryFn: () => rosterApi.getWeek(baseDate).then((r) => r.data.data),
   });
 
-  // Fetch day availability when drawer is open
-  const { data: dayAvailability, isLoading: dayLoading } = useQuery({
-    queryKey: ['roster', 'day-availability', drawerDate, drawerShift],
-    queryFn: () =>
-      rosterApi
-        .getDayAvailability(drawerDate!, drawerShift !== 'all' ? drawerShift : undefined)
-        .then((r) => r.data.data),
-    enabled: !!drawerDate,
+  // Fetch leave balance when drawer is open
+  const { data: balanceData, isLoading: balanceLoading } = useQuery({
+    queryKey: ['leaves', 'balance', selectedUserId],
+    queryFn: () => leavesApi.getBalance(selectedUserId!).then((r) => r.data.data ?? (r.data as any).data),
+    enabled: !!selectedUserId,
+  });
+
+  // Fetch active users for coverage dropdown
+  const { data: activeUsersData } = useQuery({
+    queryKey: ['users', 'active-list'],
+    queryFn: () => usersApi.list({ per_page: 500, is_active: true }).then((r) => r.data.data ?? (r.data as any).data),
+    enabled: !!selectedUserId,
   });
 
   // Upload mutation
@@ -106,6 +121,37 @@ export default function TeamRosterPage() {
     },
   });
 
+  // Leave request mutation
+  const leaveRequestMutation = useMutation({
+    mutationFn: (payload: LeaveRequestPayload) => leavesApi.request(payload),
+    onSuccess: () => {
+      message.success(t('leaves.requestSuccess', 'Leave request submitted successfully'));
+      leaveForm.resetFields();
+      queryClient.invalidateQueries({ queryKey: ['leaves', 'balance', selectedUserId] });
+      queryClient.invalidateQueries({ queryKey: ['roster'] });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to submit leave request';
+      message.error(msg);
+    },
+  });
+
+  // Add leave days mutation
+  const addDaysMutation = useMutation({
+    mutationFn: (payload: { userId: number; days: number; reason: string }) =>
+      leavesApi.addDays(payload.userId, payload.days, payload.reason),
+    onSuccess: () => {
+      message.success(t('leaves.addDaysSuccess', 'Leave days added successfully'));
+      addDaysForm.resetFields();
+      queryClient.invalidateQueries({ queryKey: ['leaves', 'balance', selectedUserId] });
+      queryClient.invalidateQueries({ queryKey: ['roster'] });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to add leave days';
+      message.error(msg);
+    },
+  });
+
   // Sort users by role order
   const sortedUsers = [...(weekData?.users ?? [])].sort(
     (a, b) => (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99),
@@ -117,6 +163,76 @@ export default function TeamRosterPage() {
   const rangeStart = dates.length > 0 ? dayjs(dates[0]) : dayjs().add(weekOffset * 7, 'day');
   const rangeEnd = dates.length > 0 ? dayjs(dates[dates.length - 1]) : rangeStart.add(7, 'day');
 
+  // Coverage user options (exclude selected employee)
+  const coverageUsers = (activeUsersData?.items ?? activeUsersData ?? []).filter(
+    (u: any) => u.id !== selectedUserId,
+  );
+
+  // Leave history columns
+  const leaveHistoryColumns = [
+    {
+      title: t('leaves.type', 'Type'),
+      dataIndex: 'leave_type',
+      key: 'leave_type',
+      render: (val: string) => <Tag>{val}</Tag>,
+    },
+    {
+      title: t('leaves.from', 'From'),
+      dataIndex: 'date_from',
+      key: 'date_from',
+      render: (val: string) => dayjs(val).format('DD/MM/YYYY'),
+    },
+    {
+      title: t('leaves.to', 'To'),
+      dataIndex: 'date_to',
+      key: 'date_to',
+      render: (val: string) => dayjs(val).format('DD/MM/YYYY'),
+    },
+    {
+      title: t('leaves.days', 'Days'),
+      dataIndex: 'total_days',
+      key: 'total_days',
+    },
+    {
+      title: t('leaves.status', 'Status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (val: string) => {
+        const color = val === 'approved' ? 'green' : val === 'rejected' ? 'red' : 'orange';
+        return <Tag color={color}>{val}</Tag>;
+      },
+    },
+    {
+      title: t('leaves.coverage', 'Coverage'),
+      dataIndex: 'coverage_user',
+      key: 'coverage_user',
+      render: (val: any) => val?.full_name ?? '-',
+    },
+  ];
+
+  // Handle leave form submit
+  const handleLeaveSubmit = (values: any) => {
+    const [dateFrom, dateTo] = values.date_range;
+    leaveRequestMutation.mutate({
+      user_id: selectedUserId!,
+      leave_type: values.leave_type as LeaveRequestPayload['leave_type'],
+      date_from: dateFrom.format('YYYY-MM-DD'),
+      date_to: dateTo.format('YYYY-MM-DD'),
+      reason: values.reason,
+      scope: values.scope,
+      coverage_user_id: values.coverage_user_id,
+    });
+  };
+
+  // Handle add days submit
+  const handleAddDays = (values: any) => {
+    addDaysMutation.mutate({
+      userId: selectedUserId!,
+      days: values.days,
+      reason: values.reason,
+    });
+  };
+
   // Build table columns
   const columns = [
     {
@@ -124,32 +240,49 @@ export default function TeamRosterPage() {
       key: 'user',
       fixed: 'left' as const,
       width: 220,
-      render: (_: unknown, record: RosterWeekUser) => (
-        <Space direction="vertical" size={2}>
-          <Text strong>{record.full_name}</Text>
-          <Space size={4}>
-            <Tag color={ROLE_COLORS[record.role] ?? 'default'}>{record.role}</Tag>
-            {record.specialization && <Tag>{record.specialization}</Tag>}
+      render: (_: unknown, record: RosterWeekUser) => {
+        const leaveUsed = record.leave_used ?? 0;
+        const leaveBalance = record.leave_remaining ?? 0;
+        return (
+          <Space direction="vertical" size={2}>
+            <Text
+              strong
+              style={{ cursor: 'pointer', color: '#1677ff' }}
+              onClick={() => {
+                setSelectedUserId(record.id);
+                setSelectedUserName(record.full_name);
+              }}
+            >
+              {record.full_name}
+            </Text>
+            <Space size={4}>
+              <Tag color={ROLE_COLORS[record.role] ?? 'default'}>{record.role}</Tag>
+              {record.specialization && <Tag>{record.specialization}</Tag>}
+            </Space>
+            <Space size={8}>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                Taken: {leaveUsed}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: leaveBalance === 0 ? '#ff4d4f' : undefined,
+                }}
+                type={leaveBalance === 0 ? undefined : 'secondary'}
+              >
+                Balance: {leaveBalance}
+              </Text>
+            </Space>
           </Space>
-        </Space>
-      ),
+        );
+      },
     },
     ...dates.map((date) => ({
       title: (
-        <Button
-          type="link"
-          size="small"
-          onClick={() => {
-            setDrawerDate(date);
-            setDrawerShift('all');
-          }}
-          style={{ padding: 0, height: 'auto', lineHeight: 1.2 }}
-        >
-          <div style={{ textAlign: 'center' }}>
-            <div>{dayjs(date).format('ddd')}</div>
-            <div>{dayjs(date).format('DD/MM')}</div>
-          </div>
-        </Button>
+        <div style={{ textAlign: 'center' }}>
+          <div>{dayjs(date).format('ddd')}</div>
+          <div>{dayjs(date).format('DD/MM')}</div>
+        </div>
       ),
       key: date,
       width: 80,
@@ -157,6 +290,9 @@ export default function TeamRosterPage() {
       render: (_: unknown, record: RosterWeekUser) => shiftTag(record.entries[date]),
     })),
   ];
+
+  const isAdmin = currentUser?.role === 'admin';
+  const remaining = balanceData?.remaining ?? 0;
 
   return (
     <Card
@@ -210,155 +346,190 @@ export default function TeamRosterPage() {
         locale={{ emptyText: t('common.noData', 'No data available') }}
       />
 
-      {/* Day Detail Drawer */}
+      {/* Employee Leave Drawer */}
       <Drawer
-        title={`${t('roster.teamAvailability', 'Team Availability')} - ${
-          drawerDate ? dayjs(drawerDate).format('dddd, DD MMM YYYY') : ''
-        }`}
-        open={!!drawerDate}
-        onClose={() => setDrawerDate(null)}
-        width={480}
+        title={selectedUserName}
+        open={!!selectedUserId}
+        onClose={() => {
+          setSelectedUserId(null);
+          setSelectedUserName('');
+          leaveForm.resetFields();
+          addDaysForm.resetFields();
+        }}
+        width={600}
         footer={null}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Radio.Group
-            value={drawerShift}
-            onChange={(e) => setDrawerShift(e.target.value)}
-            optionType="button"
-            buttonStyle="solid"
-          >
-            <Radio.Button value="all">{t('common.all', 'All')}</Radio.Button>
-            <Radio.Button value="day">{t('roster.dayShift', 'Day')}</Radio.Button>
-            <Radio.Button value="night">{t('roster.nightShift', 'Night')}</Radio.Button>
-          </Radio.Group>
+        {balanceLoading ? (
+          <Text type="secondary">{t('common.loading', 'Loading...')}</Text>
+        ) : (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            {/* Leave balance statistics */}
+            <Space size="large">
+              <Statistic
+                title={t('leaves.totalBalance', 'Total Balance')}
+                value={balanceData?.total_balance ?? 0}
+              />
+              <Statistic
+                title={t('leaves.used', 'Used')}
+                value={balanceData?.used ?? 0}
+              />
+              <Statistic
+                title={t('leaves.remaining', 'Remaining')}
+                value={remaining}
+                valueStyle={remaining === 0 ? { color: '#ff4d4f' } : undefined}
+              />
+            </Space>
 
-          {dayLoading ? (
-            <Text type="secondary">{t('common.loading', 'Loading...')}</Text>
-          ) : (
-            <Collapse
-              defaultActiveKey={['available', 'on_leave', 'off']}
-              items={[
-                {
-                  key: 'available',
-                  label: (
-                    <Space>
-                      <Badge status="success" />
-                      {t('roster.available', 'Available')}
-                      <Tag>{dayAvailability?.available?.length ?? 0}</Tag>
-                    </Space>
-                  ),
-                  children: (
-                    <>
-                      {(dayAvailability?.available ?? []).length === 0 ? (
-                        <Text type="secondary">{t('common.noData', 'No data')}</Text>
-                      ) : (
-                        (dayAvailability?.available ?? []).map((u) => (
-                          <div
-                            key={u.id}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '6px 0',
-                              borderBottom: '1px solid #f0f0f0',
-                            }}
-                          >
-                            <Space direction="vertical" size={0}>
-                              <Text strong>{u.full_name}</Text>
-                              <Space size={4}>
-                                <Tag color={ROLE_COLORS[u.role] ?? 'default'}>{u.role}</Tag>
-                                {u.specialization && <Tag>{u.specialization}</Tag>}
-                              </Space>
-                            </Space>
-                            {u.shift === 'day' ? (
-                              <Tag color="blue">Day</Tag>
-                            ) : (
-                              <Tag color="purple">Night</Tag>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </>
-                  ),
-                },
-                {
-                  key: 'on_leave',
-                  label: (
-                    <Space>
-                      <Badge status="error" />
-                      {t('roster.onLeave', 'On Leave')}
-                      <Tag>{dayAvailability?.on_leave?.length ?? 0}</Tag>
-                    </Space>
-                  ),
-                  children: (
-                    <>
-                      {(dayAvailability?.on_leave ?? []).length === 0 ? (
-                        <Text type="secondary">{t('common.noData', 'No data')}</Text>
-                      ) : (
-                        (dayAvailability?.on_leave ?? []).map((u) => (
-                          <div
-                            key={u.id}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              padding: '6px 0',
-                              borderBottom: '1px solid #f0f0f0',
-                            }}
-                          >
-                            <Space direction="vertical" size={0}>
-                              <Text strong>{u.full_name}</Text>
-                              <Space size={4}>
-                                <Tag color={ROLE_COLORS[u.role] ?? 'default'}>{u.role}</Tag>
-                                {u.specialization && <Tag>{u.specialization}</Tag>}
-                              </Space>
-                            </Space>
-                          </div>
-                        ))
-                      )}
-                    </>
-                  ),
-                },
-                {
-                  key: 'off',
-                  label: (
-                    <Space>
-                      <Badge status="default" />
-                      {t('roster.offDuty', 'Off')}
-                      <Tag>{dayAvailability?.off?.length ?? 0}</Tag>
-                    </Space>
-                  ),
-                  children: (
-                    <>
-                      {(dayAvailability?.off ?? []).length === 0 ? (
-                        <Text type="secondary">{t('common.noData', 'No data')}</Text>
-                      ) : (
-                        (dayAvailability?.off ?? []).map((u) => (
-                          <div
-                            key={u.id}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              padding: '6px 0',
-                              borderBottom: '1px solid #f0f0f0',
-                            }}
-                          >
-                            <Space direction="vertical" size={0}>
-                              <Text strong>{u.full_name}</Text>
-                              <Space size={4}>
-                                <Tag color={ROLE_COLORS[u.role] ?? 'default'}>{u.role}</Tag>
-                                {u.specialization && <Tag>{u.specialization}</Tag>}
-                              </Space>
-                            </Space>
-                          </div>
-                        ))
-                      )}
-                    </>
-                  ),
-                },
-              ]}
+            {remaining === 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                message={t('leaves.noBalanceRemaining', 'No leave balance remaining')}
+              />
+            )}
+
+            <Divider />
+
+            {/* Leave history table */}
+            <Typography.Title level={5}>
+              {t('leaves.history', 'Leave History')}
+            </Typography.Title>
+            <Table
+              rowKey={(record: any) => record.id ?? `${record.date_from}-${record.date_to}`}
+              columns={leaveHistoryColumns}
+              dataSource={balanceData?.leaves ?? []}
+              pagination={false}
+              size="small"
+              bordered
+              locale={{ emptyText: t('leaves.noHistory', 'No leave history') }}
             />
-          )}
-        </Space>
+
+            {/* Request Leave Form */}
+            {remaining > 0 && (
+              <>
+                <Divider />
+                <Typography.Title level={5}>
+                  {t('leaves.requestLeave', 'Request Leave')}
+                </Typography.Title>
+                <Form
+                  form={leaveForm}
+                  layout="vertical"
+                  onFinish={handleLeaveSubmit}
+                >
+                  <Form.Item
+                    name="leave_type"
+                    label={t('leaves.leaveType', 'Leave Type')}
+                    rules={[{ required: true, message: t('leaves.leaveTypeRequired', 'Please select a leave type') }]}
+                  >
+                    <Select placeholder={t('leaves.selectType', 'Select leave type')}>
+                      <Select.Option value="sick">{t('leaves.sick', 'Sick')}</Select.Option>
+                      <Select.Option value="annual">{t('leaves.annual', 'Annual')}</Select.Option>
+                      <Select.Option value="emergency">{t('leaves.emergency', 'Emergency')}</Select.Option>
+                      <Select.Option value="training">{t('leaves.training', 'Training')}</Select.Option>
+                      <Select.Option value="other">{t('leaves.other', 'Other')}</Select.Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item
+                    name="date_range"
+                    label={t('leaves.dateRange', 'Date Range')}
+                    rules={[{ required: true, message: t('leaves.dateRangeRequired', 'Please select date range') }]}
+                  >
+                    <RangePicker style={{ width: '100%' }} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name="reason"
+                    label={t('leaves.reason', 'Reason')}
+                    rules={[{ required: true, message: t('leaves.reasonRequired', 'Please provide a reason') }]}
+                  >
+                    <TextArea rows={3} placeholder={t('leaves.reasonPlaceholder', 'Enter reason for leave')} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name="coverage_user_id"
+                    label={t('leaves.coverageEmployee', 'Coverage Employee')}
+                    rules={[{ required: true, message: t('leaves.coverageRequired', 'Coverage employee is required') }]}
+                  >
+                    <Select
+                      placeholder={t('leaves.selectCoverage', 'Select coverage employee')}
+                      showSearch
+                      optionFilterProp="label"
+                      options={coverageUsers.map((u: any) => ({
+                        value: u.id,
+                        label: `${u.full_name} — ${u.employee_id ?? u.id} (${u.role})`,
+                      }))}
+                    />
+                  </Form.Item>
+
+                  <Form.Item
+                    name="scope"
+                    label={t('leaves.scope', 'Scope')}
+                    rules={[{ required: true, message: t('leaves.scopeRequired', 'Please select scope') }]}
+                  >
+                    <Select placeholder={t('leaves.selectScope', 'Select scope')}>
+                      <Select.Option value="full">{t('leaves.full', 'Full')}</Select.Option>
+                      <Select.Option value="major_only">{t('leaves.majorOnly', 'Major Only')}</Select.Option>
+                    </Select>
+                  </Form.Item>
+
+                  <Form.Item>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={leaveRequestMutation.isPending}
+                      block
+                    >
+                      {t('leaves.submitRequest', 'Submit Leave Request')}
+                    </Button>
+                  </Form.Item>
+                </Form>
+              </>
+            )}
+
+            {/* Add Leave Days - Admin Only */}
+            {isAdmin && (
+              <>
+                <Divider />
+                <Typography.Title level={5}>
+                  {t('leaves.addLeaveDays', 'Add Leave Days')}
+                </Typography.Title>
+                <Form
+                  form={addDaysForm}
+                  layout="vertical"
+                  onFinish={handleAddDays}
+                >
+                  <Form.Item
+                    name="days"
+                    label={t('leaves.numberOfDays', 'Number of Days')}
+                    rules={[{ required: true, message: t('leaves.daysRequired', 'Please enter number of days') }]}
+                  >
+                    <InputNumber min={1} style={{ width: '100%' }} placeholder={t('leaves.enterDays', 'Enter days')} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name="reason"
+                    label={t('leaves.reason', 'Reason')}
+                    rules={[{ required: true, message: t('leaves.reasonRequired', 'Please provide a reason') }]}
+                  >
+                    <TextArea rows={2} placeholder={t('leaves.addDaysReasonPlaceholder', 'Reason for adding days')} />
+                  </Form.Item>
+
+                  <Form.Item>
+                    <Button
+                      type="default"
+                      htmlType="submit"
+                      loading={addDaysMutation.isPending}
+                      block
+                    >
+                      {t('leaves.addDaysButton', 'Add Days')}
+                    </Button>
+                  </Form.Item>
+                </Form>
+              </>
+            )}
+          </Space>
+        )}
       </Drawer>
 
       {/* Upload Result Modal */}

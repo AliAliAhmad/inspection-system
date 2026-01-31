@@ -15,6 +15,7 @@ export interface User {
   language: 'en' | 'ar';
   is_active: boolean;
   is_on_leave: boolean;
+  annual_leave_balance: number;
   leave_coverage_for: number | null;
   inspector_points: number;
   specialist_points: number;

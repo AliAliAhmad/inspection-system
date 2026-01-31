@@ -28,6 +28,13 @@ export interface CapacityInfo {
   on_leave: number;
 }
 
+export interface LeaveBalanceData {
+  total_balance: number;
+  used: number;
+  remaining: number;
+  leaves: any[];
+}
+
 export const leavesApi = {
   list(params?: LeaveListParams) {
     return getApiClient().get<PaginatedResponse<Leave>>('/api/leaves', { params });
@@ -73,5 +80,13 @@ export const leavesApi = {
       '/api/leaves/capacity',
       { params: shift ? { shift } : undefined },
     );
+  },
+
+  getBalance(userId: number) {
+    return getApiClient().get<ApiResponse<LeaveBalanceData>>(`/api/leaves/user/${userId}/balance`);
+  },
+
+  addDays(userId: number, days: number, reason: string) {
+    return getApiClient().post<ApiResponse<{ annual_leave_balance: number }>>(`/api/leaves/user/${userId}/add-days`, { days, reason });
   },
 };

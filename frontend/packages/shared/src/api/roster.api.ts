@@ -8,6 +8,9 @@ export interface RosterWeekUser {
   specialization: string | null;
   is_on_leave: boolean;
   entries: Record<string, string>; // date string -> 'day'|'night'|'off'|'leave'
+  annual_leave_balance: number;
+  leave_used: number;
+  leave_remaining: number;
 }
 
 export interface RosterWeekData {
