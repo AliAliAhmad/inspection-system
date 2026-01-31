@@ -8,6 +8,7 @@ import {
   Select,
   DatePicker,
   Tag,
+  Space,
   message,
   Typography,
   Descriptions,
@@ -15,12 +16,9 @@ import {
 import { PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import type { ColumnsType } from 'antd/es/table';
 import {
   inspectionAssignmentsApi,
   usersApi,
-  type InspectionList,
-  type InspectionAssignment,
   type AssignTeamPayload,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
@@ -29,36 +27,43 @@ export default function InspectionAssignmentsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(10);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState<InspectionAssignment | null>(null);
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
 
   const [generateForm] = Form.useForm();
   const [assignForm] = Form.useForm();
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['inspection-assignments', page, perPage],
-    queryFn: () => inspectionAssignmentsApi.getLists({ page, per_page: perPage }),
+  // Fetch all lists with their assignments
+  const { data, isLoading } = useQuery({
+    queryKey: ['inspection-assignments'],
+    queryFn: () => inspectionAssignmentsApi.getLists({}),
   });
 
+  // Fetch inspectors for the assign modal
   const { data: inspectorsData } = useQuery({
     queryKey: ['users', 'inspectors'],
-    queryFn: () => usersApi.list({ role: 'inspector', is_active: true, per_page: 200 }),
+    queryFn: () => usersApi.list({ per_page: 200 }),
     enabled: assignOpen,
   });
 
   const generateMutation = useMutation({
     mutationFn: (payload: { target_date: string; shift: 'day' | 'night' }) =>
       inspectionAssignmentsApi.generateList(payload),
-    onSuccess: () => {
-      message.success(t('assignments.generateSuccess', 'Inspection list generated'));
+    onSuccess: (res) => {
+      const result = (res.data as any)?.data ?? res.data;
+      message.success(
+        t('assignments.generateSuccess', 'Inspection list generated — {{count}} assignments created', {
+          count: result?.total_assets ?? 0,
+        }),
+      );
       queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
       setGenerateOpen(false);
       generateForm.resetFields();
     },
-    onError: () => message.error(t('assignments.generateError', 'Failed to generate list')),
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || t('assignments.generateError', 'Failed to generate list'));
+    },
   });
 
   const assignMutation = useMutation({
@@ -71,104 +76,132 @@ export default function InspectionAssignmentsPage() {
       setSelectedAssignment(null);
       assignForm.resetFields();
     },
-    onError: () => message.error(t('assignments.assignError', 'Failed to assign team')),
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || t('assignments.assignError', 'Failed to assign team'));
+    },
   });
 
-  const openAssign = (assignment: InspectionAssignment) => {
-    setSelectedAssignment(assignment);
-    assignForm.resetFields();
-    setAssignOpen(true);
+  // Flatten: extract all assignments from all lists
+  const rawLists: any[] = data?.data?.data || (data?.data as any)?.data || [];
+  const allAssignments: any[] = [];
+  for (const list of rawLists) {
+    const assignments = list.assignments || [];
+    for (const a of assignments) {
+      allAssignments.push({
+        ...a,
+        list_target_date: list.target_date,
+        list_shift: list.shift,
+        list_status: list.status,
+      });
+    }
+  }
+
+  // Sort by date descending
+  allAssignments.sort((a, b) => (b.list_target_date || '').localeCompare(a.list_target_date || ''));
+
+  // Inspectors for assign modal
+  const allInspectors: any[] = (inspectorsData?.data as any)?.data || [];
+  const mechInspectors = allInspectors.filter((u: any) => u.role === 'inspector' && u.specialization === 'mechanical');
+  const elecInspectors = allInspectors.filter((u: any) => u.role === 'inspector' && u.specialization === 'electrical');
+
+  const statusColor = (s: string) => {
+    switch (s) {
+      case 'completed': return 'green';
+      case 'assigned': return 'blue';
+      case 'in_progress': return 'processing';
+      case 'unassigned': return 'default';
+      default: return 'default';
+    }
   };
 
-  const assignmentColumns: ColumnsType<InspectionAssignment> = [
+  const columns = [
     {
-      title: t('assignments.equipment', 'Equipment'),
-      key: 'equipment',
-      render: (_: unknown, record: InspectionAssignment) => record.equipment?.name || `ID: ${record.equipment_id}`,
-    },
-    {
-      title: t('assignments.berth', 'Berth'),
-      dataIndex: 'berth',
-      key: 'berth',
-      render: (v: string | null) => v || '-',
+      title: t('assignments.targetDate', 'Date'),
+      dataIndex: 'list_target_date',
+      key: 'date',
+      width: 110,
+      render: (v: string) => v ? dayjs(v).format('DD/MM/YYYY') : '-',
     },
     {
       title: t('assignments.shift', 'Shift'),
-      dataIndex: 'shift',
+      dataIndex: 'list_shift',
       key: 'shift',
-      render: (v: string) => <Tag color={v === 'day' ? 'gold' : 'geekblue'}>{v.toUpperCase()}</Tag>,
+      width: 80,
+      render: (v: string) => v ? <Tag color={v === 'day' ? 'gold' : 'geekblue'}>{v.toUpperCase()}</Tag> : '-',
+    },
+    {
+      title: t('assignments.equipment', 'Equipment'),
+      key: 'equipment_name',
+      render: (_: unknown, record: any) => record.equipment?.name || `ID: ${record.equipment_id}`,
+    },
+    {
+      title: t('assignments.equipmentType', 'Type'),
+      key: 'equipment_type',
+      render: (_: unknown, record: any) => record.equipment?.equipment_type || '-',
+    },
+    {
+      title: t('assignments.serialNumber', 'Serial #'),
+      key: 'serial',
+      render: (_: unknown, record: any) => record.equipment?.serial_number || '-',
+    },
+    {
+      title: t('assignments.berth', 'Berth'),
+      key: 'berth',
+      width: 80,
+      render: (_: unknown, record: any) => record.berth || record.equipment?.berth || '-',
     },
     {
       title: t('assignments.status', 'Status'),
       dataIndex: 'status',
       key: 'status',
-      render: (v: string) => <Tag color={v === 'completed' ? 'green' : v === 'assigned' ? 'blue' : 'default'}>{v.toUpperCase()}</Tag>,
+      width: 120,
+      render: (v: string) => <Tag color={statusColor(v)}>{(v || 'unknown').toUpperCase()}</Tag>,
     },
     {
       title: t('assignments.mechInspector', 'Mech Inspector'),
-      dataIndex: 'mechanical_inspector',
-      key: 'mechanical_inspector',
-      render: (v: any) => v ? `${v.full_name} (${v.employee_id ?? v.role_id})` : '-',
+      key: 'mech',
+      render: (_: unknown, record: any) =>
+        record.mechanical_inspector
+          ? `${record.mechanical_inspector.full_name}`
+          : <Typography.Text type="secondary">—</Typography.Text>,
     },
     {
       title: t('assignments.elecInspector', 'Elec Inspector'),
-      dataIndex: 'electrical_inspector',
-      key: 'electrical_inspector',
-      render: (v: any) => v ? `${v.full_name} (${v.employee_id ?? v.role_id})` : '-',
+      key: 'elec',
+      render: (_: unknown, record: any) =>
+        record.electrical_inspector
+          ? `${record.electrical_inspector.full_name}`
+          : <Typography.Text type="secondary">—</Typography.Text>,
     },
     {
       title: t('common.actions', 'Actions'),
       key: 'actions',
-      render: (_: unknown, record: InspectionAssignment) => (
-        <Button type="link" icon={<TeamOutlined />} onClick={() => openAssign(record)}>
-          {t('assignments.assignTeam', 'Assign Team')}
+      width: 130,
+      render: (_: unknown, record: any) => (
+        <Button
+          type="primary"
+          size="small"
+          icon={<TeamOutlined />}
+          onClick={() => {
+            setSelectedAssignment(record);
+            assignForm.resetFields();
+            setAssignOpen(true);
+          }}
+          disabled={record.status === 'completed'}
+        >
+          {record.mechanical_inspector_id ? 'Reassign' : 'Assign'}
         </Button>
       ),
     },
   ];
 
-  const listColumns: ColumnsType<InspectionList> = [
-    { title: t('assignments.id', 'ID'), dataIndex: 'id', key: 'id', width: 60 },
-    {
-      title: t('assignments.targetDate', 'Target Date'),
-      dataIndex: 'target_date',
-      key: 'target_date',
-      render: (v: string) => dayjs(v).format('YYYY-MM-DD'),
-    },
-    {
-      title: t('assignments.shift', 'Shift'),
-      dataIndex: 'shift',
-      key: 'shift',
-      render: (v: string) => <Tag color={v === 'day' ? 'gold' : 'geekblue'}>{v.toUpperCase()}</Tag>,
-    },
-    {
-      title: t('assignments.status', 'Status'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (v: string) => <Tag>{v.toUpperCase()}</Tag>,
-    },
-    {
-      title: t('assignments.totalAssignments', 'Assignments'),
-      key: 'count',
-      render: (_: unknown, record: InspectionList) => record.assignments?.length || 0,
-    },
-    {
-      title: t('assignments.createdAt', 'Created'),
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm'),
-    },
-  ];
-
-  const lists: any[] = data?.data?.data || (data?.data as any)?.data || [];
-  const pagination = data?.data?.pagination;
-  const inspectors = (inspectorsData?.data as any)?.data || [];
-  const mechInspectors = inspectors.filter((u: any) => u.specialization === 'mechanical');
-  const elecInspectors = inspectors.filter((u: any) => u.specialization === 'electrical');
-
   return (
     <Card
-      title={<Typography.Title level={4}>{t('nav.assignments', 'Inspection Assignments')}</Typography.Title>}
+      title={
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {t('nav.assignments', 'Inspection Assignments')}
+        </Typography.Title>
+      }
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateOpen(true)}>
           {t('assignments.generate', 'Generate List')}
@@ -177,30 +210,14 @@ export default function InspectionAssignmentsPage() {
     >
       <Table
         rowKey="id"
-        columns={listColumns}
-        dataSource={lists}
+        columns={columns}
+        dataSource={allAssignments}
         loading={isLoading}
-        locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
-        pagination={pagination ? {
-          current: pagination.page,
-          pageSize: pagination.per_page,
-          total: pagination.total,
-          showSizeChanger: true,
-          onChange: (p, ps) => { setPage(p); setPerPage(ps); },
-        } : false}
-        expandable={{
-          expandedRowRender: (record: InspectionList) => (
-            <Table
-              rowKey="id"
-              columns={assignmentColumns}
-              dataSource={record.assignments || []}
-              pagination={false}
-              size="small"
-            />
-          ),
-          rowExpandable: (record) => (record.assignments?.length || 0) > 0,
-        }}
-        scroll={{ x: 800 }}
+        pagination={{ pageSize: 20, showSizeChanger: true }}
+        scroll={{ x: 1200 }}
+        size="small"
+        bordered
+        locale={{ emptyText: t('common.noData', 'No inspection assignments. Click "Generate List" to create one.') }}
       />
 
       {/* Generate List Modal */}
@@ -215,14 +232,25 @@ export default function InspectionAssignmentsPage() {
         <Form
           form={generateForm}
           layout="vertical"
-          onFinish={(values: { target_date: dayjs.Dayjs; shift: 'day' | 'night' }) =>
-            generateMutation.mutate({ target_date: values.target_date.format('YYYY-MM-DD'), shift: values.shift })
+          onFinish={(values: any) =>
+            generateMutation.mutate({
+              target_date: values.target_date.format('YYYY-MM-DD'),
+              shift: values.shift,
+            })
           }
         >
-          <Form.Item name="target_date" label={t('assignments.targetDate', 'Target Date')} rules={[{ required: true }]}>
+          <Form.Item
+            name="target_date"
+            label={t('assignments.targetDate', 'Target Date')}
+            rules={[{ required: true }]}
+          >
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="shift" label={t('assignments.shift', 'Shift')} rules={[{ required: true }]}>
+          <Form.Item
+            name="shift"
+            label={t('assignments.shift', 'Shift')}
+            rules={[{ required: true }]}
+          >
             <Select>
               <Select.Option value="day">{t('common.day', 'Day')}</Select.Option>
               <Select.Option value="night">{t('common.night', 'Night')}</Select.Option>
@@ -241,12 +269,24 @@ export default function InspectionAssignmentsPage() {
         destroyOnClose
       >
         {selectedAssignment && (
-          <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
-            <Descriptions.Item label={t('assignments.equipment', 'Equipment')}>
+          <Descriptions size="small" column={1} bordered style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="Equipment">
               {selectedAssignment.equipment?.name || `ID: ${selectedAssignment.equipment_id}`}
             </Descriptions.Item>
-            <Descriptions.Item label={t('assignments.shift', 'Shift')}>
-              {selectedAssignment.shift?.toUpperCase()}
+            <Descriptions.Item label="Type">
+              {selectedAssignment.equipment?.equipment_type || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Serial #">
+              {selectedAssignment.equipment?.serial_number || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Berth">
+              {selectedAssignment.berth || selectedAssignment.equipment?.berth || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Shift">
+              {selectedAssignment.list_shift?.toUpperCase() || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Date">
+              {selectedAssignment.list_target_date ? dayjs(selectedAssignment.list_target_date).format('DD/MM/YYYY') : '-'}
             </Descriptions.Item>
           </Descriptions>
         )}
@@ -260,9 +300,13 @@ export default function InspectionAssignmentsPage() {
           <Form.Item
             name="mechanical_inspector_id"
             label={t('assignments.mechInspector', 'Mechanical Inspector')}
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: 'Please select a mechanical inspector' }]}
           >
-            <Select showSearch optionFilterProp="children" placeholder={t('assignments.selectInspector', 'Select inspector')}>
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder={t('assignments.selectInspector', 'Select mechanical inspector')}
+            >
               {mechInspectors.map((u: any) => (
                 <Select.Option key={u.id} value={u.id}>
                   {u.full_name} ({u.employee_id ?? u.role_id})
@@ -273,9 +317,13 @@ export default function InspectionAssignmentsPage() {
           <Form.Item
             name="electrical_inspector_id"
             label={t('assignments.elecInspector', 'Electrical Inspector')}
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: 'Please select an electrical inspector' }]}
           >
-            <Select showSearch optionFilterProp="children" placeholder={t('assignments.selectInspector', 'Select inspector')}>
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder={t('assignments.selectInspector', 'Select electrical inspector')}
+            >
               {elecInspectors.map((u: any) => (
                 <Select.Option key={u.id} value={u.id}>
                   {u.full_name} ({u.employee_id ?? u.role_id})
