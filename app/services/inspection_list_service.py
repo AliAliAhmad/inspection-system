@@ -5,7 +5,7 @@ Triggered daily at 1:00 PM for next shift inspections.
 
 from app.models import (
     InspectionList, InspectionAssignment, InspectionRoutine,
-    Equipment, User
+    Equipment, User, RosterEntry
 )
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
@@ -155,9 +155,18 @@ class InspectionListService:
         if elec.is_on_leave:
             raise ValidationError(f"{elec.full_name} is currently on leave")
 
-        # Validate same shift
-        if mech.shift != assignment.shift or elec.shift != assignment.shift:
-            raise ValidationError("Both inspectors must be on the same shift as the assignment")
+        # Validate same shift using roster for the assignment date
+        target_date = assignment.inspection_list.target_date
+        mech_roster = RosterEntry.query.filter_by(user_id=mechanical_inspector_id, date=target_date).first()
+        elec_roster = RosterEntry.query.filter_by(user_id=electrical_inspector_id, date=target_date).first()
+        mech_shift = mech_roster.shift if mech_roster else mech.shift
+        elec_shift = elec_roster.shift if elec_roster else elec.shift
+        if mech_shift != assignment.shift or elec_shift != assignment.shift:
+            raise ValidationError(
+                f"Both inspectors must be on the {assignment.shift} shift for {target_date}. "
+                f"Mechanical inspector is on '{mech_shift or 'unknown'}', "
+                f"Electrical inspector is on '{elec_shift or 'unknown'}'"
+            )
 
         # Calculate deadline (30 hours from shift start)
         if assignment.shift == 'day':

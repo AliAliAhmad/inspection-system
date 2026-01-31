@@ -384,6 +384,28 @@ def get_day_availability():
     ).all()
     leave_user_ids = {leave.user_id for leave in leaves}
 
+    # Build leave coverage maps
+    leave_cover_map = {}  # user_id -> cover user info
+    covering_for_map = {}  # cover_user_id -> on-leave user info
+    for lv in leaves:
+        if lv.coverage_user:
+            leave_cover_map[lv.user_id] = {
+                'id': lv.coverage_user.id,
+                'full_name': lv.coverage_user.full_name,
+                'role': lv.coverage_user.role,
+                'role_id': lv.coverage_user.role_id,
+                'specialization': lv.coverage_user.specialization,
+            }
+            on_leave_user = db.session.get(User, lv.user_id)
+            if on_leave_user:
+                covering_for_map[lv.coverage_user_id] = {
+                    'id': on_leave_user.id,
+                    'full_name': on_leave_user.full_name,
+                    'role': on_leave_user.role,
+                    'role_id': on_leave_user.role_id,
+                    'specialization': on_leave_user.specialization,
+                }
+
     # Get all active users
     all_users = User.query.filter(User.is_active == True).all()
 
@@ -396,15 +418,21 @@ def get_day_availability():
             'id': u.id,
             'full_name': u.full_name,
             'role': u.role,
+            'role_id': u.role_id,
             'specialization': u.specialization,
         }
 
         # Check if on leave first (overrides roster)
         if u.id in leave_user_ids:
+            user_info['leave_cover'] = leave_cover_map.get(u.id)
             on_leave.append(user_info)
             continue
 
         roster_shift = roster_map.get(u.id)
+
+        # Add covering_for info if this user is covering someone
+        if u.id in covering_for_map:
+            user_info['covering_for'] = covering_for_map[u.id]
 
         if roster_shift == 'off':
             off.append(user_info)

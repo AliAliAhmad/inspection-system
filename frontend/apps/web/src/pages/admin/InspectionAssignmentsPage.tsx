@@ -18,7 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   inspectionAssignmentsApi,
-  usersApi,
+  rosterApi,
   type AssignTeamPayload,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
@@ -40,11 +40,14 @@ export default function InspectionAssignmentsPage() {
     queryFn: () => inspectionAssignmentsApi.getLists({}),
   });
 
-  // Fetch inspectors for the assign modal
-  const { data: inspectorsData } = useQuery({
-    queryKey: ['users', 'inspectors'],
-    queryFn: () => usersApi.list({ per_page: 200 }),
-    enabled: assignOpen,
+  // Fetch roster availability for the selected assignment's date + shift
+  const assignmentDate = selectedAssignment?.list_target_date;
+  const assignmentShift = selectedAssignment?.list_shift;
+
+  const { data: availabilityData } = useQuery({
+    queryKey: ['roster', 'day-availability', assignmentDate, assignmentShift],
+    queryFn: () => rosterApi.getDayAvailability(assignmentDate, assignmentShift),
+    enabled: assignOpen && !!assignmentDate && !!assignmentShift,
   });
 
   const generateMutation = useMutation({
@@ -99,14 +102,30 @@ export default function InspectionAssignmentsPage() {
   // Sort by date descending
   allAssignments.sort((a, b) => (b.list_target_date || '').localeCompare(a.list_target_date || ''));
 
-  // Inspectors for assign modal
-  const allInspectors: any[] = (inspectorsData?.data as any)?.data || [];
-  const mechInspectors = allInspectors.filter((u: any) => u.role === 'inspector' && u.specialization === 'mechanical');
-  const elecInspectors = allInspectors.filter((u: any) => u.role === 'inspector' && u.specialization === 'electrical');
+  // Build inspector lists from roster availability (only those on the right shift)
+  const availData = (availabilityData?.data as any)?.data ?? availabilityData?.data;
+  const availableUsers: any[] = availData?.available ?? [];
+  const onLeaveUsers: any[] = availData?.on_leave ?? [];
 
-  // Build set of user IDs who are covering for someone on leave
+  // Filter available users: inspectors + specialists who are covering for an inspector
+  const mechAvailable = availableUsers.filter(
+    (u: any) => u.specialization === 'mechanical' && (u.role === 'inspector' || (u.role === 'specialist' && u.covering_for)),
+  );
+  const elecAvailable = availableUsers.filter(
+    (u: any) => u.specialization === 'electrical' && (u.role === 'inspector' || (u.role === 'specialist' && u.covering_for)),
+  );
+
+  // On-leave inspectors to show as disabled (red)
+  const mechOnLeave = onLeaveUsers.filter((u: any) => u.role === 'inspector' && u.specialization === 'mechanical');
+  const elecOnLeave = onLeaveUsers.filter((u: any) => u.role === 'inspector' && u.specialization === 'electrical');
+
+  // Combine: available first, then on-leave (disabled)
+  const mechOptions = [...mechAvailable, ...mechOnLeave];
+  const elecOptions = [...elecAvailable, ...elecOnLeave];
+
+  // Set of cover user IDs
   const coverUserIds = new Set<number>();
-  for (const u of allInspectors) {
+  for (const u of availableUsers) {
     if (u.covering_for) coverUserIds.add(u.id);
   }
 
@@ -200,6 +219,24 @@ export default function InspectionAssignmentsPage() {
       ),
     },
   ];
+
+  const renderInspectorOption = (u: any) => {
+    const onLeave = onLeaveUsers.some((ol: any) => ol.id === u.id);
+    const isCover = coverUserIds.has(u.id);
+    return (
+      <Select.Option key={u.id} value={u.id} disabled={onLeave}>
+        <span style={{
+          color: onLeave ? '#ff4d4f' : isCover ? '#52c41a' : undefined,
+          fontWeight: onLeave || isCover ? 600 : undefined,
+        }}>
+          {u.full_name} ({u.role_id})
+          {onLeave && u.leave_cover ? ` — Cover: ${u.leave_cover.full_name}` : ''}
+          {onLeave && !u.leave_cover ? ' — On Leave' : ''}
+          {isCover && u.covering_for ? ` — Covering ${u.covering_for.full_name}` : ''}
+        </span>
+      </Select.Option>
+    );
+  };
 
   return (
     <Card
@@ -313,23 +350,7 @@ export default function InspectionAssignmentsPage() {
               optionFilterProp="children"
               placeholder={t('assignments.selectInspector', 'Select mechanical inspector')}
             >
-              {mechInspectors.map((u: any) => {
-                const onLeave = u.is_on_leave;
-                const isCover = coverUserIds.has(u.id);
-                return (
-                  <Select.Option key={u.id} value={u.id} disabled={onLeave}>
-                    <span style={{
-                      color: onLeave ? '#ff4d4f' : isCover ? '#52c41a' : undefined,
-                      fontWeight: onLeave || isCover ? 600 : undefined,
-                    }}>
-                      {u.full_name} ({u.employee_id ?? u.role_id})
-                      {onLeave && u.leave_cover ? ` — Cover: ${u.leave_cover.full_name}` : ''}
-                      {onLeave && !u.leave_cover ? ' — On Leave' : ''}
-                      {isCover && u.covering_for ? ` — Covering ${u.covering_for.full_name}` : ''}
-                    </span>
-                  </Select.Option>
-                );
-              })}
+              {mechOptions.map(renderInspectorOption)}
             </Select>
           </Form.Item>
           <Form.Item
@@ -342,23 +363,7 @@ export default function InspectionAssignmentsPage() {
               optionFilterProp="children"
               placeholder={t('assignments.selectInspector', 'Select electrical inspector')}
             >
-              {elecInspectors.map((u: any) => {
-                const onLeave = u.is_on_leave;
-                const isCover = coverUserIds.has(u.id);
-                return (
-                  <Select.Option key={u.id} value={u.id} disabled={onLeave}>
-                    <span style={{
-                      color: onLeave ? '#ff4d4f' : isCover ? '#52c41a' : undefined,
-                      fontWeight: onLeave || isCover ? 600 : undefined,
-                    }}>
-                      {u.full_name} ({u.employee_id ?? u.role_id})
-                      {onLeave && u.leave_cover ? ` — Cover: ${u.leave_cover.full_name}` : ''}
-                      {onLeave && !u.leave_cover ? ' — On Leave' : ''}
-                      {isCover && u.covering_for ? ` — Covering ${u.covering_for.full_name}` : ''}
-                    </span>
-                  </Select.Option>
-                );
-              })}
+              {elecOptions.map(renderInspectorOption)}
             </Select>
           </Form.Item>
         </Form>
