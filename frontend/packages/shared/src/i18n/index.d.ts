@@ -87,6 +87,7 @@ export declare const resources: {
                 defect_assessments: string;
                 routines: string;
                 quick_links: string;
+                backlog: string;
             };
             status: {
                 active: string;
@@ -262,6 +263,7 @@ export declare const resources: {
                 defect_assessments: string;
                 routines: string;
                 quick_links: string;
+                backlog: string;
             };
             status: {
                 active: string;

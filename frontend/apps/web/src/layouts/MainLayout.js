@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ProLayout } from '@ant-design/pro-layout';
-import { DashboardOutlined, UserOutlined, ToolOutlined, CheckCircleOutlined, ScheduleOutlined, FileTextOutlined, BellOutlined, TrophyOutlined, CalendarOutlined, TeamOutlined, SafetyCertificateOutlined, AuditOutlined, StarOutlined, BarChartOutlined, SettingOutlined, AppstoreOutlined, ExperimentOutlined, PauseCircleOutlined, AlertOutlined, BugOutlined, SyncOutlined, } from '@ant-design/icons';
+import { DashboardOutlined, UserOutlined, ToolOutlined, CheckCircleOutlined, ScheduleOutlined, FileTextOutlined, BellOutlined, TrophyOutlined, CalendarOutlined, TeamOutlined, SafetyCertificateOutlined, AuditOutlined, StarOutlined, BarChartOutlined, SettingOutlined, AppstoreOutlined, ExperimentOutlined, PauseCircleOutlined, AlertOutlined, BugOutlined, SyncOutlined, WarningOutlined, } from '@ant-design/icons';
 import { Badge, Dropdown, Avatar, Space } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../providers/AuthProvider';
@@ -31,6 +31,7 @@ function getMenuItems(role, t) {
         { path: '/admin/bonus-approvals', name: t('nav.bonus_approvals'), icon: _jsx(StarOutlined, {}) },
         { path: '/admin/routines', name: t('nav.routines'), icon: _jsx(SyncOutlined, {}) },
         { path: '/admin/defects', name: t('nav.defects'), icon: _jsx(BugOutlined, {}) },
+        { path: '/admin/backlog', name: t('nav.backlog'), icon: _jsx(WarningOutlined, {}) },
         { path: '/admin/reports', name: t('nav.reports'), icon: _jsx(BarChartOutlined, {}) },
     ];
     const inspectorItems = [

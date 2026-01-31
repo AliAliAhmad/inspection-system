@@ -24,6 +24,7 @@ import {
   AlertOutlined,
   BugOutlined,
   SyncOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { Badge, Dropdown, Avatar, Space, Button } from 'antd';
 import { useQuery } from '@tanstack/react-query';
@@ -55,6 +56,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/bonus-approvals', name: t('nav.bonus_approvals'), icon: <StarOutlined /> },
     { path: '/admin/routines', name: t('nav.routines'), icon: <SyncOutlined /> },
     { path: '/admin/defects', name: t('nav.defects'), icon: <BugOutlined /> },
+    { path: '/admin/backlog', name: t('nav.backlog'), icon: <WarningOutlined /> },
     { path: '/admin/reports', name: t('nav.reports'), icon: <BarChartOutlined /> },
   ];
 

@@ -82,7 +82,8 @@
     "bonus_requests": "طلبات المكافآت",
     "defect_assessments": "تقييمات العيوب",
     "routines": "روتينات الفحص",
-    "quick_links": "وصول سريع"
+    "quick_links": "وصول سريع",
+    "backlog": "عمليات الفحص المتأخرة"
   },
   "status": {
     "active": "نشط",

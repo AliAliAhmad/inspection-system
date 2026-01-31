@@ -82,7 +82,8 @@
     "bonus_requests": "Bonus Requests",
     "defect_assessments": "Defect Assessments",
     "routines": "Inspection Routines",
-    "quick_links": "Quick Access"
+    "quick_links": "Quick Access",
+    "backlog": "Overdue Inspections"
   },
   "status": {
     "active": "Active",

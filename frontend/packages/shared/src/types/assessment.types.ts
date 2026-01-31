@@ -28,6 +28,8 @@ export interface InspectionAssignment {
   shift: 'day' | 'night';
   status: string;
   deadline: string | null;
+  backlog_triggered: boolean;
+  backlog_triggered_at: string | null;
   assigned_at: string | null;
   created_at: string;
 }

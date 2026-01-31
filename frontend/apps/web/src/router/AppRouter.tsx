@@ -28,6 +28,7 @@ const BonusApprovalsPage = lazy(() => import('../pages/admin/BonusApprovalsPage'
 const ReportsPage = lazy(() => import('../pages/admin/ReportsPage'));
 const InspectionRoutinesPage = lazy(() => import('../pages/admin/InspectionRoutinesPage'));
 const DefectsPage = lazy(() => import('../pages/admin/DefectsPage'));
+const BacklogPage = lazy(() => import('../pages/admin/BacklogPage'));
 
 // Inspector pages
 const MyAssignmentsPage = lazy(() => import('../pages/inspector/MyAssignmentsPage'));
@@ -95,6 +96,7 @@ export default function AppRouter() {
             <Route path="reports" element={<RoleGuard roles={['admin']}><ReportsPage /></RoleGuard>} />
             <Route path="routines" element={<RoleGuard roles={['admin']}><InspectionRoutinesPage /></RoleGuard>} />
             <Route path="defects" element={<RoleGuard roles={['admin']}><DefectsPage /></RoleGuard>} />
+            <Route path="backlog" element={<RoleGuard roles={['admin']}><BacklogPage /></RoleGuard>} />
           </Route>
 
           {/* Inspector routes */}
