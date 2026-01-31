@@ -46,6 +46,15 @@ def list_equipment():
     }), 200
 
 
+@bp.route('/types', methods=['GET'])
+@jwt_required()
+def get_equipment_types():
+    """Return distinct equipment types."""
+    rows = db.session.query(Equipment.equipment_type).distinct().order_by(Equipment.equipment_type).all()
+    types = [r[0] for r in rows if r[0]]
+    return jsonify({'status': 'success', 'data': types}), 200
+
+
 @bp.route('/<int:equipment_id>', methods=['GET'])
 @jwt_required()
 def get_equipment(equipment_id):

@@ -20,6 +20,7 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   inspectionRoutinesApi,
   checklistsApi,
+  equipmentApi,
   type InspectionRoutine,
   type CreateRoutinePayload,
   type ChecklistTemplate,
@@ -46,6 +47,12 @@ export default function InspectionRoutinesPage() {
   const { data: templates } = useQuery({
     queryKey: ['checklists', 'all'],
     queryFn: () => checklistsApi.listTemplates({ per_page: 500 }).then(r => r.data.data),
+    enabled: createModalOpen || editModalOpen,
+  });
+
+  const { data: equipmentTypes } = useQuery({
+    queryKey: ['equipment-types'],
+    queryFn: () => equipmentApi.getTypes().then(r => r.data.data),
     enabled: createModalOpen || editModalOpen,
   });
 
@@ -181,7 +188,16 @@ export default function InspectionRoutinesPage() {
         <Input />
       </Form.Item>
       <Form.Item name="asset_types" label={t('routines.assetTypes', 'Asset Types')} rules={[{ required: true }]}>
-        <Select mode="tags" placeholder={t('routines.assetTypesPlaceholder', 'Type and press enter to add')} />
+        <Select
+          mode="multiple"
+          placeholder={t('routines.selectAssetTypes', 'Select equipment types')}
+          showSearch
+          optionFilterProp="children"
+        >
+          {(equipmentTypes || []).map((et: string) => (
+            <Select.Option key={et} value={et}>{et}</Select.Option>
+          ))}
+        </Select>
       </Form.Item>
       <Form.Item name="shift" label={t('routines.shift', 'Shift')} rules={[{ required: true }]}>
         <Select>

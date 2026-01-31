@@ -33,4 +33,8 @@ export const equipmentApi = {
   remove(id: number) {
     return getApiClient().delete<ApiResponse>(`/api/equipment/${id}`);
   },
+
+  getTypes() {
+    return getApiClient().get<ApiResponse<string[]>>('/api/equipment/types');
+  },
 };
