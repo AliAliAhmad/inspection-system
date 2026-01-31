@@ -5,7 +5,7 @@ Triggered daily at 1:00 PM for next shift inspections.
 
 from app.models import (
     InspectionList, InspectionAssignment, InspectionRoutine,
-    Equipment, User, RosterEntry
+    Equipment, User, RosterEntry, Leave
 )
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
@@ -137,14 +137,23 @@ class InspectionListService:
         if assignment.status not in ('unassigned', 'assigned'):
             raise ValidationError("Assignment cannot be reassigned in current status")
 
+        target_date = assignment.inspection_list.target_date
+
         # Validate mechanical inspector
         mech = db.session.get(User, mechanical_inspector_id)
         if not mech or not mech.has_role('inspector'):
             raise ValidationError("Invalid mechanical inspector")
         if mech.specialization != 'mechanical':
             raise ValidationError("Inspector must have mechanical specialization")
-        if mech.is_on_leave:
-            raise ValidationError(f"{mech.full_name} is currently on leave")
+        # Check leave for the assignment date, not today
+        mech_leave = Leave.query.filter(
+            Leave.user_id == mechanical_inspector_id,
+            Leave.status == 'approved',
+            Leave.date_from <= target_date,
+            Leave.date_to >= target_date
+        ).first()
+        if mech_leave:
+            raise ValidationError(f"{mech.full_name} is on leave on {target_date}")
 
         # Validate electrical inspector
         elec = db.session.get(User, electrical_inspector_id)
@@ -152,11 +161,16 @@ class InspectionListService:
             raise ValidationError("Invalid electrical inspector")
         if elec.specialization != 'electrical':
             raise ValidationError("Inspector must have electrical specialization")
-        if elec.is_on_leave:
-            raise ValidationError(f"{elec.full_name} is currently on leave")
+        elec_leave = Leave.query.filter(
+            Leave.user_id == electrical_inspector_id,
+            Leave.status == 'approved',
+            Leave.date_from <= target_date,
+            Leave.date_to >= target_date
+        ).first()
+        if elec_leave:
+            raise ValidationError(f"{elec.full_name} is on leave on {target_date}")
 
         # Validate same shift using roster for the assignment date
-        target_date = assignment.inspection_list.target_date
         mech_roster = RosterEntry.query.filter_by(user_id=mechanical_inspector_id, date=target_date).first()
         elec_roster = RosterEntry.query.filter_by(user_id=electrical_inspector_id, date=target_date).first()
         mech_shift = mech_roster.shift if mech_roster else mech.shift
