@@ -258,7 +258,9 @@ def get_week_roster():
     ).all()
 
     # Build leave lookup: user_id -> set of date strings
+    # Also track coverage info per user
     leave_map = {}
+    leave_coverage_map = {}  # user_id -> { coverage_user_name, coverage_user_role }
     for leave in leaves:
         if leave.user_id not in leave_map:
             leave_map[leave.user_id] = set()
@@ -267,6 +269,14 @@ def get_week_roster():
             leave_map[leave.user_id].add(ld.isoformat())
             ld += timedelta(days=1)
         user_ids.add(leave.user_id)
+        # Store coverage info (latest leave wins if multiple)
+        if leave.coverage_user:
+            leave_coverage_map[leave.user_id] = {
+                'id': leave.coverage_user.id,
+                'full_name': leave.coverage_user.full_name,
+                'role': leave.coverage_user.role,
+                'role_id': leave.coverage_user.role_id,
+            }
 
     # Get all users who have roster entries or leaves in the range
     if user_ids:
@@ -308,7 +318,7 @@ def get_week_roster():
         total_balance = u.annual_leave_balance or 24
         used = leave_used_map.get(u.id, 0)
 
-        result_users.append({
+        user_data = {
             'id': u.id,
             'full_name': u.full_name,
             'role': u.role,
@@ -318,7 +328,12 @@ def get_week_roster():
             'annual_leave_balance': total_balance,
             'leave_used': used,
             'leave_remaining': total_balance - used,
-        })
+        }
+        # Add coverage info if user is on leave
+        if u.id in leave_coverage_map:
+            user_data['leave_cover'] = leave_coverage_map[u.id]
+
+        result_users.append(user_data)
 
     return jsonify({
         'status': 'success',

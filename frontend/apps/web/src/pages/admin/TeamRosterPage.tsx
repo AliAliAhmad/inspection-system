@@ -248,29 +248,36 @@ export default function TeamRosterPage() {
       render: (_: unknown, record: RosterWeekUser) => {
         const leaveUsed = record.leave_used ?? 0;
         const leaveBalance = record.leave_remaining ?? 0;
+        const leaveCover = (record as any).leave_cover;
         return (
           <Space direction="vertical" size={2}>
-            <Text strong>
+            <Text strong style={record.is_on_leave ? { color: '#ff4d4f' } : undefined}>
               {record.full_name}
             </Text>
             <Space size={4}>
               <Tag color={ROLE_COLORS[record.role] ?? 'default'}>{record.role}</Tag>
               {record.specialization && <Tag>{record.specialization}</Tag>}
             </Space>
-            <Space size={8}>
-              <Text type="secondary" style={{ fontSize: 11 }}>
-                Taken: {leaveUsed}
+            {record.is_on_leave && leaveCover ? (
+              <Text style={{ fontSize: 11, color: '#cf1322' }}>
+                Cover: {leaveCover.full_name} ({leaveCover.role_id})
               </Text>
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: leaveBalance === 0 ? '#ff4d4f' : undefined,
-                }}
-                type={leaveBalance === 0 ? undefined : 'secondary'}
-              >
-                Balance: {leaveBalance}
-              </Text>
-            </Space>
+            ) : (
+              <Space size={8}>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Taken: {leaveUsed}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: leaveBalance === 0 ? '#ff4d4f' : undefined,
+                  }}
+                  type={leaveBalance === 0 ? undefined : 'secondary'}
+                >
+                  Balance: {leaveBalance}
+                </Text>
+              </Space>
+            )}
           </Space>
         );
       },
@@ -288,6 +295,15 @@ export default function TeamRosterPage() {
       render: (_: unknown, record: RosterWeekUser) => shiftTag(record.entries[date]),
     })),
   ];
+
+  // Collect IDs of users who are currently covering for someone on leave
+  const coverUserIds = new Set<number>();
+  for (const u of sortedUsers) {
+    const lc = (u as any).leave_cover;
+    if (u.is_on_leave && lc?.id) {
+      coverUserIds.add(lc.id);
+    }
+  }
 
   const isAdmin = currentUser?.role === 'admin';
   const remaining = balanceData?.remaining ?? 0;
@@ -348,7 +364,11 @@ export default function TeamRosterPage() {
             setSelectedUserName(record.full_name);
             setSelectedUserRole(record.role);
           },
-          style: { cursor: 'pointer' },
+          style: {
+            cursor: 'pointer',
+            backgroundColor: record.is_on_leave ? '#fff1f0' : coverUserIds.has(record.id) ? '#f6ffed' : undefined,
+            borderLeft: record.is_on_leave ? '3px solid #ff4d4f' : coverUserIds.has(record.id) ? '3px solid #52c41a' : undefined,
+          },
         })}
       />
 

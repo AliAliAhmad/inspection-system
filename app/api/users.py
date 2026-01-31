@@ -4,6 +4,7 @@ User management endpoints (Admin only).
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
+from sqlalchemy.exc import IntegrityError
 from app.models import User
 from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
@@ -28,17 +29,26 @@ def _generate_role_id(role):
     if not prefix:
         raise ValidationError(f"Unknown role: {role}")
 
-    # Find the highest existing number for this prefix (handles both ADM-001 and ADM001)
-    existing = (
-        User.query
-        .filter(User.role_id.like(f'{prefix}%'))
-        .all()
-    )
+    # Find the highest existing number for this prefix across both role_id and minor_role_id
+    existing_role = User.query.filter(User.role_id.like(f'{prefix}%')).all()
+    existing_minor = User.query.filter(User.minor_role_id.like(f'{prefix}%')).all()
 
     max_num = 0
-    for u in existing:
-        # Strip prefix and optional hyphen, then parse the number
+    for u in existing_role:
         suffix = u.role_id[len(prefix):]
+        if suffix.startswith('-'):
+            suffix = suffix[1:]
+        try:
+            num = int(suffix)
+            if num > max_num:
+                max_num = num
+        except ValueError:
+            continue
+
+    for u in existing_minor:
+        if not u.minor_role_id:
+            continue
+        suffix = u.minor_role_id[len(prefix):]
         if suffix.startswith('-'):
             suffix = suffix[1:]
         try:
@@ -137,8 +147,15 @@ def create_user():
     user.set_password(data['password'])
     
     db.session.add(user)
-    safe_commit()
-    
+    try:
+        safe_commit()
+    except IntegrityError as e:
+        db.session.rollback()
+        error_msg = str(e.orig) if e.orig else str(e)
+        if 'role_id' in error_msg or 'minor_role_id' in error_msg:
+            raise ValidationError("Duplicate employee ID generated. Please try again.")
+        raise ValidationError(f"Database constraint error: {error_msg}")
+
     return jsonify({
         'status': 'success',
         'message': 'User created',
