@@ -160,7 +160,7 @@ export default function InspectionAssignmentsPage() {
     },
   ];
 
-  const lists = data?.data?.data || [];
+  const lists: any[] = data?.data?.data || (data?.data as any)?.data || [];
   const pagination = data?.data?.pagination;
   const inspectors = (inspectorsData?.data as any)?.data || [];
   const mechInspectors = inspectors.filter((u: any) => u.specialization === 'mechanical');
@@ -181,13 +181,13 @@ export default function InspectionAssignmentsPage() {
         dataSource={lists}
         loading={isLoading}
         locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
-        pagination={{
-          current: pagination?.page || page,
-          pageSize: pagination?.per_page || perPage,
-          total: pagination?.total || 0,
+        pagination={pagination ? {
+          current: pagination.page,
+          pageSize: pagination.per_page,
+          total: pagination.total,
           showSizeChanger: true,
           onChange: (p, ps) => { setPage(p); setPerPage(ps); },
-        }}
+        } : false}
         expandable={{
           expandedRowRender: (record: InspectionList) => (
             <Table
