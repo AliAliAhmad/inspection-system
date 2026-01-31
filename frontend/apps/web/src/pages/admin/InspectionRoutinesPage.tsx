@@ -111,7 +111,7 @@ export default function InspectionRoutinesPage() {
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
     {
-      title: t('routines.assetTypes', 'Asset Types'),
+      title: t('routines.equipmentType', 'Equipment Type'),
       dataIndex: 'asset_types',
       key: 'asset_types',
       render: (types: string[]) =>
@@ -187,10 +187,10 @@ export default function InspectionRoutinesPage() {
       <Form.Item name="name_ar" label={t('routines.nameAr', 'Name (Arabic)')}>
         <Input />
       </Form.Item>
-      <Form.Item name="asset_types" label={t('routines.assetTypes', 'Asset Types')} rules={[{ required: true }]}>
+      <Form.Item name="asset_types" label={t('routines.equipmentType', 'Equipment Type')} rules={[{ required: true }]}>
         <Select
           mode="multiple"
-          placeholder={t('routines.selectAssetTypes', 'Select equipment types')}
+          placeholder={t('routines.selectEquipmentType', 'Select equipment type')}
           showSearch
           optionFilterProp="children"
         >
