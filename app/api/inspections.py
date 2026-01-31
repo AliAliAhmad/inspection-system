@@ -208,8 +208,8 @@ def list_inspections():
     
     query = Inspection.query
     
-    # Filter by role
-    if current_user.role == 'technician':
+    # Filter by role — inspectors/specialists see only their own
+    if current_user.role in ('inspector', 'specialist', 'technician'):
         query = query.filter_by(technician_id=current_user.id)
     
     # Apply filters
@@ -251,7 +251,7 @@ def get_inspection(inspection_id):
     current_user = get_current_user()
     
     # Technicians can only see their own
-    if current_user.role == 'technician' and inspection.technician_id != current_user.id:
+    if current_user.role in ('inspector', 'specialist', 'technician') and inspection.technician_id != current_user.id:
         raise ForbiddenError("Access denied")
     
     lang = get_language(current_user)

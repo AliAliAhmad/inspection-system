@@ -4,7 +4,7 @@ This is the heart of the application.
 """
 
 import logging
-from app.models import Inspection, InspectionAnswer, Equipment, ChecklistTemplate, ChecklistItem, User
+from app.models import Inspection, InspectionAnswer, InspectionAssignment, Equipment, ChecklistTemplate, ChecklistItem, User
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime, timedelta
@@ -37,15 +37,23 @@ class InspectionService:
         equipment = db.session.get(Equipment, equipment_id)
         if not equipment:
             raise NotFoundError(f"Equipment with ID {equipment_id} not found")
-        
-        # Validate technician
+
+        # Validate inspector
         technician = db.session.get(User, technician_id)
-        if not technician or technician.role != 'technician':
-            raise ValidationError("Invalid technician")
-        
-        # Check if equipment is assigned to this technician
-        if equipment.assigned_technician_id != technician_id:
-            raise ForbiddenError("Equipment not assigned to this technician")
+        if not technician or not technician.has_role('inspector'):
+            raise ValidationError("Invalid inspector")
+
+        # Check if inspector is assigned to this equipment via InspectionAssignment
+        assignment = InspectionAssignment.query.filter(
+            InspectionAssignment.equipment_id == equipment_id,
+            db.or_(
+                InspectionAssignment.mechanical_inspector_id == technician_id,
+                InspectionAssignment.electrical_inspector_id == technician_id
+            ),
+            InspectionAssignment.status.in_(['assigned', 'in_progress', 'mech_complete', 'elec_complete'])
+        ).first()
+        if not assignment:
+            raise ForbiddenError("You are not assigned to inspect this equipment")
         
         # Check for existing draft inspection
         existing_draft = Inspection.query.filter_by(
@@ -120,12 +128,12 @@ class InspectionService:
         if inspection.status != 'draft':
             raise ValidationError("Cannot modify inspection that is not in draft status")
         
-        # Verify user is the assigned technician (unless admin)
+        # Verify user is the assigned inspector (unless admin)
         if current_user_id:
             user = db.session.get(User, int(current_user_id))
             if user.role != 'admin' and inspection.technician_id != int(current_user_id):
                 raise ForbiddenError("You can only answer your own inspections")
-        
+
         # Validate checklist item exists and belongs to the template
         item = db.session.get(ChecklistItem, checklist_item_id)
         if not item:
