@@ -93,12 +93,11 @@ class InspectionListService:
         db.session.add(inspection_list)
         db.session.flush()
 
-        # Build berth lookup from imported schedule for this day+shift
+        # Build berth lookup from imported schedule (berth is per-equipment, not per day/shift)
         schedule_berth_map = {}
         schedule_entries = InspectionSchedule.query.filter(
             InspectionSchedule.equipment_id.in_([e.id for e in equipment_list]),
-            InspectionSchedule.day_of_week == day_of_week,
-            InspectionSchedule.shift == shift,
+            InspectionSchedule.berth.isnot(None),
             InspectionSchedule.is_active == True,
         ).all()
         for se in schedule_entries:
