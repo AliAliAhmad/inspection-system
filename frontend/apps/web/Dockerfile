@@ -17,8 +17,7 @@ RUN pnpm install --frozen-lockfile
 COPY packages/shared/ packages/shared/
 COPY apps/web/ apps/web/
 
-# Build shared package first, then web
-RUN pnpm --filter @inspection/shared build 2>/dev/null || true
+# Build web (shared package is resolved from source via tsconfig paths)
 RUN pnpm --filter @inspection/web build
 
 # Stage 2: Serve
