@@ -216,11 +216,29 @@ class InspectionListService:
         assignment.deadline = deadline
         assignment.status = 'assigned'
 
+        # Auto-assign same inspector pair to other unassigned equipment at the same berth
+        auto_assigned = []
+        if assignment.berth:
+            same_berth = InspectionAssignment.query.filter(
+                InspectionAssignment.inspection_list_id == assignment.inspection_list_id,
+                InspectionAssignment.berth == assignment.berth,
+                InspectionAssignment.status == 'unassigned',
+                InspectionAssignment.id != assignment.id,
+            ).all()
+            for sa in same_berth:
+                sa.mechanical_inspector_id = mechanical_inspector_id
+                sa.electrical_inspector_id = electrical_inspector_id
+                sa.assigned_by = assigned_by_id
+                sa.assigned_at = datetime.utcnow()
+                sa.deadline = deadline
+                sa.status = 'assigned'
+                auto_assigned.append(sa)
+
         # Update list stats
         il = assignment.inspection_list
         il.assigned_assets = InspectionAssignment.query.filter_by(
             inspection_list_id=il.id
-        ).filter(InspectionAssignment.status != 'unassigned').count() + 1
+        ).filter(InspectionAssignment.status != 'unassigned').count()
 
         if il.assigned_assets >= il.total_assets:
             il.status = 'fully_assigned'
@@ -231,16 +249,21 @@ class InspectionListService:
 
         # Send notifications
         from app.services.notification_service import NotificationService
+        all_assigned = [assignment] + auto_assigned
+        equipment_names = [a.equipment.name for a in all_assigned]
+        notify_msg = f'You have been assigned to inspect: {", ".join(equipment_names)}'
         for user_id in [mechanical_inspector_id, electrical_inspector_id]:
             NotificationService.create_notification(
                 user_id=user_id,
                 type='inspection_assigned',
                 title='New Inspection Assignment',
-                message=f'You have been assigned to inspect {assignment.equipment.name}',
+                message=notify_msg,
                 related_type='inspection_assignment',
                 related_id=assignment.id
             )
 
+        # Attach auto-assigned count for API response (not persisted)
+        assignment._auto_assigned_count = len(auto_assigned)
         return assignment
 
     @staticmethod

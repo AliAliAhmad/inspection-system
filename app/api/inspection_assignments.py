@@ -87,10 +87,16 @@ def assign_team(assignment_id):
         assigned_by_id=int(current_user_id)
     )
 
+    auto_count = getattr(assignment, '_auto_assigned_count', 0)
+    msg = 'Team assigned successfully'
+    if auto_count > 0:
+        msg += f' (also auto-assigned to {auto_count} other equipment at berth {assignment.berth})'
+
     return jsonify({
         'status': 'success',
-        'message': 'Team assigned successfully',
-        'data': assignment.to_dict()
+        'message': msg,
+        'data': assignment.to_dict(),
+        'auto_assigned': auto_count,
     }), 200
 
 

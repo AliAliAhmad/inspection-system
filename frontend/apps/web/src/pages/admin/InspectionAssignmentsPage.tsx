@@ -72,8 +72,13 @@ export default function InspectionAssignmentsPage() {
   const assignMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: AssignTeamPayload }) =>
       inspectionAssignmentsApi.assignTeam(id, payload),
-    onSuccess: () => {
-      message.success(t('assignments.assignSuccess', 'Team assigned successfully'));
+    onSuccess: (res) => {
+      const data = res.data as any;
+      const autoCount = data.auto_assigned || 0;
+      const msg = autoCount > 0
+        ? `Team assigned successfully (also auto-assigned to ${autoCount} other equipment at same berth)`
+        : t('assignments.assignSuccess', 'Team assigned successfully');
+      message.success(msg);
       queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
       setAssignOpen(false);
       setSelectedAssignment(null);
