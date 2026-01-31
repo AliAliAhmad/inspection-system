@@ -20,4 +20,5 @@ export { bonusStarsApi } from './bonus-stars.api';
 export { reportsApi } from './reports.api';
 export { filesApi } from './files.api';
 export { inspectionRoutinesApi } from './inspection-routines.api';
+export { rosterApi } from './roster.api';
 //# sourceMappingURL=index.js.map

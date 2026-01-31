@@ -83,7 +83,8 @@
     "defect_assessments": "Defect Assessments",
     "routines": "Inspection Routines",
     "quick_links": "Quick Access",
-    "backlog": "Overdue Inspections"
+    "backlog": "Overdue Inspections",
+    "roster": "Team Roster"
   },
   "status": {
     "active": "Active",

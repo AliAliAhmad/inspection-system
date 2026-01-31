@@ -72,7 +72,7 @@ def create_app(config_name='development'):
         reports, schedules, ratings, notifications, specialist_jobs,
         inspection_assignments, assessments, defect_assessments,
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
-        files, sync, inspection_routines
+        files, sync, inspection_routines, roster
     )
 
     # Core
@@ -103,6 +103,9 @@ def create_app(config_name='development'):
 
     # Leave management
     app.register_blueprint(leaves.bp, url_prefix='/api/leaves')
+
+    # Team Roster
+    app.register_blueprint(roster.bp, url_prefix='/api/roster')
 
     # Leaderboards & Bonus
     app.register_blueprint(leaderboards.bp, url_prefix='/api/leaderboards')

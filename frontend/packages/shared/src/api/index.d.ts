@@ -40,4 +40,6 @@ export { filesApi } from './files.api';
 export type { FileListParams } from './files.api';
 export { inspectionRoutinesApi } from './inspection-routines.api';
 export type { InspectionRoutine, CreateRoutinePayload, } from './inspection-routines.api';
+export { rosterApi } from './roster.api';
+export type { RosterWeekUser, RosterWeekData, DayAvailabilityData, UploadRosterResult, } from './roster.api';
 //# sourceMappingURL=index.d.ts.map

@@ -83,7 +83,8 @@
     "defect_assessments": "تقييمات العيوب",
     "routines": "روتينات الفحص",
     "quick_links": "وصول سريع",
-    "backlog": "عمليات الفحص المتأخرة"
+    "backlog": "عمليات الفحص المتأخرة",
+    "roster": "قائمة الفريق"
   },
   "status": {
     "active": "نشط",

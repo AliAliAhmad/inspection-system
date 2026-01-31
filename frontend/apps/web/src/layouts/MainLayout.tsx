@@ -43,6 +43,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
   ];
 
   const adminItems: MenuDataItem[] = [
+    { path: '/admin/roster', name: t('nav.roster'), icon: <TeamOutlined /> },
     { path: '/admin/users', name: t('nav.users'), icon: <TeamOutlined /> },
     { path: '/admin/equipment', name: t('nav.equipment'), icon: <ToolOutlined /> },
     { path: '/admin/checklists', name: t('nav.checklists'), icon: <CheckCircleOutlined /> },

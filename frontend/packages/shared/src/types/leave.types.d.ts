@@ -21,6 +21,7 @@ export interface Leave {
     created_at: string;
 }
 export interface LeaveRequestPayload {
+    user_id?: number;
     leave_type: LeaveType;
     date_from: string;
     date_to: string;

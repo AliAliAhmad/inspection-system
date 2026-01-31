@@ -60,6 +60,24 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('inspection_schedules.shift already exists')
+
+    # Create roster_entries table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS roster_entries (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                date DATE NOT NULL,
+                shift VARCHAR(20),
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, date)
+            )
+        '''))
+        db.session.commit()
+        print('Created roster_entries table')
+    except Exception:
+        db.session.rollback()
+        print('roster_entries table already exists')
 "
 
 echo "Starting gunicorn..."

@@ -29,6 +29,9 @@ from app.models.inspection_assignment import InspectionAssignment
 # Leave & Coverage
 from app.models.leave import Leave
 
+# Roster
+from app.models.roster import RosterEntry
+
 # Timer & Takeover
 from app.models.pause_log import PauseLog
 from app.models.job_takeover import JobTakeover
@@ -67,6 +70,7 @@ __all__ = [
     'InspectionList',
     'InspectionAssignment',
     'Leave',
+    'RosterEntry',
     'PauseLog',
     'JobTakeover',
     'BonusStar',

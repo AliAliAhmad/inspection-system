@@ -78,3 +78,10 @@ export type {
   InspectionRoutine,
   CreateRoutinePayload,
 } from './inspection-routines.api';
+export { rosterApi } from './roster.api';
+export type {
+  RosterWeekUser,
+  RosterWeekData,
+  DayAvailabilityData,
+  UploadRosterResult,
+} from './roster.api';

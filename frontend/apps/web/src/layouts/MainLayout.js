@@ -18,6 +18,7 @@ function getMenuItems(role, t) {
         { path: '/profile', name: t('nav.profile'), icon: _jsx(UserOutlined, {}) },
     ];
     const adminItems = [
+        { path: '/admin/roster', name: t('nav.roster'), icon: _jsx(TeamOutlined, {}) },
         { path: '/admin/users', name: t('nav.users'), icon: _jsx(TeamOutlined, {}) },
         { path: '/admin/equipment', name: t('nav.equipment'), icon: _jsx(ToolOutlined, {}) },
         { path: '/admin/checklists', name: t('nav.checklists'), icon: _jsx(CheckCircleOutlined, {}) },

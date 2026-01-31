@@ -45,18 +45,35 @@ def list_leaves():
 @bp.route('', methods=['POST'])
 @jwt_required()
 def request_leave():
-    """Submit a leave request."""
+    """Submit a leave request.
+
+    If caller is admin or engineer, they can specify user_id in the body
+    to create a leave on behalf of another user.
+    If caller is admin, the leave is auto-approved.
+    """
     user = get_current_user()
     data = request.get_json()
 
+    # Determine the target user
+    target_user_id = user.id
+    if data.get('user_id') and user.role in ('admin', 'engineer'):
+        target_user_id = int(data['user_id'])
+
     leave = LeaveService.request_leave(
-        user_id=user.id,
+        user_id=target_user_id,
         leave_type=data['leave_type'],
         date_from=date.fromisoformat(data['date_from']),
         date_to=date.fromisoformat(data['date_to']),
         reason=data['reason'],
         scope=data.get('scope', 'full')
     )
+
+    # If caller is admin, auto-approve the leave
+    if user.role == 'admin':
+        leave = LeaveService.approve_leave(
+            leave_id=leave.id,
+            approved_by=user.id
+        )
 
     # Auto-translate leave reason
     from app.utils.bilingual import auto_translate_and_save

@@ -88,6 +88,7 @@ export declare const resources: {
                 routines: string;
                 quick_links: string;
                 backlog: string;
+                roster: string;
             };
             status: {
                 active: string;
@@ -264,6 +265,7 @@ export declare const resources: {
                 routines: string;
                 quick_links: string;
                 backlog: string;
+                roster: string;
             };
             status: {
                 active: string;
