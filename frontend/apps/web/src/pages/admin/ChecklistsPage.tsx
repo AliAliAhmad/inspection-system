@@ -246,12 +246,6 @@ export default function ChecklistsPage() {
         destroyOnClose
       >
         <Form form={templateForm} layout="vertical" onFinish={(v: CreateTemplatePayload) => createTemplateMutation.mutate(v)}>
-          <Form.Item name="name" label={t('checklists.name', 'Name')} rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="name_ar" label={t('checklists.nameAr', 'Name (Arabic)')}>
-            <Input />
-          </Form.Item>
           <Form.Item name="equipment_type" label={t('checklists.equipmentType', 'Equipment Type')} rules={[{ required: true }]}>
             <Input placeholder="e.g. Centrifugal Pump" />
           </Form.Item>

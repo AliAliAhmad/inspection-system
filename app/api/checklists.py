@@ -48,28 +48,31 @@ def create_template():
     data = request.get_json()
     current_user_id = get_jwt_identity()
     
-    required_fields = ['name', 'equipment_type', 'version']
+    required_fields = ['equipment_type', 'version']
     for field in required_fields:
         if field not in data:
             raise ValidationError(f"{field} is required")
-    
+
     # Check if template with same equipment_type and version exists
     existing = ChecklistTemplate.query.filter_by(
         equipment_type=data['equipment_type'],
         version=data['version']
     ).first()
-    
+
     if existing:
         raise ValidationError(f"Template for {data['equipment_type']} version {data['version']} already exists")
-    
+
+    # Auto-generate name from equipment_type if not provided
+    name = data.get('name') or f"{data['equipment_type']} Checklist v{data['version']}"
+
     # Auto-translate name to Arabic if not provided
     name_ar = data.get('name_ar')
     if not name_ar:
         from app.services.translation_service import TranslationService
-        name_ar = TranslationService.translate_to_arabic(data['name'])
+        name_ar = TranslationService.translate_to_arabic(name)
 
     template = ChecklistTemplate(
-        name=data['name'],
+        name=name,
         name_ar=name_ar,
         equipment_type=data['equipment_type'],
         version=data['version'],
