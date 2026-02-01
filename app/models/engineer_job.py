@@ -91,6 +91,13 @@ class EngineerJob(db.Model):
         ),
     )
 
+    def has_pending_pause(self):
+        """Check if there is a pending pause request for this job"""
+        from app.models.pause_log import PauseLog
+        return PauseLog.query.filter_by(
+            job_type='engineer', job_id=self.id, status='pending'
+        ).first() is not None
+
     def calculate_time_rating(self):
         """Same rating logic as specialist jobs."""
         if not self.planned_time_hours or not self.actual_time_hours:
@@ -138,6 +145,8 @@ class EngineerJob(db.Model):
             'qc_rating': float(self.qc_rating) if self.qc_rating else None,
             'admin_bonus': self.admin_bonus,
             'qe_id': self.qe_id,
+            'is_running': self.status == 'in_progress' and self.started_at is not None and not self.has_pending_pause(),
+            'has_pending_pause': self.has_pending_pause(),
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

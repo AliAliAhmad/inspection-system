@@ -361,8 +361,20 @@ export default function SpecialistJobDetailScreen() {
           </TouchableOpacity>
         )}
 
+        {/* In progress — waiting for pause approval */}
+        {jobData.status === 'in_progress' && jobData.has_pending_pause && (
+          <View style={styles.pausedInfoBox}>
+            <Text style={styles.pausedInfoText}>
+              {t('jobs.waiting_approval', 'Waiting for Pause Approval')}
+            </Text>
+            <Text style={{ color: '#616161', fontSize: 13, marginTop: 4 }}>
+              {t('jobs.waiting_approval_desc', 'Your pause request has been submitted. Timer is stopped until an admin or engineer reviews your request.')}
+            </Text>
+          </View>
+        )}
+
         {/* In progress actions */}
-        {jobData.status === 'in_progress' && (
+        {jobData.status === 'in_progress' && !jobData.has_pending_pause && (
           <>
             <TouchableOpacity
               style={[styles.actionButton, styles.pauseButton]}

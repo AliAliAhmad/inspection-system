@@ -422,8 +422,20 @@ export default function SpecialistJobDetailPage() {
           />
         )}
 
+        {/* In Progress — Waiting for Pause Approval */}
+        {job.status === 'in_progress' && job.has_pending_pause && (
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Alert
+              type="info"
+              message={t('jobs.waiting_approval', 'Waiting for Pause Approval')}
+              description={t('jobs.waiting_approval_desc', 'Your pause request has been submitted. Timer is stopped until an admin or engineer reviews your request.')}
+              showIcon
+            />
+          </Space>
+        )}
+
         {/* In Progress (running) */}
-        {job.status === 'in_progress' && job.is_running && (
+        {job.status === 'in_progress' && job.is_running && !job.has_pending_pause && (
           <Space direction="vertical" size="large" style={{ width: '100%' }}>
             {/* Live timer */}
             <div style={{ textAlign: 'center' }}>

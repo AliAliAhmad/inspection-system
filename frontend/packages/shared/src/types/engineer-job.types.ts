@@ -23,6 +23,8 @@ export interface EngineerJob {
   qc_rating: number | null;
   admin_bonus: number;
   qe_id: number | null;
+  is_running?: boolean;
+  has_pending_pause?: boolean;
   created_at: string;
 }
 

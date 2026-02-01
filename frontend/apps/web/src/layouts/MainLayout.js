@@ -30,6 +30,7 @@ function getMenuItems(role, t) {
         { path: '/admin/quality-reviews', name: t('nav.quality_reviews'), icon: _jsx(AuditOutlined, {}) },
         { path: '/admin/leave-approvals', name: t('nav.leave_approvals'), icon: _jsx(SafetyCertificateOutlined, {}) },
         { path: '/admin/bonus-approvals', name: t('nav.bonus_approvals'), icon: _jsx(StarOutlined, {}) },
+        { path: '/admin/pause-approvals', name: t('nav.pause_approvals'), icon: _jsx(PauseCircleOutlined, {}) },
         { path: '/admin/routines', name: t('nav.routines'), icon: _jsx(SyncOutlined, {}) },
         { path: '/admin/defects', name: t('nav.defects'), icon: _jsx(BugOutlined, {}) },
         { path: '/admin/backlog', name: t('nav.backlog'), icon: _jsx(WarningOutlined, {}) },
@@ -85,7 +86,7 @@ export default function MainLayout() {
         { key: 'logout', label: t('auth.logout'), danger: true },
     ];
     return (_jsx(ProLayout, { title: t('common.app_title'), layout: "mix", fixSiderbar: true, collapsed: collapsed, onCollapse: setCollapsed, location: { pathname: location.pathname }, menuDataRender: () => menuItems, menuItemRender: (item, dom) => (_jsx("div", { onClick: () => item.path && navigate(item.path), children: dom })), actionsRender: () => [
-            _jsx(Badge, { count: unreadCount, size: "small", children: _jsx(BellOutlined, { style: { fontSize: 18 }, onClick: () => navigate('/notifications') }) }, "notifications"),
+            _jsx("div", { onClick: () => navigate('/notifications'), style: { cursor: 'pointer', padding: '4px 8px', display: 'inline-flex', alignItems: 'center' }, children: _jsx(Badge, { count: unreadCount, size: "small", children: _jsx(BellOutlined, { style: { fontSize: 20 } }) }) }, "notifications"),
             _jsx(Dropdown, { menu: {
                     items: userMenuItems,
                     onClick: ({ key }) => {

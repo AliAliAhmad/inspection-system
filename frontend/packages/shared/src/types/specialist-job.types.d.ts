@@ -27,10 +27,11 @@ export interface SpecialistJob {
     qe_id?: number | null;
     is_running?: boolean;
     is_paused?: boolean;
+    has_pending_pause?: boolean;
     wrong_finding_reason?: string | null;
     wrong_finding_photo?: string | null;
 }
-export type PauseCategory = 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'other';
+export type PauseCategory = 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'error_record' | 'other';
 export interface PauseLog {
     id: number;
     job_type: string;

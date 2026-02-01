@@ -99,6 +99,7 @@ export default function AppRouter() {
             <Route path="defects" element={<RoleGuard roles={['admin']}><DefectsPage /></RoleGuard>} />
             <Route path="backlog" element={<RoleGuard roles={['admin']}><BacklogPage /></RoleGuard>} />
             <Route path="roster" element={<RoleGuard roles={['admin', 'engineer']}><TeamRosterPage /></RoleGuard>} />
+            <Route path="pause-approvals" element={<RoleGuard roles={['admin']}><PauseApprovalsPage /></RoleGuard>} />
           </Route>
 
           {/* Inspector routes */}

@@ -29,6 +29,7 @@ export interface SpecialistJob {
   qe_id?: number | null;
   is_running?: boolean;
   is_paused?: boolean;
+  has_pending_pause?: boolean;
   wrong_finding_reason?: string | null;
   wrong_finding_photo?: string | null;
 }

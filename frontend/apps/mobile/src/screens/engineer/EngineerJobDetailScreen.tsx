@@ -245,8 +245,8 @@ export default function EngineerJobDetailScreen() {
         </View>
       </View>
 
-      {/* Timer for in_progress */}
-      {job.status === 'in_progress' && (
+      {/* Timer for in_progress (hidden when waiting for pause approval) */}
+      {job.status === 'in_progress' && !job.has_pending_pause && (
         <View style={styles.timerSection}>
           <Text style={styles.timerLabel}>{t('common.elapsed_time', 'Elapsed Time')}</Text>
           <Text style={styles.timerValue}>{elapsed}</Text>
@@ -362,7 +362,20 @@ export default function EngineerJobDetailScreen() {
         </View>
       )}
 
-      {job.status === 'in_progress' && (
+      {job.status === 'in_progress' && job.has_pending_pause && (
+        <View style={styles.actionsSection}>
+          <View style={{ backgroundColor: '#E3F2FD', borderRadius: 10, padding: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: '#1565C0' }}>
+              {t('jobs.waiting_approval', 'Waiting for Pause Approval')}
+            </Text>
+            <Text style={{ color: '#616161', fontSize: 13, marginTop: 4 }}>
+              {t('jobs.waiting_approval_desc', 'Your pause request has been submitted. Timer is stopped until an admin or engineer reviews your request.')}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {job.status === 'in_progress' && !job.has_pending_pause && (
         <View style={styles.actionsSection}>
           <TouchableOpacity
             style={[styles.actionButton, styles.secondaryButton]}

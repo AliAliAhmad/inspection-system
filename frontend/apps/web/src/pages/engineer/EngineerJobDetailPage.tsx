@@ -236,7 +236,7 @@ export default function EngineerJobDetailPage() {
               </Button>
             </>
           )}
-          {job.status === 'in_progress' && (
+          {job.status === 'in_progress' && !job.has_pending_pause && (
             <>
               <Button
                 icon={<PauseCircleOutlined />}
@@ -256,8 +256,20 @@ export default function EngineerJobDetailPage() {
         </Space>
       </Space>
 
+      {/* Waiting for Pause Approval */}
+      {job.status === 'in_progress' && job.has_pending_pause && (
+        <Card style={{ marginBottom: 16 }}>
+          <Alert
+            type="info"
+            message={t('jobs.waiting_approval', 'Waiting for Pause Approval')}
+            description={t('jobs.waiting_approval_desc', 'Your pause request has been submitted. Timer is stopped until an admin or engineer reviews your request.')}
+            showIcon
+          />
+        </Card>
+      )}
+
       {/* Live timer for in_progress */}
-      {job.status === 'in_progress' && (
+      {job.status === 'in_progress' && !job.has_pending_pause && (
         <Card style={{ marginBottom: 16, textAlign: 'center' }}>
           <Statistic
             title={t('jobs.elapsed_time', 'Elapsed Time')}

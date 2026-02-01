@@ -55,6 +55,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/quality-reviews', name: t('nav.quality_reviews'), icon: <AuditOutlined /> },
     { path: '/admin/leave-approvals', name: t('nav.leave_approvals'), icon: <SafetyCertificateOutlined /> },
     { path: '/admin/bonus-approvals', name: t('nav.bonus_approvals'), icon: <StarOutlined /> },
+    { path: '/admin/pause-approvals', name: t('nav.pause_approvals'), icon: <PauseCircleOutlined /> },
     { path: '/admin/routines', name: t('nav.routines'), icon: <SyncOutlined /> },
     { path: '/admin/defects', name: t('nav.defects'), icon: <BugOutlined /> },
     { path: '/admin/backlog', name: t('nav.backlog'), icon: <WarningOutlined /> },

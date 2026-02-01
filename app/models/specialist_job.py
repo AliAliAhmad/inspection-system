@@ -124,9 +124,16 @@ class SpecialistJob(db.Model):
         """Check if specialist can view full job details"""
         return self.has_planned_time()
 
+    def has_pending_pause(self):
+        """Check if there is a pending pause request for this job"""
+        from app.models.pause_log import PauseLog
+        return PauseLog.query.filter_by(
+            job_type='specialist', job_id=self.id, status='pending'
+        ).first() is not None
+
     def is_running(self):
-        """Check if timer is currently running"""
-        return self.status == 'in_progress' and self.started_at and not self.completed_at
+        """Check if timer is currently running (stops on pending pause)"""
+        return self.status == 'in_progress' and self.started_at and not self.completed_at and not self.has_pending_pause()
 
     def is_paused(self):
         """Check if job is currently paused"""
@@ -225,6 +232,7 @@ class SpecialistJob(db.Model):
                 'qe_id': self.qe_id,
                 'is_running': self.is_running(),
                 'is_paused': self.is_paused(),
+                'has_pending_pause': self.has_pending_pause(),
             })
 
         return data
