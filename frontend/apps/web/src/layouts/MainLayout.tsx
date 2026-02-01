@@ -32,6 +32,7 @@ import { useAuth } from '../providers/AuthProvider';
 import { useLanguage } from '../providers/LanguageProvider';
 import { useTranslation } from 'react-i18next';
 import { notificationsApi } from '@inspection/shared';
+import { useNotificationAlerts } from '../hooks/useNotificationAlerts';
 
 function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] {
   const shared: MenuDataItem[] = [
@@ -101,6 +102,8 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+
+  useNotificationAlerts({ user, navigate });
 
   const { data: unreadData } = useQuery({
     queryKey: ['notifications', 'unread-count'],
