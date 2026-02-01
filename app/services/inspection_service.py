@@ -155,10 +155,9 @@ class InspectionService:
         # Validate answer based on type
         InspectionService._validate_answer_value(item.answer_type, answer_value)
         
-        # Check if critical failure requires photo
-        if item.critical_failure and answer_value.lower() == 'fail' and not photo_path:
-            raise ValidationError("Photo is required for critical failures")
-        
+        # Note: critical failure photo requirement is enforced at submit time,
+        # not at answer time, so inspectors can mark fail and upload photo after.
+
         # Check if answer already exists
         existing_answer = InspectionAnswer.query.filter_by(
             inspection_id=inspection_id,
