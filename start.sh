@@ -10,7 +10,7 @@ fi
 export FLASK_APP="app:create_app('production')"
 
 echo "Running database migrations..."
-flask db upgrade
+flask db upgrade || echo "WARNING: Migration failed, continuing with schema patches..."
 
 echo "Applying schema patches..."
 python -c "
@@ -127,6 +127,15 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('annual_leave_balance column already exists')
+
+    # Add voice_note_id column to inspection_answers
+    try:
+        db.session.execute(text('ALTER TABLE inspection_answers ADD COLUMN voice_note_id INTEGER REFERENCES files(id)'))
+        db.session.commit()
+        print('Added voice_note_id column to inspection_answers')
+    except Exception:
+        db.session.rollback()
+        print('inspection_answers.voice_note_id already exists')
 "
 
 echo "Starting gunicorn..."
