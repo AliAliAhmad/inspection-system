@@ -30,3 +30,13 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 *.log
+
+# TypeScript compiled output in source dirs (built from source on deploy)
+frontend/apps/web/src/**/*.js
+frontend/apps/web/src/**/*.js.map
+frontend/apps/web/src/**/*.d.ts
+frontend/apps/web/src/**/*.d.ts.map
+frontend/packages/shared/src/**/*.js
+frontend/packages/shared/src/**/*.js.map
+frontend/packages/shared/src/**/*.d.ts
+frontend/packages/shared/src/**/*.d.ts.map

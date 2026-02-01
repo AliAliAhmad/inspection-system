@@ -1,1 +1,0 @@
-{"version":3,"file":"useNotificationAlerts.d.ts","sourceRoot":"","sources":["useNotificationAlerts.ts"],"names":[],"mappings":"AAwGA,UAAU,4BAA4B;IACpC,IAAI,EAAE;QAAE,IAAI,EAAE,MAAM,CAAA;KAAE,GAAG,IAAI,CAAC;IAC9B,QAAQ,EAAE,CAAC,IAAI,EAAE,MAAM,KAAK,IAAI,CAAC;CAClC;AAED,wBAAgB,qBAAqB,CAAC,EAAE,IAAI,EAAE,QAAQ,EAAE,EAAE,4BAA4B,QAgGrF"}
