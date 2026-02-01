@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
 import LeaveApprovalsTab from './LeaveApprovalsPage';
 import BonusApprovalsTab from './BonusApprovalsPage';
-import PauseApprovalsTab from './PauseApprovalsPage';
+import PauseApprovalsTab from '../engineer/PauseApprovalsPage';
 
 const TAB_KEYS = ['leaves', 'bonus', 'pauses'] as const;
 
