@@ -21,7 +21,11 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
   const [transcribing, setTranscribing] = useState(false);
   const [enText, setEnText] = useState<string | null>(null);
   const [arText, setArText] = useState<string | null>(null);
+  const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [transcriptionFailed, setTranscriptionFailed] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   const startRecording = useCallback(async () => {
     try {
@@ -41,7 +45,7 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
       );
       recordingRef.current = rec;
       setRecording(true);
-    } catch (err) {
+    } catch {
       Alert.alert('Error', 'Failed to start recording');
     }
   }, []);
@@ -51,6 +55,7 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
 
     setRecording(false);
     setTranscribing(true);
+    setTranscriptionFailed(false);
 
     try {
       await recordingRef.current.stopAndUnloadAsync();
@@ -62,23 +67,35 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
         return;
       }
 
+      // Save URI for local playback
+      setAudioUri(uri);
+
       // Read the file and create a blob
       const response = await fetch(uri);
       const blob = await response.blob();
 
       const result = await voiceApi.transcribe(blob);
-      setEnText(result.en);
-      setArText(result.ar);
 
-      // Set the input value
-      const text = result.en || result.ar || '';
-      if (inputProps.onChangeText) {
-        inputProps.onChangeText(text);
+      if (result.transcription_failed) {
+        setTranscriptionFailed(true);
+        setEnText(null);
+        setArText(null);
+        Alert.alert('Voice Saved', 'Recording saved but transcription failed. You can type manually.');
+      } else {
+        setEnText(result.en);
+        setArText(result.ar);
+
+        // Set the input value
+        const text = result.en || result.ar || '';
+        if (inputProps.onChangeText) {
+          inputProps.onChangeText(text);
+        }
+
+        onTranscribed?.(result.en, result.ar);
       }
-
-      onTranscribed?.(result.en, result.ar);
     } catch {
-      Alert.alert('Error', 'Transcription failed');
+      setTranscriptionFailed(true);
+      Alert.alert('Voice Saved', 'Recording saved but transcription failed.');
     } finally {
       setTranscribing(false);
     }
@@ -91,6 +108,44 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
       startRecording();
     }
   }, [recording, startRecording, stopRecording]);
+
+  const playAudio = useCallback(async () => {
+    if (!audioUri) return;
+
+    try {
+      // Stop any existing playback
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+
+      const { sound } = await Audio.Sound.createAsync({ uri: audioUri });
+      soundRef.current = sound;
+      setPlaying(true);
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setPlaying(false);
+        }
+      });
+
+      await sound.playAsync();
+    } catch {
+      setPlaying(false);
+    }
+  }, [audioUri]);
+
+  const stopAudio = useCallback(async () => {
+    if (soundRef.current) {
+      await soundRef.current.stopAsync();
+      setPlaying(false);
+    }
+  }, []);
 
   return (
     <View>
@@ -113,9 +168,32 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
       </View>
 
       {transcribing && (
-        <Text style={styles.statusText}>Transcribing...</Text>
+        <Text style={styles.statusText}>Saving &amp; transcribing...</Text>
       )}
 
+      {/* Audio playback button */}
+      {audioUri && !recording && !transcribing && (
+        <TouchableOpacity
+          style={styles.audioPlayerRow}
+          onPress={playing ? stopAudio : playAudio}
+        >
+          <Text style={styles.playIcon}>{playing ? '⏹' : '▶️'}</Text>
+          <Text style={styles.audioLabel}>
+            {playing ? 'Stop playback' : 'Play voice recording'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Transcription failure notice */}
+      {transcriptionFailed && !transcribing && (
+        <View style={styles.warningBox}>
+          <Text style={styles.warningText}>
+            Transcription failed — voice recording saved. Type your note manually.
+          </Text>
+        </View>
+      )}
+
+      {/* Transcription results */}
       {(enText || arText) && !transcribing && (
         <View style={styles.translationBox}>
           {enText ? <Text style={styles.translationLine}>EN: {enText}</Text> : null}
@@ -160,6 +238,36 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     marginTop: 4,
+  },
+  audioPlayerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    padding: 8,
+    backgroundColor: '#f0f5ff',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#d6e4ff',
+  },
+  playIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  audioLabel: {
+    fontSize: 12,
+    color: '#1677ff',
+  },
+  warningBox: {
+    marginTop: 4,
+    padding: 6,
+    backgroundColor: '#fffbe6',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#ffe58f',
+  },
+  warningText: {
+    fontSize: 11,
+    color: '#ad6800',
   },
   translationBox: {
     marginTop: 6,

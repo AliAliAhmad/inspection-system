@@ -16,7 +16,7 @@ from app.exceptions.api_exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'webm', 'wav', 'mp3', 'ogg', 'm4a', 'mp4'}
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
 
 # Magic bytes for MIME type validation
@@ -27,6 +27,10 @@ MAGIC_BYTES = {
     'gif': [(b'GIF87a',), (b'GIF89a',)],
     'webp': [(b'RIFF', b'WEBP')],  # RIFF....WEBP
     'pdf': [(b'%PDF',)],
+    'wav': [(b'RIFF',)],
+    'mp3': [(b'\xff\xfb',), (b'\xff\xf3',), (b'\xff\xf2',), (b'ID3',)],
+    'ogg': [(b'OggS',)],
+    # webm, m4a, mp4 use container formats with variable headers — skip magic check
 }
 
 

@@ -1,14 +1,17 @@
 """
 Voice transcription and translation API endpoints.
-Records audio → Whisper transcription → bilingual output (EN + AR).
+Records audio → saves file permanently → Whisper transcription → bilingual output (EN + AR).
+The audio file is always saved even if transcription fails.
 """
 
 import os
 import tempfile
 import logging
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.translation_service import TranslationService
+from app.services.file_service import FileService
+from app.extensions import db
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +22,18 @@ bp = Blueprint('voice', __name__)
 @jwt_required()
 def transcribe():
     """
-    Transcribe an audio file and return both English and Arabic text.
+    Save an audio recording and transcribe it to both English and Arabic text.
 
-    Accepts: multipart/form-data with an 'audio' file field.
-    Returns: { "status": "success", "data": { "en": "...", "ar": "...", "detected_language": "en|ar" } }
+    Accepts: multipart/form-data with 'audio' file field.
+             Optional: 'related_type', 'related_id' for linking the audio to an entity.
+    Returns: {
+        "status": "success",
+        "data": {
+            "en": "...", "ar": "...", "detected_language": "en|ar",
+            "audio_file": { file record dict },
+            "transcription_failed": false
+        }
+    }
     """
     if 'audio' not in request.files:
         return jsonify({'status': 'error', 'message': 'No audio file provided'}), 400
@@ -31,56 +42,102 @@ def transcribe():
     if not audio_file.filename:
         return jsonify({'status': 'error', 'message': 'Empty audio file'}), 400
 
+    user_id = get_jwt_identity()
+    related_type = request.form.get('related_type')
+    related_id = request.form.get('related_id')
+    if related_id:
+        try:
+            related_id = int(related_id)
+        except (ValueError, TypeError):
+            related_id = None
+
+    # --- 1. Save the audio file permanently ---
+    audio_file_record = None
+    try:
+        # Ensure filename has an extension
+        filename = audio_file.filename or 'recording.webm'
+        if '.' not in filename:
+            filename = filename + '.webm'
+        audio_file.filename = filename
+
+        audio_file_record = FileService.upload_file(
+            file=audio_file,
+            uploaded_by=user_id,
+            related_type=related_type,
+            related_id=related_id,
+            category='voice_notes',
+        )
+        logger.info("Voice recording saved: file_id=%s user_id=%s", audio_file_record.id, user_id)
+    except Exception as e:
+        logger.error("Failed to save voice recording: %s", e)
+        # Continue to try transcription even if file save fails
+
+    # --- 2. Attempt transcription ---
+    en_text = ''
+    ar_text = ''
+    detected_language = 'unknown'
+    transcription_failed = False
+
     try:
         from openai import OpenAI
 
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
-            return jsonify({'status': 'error', 'message': 'Transcription service not configured'}), 503
+            transcription_failed = True
+            logger.warning("Transcription skipped: OPENAI_API_KEY not configured")
+        else:
+            client = OpenAI(api_key=api_key)
 
-        client = OpenAI(api_key=api_key)
+            # We need to read from the saved file (audio_file stream was consumed by upload)
+            if audio_file_record and os.path.exists(audio_file_record.file_path):
+                source_path = audio_file_record.file_path
+            else:
+                # Fallback: re-read from request if file save failed
+                audio_file.seek(0)
+                suffix = _get_suffix(audio_file.filename or 'audio.webm')
+                tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+                audio_file.save(tmp)
+                tmp.close()
+                source_path = tmp.name
 
-        # Save to temp file (Whisper needs a file-like with a name)
-        suffix = _get_suffix(audio_file.filename or 'audio.webm')
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            audio_file.save(tmp)
-            tmp_path = tmp.name
+            try:
+                with open(source_path, 'rb') as f:
+                    transcript = client.audio.transcriptions.create(
+                        model='whisper-1',
+                        file=f,
+                        response_format='verbose_json',
+                    )
 
-        try:
-            with open(tmp_path, 'rb') as f:
-                transcript = client.audio.transcriptions.create(
-                    model='whisper-1',
-                    file=f,
-                    response_format='verbose_json',
-                )
+                text = transcript.text.strip() if transcript.text else ''
+                detected_language = getattr(transcript, 'language', None) or 'unknown'
 
-            text = transcript.text.strip() if transcript.text else ''
-            detected_language = getattr(transcript, 'language', None) or 'unknown'
+                if text:
+                    result = TranslationService.auto_translate(text)
+                    en_text = result.get('en') or text
+                    ar_text = result.get('ar') or text
 
-            if not text:
-                return jsonify({
-                    'status': 'success',
-                    'data': {'en': '', 'ar': '', 'detected_language': detected_language}
-                }), 200
-
-            # Translate to both languages
-            result = TranslationService.auto_translate(text)
-
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'en': result.get('en') or text,
-                    'ar': result.get('ar') or text,
-                    'detected_language': detected_language,
-                }
-            }), 200
-
-        finally:
-            os.unlink(tmp_path)
+            finally:
+                # Clean up temp file if we created one
+                if not audio_file_record or not os.path.exists(audio_file_record.file_path):
+                    try:
+                        os.unlink(source_path)
+                    except OSError:
+                        pass
 
     except Exception as e:
-        logger.error(f'Voice transcription failed: {e}')
-        return jsonify({'status': 'error', 'message': 'Transcription failed'}), 500
+        logger.error("Voice transcription failed: %s", e)
+        transcription_failed = True
+
+    # --- 3. Build response ---
+    response_data = {
+        'en': en_text,
+        'ar': ar_text,
+        'detected_language': detected_language,
+        'transcription_failed': transcription_failed,
+        'audio_file': audio_file_record.to_dict() if audio_file_record else None,
+    }
+
+    return jsonify({'status': 'success', 'data': response_data}), 200
 
 
 @bp.route('/translate', methods=['POST'])

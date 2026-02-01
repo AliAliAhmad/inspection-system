@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { Input, Button, Space, Typography, Spin, message } from 'antd';
-import { AudioOutlined, LoadingOutlined } from '@ant-design/icons';
+import { AudioOutlined, LoadingOutlined, SoundOutlined } from '@ant-design/icons';
 import { voiceApi } from '@inspection/shared';
 import type { TextAreaProps } from 'antd/es/input';
 
@@ -9,13 +9,22 @@ interface VoiceTextAreaProps extends TextAreaProps {
   onTranscribed?: (en: string, ar: string) => void;
 }
 
+/** Build full URL for a backend download path */
+function getAudioUrl(downloadPath: string): string {
+  const base = (import.meta as any).env?.VITE_API_URL || '';
+  return base + downloadPath;
+}
+
 export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: VoiceTextAreaProps) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [enText, setEnText] = useState<string | null>(null);
   const [arText, setArText] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [transcriptionFailed, setTranscriptionFailed] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const localBlobUrlRef = useRef<string | null>(null);
 
   const startRecording = useCallback(async () => {
     try {
@@ -37,24 +46,45 @@ export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: Voice
           return;
         }
 
+        // Create a local blob URL for immediate playback
+        if (localBlobUrlRef.current) URL.revokeObjectURL(localBlobUrlRef.current);
+        const blobUrl = URL.createObjectURL(blob);
+        localBlobUrlRef.current = blobUrl;
+        setAudioUrl(blobUrl);
+
         setTranscribing(true);
+        setTranscriptionFailed(false);
         try {
           const result = await voiceApi.transcribe(blob);
-          setEnText(result.en);
-          setArText(result.ar);
 
-          // Set the textarea value via onChange simulation
-          if (textAreaProps.onChange) {
-            const combined = result.en || result.ar || '';
-            const syntheticEvent = {
-              target: { value: combined },
-            } as React.ChangeEvent<HTMLTextAreaElement>;
-            textAreaProps.onChange(syntheticEvent);
+          // Use server download URL if available, keep local blob as fallback
+          if (result.audio_file?.download_url) {
+            setAudioUrl(getAudioUrl(result.audio_file.download_url));
           }
 
-          onTranscribed?.(result.en, result.ar);
+          if (result.transcription_failed) {
+            setTranscriptionFailed(true);
+            setEnText(null);
+            setArText(null);
+            message.warning('Voice saved but transcription failed. You can re-record or type manually.');
+          } else {
+            setEnText(result.en);
+            setArText(result.ar);
+
+            // Set the textarea value
+            if (textAreaProps.onChange) {
+              const combined = result.en || result.ar || '';
+              const syntheticEvent = {
+                target: { value: combined },
+              } as React.ChangeEvent<HTMLTextAreaElement>;
+              textAreaProps.onChange(syntheticEvent);
+            }
+
+            onTranscribed?.(result.en, result.ar);
+          }
         } catch {
-          message.error('Transcription failed');
+          setTranscriptionFailed(true);
+          message.warning('Voice saved but transcription failed.');
         } finally {
           setTranscribing(false);
         }
@@ -99,10 +129,47 @@ export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: Voice
 
       {transcribing && (
         <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
-          <Spin size="small" /> Transcribing...
+          <Spin size="small" /> Saving &amp; transcribing...
         </div>
       )}
 
+      {/* Audio player — always shown when a recording exists */}
+      {audioUrl && !recording && !transcribing && (
+        <div
+          style={{
+            marginTop: 6,
+            padding: '6px 10px',
+            background: '#f0f5ff',
+            borderRadius: 4,
+            border: '1px solid #d6e4ff',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <SoundOutlined style={{ color: '#1677ff', fontSize: 14 }} />
+          <audio controls src={audioUrl} style={{ height: 32, flex: 1 }} preload="metadata" />
+        </div>
+      )}
+
+      {/* Transcription failure notice */}
+      {transcriptionFailed && !transcribing && (
+        <div
+          style={{
+            marginTop: 4,
+            padding: '4px 10px',
+            background: '#fffbe6',
+            borderRadius: 4,
+            border: '1px solid #ffe58f',
+            fontSize: 12,
+            color: '#ad6800',
+          }}
+        >
+          Transcription failed — voice recording saved. You can type your note manually.
+        </div>
+      )}
+
+      {/* Transcription results */}
       {(enText || arText) && !transcribing && (
         <div
           style={{
