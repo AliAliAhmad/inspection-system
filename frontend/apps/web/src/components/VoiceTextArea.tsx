@@ -60,9 +60,12 @@ export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: Voice
             setEnText(result.en);
             setArText(result.ar);
 
-            // Set the textarea value
+            // Put both languages into the textarea
             if (textAreaProps.onChange) {
-              const combined = result.en || result.ar || '';
+              const parts: string[] = [];
+              if (result.en) parts.push(`EN: ${result.en}`);
+              if (result.ar) parts.push(`AR: ${result.ar}`);
+              const combined = parts.join('\n');
               const syntheticEvent = {
                 target: { value: combined },
               } as React.ChangeEvent<HTMLTextAreaElement>;

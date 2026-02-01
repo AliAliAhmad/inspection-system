@@ -85,10 +85,13 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
         setEnText(result.en);
         setArText(result.ar);
 
-        // Set the input value
-        const text = result.en || result.ar || '';
+        // Put both languages into the input
+        const parts: string[] = [];
+        if (result.en) parts.push(`EN: ${result.en}`);
+        if (result.ar) parts.push(`AR: ${result.ar}`);
+        const combined = parts.join('\n');
         if (inputProps.onChangeText) {
-          inputProps.onChangeText(text);
+          inputProps.onChangeText(combined);
         }
 
         onTranscribed?.(result.en, result.ar);
