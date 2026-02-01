@@ -18,5 +18,11 @@ export const engineerJobsApi = {
     complete(jobId, payload) {
         return getApiClient().post(`/api/engineer-jobs/${jobId}/complete`, payload);
     },
+    requestPause(jobId, payload) {
+        return getApiClient().post(`/api/engineer-jobs/${jobId}/pause`, payload);
+    },
+    getPauseHistory(jobId) {
+        return getApiClient().get(`/api/engineer-jobs/${jobId}/pause-history`);
+    },
 };
 //# sourceMappingURL=engineer-jobs.api.js.map

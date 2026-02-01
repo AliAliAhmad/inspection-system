@@ -15,6 +15,7 @@ import {
   Spin,
   Alert,
   Statistic,
+  Timeline,
   message,
 } from 'antd';
 import {
@@ -22,6 +23,7 @@ import {
   ClockCircleOutlined,
   PlayCircleOutlined,
   CheckCircleOutlined,
+  PauseCircleOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -29,6 +31,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   engineerJobsApi,
   EngineerJob,
+  PauseLog,
+  PauseCategory,
   formatDateTime,
   formatHours,
 } from '@inspection/shared';
@@ -42,6 +46,16 @@ const STATUS_COLOR: Record<string, string> = {
   qc_approved: 'green',
 };
 
+const PAUSE_CATEGORIES: PauseCategory[] = [
+  'parts',
+  'duty_finish',
+  'tools',
+  'manpower',
+  'oem',
+  'error_record',
+  'other',
+];
+
 export default function EngineerJobDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -50,6 +64,9 @@ export default function EngineerJobDetailPage() {
 
   const [plannedTimeOpen, setPlannedTimeOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [pauseCategory, setPauseCategory] = useState<PauseCategory | null>(null);
+  const [pauseDetails, setPauseDetails] = useState('');
   const [plannedForm] = Form.useForm();
   const [completeForm] = Form.useForm();
 
@@ -125,6 +142,31 @@ export default function EngineerJobDetailPage() {
     },
   });
 
+  const pauseMutation = useMutation({
+    mutationFn: (payload: { reason_category: PauseCategory; reason_details?: string }) =>
+      engineerJobsApi.requestPause(Number(id), payload),
+    onSuccess: () => {
+      message.success(t('jobs.pause', 'Pause requested'));
+      setPauseModalOpen(false);
+      setPauseCategory(null);
+      setPauseDetails('');
+      queryClient.invalidateQueries({ queryKey: ['engineer-job', id] });
+      queryClient.invalidateQueries({ queryKey: ['engineer-job', id, 'pause-history'] });
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+    },
+  });
+
+  const pauseHistoryQuery = useQuery({
+    queryKey: ['engineer-job', id, 'pause-history'],
+    queryFn: () => engineerJobsApi.getPauseHistory(Number(id)),
+    select: (res) => (res.data?.data ?? res.data ?? []) as PauseLog[],
+    enabled: !!id,
+  });
+
+  const pauseHistory = (pauseHistoryQuery.data ?? []) as PauseLog[];
+
   const formatElapsed = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -195,13 +237,21 @@ export default function EngineerJobDetailPage() {
             </>
           )}
           {job.status === 'in_progress' && (
-            <Button
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              onClick={() => setCompleteOpen(true)}
-            >
-              {t('jobs.complete', 'Complete')}
-            </Button>
+            <>
+              <Button
+                icon={<PauseCircleOutlined />}
+                onClick={() => setPauseModalOpen(true)}
+              >
+                {t('jobs.pause', 'Pause')}
+              </Button>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={() => setCompleteOpen(true)}
+              >
+                {t('jobs.complete', 'Complete')}
+              </Button>
+            </>
           )}
         </Space>
       </Space>
@@ -286,6 +336,102 @@ export default function EngineerJobDetailPage() {
           </Descriptions>
         </Card>
       )}
+
+      {/* Pause History */}
+      {pauseHistory.length > 0 && (
+        <Card title={t('jobs.pause', 'Pause History')} style={{ marginTop: 16 }}>
+          <Timeline
+            items={pauseHistory.map((pause) => ({
+              color:
+                pause.status === 'approved'
+                  ? 'green'
+                  : pause.status === 'denied'
+                    ? 'red'
+                    : 'blue',
+              children: (
+                <div>
+                  <Typography.Text strong>
+                    {pause.reason_category.replace(/_/g, ' ')}
+                  </Typography.Text>
+                  {pause.reason_details && (
+                    <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
+                      {pause.reason_details}
+                    </Typography.Paragraph>
+                  )}
+                  <Space size="small">
+                    <Tag
+                      color={
+                        pause.status === 'approved'
+                          ? 'success'
+                          : pause.status === 'denied'
+                            ? 'error'
+                            : 'processing'
+                      }
+                    >
+                      {t(`status.${pause.status}`, pause.status)}
+                    </Tag>
+                    <Typography.Text type="secondary">
+                      {new Date(pause.requested_at).toLocaleString()}
+                    </Typography.Text>
+                    {pause.duration_minutes != null && (
+                      <Typography.Text type="secondary">
+                        ({pause.duration_minutes} min)
+                      </Typography.Text>
+                    )}
+                  </Space>
+                </div>
+              ),
+            }))}
+          />
+        </Card>
+      )}
+
+      {/* Pause Request Modal */}
+      <Modal
+        title={t('jobs.pause', 'Request Pause')}
+        open={pauseModalOpen}
+        onOk={() => {
+          if (!pauseCategory) return;
+          pauseMutation.mutate({
+            reason_category: pauseCategory,
+            reason_details: pauseDetails || undefined,
+          });
+        }}
+        onCancel={() => {
+          setPauseModalOpen(false);
+          setPauseCategory(null);
+          setPauseDetails('');
+        }}
+        confirmLoading={pauseMutation.isPending}
+        okText={t('common.submit', 'Submit')}
+        cancelText={t('common.cancel', 'Cancel')}
+        okButtonProps={{ disabled: !pauseCategory }}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <div>
+            <Typography.Text strong>{t('jobs.pause_reason', 'Reason Category')}</Typography.Text>
+            <Select
+              value={pauseCategory}
+              onChange={(val) => setPauseCategory(val)}
+              style={{ width: '100%', marginTop: 8 }}
+              placeholder={t('common.select', 'Select reason')}
+              options={PAUSE_CATEGORIES.map((cat) => ({
+                value: cat,
+                label: cat.replace(/_/g, ' '),
+              }))}
+            />
+          </div>
+          <div>
+            <Typography.Text strong>{t('common.details', 'Details')}</Typography.Text>
+            <Input.TextArea
+              rows={3}
+              value={pauseDetails}
+              onChange={(e) => setPauseDetails(e.target.value)}
+              style={{ marginTop: 8 }}
+            />
+          </div>
+        </Space>
+      </Modal>
 
       {/* Enter Planned Time Modal */}
       <Modal

@@ -17,7 +17,17 @@ import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { engineerJobsApi } from '@inspection/shared';
-import type { EngineerJob } from '@inspection/shared';
+import type { EngineerJob, PauseCategory } from '@inspection/shared';
+
+const PAUSE_CATEGORIES: PauseCategory[] = [
+  'parts',
+  'duty_finish',
+  'tools',
+  'manpower',
+  'oem',
+  'error_record',
+  'other',
+];
 
 export default function EngineerJobDetailScreen() {
   const { t } = useTranslation();
@@ -28,6 +38,9 @@ export default function EngineerJobDetailScreen() {
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
   const [workNotes, setWorkNotes] = useState('');
   const [completionStatus, setCompletionStatus] = useState<string>('pass');
+  const [pauseModalVisible, setPauseModalVisible] = useState(false);
+  const [pauseCategory, setPauseCategory] = useState<PauseCategory>('parts');
+  const [pauseDetails, setPauseDetails] = useState('');
 
   // Live timer state
   const [elapsed, setElapsed] = useState('00:00:00');
@@ -85,6 +98,18 @@ export default function EngineerJobDetailScreen() {
     onSuccess: () => {
       setCompleteModalVisible(false);
       setWorkNotes('');
+      queryClient.invalidateQueries({ queryKey: ['engineerJob', id] });
+      queryClient.invalidateQueries({ queryKey: ['engineerJobs'] });
+    },
+  });
+
+  const pauseMutation = useMutation({
+    mutationFn: (payload: { reason_category: PauseCategory; reason_details?: string }) =>
+      engineerJobsApi.requestPause(id, payload),
+    onSuccess: () => {
+      setPauseModalVisible(false);
+      setPauseCategory('parts');
+      setPauseDetails('');
       queryClient.invalidateQueries({ queryKey: ['engineerJob', id] });
       queryClient.invalidateQueries({ queryKey: ['engineerJobs'] });
     },
@@ -340,6 +365,12 @@ export default function EngineerJobDetailScreen() {
       {job.status === 'in_progress' && (
         <View style={styles.actionsSection}>
           <TouchableOpacity
+            style={[styles.actionButton, styles.secondaryButton]}
+            onPress={() => setPauseModalVisible(true)}
+          >
+            <Text style={styles.secondaryButtonText}>{t('jobs.pause', 'Pause')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.actionButton, styles.primaryButton, { backgroundColor: '#4CAF50' }]}
             onPress={() => setCompleteModalVisible(true)}
           >
@@ -347,6 +378,78 @@ export default function EngineerJobDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Pause Modal */}
+      <Modal visible={pauseModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('jobs.pause', 'Request Pause')}</Text>
+
+            <Text style={styles.inputLabel}>{t('jobs.pause_reason', 'Reason Category')}</Text>
+            <View style={styles.categoryGrid}>
+              {PAUSE_CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.categoryChip,
+                    pauseCategory === cat && styles.categoryChipActive,
+                  ]}
+                  onPress={() => setPauseCategory(cat)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      pauseCategory === cat && styles.categoryChipTextActive,
+                    ]}
+                  >
+                    {cat.replace(/_/g, ' ')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.inputLabel}>{t('common.details', 'Details')}</Text>
+            <TextInput
+              style={styles.textArea}
+              multiline
+              numberOfLines={3}
+              value={pauseDetails}
+              onChangeText={setPauseDetails}
+              placeholder={t('common.enter_details', 'Enter details...')}
+              placeholderTextColor="#9E9E9E"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.secondaryButton]}
+                onPress={() => {
+                  setPauseModalVisible(false);
+                  setPauseCategory('parts');
+                  setPauseDetails('');
+                }}
+              >
+                <Text style={styles.secondaryButtonText}>{t('common.cancel', 'Cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.primaryButton]}
+                onPress={() =>
+                  pauseMutation.mutate({
+                    reason_category: pauseCategory,
+                    reason_details: pauseDetails || undefined,
+                  })
+                }
+                disabled={pauseMutation.isPending}
+              >
+                {pauseMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>{t('common.submit', 'Submit')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Complete Modal */}
       <Modal visible={completeModalVisible} animationType="slide" transparent>
@@ -513,4 +616,26 @@ const styles = StyleSheet.create({
   toggleText: { fontSize: 15, fontWeight: '500', color: '#616161' },
   toggleTextActive: { color: '#212121' },
   modalActions: { flexDirection: 'row', gap: 12 },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  categoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    backgroundColor: '#fff',
+  },
+  categoryChipActive: {
+    borderColor: '#1976D2',
+    backgroundColor: '#E3F2FD',
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#616161',
+    textTransform: 'capitalize',
+  },
+  categoryChipTextActive: {
+    color: '#1976D2',
+  },
 });

@@ -4,7 +4,9 @@ import {
   PaginatedResponse,
   PaginationParams,
   EngineerJob,
+  PauseLog,
   CreateEngineerJobPayload,
+  PauseCategory,
 } from '../types';
 
 export interface EngineerJobListParams extends PaginationParams {
@@ -20,6 +22,11 @@ export interface EngineerPlannedTimePayload {
 export interface EngineerCompletePayload {
   work_notes?: string;
   completion_status?: string;
+}
+
+export interface EngineerPauseRequestPayload {
+  reason_category: PauseCategory;
+  reason_details?: string;
 }
 
 export const engineerJobsApi = {
@@ -50,6 +57,19 @@ export const engineerJobsApi = {
     return getApiClient().post<ApiResponse<EngineerJob>>(
       `/api/engineer-jobs/${jobId}/complete`,
       payload,
+    );
+  },
+
+  requestPause(jobId: number, payload: EngineerPauseRequestPayload) {
+    return getApiClient().post<ApiResponse<PauseLog>>(
+      `/api/engineer-jobs/${jobId}/pause`,
+      payload,
+    );
+  },
+
+  getPauseHistory(jobId: number) {
+    return getApiClient().get<ApiResponse<PauseLog[]>>(
+      `/api/engineer-jobs/${jobId}/pause-history`,
     );
   },
 };

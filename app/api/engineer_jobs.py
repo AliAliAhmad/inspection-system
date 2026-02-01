@@ -9,6 +9,7 @@ from app.extensions import limiter
 from app.services.engineer_job_service import EngineerJobService
 from app.utils.decorators import get_current_user, admin_required, engineer_required, role_required, get_language
 from app.models import EngineerJob
+from app.services.pause_service import PauseService
 from app.utils.pagination import paginate
 
 bp = Blueprint('engineer_jobs', __name__)
@@ -158,4 +159,40 @@ def complete_job(job_id):
         'status': 'success',
         'message': 'Job completed',
         'data': job.to_dict()
+    }), 200
+
+
+# --- Pause endpoints ---
+
+@bp.route('/<int:job_id>/pause', methods=['POST'])
+@jwt_required()
+@engineer_required()
+def request_pause(job_id):
+    """Request pause for an engineer job."""
+    user = get_current_user()
+    data = request.get_json()
+
+    pause = PauseService.request_pause(
+        job_type='engineer',
+        job_id=job_id,
+        requested_by=user.id,
+        reason_category=data['reason_category'],
+        reason_details=data.get('reason_details')
+    )
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Pause requested',
+        'data': pause.to_dict()
+    }), 201
+
+
+@bp.route('/<int:job_id>/pause-history', methods=['GET'])
+@jwt_required()
+def pause_history(job_id):
+    """Get pause history for an engineer job."""
+    pauses = PauseService.get_pause_history('engineer', job_id)
+    return jsonify({
+        'status': 'success',
+        'data': [p.to_dict() for p in pauses]
     }), 200
