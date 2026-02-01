@@ -105,7 +105,9 @@
     "urgent": "عاجل",
     "resolved": "تم حلّه",
     "closed": "مُغلَق",
-    "overdue": "متأخر"
+    "overdue": "متأخر",
+    "cancelled": "ملغي",
+    "false_alarm": "إنذار كاذب"
   },
   "equipment": {
     "title": "إدارة المعدات",
@@ -143,7 +145,14 @@
     "cleaning_rating": "تقييم النظافة",
     "admin_bonus": "مكافأة المدير",
     "mark_incomplete": "تحديد كغير مكتمل",
-    "incomplete_reason": "سبب عدم الاكتمال"
+    "incomplete_reason": "سبب عدم الاكتمال",
+    "pending_jobs": "المهام المعلّقة",
+    "wrong_finding": "اكتشاف خاطئ",
+    "wrong_finding_reason": "سبب الاكتشاف الخاطئ",
+    "wrong_finding_photo": "رفع صورة/فيديو كدليل",
+    "wrong_finding_description": "الإبلاغ عن هذا العيب كاكتشاف خاطئ (إنذار كاذب). يجب توفير سبب وصورة/فيديو كدليل.",
+    "wrong_finding_success": "تم الإبلاغ عن الاكتشاف الخاطئ بنجاح",
+    "submit_wrong_finding": "إرسال الاكتشاف الخاطئ"
   },
   "leave": {
     "request": "طلب إجازة",

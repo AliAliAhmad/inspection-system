@@ -7,6 +7,7 @@ import {
   Modal,
   Select,
   Input,
+  InputNumber,
   Radio,
   Timeline,
   Upload,
@@ -51,6 +52,7 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   completed: 'success',
   incomplete: 'error',
   qc_approved: 'green',
+  cancelled: 'default',
 };
 
 const PAUSE_CATEGORIES: PauseCategory[] = [
@@ -150,11 +152,17 @@ export default function SpecialistJobDetailPage() {
     }
   }, [job?.is_running, job?.started_at]);
 
+  // Start modal state (for assigned jobs without planned time)
+  const [startPlannedHours, setStartPlannedHours] = useState<number | null>(null);
+  const [startModalVisible, setStartModalVisible] = useState(false);
+
   // Mutations
   const startMutation = useMutation({
-    mutationFn: () => specialistJobsApi.start(jobId),
+    mutationFn: (plannedHours?: number) => specialistJobsApi.start(jobId, plannedHours),
     onSuccess: () => {
       message.success(t('jobs.start'));
+      setStartModalVisible(false);
+      setStartPlannedHours(null);
       queryClient.invalidateQueries({ queryKey: ['specialist-jobs', jobId] });
     },
     onError: () => message.error(t('common.error')),
@@ -230,12 +238,22 @@ export default function SpecialistJobDetailPage() {
 
   // Handlers
   const handleStart = useCallback(() => {
-    Modal.confirm({
-      title: t('common.confirm'),
-      content: t('jobs.start'),
-      onOk: () => startMutation.mutate(),
-    });
-  }, [startMutation, t]);
+    if (job?.has_planned_time) {
+      Modal.confirm({
+        title: t('common.confirm'),
+        content: t('jobs.start'),
+        onOk: () => startMutation.mutate(),
+      });
+    } else {
+      setStartModalVisible(true);
+    }
+  }, [startMutation, t, job?.has_planned_time]);
+
+  const handleStartWithPlannedTime = useCallback(() => {
+    if (startPlannedHours && startPlannedHours > 0) {
+      startMutation.mutate(startPlannedHours);
+    }
+  }, [startPlannedHours, startMutation]);
 
   const handlePauseSubmit = useCallback(() => {
     if (!pauseCategory) return;
@@ -367,8 +385,8 @@ export default function SpecialistJobDetailPage() {
 
       {/* Timer / Action Section */}
       <Card title={t('common.actions')} style={{ marginBottom: 16 }}>
-        {/* Assigned with planned time: Start button */}
-        {job.status === 'assigned' && job.has_planned_time && (
+        {/* Assigned: Start button (works with or without planned time) */}
+        {job.status === 'assigned' && (
           <Button
             type="primary"
             icon={<PlayCircleOutlined />}
@@ -380,12 +398,12 @@ export default function SpecialistJobDetailPage() {
           </Button>
         )}
 
-        {/* Assigned without planned time */}
-        {job.status === 'assigned' && !job.has_planned_time && (
+        {/* Cancelled (wrong finding) */}
+        {job.status === 'cancelled' && (
           <Alert
-            type="info"
-            message={t('jobs.enter_planned_time')}
-            description={t('jobs.planned_time')}
+            type="warning"
+            message={t('jobs.wrong_finding')}
+            description={job.wrong_finding_reason || ''}
           />
         )}
 
@@ -688,6 +706,34 @@ export default function SpecialistJobDetailPage() {
             rows={4}
             value={incompleteReason}
             onChange={(e) => setIncompleteReason(e.target.value)}
+          />
+        </Space>
+      </Modal>
+
+      {/* Start Job Modal (for jobs without planned time) */}
+      <Modal
+        title={t('jobs.start')}
+        open={startModalVisible}
+        onOk={handleStartWithPlannedTime}
+        onCancel={() => {
+          setStartModalVisible(false);
+          setStartPlannedHours(null);
+        }}
+        confirmLoading={startMutation.isPending}
+        okText={t('jobs.start')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ disabled: !startPlannedHours || startPlannedHours <= 0 }}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Typography.Text strong>{t('jobs.planned_time')}</Typography.Text>
+          <InputNumber
+            min={0.5}
+            step={0.5}
+            value={startPlannedHours}
+            onChange={(val) => setStartPlannedHours(val)}
+            style={{ width: '100%' }}
+            placeholder={t('jobs.planned_time')}
+            addonAfter="h"
           />
         </Space>
       </Modal>

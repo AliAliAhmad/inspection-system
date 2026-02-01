@@ -1,4 +1,4 @@
-export type JobStatus = 'assigned' | 'in_progress' | 'paused' | 'completed' | 'incomplete' | 'qc_approved';
+export type JobStatus = 'assigned' | 'in_progress' | 'paused' | 'completed' | 'incomplete' | 'qc_approved' | 'cancelled';
 export type CompletionStatus = 'pass' | 'incomplete';
 export type JobCategory = 'major' | 'minor';
 
@@ -28,6 +28,8 @@ export interface SpecialistJob {
   qe_id?: number | null;
   is_running?: boolean;
   is_paused?: boolean;
+  wrong_finding_reason?: string | null;
+  wrong_finding_photo?: string | null;
 }
 
 export type PauseCategory = 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'other';

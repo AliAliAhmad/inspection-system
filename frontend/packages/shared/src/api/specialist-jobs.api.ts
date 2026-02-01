@@ -34,12 +34,22 @@ export const specialistJobsApi = {
   enterPlannedTime(jobId: number, hours: number) {
     return getApiClient().post<ApiResponse<SpecialistJob>>(
       `/api/jobs/${jobId}/planned-time`,
-      { hours },
+      { planned_time_hours: hours },
     );
   },
 
-  start(jobId: number) {
-    return getApiClient().post<ApiResponse<SpecialistJob>>(`/api/jobs/${jobId}/start`);
+  start(jobId: number, plannedTimeHours?: number) {
+    return getApiClient().post<ApiResponse<SpecialistJob>>(
+      `/api/jobs/${jobId}/start`,
+      plannedTimeHours ? { planned_time_hours: plannedTimeHours } : {},
+    );
+  },
+
+  wrongFinding(jobId: number, reason: string, photoPath: string) {
+    return getApiClient().post<ApiResponse<{ job: SpecialistJob; defect: unknown }>>(
+      `/api/jobs/${jobId}/wrong-finding`,
+      { reason, photo_path: photoPath },
+    );
   },
 
   complete(jobId: number, payload: CompleteJobPayload) {

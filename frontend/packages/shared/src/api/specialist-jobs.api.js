@@ -7,10 +7,13 @@ export const specialistJobsApi = {
         return getApiClient().get(`/api/jobs/${jobId}`);
     },
     enterPlannedTime(jobId, hours) {
-        return getApiClient().post(`/api/jobs/${jobId}/planned-time`, { hours });
+        return getApiClient().post(`/api/jobs/${jobId}/planned-time`, { planned_time_hours: hours });
     },
-    start(jobId) {
-        return getApiClient().post(`/api/jobs/${jobId}/start`);
+    start(jobId, plannedTimeHours) {
+        return getApiClient().post(`/api/jobs/${jobId}/start`, plannedTimeHours ? { planned_time_hours: plannedTimeHours } : {});
+    },
+    wrongFinding(jobId, reason, photoPath) {
+        return getApiClient().post(`/api/jobs/${jobId}/wrong-finding`, { reason, photo_path: photoPath });
     },
     complete(jobId, payload) {
         return getApiClient().post(`/api/jobs/${jobId}/complete`, payload);

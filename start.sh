@@ -97,6 +97,26 @@ with app.app_context():
         db.session.rollback()
         print('roster_entries table already exists')
 
+    # Add wrong_finding columns to specialist_jobs
+    for col_name, col_type in [('wrong_finding_reason', 'TEXT'), ('wrong_finding_photo', 'VARCHAR(500)')]:
+        try:
+            db.session.execute(text(f'ALTER TABLE specialist_jobs ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added {col_name} column to specialist_jobs')
+        except Exception:
+            db.session.rollback()
+            print(f'specialist_jobs.{col_name} already exists')
+
+    # Update specialist_jobs status constraint to include cancelled
+    try:
+        db.session.execute(text('ALTER TABLE specialist_jobs DROP CONSTRAINT IF EXISTS check_valid_job_status'))
+        db.session.execute(text(\"\"\"ALTER TABLE specialist_jobs ADD CONSTRAINT check_valid_job_status CHECK (status IN ('assigned', 'in_progress', 'paused', 'completed', 'incomplete', 'qc_approved', 'cancelled'))\"\"\"))
+        db.session.commit()
+        print('Updated specialist_jobs status constraint')
+    except Exception:
+        db.session.rollback()
+        print('specialist_jobs status constraint already up to date')
+
     # Add annual_leave_balance column to users
     try:
         db.session.execute(text('ALTER TABLE users ADD COLUMN annual_leave_balance INTEGER DEFAULT 24 NOT NULL'))

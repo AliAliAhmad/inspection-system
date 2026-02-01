@@ -8,15 +8,21 @@ import {
   Button,
   Modal,
   InputNumber,
+  Input,
+  Upload,
   message,
   Space,
+  Divider,
+  Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { UploadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   specialistJobsApi,
+  filesApi,
   SpecialistJob,
   JobStatus,
 } from '@inspection/shared';
@@ -29,6 +35,7 @@ const STATUS_COLORS: Record<JobStatus, string> = {
   completed: 'success',
   incomplete: 'error',
   qc_approved: 'green',
+  cancelled: 'default',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -45,9 +52,17 @@ export default function SpecialistJobsPage() {
   const { user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<TabKey>('active');
-  const [plannedTimeModalOpen, setPlannedTimeModalOpen] = useState(false);
+
+  // Start Job Modal state
+  const [startModalOpen, setStartModalOpen] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [plannedHours, setPlannedHours] = useState<number | null>(null);
+
+  // Wrong Finding state (within start modal)
+  const [showWrongFinding, setShowWrongFinding] = useState(false);
+  const [wrongFindingReason, setWrongFindingReason] = useState('');
+  const [wrongFindingPhotoPath, setWrongFindingPhotoPath] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Queries for each tab
   const pendingQuery = useQuery({
@@ -68,20 +83,33 @@ export default function SpecialistJobsPage() {
   const completedQuery = useQuery({
     queryKey: ['specialist-jobs', 'list', 'completed'],
     queryFn: () =>
-      specialistJobsApi.list({ status: 'completed,incomplete,qc_approved' }),
+      specialistJobsApi.list({ status: 'completed,incomplete,qc_approved,cancelled' }),
     select: (res) => res.data?.data ?? [],
     enabled: activeTab === 'completed',
   });
 
-  // Mutation for entering planned time
-  const enterPlannedTimeMutation = useMutation({
+  // Start job mutation (combined: set planned time + start)
+  const startJobMutation = useMutation({
     mutationFn: ({ jobId, hours }: { jobId: number; hours: number }) =>
-      specialistJobsApi.enterPlannedTime(jobId, hours),
+      specialistJobsApi.start(jobId, hours),
+    onSuccess: (_, variables) => {
+      message.success(t('jobs.start'));
+      closeStartModal();
+      queryClient.invalidateQueries({ queryKey: ['specialist-jobs'] });
+      navigate(`/specialist/jobs/${variables.jobId}`);
+    },
+    onError: () => {
+      message.error(t('common.error'));
+    },
+  });
+
+  // Wrong finding mutation
+  const wrongFindingMutation = useMutation({
+    mutationFn: ({ jobId, reason, photoPath }: { jobId: number; reason: string; photoPath: string }) =>
+      specialistJobsApi.wrongFinding(jobId, reason, photoPath),
     onSuccess: () => {
-      message.success(t('common.save'));
-      setPlannedTimeModalOpen(false);
-      setSelectedJobId(null);
-      setPlannedHours(null);
+      message.success(t('jobs.wrong_finding_success'));
+      closeStartModal();
       queryClient.invalidateQueries({ queryKey: ['specialist-jobs'] });
     },
     onError: () => {
@@ -89,20 +117,58 @@ export default function SpecialistJobsPage() {
     },
   });
 
-  const handleEnterTime = useCallback((jobId: number) => {
+  const openStartModal = useCallback((jobId: number) => {
     setSelectedJobId(jobId);
     setPlannedHours(null);
-    setPlannedTimeModalOpen(true);
+    setShowWrongFinding(false);
+    setWrongFindingReason('');
+    setWrongFindingPhotoPath('');
+    setStartModalOpen(true);
   }, []);
 
-  const handlePlannedTimeSubmit = useCallback(() => {
+  const closeStartModal = useCallback(() => {
+    setStartModalOpen(false);
+    setSelectedJobId(null);
+    setPlannedHours(null);
+    setShowWrongFinding(false);
+    setWrongFindingReason('');
+    setWrongFindingPhotoPath('');
+  }, []);
+
+  const handleStartJob = useCallback(() => {
     if (selectedJobId && plannedHours && plannedHours > 0) {
-      enterPlannedTimeMutation.mutate({
+      startJobMutation.mutate({ jobId: selectedJobId, hours: plannedHours });
+    }
+  }, [selectedJobId, plannedHours, startJobMutation]);
+
+  const handleWrongFinding = useCallback(() => {
+    if (selectedJobId && wrongFindingReason.trim() && wrongFindingPhotoPath) {
+      wrongFindingMutation.mutate({
         jobId: selectedJobId,
-        hours: plannedHours,
+        reason: wrongFindingReason.trim(),
+        photoPath: wrongFindingPhotoPath,
       });
     }
-  }, [selectedJobId, plannedHours, enterPlannedTimeMutation]);
+  }, [selectedJobId, wrongFindingReason, wrongFindingPhotoPath, wrongFindingMutation]);
+
+  const handlePhotoUpload = useCallback(
+    async (file: File) => {
+      if (!selectedJobId) return false;
+      setUploadingPhoto(true);
+      try {
+        const res = await filesApi.upload(file, 'specialist_job', selectedJobId, 'wrong_finding');
+        const filePath = res.data?.data?.file_path || res.data?.data?.url || `/uploads/${file.name}`;
+        setWrongFindingPhotoPath(filePath);
+        message.success(t('common.save'));
+      } catch {
+        message.error(t('common.error'));
+      } finally {
+        setUploadingPhoto(false);
+      }
+      return false;
+    },
+    [selectedJobId, t],
+  );
 
   const getStatusTag = (status: JobStatus) => (
     <Tag color={STATUS_COLORS[status]}>
@@ -157,8 +223,8 @@ export default function SpecialistJobsPage() {
       title: t('common.actions'),
       key: 'actions',
       render: (_: unknown, record: SpecialistJob) => (
-        <Button type="primary" size="small" onClick={() => handleEnterTime(record.id)}>
-          {t('jobs.enter_planned_time')}
+        <Button type="primary" size="small" onClick={() => openStartModal(record.id)}>
+          {t('jobs.start')}
         </Button>
       ),
     },
@@ -232,7 +298,7 @@ export default function SpecialistJobsPage() {
   const tabItems = [
     {
       key: 'pending',
-      label: t('jobs.enter_planned_time'),
+      label: t('jobs.pending_jobs'),
     },
     {
       key: 'active',
@@ -263,32 +329,112 @@ export default function SpecialistJobsPage() {
         pagination={{ pageSize: 10 }}
       />
 
-      {/* Enter Planned Time Modal */}
+      {/* Start Job Modal */}
       <Modal
-        title={t('jobs.enter_planned_time')}
-        open={plannedTimeModalOpen}
-        onOk={handlePlannedTimeSubmit}
-        onCancel={() => {
-          setPlannedTimeModalOpen(false);
-          setSelectedJobId(null);
-          setPlannedHours(null);
-        }}
-        confirmLoading={enterPlannedTimeMutation.isPending}
-        okText={t('common.save')}
-        cancelText={t('common.cancel')}
-        okButtonProps={{ disabled: !plannedHours || plannedHours <= 0 }}
+        title={t('jobs.start')}
+        open={startModalOpen}
+        onCancel={closeStartModal}
+        footer={null}
+        width={520}
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Typography.Text>{t('jobs.planned_time')}</Typography.Text>
-          <InputNumber
-            min={0.5}
-            step={0.5}
-            value={plannedHours}
-            onChange={(val) => setPlannedHours(val)}
-            style={{ width: '100%' }}
-            placeholder="Hours"
-            addonAfter="h"
-          />
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {/* Planned Time Input */}
+          <div>
+            <Typography.Text strong>{t('jobs.planned_time')}</Typography.Text>
+            <InputNumber
+              min={0.5}
+              step={0.5}
+              value={plannedHours}
+              onChange={(val) => setPlannedHours(val)}
+              style={{ width: '100%', marginTop: 8 }}
+              placeholder={t('jobs.planned_time')}
+              addonAfter="h"
+            />
+          </div>
+
+          {/* Start Job Button */}
+          <Button
+            type="primary"
+            size="large"
+            block
+            onClick={handleStartJob}
+            loading={startJobMutation.isPending}
+            disabled={!plannedHours || plannedHours <= 0}
+          >
+            {t('jobs.start')}
+          </Button>
+
+          <Divider />
+
+          {/* Wrong Finding Toggle */}
+          {!showWrongFinding ? (
+            <Button
+              danger
+              block
+              icon={<ExclamationCircleOutlined />}
+              onClick={() => setShowWrongFinding(true)}
+            >
+              {t('jobs.wrong_finding')}
+            </Button>
+          ) : (
+            <div>
+              <Alert
+                type="warning"
+                message={t('jobs.wrong_finding')}
+                description={t('jobs.wrong_finding_description')}
+                style={{ marginBottom: 16 }}
+              />
+
+              {/* Reason */}
+              <div style={{ marginBottom: 12 }}>
+                <Typography.Text strong>{t('jobs.wrong_finding_reason')}</Typography.Text>
+                <Input.TextArea
+                  rows={3}
+                  value={wrongFindingReason}
+                  onChange={(e) => setWrongFindingReason(e.target.value)}
+                  placeholder={t('jobs.wrong_finding_reason')}
+                  style={{ marginTop: 8 }}
+                />
+              </div>
+
+              {/* Photo/Video Upload */}
+              <div style={{ marginBottom: 12 }}>
+                <Typography.Text strong>{t('jobs.wrong_finding_photo')}</Typography.Text>
+                <div style={{ marginTop: 8 }}>
+                  <Upload
+                    beforeUpload={(file) => {
+                      handlePhotoUpload(file as File);
+                      return false;
+                    }}
+                    maxCount={1}
+                    accept="image/*,video/*"
+                    showUploadList={true}
+                  >
+                    <Button icon={<UploadOutlined />} loading={uploadingPhoto}>
+                      {t('jobs.wrong_finding_photo')}
+                    </Button>
+                  </Upload>
+                  {wrongFindingPhotoPath && (
+                    <Typography.Text type="success" style={{ display: 'block', marginTop: 4 }}>
+                      {t('common.save')}
+                    </Typography.Text>
+                  )}
+                </div>
+              </div>
+
+              {/* Submit Wrong Finding */}
+              <Button
+                danger
+                type="primary"
+                block
+                onClick={handleWrongFinding}
+                loading={wrongFindingMutation.isPending}
+                disabled={!wrongFindingReason.trim() || !wrongFindingPhotoPath}
+              >
+                {t('jobs.submit_wrong_finding')}
+              </Button>
+            </div>
+          )}
         </Space>
       </Modal>
     </Card>

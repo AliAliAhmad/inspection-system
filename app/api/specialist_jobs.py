@@ -83,7 +83,7 @@ def enter_planned_time(job_id):
         return jsonify({'status': 'error', 'message': 'Planned time has already been entered'}), 400
 
     data = request.get_json()
-    planned_time = data.get('planned_time_hours')
+    planned_time = data.get('planned_time_hours') or data.get('hours')
 
     if not planned_time or planned_time <= 0:
         return jsonify({'status': 'error', 'message': 'Planned time must be greater than 0'}), 400
@@ -109,16 +109,28 @@ def enter_planned_time(job_id):
 @bp.route('/<int:job_id>/start', methods=['POST'])
 @jwt_required()
 def start_job(job_id):
-    """Start the timer for a job."""
+    """Start the timer for a job. Optionally accepts planned_time_hours to set planned time in the same call."""
     user_id = get_jwt_identity()
     job = SpecialistJob.query.get_or_404(job_id)
 
     if job.specialist_id != int(user_id):
         return jsonify({'status': 'error', 'message': 'This job is not assigned to you'}), 403
-    if not job.has_planned_time():
-        return jsonify({'status': 'error', 'message': 'You must enter planned time first'}), 403
     if job.started_at:
         return jsonify({'status': 'error', 'message': 'Job already started'}), 400
+
+    # Accept planned_time_hours in request body (combined start flow)
+    data = request.get_json() or {}
+    planned_time = data.get('planned_time_hours') or data.get('hours')
+
+    if not job.has_planned_time():
+        if not planned_time or planned_time <= 0:
+            return jsonify({'status': 'error', 'message': 'Planned time is required to start the job'}), 400
+        job.planned_time_hours = planned_time
+        job.planned_time_entered_at = datetime.utcnow()
+
+    # Set equipment to under_maintenance
+    if job.defect and job.defect.inspection and job.defect.inspection.equipment:
+        job.defect.inspection.equipment.status = 'under_maintenance'
 
     job.started_at = datetime.utcnow()
     job.status = 'in_progress'
@@ -128,6 +140,69 @@ def start_job(job_id):
         'status': 'success',
         'message': 'Job started successfully',
         'data': job.to_dict(include_details=True)
+    }), 200
+
+
+@bp.route('/<int:job_id>/wrong-finding', methods=['POST'])
+@jwt_required()
+def wrong_finding(job_id):
+    """Report a wrong finding — defect is not valid (false alarm). Cancels the job."""
+    user_id = get_jwt_identity()
+    job = SpecialistJob.query.get_or_404(job_id)
+
+    if job.specialist_id != int(user_id):
+        return jsonify({'status': 'error', 'message': 'This job is not assigned to you'}), 403
+    if job.status != 'assigned':
+        return jsonify({'status': 'error', 'message': 'Can only report wrong finding on assigned jobs'}), 400
+
+    data = request.get_json() or {}
+    reason = data.get('reason', '').strip()
+    photo_path = data.get('photo_path', '').strip()
+
+    if not reason:
+        return jsonify({'status': 'error', 'message': 'Wrong finding reason is required'}), 400
+    if not photo_path:
+        return jsonify({'status': 'error', 'message': 'Photo/video evidence is required for wrong finding'}), 400
+
+    # Cancel the job
+    job.status = 'cancelled'
+    job.wrong_finding_reason = reason
+    job.wrong_finding_photo = photo_path
+    job.completed_at = datetime.utcnow()
+
+    # Update defect to false_alarm
+    defect = job.defect
+    if defect:
+        defect.status = 'false_alarm'
+        defect.resolution_notes = f'Wrong finding: {reason}'
+
+    safe_commit()
+
+    # Auto-translate wrong finding reason
+    from app.utils.bilingual import auto_translate_and_save
+    auto_translate_and_save('specialist_job', job.id, {'wrong_finding_reason': reason})
+
+    # Notify admins
+    from app.services.notification_service import NotificationService
+    admins = User.query.filter_by(role='admin', is_active=True).all()
+    for admin in admins:
+        NotificationService.create_notification(
+            user_id=admin.id,
+            type='wrong_finding',
+            title='Wrong Finding Reported',
+            message=f'Job {job.job_id}: specialist reported wrong finding — {reason[:50]}',
+            related_type='specialist_job',
+            related_id=job.id,
+            priority='warning'
+        )
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Wrong finding reported successfully',
+        'data': {
+            'job': job.to_dict(include_details=False),
+            'defect': defect.to_dict() if defect else None
+        }
     }), 200
 
 

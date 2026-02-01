@@ -50,13 +50,17 @@ class SpecialistJob(db.Model):
     # Work Completion Data
     work_notes = db.Column(db.Text)
 
+    # Wrong Finding
+    wrong_finding_reason = db.Column(db.Text, nullable=True)
+    wrong_finding_photo = db.Column(db.String(500), nullable=True)
+
     # Status
     status = db.Column(
         db.String(50),
         default='assigned',
         nullable=False,
         index=True
-    )  # 'assigned', 'in_progress', 'paused', 'completed'
+    )  # 'assigned', 'in_progress', 'paused', 'completed', 'cancelled'
 
     # Completion Status
     completion_status = db.Column(db.String(50))  # 'pass', 'incomplete'
@@ -87,7 +91,7 @@ class SpecialistJob(db.Model):
     # Constraints
     __table_args__ = (
         db.CheckConstraint(
-            "status IN ('assigned', 'in_progress', 'paused', 'completed', 'incomplete', 'qc_approved')",
+            "status IN ('assigned', 'in_progress', 'paused', 'completed', 'incomplete', 'qc_approved', 'cancelled')",
             name='check_valid_job_status'
         ),
         db.CheckConstraint(
@@ -184,6 +188,8 @@ class SpecialistJob(db.Model):
             'category': self.category,
             'has_planned_time': self.has_planned_time(),
             'can_view_details': self.can_view_details(),
+            'wrong_finding_reason': self.wrong_finding_reason,
+            'wrong_finding_photo': self.wrong_finding_photo,
         }
 
         if include_details and self.can_view_details():

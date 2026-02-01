@@ -105,7 +105,9 @@
     "urgent": "Urgent",
     "resolved": "Resolved",
     "closed": "Closed",
-    "overdue": "Overdue"
+    "overdue": "Overdue",
+    "cancelled": "Cancelled",
+    "false_alarm": "False Alarm"
   },
   "equipment": {
     "title": "Equipment Management",
@@ -143,7 +145,14 @@
     "cleaning_rating": "Cleaning Rating",
     "admin_bonus": "Admin Bonus",
     "mark_incomplete": "Mark Incomplete",
-    "incomplete_reason": "Reason for Incomplete"
+    "incomplete_reason": "Reason for Incomplete",
+    "pending_jobs": "Pending Jobs",
+    "wrong_finding": "Wrong Finding",
+    "wrong_finding_reason": "Reason for Wrong Finding",
+    "wrong_finding_photo": "Upload Photo/Video Evidence",
+    "wrong_finding_description": "Report this defect as a wrong finding (false alarm). A reason and photo/video evidence are required.",
+    "wrong_finding_success": "Wrong finding reported successfully",
+    "submit_wrong_finding": "Submit Wrong Finding"
   },
   "leave": {
     "request": "Request Leave",
