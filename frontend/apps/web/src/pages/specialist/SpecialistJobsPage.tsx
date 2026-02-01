@@ -43,7 +43,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   minor: 'orange',
 };
 
-type TabKey = 'pending' | 'active' | 'completed';
+type TabKey = 'active' | 'completed';
 
 export default function SpecialistJobsPage() {
   const { t } = useTranslation();
@@ -64,14 +64,7 @@ export default function SpecialistJobsPage() {
   const [wrongFindingPhotoPath, setWrongFindingPhotoPath] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // Queries for each tab
-  const pendingQuery = useQuery({
-    queryKey: ['specialist-jobs', 'pending-planned-time'],
-    queryFn: () => specialistJobsApi.getPendingPlannedTime(),
-    select: (res) => res.data?.data ?? res.data ?? [],
-    enabled: activeTab === 'pending',
-  });
-
+  // Active tab: assigned + in_progress + paused (all in one list)
   const activeQuery = useQuery({
     queryKey: ['specialist-jobs', 'list', 'active'],
     queryFn: () =>
@@ -218,32 +211,29 @@ export default function SpecialistJobsPage() {
     },
   ];
 
-  const pendingColumns: ColumnsType<SpecialistJob> = [
-    ...baseColumns,
-    {
-      title: t('common.actions'),
-      key: 'actions',
-      render: (_: unknown, record: SpecialistJob) => (
-        <Button type="primary" size="small" onClick={() => openStartModal(record.id)}>
-          {t('jobs.start')}
-        </Button>
-      ),
-    },
-  ];
-
+  // Active tab columns: "Start" for assigned jobs, "Details" for in_progress/paused
   const activeColumns: ColumnsType<SpecialistJob> = [
     ...baseColumns,
     {
       title: t('common.actions'),
       key: 'actions',
-      render: (_: unknown, record: SpecialistJob) => (
-        <Button
-          type="link"
-          onClick={() => navigate(`/specialist/jobs/${record.id}`)}
-        >
-          {t('common.details')}
-        </Button>
-      ),
+      render: (_: unknown, record: SpecialistJob) => {
+        if (record.status === 'assigned') {
+          return (
+            <Button type="primary" size="small" onClick={() => openStartModal(record.id)}>
+              {t('jobs.start')}
+            </Button>
+          );
+        }
+        return (
+          <Button
+            type="link"
+            onClick={() => navigate(`/specialist/jobs/${record.id}`)}
+          >
+            {t('common.details')}
+          </Button>
+        );
+      },
     },
   ];
 
@@ -265,11 +255,6 @@ export default function SpecialistJobsPage() {
 
   const getCurrentData = (): { data: SpecialistJob[]; loading: boolean } => {
     switch (activeTab) {
-      case 'pending':
-        return {
-          data: (pendingQuery.data as SpecialistJob[]) ?? [],
-          loading: pendingQuery.isLoading,
-        };
       case 'active':
         return {
           data: (activeQuery.data as SpecialistJob[]) ?? [],
@@ -285,8 +270,6 @@ export default function SpecialistJobsPage() {
 
   const getCurrentColumns = (): ColumnsType<SpecialistJob> => {
     switch (activeTab) {
-      case 'pending':
-        return pendingColumns;
       case 'active':
         return activeColumns;
       case 'completed':
@@ -297,10 +280,6 @@ export default function SpecialistJobsPage() {
   const { data, loading } = getCurrentData();
 
   const tabItems = [
-    {
-      key: 'pending',
-      label: t('jobs.pending_jobs'),
-    },
     {
       key: 'active',
       label: t('status.in_progress'),
