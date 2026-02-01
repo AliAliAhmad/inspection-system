@@ -43,7 +43,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   minor: 'orange',
 };
 
-type TabKey = 'active' | 'completed';
+type TabKey = 'pending' | 'active' | 'completed';
 
 export default function SpecialistJobsPage() {
   const { t } = useTranslation();
@@ -51,7 +51,7 @@ export default function SpecialistJobsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<TabKey>('active');
+  const [activeTab, setActiveTab] = useState<TabKey>('pending');
 
   // Start Job Modal state
   const [startModalOpen, setStartModalOpen] = useState(false);
@@ -64,11 +64,20 @@ export default function SpecialistJobsPage() {
   const [wrongFindingPhotoPath, setWrongFindingPhotoPath] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // Active tab: assigned + in_progress + paused (all in one list)
+  // Pending tab: assigned jobs (not started yet)
+  const pendingQuery = useQuery({
+    queryKey: ['specialist-jobs', 'list', 'pending'],
+    queryFn: () =>
+      specialistJobsApi.list({ status: 'assigned' }),
+    select: (res) => res.data?.data ?? [],
+    enabled: activeTab === 'pending',
+  });
+
+  // Active tab: in_progress + paused
   const activeQuery = useQuery({
     queryKey: ['specialist-jobs', 'list', 'active'],
     queryFn: () =>
-      specialistJobsApi.list({ status: 'assigned,in_progress,paused' }),
+      specialistJobsApi.list({ status: 'in_progress,paused' }),
     select: (res) => res.data?.data ?? [],
     enabled: activeTab === 'active',
   });
@@ -211,29 +220,34 @@ export default function SpecialistJobsPage() {
     },
   ];
 
-  // Active tab columns: "Start" for assigned jobs, "Details" for in_progress/paused
+  // Pending tab columns: "Start" button opens the start modal
+  const pendingColumns: ColumnsType<SpecialistJob> = [
+    ...baseColumns,
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      render: (_: unknown, record: SpecialistJob) => (
+        <Button type="primary" size="small" onClick={() => openStartModal(record.id)}>
+          {t('jobs.start')}
+        </Button>
+      ),
+    },
+  ];
+
+  // Active tab columns: "Details" link
   const activeColumns: ColumnsType<SpecialistJob> = [
     ...baseColumns,
     {
       title: t('common.actions'),
       key: 'actions',
-      render: (_: unknown, record: SpecialistJob) => {
-        if (record.status === 'assigned') {
-          return (
-            <Button type="primary" size="small" onClick={() => openStartModal(record.id)}>
-              {t('jobs.start')}
-            </Button>
-          );
-        }
-        return (
-          <Button
-            type="link"
-            onClick={() => navigate(`/specialist/jobs/${record.id}`)}
-          >
-            {t('common.details')}
-          </Button>
-        );
-      },
+      render: (_: unknown, record: SpecialistJob) => (
+        <Button
+          type="link"
+          onClick={() => navigate(`/specialist/jobs/${record.id}`)}
+        >
+          {t('common.details')}
+        </Button>
+      ),
     },
   ];
 
@@ -255,6 +269,11 @@ export default function SpecialistJobsPage() {
 
   const getCurrentData = (): { data: SpecialistJob[]; loading: boolean } => {
     switch (activeTab) {
+      case 'pending':
+        return {
+          data: (pendingQuery.data as SpecialistJob[]) ?? [],
+          loading: pendingQuery.isLoading,
+        };
       case 'active':
         return {
           data: (activeQuery.data as SpecialistJob[]) ?? [],
@@ -270,6 +289,8 @@ export default function SpecialistJobsPage() {
 
   const getCurrentColumns = (): ColumnsType<SpecialistJob> => {
     switch (activeTab) {
+      case 'pending':
+        return pendingColumns;
       case 'active':
         return activeColumns;
       case 'completed':
@@ -280,6 +301,10 @@ export default function SpecialistJobsPage() {
   const { data, loading } = getCurrentData();
 
   const tabItems = [
+    {
+      key: 'pending',
+      label: t('jobs.pending_jobs'),
+    },
     {
       key: 'active',
       label: t('status.in_progress'),
