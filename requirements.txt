@@ -47,3 +47,4 @@ typing_extensions==4.15.0
 tzlocal==5.3.1
 Werkzeug==3.0.1
 wrapt==2.0.1
+requests>=2.28.0
