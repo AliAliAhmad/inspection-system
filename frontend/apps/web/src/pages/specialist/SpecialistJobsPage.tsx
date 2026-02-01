@@ -157,7 +157,8 @@ export default function SpecialistJobsPage() {
       setUploadingPhoto(true);
       try {
         const res = await filesApi.upload(file, 'specialist_job', selectedJobId, 'wrong_finding');
-        const filePath = res.data?.data?.file_path || res.data?.data?.url || `/uploads/${file.name}`;
+        const fileData = res.data?.data;
+        const filePath = fileData?.filename ? `/uploads/${fileData.filename}` : `/uploads/${file.name}`;
         setWrongFindingPhotoPath(filePath);
         message.success(t('common.save'));
       } catch {

@@ -158,7 +158,7 @@ export default function SpecialistJobDetailPage() {
 
   // Mutations
   const startMutation = useMutation({
-    mutationFn: (plannedHours?: number) => specialistJobsApi.start(jobId, plannedHours),
+    mutationFn: (plannedHours?: number | undefined) => specialistJobsApi.start(jobId, plannedHours),
     onSuccess: () => {
       message.success(t('jobs.start'));
       setStartModalVisible(false);
@@ -242,7 +242,7 @@ export default function SpecialistJobDetailPage() {
       Modal.confirm({
         title: t('common.confirm'),
         content: t('jobs.start'),
-        onOk: () => startMutation.mutate(),
+        onOk: () => startMutation.mutate(undefined),
       });
     } else {
       setStartModalVisible(true);
@@ -251,7 +251,7 @@ export default function SpecialistJobDetailPage() {
 
   const handleStartWithPlannedTime = useCallback(() => {
     if (startPlannedHours && startPlannedHours > 0) {
-      startMutation.mutate(startPlannedHours);
+      startMutation.mutate(startPlannedHours ?? undefined);
     }
   }, [startPlannedHours, startMutation]);
 

@@ -31,6 +31,7 @@ const statusColorMap: Record<JobStatus, string> = {
   completed: 'success',
   incomplete: 'error',
   qc_approved: 'cyan',
+  cancelled: 'default',
 };
 
 export default function AllSpecialistJobsPage() {
