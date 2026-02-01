@@ -9,9 +9,11 @@ interface VoiceTextAreaProps extends TextAreaProps {
   onTranscribed?: (en: string, ar: string) => void;
   /** Called after voice is recorded and saved, with the audio file ID */
   onVoiceRecorded?: (audioFileId: number) => void;
+  /** Called with the local blob URL for immediate playback */
+  onLocalBlobUrl?: (url: string) => void;
 }
 
-export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, ...textAreaProps }: VoiceTextAreaProps) {
+export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalBlobUrl, ...textAreaProps }: VoiceTextAreaProps) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [enText, setEnText] = useState<string | null>(null);
@@ -47,6 +49,7 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, ...textA
         const blobUrl = URL.createObjectURL(blob);
         localBlobUrlRef.current = blobUrl;
         setAudioUrl(blobUrl);
+        onLocalBlobUrl?.(blobUrl);
 
         setTranscribing(true);
         setTranscriptionFailed(false);
@@ -94,7 +97,7 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, ...textA
     } catch {
       message.error('Microphone access denied');
     }
-  }, [textAreaProps.onChange, onTranscribed, onVoiceRecorded]);
+  }, [textAreaProps.onChange, onTranscribed, onVoiceRecorded, onLocalBlobUrl]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {

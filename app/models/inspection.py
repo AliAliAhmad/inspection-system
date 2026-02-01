@@ -26,6 +26,8 @@ class Inspection(db.Model):
     __tablename__ = 'inspections'
     
     id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey('inspection_assignments.id'), nullable=True)
+    inspection_code = db.Column(db.String(100), nullable=True, unique=True)
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
     template_id = db.Column(db.Integer, db.ForeignKey('checklist_templates.id'), nullable=False)
     technician_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -73,6 +75,8 @@ class Inspection(db.Model):
         """Convert inspection to dictionary."""
         data = {
             'id': self.id,
+            'assignment_id': self.assignment_id,
+            'inspection_code': self.inspection_code,
             'equipment_id': self.equipment_id,
             'equipment': self.equipment.to_dict(language=language) if self.equipment else None,
             'template_id': self.template_id,
@@ -114,12 +118,15 @@ class InspectionAnswer(db.Model):
     answer_value = db.Column(db.String(500), nullable=False)
     comment = db.Column(db.Text, nullable=True)
     photo_path = db.Column(db.String(500), nullable=True)
+    video_path = db.Column(db.String(500), nullable=True)
+    video_file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
     voice_note_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
     answered_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
     inspection = db.relationship('Inspection', back_populates='answers')
     checklist_item = db.relationship('ChecklistItem', back_populates='answers')
+    video_file = db.relationship('File', foreign_keys=[video_file_id])
     voice_note = db.relationship('File', foreign_keys=[voice_note_id])
     
     __table_args__ = (
@@ -147,6 +154,17 @@ class InspectionAnswer(db.Model):
                 related_id=self.checklist_item_id
             ).first()
 
+        # Look up the video file record
+        video_file_record = None
+        if self.video_file_id:
+            video_file_record = self.video_file
+        elif self.video_path:
+            from app.models.file import File
+            video_file_record = File.query.filter_by(
+                related_type='inspection_answer_video',
+                related_id=self.checklist_item_id
+            ).first()
+
         return {
             'id': self.id,
             'inspection_id': self.inspection_id,
@@ -156,6 +174,8 @@ class InspectionAnswer(db.Model):
             'comment': comment,
             'photo_path': self.photo_path,
             'photo_file': photo_file.to_dict() if photo_file else None,
+            'video_path': self.video_path,
+            'video_file': video_file_record.to_dict() if video_file_record else None,
             'voice_note_id': self.voice_note_id,
             'voice_note': self.voice_note.to_dict() if self.voice_note else None,
             'answered_at': self.answered_at.isoformat() if self.answered_at else None

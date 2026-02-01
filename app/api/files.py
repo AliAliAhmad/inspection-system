@@ -112,7 +112,8 @@ def stream_file(file_id):
     return send_file(
         file_record.file_path,
         mimetype=file_record.mime_type or 'application/octet-stream',
-        as_attachment=False
+        as_attachment=False,
+        conditional=True
     )
 
 

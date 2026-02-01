@@ -136,6 +136,40 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('inspection_answers.voice_note_id already exists')
+
+    # Add assignment_id and inspection_code to inspections
+    try:
+        db.session.execute(text('ALTER TABLE inspections ADD COLUMN assignment_id INTEGER REFERENCES inspection_assignments(id)'))
+        db.session.commit()
+        print('Added assignment_id column to inspections')
+    except Exception:
+        db.session.rollback()
+        print('inspections.assignment_id already exists')
+
+    try:
+        db.session.execute(text('ALTER TABLE inspections ADD COLUMN inspection_code VARCHAR(100) UNIQUE'))
+        db.session.commit()
+        print('Added inspection_code column to inspections')
+    except Exception:
+        db.session.rollback()
+        print('inspections.inspection_code already exists')
+
+    # Add video_path and video_file_id to inspection_answers
+    try:
+        db.session.execute(text('ALTER TABLE inspection_answers ADD COLUMN video_path VARCHAR(500)'))
+        db.session.commit()
+        print('Added video_path column to inspection_answers')
+    except Exception:
+        db.session.rollback()
+        print('inspection_answers.video_path already exists')
+
+    try:
+        db.session.execute(text('ALTER TABLE inspection_answers ADD COLUMN video_file_id INTEGER REFERENCES files(id)'))
+        db.session.commit()
+        print('Added video_file_id column to inspection_answers')
+    except Exception:
+        db.session.rollback()
+        print('inspection_answers.video_file_id already exists')
 "
 
 echo "Starting gunicorn..."

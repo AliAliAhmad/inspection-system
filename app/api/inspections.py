@@ -70,9 +70,9 @@ def get_or_start_by_assignment(assignment_id):
 
     # Check for existing inspection for this assignment + user
     existing = Inspection.query.filter_by(
-        equipment_id=assignment.equipment_id,
+        assignment_id=assignment_id,
         technician_id=current_user.id,
-    ).filter(Inspection.status.in_(['draft', 'submitted'])).first()
+    ).filter(Inspection.status == 'draft').first()
 
     if existing:
         inspection_dict = existing.to_dict(include_answers=True, language=language)
@@ -88,7 +88,8 @@ def get_or_start_by_assignment(assignment_id):
     inspection_dict = InspectionService.start_inspection(
         equipment_id=assignment.equipment_id,
         technician_id=current_user.id,
-        template_id=assignment.template_id
+        template_id=assignment.template_id,
+        assignment_id=assignment_id
     )
 
     # Update assignment status to in_progress
@@ -352,22 +353,362 @@ def upload_answer_photo(inspection_id):
         category='inspection_photos'
     )
 
-    # Link the photo to the answer
+    # Link the photo to the answer (auto-create if doesn't exist)
     answer = InspectionAnswer.query.filter_by(
         inspection_id=inspection_id,
         checklist_item_id=int(checklist_item_id)
     ).first()
 
-    if answer:
-        answer.photo_path = file_record.filename
-        db.session.commit()
+    if not answer:
+        answer = InspectionAnswer(
+            inspection_id=inspection_id,
+            checklist_item_id=int(checklist_item_id),
+            answer_value='',
+            photo_path=file_record.stored_filename
+        )
+        db.session.add(answer)
+    else:
+        answer.photo_path = file_record.stored_filename
+
+    db.session.commit()
+
+    # Trigger GPT analysis of the photo
+    _analyze_media_async(file_record.file_path, 'photo', inspection_id, int(checklist_item_id))
 
     return jsonify({
         'status': 'success',
         'message': 'Photo uploaded',
         'data': file_record.to_dict(),
-        'photo_path': file_record.filename
+        'photo_path': file_record.stored_filename
     }), 201
+
+
+@bp.route('/<int:inspection_id>/upload-video', methods=['POST'])
+@jwt_required()
+def upload_answer_video(inspection_id):
+    """
+    Upload a video for an inspection answer and link it.
+    Multipart form: file, checklist_item_id
+    """
+    from app.services.file_service import FileService
+    from app.models import InspectionAnswer
+
+    current_user_id = get_jwt_identity()
+
+    inspection = db.session.get(Inspection, inspection_id)
+    if not inspection:
+        raise NotFoundError(f"Inspection with ID {inspection_id} not found")
+
+    if inspection.status != 'draft':
+        raise ValidationError("Cannot modify inspection that is not in draft status")
+
+    user = db.session.get(User, int(current_user_id))
+    if user.role != 'admin' and inspection.technician_id != int(current_user_id):
+        raise ForbiddenError("You can only upload videos to your own inspections")
+
+    if 'file' not in request.files:
+        raise ValidationError("No file in request")
+
+    checklist_item_id = request.form.get('checklist_item_id')
+    if not checklist_item_id:
+        raise ValidationError("checklist_item_id is required")
+
+    file = request.files['file']
+    file_record = FileService.upload_file(
+        file=file,
+        uploaded_by=int(current_user_id),
+        related_type='inspection_answer_video',
+        related_id=int(checklist_item_id),
+        category='inspection_videos'
+    )
+
+    # Link the video to the answer (auto-create if doesn't exist)
+    answer = InspectionAnswer.query.filter_by(
+        inspection_id=inspection_id,
+        checklist_item_id=int(checklist_item_id)
+    ).first()
+
+    if not answer:
+        answer = InspectionAnswer(
+            inspection_id=inspection_id,
+            checklist_item_id=int(checklist_item_id),
+            answer_value='',
+            video_path=file_record.stored_filename,
+            video_file_id=file_record.id
+        )
+        db.session.add(answer)
+    else:
+        answer.video_path = file_record.stored_filename
+        answer.video_file_id = file_record.id
+
+    db.session.commit()
+
+    # Trigger GPT analysis of the video (uses first frame concept)
+    _analyze_media_async(file_record.file_path, 'video', inspection_id, int(checklist_item_id))
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Video uploaded',
+        'data': file_record.to_dict(),
+        'video_path': file_record.stored_filename
+    }), 201
+
+
+@bp.route('/<int:inspection_id>/delete-voice', methods=['POST'])
+@jwt_required()
+def delete_answer_voice(inspection_id):
+    """
+    Delete a voice note from an inspection answer.
+    Removes voice file, clears transcript/translation from comment.
+    """
+    from app.models import InspectionAnswer
+    from app.services.file_service import FileService
+
+    current_user_id = get_jwt_identity()
+    data = request.get_json() or {}
+    checklist_item_id = data.get('checklist_item_id')
+
+    if not checklist_item_id:
+        raise ValidationError("checklist_item_id is required")
+
+    inspection = db.session.get(Inspection, inspection_id)
+    if not inspection:
+        raise NotFoundError(f"Inspection with ID {inspection_id} not found")
+
+    if inspection.status != 'draft':
+        raise ValidationError("Cannot modify inspection that is not in draft status")
+
+    user = db.session.get(User, int(current_user_id))
+    if user.role != 'admin' and inspection.technician_id != int(current_user_id):
+        raise ForbiddenError("You can only modify your own inspections")
+
+    answer = InspectionAnswer.query.filter_by(
+        inspection_id=inspection_id,
+        checklist_item_id=int(checklist_item_id)
+    ).first()
+
+    if not answer:
+        raise NotFoundError("Answer not found")
+
+    # Delete the voice file
+    if answer.voice_note_id:
+        try:
+            FileService.delete_file(answer.voice_note_id, int(current_user_id))
+        except Exception:
+            pass
+
+    # Clear voice note and comment (transcript + translation)
+    answer.voice_note_id = None
+    answer.comment = None
+    db.session.commit()
+
+    # Clean up bilingual translations
+    try:
+        from app.utils.bilingual import remove_translations
+        remove_translations('inspection_answer', answer.id)
+    except Exception:
+        pass
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Voice note deleted'
+    }), 200
+
+
+@bp.route('/<int:inspection_id>/delete-photo', methods=['POST'])
+@jwt_required()
+def delete_answer_photo(inspection_id):
+    """Delete a photo from an inspection answer."""
+    from app.models import InspectionAnswer
+    from app.services.file_service import FileService
+    from app.models.file import File
+
+    current_user_id = get_jwt_identity()
+    data = request.get_json() or {}
+    checklist_item_id = data.get('checklist_item_id')
+
+    if not checklist_item_id:
+        raise ValidationError("checklist_item_id is required")
+
+    inspection = db.session.get(Inspection, inspection_id)
+    if not inspection:
+        raise NotFoundError(f"Inspection with ID {inspection_id} not found")
+
+    if inspection.status != 'draft':
+        raise ValidationError("Cannot modify inspection that is not in draft status")
+
+    user = db.session.get(User, int(current_user_id))
+    if user.role != 'admin' and inspection.technician_id != int(current_user_id):
+        raise ForbiddenError("You can only modify your own inspections")
+
+    answer = InspectionAnswer.query.filter_by(
+        inspection_id=inspection_id,
+        checklist_item_id=int(checklist_item_id)
+    ).first()
+
+    if not answer:
+        raise NotFoundError("Answer not found")
+
+    # Delete the photo file record
+    photo_file = File.query.filter_by(
+        related_type='inspection_answer',
+        related_id=int(checklist_item_id)
+    ).first()
+    if photo_file:
+        try:
+            FileService.delete_file(photo_file.id, int(current_user_id))
+        except Exception:
+            pass
+
+    # Remove photo analysis from comment
+    if answer.comment:
+        lines = answer.comment.split('\n')
+        cleaned = [l for l in lines if not l.startswith('[Photo]:')]
+        answer.comment = '\n'.join(cleaned).strip() or None
+
+    answer.photo_path = None
+    db.session.commit()
+
+    return jsonify({'status': 'success', 'message': 'Photo deleted'}), 200
+
+
+@bp.route('/<int:inspection_id>/delete-video', methods=['POST'])
+@jwt_required()
+def delete_answer_video(inspection_id):
+    """Delete a video from an inspection answer."""
+    from app.models import InspectionAnswer
+    from app.services.file_service import FileService
+
+    current_user_id = get_jwt_identity()
+    data = request.get_json() or {}
+    checklist_item_id = data.get('checklist_item_id')
+
+    if not checklist_item_id:
+        raise ValidationError("checklist_item_id is required")
+
+    inspection = db.session.get(Inspection, inspection_id)
+    if not inspection:
+        raise NotFoundError(f"Inspection with ID {inspection_id} not found")
+
+    if inspection.status != 'draft':
+        raise ValidationError("Cannot modify inspection that is not in draft status")
+
+    user = db.session.get(User, int(current_user_id))
+    if user.role != 'admin' and inspection.technician_id != int(current_user_id):
+        raise ForbiddenError("You can only modify your own inspections")
+
+    answer = InspectionAnswer.query.filter_by(
+        inspection_id=inspection_id,
+        checklist_item_id=int(checklist_item_id)
+    ).first()
+
+    if not answer:
+        raise NotFoundError("Answer not found")
+
+    # Delete the video file
+    if answer.video_file_id:
+        try:
+            FileService.delete_file(answer.video_file_id, int(current_user_id))
+        except Exception:
+            pass
+
+    # Remove video analysis from comment
+    if answer.comment:
+        lines = answer.comment.split('\n')
+        cleaned = [l for l in lines if not l.startswith('[Video]:')]
+        answer.comment = '\n'.join(cleaned).strip() or None
+
+    answer.video_path = None
+    answer.video_file_id = None
+    db.session.commit()
+
+    return jsonify({'status': 'success', 'message': 'Video deleted'}), 200
+
+
+def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id):
+    """
+    Analyze a photo or video using GPT-4o-mini vision and append result to comment.
+    """
+    import os
+    import base64
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            return
+
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        # Read and encode the image/video frame
+        with open(file_path, 'rb') as f:
+            data = f.read()
+
+        b64 = base64.b64encode(data).decode('utf-8')
+
+        # Determine mime type
+        ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
+        mime_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+                    'gif': 'image/gif', 'webp': 'image/webp', 'mp4': 'video/mp4', 'webm': 'video/webm'}
+        mime = mime_map.get(ext, 'image/jpeg')
+
+        # For video, we still send as image (GPT will analyze the thumbnail/first bytes)
+        if media_type == 'video':
+            # Only send if it's a small enough file for base64
+            if len(data) > 5 * 1024 * 1024:
+                return
+            mime = mime_map.get(ext, 'video/mp4')
+
+        prompt = (
+            "Describe what you see in this inspection image in 1-2 short sentences. "
+            "Focus on identifying any defects, damage, or issues visible. Be concise and specific."
+        )
+
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[{
+                'role': 'user',
+                'content': [
+                    {'type': 'text', 'text': prompt},
+                    {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{b64}', 'detail': 'low'}}
+                ]
+            }],
+            max_tokens=150
+        )
+
+        analysis = response.choices[0].message.content.strip() if response.choices else None
+        if not analysis:
+            return
+
+        # Append to comment
+        from app.models import InspectionAnswer
+        answer = InspectionAnswer.query.filter_by(
+            inspection_id=inspection_id,
+            checklist_item_id=checklist_item_id
+        ).first()
+
+        if answer:
+            prefix = '[Photo]:' if media_type == 'photo' else '[Video]:'
+            analysis_line = f'{prefix} {analysis}'
+
+            if answer.comment:
+                answer.comment = f'{answer.comment}\n\n{analysis_line}'
+            else:
+                answer.comment = analysis_line
+
+            db.session.commit()
+
+            # Auto-translate the updated comment
+            from app.utils.bilingual import auto_translate_and_save
+            auto_translate_and_save('inspection_answer', answer.id, {
+                'comment': answer.comment
+            })
+
+    except Exception as e:
+        logger.error("Media analysis failed: %s", e)
 
 
 @bp.route('/<int:inspection_id>', methods=['DELETE'])

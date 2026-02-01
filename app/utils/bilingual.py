@@ -56,6 +56,15 @@ def auto_translate_and_save(model_type, model_id, fields):
     db.session.commit()
 
 
+def remove_translations(model_type, model_id):
+    """Remove all translations for a given model instance."""
+    Translation.query.filter_by(
+        model_type=model_type,
+        model_id=model_id
+    ).delete()
+    db.session.commit()
+
+
 def get_bilingual_text(model_type, model_id, field_name, original_text, language='en'):
     """
     Get text in the requested language.

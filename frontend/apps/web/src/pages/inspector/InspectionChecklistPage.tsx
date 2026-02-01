@@ -13,6 +13,7 @@ import {
   Alert,
   List,
   Badge,
+  Image,
   message,
   Popconfirm,
   Descriptions,
@@ -20,6 +21,8 @@ import {
 import {
   CameraOutlined,
   PictureOutlined,
+  VideoCameraOutlined,
+  DeleteOutlined,
   StarFilled,
   CheckCircleOutlined,
   ArrowLeftOutlined,
@@ -38,6 +41,8 @@ import {
 } from '@inspection/shared';
 import VoiceTextArea from '../../components/VoiceTextArea';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 export default function InspectionChecklistPage() {
   const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
@@ -45,7 +50,6 @@ export default function InspectionChecklistPage() {
   const assignmentId = Number(id);
   const isArabic = i18n.language === 'ar';
 
-  // Warn on page close/refresh if inspection is in draft status
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
@@ -54,7 +58,6 @@ export default function InspectionChecklistPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Fetch inspection data by assignment ID (auto-creates if needed)
   const {
     data: inspection,
     isLoading,
@@ -68,7 +71,6 @@ export default function InspectionChecklistPage() {
 
   const inspectionId = inspection?.id;
 
-  // Fetch progress using actual inspection ID
   const { data: progress, refetch: refetchProgress } = useQuery({
     queryKey: ['inspection-progress', inspectionId],
     queryFn: () =>
@@ -85,7 +87,6 @@ export default function InspectionChecklistPage() {
     enabled: !!inspectionId,
   });
 
-  // Answer mutation using actual inspection ID
   const answerMutation = useMutation({
     mutationFn: (payload: {
       checklist_item_id: number;
@@ -102,7 +103,6 @@ export default function InspectionChecklistPage() {
     },
   });
 
-  // Submit mutation using actual inspection ID
   const submitMutation = useMutation({
     mutationFn: () => inspectionsApi.submit(inspectionId!),
     onSuccess: () => {
@@ -111,19 +111,6 @@ export default function InspectionChecklistPage() {
     },
     onError: (err: any) => {
       message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error'));
-    },
-  });
-
-  // Upload mutation — uses dedicated endpoint that links photo to the answer
-  const uploadMutation = useMutation({
-    mutationFn: (params: { file: File; checklistItemId: number }) =>
-      inspectionsApi.uploadAnswerPhoto(inspectionId!, params.checklistItemId, params.file),
-    onSuccess: () => {
-      message.success('Photo uploaded');
-      refetchInspection();
-    },
-    onError: () => {
-      message.error(t('common.error'));
     },
   });
 
@@ -137,14 +124,6 @@ export default function InspectionChecklistPage() {
       });
     },
     [answerMutation],
-  );
-
-  const handleUpload = useCallback(
-    (file: File, checklistItemId: number) => {
-      uploadMutation.mutate({ file, checklistItemId });
-      return false;
-    },
-    [uploadMutation],
   );
 
   if (isLoading) {
@@ -202,7 +181,6 @@ export default function InspectionChecklistPage() {
 
       <Typography.Title level={4}>{t('inspection.checklist')}</Typography.Title>
 
-      {/* Equipment Info */}
       {inspection.equipment && (
         <Card style={{ marginBottom: 16 }}>
           <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small">
@@ -218,6 +196,11 @@ export default function InspectionChecklistPage() {
             <Descriptions.Item label={t('equipment.berth')}>
               {inspection.equipment.berth ?? '-'}
             </Descriptions.Item>
+            {inspection.inspection_code && (
+              <Descriptions.Item label={t('inspection.code', 'Inspection Code')}>
+                <Tag color="blue">{inspection.inspection_code}</Tag>
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label={t('common.status')}>
               <Tag color={inspection.status === 'draft' ? 'blue' : 'green'}>
                 {t(`status.${inspection.status}`, inspection.status)}
@@ -227,7 +210,6 @@ export default function InspectionChecklistPage() {
         </Card>
       )}
 
-      {/* Progress Bar */}
       {progress && (
         <Card style={{ marginBottom: 16 }}>
           <Typography.Text strong>{t('inspection.progress')}</Typography.Text>
@@ -241,7 +223,6 @@ export default function InspectionChecklistPage() {
         </Card>
       )}
 
-      {/* Checklist Items */}
       <List
         dataSource={uniqueItems}
         locale={{ emptyText: t('common.noData') }}
@@ -254,14 +235,14 @@ export default function InspectionChecklistPage() {
               existingAnswer={existingAnswer}
               getQuestionText={getQuestionText}
               onAnswer={handleAnswer}
-              onUpload={handleUpload}
+              inspectionId={inspectionId!}
+              refetchInspection={refetchInspection}
               isSubmitted={inspection.status !== 'draft'}
             />
           );
         }}
       />
 
-      {/* Submit Button */}
       {inspection.status === 'draft' && (
         <Card style={{ marginTop: 16, textAlign: 'center' }}>
           <Popconfirm
@@ -304,15 +285,16 @@ interface ChecklistItemCardProps {
   existingAnswer?: InspectionAnswer;
   getQuestionText: (item: ChecklistItem) => string;
   onAnswer: (id: number, value: string, comment?: string, voiceNoteId?: number) => void;
-  onUpload: (file: File, id: number) => boolean;
+  inspectionId: number;
+  refetchInspection: () => void;
   isSubmitted: boolean;
 }
 
-function openCameraInput(accept: string, onFile: (file: File) => void) {
+function openFileInput(accept: string, capture: boolean, onFile: (file: File) => void) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = accept;
-  input.capture = 'environment';
+  if (capture) input.capture = 'environment';
   input.onchange = () => {
     const file = input.files?.[0];
     if (file) onFile(file);
@@ -325,37 +307,111 @@ function ChecklistItemCard({
   existingAnswer,
   getQuestionText,
   onAnswer,
-  onUpload,
+  inspectionId,
+  refetchInspection,
   isSubmitted,
 }: ChecklistItemCardProps) {
   const { t } = useTranslation();
-  const [comment, setComment] = useState(existingAnswer?.comment ?? '');
   const [voiceNoteId, setVoiceNoteId] = useState<number | undefined>(
     existingAnswer?.voice_note_id ?? undefined,
   );
   const [currentValue, setCurrentValue] = useState(existingAnswer?.answer_value ?? '');
+  const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
 
-  // Auto-show comment area when answer is fail/no, or when there's an existing comment/voice
   const isFailed = currentValue === 'fail' || currentValue === 'no';
-  const hasExistingCommentOrVoice = !!(existingAnswer?.comment || existingAnswer?.voice_note_id);
-  const [showComment, setShowComment] = useState(isFailed || hasExistingCommentOrVoice);
+  const hasExistingVoice = !!(existingAnswer?.voice_note_id || voiceNoteId);
+  const [showComment, setShowComment] = useState(isFailed || hasExistingVoice || !!existingAnswer?.comment);
 
-  // Auto-expand comment section when fail/no is selected
   useEffect(() => {
-    if (isFailed) {
-      setShowComment(true);
-    }
+    if (isFailed) setShowComment(true);
   }, [isFailed]);
+
+  // Sync voiceNoteId with existingAnswer updates
+  useEffect(() => {
+    if (existingAnswer?.voice_note_id) {
+      setVoiceNoteId(existingAnswer.voice_note_id);
+    }
+  }, [existingAnswer?.voice_note_id]);
+
+  const token = localStorage.getItem('access_token') || '';
+
+  // Single voice player: use local blob if just recorded, else server stream
+  const voiceStreamUrl = localBlobUrl
+    ? null
+    : (existingAnswer?.voice_note_id
+      ? `${API_BASE}/api/files/${existingAnswer.voice_note_id}/stream?token=${token}`
+      : null);
+
+  const audioSrc = localBlobUrl || voiceStreamUrl;
+
+  // Photo preview
+  const photoStreamUrl = existingAnswer?.photo_file
+    ? `${API_BASE}/api/files/${existingAnswer.photo_file.id}/stream?token=${token}`
+    : null;
+
+  // Video preview
+  const videoStreamUrl = existingAnswer?.video_file
+    ? `${API_BASE}/api/files/${existingAnswer.video_file.id}/stream?token=${token}`
+    : null;
 
   const handleAnswerChange = (value: string) => {
     setCurrentValue(value);
-    onAnswer(item.id, value, comment || undefined, voiceNoteId);
+    onAnswer(item.id, value, undefined, voiceNoteId);
   };
 
-  // Build stream URL for existing voice note (for engineers/admins viewing submitted inspections)
-  const existingVoiceStreamUrl = existingAnswer?.voice_note_id
-    ? `/api/files/${existingAnswer.voice_note_id}/stream?token=${localStorage.getItem('access_token') || ''}`
-    : null;
+  // Upload photo mutation
+  const uploadPhotoMutation = useMutation({
+    mutationFn: (file: File) => inspectionsApi.uploadAnswerPhoto(inspectionId, item.id, file),
+    onSuccess: () => {
+      message.success(t('inspection.photoUploaded', 'Photo uploaded'));
+      refetchInspection();
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || t('common.error'));
+    },
+  });
+
+  // Upload video mutation
+  const uploadVideoMutation = useMutation({
+    mutationFn: (file: File) => inspectionsApi.uploadAnswerVideo(inspectionId, item.id, file),
+    onSuccess: () => {
+      message.success(t('inspection.videoUploaded', 'Video uploaded'));
+      refetchInspection();
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || t('common.error'));
+    },
+  });
+
+  // Delete mutations
+  const deleteVoiceMutation = useMutation({
+    mutationFn: () => inspectionsApi.deleteVoice(inspectionId, item.id),
+    onSuccess: () => {
+      setVoiceNoteId(undefined);
+      setLocalBlobUrl(null);
+      message.success(t('inspection.voiceDeleted', 'Voice note deleted'));
+      refetchInspection();
+    },
+    onError: () => message.error(t('common.error')),
+  });
+
+  const deletePhotoMutation = useMutation({
+    mutationFn: () => inspectionsApi.deletePhoto(inspectionId, item.id),
+    onSuccess: () => {
+      message.success(t('inspection.photoDeleted', 'Photo deleted'));
+      refetchInspection();
+    },
+    onError: () => message.error(t('common.error')),
+  });
+
+  const deleteVideoMutation = useMutation({
+    mutationFn: () => inspectionsApi.deleteVideo(inspectionId, item.id),
+    onSuccess: () => {
+      message.success(t('inspection.videoDeleted', 'Video deleted'));
+      refetchInspection();
+    },
+    onError: () => message.error(t('common.error')),
+  });
 
   const renderAnswerInput = () => {
     const disabled = isSubmitted;
@@ -392,7 +448,7 @@ function ChecklistItemCard({
             disabled={disabled}
             onBlur={(e) => {
               if (e.target.value && e.target.value !== (existingAnswer?.answer_value ?? '')) {
-                onAnswer(item.id, e.target.value, comment || undefined, voiceNoteId);
+                onAnswer(item.id, e.target.value, undefined, voiceNoteId);
               }
             }}
           />
@@ -406,7 +462,7 @@ function ChecklistItemCard({
             onBlur={(e) => {
               const val = e.target.value;
               if (val && val !== currentValue) {
-                onAnswer(item.id, val, comment || undefined, voiceNoteId);
+                onAnswer(item.id, val, undefined, voiceNoteId);
               }
             }}
             style={{ width: 200 }}
@@ -445,13 +501,10 @@ function ChecklistItemCard({
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         {renderAnswerInput()}
 
+        {/* Action buttons: comment toggle + photo/video upload */}
         <Space wrap>
-          {!showComment && (
-            <Button
-              size="small"
-              type="link"
-              onClick={() => setShowComment(true)}
-            >
+          {!showComment && !isSubmitted && (
+            <Button size="small" type="link" onClick={() => setShowComment(true)}>
               {t('inspection.comment', 'Comment')}
             </Button>
           )}
@@ -462,78 +515,122 @@ function ChecklistItemCard({
                 size="small"
                 type="link"
                 icon={<CameraOutlined />}
-                onClick={() => openCameraInput('image/*', (file) => onUpload(file, item.id))}
+                loading={uploadPhotoMutation.isPending}
+                onClick={() => openFileInput('image/*', true, (file) => uploadPhotoMutation.mutate(file))}
               >
                 {t('inspection.take_photo', 'Take Photo')}
               </Button>
               <Upload
                 accept="image/*"
                 showUploadList={false}
-                beforeUpload={(file) => onUpload(file, item.id)}
+                beforeUpload={(file) => { uploadPhotoMutation.mutate(file); return false; }}
               >
-                <Button size="small" type="link" icon={<PictureOutlined />}>
-                  {t('inspection.from_gallery', 'From Gallery')}
+                <Button size="small" type="link" icon={<PictureOutlined />} loading={uploadPhotoMutation.isPending}>
+                  {t('inspection.from_gallery', 'Gallery Photo')}
+                </Button>
+              </Upload>
+              <Button
+                size="small"
+                type="link"
+                icon={<VideoCameraOutlined />}
+                loading={uploadVideoMutation.isPending}
+                onClick={() => openFileInput('video/*', true, (file) => uploadVideoMutation.mutate(file))}
+              >
+                {t('inspection.record_video', 'Record Video')}
+              </Button>
+              <Upload
+                accept="video/*"
+                showUploadList={false}
+                beforeUpload={(file) => { uploadVideoMutation.mutate(file); return false; }}
+              >
+                <Button size="small" type="link" icon={<VideoCameraOutlined />} loading={uploadVideoMutation.isPending}>
+                  {t('inspection.from_gallery_video', 'Gallery Video')}
                 </Button>
               </Upload>
             </>
           )}
-
-          {existingAnswer?.photo_path && (
-            <Tag color="green">{t('inspection.photo', 'Photo')} uploaded</Tag>
-          )}
-
-          {(existingAnswer?.voice_note_id || voiceNoteId) && (
-            <Tag color="blue" icon={<SoundOutlined />}>Voice note</Tag>
-          )}
         </Space>
 
-        {/* Comment + Voice recording area — always visible on fail/no */}
+        {/* Photo preview */}
+        {photoStreamUrl && (
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <Image
+              src={photoStreamUrl}
+              alt="Inspection photo"
+              style={{ maxWidth: 200, maxHeight: 150, objectFit: 'contain', borderRadius: 4 }}
+              fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN88P/BfwAJhAPk4kCKjgAAAABJRU5ErkJggg=="
+            />
+            {!isSubmitted && (
+              <Button
+                type="text"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                loading={deletePhotoMutation.isPending}
+                onClick={() => deletePhotoMutation.mutate()}
+                style={{ position: 'absolute', top: 0, right: 0 }}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Video preview */}
+        {videoStreamUrl && (
+          <div style={{ position: 'relative' }}>
+            <video
+              controls
+              src={videoStreamUrl}
+              style={{ maxWidth: 300, maxHeight: 200, borderRadius: 4 }}
+              preload="metadata"
+            />
+            {!isSubmitted && (
+              <Button
+                type="text"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                loading={deleteVideoMutation.isPending}
+                onClick={() => deleteVideoMutation.mutate()}
+                style={{ position: 'absolute', top: 0, right: 0 }}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Voice recording area — always visible on fail/no */}
         {showComment && (
           <div>
-            <VoiceTextArea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder={
-                isFailed
-                  ? t('inspection.fail_comment', 'Add comment or use voice recording...')
-                  : t('inspection.comment', 'Add a comment...')
-              }
-              rows={2}
-              disabled={isSubmitted}
-              onVoiceRecorded={(audioFileId) => {
-                setVoiceNoteId(audioFileId);
-                // Auto-save with voice note
-                if (currentValue) {
-                  onAnswer(item.id, currentValue, comment || undefined, audioFileId);
+            {!isSubmitted && (
+              <VoiceTextArea
+                value={existingAnswer?.comment ?? ''}
+                rows={2}
+                placeholder={
+                  isFailed
+                    ? t('inspection.fail_comment', 'Record a voice note for failed items...')
+                    : t('inspection.comment', 'Record a voice note...')
                 }
-              }}
-              onTranscribed={(en, ar) => {
-                const parts: string[] = [];
-                if (en) parts.push(`EN: ${en}`);
-                if (ar) parts.push(`AR: ${ar}`);
-                const combined = parts.join('\n');
-                setComment(combined);
-                if (currentValue) {
-                  onAnswer(item.id, currentValue, combined, voiceNoteId);
-                }
-              }}
-              onBlur={() => {
-                if (
-                  existingAnswer &&
-                  comment !== (existingAnswer.comment ?? '')
-                ) {
-                  onAnswer(
-                    item.id,
-                    existingAnswer.answer_value,
-                    comment || undefined,
-                    voiceNoteId,
-                  );
-                }
-              }}
-            />
+                disabled={true}
+                onVoiceRecorded={(audioFileId) => {
+                  setVoiceNoteId(audioFileId);
+                  if (currentValue) {
+                    onAnswer(item.id, currentValue, undefined, audioFileId);
+                  }
+                }}
+                onTranscribed={(en, ar) => {
+                  const parts: string[] = [];
+                  if (en) parts.push(`EN: ${en}`);
+                  if (ar) parts.push(`AR: ${ar}`);
+                  const combined = parts.join('\n');
+                  if (currentValue) {
+                    onAnswer(item.id, currentValue, combined, voiceNoteId);
+                  }
+                }}
+                onLocalBlobUrl={(url) => setLocalBlobUrl(url)}
+              />
+            )}
 
-            {/* Existing voice note playback (from server, for viewing submitted inspections) */}
-            {existingVoiceStreamUrl && (
+            {/* Single audio player — blob or server stream */}
+            {audioSrc && !isSubmitted && (
               <div
                 style={{
                   marginTop: 6,
@@ -547,13 +644,34 @@ function ChecklistItemCard({
                 }}
               >
                 <SoundOutlined style={{ color: '#1677ff', fontSize: 14 }} />
-                <audio controls src={existingVoiceStreamUrl} style={{ height: 32, flex: 1 }} preload="auto" />
+                <audio controls src={audioSrc} style={{ height: 32, flex: 1 }} preload="auto" />
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  loading={deleteVoiceMutation.isPending}
+                  onClick={() => deleteVoiceMutation.mutate()}
+                />
               </div>
             )}
 
-            {isFailed && !comment && !voiceNoteId && !isSubmitted && (
+            {/* Read-only: show existing comment text */}
+            {existingAnswer?.comment && (
+              <div style={{ marginTop: 6, padding: '6px 10px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e8e8e8', fontSize: 12 }}>
+                <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{existingAnswer.comment}</Typography.Text>
+              </div>
+            )}
+
+            {/* Validation warning */}
+            {isFailed && !hasExistingVoice && !isSubmitted && (
               <Typography.Text type="warning" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
-                {t('inspection.fail_requires_note', 'A comment or voice note is required for failed items')}
+                {t('inspection.fail_requires_voice', 'Voice recording is required for failed items')}
+              </Typography.Text>
+            )}
+            {isFailed && !existingAnswer?.photo_path && !existingAnswer?.video_path && !isSubmitted && (
+              <Typography.Text type="warning" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
+                {t('inspection.fail_requires_media', 'Photo or video is required for failed items')}
               </Typography.Text>
             )}
           </div>

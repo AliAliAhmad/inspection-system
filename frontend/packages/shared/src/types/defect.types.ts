@@ -14,6 +14,13 @@ export interface InspectionAnswerSummary {
     mime_type: string;
     download_url: string;
   } | null;
+  video_path: string | null;
+  video_file: {
+    id: number;
+    original_filename: string;
+    mime_type: string;
+    download_url: string;
+  } | null;
   voice_note_id: number | null;
   voice_note: {
     id: number;

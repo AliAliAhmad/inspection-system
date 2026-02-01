@@ -147,8 +147,18 @@ class EngineerJob(db.Model):
             'qe_id': self.qe_id,
             'is_running': self.status == 'in_progress' and self.started_at is not None and not self.has_pending_pause(),
             'has_pending_pause': self.has_pending_pause(),
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'defect': self._get_defect_dict(language),
         }
+
+    def _get_defect_dict(self, language='en'):
+        """Get related defect with inspection answer if this is a defect-related job."""
+        if self.related_type == 'defect' and self.related_id:
+            from app.models.defect import Defect
+            defect = db.session.get(Defect, self.related_id)
+            if defect:
+                return defect.to_dict(language=language)
+        return None
 
     def __repr__(self):
         return f'<EngineerJob {self.job_id} - {self.status}>'

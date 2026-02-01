@@ -66,6 +66,33 @@ export const inspectionsApi = {
     });
   },
 
+  uploadAnswerVideo(inspectionId: number, checklistItemId: number, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('checklist_item_id', String(checklistItemId));
+    return getApiClient().post<ApiResponse>(`/api/inspections/${inspectionId}/upload-video`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  deleteVoice(inspectionId: number, checklistItemId: number) {
+    return getApiClient().post<ApiResponse>(`/api/inspections/${inspectionId}/delete-voice`, {
+      checklist_item_id: checklistItemId,
+    });
+  },
+
+  deletePhoto(inspectionId: number, checklistItemId: number) {
+    return getApiClient().post<ApiResponse>(`/api/inspections/${inspectionId}/delete-photo`, {
+      checklist_item_id: checklistItemId,
+    });
+  },
+
+  deleteVideo(inspectionId: number, checklistItemId: number) {
+    return getApiClient().post<ApiResponse>(`/api/inspections/${inspectionId}/delete-video`, {
+      checklist_item_id: checklistItemId,
+    });
+  },
+
   remove(id: number) {
     return getApiClient().delete<ApiResponse>(`/api/inspections/${id}`);
   },

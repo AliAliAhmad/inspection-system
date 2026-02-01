@@ -1,5 +1,5 @@
 import { Card, Tag, Typography, Space, Image } from 'antd';
-import { SoundOutlined, PictureOutlined, WarningOutlined } from '@ant-design/icons';
+import { SoundOutlined, PictureOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { InspectionAnswerSummary } from '@inspection/shared';
 
@@ -28,6 +28,10 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
 
   const photoStreamUrl = answer.photo_file
     ? `${API_BASE}/api/files/${answer.photo_file.id}/stream?token=${token}`
+    : null;
+
+  const videoStreamUrl = answer.video_file
+    ? `${API_BASE}/api/files/${answer.video_file.id}/stream?token=${token}`
     : null;
 
   const voiceStreamUrl = answer.voice_note_id
@@ -79,16 +83,6 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
           </Tag>
         </div>
 
-        {/* Comment */}
-        {answer.comment && (
-          <div style={{ background: '#fff', padding: '8px 12px', borderRadius: 4, border: '1px solid #f0f0f0' }}>
-            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 2 }}>
-              {t('inspection.comment', 'Comment')}:
-            </Typography.Text>
-            <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{answer.comment}</Typography.Text>
-          </div>
-        )}
-
         {/* Photo */}
         {photoStreamUrl && (
           <div style={{ background: '#fff', padding: '8px 12px', borderRadius: 4, border: '1px solid #f0f0f0' }}>
@@ -100,6 +94,21 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
               alt="Inspection photo"
               style={{ maxWidth: 300, maxHeight: 200, objectFit: 'contain', borderRadius: 4 }}
               fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN88P/BfwAJhAPk4kCKjgAAAABJRU5ErkJggg=="
+            />
+          </div>
+        )}
+
+        {/* Video */}
+        {videoStreamUrl && (
+          <div style={{ background: '#fff', padding: '8px 12px', borderRadius: 4, border: '1px solid #f0f0f0' }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+              <VideoCameraOutlined /> {t('inspection.video', 'Video')}:
+            </Typography.Text>
+            <video
+              controls
+              src={videoStreamUrl}
+              style={{ maxWidth: 400, maxHeight: 250, borderRadius: 4 }}
+              preload="metadata"
             />
           </div>
         )}
@@ -122,6 +131,16 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
               {t('inspection.voiceNote', 'Voice Note')}:
             </Typography.Text>
             <audio controls src={voiceStreamUrl} style={{ height: 32, flex: 1 }} preload="auto" />
+          </div>
+        )}
+
+        {/* Comment */}
+        {answer.comment && (
+          <div style={{ background: '#fff', padding: '8px 12px', borderRadius: 4, border: '1px solid #f0f0f0' }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 2 }}>
+              {t('inspection.comment', 'Comment')}:
+            </Typography.Text>
+            <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{answer.comment}</Typography.Text>
           </div>
         )}
       </Space>

@@ -17,7 +17,7 @@ class InspectionService:
     """Service for managing inspection lifecycle and workflow."""
     
     @staticmethod
-    def start_inspection(equipment_id, technician_id, template_id=None):
+    def start_inspection(equipment_id, technician_id, template_id=None, assignment_id=None):
         """
         Start a new inspection (creates draft).
 
@@ -25,6 +25,7 @@ class InspectionService:
             equipment_id: ID of equipment to inspect
             technician_id: ID of technician performing inspection
             template_id: ID of checklist template (from assignment/routine)
+            assignment_id: ID of inspection assignment
 
         Returns:
             Created Inspection dict with checklist items in user's language
@@ -84,11 +85,24 @@ class InspectionService:
                     f"No checklist template found. Please assign a template in the inspection routine."
                 )
 
+        # Generate inspection code: ASSET-ORDER-DATE
+        now = datetime.utcnow()
+        date_str = now.strftime('%Y%m%d')
+        existing_count = Inspection.query.filter(
+            Inspection.equipment_id == equipment_id,
+            Inspection.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+        ).count()
+        order_num = existing_count + 1
+        asset_code = equipment.serial_number if equipment.serial_number else f'EQ{equipment_id}'
+        inspection_code = f'{asset_code}-{order_num:03d}-{date_str}'
+
         # Create new inspection
         inspection = Inspection(
             equipment_id=equipment_id,
             template_id=template.id,
             technician_id=technician_id,
+            assignment_id=assignment_id,
+            inspection_code=inspection_code,
             status='draft',
             started_at=datetime.utcnow()
         )
@@ -366,16 +380,27 @@ class InspectionService:
                 f"Please answer: {', '.join(missing_questions)}"
             )
         
-        # Validate critical failures have photos
-        critical_failures = InspectionAnswer.query.join(ChecklistItem).filter(
+        # Validate all fail/no answers have voice note + (photo or video)
+        failed_without_evidence = InspectionAnswer.query.join(ChecklistItem).filter(
             InspectionAnswer.inspection_id == inspection.id,
-            ChecklistItem.critical_failure == True,
-            InspectionAnswer.answer_value == 'fail',
-            InspectionAnswer.photo_path.is_(None)
+            ChecklistItem.answer_type.in_(['pass_fail', 'yes_no']),
+            db.or_(
+                InspectionAnswer.answer_value == 'fail',
+                InspectionAnswer.answer_value == 'no'
+            )
         ).all()
-        
-        if critical_failures:
-            raise ValidationError("All critical failures must have photos attached")
+
+        for answer in failed_without_evidence:
+            if not answer.voice_note_id:
+                item = answer.checklist_item
+                raise ValidationError(
+                    f"Voice recording is required for failed item: {item.question_text[:50] if item else 'Unknown'}"
+                )
+            if not answer.photo_path and not answer.video_path:
+                item = answer.checklist_item
+                raise ValidationError(
+                    f"Photo or video is required for failed item: {item.question_text[:50] if item else 'Unknown'}"
+                )
     
     @staticmethod
     def _get_failed_answers(inspection_id):

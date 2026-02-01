@@ -37,6 +37,7 @@ import {
   formatHours,
 } from '@inspection/shared';
 import VoiceTextArea from '../../components/VoiceTextArea';
+import InspectionFindingCard from '../../components/InspectionFindingCard';
 
 const STATUS_COLOR: Record<string, string> = {
   assigned: 'blue',
@@ -324,6 +325,13 @@ export default function EngineerJobDetailPage() {
           )}
         </Descriptions>
       </Card>
+
+      {/* Inspector's Finding */}
+      {(job as any).defect?.inspection_answer && (
+        <div style={{ marginTop: 16 }}>
+          <InspectionFindingCard answer={(job as any).defect.inspection_answer} />
+        </div>
+      )}
 
       {/* Ratings display for completed jobs */}
       {(job.status === 'completed' || job.status === 'qc_approved') && (

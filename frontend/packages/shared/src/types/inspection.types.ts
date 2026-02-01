@@ -6,6 +6,8 @@ export type InspectionResult = 'pass' | 'fail' | 'incomplete';
 
 export interface Inspection {
   id: number;
+  assignment_id: number | null;
+  inspection_code: string | null;
   equipment_id: number;
   equipment: Equipment | null;
   template_id: number;
@@ -28,6 +30,9 @@ export interface InspectionAnswer {
   answer_value: string;
   comment: string | null;
   photo_path: string | null;
+  photo_file: { id: number; original_filename: string; mime_type: string; download_url: string } | null;
+  video_path: string | null;
+  video_file: { id: number; original_filename: string; mime_type: string; download_url: string } | null;
   voice_note_id: number | null;
   voice_note: { id: number; filename: string; original_filename: string; mime_type?: string } | null;
   answered_at: string;
