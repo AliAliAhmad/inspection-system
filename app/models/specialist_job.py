@@ -235,6 +235,12 @@ class SpecialistJob(db.Model):
                 'has_pending_pause': self.has_pending_pause(),
             })
 
+        # Include defect with inspection answer data
+        if self.defect:
+            data['defect'] = self.defect.to_dict(language=language)
+        else:
+            data['defect'] = None
+
         return data
 
     def __repr__(self):

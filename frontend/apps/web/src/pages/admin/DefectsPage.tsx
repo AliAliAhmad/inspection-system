@@ -13,7 +13,7 @@ import {
   Space,
   message,
 } from 'antd';
-import { ToolOutlined } from '@ant-design/icons';
+import { ToolOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
@@ -25,6 +25,7 @@ import {
   type AssignSpecialistPayload,
 } from '@inspection/shared';
 import VoiceTextArea from '../../components/VoiceTextArea';
+import InspectionFindingCard from '../../components/InspectionFindingCard';
 
 const severityColors: Record<string, string> = {
   critical: 'red',
@@ -217,6 +218,22 @@ export default function DefectsPage() {
         dataSource={defects}
         loading={isLoading}
         locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
+        expandable={{
+          expandedRowRender: (record: Defect) =>
+            record.inspection_answer ? (
+              <InspectionFindingCard answer={record.inspection_answer} />
+            ) : (
+              <Typography.Text type="secondary">{t('common.noData', 'No inspection data')}</Typography.Text>
+            ),
+          rowExpandable: (record: Defect) => !!record.inspection_answer,
+          expandIcon: ({ expanded, onExpand, record }) =>
+            record.inspection_answer ? (
+              <InfoCircleOutlined
+                style={{ color: expanded ? '#1677ff' : '#999', cursor: 'pointer' }}
+                onClick={(e) => onExpand(record, e)}
+              />
+            ) : null,
+        }}
         pagination={{
           current: pagination?.page || page,
           pageSize: pagination?.per_page || 20,

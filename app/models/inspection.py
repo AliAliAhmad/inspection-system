@@ -138,6 +138,15 @@ class InspectionAnswer(db.Model):
             self.comment, language
         ) if self.comment else self.comment
 
+        # Look up the photo file record if photo_path is set
+        photo_file = None
+        if self.photo_path:
+            from app.models.file import File
+            photo_file = File.query.filter_by(
+                related_type='inspection_answer',
+                related_id=self.checklist_item_id
+            ).first()
+
         return {
             'id': self.id,
             'inspection_id': self.inspection_id,
@@ -146,6 +155,7 @@ class InspectionAnswer(db.Model):
             'answer_value': self.answer_value,
             'comment': comment,
             'photo_path': self.photo_path,
+            'photo_file': photo_file.to_dict() if photo_file else None,
             'voice_note_id': self.voice_note_id,
             'voice_note': self.voice_note.to_dict() if self.voice_note else None,
             'answered_at': self.answered_at.isoformat() if self.answered_at else None

@@ -12,6 +12,7 @@ export interface SpecialistJob {
   category: JobCategory | null;
   has_planned_time: boolean;
   can_view_details: boolean;
+  defect?: import('./defect.types').Defect | null;
   // Below only present when can_view_details is true
   planned_time_hours?: number | null;
   planned_time_entered_at?: string | null;

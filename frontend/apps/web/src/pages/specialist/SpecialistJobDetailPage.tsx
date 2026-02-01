@@ -46,6 +46,7 @@ import {
 } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
 import VoiceTextArea from '../../components/VoiceTextArea';
+import InspectionFindingCard from '../../components/InspectionFindingCard';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   assigned: 'blue',
@@ -398,6 +399,13 @@ export default function SpecialistJobDetailPage() {
           )}
         </Descriptions>
       </Card>
+
+      {/* Inspector's Finding */}
+      {job.defect?.inspection_answer && (
+        <Card title={t('inspection.finding', "Inspector's Finding")} style={{ marginBottom: 16 }}>
+          <InspectionFindingCard answer={job.defect.inspection_answer} />
+        </Card>
+      )}
 
       {/* Timer / Action Section */}
       <Card title={t('common.actions')} style={{ marginBottom: 16 }}>

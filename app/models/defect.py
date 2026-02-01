@@ -70,7 +70,7 @@ class Defect(db.Model):
 
     def to_dict(self, language='en'):
         """Convert defect to dictionary."""
-        return {
+        data = {
             'id': self.id,
             'inspection_id': self.inspection_id,
             'checklist_item_id': self.checklist_item_id,
@@ -89,6 +89,19 @@ class Defect(db.Model):
             'work_order_id': self.work_order_id,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+        # Include the inspection answer that caused this defect
+        if self.inspection_id and self.checklist_item_id:
+            from app.models.inspection import InspectionAnswer
+            answer = InspectionAnswer.query.filter_by(
+                inspection_id=self.inspection_id,
+                checklist_item_id=self.checklist_item_id
+            ).first()
+            data['inspection_answer'] = answer.to_dict(language=language) if answer else None
+        else:
+            data['inspection_answer'] = None
+
+        return data
 
     def __repr__(self):
         return f'<Defect {self.id} - {self.severity}>'
