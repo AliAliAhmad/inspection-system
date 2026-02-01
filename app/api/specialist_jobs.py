@@ -116,7 +116,11 @@ def start_job(job_id):
     if job.specialist_id != int(user_id):
         return jsonify({'status': 'error', 'message': 'This job is not assigned to you'}), 403
     if job.started_at:
-        return jsonify({'status': 'error', 'message': 'Job already started'}), 400
+        return jsonify({
+            'status': 'success',
+            'message': 'Job already started',
+            'data': job.to_dict(include_details=True)
+        }), 200
 
     # Accept planned_time_hours in request body (combined start flow)
     data = request.get_json() or {}

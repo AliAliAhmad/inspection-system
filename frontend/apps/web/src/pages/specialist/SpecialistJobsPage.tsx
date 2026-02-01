@@ -83,6 +83,7 @@ export default function SpecialistJobsPage() {
       specialistJobsApi.list({ status: 'assigned' }),
     select: (res) => res.data?.data ?? [],
     enabled: activeTab === 'pending',
+    refetchOnMount: 'always',
   });
 
   // Active tab: in_progress + paused
@@ -92,6 +93,7 @@ export default function SpecialistJobsPage() {
       specialistJobsApi.list({ status: 'in_progress,paused' }),
     select: (res) => res.data?.data ?? [],
     enabled: activeTab === 'active',
+    refetchOnMount: 'always',
   });
 
   const completedQuery = useQuery({
@@ -100,6 +102,7 @@ export default function SpecialistJobsPage() {
       specialistJobsApi.list({ status: 'completed,incomplete,qc_approved,cancelled' }),
     select: (res) => res.data?.data ?? [],
     enabled: activeTab === 'completed',
+    refetchOnMount: 'always',
   });
 
   // Start job mutation (combined: set planned time + start)

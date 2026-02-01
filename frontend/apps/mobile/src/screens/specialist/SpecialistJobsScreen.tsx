@@ -64,6 +64,7 @@ export default function SpecialistJobsScreen() {
       const payload = res.data;
       return (payload as any).items ?? (payload as any).data ?? payload;
     },
+    refetchOnMount: 'always',
   });
 
   const jobs = (Array.isArray(allJobs) ? allJobs : []) as SpecialistJob[];
