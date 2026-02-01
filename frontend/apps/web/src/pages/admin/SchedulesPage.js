@@ -1,6 +1,6 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState } from 'react';
-import { Card, Table, Button, Modal, Upload, Tag, Row, Col, Alert, message, Typography, List, } from 'antd';
+import { Card, Table, Button, Modal, Upload, Tag, Row, Col, Alert, message, Typography, } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -95,8 +95,43 @@ export default function SchedulesPage() {
     const tomorrowEntries = upcomingData?.tomorrow ?? [];
     const todayDate = upcomingData?.today_date ?? '';
     const tomorrowDate = upcomingData?.tomorrow_date ?? '';
-    const renderUpcomingItem = (item) => (_jsx(List.Item, { children: _jsx(List.Item.Meta, { title: item.equipment_name, description: _jsxs(_Fragment, { children: [item.equipment_type && _jsx(Tag, { children: item.equipment_type }), item.berth && _jsx(Tag, { color: "geekblue", children: item.berth }), _jsx(Tag, { color: item.shift === 'day' ? 'gold' : 'purple', children: item.shift.toUpperCase() })] }) }) }));
-    return (_jsxs("div", { children: [_jsxs(Row, { gutter: 16, style: { marginBottom: 16 }, children: [_jsx(Col, { xs: 24, md: 12, children: _jsx(Card, { title: _jsxs(Typography.Text, { strong: true, children: [t('schedules.todayInspections', "Today's Inspections"), todayDate && ` — ${todayDate}`] }), size: "small", loading: upcomingLoading, children: todayEntries.length === 0 ? (_jsx(Typography.Text, { type: "secondary", children: t('schedules.noInspectionsToday', 'No inspections scheduled for today') })) : (_jsx(List, { size: "small", dataSource: todayEntries, renderItem: renderUpcomingItem })) }) }), _jsx(Col, { xs: 24, md: 12, children: _jsx(Card, { title: _jsxs(Typography.Text, { strong: true, children: [t('schedules.tomorrowInspections', "Tomorrow's Inspections"), tomorrowDate && ` — ${tomorrowDate}`] }), size: "small", loading: upcomingLoading, children: tomorrowEntries.length === 0 ? (_jsx(Typography.Text, { type: "secondary", children: t('schedules.noInspectionsTomorrow', 'No inspections scheduled for tomorrow') })) : (_jsx(List, { size: "small", dataSource: tomorrowEntries, renderItem: renderUpcomingItem })) }) })] }), _jsx(Card, { title: _jsx(Typography.Title, { level: 4, style: { margin: 0 }, children: t('nav.inspectionSchedule', 'Inspection Schedule') }), extra: _jsx(Upload, { accept: ".xlsx,.xls", showUploadList: false, beforeUpload: (file) => {
+    const groupByBerth = (entries) => {
+        const map = {};
+        for (const e of entries) {
+            const key = e.berth || 'Unknown';
+            if (!map[key])
+                map[key] = { day: [], night: [] };
+            if (e.shift === 'day')
+                map[key].day.push(e);
+            else
+                map[key].night.push(e);
+        }
+        return Object.entries(map)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([berth, shifts]) => ({ berth, ...shifts }));
+    };
+    const berthColumns = [
+        {
+            title: t('schedules.berth', 'Berth'),
+            dataIndex: 'berth',
+            key: 'berth',
+            width: 90,
+            render: (v) => _jsx(Tag, { color: "geekblue", children: v }),
+        },
+        {
+            title: _jsxs(_Fragment, { children: [_jsx(Tag, { color: "gold", children: "D" }), " ", t('schedules.dayShift', 'Day')] }),
+            key: 'day',
+            render: (_, record) => record.day.length === 0 ? (_jsx(Typography.Text, { type: "secondary", children: "\u2014" })) : (record.day.map((e) => (_jsx(Tag, { style: { marginBottom: 4 }, children: e.equipment_name }, e.equipment_id)))),
+        },
+        {
+            title: _jsxs(_Fragment, { children: [_jsx(Tag, { color: "purple", children: "N" }), " ", t('schedules.nightShift', 'Night')] }),
+            key: 'night',
+            render: (_, record) => record.night.length === 0 ? (_jsx(Typography.Text, { type: "secondary", children: "\u2014" })) : (record.night.map((e) => (_jsx(Tag, { style: { marginBottom: 4 }, children: e.equipment_name }, e.equipment_id)))),
+        },
+    ];
+    const todayBerths = groupByBerth(todayEntries);
+    const tomorrowBerths = groupByBerth(tomorrowEntries);
+    return (_jsxs("div", { children: [_jsxs(Row, { gutter: 16, style: { marginBottom: 16 }, children: [_jsx(Col, { xs: 24, md: 12, children: _jsx(Card, { title: _jsxs(Typography.Text, { strong: true, children: [t('schedules.todayInspections', "Today's Inspections"), todayDate && ` — ${todayDate}`] }), size: "small", loading: upcomingLoading, children: todayBerths.length === 0 ? (_jsx(Typography.Text, { type: "secondary", children: t('schedules.noInspectionsToday', 'No inspections scheduled for today') })) : (_jsx(Table, { rowKey: "berth", columns: berthColumns, dataSource: todayBerths, pagination: false, size: "small", bordered: true })) }) }), _jsx(Col, { xs: 24, md: 12, children: _jsx(Card, { title: _jsxs(Typography.Text, { strong: true, children: [t('schedules.tomorrowInspections', "Tomorrow's Inspections"), tomorrowDate && ` — ${tomorrowDate}`] }), size: "small", loading: upcomingLoading, children: tomorrowBerths.length === 0 ? (_jsx(Typography.Text, { type: "secondary", children: t('schedules.noInspectionsTomorrow', 'No inspections scheduled for tomorrow') })) : (_jsx(Table, { rowKey: "berth", columns: berthColumns, dataSource: tomorrowBerths, pagination: false, size: "small", bordered: true })) }) })] }), _jsx(Card, { title: _jsx(Typography.Title, { level: 4, style: { margin: 0 }, children: t('nav.inspectionSchedule', 'Inspection Schedule') }), extra: _jsx(Upload, { accept: ".xlsx,.xls", showUploadList: false, beforeUpload: (file) => {
                         uploadMutation.mutate(file);
                         return false;
                     }, children: _jsx(Button, { icon: _jsx(UploadOutlined, {}), loading: uploadMutation.isPending, type: "primary", children: t('schedules.importSchedule', 'Import Schedule') }) }), children: _jsx(Table, { rowKey: "equipment_id", columns: scheduleColumns, dataSource: schedules || [], loading: schedulesLoading, locale: {

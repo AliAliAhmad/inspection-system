@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../providers/AuthProvider';
 import { engineerJobsApi, equipmentApi, } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 export default function CreateJobPage() {
     const { t } = useTranslation();
     const navigate = useNavigate();
@@ -44,12 +45,12 @@ export default function CreateJobPage() {
                                     { value: 'custom_project', label: t('jobs.type_custom_project', 'Custom Project') },
                                     { value: 'system_review', label: t('jobs.type_system_review', 'System Review') },
                                     { value: 'special_task', label: t('jobs.type_special_task', 'Special Task') },
-                                ] }) }), _jsx(Form.Item, { name: "title", label: t('common.title', 'Title'), rules: [{ required: true, message: t('common.required', 'This field is required') }], children: _jsx(Input, { placeholder: t('common.title', 'Title') }) }), _jsx(Form.Item, { name: "description", label: t('common.description', 'Description'), rules: [{ required: true, message: t('common.required', 'This field is required') }], children: _jsx(Input.TextArea, { rows: 4, placeholder: t('common.description', 'Description') }) }), _jsx(Form.Item, { name: "equipment_id", label: t('equipment.name', 'Equipment'), children: _jsx(Select, { allowClear: true, showSearch: true, placeholder: t('common.select', 'Select equipment...'), optionFilterProp: "label", options: equipmentList.map((eq) => ({
+                                ] }) }), _jsx(Form.Item, { name: "title", label: t('common.title', 'Title'), rules: [{ required: true, message: t('common.required', 'This field is required') }], children: _jsx(Input, { placeholder: t('common.title', 'Title') }) }), _jsx(Form.Item, { name: "description", label: t('common.description', 'Description'), rules: [{ required: true, message: t('common.required', 'This field is required') }], children: _jsx(VoiceTextArea, { rows: 4, placeholder: t('common.description', 'Description') }) }), _jsx(Form.Item, { name: "equipment_id", label: t('equipment.name', 'Equipment'), children: _jsx(Select, { allowClear: true, showSearch: true, placeholder: t('common.select', 'Select equipment...'), optionFilterProp: "label", options: equipmentList.map((eq) => ({
                                     value: eq.id,
                                     label: `${eq.name} (${eq.equipment_type})`,
                                 })) }) }), _jsx(Form.Item, { name: "category", label: t('common.category', 'Category'), children: _jsx(Radio.Group, { onChange: (e) => setCategory(e.target.value), options: [
                                     { value: 'major', label: t('status.major', 'Major') },
                                     { value: 'minor', label: t('status.minor', 'Minor') },
-                                ] }) }), category === 'major' && (_jsx(Form.Item, { name: "major_reason", label: t('jobs.major_reason', 'Major Reason'), rules: [{ required: true, message: t('common.required', 'This field is required') }], children: _jsx(Input.TextArea, { rows: 3, placeholder: t('jobs.major_reason', 'Explain why this is major...') }) })), _jsx(Form.Item, { children: _jsxs(Space, { children: [_jsx(Button, { type: "primary", htmlType: "submit", loading: createMutation.isPending, children: t('common.submit', 'Submit') }), _jsx(Button, { onClick: () => navigate('/engineer/jobs'), children: t('common.cancel', 'Cancel') })] }) })] }) })] }));
+                                ] }) }), category === 'major' && (_jsx(Form.Item, { name: "major_reason", label: t('jobs.major_reason', 'Major Reason'), rules: [{ required: true, message: t('common.required', 'This field is required') }], children: _jsx(VoiceTextArea, { rows: 3, placeholder: t('jobs.major_reason', 'Explain why this is major...') }) })), _jsx(Form.Item, { children: _jsxs(Space, { children: [_jsx(Button, { type: "primary", htmlType: "submit", loading: createMutation.isPending, children: t('common.submit', 'Submit') }), _jsx(Button, { onClick: () => navigate('/engineer/jobs'), children: t('common.cancel', 'Cancel') })] }) })] }) })] }));
 }
 //# sourceMappingURL=CreateJobPage.js.map

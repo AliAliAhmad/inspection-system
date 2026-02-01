@@ -9,6 +9,7 @@ import { useAuth } from '../providers/AuthProvider';
 import { useLanguage } from '../providers/LanguageProvider';
 import { useTranslation } from 'react-i18next';
 import { notificationsApi } from '@inspection/shared';
+import { useNotificationAlerts } from '../hooks/useNotificationAlerts';
 function getMenuItems(role, t) {
     const shared = [
         { path: '/', name: t('nav.dashboard'), icon: _jsx(DashboardOutlined, {}) },
@@ -69,6 +70,7 @@ export default function MainLayout() {
     const navigate = useNavigate();
     const location = useLocation();
     const [collapsed, setCollapsed] = useState(false);
+    useNotificationAlerts({ user, navigate });
     const { data: unreadData } = useQuery({
         queryKey: ['notifications', 'unread-count'],
         queryFn: () => notificationsApi.list({ unread_only: true, per_page: 1 }),

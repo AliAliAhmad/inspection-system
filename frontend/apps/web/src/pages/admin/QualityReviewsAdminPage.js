@@ -1,11 +1,12 @@
 import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Radio, Tag, message, Typography, Tabs, } from 'antd';
+import { Card, Table, Button, Modal, Form, Radio, Tag, message, Typography, Tabs, } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { qualityReviewsApi, } from '@inspection/shared';
 import dayjs from 'dayjs';
+import VoiceTextArea from '../../components/VoiceTextArea';
 const statusColorMap = {
     pending: 'processing',
     approved: 'success',
@@ -113,6 +114,6 @@ export default function QualityReviewsAdminPage() {
                             id: selectedReview.id,
                             type: selectedReview.job_type,
                             jobId: selectedReview.job_id,
-                        }) })), _jsxs(Form, { form: validateForm, layout: "vertical", onFinish: (v) => selectedReview && validateMutation.mutate({ id: selectedReview.id, payload: v }), children: [_jsx(Form.Item, { name: "admin_validation", label: t('qualityReviews.validation', 'Validation'), rules: [{ required: true }], children: _jsxs(Radio.Group, { children: [_jsx(Radio.Button, { value: "valid", children: t('qualityReviews.valid', 'Valid') }), _jsx(Radio.Button, { value: "wrong", children: t('qualityReviews.wrong', 'Wrong') })] }) }), _jsx(Form.Item, { name: "admin_validation_notes", label: t('qualityReviews.validationNotes', 'Notes'), children: _jsx(Input.TextArea, { rows: 3 }) })] })] })] }));
+                        }) })), _jsxs(Form, { form: validateForm, layout: "vertical", onFinish: (v) => selectedReview && validateMutation.mutate({ id: selectedReview.id, payload: v }), children: [_jsx(Form.Item, { name: "admin_validation", label: t('qualityReviews.validation', 'Validation'), rules: [{ required: true }], children: _jsxs(Radio.Group, { children: [_jsx(Radio.Button, { value: "valid", children: t('qualityReviews.valid', 'Valid') }), _jsx(Radio.Button, { value: "wrong", children: t('qualityReviews.wrong', 'Wrong') })] }) }), _jsx(Form.Item, { name: "admin_validation_notes", label: t('qualityReviews.validationNotes', 'Notes'), children: _jsx(VoiceTextArea, { rows: 3 }) })] })] })] }));
 }
 //# sourceMappingURL=QualityReviewsAdminPage.js.map

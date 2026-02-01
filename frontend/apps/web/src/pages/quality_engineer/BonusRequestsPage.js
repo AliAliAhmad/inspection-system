@@ -1,10 +1,11 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState } from 'react';
-import { Card, Table, Tag, Button, Space, Typography, Form, Select, InputNumber, Input, message, } from 'antd';
+import { Card, Table, Tag, Button, Space, Typography, Form, Select, InputNumber, message, } from 'antd';
 import { StarOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { bonusStarsApi, usersApi, formatDateTime, } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 const STATUS_COLOR = {
     pending: 'orange',
     approved: 'green',
@@ -100,7 +101,7 @@ export default function BonusRequestsPage() {
                             : t('common.request_bonus', 'Request Bonus') })] }), showForm && (_jsx(Card, { title: t('common.request_bonus', 'Request Bonus'), style: { marginBottom: 16 }, children: _jsxs(Form, { form: form, layout: "vertical", onFinish: handleSubmit, style: { maxWidth: 500 }, children: [_jsx(Form.Item, { name: "user_id", label: t('common.user', 'User'), rules: [{ required: true, message: t('common.required', 'Required') }], children: _jsx(Select, { showSearch: true, placeholder: t('common.select', 'Select user...'), optionFilterProp: "label", options: users.map((u) => ({
                                     value: u.id,
                                     label: `${u.full_name} (${u.role})`,
-                                })) }) }), _jsx(Form.Item, { name: "amount", label: t('common.amount', 'Amount'), rules: [{ required: true, message: t('common.required', 'Required') }], children: _jsx(InputNumber, { min: 1, max: 10, style: { width: '100%' }, placeholder: "1-10" }) }), _jsx(Form.Item, { name: "reason", label: t('common.reason', 'Reason'), rules: [{ required: true, message: t('common.required', 'Required') }], children: _jsx(Input.TextArea, { rows: 3, placeholder: t('common.reason', 'Reason for bonus...') }) }), _jsx(Form.Item, { name: "related_job_type", label: t('common.related_job_type', 'Related Job Type (optional)'), children: _jsx(Select, { allowClear: true, placeholder: t('common.select', 'Select...'), options: [
+                                })) }) }), _jsx(Form.Item, { name: "amount", label: t('common.amount', 'Amount'), rules: [{ required: true, message: t('common.required', 'Required') }], children: _jsx(InputNumber, { min: 1, max: 10, style: { width: '100%' }, placeholder: "1-10" }) }), _jsx(Form.Item, { name: "reason", label: t('common.reason', 'Reason'), rules: [{ required: true, message: t('common.required', 'Required') }], children: _jsx(VoiceTextArea, { rows: 3, placeholder: t('common.reason', 'Reason for bonus...') }) }), _jsx(Form.Item, { name: "related_job_type", label: t('common.related_job_type', 'Related Job Type (optional)'), children: _jsx(Select, { allowClear: true, placeholder: t('common.select', 'Select...'), options: [
                                     { value: 'specialist', label: t('common.specialist', 'Specialist') },
                                     { value: 'engineer', label: t('common.engineer', 'Engineer') },
                                 ] }) }), _jsx(Form.Item, { name: "related_job_id", label: t('common.related_job_id', 'Related Job ID (optional)'), children: _jsx(InputNumber, { style: { width: '100%' }, placeholder: "Job ID" }) }), _jsx(Form.Item, { children: _jsx(Button, { type: "primary", htmlType: "submit", loading: requestMutation.isPending, block: true, children: t('common.submit', 'Submit Request') }) })] }) })), _jsx(Card, { children: _jsx(Table, { rowKey: "id", columns: columns, dataSource: bonuses, loading: bonusLoading, locale: { emptyText: t('common.noData', 'No bonus requests') }, pagination: { pageSize: 15 } }) })] }));

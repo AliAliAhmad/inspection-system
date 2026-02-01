@@ -8,7 +8,7 @@ function getSavedLanguage(fallback) {
             return saved;
     }
     catch {
-        // localStorage not available
+        // localStorage not available (SSR, etc.)
     }
     return fallback;
 }

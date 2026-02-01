@@ -1,11 +1,12 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Radio, Tag, Space, message, Typography, Tabs, } from 'antd';
+import { Card, Table, Button, Modal, Form, Radio, Tag, Space, message, Typography, Tabs, } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { inspectionsApi, } from '@inspection/shared';
 import dayjs from 'dayjs';
+import VoiceTextArea from '../../components/VoiceTextArea';
 const statusColorMap = {
     draft: 'default',
     submitted: 'processing',
@@ -108,6 +109,6 @@ export default function AllInspectionsPage() {
                 }, scroll: { x: 900 } }), _jsxs(Modal, { title: t('inspections.reviewInspection', 'Review Inspection'), open: reviewOpen, onCancel: () => { setReviewOpen(false); setReviewingInspection(null); reviewForm.resetFields(); }, onOk: () => reviewForm.submit(), confirmLoading: reviewMutation.isPending, destroyOnClose: true, children: [reviewingInspection && (_jsx(Typography.Paragraph, { type: "secondary", style: { marginBottom: 16 }, children: t('inspections.reviewFor', 'Reviewing inspection #{{id}} for {{equipment}}', {
                             id: reviewingInspection.id,
                             equipment: reviewingInspection.equipment?.name || reviewingInspection.equipment_id,
-                        }) })), _jsxs(Form, { form: reviewForm, layout: "vertical", onFinish: (v) => reviewingInspection && reviewMutation.mutate({ id: reviewingInspection.id, payload: v }), children: [_jsx(Form.Item, { name: "result", label: t('inspections.result', 'Result'), rules: [{ required: true }], children: _jsxs(Radio.Group, { children: [_jsx(Radio.Button, { value: "pass", children: t('inspections.pass', 'Pass') }), _jsx(Radio.Button, { value: "fail", children: t('inspections.fail', 'Fail') }), _jsx(Radio.Button, { value: "incomplete", children: t('inspections.incomplete', 'Incomplete') })] }) }), _jsx(Form.Item, { name: "notes", label: t('inspections.notes', 'Notes'), children: _jsx(Input.TextArea, { rows: 3 }) })] })] })] }));
+                        }) })), _jsxs(Form, { form: reviewForm, layout: "vertical", onFinish: (v) => reviewingInspection && reviewMutation.mutate({ id: reviewingInspection.id, payload: v }), children: [_jsx(Form.Item, { name: "result", label: t('inspections.result', 'Result'), rules: [{ required: true }], children: _jsxs(Radio.Group, { children: [_jsx(Radio.Button, { value: "pass", children: t('inspections.pass', 'Pass') }), _jsx(Radio.Button, { value: "fail", children: t('inspections.fail', 'Fail') }), _jsx(Radio.Button, { value: "incomplete", children: t('inspections.incomplete', 'Incomplete') })] }) }), _jsx(Form.Item, { name: "notes", label: t('inspections.notes', 'Notes'), children: _jsx(VoiceTextArea, { rows: 3 }) })] })] })] }));
 }
 //# sourceMappingURL=AllInspectionsPage.js.map

@@ -30,7 +30,15 @@
       "Bash(chmod:*)",
       "WebSearch",
       "WebFetch(domain:render.com)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:inspection-web.onrender.com)",
+      "WebFetch(domain:inspection-api-o3hz.onrender.com)",
+      "Bash(echo:*)",
+      "Bash(git status:*)",
+      "Bash(bash -n:*)",
+      "Bash(done)"
     ]
   }
 }

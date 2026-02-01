@@ -11,6 +11,7 @@ export * from './utils/token-storage';
 export * from './utils/role-guards';
 export * from './utils/date-utils';
 export * from './utils/sanitize';
+export * from './utils/notification-routes';
 // Hooks
 export * from './hooks/useAuth';
 export * from './hooks/useLanguage';

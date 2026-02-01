@@ -1,11 +1,12 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState, useCallback, useEffect } from 'react';
-import { Card, Typography, Progress, Button, Radio, Input, InputNumber, Upload, Tag, Space, Spin, Alert, List, Badge, message, Popconfirm, Descriptions, } from 'antd';
-import { CameraOutlined, StarFilled, CheckCircleOutlined, ArrowLeftOutlined, SendOutlined, } from '@ant-design/icons';
+import { Card, Typography, Progress, Button, Radio, InputNumber, Upload, Tag, Space, Spin, Alert, List, Badge, message, Popconfirm, Descriptions, } from 'antd';
+import { CameraOutlined, PictureOutlined, StarFilled, CheckCircleOutlined, ArrowLeftOutlined, SendOutlined, } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { inspectionsApi, filesApi, } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 export default function InspectionChecklistPage() {
     const { t, i18n } = useTranslation();
     const { id } = useParams();
@@ -120,6 +121,18 @@ export default function InspectionChecklistPage() {
                     return (_jsx(ChecklistItemCard, { item: item, existingAnswer: existingAnswer, getQuestionText: getQuestionText, onAnswer: handleAnswer, onUpload: handleUpload, isSubmitted: inspection.status !== 'draft' }, item.id));
                 } }), inspection.status === 'draft' && (_jsxs(Card, { style: { marginTop: 16, textAlign: 'center' }, children: [_jsx(Popconfirm, { title: t('common.confirm'), onConfirm: () => submitMutation.mutate(), okText: t('common.submit'), cancelText: t('common.cancel'), children: _jsx(Button, { type: "primary", size: "large", icon: _jsx(SendOutlined, {}), loading: submitMutation.isPending, disabled: !canSubmit, children: t('inspection.submit') }) }), !canSubmit && progress && progress.total_items > 0 && (_jsxs(Typography.Text, { type: "secondary", style: { display: 'block', marginTop: 8 }, children: [t('inspection.progress'), ": ", progress.answered_items, " /", ' ', progress.total_items] }))] }))] }));
 }
+function openCameraInput(accept, onFile) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.capture = 'environment';
+    input.onchange = () => {
+        const file = input.files?.[0];
+        if (file)
+            onFile(file);
+    };
+    input.click();
+}
 function ChecklistItemCard({ item, existingAnswer, getQuestionText, onAnswer, onUpload, isSubmitted, }) {
     const { t } = useTranslation();
     const [comment, setComment] = useState(existingAnswer?.comment ?? '');
@@ -133,7 +146,7 @@ function ChecklistItemCard({ item, existingAnswer, getQuestionText, onAnswer, on
             case 'pass_fail':
                 return (_jsxs(Radio.Group, { value: currentValue || undefined, onChange: (e) => onAnswer(item.id, e.target.value, comment || undefined), disabled: disabled, children: [_jsx(Radio.Button, { value: "pass", children: "Pass" }), _jsx(Radio.Button, { value: "fail", children: "Fail" })] }));
             case 'text':
-                return (_jsx(Input.TextArea, { defaultValue: currentValue, rows: 2, placeholder: t('inspection.answer', 'Enter answer'), disabled: disabled, onBlur: (e) => {
+                return (_jsx(VoiceTextArea, { defaultValue: currentValue, rows: 2, placeholder: t('inspection.answer', 'Enter answer'), disabled: disabled, onBlur: (e) => {
                         if (e.target.value && e.target.value !== currentValue) {
                             onAnswer(item.id, e.target.value, comment || undefined);
                         }
@@ -149,7 +162,7 @@ function ChecklistItemCard({ item, existingAnswer, getQuestionText, onAnswer, on
                 return null;
         }
     };
-    return (_jsx(Card, { style: { marginBottom: 12 }, size: "small", title: _jsxs(Space, { wrap: true, children: [_jsx(Typography.Text, { strong: true, children: getQuestionText(item) }), item.category && (_jsx(Tag, { color: item.category === 'mechanical' ? 'blue' : 'gold', children: item.category })), item.critical_failure && (_jsx(Badge, { count: _jsx(StarFilled, { style: { color: '#f5222d', fontSize: 14 } }) })), existingAnswer && (_jsx(CheckCircleOutlined, { style: { color: '#52c41a' } }))] }), children: _jsxs(Space, { direction: "vertical", style: { width: '100%' }, size: "middle", children: [renderAnswerInput(), _jsxs(Space, { children: [_jsx(Button, { size: "small", type: "link", onClick: () => setShowComment(!showComment), children: t('inspection.comment', 'Comment') }), !isSubmitted && (_jsx(Upload, { accept: "image/*", showUploadList: false, beforeUpload: (file) => onUpload(file, item.id), children: _jsx(Button, { size: "small", type: "link", icon: _jsx(CameraOutlined, {}), children: t('inspection.photo', 'Photo') }) })), existingAnswer?.photo_path && (_jsxs(Tag, { color: "green", children: [t('inspection.photo', 'Photo'), " uploaded"] }))] }), showComment && (_jsx(Input.TextArea, { value: comment, onChange: (e) => setComment(e.target.value), placeholder: t('inspection.comment', 'Add a comment...'), rows: 2, disabled: isSubmitted, onBlur: () => {
+    return (_jsx(Card, { style: { marginBottom: 12 }, size: "small", title: _jsxs(Space, { wrap: true, children: [_jsx(Typography.Text, { strong: true, children: getQuestionText(item) }), item.category && (_jsx(Tag, { color: item.category === 'mechanical' ? 'blue' : 'gold', children: item.category })), item.critical_failure && (_jsx(Badge, { count: _jsx(StarFilled, { style: { color: '#f5222d', fontSize: 14 } }) })), existingAnswer && (_jsx(CheckCircleOutlined, { style: { color: '#52c41a' } }))] }), children: _jsxs(Space, { direction: "vertical", style: { width: '100%' }, size: "middle", children: [renderAnswerInput(), _jsxs(Space, { children: [_jsx(Button, { size: "small", type: "link", onClick: () => setShowComment(!showComment), children: t('inspection.comment', 'Comment') }), !isSubmitted && (_jsxs(_Fragment, { children: [_jsx(Button, { size: "small", type: "link", icon: _jsx(CameraOutlined, {}), onClick: () => openCameraInput('image/*', (file) => onUpload(file, item.id)), children: t('inspection.take_photo', 'Take Photo') }), _jsx(Upload, { accept: "image/*", showUploadList: false, beforeUpload: (file) => onUpload(file, item.id), children: _jsx(Button, { size: "small", type: "link", icon: _jsx(PictureOutlined, {}), children: t('inspection.from_gallery', 'From Gallery') }) })] })), existingAnswer?.photo_path && (_jsxs(Tag, { color: "green", children: [t('inspection.photo', 'Photo'), " uploaded"] }))] }), showComment && (_jsx(VoiceTextArea, { value: comment, onChange: (e) => setComment(e.target.value), placeholder: t('inspection.comment', 'Add a comment...'), rows: 2, disabled: isSubmitted, onBlur: () => {
                         if (existingAnswer &&
                             comment !== (existingAnswer.comment ?? '')) {
                             onAnswer(item.id, existingAnswer.answer_value, comment || undefined);

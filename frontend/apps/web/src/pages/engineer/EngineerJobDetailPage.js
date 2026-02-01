@@ -1,11 +1,12 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState, useEffect, useRef } from 'react';
-import { Card, Descriptions, Tag, Button, Space, Typography, Modal, Form, InputNumber, Input, Select, Rate, Spin, Alert, Statistic, Timeline, message, } from 'antd';
+import { Card, Descriptions, Tag, Button, Space, Typography, Modal, Form, InputNumber, Select, Rate, Spin, Alert, Statistic, Timeline, message, } from 'antd';
 import { ArrowLeftOutlined, ClockCircleOutlined, PlayCircleOutlined, CheckCircleOutlined, PauseCircleOutlined, } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { engineerJobsApi, formatDateTime, formatHours, } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 const STATUS_COLOR = {
     assigned: 'blue',
     in_progress: 'processing',
@@ -160,7 +161,7 @@ export default function EngineerJobDetailPage() {
                 }, confirmLoading: pauseMutation.isPending, okText: t('common.submit', 'Submit'), cancelText: t('common.cancel', 'Cancel'), okButtonProps: { disabled: !pauseCategory }, children: _jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: t('jobs.pause_reason', 'Reason Category') }), _jsx(Select, { value: pauseCategory, onChange: (val) => setPauseCategory(val), style: { width: '100%', marginTop: 8 }, placeholder: t('common.select', 'Select reason'), options: PAUSE_CATEGORIES.map((cat) => ({
                                         value: cat,
                                         label: cat.replace(/_/g, ' '),
-                                    })) })] }), _jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: t('common.details', 'Details') }), _jsx(Input.TextArea, { rows: 3, value: pauseDetails, onChange: (e) => setPauseDetails(e.target.value), style: { marginTop: 8 } })] })] }) }), _jsx(Modal, { title: t('jobs.enter_planned_time', 'Enter Planned Time'), open: plannedTimeOpen, onCancel: () => setPlannedTimeOpen(false), footer: null, children: _jsxs(Form, { form: plannedForm, layout: "vertical", onFinish: (values) => plannedTimeMutation.mutate({
+                                    })) })] }), _jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: t('common.details', 'Details') }), _jsx(VoiceTextArea, { rows: 3, value: pauseDetails, onChange: (e) => setPauseDetails(e.target.value), style: { marginTop: 8 } })] })] }) }), _jsx(Modal, { title: t('jobs.enter_planned_time', 'Enter Planned Time'), open: plannedTimeOpen, onCancel: () => setPlannedTimeOpen(false), footer: null, children: _jsxs(Form, { form: plannedForm, layout: "vertical", onFinish: (values) => plannedTimeMutation.mutate({
                         planned_time_days: values.planned_time_days,
                         planned_time_hours: values.planned_time_hours,
                     }), children: [_jsx(Form.Item, { name: "planned_time_days", label: t('common.days', 'Days'), children: _jsx(InputNumber, { min: 0, style: { width: '100%' }, placeholder: "0" }) }), _jsx(Form.Item, { name: "planned_time_hours", label: t('common.hours', 'Hours'), children: _jsx(InputNumber, { min: 0, max: 23, style: { width: '100%' }, placeholder: "0" }) }), _jsx(Form.Item, { children: _jsx(Button, { type: "primary", htmlType: "submit", loading: plannedTimeMutation.isPending, block: true, children: t('common.save', 'Save') }) })] }) }), _jsx(Modal, { title: t('jobs.complete', 'Complete Job'), open: completeOpen, onCancel: () => setCompleteOpen(false), footer: null, children: _jsxs(Form, { form: completeForm, layout: "vertical", onFinish: (values) => completeMutation.mutate({
@@ -169,6 +170,6 @@ export default function EngineerJobDetailPage() {
                     }), children: [_jsx(Form.Item, { name: "completion_status", label: t('common.completion_status', 'Completion Status'), rules: [{ required: true, message: t('common.required', 'This field is required') }], children: _jsx(Select, { placeholder: t('common.select', 'Select...'), options: [
                                     { value: 'pass', label: t('status.pass', 'Pass') },
                                     { value: 'incomplete', label: t('status.incomplete', 'Incomplete') },
-                                ] }) }), _jsx(Form.Item, { name: "work_notes", label: t('jobs.work_notes', 'Work Notes'), children: _jsx(Input.TextArea, { rows: 4, placeholder: t('jobs.work_notes', 'Work notes...') }) }), _jsx(Form.Item, { children: _jsx(Button, { type: "primary", htmlType: "submit", loading: completeMutation.isPending, block: true, children: t('jobs.complete', 'Complete') }) })] }) })] }));
+                                ] }) }), _jsx(Form.Item, { name: "work_notes", label: t('jobs.work_notes', 'Work Notes'), children: _jsx(VoiceTextArea, { rows: 4, placeholder: t('jobs.work_notes', 'Work notes...') }) }), _jsx(Form.Item, { children: _jsx(Button, { type: "primary", htmlType: "submit", loading: completeMutation.isPending, block: true, children: t('jobs.complete', 'Complete') }) })] }) })] }));
 }
 //# sourceMappingURL=EngineerJobDetailPage.js.map

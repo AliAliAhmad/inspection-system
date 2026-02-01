@@ -8,7 +8,7 @@ export interface CompleteJobPayload {
     completion_status?: 'pass' | 'incomplete';
 }
 export interface PauseRequestPayload {
-    reason_category: 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'other';
+    reason_category: 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'error_record' | 'other';
     reason_details?: string;
 }
 export declare const specialistJobsApi: {

@@ -1,12 +1,13 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useState } from 'react';
-import { Card, Table, Button, Tag, Space, Modal, Form, Select, Input, DatePicker, message, Typography, Statistic, Row, Col, Alert, } from 'antd';
+import { Card, Table, Button, Tag, Space, Modal, Form, Select, DatePicker, message, Typography, Statistic, Row, Col, Alert, } from 'antd';
 import { PlusOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../providers/AuthProvider';
 import { leavesApi, usersApi } from '@inspection/shared';
 import { formatDate } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 const statusColors = {
     pending: 'orange',
     approved: 'green',
@@ -125,7 +126,7 @@ export default function LeavesPage() {
                         total: pagination.total,
                         pageSize: pagination.per_page,
                         onChange: setPage,
-                    } : false }) }), _jsx(Modal, { title: t('leave.request'), open: modalOpen, onCancel: () => setModalOpen(false), footer: null, children: _jsxs(Form, { form: form, layout: "vertical", onFinish: handleSubmit, children: [_jsx(Form.Item, { name: "leave_type", label: t('leave.type'), rules: [{ required: true }], children: _jsx(Select, { options: leaveTypes.map(lt => ({ value: lt, label: t(`leave.${lt}`) })) }) }), _jsx(Form.Item, { name: "dates", label: `${t('leave.date_from')} - ${t('leave.date_to')}`, rules: [{ required: true }], children: _jsx(DatePicker.RangePicker, { style: { width: '100%' } }) }), _jsx(Form.Item, { name: "reason", label: t('leave.reason'), rules: [{ required: true }], children: _jsx(Input.TextArea, { rows: 3 }) }), _jsx(Form.Item, { name: "coverage_user_id", label: t('leave.coverage', 'Coverage Employee'), rules: [{ required: true, message: t('leave.coverageRequired', 'Please select a coverage employee') }], children: _jsx(Select, { showSearch: true, optionFilterProp: "children", placeholder: t('leave.assign_coverage', 'Select coverage employee'), children: allUsers
+                    } : false }) }), _jsx(Modal, { title: t('leave.request'), open: modalOpen, onCancel: () => setModalOpen(false), footer: null, children: _jsxs(Form, { form: form, layout: "vertical", onFinish: handleSubmit, children: [_jsx(Form.Item, { name: "leave_type", label: t('leave.type'), rules: [{ required: true }], children: _jsx(Select, { options: leaveTypes.map(lt => ({ value: lt, label: t(`leave.${lt}`) })) }) }), _jsx(Form.Item, { name: "dates", label: `${t('leave.date_from')} - ${t('leave.date_to')}`, rules: [{ required: true }], children: _jsx(DatePicker.RangePicker, { style: { width: '100%' } }) }), _jsx(Form.Item, { name: "reason", label: t('leave.reason'), rules: [{ required: true }], children: _jsx(VoiceTextArea, { rows: 3 }) }), _jsx(Form.Item, { name: "coverage_user_id", label: t('leave.coverage', 'Coverage Employee'), rules: [{ required: true, message: t('leave.coverageRequired', 'Please select a coverage employee') }], children: _jsx(Select, { showSearch: true, optionFilterProp: "children", placeholder: t('leave.assign_coverage', 'Select coverage employee'), children: allUsers
                                     .filter((u) => {
                                     if (u.id === user?.id)
                                         return false;
