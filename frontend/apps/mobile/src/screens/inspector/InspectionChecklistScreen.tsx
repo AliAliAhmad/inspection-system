@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -59,21 +59,26 @@ export default function InspectionChecklistScreen() {
   } = useQuery({
     queryKey: ['inspection', id],
     queryFn: () => inspectionsApi.get(id),
-    select: (res) => res.data.data ?? res.data,
-    onSuccess: (data: Inspection) => {
-      if (data.answers) {
-        const existing: LocalAnswers = {};
-        data.answers.forEach((ans: InspectionAnswer) => {
-          existing[ans.checklist_item_id] = {
-            answer_value: ans.answer_value,
-            comment: ans.comment ?? undefined,
-            photo_uri: ans.photo_path ?? undefined,
-          };
-        });
-        setLocalAnswers((prev) => ({ ...existing, ...prev }));
-      }
+    select: (res) => {
+      const ins = (res.data as any).data ?? res.data;
+      return ins as Inspection;
     },
   });
+
+  // Sync server answers into local state when inspection data loads
+  useEffect(() => {
+    if (inspection?.answers) {
+      const existing: LocalAnswers = {};
+      inspection.answers.forEach((ans: InspectionAnswer) => {
+        existing[ans.checklist_item_id] = {
+          answer_value: ans.answer_value,
+          comment: ans.comment ?? undefined,
+          photo_uri: ans.photo_path ?? undefined,
+        };
+      });
+      setLocalAnswers((prev) => ({ ...existing, ...prev }));
+    }
+  }, [inspection]);
 
   const {
     data: progress,

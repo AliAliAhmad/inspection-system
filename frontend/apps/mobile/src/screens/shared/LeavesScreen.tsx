@@ -62,8 +62,8 @@ export default function LeavesScreen() {
   const leaves: Leave[] = (data?.data as any)?.items ?? (data?.data as any)?.data ?? (data?.data as any) ?? [];
 
   const requestMutation = useMutation({
-    mutationFn: (payload: { leave_type: LeaveType; date_from: string; date_to: string; reason: string; scope?: 'major_only' | 'full' }) =>
-      leavesApi.request(payload),
+    mutationFn: (payload: { leave_type: LeaveType; date_from: string; date_to: string; reason: string; scope?: 'major_only' | 'full'; coverage_user_id?: number }) =>
+      leavesApi.request(payload as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leaves'] });
       setModalVisible(false);

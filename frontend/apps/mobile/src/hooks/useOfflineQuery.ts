@@ -14,9 +14,9 @@ export function useOfflineQuery<TData = unknown>(
   const { isOnline } = useOffline();
   const { cacheKey, queryFn, ...rest } = options;
 
-  return useQuery<TData, Error, TData, QueryKey>({
+  return useQuery({
     ...rest,
-    queryFn: async (context) => {
+    queryFn: async (context: any) => {
       if (!isOnline) {
         const cached = offlineCache.get<TData>(cacheKey);
         if (cached) return cached;
@@ -24,7 +24,8 @@ export function useOfflineQuery<TData = unknown>(
       }
 
       // Fetch from API
-      const data = typeof queryFn === 'function' ? await queryFn(context) : await queryFn;
+      const fn = queryFn as (ctx: any) => Promise<TData>;
+      const data = await fn(context);
 
       // Cache the result
       offlineCache.set(cacheKey, data);
@@ -34,6 +35,5 @@ export function useOfflineQuery<TData = unknown>(
     // When offline, don't retry and use stale data
     retry: isOnline ? 3 : 0,
     staleTime: isOnline ? undefined : Infinity,
-    ...(rest as object),
-  });
+  } as any);
 }

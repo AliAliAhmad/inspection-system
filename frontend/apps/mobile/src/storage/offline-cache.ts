@@ -1,6 +1,6 @@
-import { MMKV } from 'react-native-mmkv';
+import { createMMKV } from 'react-native-mmkv';
 
-const storage = new MMKV({ id: 'offline-cache' });
+const storage = createMMKV({ id: 'offline-cache' });
 
 export const offlineCache = {
   // Store data with a key
@@ -18,7 +18,7 @@ export const offlineCache = {
 
   // Remove cached data
   remove(key: string): void {
-    storage.delete(key);
+    storage.remove(key);
   },
 
   // Clear all cache

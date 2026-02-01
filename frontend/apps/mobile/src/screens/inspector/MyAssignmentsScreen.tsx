@@ -50,7 +50,7 @@ export default function MyAssignmentsScreen() {
       inspectionAssignmentsApi.getMyAssignments(
         activeFilter === 'all' ? undefined : { status: activeFilter },
       ),
-    select: (res) => res.data.items ?? res.data,
+    select: (res) => (res.data as any).data ?? res.data,
   });
 
   const assignments = (Array.isArray(data) ? data : []) as InspectionAssignment[];

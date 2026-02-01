@@ -1,6 +1,6 @@
-import { MMKV } from 'react-native-mmkv';
+import { createMMKV } from 'react-native-mmkv';
 
-const queueStorage = new MMKV({ id: 'sync-queue' });
+const queueStorage = createMMKV({ id: 'sync-queue' });
 const QUEUE_KEY = 'pending-operations';
 
 export interface QueuedOperation {
@@ -69,7 +69,7 @@ export const syncManager = {
 
   // Clear all queued operations
   clear(): void {
-    queueStorage.delete(QUEUE_KEY);
+    queueStorage.remove(QUEUE_KEY);
   },
 
   // Process the queue sequentially using the API client

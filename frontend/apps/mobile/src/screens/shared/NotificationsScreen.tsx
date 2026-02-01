@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { notificationsApi, Notification, NotificationPriority, getNotificationMobileRoute } from '@inspection/shared';
 import { formatDateTime } from '@inspection/shared';
-import { useAuth } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 
 const priorityColors: Record<NotificationPriority, string> = {
   info: '#1677ff',

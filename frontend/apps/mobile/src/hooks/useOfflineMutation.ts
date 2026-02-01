@@ -60,7 +60,7 @@ export function useOfflineMutation<TData = unknown, TVariables = void>(
       if (invalidateKeys) {
         invalidateKeys.forEach(key => queryClient.invalidateQueries({ queryKey: key }));
       }
-      rest.onSuccess?.(data, variables, context);
+      (rest as any).onSuccess?.(data, variables, context);
     },
   });
 }

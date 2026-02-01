@@ -67,7 +67,7 @@ export default function AdminUsersScreen() {
     language: 'en',
   });
 
-  const { data, isLoading, isError, refetch, isRefetching, isFetchingNextPage } = useQuery({
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['users', roleFilter, search, page],
     queryFn: () =>
       usersApi.list({

@@ -63,14 +63,14 @@ export default function DashboardScreen() {
       {loading ? (
         <ActivityIndicator size="large" color="#1677ff" style={{ marginTop: 32 }} />
       ) : isAdmin && adminData ? (
-        <View style={styles.grid}>
-          <StatCard title={t('nav.users')} value={adminData.users_count} />
-          <StatCard title={t('nav.equipment')} value={adminData.equipment_count} />
-          <StatCard title={t('nav.inspections')} value={adminData.inspections_today} />
-          <StatCard title={t('nav.defects')} value={adminData.open_defects} color={adminData.open_defects > 0 ? '#cf1322' : undefined} />
-          <StatCard title={t('nav.leaves')} value={adminData.active_leaves} />
-        </View>
         <>
+          <View style={styles.grid}>
+            <StatCard title={t('nav.users')} value={adminData.users_count} />
+            <StatCard title={t('nav.equipment')} value={adminData.equipment_count} />
+            <StatCard title={t('nav.inspections')} value={adminData.inspections_today} />
+            <StatCard title={t('nav.defects')} value={adminData.open_defects} color={adminData.open_defects > 0 ? '#cf1322' : undefined} />
+            <StatCard title={t('nav.leaves')} value={adminData.active_leaves} />
+          </View>
           <Text style={styles.sectionTitle}>{t('nav.quick_links', 'Quick Access')}</Text>
           <QuickLink label={t('nav.routines', 'Inspection Routines')} onPress={() => navigation.navigate('InspectionRoutines')} />
           <QuickLink label={t('nav.defects', 'Defects')} onPress={() => navigation.navigate('Defects')} />
