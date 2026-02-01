@@ -32,7 +32,8 @@ def is_arabic(text):
     """Check if text is primarily Arabic."""
     if not text:
         return False
-    arabic_chars = len(_ARABIC_RE.findall(text))
+    # Count total Arabic characters (sum of all match lengths)
+    arabic_chars = sum(len(m) for m in _ARABIC_RE.findall(text))
     # If more than 30% of non-space chars are Arabic, consider it Arabic
     non_space = len(text.replace(' ', ''))
     if non_space == 0:
