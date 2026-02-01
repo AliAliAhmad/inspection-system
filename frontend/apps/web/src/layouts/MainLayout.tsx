@@ -133,9 +133,15 @@ export default function MainLayout() {
         <div onClick={() => item.path && navigate(item.path)}>{dom}</div>
       )}
       actionsRender={() => [
-        <Badge key="notifications" count={unreadCount} size="small">
-          <BellOutlined style={{ fontSize: 18 }} onClick={() => navigate('/notifications')} />
-        </Badge>,
+        <div
+          key="notifications"
+          onClick={() => navigate('/notifications')}
+          style={{ cursor: 'pointer', padding: '4px 8px', display: 'inline-flex', alignItems: 'center' }}
+        >
+          <Badge count={unreadCount} size="small">
+            <BellOutlined style={{ fontSize: 20 }} />
+          </Badge>
+        </div>,
         <Dropdown
           key="user"
           menu={{

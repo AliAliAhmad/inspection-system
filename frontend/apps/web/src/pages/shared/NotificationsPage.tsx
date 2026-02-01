@@ -90,7 +90,7 @@ export default function NotificationsPage() {
                     size="small"
                     onClick={() => markReadMutation.mutate(item.id)}
                   >
-                    Mark Read
+                    {t('notifications.mark_all_read', 'Mark Read')}
                   </Button>
                 ),
                 <Button
