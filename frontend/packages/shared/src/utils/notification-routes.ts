@@ -23,7 +23,7 @@ export function getNotificationRoute(
     // Leaves
     case 'leave_requested':
     case 'leave_coverage_assigned':
-      return userRole === 'admin' ? '/admin/leave-approvals' : '/leaves';
+      return userRole === 'admin' ? '/admin/approvals?tab=leaves' : '/leaves';
     case 'leave_notification':
     case 'leave_rejected':
     case 'leave_balance_updated':
@@ -61,7 +61,7 @@ export function getNotificationRoute(
 
     // Pause
     case 'pause_requested':
-      return userRole === 'admin' ? '/admin/pause-approvals' : '/engineer/pause-approvals';
+      return userRole === 'admin' ? '/admin/approvals?tab=pauses' : '/engineer/pause-approvals';
     case 'pause_approved':
     case 'pause_denied':
       if (userRole === 'specialist') return '/specialist/jobs';
@@ -73,7 +73,7 @@ export function getNotificationRoute(
     case 'bonus_denied':
       return '/leaderboard';
     case 'bonus_request':
-      return userRole === 'admin' ? '/admin/bonus-approvals' : '/quality/bonus-requests';
+      return userRole === 'admin' ? '/admin/approvals?tab=bonus' : '/quality/bonus-requests';
 
     // Assessment
     case 'assessment_required':

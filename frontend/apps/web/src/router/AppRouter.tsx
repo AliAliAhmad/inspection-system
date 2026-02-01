@@ -23,8 +23,7 @@ const AllInspectionsPage = lazy(() => import('../pages/admin/AllInspectionsPage'
 const AllSpecialistJobsPage = lazy(() => import('../pages/admin/AllSpecialistJobsPage'));
 const AllEngineerJobsPage = lazy(() => import('../pages/admin/AllEngineerJobsPage'));
 const QualityReviewsAdminPage = lazy(() => import('../pages/admin/QualityReviewsAdminPage'));
-const LeaveApprovalsPage = lazy(() => import('../pages/admin/LeaveApprovalsPage'));
-const BonusApprovalsPage = lazy(() => import('../pages/admin/BonusApprovalsPage'));
+const ApprovalsPage = lazy(() => import('../pages/admin/ApprovalsPage'));
 const ReportsPage = lazy(() => import('../pages/admin/ReportsPage'));
 const InspectionRoutinesPage = lazy(() => import('../pages/admin/InspectionRoutinesPage'));
 const DefectsPage = lazy(() => import('../pages/admin/DefectsPage'));
@@ -92,14 +91,16 @@ export default function AppRouter() {
             <Route path="specialist-jobs" element={<RoleGuard roles={['admin']}><AllSpecialistJobsPage /></RoleGuard>} />
             <Route path="engineer-jobs" element={<RoleGuard roles={['admin']}><AllEngineerJobsPage /></RoleGuard>} />
             <Route path="quality-reviews" element={<RoleGuard roles={['admin']}><QualityReviewsAdminPage /></RoleGuard>} />
-            <Route path="leave-approvals" element={<RoleGuard roles={['admin']}><LeaveApprovalsPage /></RoleGuard>} />
-            <Route path="bonus-approvals" element={<RoleGuard roles={['admin']}><BonusApprovalsPage /></RoleGuard>} />
+            <Route path="approvals" element={<RoleGuard roles={['admin']}><ApprovalsPage /></RoleGuard>} />
+            {/* Redirects from old approval routes */}
+            <Route path="leave-approvals" element={<Navigate to="/admin/approvals?tab=leaves" replace />} />
+            <Route path="bonus-approvals" element={<Navigate to="/admin/approvals?tab=bonus" replace />} />
             <Route path="reports" element={<RoleGuard roles={['admin']}><ReportsPage /></RoleGuard>} />
             <Route path="routines" element={<RoleGuard roles={['admin']}><InspectionRoutinesPage /></RoleGuard>} />
             <Route path="defects" element={<RoleGuard roles={['admin']}><DefectsPage /></RoleGuard>} />
             <Route path="backlog" element={<RoleGuard roles={['admin']}><BacklogPage /></RoleGuard>} />
             <Route path="roster" element={<RoleGuard roles={['admin', 'engineer']}><TeamRosterPage /></RoleGuard>} />
-            <Route path="pause-approvals" element={<RoleGuard roles={['admin']}><PauseApprovalsPage /></RoleGuard>} />
+            <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pauses" replace />} />
           </Route>
 
           {/* Inspector routes */}
