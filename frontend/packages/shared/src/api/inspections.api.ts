@@ -57,6 +57,15 @@ export const inspectionsApi = {
     return getApiClient().post<ApiResponse<Inspection>>(`/api/inspections/${id}/review`, payload);
   },
 
+  uploadAnswerPhoto(inspectionId: number, checklistItemId: number, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('checklist_item_id', String(checklistItemId));
+    return getApiClient().post<ApiResponse>(`/api/inspections/${inspectionId}/upload-photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
   remove(id: number) {
     return getApiClient().delete<ApiResponse>(`/api/inspections/${id}`);
   },

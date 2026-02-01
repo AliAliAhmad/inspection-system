@@ -313,6 +313,63 @@ def get_inspection(inspection_id):
     }), 200
 
 
+@bp.route('/<int:inspection_id>/upload-photo', methods=['POST'])
+@jwt_required()
+def upload_answer_photo(inspection_id):
+    """
+    Upload a photo for an inspection answer and link it.
+    Multipart form: file, checklist_item_id
+    """
+    from app.services.file_service import FileService
+    from app.models import InspectionAnswer
+
+    current_user_id = get_jwt_identity()
+
+    inspection = db.session.get(Inspection, inspection_id)
+    if not inspection:
+        raise NotFoundError(f"Inspection with ID {inspection_id} not found")
+
+    if inspection.status != 'draft':
+        raise ValidationError("Cannot modify inspection that is not in draft status")
+
+    user = db.session.get(User, int(current_user_id))
+    if user.role != 'admin' and inspection.technician_id != int(current_user_id):
+        raise ForbiddenError("You can only upload photos to your own inspections")
+
+    if 'file' not in request.files:
+        raise ValidationError("No file in request")
+
+    checklist_item_id = request.form.get('checklist_item_id')
+    if not checklist_item_id:
+        raise ValidationError("checklist_item_id is required")
+
+    file = request.files['file']
+    file_record = FileService.upload_file(
+        file=file,
+        uploaded_by=int(current_user_id),
+        related_type='inspection_answer',
+        related_id=int(checklist_item_id),
+        category='inspection_photos'
+    )
+
+    # Link the photo to the answer
+    answer = InspectionAnswer.query.filter_by(
+        inspection_id=inspection_id,
+        checklist_item_id=int(checklist_item_id)
+    ).first()
+
+    if answer:
+        answer.photo_path = file_record.filename
+        db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Photo uploaded',
+        'data': file_record.to_dict(),
+        'photo_path': file_record.filename
+    }), 201
+
+
 @bp.route('/<int:inspection_id>', methods=['DELETE'])
 @jwt_required()
 def delete_inspection(inspection_id):
