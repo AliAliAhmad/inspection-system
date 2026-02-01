@@ -24,6 +24,7 @@ import { useAuth } from '../../providers/AuthProvider';
 import { leavesApi, usersApi, Leave, LeaveStatus, LeaveType } from '@inspection/shared';
 import { formatDate } from '@inspection/shared';
 import dayjs from 'dayjs';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const statusColors: Record<LeaveStatus, string> = {
   pending: 'orange',
@@ -278,7 +279,7 @@ export default function LeavesPage() {
             label={t('leave.reason')}
             rules={[{ required: true }]}
           >
-            <Input.TextArea rows={3} />
+            <VoiceTextArea rows={3} />
           </Form.Item>
 
           <Form.Item

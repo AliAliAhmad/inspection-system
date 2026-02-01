@@ -36,6 +36,7 @@ import {
   formatDateTime,
   formatHours,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const STATUS_COLOR: Record<string, string> = {
   assigned: 'blue',
@@ -435,7 +436,7 @@ export default function EngineerJobDetailPage() {
           </div>
           <div>
             <Typography.Text strong>{t('common.details', 'Details')}</Typography.Text>
-            <Input.TextArea
+            <VoiceTextArea
               rows={3}
               value={pauseDetails}
               onChange={(e) => setPauseDetails(e.target.value)}
@@ -521,7 +522,7 @@ export default function EngineerJobDetailPage() {
             name="work_notes"
             label={t('jobs.work_notes', 'Work Notes')}
           >
-            <Input.TextArea rows={4} placeholder={t('jobs.work_notes', 'Work notes...')} />
+            <VoiceTextArea rows={4} placeholder={t('jobs.work_notes', 'Work notes...')} />
           </Form.Item>
           <Form.Item>
             <Button

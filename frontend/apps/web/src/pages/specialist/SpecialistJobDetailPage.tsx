@@ -45,6 +45,7 @@ import {
   PauseCategory,
 } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   assigned: 'blue',
@@ -625,7 +626,7 @@ export default function SpecialistJobDetailPage() {
             </div>
             <div>
               <Typography.Text strong>Technical Notes</Typography.Text>
-              <Input.TextArea
+              <VoiceTextArea
                 rows={3}
                 value={technicalNotes}
                 onChange={(e) => setTechnicalNotes(e.target.value)}
@@ -674,7 +675,7 @@ export default function SpecialistJobDetailPage() {
           </div>
           <div>
             <Typography.Text strong>Details</Typography.Text>
-            <Input.TextArea
+            <VoiceTextArea
               rows={3}
               value={pauseDetails}
               onChange={(e) => setPauseDetails(e.target.value)}
@@ -701,7 +702,7 @@ export default function SpecialistJobDetailPage() {
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <div>
             <Typography.Text strong>{t('jobs.work_notes')}</Typography.Text>
-            <Input.TextArea
+            <VoiceTextArea
               rows={4}
               value={workNotes}
               onChange={(e) => setWorkNotes(e.target.value)}
@@ -738,7 +739,7 @@ export default function SpecialistJobDetailPage() {
       >
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Typography.Text strong>{t('jobs.incomplete_reason')}</Typography.Text>
-          <Input.TextArea
+          <VoiceTextArea
             rows={4}
             value={incompleteReason}
             onChange={(e) => setIncompleteReason(e.target.value)}

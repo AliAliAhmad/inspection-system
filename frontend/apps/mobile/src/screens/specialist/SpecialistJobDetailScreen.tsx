@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Modal,
 } from 'react-native';
+import VoiceTextInput from '../../components/VoiceTextInput';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -542,7 +543,7 @@ export default function SpecialistJobDetailScreen() {
             </View>
 
             <Text style={styles.modalLabel}>Details</Text>
-            <TextInput
+            <VoiceTextInput
               style={styles.modalTextInput}
               value={pauseDetails}
               onChangeText={setPauseDetails}
@@ -589,7 +590,7 @@ export default function SpecialistJobDetailScreen() {
             <Text style={styles.modalTitle}>{t('jobs.complete')}</Text>
 
             <Text style={styles.modalLabel}>{t('jobs.work_notes')}</Text>
-            <TextInput
+            <VoiceTextInput
               style={styles.modalTextInput}
               value={workNotesInput}
               onChangeText={setWorkNotesInput}
@@ -636,7 +637,7 @@ export default function SpecialistJobDetailScreen() {
             <Text style={styles.modalTitle}>{t('jobs.mark_incomplete')}</Text>
 
             <Text style={styles.modalLabel}>{t('jobs.incomplete_reason')}</Text>
-            <TextInput
+            <VoiceTextInput
               style={styles.modalTextInput}
               value={incompleteReasonInput}
               onChangeText={setIncompleteReasonInput}

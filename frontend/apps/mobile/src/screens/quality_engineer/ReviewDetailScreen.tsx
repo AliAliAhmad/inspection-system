@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
 } from 'react-native';
+import VoiceTextInput from '../../components/VoiceTextInput';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -312,7 +313,7 @@ export default function ReviewDetailScreen() {
             </View>
 
             <Text style={styles.inputLabel}>{t('quality.rejection_reason', 'Rejection Reason')}</Text>
-            <TextInput
+            <VoiceTextInput
               style={styles.textArea}
               multiline
               numberOfLines={3}
@@ -323,7 +324,7 @@ export default function ReviewDetailScreen() {
             />
 
             <Text style={styles.inputLabel}>{t('quality.evidence', 'Evidence Notes')} ({t('common.optional', 'optional')})</Text>
-            <TextInput
+            <VoiceTextInput
               style={styles.textArea}
               multiline
               numberOfLines={3}

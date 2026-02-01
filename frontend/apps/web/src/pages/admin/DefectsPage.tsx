@@ -24,6 +24,7 @@ import {
   type DefectStatus,
   type AssignSpecialistPayload,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const severityColors: Record<string, string> = {
   critical: 'red',
@@ -301,7 +302,7 @@ export default function DefectsPage() {
               label={t('defects.majorReason', 'Major Reason')}
               rules={[{ required: true, message: 'Reason is required for major category' }]}
             >
-              <Input.TextArea rows={3} placeholder={t('defects.enterMajorReason', 'Explain why this is a major job')} />
+              <VoiceTextArea rows={3} placeholder={t('defects.enterMajorReason', 'Explain why this is a major job')} />
             </Form.Item>
           )}
         </Form>

@@ -31,6 +31,7 @@ import {
   FinalAssessment,
   Verdict,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 export default function AssessmentPage() {
   const { t } = useTranslation();
@@ -277,7 +278,7 @@ export default function AssessmentPage() {
                   >
                     Urgent Reason *
                   </Typography.Text>
-                  <Input.TextArea
+                  <VoiceTextArea
                     value={urgentReason}
                     onChange={(e) => setUrgentReason(e.target.value)}
                     rows={3}

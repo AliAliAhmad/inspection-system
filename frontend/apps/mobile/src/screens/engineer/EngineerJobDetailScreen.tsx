@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
 } from 'react-native';
+import VoiceTextInput from '../../components/VoiceTextInput';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useRoute } from '@react-navigation/native';
@@ -422,7 +423,7 @@ export default function EngineerJobDetailScreen() {
             </View>
 
             <Text style={styles.inputLabel}>{t('common.details', 'Details')}</Text>
-            <TextInput
+            <VoiceTextInput
               style={styles.textArea}
               multiline
               numberOfLines={3}
@@ -471,7 +472,7 @@ export default function EngineerJobDetailScreen() {
             <Text style={styles.modalTitle}>{t('jobs.complete', 'Complete Job')}</Text>
 
             <Text style={styles.inputLabel}>{t('jobs.work_notes', 'Work Notes')}</Text>
-            <TextInput
+            <VoiceTextInput
               style={styles.textArea}
               multiline
               numberOfLines={4}

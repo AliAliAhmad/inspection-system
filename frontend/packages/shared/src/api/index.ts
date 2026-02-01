@@ -83,6 +83,8 @@ export type {
   UpcomingData,
 } from './inspection-routines.api';
 export { rosterApi } from './roster.api';
+export { voiceApi } from './voice.api';
+export type { TranscriptionResult } from './voice.api';
 export type {
   RosterWeekUser,
   RosterWeekData,

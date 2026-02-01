@@ -25,6 +25,7 @@ import {
   type ReviewPayload,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const statusColorMap: Record<InspectionStatus, string> = {
   draft: 'default',
@@ -197,7 +198,7 @@ export default function AllInspectionsPage() {
             </Radio.Group>
           </Form.Item>
           <Form.Item name="notes" label={t('inspections.notes', 'Notes')}>
-            <Input.TextArea rows={3} />
+            <VoiceTextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

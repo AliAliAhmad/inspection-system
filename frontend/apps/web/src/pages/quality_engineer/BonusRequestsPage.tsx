@@ -23,6 +23,7 @@ import {
   User,
   formatDateTime,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const STATUS_COLOR: Record<string, string> = {
   pending: 'orange',
@@ -198,7 +199,7 @@ export default function BonusRequestsPage() {
               label={t('common.reason', 'Reason')}
               rules={[{ required: true, message: t('common.required', 'Required') }]}
             >
-              <Input.TextArea rows={3} placeholder={t('common.reason', 'Reason for bonus...')} />
+              <VoiceTextArea rows={3} placeholder={t('common.reason', 'Reason for bonus...')} />
             </Form.Item>
 
             <Form.Item

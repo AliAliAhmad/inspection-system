@@ -72,7 +72,7 @@ def create_app(config_name='development'):
         reports, schedules, ratings, notifications, specialist_jobs,
         inspection_assignments, assessments, defect_assessments,
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
-        files, sync, inspection_routines, roster
+        files, sync, inspection_routines, roster, voice
     )
 
     # Core
@@ -119,6 +119,9 @@ def create_app(config_name='development'):
 
     # Offline sync
     app.register_blueprint(sync.bp, url_prefix='/api/sync')
+
+    # Voice transcription & translation
+    app.register_blueprint(voice.bp, url_prefix='/api/voice')
 
     # Initialize background scheduler (not in testing)
     if config_name != 'testing':

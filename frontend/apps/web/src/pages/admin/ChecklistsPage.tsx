@@ -27,6 +27,7 @@ import {
   type CreateChecklistItemPayload,
   type UpdateChecklistItemPayload,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 export default function ChecklistsPage() {
   const { t } = useTranslation();
@@ -263,7 +264,7 @@ export default function ChecklistsPage() {
             <Input placeholder="e.g. Impeller, Bearing (optional)" />
           </Form.Item>
           <Form.Item name="description" label={t('checklists.description', 'Description')} rules={[{ required: true }]}>
-            <Input.TextArea rows={3} placeholder="What this checklist covers" />
+            <VoiceTextArea rows={3} placeholder="What this checklist covers" />
           </Form.Item>
           <Form.Item name="version" label={t('checklists.version', 'Version')} rules={[{ required: true }]} initialValue="1.0">
             <Input placeholder="e.g. 1.0" />

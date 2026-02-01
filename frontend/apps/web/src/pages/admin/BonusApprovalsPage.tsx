@@ -28,6 +28,7 @@ import {
   type AwardBonusPayload,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 export default function BonusApprovalsPage() {
   const { t } = useTranslation();
@@ -276,7 +277,7 @@ export default function BonusApprovalsPage() {
               <InputNumber min={1} max={100} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="reason" label={t('bonus.reason', 'Reason')} rules={[{ required: true }]}>
-              <Input.TextArea rows={3} />
+              <VoiceTextArea rows={3} />
             </Form.Item>
             <Divider>{t('bonus.optionalFields', 'Optional - Related Job')}</Divider>
             <Form.Item name="related_job_type" label={t('bonus.relatedJobType', 'Related Job Type')}>

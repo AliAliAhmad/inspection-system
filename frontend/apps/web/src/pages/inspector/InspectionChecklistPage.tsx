@@ -39,6 +39,7 @@ import {
   ChecklistItem,
   InspectionProgress,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 export default function InspectionChecklistPage() {
   const { t, i18n } = useTranslation();
@@ -364,7 +365,7 @@ function ChecklistItemCard({
         );
       case 'text':
         return (
-          <Input.TextArea
+          <VoiceTextArea
             defaultValue={currentValue}
             rows={2}
             placeholder={t('inspection.answer', 'Enter answer')}
@@ -461,7 +462,7 @@ function ChecklistItemCard({
         </Space>
 
         {showComment && (
-          <Input.TextArea
+          <VoiceTextArea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder={t('inspection.comment', 'Add a comment...')}

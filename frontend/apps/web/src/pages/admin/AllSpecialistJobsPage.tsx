@@ -23,6 +23,7 @@ import {
   type SpecialistJob,
   type JobStatus,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const statusColorMap: Record<JobStatus, string> = {
   assigned: 'default',
@@ -251,7 +252,7 @@ export default function AllSpecialistJobsPage() {
           }
         >
           <Form.Item name="reason" label={t('specialistJobs.pauseReason', 'Reason')}>
-            <Input.TextArea rows={3} />
+            <VoiceTextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

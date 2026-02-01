@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import VoiceTextInput from '../../components/VoiceTextInput';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -124,7 +125,7 @@ export default function CreateJobScreen() {
 
       {/* Description */}
       <Text style={styles.label}>{t('common.description', 'Description')}</Text>
-      <TextInput
+      <VoiceTextInput
         style={[styles.input, styles.textArea]}
         value={description}
         onChangeText={setDescription}
@@ -159,7 +160,7 @@ export default function CreateJobScreen() {
       {category === 'major' && (
         <>
           <Text style={styles.label}>{t('common.major_reason', 'Major Reason')}</Text>
-          <TextInput
+          <VoiceTextInput
             style={[styles.input, styles.textArea]}
             value={majorReason}
             onChangeText={setMajorReason}

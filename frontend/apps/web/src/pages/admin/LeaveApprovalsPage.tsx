@@ -25,6 +25,7 @@ import {
   type User,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const statusColorMap: Record<LeaveStatus, string> = {
   pending: 'processing',
@@ -258,7 +259,7 @@ export default function LeaveApprovalsPage() {
           }
         >
           <Form.Item name="notes" label={t('leaves.notes', 'Notes (optional)')}>
-            <Input.TextArea rows={3} />
+            <VoiceTextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>
@@ -280,7 +281,7 @@ export default function LeaveApprovalsPage() {
           }
         >
           <Form.Item name="rejection_reason" label={t('leaves.rejectionReason', 'Rejection Reason')}>
-            <Input.TextArea rows={3} />
+            <VoiceTextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

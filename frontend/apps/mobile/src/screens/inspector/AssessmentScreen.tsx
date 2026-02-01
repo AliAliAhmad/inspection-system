@@ -10,6 +10,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
+import VoiceTextInput from '../../components/VoiceTextInput';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -312,7 +313,7 @@ export default function AssessmentScreen() {
           </View>
 
           {selectedVerdict === 'urgent' ? (
-            <TextInput
+            <VoiceTextInput
               style={styles.urgentReasonInput}
               value={urgentReason}
               onChangeText={setUrgentReason}

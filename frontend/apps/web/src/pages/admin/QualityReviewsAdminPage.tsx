@@ -23,6 +23,7 @@ import {
   type ValidatePayload,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const statusColorMap: Record<ReviewStatus, string> = {
   pending: 'processing',
@@ -207,7 +208,7 @@ export default function QualityReviewsAdminPage() {
             name="admin_validation_notes"
             label={t('qualityReviews.validationNotes', 'Notes')}
           >
-            <Input.TextArea rows={3} />
+            <VoiceTextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

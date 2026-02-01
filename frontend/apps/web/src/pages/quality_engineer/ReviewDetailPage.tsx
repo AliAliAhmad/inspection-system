@@ -27,6 +27,7 @@ import {
   RejectionCategory,
   formatDateTime,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 const STATUS_COLOR: Record<string, string> = {
   pending: 'orange',
@@ -180,7 +181,7 @@ export default function ReviewDetailPage() {
         <Card title={t('common.actions', 'Actions')} style={{ marginBottom: 16 }}>
           {!showRejectForm ? (
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Input.TextArea
+              <VoiceTextArea
                 rows={2}
                 placeholder={t('common.notes_optional', 'Notes (optional)')}
                 value={approveNotes}
@@ -235,19 +236,19 @@ export default function ReviewDetailPage() {
                 label={t('quality.rejection_reason', 'Rejection Reason')}
                 rules={[{ required: true, message: t('common.required', 'Required') }]}
               >
-                <Input.TextArea rows={3} placeholder={t('quality.rejection_reason', 'Reason...')} />
+                <VoiceTextArea rows={3} placeholder={t('quality.rejection_reason', 'Reason...')} />
               </Form.Item>
               <Form.Item
                 name="evidence_notes"
                 label={t('quality.evidence', 'Evidence Notes')}
               >
-                <Input.TextArea rows={2} placeholder={t('quality.evidence', 'Evidence notes...')} />
+                <VoiceTextArea rows={2} placeholder={t('quality.evidence', 'Evidence notes...')} />
               </Form.Item>
               <Form.Item
                 name="notes"
                 label={t('common.notes', 'Notes')}
               >
-                <Input.TextArea rows={2} placeholder={t('common.notes', 'Additional notes...')} />
+                <VoiceTextArea rows={2} placeholder={t('common.notes', 'Additional notes...')} />
               </Form.Item>
               <Form.Item>
                 <Space>

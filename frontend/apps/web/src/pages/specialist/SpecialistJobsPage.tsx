@@ -27,6 +27,7 @@ import {
   JobStatus,
 } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 function openCameraInput(accept: string, onFile: (file: File) => void) {
   const input = document.createElement('input');
@@ -408,7 +409,7 @@ export default function SpecialistJobsPage() {
               {/* Reason */}
               <div style={{ marginBottom: 12 }}>
                 <Typography.Text strong>{t('jobs.wrong_finding_reason')}</Typography.Text>
-                <Input.TextArea
+                <VoiceTextArea
                   rows={3}
                   value={wrongFindingReason}
                   onChange={(e) => setWrongFindingReason(e.target.value)}

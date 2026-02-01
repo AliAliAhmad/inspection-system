@@ -21,6 +21,7 @@ import {
   CreateEngineerJobPayload,
   Equipment,
 } from '@inspection/shared';
+import VoiceTextArea from '../../components/VoiceTextArea';
 
 export default function CreateJobPage() {
   const { t } = useTranslation();
@@ -107,7 +108,7 @@ export default function CreateJobPage() {
             label={t('common.description', 'Description')}
             rules={[{ required: true, message: t('common.required', 'This field is required') }]}
           >
-            <Input.TextArea rows={4} placeholder={t('common.description', 'Description')} />
+            <VoiceTextArea rows={4} placeholder={t('common.description', 'Description')} />
           </Form.Item>
 
           <Form.Item
@@ -145,7 +146,7 @@ export default function CreateJobPage() {
               label={t('jobs.major_reason', 'Major Reason')}
               rules={[{ required: true, message: t('common.required', 'This field is required') }]}
             >
-              <Input.TextArea rows={3} placeholder={t('jobs.major_reason', 'Explain why this is major...')} />
+              <VoiceTextArea rows={3} placeholder={t('jobs.major_reason', 'Explain why this is major...')} />
             </Form.Item>
           )}
 

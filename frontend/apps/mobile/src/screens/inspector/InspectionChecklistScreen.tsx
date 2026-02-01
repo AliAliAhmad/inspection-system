@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Image,
 } from 'react-native';
+import VoiceTextInput from '../../components/VoiceTextInput';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -285,7 +286,7 @@ export default function InspectionChecklistScreen() {
   const renderTextInput = (item: ChecklistItem) => {
     const val = localAnswers[item.id]?.answer_value ?? '';
     return (
-      <TextInput
+      <VoiceTextInput
         style={styles.textInputAnswer}
         value={val}
         onChangeText={(text) => handleAnswer(item.id, text)}
@@ -382,7 +383,7 @@ export default function InspectionChecklistScreen() {
         </View>
 
         {commentExpanded ? (
-          <TextInput
+          <VoiceTextInput
             style={styles.commentInput}
             value={currentAnswer?.comment ?? ''}
             onChangeText={(text) => handleComment(item.id, text)}
