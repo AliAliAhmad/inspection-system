@@ -110,7 +110,9 @@ with app.app_context():
     # Update specialist_jobs status constraint to include cancelled
     try:
         db.session.execute(text('ALTER TABLE specialist_jobs DROP CONSTRAINT IF EXISTS check_valid_job_status'))
-        db.session.execute(text(\"\"\"ALTER TABLE specialist_jobs ADD CONSTRAINT check_valid_job_status CHECK (status IN ('assigned', 'in_progress', 'paused', 'completed', 'incomplete', 'qc_approved', 'cancelled'))\"\"\"))
+        constraint_sql = 'ALTER TABLE specialist_jobs ADD CONSTRAINT check_valid_job_status '
+        constraint_sql += \"CHECK (status IN ('assigned', 'in_progress', 'paused', 'completed', 'incomplete', 'qc_approved', 'cancelled'))\"
+        db.session.execute(text(constraint_sql))
         db.session.commit()
         print('Updated specialist_jobs status constraint')
     except Exception:
