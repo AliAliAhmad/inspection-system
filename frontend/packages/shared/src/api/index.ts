@@ -15,7 +15,7 @@ export type {
 export { inspectionsApi } from './inspections.api';
 export type { InspectionListParams, StartInspectionPayload, ReviewPayload } from './inspections.api';
 export { defectsApi } from './defects.api';
-export type { DefectListParams } from './defects.api';
+export type { DefectListParams, AssignSpecialistPayload } from './defects.api';
 export { schedulesApi } from './schedules.api';
 export type { CreateSchedulePayload } from './schedules.api';
 export { ratingsApi } from './ratings.api';

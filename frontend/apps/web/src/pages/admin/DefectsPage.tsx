@@ -5,14 +5,24 @@ import {
   Tag,
   Tabs,
   Typography,
+  Button,
+  Modal,
+  Form,
+  Select,
+  Input,
+  Space,
+  message,
 } from 'antd';
-import { useQuery } from '@tanstack/react-query';
+import { ToolOutlined } from '@ant-design/icons';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import {
   defectsApi,
+  usersApi,
   type Defect,
   type DefectStatus,
+  type AssignSpecialistPayload,
 } from '@inspection/shared';
 
 const severityColors: Record<string, string> = {
@@ -40,14 +50,52 @@ const statusLabels: Record<string, string> = {
 
 export default function DefectsPage() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
 
   const [activeStatus, setActiveStatus] = useState<DefectStatus | undefined>();
   const [page, setPage] = useState(1);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [selectedDefect, setSelectedDefect] = useState<Defect | null>(null);
+  const [assignForm] = Form.useForm();
+  const [category, setCategory] = useState<string | undefined>();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['defects', activeStatus, page],
     queryFn: () => defectsApi.list({ status: activeStatus, page, per_page: 20 }).then(r => r.data),
   });
+
+  // Fetch specialists when modal is open
+  const { data: specialistsData } = useQuery({
+    queryKey: ['users', 'specialists'],
+    queryFn: () => usersApi.list({ role: 'specialist', per_page: 200, is_active: true }),
+    enabled: assignOpen,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: AssignSpecialistPayload }) =>
+      defectsApi.assignSpecialist(id, payload),
+    onSuccess: (res) => {
+      const job = (res.data as any)?.data;
+      message.success(
+        t('defects.assignSuccess', 'Specialist job {{jobId}} created', {
+          jobId: job?.job_id || '',
+        }),
+      );
+      queryClient.invalidateQueries({ queryKey: ['defects'] });
+      setAssignOpen(false);
+      setSelectedDefect(null);
+      assignForm.resetFields();
+      setCategory(undefined);
+    },
+    onError: (err: any) => {
+      message.error(
+        err?.response?.data?.message || t('defects.assignError', 'Failed to assign specialist'),
+      );
+    },
+  });
+
+  const specialists: any[] =
+    specialistsData?.data?.data || (specialistsData?.data as any)?.data || [];
 
   const columns: ColumnsType<Defect> = [
     {
@@ -86,10 +134,10 @@ export default function DefectsPage() {
       title: t('defects.category', 'Category'),
       dataIndex: 'category',
       key: 'category',
-      render: (category: string | null) =>
-        category ? (
-          <Tag color={category === 'mechanical' ? 'blue' : 'gold'}>
-            {category.toUpperCase()}
+      render: (cat: string | null) =>
+        cat ? (
+          <Tag color={cat === 'mechanical' ? 'blue' : 'gold'}>
+            {cat.toUpperCase()}
           </Tag>
         ) : (
           '-'
@@ -108,10 +156,30 @@ export default function DefectsPage() {
       render: (v: string | null) => v || '-',
     },
     {
-      title: t('defects.createdAt', 'Created At'),
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (v: string | null) => v || '-',
+      title: t('common.actions', 'Actions'),
+      key: 'actions',
+      width: 160,
+      render: (_: unknown, record: Defect) => {
+        const hasJob = !!(record as any).specialist_job;
+        return (
+          <Button
+            type="primary"
+            size="small"
+            icon={<ToolOutlined />}
+            onClick={() => {
+              setSelectedDefect(record);
+              assignForm.resetFields();
+              setCategory(undefined);
+              setAssignOpen(true);
+            }}
+            disabled={hasJob || record.status === 'closed' || record.status === 'resolved'}
+          >
+            {hasJob
+              ? t('defects.assigned', 'Assigned')
+              : t('defects.assignSpecialist', 'Assign Specialist')}
+          </Button>
+        );
+      },
     },
   ];
 
@@ -155,8 +223,89 @@ export default function DefectsPage() {
           showSizeChanger: false,
           onChange: (p) => setPage(p),
         }}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 1100 }}
       />
+
+      {/* Assign Specialist Modal */}
+      <Modal
+        title={t('defects.assignSpecialist', 'Assign Specialist')}
+        open={assignOpen}
+        onCancel={() => {
+          setAssignOpen(false);
+          setSelectedDefect(null);
+          assignForm.resetFields();
+          setCategory(undefined);
+        }}
+        onOk={() => assignForm.submit()}
+        confirmLoading={assignMutation.isPending}
+        destroyOnClose
+      >
+        {selectedDefect && (
+          <div style={{ marginBottom: 16 }}>
+            <Typography.Text strong>Defect #{selectedDefect.id}: </Typography.Text>
+            <Typography.Text>{selectedDefect.description}</Typography.Text>
+            <br />
+            <Space style={{ marginTop: 4 }}>
+              <Tag color={severityColors[selectedDefect.severity || '']}>
+                {selectedDefect.severity?.toUpperCase()}
+              </Tag>
+              {selectedDefect.category && (
+                <Tag color={selectedDefect.category === 'mechanical' ? 'blue' : 'gold'}>
+                  {selectedDefect.category.toUpperCase()}
+                </Tag>
+              )}
+            </Space>
+          </div>
+        )}
+        <Form
+          form={assignForm}
+          layout="vertical"
+          onFinish={(values: AssignSpecialistPayload) =>
+            selectedDefect &&
+            assignMutation.mutate({ id: selectedDefect.id, payload: values })
+          }
+        >
+          <Form.Item
+            name="specialist_id"
+            label={t('defects.specialist', 'Specialist')}
+            rules={[{ required: true, message: 'Please select a specialist' }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder={t('defects.selectSpecialist', 'Select specialist')}
+            >
+              {specialists.map((s: any) => (
+                <Select.Option key={s.id} value={s.id}>
+                  {s.full_name} ({s.role_id})
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="category"
+            label={t('defects.jobCategory', 'Job Category')}
+          >
+            <Select
+              allowClear
+              placeholder={t('defects.selectCategory', 'Select category (optional)')}
+              onChange={(v) => setCategory(v)}
+            >
+              <Select.Option value="minor">Minor</Select.Option>
+              <Select.Option value="major">Major</Select.Option>
+            </Select>
+          </Form.Item>
+          {category === 'major' && (
+            <Form.Item
+              name="major_reason"
+              label={t('defects.majorReason', 'Major Reason')}
+              rules={[{ required: true, message: 'Reason is required for major category' }]}
+            >
+              <Input.TextArea rows={3} placeholder={t('defects.enterMajorReason', 'Explain why this is a major job')} />
+            </Form.Item>
+          )}
+        </Form>
+      </Modal>
     </Card>
   );
 }
