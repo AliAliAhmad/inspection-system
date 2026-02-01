@@ -51,7 +51,7 @@ class PauseLog(db.Model):
 
     __table_args__ = (
         db.CheckConstraint(
-            "reason_category IN ('parts', 'duty_finish', 'tools', 'manpower', 'oem', 'other')",
+            "reason_category IN ('parts', 'duty_finish', 'tools', 'manpower', 'oem', 'error_record', 'other')",
             name='check_valid_pause_reason'
         ),
         db.CheckConstraint(

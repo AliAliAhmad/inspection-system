@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, Typography, Tag, Button, Modal, Select, Input, Radio, Timeline, Upload, Rate, Statistic, Descriptions, Space, Spin, Alert, message, } from 'antd';
-import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, ClockCircleOutlined, } from '@ant-design/icons';
+import { Card, Typography, Tag, Button, Modal, Select, Input, InputNumber, Radio, Timeline, Upload, Rate, Statistic, Descriptions, Space, Spin, Alert, message, } from 'antd';
+import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, CameraOutlined, PictureOutlined, ClockCircleOutlined, } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,7 @@ const STATUS_COLORS = {
     completed: 'success',
     incomplete: 'error',
     qc_approved: 'green',
+    cancelled: 'default',
 };
 const PAUSE_CATEGORIES = [
     'parts',
@@ -21,8 +22,21 @@ const PAUSE_CATEGORIES = [
     'tools',
     'manpower',
     'oem',
+    'error_record',
     'other',
 ];
+function openCameraInput(accept, onFile) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.capture = 'environment';
+    input.onchange = () => {
+        const file = input.files?.[0];
+        if (file)
+            onFile(file);
+    };
+    input.click();
+}
 function formatElapsed(seconds) {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -71,10 +85,11 @@ export default function SpecialistJobDetailPage() {
         enabled: !!jobId && !isNaN(jobId),
     });
     const job = jobQuery.data;
-    // Live timer effect
+    // Live timer effect — counts from planned_time_entered_at (when specialist committed)
+    const timerRef = job?.planned_time_entered_at || job?.started_at;
     useEffect(() => {
-        if (job?.is_running && job?.started_at) {
-            const startTime = new Date(job.started_at).getTime();
+        if (job?.is_running && timerRef) {
+            const startTime = new Date(timerRef).getTime();
             const updateElapsed = () => {
                 const now = Date.now();
                 setElapsed(Math.floor((now - startTime) / 1000));
@@ -95,12 +110,17 @@ export default function SpecialistJobDetailPage() {
                 intervalRef.current = null;
             }
         }
-    }, [job?.is_running, job?.started_at]);
+    }, [job?.is_running, timerRef]);
+    // Start modal state (for assigned jobs without planned time)
+    const [startPlannedHours, setStartPlannedHours] = useState(null);
+    const [startModalVisible, setStartModalVisible] = useState(false);
     // Mutations
     const startMutation = useMutation({
-        mutationFn: () => specialistJobsApi.start(jobId),
+        mutationFn: (plannedHours) => specialistJobsApi.start(jobId, plannedHours),
         onSuccess: () => {
             message.success(t('jobs.start'));
+            setStartModalVisible(false);
+            setStartPlannedHours(null);
             queryClient.invalidateQueries({ queryKey: ['specialist-jobs', jobId] });
         },
         onError: () => message.error(t('common.error')),
@@ -166,12 +186,22 @@ export default function SpecialistJobDetailPage() {
     });
     // Handlers
     const handleStart = useCallback(() => {
-        Modal.confirm({
-            title: t('common.confirm'),
-            content: t('jobs.start'),
-            onOk: () => startMutation.mutate(),
-        });
-    }, [startMutation, t]);
+        if (job?.has_planned_time) {
+            Modal.confirm({
+                title: t('common.confirm'),
+                content: t('jobs.start'),
+                onOk: () => startMutation.mutate(undefined),
+            });
+        }
+        else {
+            setStartModalVisible(true);
+        }
+    }, [startMutation, t, job?.has_planned_time]);
+    const handleStartWithPlannedTime = useCallback(() => {
+        if (startPlannedHours && startPlannedHours > 0) {
+            startMutation.mutate(startPlannedHours ?? undefined);
+        }
+    }, [startPlannedHours, startMutation]);
     const handlePauseSubmit = useCallback(() => {
         if (!pauseCategory)
             return;
@@ -218,7 +248,7 @@ export default function SpecialistJobDetailPage() {
     const jobAssessments = pendingAssessments.filter((a) => a.defect_id === job.defect_id);
     const isCompleted = job.status === 'completed' || job.status === 'qc_approved';
     const isIncomplete = job.status === 'incomplete';
-    return (_jsxs("div", { children: [_jsx(Card, { style: { marginBottom: 16 }, children: _jsxs(Space, { direction: "vertical", style: { width: '100%' }, children: [_jsx(Space, { children: _jsx(Button, { icon: _jsx(ArrowLeftOutlined, {}), onClick: () => navigate('/specialist/jobs'), children: t('common.back') }) }), _jsxs(Space, { size: "middle", align: "center", children: [_jsx(Typography.Title, { level: 4, style: { margin: 0 }, children: job.job_id }), _jsx(Tag, { color: STATUS_COLORS[job.status], children: t(`status.${job.status}`) }), job.category && (_jsx(Tag, { color: job.category === 'major' ? 'red' : 'orange', children: job.category }))] })] }) }), _jsx(Card, { title: t('common.details'), style: { marginBottom: 16 }, children: _jsxs(Descriptions, { bordered: true, column: { xs: 1, sm: 2 }, children: [_jsx(Descriptions.Item, { label: t('jobs.planned_time'), children: job.planned_time_hours != null ? `${job.planned_time_hours}h` : '-' }), _jsx(Descriptions.Item, { label: t('jobs.actual_time'), children: job.actual_time_hours != null ? `${job.actual_time_hours.toFixed(1)}h` : '-' }), _jsx(Descriptions.Item, { label: "Started At", children: job.started_at ? new Date(job.started_at).toLocaleString() : '-' }), _jsx(Descriptions.Item, { label: "Completed At", children: job.completed_at ? new Date(job.completed_at).toLocaleString() : '-' }), job.work_notes && (_jsx(Descriptions.Item, { label: t('jobs.work_notes'), span: 2, children: job.work_notes })), job.incomplete_reason && (_jsx(Descriptions.Item, { label: t('jobs.incomplete_reason'), span: 2, children: job.incomplete_reason }))] }) }), _jsxs(Card, { title: t('common.actions'), style: { marginBottom: 16 }, children: [job.status === 'assigned' && job.has_planned_time && (_jsx(Button, { type: "primary", icon: _jsx(PlayCircleOutlined, {}), size: "large", onClick: handleStart, loading: startMutation.isPending, children: t('jobs.start') })), job.status === 'assigned' && !job.has_planned_time && (_jsx(Alert, { type: "info", message: t('jobs.enter_planned_time'), description: t('jobs.planned_time') })), job.status === 'in_progress' && job.is_running && (_jsxs(Space, { direction: "vertical", size: "large", style: { width: '100%' }, children: [_jsx("div", { style: { textAlign: 'center' }, children: _jsx(Statistic, { title: t('jobs.actual_time'), value: formatElapsed(elapsed), prefix: _jsx(ClockCircleOutlined, {}), valueStyle: { fontSize: 36, fontFamily: 'monospace' } }) }), _jsxs(Space, { wrap: true, children: [_jsx(Button, { icon: _jsx(PauseCircleOutlined, {}), onClick: () => setPauseModalOpen(true), children: t('jobs.pause') }), _jsx(Button, { type: "primary", icon: _jsx(CheckCircleOutlined, {}), onClick: () => setCompleteModalOpen(true), children: t('jobs.complete') }), _jsx(Button, { danger: true, icon: _jsx(CloseCircleOutlined, {}), onClick: () => setIncompleteModalOpen(true), children: t('jobs.mark_incomplete') })] })] })), job.status === 'paused' && (_jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsx(Alert, { type: "warning", message: t('status.paused'), description: pauseHistory.length > 0
+    return (_jsxs("div", { children: [_jsx(Card, { style: { marginBottom: 16 }, children: _jsxs(Space, { direction: "vertical", style: { width: '100%' }, children: [_jsx(Space, { children: _jsx(Button, { icon: _jsx(ArrowLeftOutlined, {}), onClick: () => navigate('/specialist/jobs'), children: t('common.back') }) }), _jsxs(Space, { size: "middle", align: "center", children: [_jsx(Typography.Title, { level: 4, style: { margin: 0 }, children: job.job_id }), _jsx(Tag, { color: STATUS_COLORS[job.status], children: t(`status.${job.status}`) }), job.category && (_jsx(Tag, { color: job.category === 'major' ? 'red' : 'orange', children: job.category }))] })] }) }), _jsx(Card, { title: t('common.details'), style: { marginBottom: 16 }, children: _jsxs(Descriptions, { bordered: true, column: { xs: 1, sm: 2 }, children: [_jsx(Descriptions.Item, { label: t('jobs.planned_time'), children: job.planned_time_hours != null ? `${job.planned_time_hours}h` : '-' }), _jsx(Descriptions.Item, { label: t('jobs.actual_time'), children: job.actual_time_hours != null ? `${job.actual_time_hours.toFixed(1)}h` : '-' }), _jsx(Descriptions.Item, { label: "Started At", children: job.started_at ? new Date(job.started_at).toLocaleString() : '-' }), _jsx(Descriptions.Item, { label: "Completed At", children: job.completed_at ? new Date(job.completed_at).toLocaleString() : '-' }), job.work_notes && (_jsx(Descriptions.Item, { label: t('jobs.work_notes'), span: 2, children: job.work_notes })), job.incomplete_reason && (_jsx(Descriptions.Item, { label: t('jobs.incomplete_reason'), span: 2, children: job.incomplete_reason }))] }) }), _jsxs(Card, { title: t('common.actions'), style: { marginBottom: 16 }, children: [job.status === 'assigned' && (_jsx(Button, { type: "primary", icon: _jsx(PlayCircleOutlined, {}), size: "large", onClick: handleStart, loading: startMutation.isPending, children: t('jobs.start') })), job.status === 'cancelled' && (_jsx(Alert, { type: "warning", message: t('jobs.wrong_finding'), description: job.wrong_finding_reason || '' })), job.status === 'in_progress' && job.is_running && (_jsxs(Space, { direction: "vertical", size: "large", style: { width: '100%' }, children: [_jsx("div", { style: { textAlign: 'center' }, children: _jsx(Statistic, { title: t('jobs.actual_time'), value: formatElapsed(elapsed), prefix: _jsx(ClockCircleOutlined, {}), valueStyle: { fontSize: 36, fontFamily: 'monospace' } }) }), _jsxs(Space, { wrap: true, children: [_jsx(Button, { icon: _jsx(PauseCircleOutlined, {}), onClick: () => setPauseModalOpen(true), children: t('jobs.pause') }), _jsx(Button, { type: "primary", icon: _jsx(CheckCircleOutlined, {}), onClick: () => setCompleteModalOpen(true), children: t('jobs.complete') }), _jsx(Button, { danger: true, icon: _jsx(CloseCircleOutlined, {}), onClick: () => setIncompleteModalOpen(true), children: t('jobs.mark_incomplete') })] })] })), job.status === 'paused' && (_jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsx(Alert, { type: "warning", message: t('status.paused'), description: pauseHistory.length > 0
                                     ? `${pauseHistory[pauseHistory.length - 1].reason_category}${pauseHistory[pauseHistory.length - 1].reason_details
                                         ? ': ' + pauseHistory[pauseHistory.length - 1].reason_details
                                         : ''}`
@@ -234,10 +264,10 @@ export default function SpecialistJobDetailPage() {
                                                 : pause.status === 'denied'
                                                     ? 'error'
                                                     : 'processing', children: t(`status.${pause.status}`) }), _jsx(Typography.Text, { type: "secondary", children: new Date(pause.requested_at).toLocaleString() }), pause.duration_minutes != null && (_jsxs(Typography.Text, { type: "secondary", children: ["(", pause.duration_minutes, " min)"] }))] })] })),
-                    })) }) })), isCompleted && (_jsx(Card, { title: "Cleaning", style: { marginBottom: 16 }, children: _jsx(Upload, { beforeUpload: (file) => {
-                        handleFileUpload(file);
-                        return false;
-                    }, maxCount: 1, accept: "image/*", showUploadList: true, children: _jsx(Button, { icon: _jsx(UploadOutlined, {}), loading: fileUploadMutation.isPending || cleaningUploadMutation.isPending, children: "Upload Cleaning Photo" }) }) })), jobAssessments.length === 0 && job.defect_id && (_jsx(Card, { title: t('nav.defect_assessments'), style: { marginBottom: 16 }, children: _jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: "Verdict" }), _jsxs(Radio.Group, { value: assessmentVerdict, onChange: (e) => setAssessmentVerdict(e.target.value), style: { display: 'block', marginTop: 8 }, children: [_jsx(Radio.Button, { value: "confirm", children: t('status.approved') }), _jsx(Radio.Button, { value: "reject", children: t('status.rejected') }), _jsx(Radio.Button, { value: "minor", children: "Minor" })] })] }), _jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: "Technical Notes" }), _jsx(Input.TextArea, { rows: 3, value: technicalNotes, onChange: (e) => setTechnicalNotes(e.target.value), style: { marginTop: 8 } })] }), _jsx(Button, { type: "primary", onClick: () => handleDefectAssessment(job.defect_id), loading: defectAssessmentMutation.isPending, children: t('common.submit') })] }) })), _jsx(Modal, { title: t('jobs.pause'), open: pauseModalOpen, onOk: handlePauseSubmit, onCancel: () => {
+                    })) }) })), isCompleted && (_jsx(Card, { title: "Cleaning", style: { marginBottom: 16 }, children: _jsxs(Space, { children: [_jsx(Button, { icon: _jsx(CameraOutlined, {}), loading: fileUploadMutation.isPending || cleaningUploadMutation.isPending, onClick: () => openCameraInput('image/*', (file) => handleFileUpload(file)), children: t('inspection.take_photo', 'Take Photo') }), _jsx(Upload, { beforeUpload: (file) => {
+                                handleFileUpload(file);
+                                return false;
+                            }, maxCount: 1, accept: "image/*", showUploadList: true, children: _jsx(Button, { icon: _jsx(PictureOutlined, {}), loading: fileUploadMutation.isPending || cleaningUploadMutation.isPending, children: t('inspection.from_gallery', 'From Gallery') }) })] }) })), jobAssessments.length === 0 && job.defect_id && (_jsx(Card, { title: t('nav.defect_assessments'), style: { marginBottom: 16 }, children: _jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: "Verdict" }), _jsxs(Radio.Group, { value: assessmentVerdict, onChange: (e) => setAssessmentVerdict(e.target.value), style: { display: 'block', marginTop: 8 }, children: [_jsx(Radio.Button, { value: "confirm", children: t('status.approved') }), _jsx(Radio.Button, { value: "reject", children: t('status.rejected') }), _jsx(Radio.Button, { value: "minor", children: "Minor" })] })] }), _jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: "Technical Notes" }), _jsx(Input.TextArea, { rows: 3, value: technicalNotes, onChange: (e) => setTechnicalNotes(e.target.value), style: { marginTop: 8 } })] }), _jsx(Button, { type: "primary", onClick: () => handleDefectAssessment(job.defect_id), loading: defectAssessmentMutation.isPending, children: t('common.submit') })] }) })), _jsx(Modal, { title: t('jobs.pause'), open: pauseModalOpen, onOk: handlePauseSubmit, onCancel: () => {
                     setPauseModalOpen(false);
                     setPauseCategory(null);
                     setPauseDetails('');
@@ -251,6 +281,9 @@ export default function SpecialistJobDetailPage() {
                 }, confirmLoading: completeMutation.isPending, okText: t('common.submit'), cancelText: t('common.cancel'), children: _jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: t('jobs.work_notes') }), _jsx(Input.TextArea, { rows: 4, value: workNotes, onChange: (e) => setWorkNotes(e.target.value), style: { marginTop: 8 } })] }), _jsxs("div", { children: [_jsx(Typography.Text, { strong: true, children: t('common.status') }), _jsxs(Radio.Group, { value: completionStatus, onChange: (e) => setCompletionStatus(e.target.value), style: { display: 'block', marginTop: 8 }, children: [_jsx(Radio, { value: "pass", children: t('status.completed') }), _jsx(Radio, { value: "incomplete", children: t('status.incomplete') })] })] })] }) }), _jsx(Modal, { title: t('jobs.mark_incomplete'), open: incompleteModalOpen, onOk: handleIncompleteSubmit, onCancel: () => {
                     setIncompleteModalOpen(false);
                     setIncompleteReason('');
-                }, confirmLoading: incompleteMarkMutation.isPending, okText: t('common.submit'), cancelText: t('common.cancel'), okButtonProps: { disabled: !incompleteReason.trim() }, children: _jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsx(Typography.Text, { strong: true, children: t('jobs.incomplete_reason') }), _jsx(Input.TextArea, { rows: 4, value: incompleteReason, onChange: (e) => setIncompleteReason(e.target.value) })] }) })] }));
+                }, confirmLoading: incompleteMarkMutation.isPending, okText: t('common.submit'), cancelText: t('common.cancel'), okButtonProps: { disabled: !incompleteReason.trim() }, children: _jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsx(Typography.Text, { strong: true, children: t('jobs.incomplete_reason') }), _jsx(Input.TextArea, { rows: 4, value: incompleteReason, onChange: (e) => setIncompleteReason(e.target.value) })] }) }), _jsx(Modal, { title: t('jobs.start'), open: startModalVisible, onOk: handleStartWithPlannedTime, onCancel: () => {
+                    setStartModalVisible(false);
+                    setStartPlannedHours(null);
+                }, confirmLoading: startMutation.isPending, okText: t('jobs.start'), cancelText: t('common.cancel'), okButtonProps: { disabled: !startPlannedHours || startPlannedHours <= 0 }, children: _jsxs(Space, { direction: "vertical", size: "middle", style: { width: '100%' }, children: [_jsx(Typography.Text, { strong: true, children: t('jobs.planned_time') }), _jsx(InputNumber, { min: 0.5, step: 0.5, value: startPlannedHours, onChange: (val) => setStartPlannedHours(val), style: { width: '100%' }, placeholder: t('jobs.planned_time'), addonAfter: "h" })] }) })] }));
 }
 //# sourceMappingURL=SpecialistJobDetailPage.js.map

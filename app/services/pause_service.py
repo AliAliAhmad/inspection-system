@@ -28,7 +28,7 @@ class PauseService:
             reason_category: parts, duty_finish, tools, manpower, oem, other
             reason_details: Optional additional details
         """
-        valid_categories = ['parts', 'duty_finish', 'tools', 'manpower', 'oem', 'other']
+        valid_categories = ['parts', 'duty_finish', 'tools', 'manpower', 'oem', 'error_record', 'other']
         if reason_category not in valid_categories:
             raise ValidationError(f"Reason must be one of: {', '.join(valid_categories)}")
 

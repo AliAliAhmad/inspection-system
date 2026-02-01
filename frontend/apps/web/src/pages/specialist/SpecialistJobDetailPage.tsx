@@ -62,6 +62,7 @@ const PAUSE_CATEGORIES: PauseCategory[] = [
   'tools',
   'manpower',
   'oem',
+  'error_record',
   'other',
 ];
 

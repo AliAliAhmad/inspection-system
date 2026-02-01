@@ -33,7 +33,7 @@ export interface SpecialistJob {
   wrong_finding_photo?: string | null;
 }
 
-export type PauseCategory = 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'other';
+export type PauseCategory = 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'error_record' | 'other';
 
 export interface PauseLog {
   id: number;

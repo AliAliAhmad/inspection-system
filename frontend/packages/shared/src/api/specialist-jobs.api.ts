@@ -18,7 +18,7 @@ export interface CompleteJobPayload {
 }
 
 export interface PauseRequestPayload {
-  reason_category: 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'other';
+  reason_category: 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'error_record' | 'other';
   reason_details?: string;
 }
 
