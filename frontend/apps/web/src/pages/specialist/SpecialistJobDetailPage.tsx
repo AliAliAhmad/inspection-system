@@ -124,10 +124,11 @@ export default function SpecialistJobDetailPage() {
 
   const job = jobQuery.data as SpecialistJob | undefined;
 
-  // Live timer effect
+  // Live timer effect — counts from planned_time_entered_at (when specialist committed)
+  const timerRef = job?.planned_time_entered_at || job?.started_at;
   useEffect(() => {
-    if (job?.is_running && job?.started_at) {
-      const startTime = new Date(job.started_at).getTime();
+    if (job?.is_running && timerRef) {
+      const startTime = new Date(timerRef).getTime();
 
       const updateElapsed = () => {
         const now = Date.now();
@@ -150,7 +151,7 @@ export default function SpecialistJobDetailPage() {
         intervalRef.current = null;
       }
     }
-  }, [job?.is_running, job?.started_at]);
+  }, [job?.is_running, timerRef]);
 
   // Start modal state (for assigned jobs without planned time)
   const [startPlannedHours, setStartPlannedHours] = useState<number | null>(null);

@@ -210,6 +210,7 @@ class SpecialistJob(db.Model):
 
             data.update({
                 'planned_time_hours': float(self.planned_time_hours) if self.planned_time_hours else None,
+                'planned_time_entered_at': self.planned_time_entered_at.isoformat() if self.planned_time_entered_at else None,
                 'started_at': self.started_at.isoformat() if self.started_at else None,
                 'completed_at': self.completed_at.isoformat() if self.completed_at else None,
                 'actual_time_hours': float(self.actual_time_hours) if self.actual_time_hours else None,

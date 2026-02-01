@@ -230,9 +230,10 @@ def complete_job(job_id):
     job.status = 'completed'
     job.completion_status = completion_status
 
-    # Calculate actual time
-    if job.started_at:
-        time_diff = job.completed_at - job.started_at
+    # Calculate actual time from planned_time_entered_at (when specialist committed to the job)
+    start_ref = job.planned_time_entered_at or job.started_at
+    if start_ref:
+        time_diff = job.completed_at - start_ref
         total_minutes = time_diff.total_seconds() / 60
         work_minutes = total_minutes - (job.paused_duration_minutes or 0)
         job.actual_time_hours = round(work_minutes / 60, 2)

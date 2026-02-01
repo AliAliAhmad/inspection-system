@@ -12,6 +12,7 @@ export interface SpecialistJob {
     has_planned_time: boolean;
     can_view_details: boolean;
     planned_time_hours?: number | null;
+    planned_time_entered_at?: string | null;
     started_at?: string | null;
     completed_at?: string | null;
     actual_time_hours?: number | null;
