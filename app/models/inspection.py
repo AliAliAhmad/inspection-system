@@ -114,11 +114,13 @@ class InspectionAnswer(db.Model):
     answer_value = db.Column(db.String(500), nullable=False)
     comment = db.Column(db.Text, nullable=True)
     photo_path = db.Column(db.String(500), nullable=True)
+    voice_note_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
     answered_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     inspection = db.relationship('Inspection', back_populates='answers')
     checklist_item = db.relationship('ChecklistItem', back_populates='answers')
+    voice_note = db.relationship('File', foreign_keys=[voice_note_id])
     
     __table_args__ = (
         db.UniqueConstraint(
@@ -144,6 +146,8 @@ class InspectionAnswer(db.Model):
             'answer_value': self.answer_value,
             'comment': comment,
             'photo_path': self.photo_path,
+            'voice_note_id': self.voice_note_id,
+            'voice_note': self.voice_note.to_dict() if self.voice_note else None,
             'answered_at': self.answered_at.isoformat() if self.answered_at else None
         }
     

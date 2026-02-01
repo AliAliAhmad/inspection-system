@@ -7,9 +7,11 @@ import type { TextAreaProps } from 'antd/es/input';
 interface VoiceTextAreaProps extends TextAreaProps {
   /** Called after transcription with both language versions */
   onTranscribed?: (en: string, ar: string) => void;
+  /** Called after voice is recorded and saved, with the audio file ID */
+  onVoiceRecorded?: (audioFileId: number) => void;
 }
 
-export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: VoiceTextAreaProps) {
+export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, ...textAreaProps }: VoiceTextAreaProps) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [enText, setEnText] = useState<string | null>(null);
@@ -51,6 +53,11 @@ export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: Voice
         try {
           const result = await voiceApi.transcribe(blob);
 
+          // Notify parent of saved audio file
+          if (result.audio_file?.id) {
+            onVoiceRecorded?.(result.audio_file.id);
+          }
+
           if (result.transcription_failed) {
             setTranscriptionFailed(true);
             setEnText(null);
@@ -87,7 +94,7 @@ export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: Voice
     } catch {
       message.error('Microphone access denied');
     }
-  }, [textAreaProps.onChange, onTranscribed]);
+  }, [textAreaProps.onChange, onTranscribed, onVoiceRecorded]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {

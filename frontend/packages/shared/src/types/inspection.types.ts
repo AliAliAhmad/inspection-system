@@ -28,6 +28,8 @@ export interface InspectionAnswer {
   answer_value: string;
   comment: string | null;
   photo_path: string | null;
+  voice_note_id: number | null;
+  voice_note: { id: number; filename: string; original_filename: string; mime_type?: string } | null;
   answered_at: string;
 }
 
@@ -59,6 +61,7 @@ export interface AnswerPayload {
   checklist_item_id: number;
   answer_value: string;
   comment?: string;
+  voice_note_id?: number;
 }
 
 export interface InspectionProgress {

@@ -5,14 +5,12 @@ import {
   Progress,
   Button,
   Radio,
-  Input,
   InputNumber,
   Upload,
   Tag,
   Space,
   Spin,
   Alert,
-  Collapse,
   List,
   Badge,
   message,
@@ -26,13 +24,13 @@ import {
   CheckCircleOutlined,
   ArrowLeftOutlined,
   SendOutlined,
+  SoundOutlined,
 } from '@ant-design/icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   inspectionsApi,
-  inspectionAssignmentsApi,
   filesApi,
   Inspection,
   InspectionAnswer,
@@ -45,7 +43,6 @@ export default function InspectionChecklistPage() {
   const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const assignmentId = Number(id);
   const isArabic = i18n.language === 'ar';
 
@@ -95,6 +92,7 @@ export default function InspectionChecklistPage() {
       checklist_item_id: number;
       answer_value: string;
       comment?: string;
+      voice_note_id?: number;
     }) => inspectionsApi.answerQuestion(inspectionId!, payload),
     onSuccess: () => {
       refetchProgress();
@@ -112,8 +110,8 @@ export default function InspectionChecklistPage() {
       message.success(t('inspection.submit'));
       navigate('/inspector/assignments');
     },
-    onError: () => {
-      message.error(t('common.error'));
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error'));
     },
   });
 
@@ -131,11 +129,12 @@ export default function InspectionChecklistPage() {
   });
 
   const handleAnswer = useCallback(
-    (checklistItemId: number, value: string, comment?: string) => {
+    (checklistItemId: number, value: string, comment?: string, voiceNoteId?: number) => {
       answerMutation.mutate({
         checklist_item_id: checklistItemId,
         answer_value: value,
         comment,
+        voice_note_id: voiceNoteId,
       });
     },
     [answerMutation],
@@ -144,7 +143,7 @@ export default function InspectionChecklistPage() {
   const handleUpload = useCallback(
     (file: File, checklistItemId: number) => {
       uploadMutation.mutate({ file, checklistItemId });
-      return false; // prevent default upload behavior
+      return false;
     },
     [uploadMutation],
   );
@@ -169,13 +168,11 @@ export default function InspectionChecklistPage() {
   const answeredMap = new Map<number, InspectionAnswer>();
   answers.forEach((a) => answeredMap.set(a.checklist_item_id, a));
 
-  // Get checklist items: prefer checklist_items from response, fallback to extracting from answers
   const rawChecklistItems: ChecklistItem[] = (inspection as any).checklist_items ?? [];
   const itemsFromAnswers: ChecklistItem[] = answers
     .filter((a) => a.checklist_item !== null)
     .map((a) => a.checklist_item as ChecklistItem);
 
-  // Merge and deduplicate by id, sorted by order_index
   const allItems = [...rawChecklistItems, ...itemsFromAnswers];
   const uniqueItems = Array.from(
     new Map(allItems.map((item) => [item.id, item])).values(),
@@ -307,7 +304,7 @@ interface ChecklistItemCardProps {
   item: ChecklistItem;
   existingAnswer?: InspectionAnswer;
   getQuestionText: (item: ChecklistItem) => string;
-  onAnswer: (id: number, value: string, comment?: string) => void;
+  onAnswer: (id: number, value: string, comment?: string, voiceNoteId?: number) => void;
   onUpload: (file: File, id: number) => boolean;
   isSubmitted: boolean;
 }
@@ -334,10 +331,34 @@ function ChecklistItemCard({
 }: ChecklistItemCardProps) {
   const { t } = useTranslation();
   const [comment, setComment] = useState(existingAnswer?.comment ?? '');
-  const [showComment, setShowComment] = useState(!!existingAnswer?.comment);
+  const [voiceNoteId, setVoiceNoteId] = useState<number | undefined>(
+    existingAnswer?.voice_note_id ?? undefined,
+  );
+  const [currentValue, setCurrentValue] = useState(existingAnswer?.answer_value ?? '');
+
+  // Auto-show comment area when answer is fail/no, or when there's an existing comment/voice
+  const isFailed = currentValue === 'fail' || currentValue === 'no';
+  const hasExistingCommentOrVoice = !!(existingAnswer?.comment || existingAnswer?.voice_note_id);
+  const [showComment, setShowComment] = useState(isFailed || hasExistingCommentOrVoice);
+
+  // Auto-expand comment section when fail/no is selected
+  useEffect(() => {
+    if (isFailed) {
+      setShowComment(true);
+    }
+  }, [isFailed]);
+
+  const handleAnswerChange = (value: string) => {
+    setCurrentValue(value);
+    onAnswer(item.id, value, comment || undefined, voiceNoteId);
+  };
+
+  // Build stream URL for existing voice note (for engineers/admins viewing submitted inspections)
+  const existingVoiceStreamUrl = existingAnswer?.voice_note_id
+    ? `/api/files/${existingAnswer.voice_note_id}/stream?token=${localStorage.getItem('access_token') || ''}`
+    : null;
 
   const renderAnswerInput = () => {
-    const currentValue = existingAnswer?.answer_value ?? '';
     const disabled = isSubmitted;
 
     switch (item.answer_type) {
@@ -345,7 +366,7 @@ function ChecklistItemCard({
         return (
           <Radio.Group
             value={currentValue || undefined}
-            onChange={(e) => onAnswer(item.id, e.target.value, comment || undefined)}
+            onChange={(e) => handleAnswerChange(e.target.value)}
             disabled={disabled}
           >
             <Radio.Button value="yes">Yes</Radio.Button>
@@ -356,7 +377,7 @@ function ChecklistItemCard({
         return (
           <Radio.Group
             value={currentValue || undefined}
-            onChange={(e) => onAnswer(item.id, e.target.value, comment || undefined)}
+            onChange={(e) => handleAnswerChange(e.target.value)}
             disabled={disabled}
           >
             <Radio.Button value="pass">Pass</Radio.Button>
@@ -371,8 +392,8 @@ function ChecklistItemCard({
             placeholder={t('inspection.answer', 'Enter answer')}
             disabled={disabled}
             onBlur={(e) => {
-              if (e.target.value && e.target.value !== currentValue) {
-                onAnswer(item.id, e.target.value, comment || undefined);
+              if (e.target.value && e.target.value !== (existingAnswer?.answer_value ?? '')) {
+                onAnswer(item.id, e.target.value, comment || undefined, voiceNoteId);
               }
             }}
           />
@@ -386,7 +407,7 @@ function ChecklistItemCard({
             onBlur={(e) => {
               const val = e.target.value;
               if (val && val !== currentValue) {
-                onAnswer(item.id, val, comment || undefined);
+                onAnswer(item.id, val, comment || undefined, voiceNoteId);
               }
             }}
             style={{ width: 200 }}
@@ -425,14 +446,16 @@ function ChecklistItemCard({
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         {renderAnswerInput()}
 
-        <Space>
-          <Button
-            size="small"
-            type="link"
-            onClick={() => setShowComment(!showComment)}
-          >
-            {t('inspection.comment', 'Comment')}
-          </Button>
+        <Space wrap>
+          {!showComment && (
+            <Button
+              size="small"
+              type="link"
+              onClick={() => setShowComment(true)}
+            >
+              {t('inspection.comment', 'Comment')}
+            </Button>
+          )}
 
           {!isSubmitted && (
             <>
@@ -459,28 +482,82 @@ function ChecklistItemCard({
           {existingAnswer?.photo_path && (
             <Tag color="green">{t('inspection.photo', 'Photo')} uploaded</Tag>
           )}
+
+          {(existingAnswer?.voice_note_id || voiceNoteId) && (
+            <Tag color="blue" icon={<SoundOutlined />}>Voice note</Tag>
+          )}
         </Space>
 
+        {/* Comment + Voice recording area — always visible on fail/no */}
         {showComment && (
-          <VoiceTextArea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={t('inspection.comment', 'Add a comment...')}
-            rows={2}
-            disabled={isSubmitted}
-            onBlur={() => {
-              if (
-                existingAnswer &&
-                comment !== (existingAnswer.comment ?? '')
-              ) {
-                onAnswer(
-                  item.id,
-                  existingAnswer.answer_value,
-                  comment || undefined,
-                );
+          <div>
+            <VoiceTextArea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder={
+                isFailed
+                  ? t('inspection.fail_comment', 'Add comment or use voice recording...')
+                  : t('inspection.comment', 'Add a comment...')
               }
-            }}
-          />
+              rows={2}
+              disabled={isSubmitted}
+              onVoiceRecorded={(audioFileId) => {
+                setVoiceNoteId(audioFileId);
+                // Auto-save with voice note
+                if (currentValue) {
+                  onAnswer(item.id, currentValue, comment || undefined, audioFileId);
+                }
+              }}
+              onTranscribed={(en, ar) => {
+                const parts: string[] = [];
+                if (en) parts.push(`EN: ${en}`);
+                if (ar) parts.push(`AR: ${ar}`);
+                const combined = parts.join('\n');
+                setComment(combined);
+                if (currentValue) {
+                  onAnswer(item.id, currentValue, combined, voiceNoteId);
+                }
+              }}
+              onBlur={() => {
+                if (
+                  existingAnswer &&
+                  comment !== (existingAnswer.comment ?? '')
+                ) {
+                  onAnswer(
+                    item.id,
+                    existingAnswer.answer_value,
+                    comment || undefined,
+                    voiceNoteId,
+                  );
+                }
+              }}
+            />
+
+            {/* Existing voice note playback (from server, for viewing submitted inspections) */}
+            {existingVoiceStreamUrl && (
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: '6px 10px',
+                  background: '#f0f5ff',
+                  borderRadius: 4,
+                  border: '1px solid #d6e4ff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <SoundOutlined style={{ color: '#1677ff', fontSize: 14 }} />
+                <audio controls src={existingVoiceStreamUrl} style={{ height: 32, flex: 1 }} preload="metadata" />
+              </div>
+            )}
+
+            {isFailed && !comment && !voiceNoteId && !isSubmitted && (
+              <Typography.Text type="warning" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                {t('inspection.fail_requires_note', 'A comment or voice note is required for failed items')}
+              </Typography.Text>
+            )}
+          </div>
         )}
       </Space>
     </Card>

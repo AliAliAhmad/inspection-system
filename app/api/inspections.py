@@ -131,6 +131,7 @@ def answer_question(inspection_id):
         answer_value=data['answer_value'],
         comment=data.get('comment'),
         photo_path=data.get('photo_path'),
+        voice_note_id=data.get('voice_note_id'),
         current_user_id=current_user_id
     )
 
