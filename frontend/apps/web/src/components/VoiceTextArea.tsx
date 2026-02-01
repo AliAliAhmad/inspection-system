@@ -9,12 +9,6 @@ interface VoiceTextAreaProps extends TextAreaProps {
   onTranscribed?: (en: string, ar: string) => void;
 }
 
-/** Build full URL for a backend download path */
-function getAudioUrl(downloadPath: string): string {
-  const base = (import.meta as any).env?.VITE_API_URL || '';
-  return base + downloadPath;
-}
-
 export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: VoiceTextAreaProps) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -56,11 +50,6 @@ export default function VoiceTextArea({ onTranscribed, ...textAreaProps }: Voice
         setTranscriptionFailed(false);
         try {
           const result = await voiceApi.transcribe(blob);
-
-          // Use server download URL if available, keep local blob as fallback
-          if (result.audio_file?.download_url) {
-            setAudioUrl(getAudioUrl(result.audio_file.download_url));
-          }
 
           if (result.transcription_failed) {
             setTranscriptionFailed(true);

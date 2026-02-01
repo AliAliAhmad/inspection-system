@@ -88,6 +88,34 @@ def download_file(file_id):
     )
 
 
+@bp.route('/<int:file_id>/stream', methods=['GET'])
+def stream_file(file_id):
+    """
+    Stream a file for playback (e.g. audio/video).
+    Uses a short-lived token query param for auth since HTML media elements
+    cannot send Authorization headers.
+    """
+    from flask_jwt_extended import decode_token
+    from flask_jwt_extended.exceptions import JWTDecodeError
+
+    token = request.args.get('token')
+    if not token:
+        return jsonify({'status': 'error', 'message': 'Token required'}), 401
+
+    try:
+        decode_token(token)
+    except (JWTDecodeError, Exception):
+        return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+
+    file_record = File.query.get_or_404(file_id)
+
+    return send_file(
+        file_record.file_path,
+        mimetype=file_record.mime_type or 'application/octet-stream',
+        as_attachment=False
+    )
+
+
 @bp.route('', methods=['GET'])
 @jwt_required()
 def list_files():
