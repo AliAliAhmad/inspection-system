@@ -26,7 +26,8 @@ import {
   PauseCircleOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  UploadOutlined,
+  CameraOutlined,
+  PictureOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
 
@@ -63,6 +64,18 @@ const PAUSE_CATEGORIES: PauseCategory[] = [
   'oem',
   'other',
 ];
+
+function openCameraInput(accept: string, onFile: (file: File) => void) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept;
+  input.capture = 'environment';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (file) onFile(file);
+  };
+  input.click();
+}
 
 function formatElapsed(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -553,22 +566,31 @@ export default function SpecialistJobDetailPage() {
       {/* Cleaning Section (for completed jobs) */}
       {isCompleted && (
         <Card title="Cleaning" style={{ marginBottom: 16 }}>
-          <Upload
-            beforeUpload={(file) => {
-              handleFileUpload(file as File);
-              return false;
-            }}
-            maxCount={1}
-            accept="image/*"
-            showUploadList={true}
-          >
+          <Space>
             <Button
-              icon={<UploadOutlined />}
+              icon={<CameraOutlined />}
               loading={fileUploadMutation.isPending || cleaningUploadMutation.isPending}
+              onClick={() => openCameraInput('image/*', (file) => handleFileUpload(file))}
             >
-              Upload Cleaning Photo
+              {t('inspection.take_photo', 'Take Photo')}
             </Button>
-          </Upload>
+            <Upload
+              beforeUpload={(file) => {
+                handleFileUpload(file as File);
+                return false;
+              }}
+              maxCount={1}
+              accept="image/*"
+              showUploadList={true}
+            >
+              <Button
+                icon={<PictureOutlined />}
+                loading={fileUploadMutation.isPending || cleaningUploadMutation.isPending}
+              >
+                {t('inspection.from_gallery', 'From Gallery')}
+              </Button>
+            </Upload>
+          </Space>
         </Card>
       )}
 

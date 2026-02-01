@@ -16,7 +16,7 @@ import {
   Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { UploadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { CameraOutlined, PictureOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -27,6 +27,18 @@ import {
   JobStatus,
 } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
+
+function openCameraInput(accept: string, onFile: (file: File) => void) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept;
+  input.capture = 'environment';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (file) onFile(file);
+  };
+  input.click();
+}
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   assigned: 'blue',
@@ -406,19 +418,28 @@ export default function SpecialistJobsPage() {
               <div style={{ marginBottom: 12 }}>
                 <Typography.Text strong>{t('jobs.wrong_finding_photo')}</Typography.Text>
                 <div style={{ marginTop: 8 }}>
-                  <Upload
-                    beforeUpload={(file) => {
-                      handlePhotoUpload(file as File);
-                      return false;
-                    }}
-                    maxCount={1}
-                    accept="image/*,video/*"
-                    showUploadList={true}
-                  >
-                    <Button icon={<UploadOutlined />} loading={uploadingPhoto}>
-                      {t('jobs.wrong_finding_photo')}
+                  <Space>
+                    <Button
+                      icon={<CameraOutlined />}
+                      loading={uploadingPhoto}
+                      onClick={() => openCameraInput('image/*,video/*', (file) => handlePhotoUpload(file))}
+                    >
+                      {t('inspection.take_photo', 'Take Photo')}
                     </Button>
-                  </Upload>
+                    <Upload
+                      beforeUpload={(file) => {
+                        handlePhotoUpload(file as File);
+                        return false;
+                      }}
+                      maxCount={1}
+                      accept="image/*,video/*"
+                      showUploadList={true}
+                    >
+                      <Button icon={<PictureOutlined />} loading={uploadingPhoto}>
+                        {t('inspection.from_gallery', 'From Gallery')}
+                      </Button>
+                    </Upload>
+                  </Space>
                   {wrongFindingPhotoPath && (
                     <Typography.Text type="success" style={{ display: 'block', marginTop: 4 }}>
                       {t('common.save')}

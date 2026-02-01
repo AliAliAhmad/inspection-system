@@ -21,6 +21,7 @@ import {
 } from 'antd';
 import {
   CameraOutlined,
+  PictureOutlined,
   StarFilled,
   CheckCircleOutlined,
   ArrowLeftOutlined,
@@ -310,6 +311,18 @@ interface ChecklistItemCardProps {
   isSubmitted: boolean;
 }
 
+function openCameraInput(accept: string, onFile: (file: File) => void) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept;
+  input.capture = 'environment';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (file) onFile(file);
+  };
+  input.click();
+}
+
 function ChecklistItemCard({
   item,
   existingAnswer,
@@ -421,15 +434,25 @@ function ChecklistItemCard({
           </Button>
 
           {!isSubmitted && (
-            <Upload
-              accept="image/*"
-              showUploadList={false}
-              beforeUpload={(file) => onUpload(file, item.id)}
-            >
-              <Button size="small" type="link" icon={<CameraOutlined />}>
-                {t('inspection.photo', 'Photo')}
+            <>
+              <Button
+                size="small"
+                type="link"
+                icon={<CameraOutlined />}
+                onClick={() => openCameraInput('image/*', (file) => onUpload(file, item.id))}
+              >
+                {t('inspection.take_photo', 'Take Photo')}
               </Button>
-            </Upload>
+              <Upload
+                accept="image/*"
+                showUploadList={false}
+                beforeUpload={(file) => onUpload(file, item.id)}
+              >
+                <Button size="small" type="link" icon={<PictureOutlined />}>
+                  {t('inspection.from_gallery', 'From Gallery')}
+                </Button>
+              </Upload>
+            </>
           )}
 
           {existingAnswer?.photo_path && (

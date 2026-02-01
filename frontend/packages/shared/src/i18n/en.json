@@ -129,7 +129,8 @@
     "answer": "Answer",
     "comment": "Comment",
     "photo": "Photo",
-    "take_photo": "Take Photo"
+    "take_photo": "Take Photo",
+    "from_gallery": "From Gallery"
   },
   "jobs": {
     "planned_time": "Planned Time",

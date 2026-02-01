@@ -129,7 +129,8 @@
     "answer": "الإجابة",
     "comment": "ملاحظة",
     "photo": "صورة",
-    "take_photo": "التقاط صورة"
+    "take_photo": "التقاط صورة",
+    "from_gallery": "من المعرض"
   },
   "jobs": {
     "planned_time": "الوقت المخطط",
