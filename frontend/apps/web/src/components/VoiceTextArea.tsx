@@ -147,7 +147,7 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, ...textA
           }}
         >
           <SoundOutlined style={{ color: '#1677ff', fontSize: 14 }} />
-          <audio controls src={audioUrl} style={{ height: 32, flex: 1 }} preload="metadata" />
+          <audio controls src={audioUrl} style={{ height: 32, flex: 1 }} preload="auto" />
         </div>
       )}
 

@@ -31,7 +31,6 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   inspectionsApi,
-  filesApi,
   Inspection,
   InspectionAnswer,
   ChecklistItem,
@@ -115,10 +114,10 @@ export default function InspectionChecklistPage() {
     },
   });
 
-  // Upload mutation
+  // Upload mutation — uses dedicated endpoint that links photo to the answer
   const uploadMutation = useMutation({
     mutationFn: (params: { file: File; checklistItemId: number }) =>
-      filesApi.upload(params.file, 'inspection_answer', params.checklistItemId),
+      inspectionsApi.uploadAnswerPhoto(inspectionId!, params.checklistItemId, params.file),
     onSuccess: () => {
       message.success('Photo uploaded');
       refetchInspection();
@@ -548,7 +547,7 @@ function ChecklistItemCard({
                 }}
               >
                 <SoundOutlined style={{ color: '#1677ff', fontSize: 14 }} />
-                <audio controls src={existingVoiceStreamUrl} style={{ height: 32, flex: 1 }} preload="metadata" />
+                <audio controls src={existingVoiceStreamUrl} style={{ height: 32, flex: 1 }} preload="auto" />
               </div>
             )}
 
