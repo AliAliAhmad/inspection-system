@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { notificationsApi, Notification, NotificationPriority } from '@inspection/shared';
+import { useNavigation } from '@react-navigation/native';
+import { notificationsApi, Notification, NotificationPriority, getNotificationMobileRoute } from '@inspection/shared';
 import { formatDateTime } from '@inspection/shared';
+import { useAuth } from '@inspection/shared';
 
 const priorityColors: Record<NotificationPriority, string> = {
   info: '#1677ff',
@@ -23,6 +25,8 @@ const priorityColors: Record<NotificationPriority, string> = {
 
 export default function NotificationsScreen() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
 
@@ -44,21 +48,31 @@ export default function NotificationsScreen() {
 
   const notifications = data?.data ?? [];
 
-  const renderItem = useCallback(({ item }: { item: Notification }) => (
-    <TouchableOpacity
-      style={[styles.item, !item.is_read && styles.itemUnread]}
-      onPress={() => {
-        if (!item.is_read) markReadMutation.mutate(item.id);
-      }}
-    >
-      <View style={styles.itemHeader}>
-        <View style={[styles.priorityDot, { backgroundColor: priorityColors[item.priority] }]} />
-        <Text style={[styles.itemTitle, !item.is_read && styles.bold]}>{item.title}</Text>
-      </View>
-      <Text style={styles.itemMessage} numberOfLines={2}>{item.message}</Text>
-      <Text style={styles.itemTime}>{formatDateTime(item.created_at)}</Text>
-    </TouchableOpacity>
-  ), [markReadMutation]);
+  const handlePress = useCallback((item: Notification) => {
+    if (!item.is_read) markReadMutation.mutate(item.id);
+    const route = user ? getNotificationMobileRoute(item, user.role) : null;
+    if (route) {
+      navigation.navigate(route.screen, route.params);
+    }
+  }, [markReadMutation, user, navigation]);
+
+  const renderItem = useCallback(({ item }: { item: Notification }) => {
+    const route = user ? getNotificationMobileRoute(item, user.role) : null;
+    return (
+      <TouchableOpacity
+        style={[styles.item, !item.is_read && styles.itemUnread]}
+        onPress={() => handlePress(item)}
+      >
+        <View style={styles.itemHeader}>
+          <View style={[styles.priorityDot, { backgroundColor: priorityColors[item.priority] }]} />
+          <Text style={[styles.itemTitle, !item.is_read && styles.bold]} numberOfLines={1}>{item.title}</Text>
+          {route && <Text style={styles.chevron}>{'>'}</Text>}
+        </View>
+        <Text style={styles.itemMessage} numberOfLines={2}>{item.message}</Text>
+        <Text style={styles.itemTime}>{formatDateTime(item.created_at)}</Text>
+      </TouchableOpacity>
+    );
+  }, [markReadMutation, user, handlePress]);
 
   return (
     <View style={styles.container}>
@@ -112,6 +126,7 @@ const styles = StyleSheet.create({
   priorityDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   itemTitle: { fontSize: 15, color: '#1a1a1a', flex: 1 },
   bold: { fontWeight: 'bold' },
+  chevron: { fontSize: 16, color: '#1677ff', fontWeight: 'bold', marginLeft: 8 },
   itemMessage: { fontSize: 13, color: '#666', marginBottom: 4 },
   itemTime: { fontSize: 11, color: '#999' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 48 },

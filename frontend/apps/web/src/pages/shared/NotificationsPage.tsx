@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Card, List, Typography, Button, Tag, Space, Badge, Empty, Spin } from 'antd';
-import { BellOutlined, CheckOutlined, DeleteOutlined } from '@ant-design/icons';
+import { BellOutlined, CheckOutlined, DeleteOutlined, RightOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { notificationsApi, Notification, NotificationPriority } from '@inspection/shared';
+import { useNavigate } from 'react-router-dom';
+import { notificationsApi, Notification, NotificationPriority, getNotificationRoute } from '@inspection/shared';
 import { formatDateTime } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 
 const priorityColors: Record<NotificationPriority, string> = {
   info: 'blue',
@@ -15,6 +17,8 @@ const priorityColors: Record<NotificationPriority, string> = {
 
 export default function NotificationsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
 
@@ -41,6 +45,12 @@ export default function NotificationsPage() {
 
   const notifications = data?.data ?? [];
   const pagination = data?.pagination;
+
+  const handleNotificationClick = (item: Notification) => {
+    if (!item.is_read) markReadMutation.mutate(item.id);
+    const route = user ? getNotificationRoute(item, user.role) : null;
+    if (route) navigate(route);
+  };
 
   return (
     <Card
@@ -74,55 +84,64 @@ export default function NotificationsPage() {
             pageSize: pagination.per_page,
             onChange: setPage,
           } : false}
-          renderItem={(item: Notification) => (
-            <List.Item
-              style={{
-                backgroundColor: item.is_read ? undefined : '#f6ffed',
-                padding: '12px 16px',
-                borderRadius: 6,
-                marginBottom: 4,
-              }}
-              actions={[
-                !item.is_read && (
+          renderItem={(item: Notification) => {
+            const route = user ? getNotificationRoute(item, user.role) : null;
+            return (
+              <List.Item
+                style={{
+                  backgroundColor: item.is_read ? undefined : '#f6ffed',
+                  padding: '12px 16px',
+                  borderRadius: 6,
+                  marginBottom: 4,
+                  cursor: route ? 'pointer' : undefined,
+                  transition: 'background-color 0.2s',
+                }}
+                onClick={() => handleNotificationClick(item)}
+                actions={[
+                  !item.is_read && (
+                    <Button
+                      key="read"
+                      type="link"
+                      size="small"
+                      onClick={(e) => { e.stopPropagation(); markReadMutation.mutate(item.id); }}
+                    >
+                      {t('notifications.mark_all_read', 'Mark Read')}
+                    </Button>
+                  ),
                   <Button
-                    key="read"
+                    key="delete"
                     type="link"
+                    danger
                     size="small"
-                    onClick={() => markReadMutation.mutate(item.id)}
-                  >
-                    {t('notifications.mark_all_read', 'Mark Read')}
-                  </Button>
-                ),
-                <Button
-                  key="delete"
-                  type="link"
-                  danger
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  onClick={() => deleteMutation.mutate(item.id)}
-                />,
-              ].filter(Boolean)}
-            >
-              <List.Item.Meta
-                title={
-                  <Space>
-                    {!item.is_read && <Badge status="processing" />}
-                    <Typography.Text strong={!item.is_read}>{item.title}</Typography.Text>
-                    <Tag color={priorityColors[item.priority]}>{item.priority}</Tag>
-                  </Space>
-                }
-                description={
-                  <div>
-                    <Typography.Text>{item.message}</Typography.Text>
-                    <br />
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {formatDateTime(item.created_at)}
-                    </Typography.Text>
-                  </div>
-                }
-              />
-            </List.Item>
-          )}
+                    icon={<DeleteOutlined />}
+                    onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(item.id); }}
+                  />,
+                  route && (
+                    <RightOutlined key="go" style={{ color: '#1677ff', fontSize: 12 }} />
+                  ),
+                ].filter(Boolean)}
+              >
+                <List.Item.Meta
+                  title={
+                    <Space>
+                      {!item.is_read && <Badge status="processing" />}
+                      <Typography.Text strong={!item.is_read}>{item.title}</Typography.Text>
+                      <Tag color={priorityColors[item.priority]}>{item.priority}</Tag>
+                    </Space>
+                  }
+                  description={
+                    <div>
+                      <Typography.Text>{item.message}</Typography.Text>
+                      <br />
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {formatDateTime(item.created_at)}
+                      </Typography.Text>
+                    </div>
+                  }
+                />
+              </List.Item>
+            );
+          }}
         />
       )}
     </Card>
