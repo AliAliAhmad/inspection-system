@@ -28,6 +28,13 @@ def get_jobs():
     else:
         query = SpecialistJob.query.filter_by(specialist_id=user.id)
 
+    # Filter by status if provided (supports comma-separated values)
+    status_param = request.args.get('status')
+    if status_param:
+        statuses = [s.strip() for s in status_param.split(',') if s.strip()]
+        if statuses:
+            query = query.filter(SpecialistJob.status.in_(statuses))
+
     query = query.order_by(SpecialistJob.created_at.desc())
     items, pagination_meta = paginate(query)
 
