@@ -564,7 +564,7 @@ function ChecklistItemCard({
             )}
             {!isSubmitted && (
               <Button
-                type="text"
+                type="primary"
                 danger
                 size="small"
                 icon={<DeleteOutlined />}
@@ -574,7 +574,7 @@ function ChecklistItemCard({
                   setLocalPhotoUrl(null);
                   setPhotoLoadError(false);
                 }}
-                style={{ position: 'absolute', top: 2, right: 2 }}
+                style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}
               />
             )}
           </div>
@@ -582,16 +582,23 @@ function ChecklistItemCard({
 
         {/* Video preview */}
         {videoSrc && (
-          <div style={{ position: 'relative' }}>
+          <div style={{
+            position: 'relative',
+            display: 'inline-block',
+            border: '1px solid #d9d9d9',
+            borderRadius: 4,
+            padding: 4,
+            background: '#fafafa',
+          }}>
             <video
               controls
               src={videoSrc}
-              style={{ maxWidth: 300, maxHeight: 200, borderRadius: 4 }}
+              style={{ maxWidth: 300, maxHeight: 200, borderRadius: 4, display: 'block' }}
               preload="metadata"
             />
             {!isSubmitted && (
               <Button
-                type="text"
+                type="primary"
                 danger
                 size="small"
                 icon={<DeleteOutlined />}
@@ -600,7 +607,7 @@ function ChecklistItemCard({
                   deleteVideoMutation.mutate();
                   setLocalVideoUrl(null);
                 }}
-                style={{ position: 'absolute', top: 0, right: 0 }}
+                style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}
               />
             )}
           </div>
