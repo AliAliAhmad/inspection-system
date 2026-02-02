@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { Input, Button, Space, Typography, Spin, message } from 'antd';
-import { AudioOutlined, LoadingOutlined, SoundOutlined } from '@ant-design/icons';
+import { AudioOutlined, LoadingOutlined } from '@ant-design/icons';
 import { voiceApi } from '@inspection/shared';
 import type { TextAreaProps } from 'antd/es/input';
 
@@ -11,14 +11,15 @@ interface VoiceTextAreaProps extends TextAreaProps {
   onVoiceRecorded?: (audioFileId: number) => void;
   /** Called with the local blob URL for immediate playback */
   onLocalBlobUrl?: (url: string) => void;
+  /** Language hint for Whisper transcription ('en' or 'ar') */
+  language?: string;
 }
 
-export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalBlobUrl, ...textAreaProps }: VoiceTextAreaProps) {
+export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalBlobUrl, language, ...textAreaProps }: VoiceTextAreaProps) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [enText, setEnText] = useState<string | null>(null);
   const [arText, setArText] = useState<string | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [transcriptionFailed, setTranscriptionFailed] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -48,13 +49,12 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalB
         if (localBlobUrlRef.current) URL.revokeObjectURL(localBlobUrlRef.current);
         const blobUrl = URL.createObjectURL(blob);
         localBlobUrlRef.current = blobUrl;
-        setAudioUrl(blobUrl);
         onLocalBlobUrl?.(blobUrl);
 
         setTranscribing(true);
         setTranscriptionFailed(false);
         try {
-          const result = await voiceApi.transcribe(blob);
+          const result = await voiceApi.transcribe(blob, undefined, undefined, language);
 
           // Notify parent of saved audio file
           if (result.audio_file?.id) {
@@ -97,7 +97,7 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalB
     } catch {
       message.error('Microphone access denied');
     }
-  }, [textAreaProps.onChange, onTranscribed, onVoiceRecorded, onLocalBlobUrl]);
+  }, [textAreaProps.onChange, onTranscribed, onVoiceRecorded, onLocalBlobUrl, language]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -132,25 +132,6 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalB
       {transcribing && (
         <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
           <Spin size="small" /> Saving &amp; transcribing...
-        </div>
-      )}
-
-      {/* Audio player — always shown when a recording exists */}
-      {audioUrl && !recording && !transcribing && (
-        <div
-          style={{
-            marginTop: 6,
-            padding: '6px 10px',
-            background: '#f0f5ff',
-            borderRadius: 4,
-            border: '1px solid #d6e4ff',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <SoundOutlined style={{ color: '#1677ff', fontSize: 14 }} />
-          <audio controls src={audioUrl} style={{ height: 32, flex: 1 }} preload="auto" />
         </div>
       )}
 

@@ -118,6 +118,7 @@ class InspectionAnswer(db.Model):
     answer_value = db.Column(db.String(500), nullable=False)
     comment = db.Column(db.Text, nullable=True)
     photo_path = db.Column(db.String(500), nullable=True)
+    photo_file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
     video_path = db.Column(db.String(500), nullable=True)
     video_file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
     voice_note_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
@@ -126,6 +127,7 @@ class InspectionAnswer(db.Model):
     # Relationships
     inspection = db.relationship('Inspection', back_populates='answers')
     checklist_item = db.relationship('ChecklistItem', back_populates='answers')
+    photo_file = db.relationship('File', foreign_keys=[photo_file_id])
     video_file = db.relationship('File', foreign_keys=[video_file_id])
     voice_note = db.relationship('File', foreign_keys=[voice_note_id])
     
@@ -145,25 +147,9 @@ class InspectionAnswer(db.Model):
             self.comment, language
         ) if self.comment else self.comment
 
-        # Look up the photo file record if photo_path is set
-        photo_file = None
-        if self.photo_path:
-            from app.models.file import File
-            photo_file = File.query.filter_by(
-                related_type='inspection_answer',
-                related_id=self.checklist_item_id
-            ).first()
-
-        # Look up the video file record
-        video_file_record = None
-        if self.video_file_id:
-            video_file_record = self.video_file
-        elif self.video_path:
-            from app.models.file import File
-            video_file_record = File.query.filter_by(
-                related_type='inspection_answer_video',
-                related_id=self.checklist_item_id
-            ).first()
+        # Use direct file ID relationships
+        photo_file_record = self.photo_file if self.photo_file_id else None
+        video_file_record = self.video_file if self.video_file_id else None
 
         return {
             'id': self.id,
@@ -173,7 +159,7 @@ class InspectionAnswer(db.Model):
             'answer_value': self.answer_value,
             'comment': comment,
             'photo_path': self.photo_path,
-            'photo_file': photo_file.to_dict() if photo_file else None,
+            'photo_file': photo_file_record.to_dict() if photo_file_record else None,
             'video_path': self.video_path,
             'video_file': video_file_record.to_dict() if video_file_record else None,
             'voice_note_id': self.voice_note_id,

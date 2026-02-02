@@ -170,6 +170,31 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('inspection_answers.video_file_id already exists')
+
+    # Add photo_file_id to inspection_answers
+    try:
+        db.session.execute(text('ALTER TABLE inspection_answers ADD COLUMN photo_file_id INTEGER REFERENCES files(id)'))
+        db.session.commit()
+        print('Added photo_file_id column to inspection_answers')
+    except Exception:
+        db.session.rollback()
+        print('inspection_answers.photo_file_id already exists')
+
+    # Backfill photo_file_id from existing files table
+    try:
+        db.session.execute(text('''
+            UPDATE inspection_answers ia
+            SET photo_file_id = f.id
+            FROM files f
+            WHERE ia.photo_path = f.stored_filename
+              AND ia.photo_file_id IS NULL
+              AND ia.photo_path IS NOT NULL
+        '''))
+        db.session.commit()
+        print('Backfilled photo_file_id from files table')
+    except Exception:
+        db.session.rollback()
+        print('photo_file_id backfill skipped or already done')
 "
 
 echo "Starting gunicorn..."

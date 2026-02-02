@@ -7,6 +7,7 @@ The audio file is always saved even if transcription fails.
 import os
 import tempfile
 import logging
+import subprocess
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.translation_service import TranslationService
@@ -14,6 +15,44 @@ from app.services.file_service import FileService
 from app.extensions import db
 
 logger = logging.getLogger(__name__)
+
+# Context prompt helps Whisper with domain-specific terminology
+WHISPER_PROMPT = (
+    "This is an industrial equipment inspection report. "
+    "Terms include: bearing, valve, pump, motor, compressor, gasket, "
+    "leak, corrosion, vibration, alignment, lubrication, pressure, "
+    "temperature, RPM, voltage, amperage, insulation, winding."
+)
+
+
+def _convert_to_wav(source_path):
+    """
+    Convert audio file to WAV format using ffmpeg for better Whisper accuracy.
+    Returns the WAV path if successful, or the original path if conversion fails.
+    """
+    wav_path = source_path.rsplit('.', 1)[0] + '_whisper.wav'
+    try:
+        result = subprocess.run(
+            ['ffmpeg', '-i', source_path, '-ar', '16000', '-ac', '1',
+             '-c:a', 'pcm_s16le', '-y', '-loglevel', 'error', wav_path],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0 and os.path.exists(wav_path) and os.path.getsize(wav_path) > 0:
+            logger.info("Audio converted to WAV for Whisper: %s", wav_path)
+            return wav_path
+        else:
+            logger.warning("WAV conversion failed: %s", result.stderr[:200])
+            if os.path.exists(wav_path):
+                os.remove(wav_path)
+            return source_path
+    except Exception as e:
+        logger.warning("WAV conversion error: %s", e)
+        if os.path.exists(wav_path):
+            try:
+                os.remove(wav_path)
+            except OSError:
+                pass
+        return source_path
 
 bp = Blueprint('voice', __name__)
 
@@ -45,6 +84,7 @@ def transcribe():
     user_id = get_jwt_identity()
     related_type = request.form.get('related_type')
     related_id = request.form.get('related_id')
+    language_hint = request.form.get('language')  # 'en' or 'ar' from frontend
     if related_id:
         try:
             related_id = int(related_id)
@@ -100,13 +140,23 @@ def transcribe():
                 tmp.close()
                 source_path = tmp.name
 
+            # Convert to WAV for better Whisper accuracy
+            whisper_path = _convert_to_wav(source_path)
+            wav_was_created = (whisper_path != source_path)
+
             try:
-                with open(source_path, 'rb') as f:
-                    transcript = client.audio.transcriptions.create(
-                        model='whisper-1',
-                        file=f,
-                        response_format='verbose_json',
-                    )
+                # Build Whisper API kwargs
+                whisper_kwargs = {
+                    'model': 'whisper-1',
+                    'response_format': 'verbose_json',
+                    'prompt': WHISPER_PROMPT,
+                }
+                if language_hint in ('en', 'ar'):
+                    whisper_kwargs['language'] = language_hint
+
+                with open(whisper_path, 'rb') as f:
+                    whisper_kwargs['file'] = f
+                    transcript = client.audio.transcriptions.create(**whisper_kwargs)
 
                 text = transcript.text.strip() if transcript.text else ''
                 detected_language = getattr(transcript, 'language', None) or 'unknown'
@@ -117,7 +167,13 @@ def transcribe():
                     ar_text = result.get('ar') or text
 
             finally:
-                # Clean up temp file if we created one
+                # Clean up WAV temp file
+                if wav_was_created and os.path.exists(whisper_path):
+                    try:
+                        os.unlink(whisper_path)
+                    except OSError:
+                        pass
+                # Clean up temp file if we created one from fallback
                 if not audio_file_record or not os.path.exists(audio_file_record.file_path):
                     try:
                         os.unlink(source_path)

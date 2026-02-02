@@ -19,11 +19,13 @@ export const voiceApi = {
     audioBlob: Blob,
     relatedType?: string,
     relatedId?: number,
+    language?: string,
   ): Promise<TranscriptionResult> {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
     if (relatedType) formData.append('related_type', relatedType);
     if (relatedId != null) formData.append('related_id', String(relatedId));
+    if (language) formData.append('language', language);
 
     const res = await getApiClient().post<{ status: string; data: TranscriptionResult }>(
       '/api/voice/transcribe',

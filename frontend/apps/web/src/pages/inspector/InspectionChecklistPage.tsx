@@ -311,7 +311,7 @@ function ChecklistItemCard({
   refetchInspection,
   isSubmitted,
 }: ChecklistItemCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [voiceNoteId, setVoiceNoteId] = useState<number | undefined>(
     existingAnswer?.voice_note_id ?? undefined,
   );
@@ -446,6 +446,7 @@ function ChecklistItemCard({
             rows={2}
             placeholder={t('inspection.answer', 'Enter answer')}
             disabled={disabled}
+            language={i18n.language}
             onBlur={(e) => {
               if (e.target.value && e.target.value !== (existingAnswer?.answer_value ?? '')) {
                 onAnswer(item.id, e.target.value, undefined, voiceNoteId);
@@ -610,6 +611,7 @@ function ChecklistItemCard({
                     : t('inspection.comment', 'Record a voice note...')
                 }
                 disabled={true}
+                language={i18n.language}
                 onVoiceRecorded={(audioFileId) => {
                   setVoiceNoteId(audioFileId);
                   if (currentValue) {

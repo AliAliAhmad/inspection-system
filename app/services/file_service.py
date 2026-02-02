@@ -6,6 +6,7 @@ Handles cleaning photos, evidence photos, defect photos, etc.
 import logging
 import os
 import uuid
+import subprocess
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from flask import current_app
@@ -16,8 +17,21 @@ from app.exceptions.api_exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'webm', 'wav', 'mp3', 'ogg', 'm4a', 'mp4'}
-MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
+ALLOWED_EXTENSIONS = {
+    # Images
+    'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'tif',
+    # Documents
+    'pdf',
+    # Audio
+    'webm', 'wav', 'mp3', 'ogg', 'm4a',
+    # Video
+    'mp4', 'mov', '3gp', 'avi', 'mkv', 'flv', 'wmv', 'm4v', 'ts',
+}
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB (increased for video files)
+
+# Extensions that need conversion
+VIDEO_CONVERT_EXTENSIONS = {'mov', '3gp', 'avi', 'mkv', 'flv', 'wmv', 'm4v', 'ts', 'webm'}
+IMAGE_CONVERT_EXTENSIONS = {'heic', 'heif', 'bmp', 'tiff', 'tif'}
 
 # Magic bytes for MIME type validation
 MAGIC_BYTES = {
@@ -30,8 +44,79 @@ MAGIC_BYTES = {
     'wav': [(b'RIFF',)],
     'mp3': [(b'\xff\xfb',), (b'\xff\xf3',), (b'\xff\xf2',), (b'ID3',)],
     'ogg': [(b'OggS',)],
-    # webm, m4a, mp4 use container formats with variable headers — skip magic check
+    # webm, m4a, mp4, mov, 3gp, avi, mkv, heic, heif, bmp, tiff — skip magic check
 }
+
+
+def _convert_video_to_mp4(file_path):
+    """
+    Convert a video file to mp4 using ffmpeg.
+    Returns the new file path if successful, or the original path if conversion fails.
+    """
+    output_path = file_path.rsplit('.', 1)[0] + '.mp4'
+    if file_path == output_path:
+        return file_path
+
+    try:
+        result = subprocess.run(
+            ['ffmpeg', '-i', file_path, '-c:v', 'libx264', '-c:a', 'aac',
+             '-movflags', '+faststart', '-y', '-loglevel', 'error', output_path],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            os.remove(file_path)
+            logger.info("Video converted to mp4: %s", output_path)
+            return output_path
+        else:
+            logger.warning("Video conversion failed (returncode=%s): %s", result.returncode, result.stderr[:200])
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            return file_path
+    except Exception as e:
+        logger.warning("Video conversion error: %s", e)
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+        return file_path
+
+
+def _convert_image_to_jpg(file_path, ext):
+    """
+    Convert an image file to JPEG using Pillow (with pillow-heif for HEIC/HEIF).
+    Returns the new file path if successful, or the original path if conversion fails.
+    """
+    output_path = file_path.rsplit('.', 1)[0] + '.jpg'
+
+    try:
+        if ext in ('heic', 'heif'):
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+
+        from PIL import Image
+        img = Image.open(file_path)
+        if img.mode in ('RGBA', 'P', 'LA'):
+            img = img.convert('RGB')
+        img.save(output_path, 'JPEG', quality=85)
+        img.close()
+
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            os.remove(file_path)
+            logger.info("Image converted to jpg: %s", output_path)
+            return output_path
+        else:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            return file_path
+    except Exception as e:
+        logger.warning("Image conversion error: %s", e)
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+        return file_path
 
 
 def _validate_mime_type(file_path, extension):
@@ -116,11 +201,34 @@ class FileService:
         # Validate file content matches extension (magic bytes check)
         _validate_mime_type(file_path, ext)
 
+        # Convert video formats to mp4
+        if ext in VIDEO_CONVERT_EXTENSIONS:
+            new_path = _convert_video_to_mp4(file_path)
+            if new_path != file_path:
+                file_path = new_path
+                unique_name = os.path.basename(new_path)
+                ext = 'mp4'
+
+        # Convert image formats to jpg
+        if ext in IMAGE_CONVERT_EXTENSIONS:
+            new_path = _convert_image_to_jpg(file_path, ext)
+            if new_path != file_path:
+                file_path = new_path
+                unique_name = os.path.basename(new_path)
+                ext = 'jpg'
+
         # Get file size
         file_size = os.path.getsize(file_path)
         if file_size > MAX_FILE_SIZE:
             os.remove(file_path)
             raise ValidationError(f"File too large. Maximum: {MAX_FILE_SIZE // (1024*1024)}MB")
+
+        # Determine correct MIME type after potential conversion
+        mime_type = file.content_type
+        if ext == 'mp4':
+            mime_type = 'video/mp4'
+        elif ext == 'jpg':
+            mime_type = 'image/jpeg'
 
         # Create database record
         file_record = File(
@@ -128,7 +236,7 @@ class FileService:
             stored_filename=unique_name,
             file_path=file_path,
             file_size=file_size,
-            mime_type=file.content_type,
+            mime_type=mime_type,
             uploaded_by=uploaded_by,
             related_type=related_type,
             related_id=related_id

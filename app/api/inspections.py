@@ -364,11 +364,13 @@ def upload_answer_photo(inspection_id):
             inspection_id=inspection_id,
             checklist_item_id=int(checklist_item_id),
             answer_value='',
-            photo_path=file_record.stored_filename
+            photo_path=file_record.stored_filename,
+            photo_file_id=file_record.id
         )
         db.session.add(answer)
     else:
         answer.photo_path = file_record.stored_filename
+        answer.photo_file_id = file_record.id
 
     db.session.commit()
 
@@ -550,13 +552,9 @@ def delete_answer_photo(inspection_id):
         raise NotFoundError("Answer not found")
 
     # Delete the photo file record
-    photo_file = File.query.filter_by(
-        related_type='inspection_answer',
-        related_id=int(checklist_item_id)
-    ).first()
-    if photo_file:
+    if answer.photo_file_id:
         try:
-            FileService.delete_file(photo_file.id, int(current_user_id))
+            FileService.delete_file(answer.photo_file_id, int(current_user_id))
         except Exception:
             pass
 
@@ -567,6 +565,7 @@ def delete_answer_photo(inspection_id):
         answer.comment = '\n'.join(cleaned).strip() or None
 
     answer.photo_path = None
+    answer.photo_file_id = None
     db.session.commit()
 
     return jsonify({'status': 'success', 'message': 'Photo deleted'}), 200
