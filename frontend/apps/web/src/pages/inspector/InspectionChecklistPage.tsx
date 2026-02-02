@@ -13,7 +13,6 @@ import {
   Alert,
   List,
   Badge,
-  Image,
   message,
   Popconfirm,
   Descriptions,
@@ -316,6 +315,9 @@ function ChecklistItemCard({
   );
   const [currentValue, setCurrentValue] = useState(existingAnswer?.answer_value ?? '');
   const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
+  const [localPhotoUrl, setLocalPhotoUrl] = useState<string | null>(null);
+  const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
+  const [photoLoadError, setPhotoLoadError] = useState(false);
 
   const isFailed = currentValue === 'fail' || currentValue === 'no';
   const hasExistingVoice = !!(existingAnswer?.voice_note_id || voiceNoteId);
@@ -343,15 +345,17 @@ function ChecklistItemCard({
 
   const audioSrc = localBlobUrl || voiceStreamUrl;
 
-  // Photo preview
-  const photoStreamUrl = existingAnswer?.photo_file
+  // Photo preview: local blob first (instant), server stream on reload
+  const serverPhotoUrl = existingAnswer?.photo_file
     ? `${API_BASE}/api/files/${existingAnswer.photo_file.id}/stream?token=${token}`
     : null;
+  const photoSrc = localPhotoUrl || serverPhotoUrl;
 
-  // Video preview
-  const videoStreamUrl = existingAnswer?.video_file
+  // Video preview: local blob first, server stream on reload
+  const serverVideoUrl = existingAnswer?.video_file
     ? `${API_BASE}/api/files/${existingAnswer.video_file.id}/stream?token=${token}`
     : null;
+  const videoSrc = localVideoUrl || serverVideoUrl;
 
   const handleAnswerChange = (value: string) => {
     setCurrentValue(value);
@@ -360,7 +364,17 @@ function ChecklistItemCard({
 
   // Upload media mutation (auto-detects photo vs video on backend)
   const uploadMediaMutation = useMutation({
-    mutationFn: (file: File) => inspectionsApi.uploadMedia(inspectionId, item.id, file),
+    mutationFn: (file: File) => {
+      // Create local preview immediately
+      const blobUrl = URL.createObjectURL(file);
+      if (file.type.startsWith('video/')) {
+        setLocalVideoUrl(blobUrl);
+      } else {
+        setLocalPhotoUrl(blobUrl);
+        setPhotoLoadError(false);
+      }
+      return inspectionsApi.uploadMedia(inspectionId, item.id, file);
+    },
     onSuccess: () => {
       message.success(t('inspection.mediaUploaded', 'Media uploaded'));
       refetchInspection();
@@ -522,14 +536,32 @@ function ChecklistItemCard({
         </Space>
 
         {/* Photo preview */}
-        {photoStreamUrl && (
-          <div style={{ position: 'relative', display: 'inline-block' }}>
-            <Image
-              src={photoStreamUrl}
-              alt="Inspection photo"
-              style={{ maxWidth: 200, maxHeight: 150, objectFit: 'contain', borderRadius: 4 }}
-              fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN88P/BfwAJhAPk4kCKjgAAAABJRU5ErkJggg=="
-            />
+        {photoSrc && (
+          <div style={{
+            position: 'relative',
+            display: 'inline-block',
+            border: '1px solid #d9d9d9',
+            borderRadius: 4,
+            padding: 4,
+            background: '#fafafa',
+          }}>
+            {photoLoadError ? (
+              <div style={{
+                width: 200, height: 120,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#999', fontSize: 12,
+              }}>
+                <PictureOutlined style={{ fontSize: 24, marginRight: 8 }} />
+                {t('inspection.photo_load_error', 'Photo unavailable')}
+              </div>
+            ) : (
+              <img
+                src={photoSrc}
+                alt="Inspection photo"
+                style={{ maxWidth: 200, maxHeight: 150, objectFit: 'contain', borderRadius: 4, display: 'block' }}
+                onError={() => setPhotoLoadError(true)}
+              />
+            )}
             {!isSubmitted && (
               <Button
                 type="text"
@@ -537,19 +569,23 @@ function ChecklistItemCard({
                 size="small"
                 icon={<DeleteOutlined />}
                 loading={deletePhotoMutation.isPending}
-                onClick={() => deletePhotoMutation.mutate()}
-                style={{ position: 'absolute', top: 0, right: 0 }}
+                onClick={() => {
+                  deletePhotoMutation.mutate();
+                  setLocalPhotoUrl(null);
+                  setPhotoLoadError(false);
+                }}
+                style={{ position: 'absolute', top: 2, right: 2 }}
               />
             )}
           </div>
         )}
 
         {/* Video preview */}
-        {videoStreamUrl && (
+        {videoSrc && (
           <div style={{ position: 'relative' }}>
             <video
               controls
-              src={videoStreamUrl}
+              src={videoSrc}
               style={{ maxWidth: 300, maxHeight: 200, borderRadius: 4 }}
               preload="metadata"
             />
@@ -560,7 +596,10 @@ function ChecklistItemCard({
                 size="small"
                 icon={<DeleteOutlined />}
                 loading={deleteVideoMutation.isPending}
-                onClick={() => deleteVideoMutation.mutate()}
+                onClick={() => {
+                  deleteVideoMutation.mutate();
+                  setLocalVideoUrl(null);
+                }}
                 style={{ position: 'absolute', top: 0, right: 0 }}
               />
             )}
