@@ -29,8 +29,8 @@ ALLOWED_EXTENSIONS = {
 }
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB (increased for video files)
 
-# Extensions that need conversion
-VIDEO_CONVERT_EXTENSIONS = {'mov', '3gp', 'avi', 'mkv', 'flv', 'wmv', 'm4v', 'ts', 'webm'}
+# Extensions that need conversion (webm excluded — used for audio voice notes)
+VIDEO_CONVERT_EXTENSIONS = {'mov', '3gp', 'avi', 'mkv', 'flv', 'wmv', 'm4v', 'ts'}
 IMAGE_CONVERT_EXTENSIONS = {'heic', 'heif', 'bmp', 'tiff', 'tif'}
 
 # Magic bytes for MIME type validation
