@@ -21,7 +21,6 @@ import {
 import {
   CameraOutlined,
   PictureOutlined,
-  VideoCameraOutlined,
   DeleteOutlined,
   StarFilled,
   CheckCircleOutlined,
@@ -359,23 +358,11 @@ function ChecklistItemCard({
     onAnswer(item.id, value, undefined, voiceNoteId);
   };
 
-  // Upload photo mutation
-  const uploadPhotoMutation = useMutation({
-    mutationFn: (file: File) => inspectionsApi.uploadAnswerPhoto(inspectionId, item.id, file),
+  // Upload media mutation (auto-detects photo vs video on backend)
+  const uploadMediaMutation = useMutation({
+    mutationFn: (file: File) => inspectionsApi.uploadMedia(inspectionId, item.id, file),
     onSuccess: () => {
-      message.success(t('inspection.photoUploaded', 'Photo uploaded'));
-      refetchInspection();
-    },
-    onError: (err: any) => {
-      message.error(err?.response?.data?.message || t('common.error'));
-    },
-  });
-
-  // Upload video mutation
-  const uploadVideoMutation = useMutation({
-    mutationFn: (file: File) => inspectionsApi.uploadAnswerVideo(inspectionId, item.id, file),
-    onSuccess: () => {
-      message.success(t('inspection.videoUploaded', 'Video uploaded'));
+      message.success(t('inspection.mediaUploaded', 'Media uploaded'));
       refetchInspection();
     },
     onError: (err: any) => {
@@ -516,36 +503,18 @@ function ChecklistItemCard({
                 size="small"
                 type="link"
                 icon={<CameraOutlined />}
-                loading={uploadPhotoMutation.isPending}
-                onClick={() => openFileInput('image/*', true, (file) => uploadPhotoMutation.mutate(file))}
+                loading={uploadMediaMutation.isPending}
+                onClick={() => openFileInput('image/*,video/*', true, (file) => uploadMediaMutation.mutate(file))}
               >
-                {t('inspection.take_photo', 'Take Photo')}
+                {t('inspection.camera', 'Camera')}
               </Button>
               <Upload
-                accept="image/*"
+                accept="image/*,video/*"
                 showUploadList={false}
-                beforeUpload={(file) => { uploadPhotoMutation.mutate(file); return false; }}
+                beforeUpload={(file) => { uploadMediaMutation.mutate(file); return false; }}
               >
-                <Button size="small" type="link" icon={<PictureOutlined />} loading={uploadPhotoMutation.isPending}>
-                  {t('inspection.from_gallery', 'Gallery Photo')}
-                </Button>
-              </Upload>
-              <Button
-                size="small"
-                type="link"
-                icon={<VideoCameraOutlined />}
-                loading={uploadVideoMutation.isPending}
-                onClick={() => openFileInput('video/*', true, (file) => uploadVideoMutation.mutate(file))}
-              >
-                {t('inspection.record_video', 'Record Video')}
-              </Button>
-              <Upload
-                accept="video/*"
-                showUploadList={false}
-                beforeUpload={(file) => { uploadVideoMutation.mutate(file); return false; }}
-              >
-                <Button size="small" type="link" icon={<VideoCameraOutlined />} loading={uploadVideoMutation.isPending}>
-                  {t('inspection.from_gallery_video', 'Gallery Video')}
+                <Button size="small" type="link" icon={<PictureOutlined />} loading={uploadMediaMutation.isPending}>
+                  {t('inspection.gallery', 'Gallery')}
                 </Button>
               </Upload>
             </>

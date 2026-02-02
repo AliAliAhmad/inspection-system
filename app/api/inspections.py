@@ -314,11 +314,26 @@ def get_inspection(inspection_id):
     }), 200
 
 
-@bp.route('/<int:inspection_id>/upload-photo', methods=['POST'])
+IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tiff', 'tif'}
+VIDEO_EXTENSIONS = {'mp4', 'mov', '3gp', 'avi', 'mkv', 'flv', 'wmv', 'm4v', 'ts'}
+
+
+def _detect_media_type(file):
+    """Detect if uploaded file is image or video based on MIME type and extension."""
+    mime = (file.content_type or '').lower()
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in (file.filename or '') else ''
+
+    if mime.startswith('video/') or ext in VIDEO_EXTENSIONS:
+        return 'video'
+    return 'image'
+
+
+@bp.route('/<int:inspection_id>/upload-media', methods=['POST'])
 @jwt_required()
-def upload_answer_photo(inspection_id):
+def upload_answer_media(inspection_id):
     """
-    Upload a photo for an inspection answer and link it.
+    Upload a photo or video for an inspection answer.
+    Auto-detects image vs video from file type.
     Multipart form: file, checklist_item_id
     """
     from app.services.file_service import FileService
@@ -335,7 +350,7 @@ def upload_answer_photo(inspection_id):
 
     user = db.session.get(User, int(current_user_id))
     if user.role != 'admin' and inspection.technician_id != int(current_user_id):
-        raise ForbiddenError("You can only upload photos to your own inspections")
+        raise ForbiddenError("You can only upload media to your own inspections")
 
     if 'file' not in request.files:
         raise ValidationError("No file in request")
@@ -345,115 +360,71 @@ def upload_answer_photo(inspection_id):
         raise ValidationError("checklist_item_id is required")
 
     file = request.files['file']
+    media_type = _detect_media_type(file)
+    is_video = (media_type == 'video')
+
     file_record = FileService.upload_file(
         file=file,
         uploaded_by=int(current_user_id),
-        related_type='inspection_answer',
+        related_type='inspection_answer_video' if is_video else 'inspection_answer',
         related_id=int(checklist_item_id),
-        category='inspection_photos'
+        category='inspection_videos' if is_video else 'inspection_photos'
     )
 
-    # Link the photo to the answer (auto-create if doesn't exist)
+    # Link to the answer (auto-create if doesn't exist)
     answer = InspectionAnswer.query.filter_by(
         inspection_id=inspection_id,
         checklist_item_id=int(checklist_item_id)
     ).first()
 
     if not answer:
-        answer = InspectionAnswer(
-            inspection_id=inspection_id,
-            checklist_item_id=int(checklist_item_id),
-            answer_value='',
-            photo_path=file_record.stored_filename,
-            photo_file_id=file_record.id
-        )
+        kwargs = {
+            'inspection_id': inspection_id,
+            'checklist_item_id': int(checklist_item_id),
+            'answer_value': '',
+        }
+        if is_video:
+            kwargs['video_path'] = file_record.stored_filename
+            kwargs['video_file_id'] = file_record.id
+        else:
+            kwargs['photo_path'] = file_record.stored_filename
+            kwargs['photo_file_id'] = file_record.id
+        answer = InspectionAnswer(**kwargs)
         db.session.add(answer)
     else:
-        answer.photo_path = file_record.stored_filename
-        answer.photo_file_id = file_record.id
+        if is_video:
+            answer.video_path = file_record.stored_filename
+            answer.video_file_id = file_record.id
+        else:
+            answer.photo_path = file_record.stored_filename
+            answer.photo_file_id = file_record.id
 
     db.session.commit()
 
-    # Trigger GPT analysis of the photo
-    _analyze_media_async(file_record.file_path, 'photo', inspection_id, int(checklist_item_id))
+    # Trigger GPT analysis
+    _analyze_media_async(file_record.file_path, media_type, inspection_id, int(checklist_item_id))
 
     return jsonify({
         'status': 'success',
-        'message': 'Photo uploaded',
+        'message': f'{"Video" if is_video else "Photo"} uploaded',
         'data': file_record.to_dict(),
-        'photo_path': file_record.stored_filename
+        'media_type': media_type,
     }), 201
+
+
+# Keep legacy endpoints as aliases for backward compatibility
+@bp.route('/<int:inspection_id>/upload-photo', methods=['POST'])
+@jwt_required()
+def upload_answer_photo(inspection_id):
+    """Legacy: Upload a photo. Redirects to unified upload-media."""
+    return upload_answer_media(inspection_id)
 
 
 @bp.route('/<int:inspection_id>/upload-video', methods=['POST'])
 @jwt_required()
 def upload_answer_video(inspection_id):
-    """
-    Upload a video for an inspection answer and link it.
-    Multipart form: file, checklist_item_id
-    """
-    from app.services.file_service import FileService
-    from app.models import InspectionAnswer
-
-    current_user_id = get_jwt_identity()
-
-    inspection = db.session.get(Inspection, inspection_id)
-    if not inspection:
-        raise NotFoundError(f"Inspection with ID {inspection_id} not found")
-
-    if inspection.status != 'draft':
-        raise ValidationError("Cannot modify inspection that is not in draft status")
-
-    user = db.session.get(User, int(current_user_id))
-    if user.role != 'admin' and inspection.technician_id != int(current_user_id):
-        raise ForbiddenError("You can only upload videos to your own inspections")
-
-    if 'file' not in request.files:
-        raise ValidationError("No file in request")
-
-    checklist_item_id = request.form.get('checklist_item_id')
-    if not checklist_item_id:
-        raise ValidationError("checklist_item_id is required")
-
-    file = request.files['file']
-    file_record = FileService.upload_file(
-        file=file,
-        uploaded_by=int(current_user_id),
-        related_type='inspection_answer_video',
-        related_id=int(checklist_item_id),
-        category='inspection_videos'
-    )
-
-    # Link the video to the answer (auto-create if doesn't exist)
-    answer = InspectionAnswer.query.filter_by(
-        inspection_id=inspection_id,
-        checklist_item_id=int(checklist_item_id)
-    ).first()
-
-    if not answer:
-        answer = InspectionAnswer(
-            inspection_id=inspection_id,
-            checklist_item_id=int(checklist_item_id),
-            answer_value='',
-            video_path=file_record.stored_filename,
-            video_file_id=file_record.id
-        )
-        db.session.add(answer)
-    else:
-        answer.video_path = file_record.stored_filename
-        answer.video_file_id = file_record.id
-
-    db.session.commit()
-
-    # Trigger GPT analysis of the video (uses first frame concept)
-    _analyze_media_async(file_record.file_path, 'video', inspection_id, int(checklist_item_id))
-
-    return jsonify({
-        'status': 'success',
-        'message': 'Video uploaded',
-        'data': file_record.to_dict(),
-        'video_path': file_record.stored_filename
-    }), 201
+    """Legacy: Upload a video. Redirects to unified upload-media."""
+    return upload_answer_media(inspection_id)
 
 
 @bp.route('/<int:inspection_id>/delete-voice', methods=['POST'])
@@ -492,17 +463,18 @@ def delete_answer_voice(inspection_id):
     if not answer:
         raise NotFoundError("Answer not found")
 
-    # Delete the voice file
-    if answer.voice_note_id:
-        try:
-            FileService.delete_file(answer.voice_note_id, int(current_user_id))
-        except Exception:
-            pass
-
-    # Clear voice note and comment (transcript + translation)
+    # Save file ID, then clear FK FIRST to avoid constraint violation
+    file_id_to_delete = answer.voice_note_id
     answer.voice_note_id = None
     answer.comment = None
     db.session.commit()
+
+    # Now safely delete the file record
+    if file_id_to_delete:
+        try:
+            FileService.delete_file(file_id_to_delete, int(current_user_id))
+        except Exception:
+            pass
 
     # Clean up bilingual translations
     try:
@@ -523,7 +495,6 @@ def delete_answer_photo(inspection_id):
     """Delete a photo from an inspection answer."""
     from app.models import InspectionAnswer
     from app.services.file_service import FileService
-    from app.models.file import File
 
     current_user_id = get_jwt_identity()
     data = request.get_json() or {}
@@ -551,12 +522,8 @@ def delete_answer_photo(inspection_id):
     if not answer:
         raise NotFoundError("Answer not found")
 
-    # Delete the photo file record
-    if answer.photo_file_id:
-        try:
-            FileService.delete_file(answer.photo_file_id, int(current_user_id))
-        except Exception:
-            pass
+    # Save file ID, then clear FK FIRST to avoid constraint violation
+    file_id_to_delete = answer.photo_file_id
 
     # Remove photo analysis from comment
     if answer.comment:
@@ -567,6 +534,13 @@ def delete_answer_photo(inspection_id):
     answer.photo_path = None
     answer.photo_file_id = None
     db.session.commit()
+
+    # Now safely delete the file record
+    if file_id_to_delete:
+        try:
+            FileService.delete_file(file_id_to_delete, int(current_user_id))
+        except Exception:
+            pass
 
     return jsonify({'status': 'success', 'message': 'Photo deleted'}), 200
 
@@ -604,12 +578,8 @@ def delete_answer_video(inspection_id):
     if not answer:
         raise NotFoundError("Answer not found")
 
-    # Delete the video file
-    if answer.video_file_id:
-        try:
-            FileService.delete_file(answer.video_file_id, int(current_user_id))
-        except Exception:
-            pass
+    # Save file ID, then clear FK FIRST to avoid constraint violation
+    file_id_to_delete = answer.video_file_id
 
     # Remove video analysis from comment
     if answer.comment:
@@ -620,6 +590,13 @@ def delete_answer_video(inspection_id):
     answer.video_path = None
     answer.video_file_id = None
     db.session.commit()
+
+    # Now safely delete the file record
+    if file_id_to_delete:
+        try:
+            FileService.delete_file(file_id_to_delete, int(current_user_id))
+        except Exception:
+            pass
 
     return jsonify({'status': 'success', 'message': 'Video deleted'}), 200
 

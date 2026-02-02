@@ -57,22 +57,24 @@ export const inspectionsApi = {
     return getApiClient().post<ApiResponse<Inspection>>(`/api/inspections/${id}/review`, payload);
   },
 
-  uploadAnswerPhoto(inspectionId: number, checklistItemId: number, file: File) {
+  /** Upload any media (photo or video) — backend auto-detects type */
+  uploadMedia(inspectionId: number, checklistItemId: number, file: File) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('checklist_item_id', String(checklistItemId));
-    return getApiClient().post<ApiResponse>(`/api/inspections/${inspectionId}/upload-photo`, formData, {
+    return getApiClient().post<ApiResponse>(`/api/inspections/${inspectionId}/upload-media`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
 
+  /** @deprecated Use uploadMedia instead */
+  uploadAnswerPhoto(inspectionId: number, checklistItemId: number, file: File) {
+    return this.uploadMedia(inspectionId, checklistItemId, file);
+  },
+
+  /** @deprecated Use uploadMedia instead */
   uploadAnswerVideo(inspectionId: number, checklistItemId: number, file: File) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('checklist_item_id', String(checklistItemId));
-    return getApiClient().post<ApiResponse>(`/api/inspections/${inspectionId}/upload-video`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return this.uploadMedia(inspectionId, checklistItemId, file);
   },
 
   deleteVoice(inspectionId: number, checklistItemId: number) {
