@@ -603,88 +603,121 @@ def delete_answer_video(inspection_id):
 
 def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id):
     """
-    Analyze a photo or video using GPT-4o-mini vision and append result to comment.
+    Analyze a photo or video using GPT-4o-mini vision in a background thread.
+    Appends result to the answer's comment field.
     """
-    import os
-    import base64
-    import logging
+    import threading
+    from flask import current_app
 
-    logger = logging.getLogger(__name__)
+    app = current_app._get_current_object()
 
-    try:
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            return
+    def _run_analysis():
+        import os
+        import base64
+        import logging
 
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
+        logger = logging.getLogger(__name__)
 
-        # Read and encode the image/video frame
-        with open(file_path, 'rb') as f:
-            data = f.read()
+        with app.app_context():
+            for attempt in range(2):  # Retry once on failure
+                try:
+                    api_key = os.getenv('OPENAI_API_KEY')
+                    if not api_key:
+                        return
 
-        b64 = base64.b64encode(data).decode('utf-8')
+                    if not os.path.exists(file_path):
+                        logger.warning("Analysis skipped: file not found: %s", file_path)
+                        return
 
-        # Determine mime type
-        ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
-        mime_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
-                    'gif': 'image/gif', 'webp': 'image/webp', 'mp4': 'video/mp4', 'webm': 'video/webm'}
-        mime = mime_map.get(ext, 'image/jpeg')
+                    from openai import OpenAI
+                    client = OpenAI(api_key=api_key)
 
-        # For video, we still send as image (GPT will analyze the thumbnail/first bytes)
-        if media_type == 'video':
-            # Only send if it's a small enough file for base64
-            if len(data) > 5 * 1024 * 1024:
-                return
-            mime = mime_map.get(ext, 'video/mp4')
+                    # Read and encode the image
+                    with open(file_path, 'rb') as f:
+                        data = f.read()
 
-        prompt = (
-            "Describe what you see in this inspection image in 1-2 short sentences. "
-            "Focus on identifying any defects, damage, or issues visible. Be concise and specific."
-        )
+                    # Skip very large files
+                    if len(data) > 10 * 1024 * 1024:
+                        logger.info("Analysis skipped: file too large (%s bytes)", len(data))
+                        return
 
-        response = client.chat.completions.create(
-            model='gpt-4o-mini',
-            messages=[{
-                'role': 'user',
-                'content': [
-                    {'type': 'text', 'text': prompt},
-                    {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{b64}', 'detail': 'low'}}
-                ]
-            }],
-            max_tokens=150
-        )
+                    b64 = base64.b64encode(data).decode('utf-8')
 
-        analysis = response.choices[0].message.content.strip() if response.choices else None
-        if not analysis:
-            return
+                    # Determine mime type
+                    ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
+                    mime_map = {
+                        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+                        'gif': 'image/gif', 'webp': 'image/webp', 'mp4': 'video/mp4',
+                    }
+                    mime = mime_map.get(ext, 'image/jpeg')
 
-        # Append to comment
-        from app.models import InspectionAnswer
-        answer = InspectionAnswer.query.filter_by(
-            inspection_id=inspection_id,
-            checklist_item_id=checklist_item_id
-        ).first()
+                    prompt = (
+                        "Describe what you see in this inspection image in 1-2 short sentences. "
+                        "Focus on identifying any defects, damage, or issues visible. "
+                        "Be concise and specific."
+                    )
 
-        if answer:
-            prefix = '[Photo]:' if media_type == 'photo' else '[Video]:'
-            analysis_line = f'{prefix} {analysis}'
+                    response = client.chat.completions.create(
+                        model='gpt-4o-mini',
+                        messages=[{
+                            'role': 'user',
+                            'content': [
+                                {'type': 'text', 'text': prompt},
+                                {'type': 'image_url', 'image_url': {
+                                    'url': f'data:{mime};base64,{b64}',
+                                    'detail': 'low',
+                                }}
+                            ]
+                        }],
+                        max_tokens=150,
+                        timeout=30,
+                    )
 
-            if answer.comment:
-                answer.comment = f'{answer.comment}\n\n{analysis_line}'
-            else:
-                answer.comment = analysis_line
+                    analysis = response.choices[0].message.content.strip() if response.choices else None
+                    if not analysis:
+                        return
 
-            db.session.commit()
+                    # Re-fetch answer inside this thread's session to avoid stale data
+                    from app.models import InspectionAnswer
+                    answer = InspectionAnswer.query.filter_by(
+                        inspection_id=inspection_id,
+                        checklist_item_id=checklist_item_id
+                    ).first()
 
-            # Auto-translate the updated comment
-            from app.utils.bilingual import auto_translate_and_save
-            auto_translate_and_save('inspection_answer', answer.id, {
-                'comment': answer.comment
-            })
+                    if not answer:
+                        return
 
-    except Exception as e:
-        logger.error("Media analysis failed: %s", e)
+                    prefix = '[Photo]:' if media_type == 'photo' else '[Video]:'
+                    analysis_line = f'{prefix} {analysis}'
+
+                    # Append — don't overwrite existing comment
+                    if answer.comment:
+                        answer.comment = f'{answer.comment}\n\n{analysis_line}'
+                    else:
+                        answer.comment = analysis_line
+
+                    db.session.commit()
+
+                    # Auto-translate
+                    try:
+                        from app.utils.bilingual import auto_translate_and_save
+                        auto_translate_and_save('inspection_answer', answer.id, {
+                            'comment': answer.comment
+                        })
+                    except Exception:
+                        pass
+
+                    logger.info("Media analysis complete: inspection=%s item=%s", inspection_id, checklist_item_id)
+                    return  # Success — no need to retry
+
+                except Exception as e:
+                    logger.error("Media analysis attempt %s failed: %s", attempt + 1, e)
+                    if attempt == 0:
+                        import time
+                        time.sleep(2)  # Wait before retry
+
+    thread = threading.Thread(target=_run_analysis, daemon=True)
+    thread.start()
 
 
 @bp.route('/<int:inspection_id>', methods=['DELETE'])
