@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Card,
   Typography,
@@ -313,6 +313,7 @@ function ChecklistItemCard({
   const [voiceNoteId, setVoiceNoteId] = useState<number | undefined>(
     existingAnswer?.voice_note_id ?? undefined,
   );
+  const voiceNoteIdRef = useRef(voiceNoteId);
   const [currentValue, setCurrentValue] = useState(existingAnswer?.answer_value ?? '');
   const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
   const [localPhotoUrl, setLocalPhotoUrl] = useState<string | null>(null);
@@ -629,18 +630,15 @@ function ChecklistItemCard({
                 language={i18n.language}
                 onVoiceRecorded={(audioFileId) => {
                   setVoiceNoteId(audioFileId);
-                  if (currentValue) {
-                    onAnswer(item.id, currentValue, undefined, audioFileId);
-                  }
+                  voiceNoteIdRef.current = audioFileId;
+                  onAnswer(item.id, currentValue || '', undefined, audioFileId);
                 }}
                 onTranscribed={(en, ar) => {
                   const parts: string[] = [];
                   if (en) parts.push(`EN: ${en}`);
                   if (ar) parts.push(`AR: ${ar}`);
                   const combined = parts.join('\n');
-                  if (currentValue) {
-                    onAnswer(item.id, currentValue, combined, voiceNoteId);
-                  }
+                  onAnswer(item.id, currentValue || '', combined, voiceNoteIdRef.current);
                 }}
                 onLocalBlobUrl={(url) => setLocalBlobUrl(url)}
               />
