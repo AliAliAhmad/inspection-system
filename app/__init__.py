@@ -54,13 +54,21 @@ def create_app(config_name='development'):
     jwt.init_app(app)
     limiter.init_app(app)
 
-    # CORS configuration — production must set CORS_ORIGINS explicitly
-    cors_origins = os.getenv('CORS_ORIGINS', '*')
-    if cors_origins != '*':
-        cors_origins = [o.strip() for o in cors_origins.split(',')]
-    if cors_origins == '*' and not app.config.get('DEBUG') and not app.config.get('TESTING'):
-        app.logger.warning("CORS_ORIGINS not set — defaulting to '*'. Set CORS_ORIGINS in production.")
-    CORS(app, origins=cors_origins)
+    # CORS configuration — allow all origins in development
+    CORS(app,
+         resources={r"/api/*": {"origins": "*"}},
+         supports_credentials=True,
+         allow_headers=["*"],
+         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+         expose_headers=["Content-Type", "Authorization"])
+
+    # Explicit CORS headers for all responses
+    @app.after_request
+    def add_cors_headers(response):
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, Accept-Language'
+        return response
 
     # Import models to ensure they're registered
     with app.app_context():
@@ -72,7 +80,7 @@ def create_app(config_name='development'):
         reports, schedules, ratings, notifications, specialist_jobs,
         inspection_assignments, assessments, defect_assessments,
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
-        files, sync, inspection_routines, roster, voice
+        files, sync, inspection_routines, roster, voice, ai
     )
 
     # Core
@@ -122,6 +130,9 @@ def create_app(config_name='development'):
 
     # Voice transcription & translation
     app.register_blueprint(voice.bp, url_prefix='/api/voice')
+
+    # AI services (OpenAI - Vision, Reports, Search, TTS, Assistant)
+    app.register_blueprint(ai.bp, url_prefix='/api/ai')
 
     # Initialize background scheduler (not in testing)
     if config_name != 'testing':

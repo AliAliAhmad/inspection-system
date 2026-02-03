@@ -46,4 +46,19 @@ export const filesApi = {
   remove(fileId: number) {
     return getApiClient().delete<ApiResponse>(`/api/files/${fileId}`);
   },
+
+  /** Extract text from an image using Cloudinary OCR */
+  extractOcr(fileId: number) {
+    return getApiClient().post<ApiResponse<{ file_id: number; ocr_text: string }>>(`/api/files/${fileId}/ocr`);
+  },
+
+  /** Get URL with background removed using Cloudinary AI */
+  getBackgroundRemoved(fileId: number) {
+    return getApiClient().get<ApiResponse<{ file_id: number; original_url: string; background_removed_url: string }>>(`/api/files/${fileId}/background-removed`);
+  },
+
+  /** Get detailed file info including AI tags and OCR text */
+  getInfo(fileId: number) {
+    return getApiClient().get<ApiResponse<FileRecord>>(`/api/files/${fileId}/info`);
+  },
 };

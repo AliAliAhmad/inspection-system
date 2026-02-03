@@ -10,6 +10,8 @@ import {
   Alert,
   RefreshControl,
   Modal,
+  Image,
+  Linking,
 } from 'react-native';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -23,7 +25,9 @@ import {
   SpecialistJob,
   PauseLog,
   PauseCategory,
+  getApiClient,
 } from '@inspection/shared';
+import { tokenStorage } from '../../storage/token-storage';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'SpecialistJobDetail'>;
@@ -128,6 +132,30 @@ export default function SpecialistJobDetailScreen() {
 
   const jobData = job as SpecialistJob | undefined;
   const pauses = (pauseHistory ?? []) as PauseLog[];
+
+  // Get the inspection answer from the defect
+  const inspectionAnswer = (jobData as any)?.defect?.inspection_answer;
+
+  // Build the photo URL if there's a photo
+  const getPhotoUrl = useCallback((photoPath: string | null | undefined) => {
+    if (!photoPath) return null;
+    // Handle both full URLs and relative paths
+    if (photoPath.startsWith('http')) return photoPath;
+    const baseUrl = getApiClient().defaults.baseURL || '';
+    return `${baseUrl}${photoPath.startsWith('/') ? '' : '/'}${photoPath}`;
+  }, []);
+
+  // Play voice note
+  const playVoiceNote = useCallback(async (voiceNoteId: number) => {
+    try {
+      const token = await tokenStorage.getAccessToken();
+      const baseUrl = getApiClient().defaults.baseURL || '';
+      const streamUrl = `${baseUrl}/api/files/${voiceNoteId}/stream?token=${token}`;
+      await Linking.openURL(streamUrl);
+    } catch (error) {
+      Alert.alert(t('common.error'), 'Could not play voice note');
+    }
+  }, [t]);
 
   // Timer effect
   useEffect(() => {
@@ -334,6 +362,70 @@ export default function SpecialistJobDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Inspector's Finding Section */}
+      {inspectionAnswer && (
+        <View style={styles.findingCard}>
+          <Text style={styles.sectionTitle}>{t('jobs.inspectorFinding', "Inspector's Finding")}</Text>
+
+          {/* Question text */}
+          {inspectionAnswer.checklist_item?.question_text && (
+            <View style={styles.findingQuestion}>
+              <Text style={styles.findingQuestionLabel}>{t('inspection.question', 'Question')}:</Text>
+              <Text style={styles.findingQuestionText}>
+                {inspectionAnswer.checklist_item.question_text}
+              </Text>
+            </View>
+          )}
+
+          {/* Answer value */}
+          <View style={styles.findingRow}>
+            <Text style={styles.findingLabel}>{t('inspection.answer', 'Answer')}:</Text>
+            <View style={[
+              styles.findingAnswerBadge,
+              { backgroundColor: inspectionAnswer.answer_value === 'fail' || inspectionAnswer.answer_value === 'no' ? '#FFEBEE' : '#E8F5E9' }
+            ]}>
+              <Text style={[
+                styles.findingAnswerText,
+                { color: inspectionAnswer.answer_value === 'fail' || inspectionAnswer.answer_value === 'no' ? '#C62828' : '#2E7D32' }
+              ]}>
+                {inspectionAnswer.answer_value?.toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
+          {/* Comment */}
+          {inspectionAnswer.comment && (
+            <View style={styles.findingCommentBox}>
+              <Text style={styles.findingCommentLabel}>{t('inspection.comment', 'Comment')}:</Text>
+              <Text style={styles.findingCommentText}>{inspectionAnswer.comment}</Text>
+            </View>
+          )}
+
+          {/* Photo */}
+          {inspectionAnswer.photo_path && (
+            <View style={styles.findingMediaSection}>
+              <Text style={styles.findingMediaLabel}>{t('inspection.photo', 'Photo')}:</Text>
+              <Image
+                source={{ uri: getPhotoUrl(inspectionAnswer.photo_path) || '' }}
+                style={styles.findingPhoto}
+                resizeMode="cover"
+              />
+            </View>
+          )}
+
+          {/* Voice Note */}
+          {inspectionAnswer.voice_note_id && (
+            <TouchableOpacity
+              style={styles.voiceNoteButton}
+              onPress={() => playVoiceNote(inspectionAnswer.voice_note_id)}
+            >
+              <Text style={styles.voiceNoteIcon}>🔊</Text>
+              <Text style={styles.voiceNoteText}>{t('inspection.playVoiceNote', 'Play Voice Note')}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* Timer Section */}
       {jobData.is_running && (
@@ -772,6 +864,105 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 14,
     color: '#212121',
+  },
+
+  // Inspector's Finding
+  findingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  findingQuestion: {
+    marginBottom: 12,
+  },
+  findingQuestionLabel: {
+    fontSize: 12,
+    color: '#757575',
+    marginBottom: 4,
+  },
+  findingQuestionText: {
+    fontSize: 14,
+    color: '#212121',
+    fontWeight: '500',
+  },
+  findingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  findingLabel: {
+    fontSize: 14,
+    color: '#757575',
+    marginRight: 8,
+  },
+  findingAnswerBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  findingAnswerText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  findingCommentBox: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  findingCommentLabel: {
+    fontSize: 12,
+    color: '#757575',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  findingCommentText: {
+    fontSize: 14,
+    color: '#212121',
+    lineHeight: 20,
+  },
+  findingMediaSection: {
+    marginBottom: 12,
+  },
+  findingMediaLabel: {
+    fontSize: 12,
+    color: '#757575',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  findingPhoto: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+  },
+  voiceNoteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  voiceNoteIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  voiceNoteText: {
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '600',
   },
 
   // Timer

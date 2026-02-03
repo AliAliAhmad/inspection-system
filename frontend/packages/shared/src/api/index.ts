@@ -91,3 +91,14 @@ export type {
   DayAvailabilityData,
   UploadRosterResult,
 } from './roster.api';
+export { aiApi } from './ai.api';
+export type {
+  DefectAnalysis,
+  GaugeReading,
+  ImageComparison,
+  ReportResult,
+  SummaryResult,
+  TranslationResult,
+  SearchResult,
+  AssistantResponse,
+} from './ai.api';

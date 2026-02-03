@@ -27,6 +27,27 @@ import {
   InspectionProgress,
 } from '@inspection/shared';
 
+/**
+ * Optimize Cloudinary image URL with auto-format, auto-quality, and enhancement
+ * - f_auto: Best format for device (WebP, JPEG)
+ * - q_auto: Smart compression (30-50% smaller)
+ * - e_improve: Auto-enhance colors/contrast for poorly lit photos
+ */
+function getOptimizedPhotoUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/f_auto,q_auto,e_improve/');
+}
+
+/**
+ * Generate photo thumbnail for mobile list views
+ * - Smaller size for fast loading on mobile
+ * - c_fill with g_auto for smart cropping
+ */
+function getPhotoThumbnailUrl(url: string, width = 300, height = 150): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},h_${height},c_fill,g_auto/`);
+}
+
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'InspectionChecklist'>;
 
@@ -34,7 +55,9 @@ interface LocalAnswers {
   [checklistItemId: number]: {
     answer_value: string;
     comment?: string;
-    photo_uri?: string;
+    photo_uri?: string;       // Local URI for preview while uploading
+    photo_url?: string;       // Cloudinary URL after upload
+    isUploading?: boolean;    // Upload in progress
   };
 }
 
@@ -70,10 +93,12 @@ export default function InspectionChecklistScreen() {
     if (inspection?.answers) {
       const existing: LocalAnswers = {};
       inspection.answers.forEach((ans: InspectionAnswer) => {
+        // Get Cloudinary URL from photo_file if available
+        const photoUrl = (ans.photo_file as any)?.url || null;
         existing[ans.checklist_item_id] = {
           answer_value: ans.answer_value,
           comment: ans.comment ?? undefined,
-          photo_uri: ans.photo_path ?? undefined,
+          photo_url: photoUrl ?? undefined,
         };
       });
       setLocalAnswers((prev) => ({ ...existing, ...prev }));
@@ -173,6 +198,65 @@ export default function InspectionChecklistScreen() {
     });
   }, []);
 
+  // Upload photo to Cloudinary via API
+  const uploadPhoto = useCallback(
+    async (checklistItemId: number, uri: string, fileName: string) => {
+      // Set uploading state
+      setLocalAnswers((prev) => ({
+        ...prev,
+        [checklistItemId]: {
+          ...prev[checklistItemId],
+          photo_uri: uri,
+          isUploading: true,
+        },
+      }));
+
+      try {
+        // Create FormData for React Native
+        const formData = new FormData();
+        formData.append('file', {
+          uri,
+          name: fileName || 'photo.jpg',
+          type: 'image/jpeg',
+        } as any);
+        formData.append('checklist_item_id', String(checklistItemId));
+
+        // Upload to Cloudinary via API
+        const response = await inspectionsApi.uploadMedia(id, checklistItemId, formData as any);
+        const data = (response.data as any)?.data;
+        const cloudinaryUrl = data?.photo_file?.url || data?.url;
+
+        // Update state with Cloudinary URL
+        setLocalAnswers((prev) => ({
+          ...prev,
+          [checklistItemId]: {
+            ...prev[checklistItemId],
+            photo_uri: undefined,
+            photo_url: cloudinaryUrl,
+            isUploading: false,
+          },
+        }));
+
+        // Refresh inspection data
+        queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+      } catch (error) {
+        console.error('Photo upload failed:', error);
+        Alert.alert(t('common.error'), 'Failed to upload photo');
+
+        // Clear uploading state on error
+        setLocalAnswers((prev) => ({
+          ...prev,
+          [checklistItemId]: {
+            ...prev[checklistItemId],
+            photo_uri: undefined,
+            isUploading: false,
+          },
+        }));
+      }
+    },
+    [id, queryClient, t],
+  );
+
   const handleTakePhoto = useCallback(
     async (checklistItemId: number) => {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -187,16 +271,11 @@ export default function InspectionChecklistScreen() {
       });
 
       if (!result.canceled && result.assets?.[0]) {
-        setLocalAnswers((prev) => ({
-          ...prev,
-          [checklistItemId]: {
-            ...prev[checklistItemId],
-            photo_uri: result.assets[0].uri,
-          },
-        }));
+        const asset = result.assets[0];
+        uploadPhoto(checklistItemId, asset.uri, asset.fileName || 'photo.jpg');
       }
     },
-    [t],
+    [t, uploadPhoto],
   );
 
   const handlePickImage = useCallback(
@@ -213,16 +292,11 @@ export default function InspectionChecklistScreen() {
       });
 
       if (!result.canceled && result.assets?.[0]) {
-        setLocalAnswers((prev) => ({
-          ...prev,
-          [checklistItemId]: {
-            ...prev[checklistItemId],
-            photo_uri: result.assets[0].uri,
-          },
-        }));
+        const asset = result.assets[0];
+        uploadPhoto(checklistItemId, asset.uri, asset.fileName || 'photo.jpg');
       }
     },
-    [t],
+    [t, uploadPhoto],
   );
 
   const handleSubmit = useCallback(() => {
@@ -337,6 +411,10 @@ export default function InspectionChecklistScreen() {
     const commentExpanded = expandedComments.has(item.id);
     const currentAnswer = localAnswers[item.id];
 
+    // Photo URL: prefer Cloudinary URL, fallback to local URI during upload
+    const photoSource = currentAnswer?.photo_url || currentAnswer?.photo_uri;
+    const isUploading = currentAnswer?.isUploading;
+
     return (
       <View key={item.id} style={styles.checklistCard}>
         <View style={styles.questionHeader}>
@@ -373,15 +451,17 @@ export default function InspectionChecklistScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.cameraButton}
+            style={[styles.cameraButton, isUploading && styles.buttonDisabled]}
             onPress={() => handleTakePhoto(item.id)}
+            disabled={isUploading}
           >
             <Text style={styles.cameraButtonText}>{t('inspection.take_photo')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.galleryButton}
+            style={[styles.galleryButton, isUploading && styles.buttonDisabled]}
             onPress={() => handlePickImage(item.id)}
+            disabled={isUploading}
           >
             <Text style={styles.galleryButtonText}>{t('inspection.photo')}</Text>
           </TouchableOpacity>
@@ -399,12 +479,21 @@ export default function InspectionChecklistScreen() {
           />
         ) : null}
 
-        {currentAnswer?.photo_uri ? (
-          <Image
-            source={{ uri: currentAnswer.photo_uri }}
-            style={styles.photoPreview}
-            resizeMode="cover"
-          />
+        {/* Photo preview with upload indicator and Cloudinary optimizations */}
+        {photoSource ? (
+          <View style={styles.photoContainer}>
+            <Image
+              source={{ uri: isUploading ? photoSource : getPhotoThumbnailUrl(photoSource) }}
+              style={styles.photoPreview}
+              resizeMode="cover"
+            />
+            {isUploading && (
+              <View style={styles.uploadOverlay}>
+                <ActivityIndicator color="#fff" size="large" />
+                <Text style={styles.uploadingText}>Uploading...</Text>
+              </View>
+            )}
+          </View>
         ) : null}
       </View>
     );
@@ -685,20 +774,6 @@ const styles = StyleSheet.create({
   toggleBtnTextActive: {
     color: '#fff',
   },
-  ratingRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  starButton: {
-    padding: 4,
-  },
-  starText: {
-    fontSize: 28,
-    color: '#bdbdbd',
-  },
-  starFilled: {
-    color: '#FFC107',
-  },
   textInputAnswer: {
     borderWidth: 1,
     borderColor: '#e0e0e0',
@@ -757,6 +832,9 @@ const styles = StyleSheet.create({
     color: '#E65100',
     fontWeight: '500',
   },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
   commentInput: {
     borderWidth: 1,
     borderColor: '#e0e0e0',
@@ -768,11 +846,31 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#212121',
   },
+  photoContainer: {
+    position: 'relative',
+    marginTop: 8,
+  },
   photoPreview: {
     width: '100%',
     height: 150,
     borderRadius: 8,
+  },
+  uploadOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadingText: {
+    color: '#fff',
     marginTop: 8,
+    fontSize: 14,
+    fontWeight: '600',
   },
   submitButton: {
     backgroundColor: '#1976D2',

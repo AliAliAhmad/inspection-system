@@ -1,8 +1,9 @@
 """
 File upload and download endpoints.
+Files are stored on Cloudinary - download/stream redirect to Cloudinary URLs.
 """
 
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, redirect
 from flask_jwt_extended import jwt_required
 from app.extensions import limiter
 from app.services.file_service import FileService
@@ -78,43 +79,26 @@ def upload_multiple():
 @bp.route('/<int:file_id>/download', methods=['GET'])
 @jwt_required()
 def download_file(file_id):
-    """Download a file."""
+    """Download a file - redirects to Cloudinary URL."""
     file_record = File.query.get_or_404(file_id)
-
-    return send_file(
-        file_record.file_path,
-        download_name=file_record.original_filename,
-        as_attachment=True
-    )
+    url = file_record.get_url()
+    if url:
+        return redirect(url)
+    return jsonify({'status': 'error', 'message': 'File not available'}), 404
 
 
 @bp.route('/<int:file_id>/stream', methods=['GET'])
 def stream_file(file_id):
     """
-    Stream a file for playback (e.g. audio/video).
-    Uses a short-lived token query param for auth since HTML media elements
-    cannot send Authorization headers.
+    Stream a file - redirects to Cloudinary URL.
+    No auth required since Cloudinary URLs are publicly accessible.
+    Kept for backwards compatibility.
     """
-    from flask_jwt_extended import decode_token
-    from flask_jwt_extended.exceptions import JWTDecodeError
-
-    token = request.args.get('token')
-    if not token:
-        return jsonify({'status': 'error', 'message': 'Token required'}), 401
-
-    try:
-        decode_token(token)
-    except (JWTDecodeError, Exception):
-        return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
-
     file_record = File.query.get_or_404(file_id)
-
-    return send_file(
-        file_record.file_path,
-        mimetype=file_record.mime_type or 'application/octet-stream',
-        as_attachment=False,
-        conditional=True
-    )
+    url = file_record.get_url()
+    if url:
+        return redirect(url)
+    return jsonify({'status': 'error', 'message': 'File not available'}), 404
 
 
 @bp.route('', methods=['GET'])
@@ -148,4 +132,72 @@ def delete_file(file_id):
     return jsonify({
         'status': 'success',
         'message': 'File deleted'
+    }), 200
+
+
+@bp.route('/<int:file_id>/ocr', methods=['POST'])
+@limiter.limit("10 per minute")
+@jwt_required()
+def extract_ocr(file_id):
+    """
+    Extract text from an image using Cloudinary OCR.
+    Returns the extracted text and updates the file record.
+    """
+    text = FileService.extract_ocr(file_id)
+
+    return jsonify({
+        'status': 'success',
+        'message': 'OCR extraction complete',
+        'data': {
+            'file_id': file_id,
+            'ocr_text': text or ''
+        }
+    }), 200
+
+
+@bp.route('/<int:file_id>/background-removed', methods=['GET'])
+@jwt_required()
+def get_background_removed(file_id):
+    """
+    Get URL with background removed using Cloudinary AI.
+    Returns the transformed URL.
+    """
+    file_record = File.query.get_or_404(file_id)
+
+    if not file_record.is_image():
+        return jsonify({
+            'status': 'error',
+            'message': 'Background removal is only available for images'
+        }), 400
+
+    bg_removed_url = FileService.get_background_removed_url(file_record)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'file_id': file_id,
+            'original_url': file_record.get_url(),
+            'background_removed_url': bg_removed_url
+        }
+    }), 200
+
+
+@bp.route('/<int:file_id>/info', methods=['GET'])
+@jwt_required()
+def get_file_info(file_id):
+    """
+    Get detailed file info including AI tags and OCR text.
+    """
+    file_record = File.query.get_or_404(file_id)
+
+    data = file_record.to_dict()
+
+    # Add transformed URLs for images
+    if file_record.is_image():
+        data['background_removed_url'] = FileService.get_background_removed_url(file_record)
+        data['optimized_url'] = FileService.get_optimized_url(file_record)
+
+    return jsonify({
+        'status': 'success',
+        'data': data
     }), 200

@@ -1,0 +1,601 @@
+"""
+OpenAI Service - AI features for inspection system.
+Provides: Vision analysis, report generation, embeddings search, TTS, and AI assistant.
+"""
+
+import os
+import json
+import logging
+import base64
+import requests
+from typing import Optional, List, Dict, Any
+from openai import OpenAI
+
+logger = logging.getLogger(__name__)
+
+
+def _get_client() -> Optional[OpenAI]:
+    """Get OpenAI client if API key is configured."""
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not configured")
+        return None
+    return OpenAI(api_key=api_key)
+
+
+class VisionService:
+    """GPT-4 Vision - Analyze inspection photos for defects."""
+
+    @staticmethod
+    def analyze_defect_photo(image_url: str, language: str = 'en') -> Dict[str, Any]:
+        """
+        Analyze a defect photo using GPT-4 Vision.
+
+        Args:
+            image_url: URL of the image (Cloudinary URL)
+            language: Response language ('en' or 'ar')
+
+        Returns:
+            Analysis result with defect description, severity, recommendations
+        """
+        client = _get_client()
+        if not client:
+            return {'error': 'OpenAI not configured'}
+
+        lang_instruction = "Respond in Arabic." if language == 'ar' else "Respond in English."
+
+        prompt = f"""You are an industrial equipment inspection expert. Analyze this inspection photo and provide:
+
+1. **Defect Description**: What problem do you see? Be specific about the type of damage/issue.
+2. **Location**: Where on the equipment is the defect located?
+3. **Severity**: Rate as CRITICAL, HIGH, MEDIUM, or LOW
+4. **Cause**: What likely caused this issue?
+5. **Recommendation**: What action should be taken and how urgently?
+6. **Safety Risk**: Any immediate safety concerns?
+
+{lang_instruction}
+Format your response as JSON with keys: description, location, severity, cause, recommendation, safety_risk"""
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": image_url}}
+                        ]
+                    }
+                ],
+                max_tokens=1000
+            )
+
+            content = response.choices[0].message.content
+
+            # Try to parse as JSON
+            try:
+                # Remove markdown code blocks if present
+                if '```json' in content:
+                    content = content.split('```json')[1].split('```')[0]
+                elif '```' in content:
+                    content = content.split('```')[1].split('```')[0]
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                result = {'raw_analysis': content}
+
+            result['success'] = True
+            return result
+
+        except Exception as e:
+            logger.error(f"Vision analysis failed: {e}")
+            return {'error': str(e), 'success': False}
+
+    @staticmethod
+    def read_gauge(image_url: str) -> Dict[str, Any]:
+        """
+        Read gauge/meter values from an image.
+
+        Args:
+            image_url: URL of the gauge image
+
+        Returns:
+            Reading value and unit
+        """
+        client = _get_client()
+        if not client:
+            return {'error': 'OpenAI not configured'}
+
+        prompt = """Look at this gauge/meter image and extract:
+1. The current reading value
+2. The unit of measurement
+3. The scale range (min-max)
+4. Is the reading in normal/warning/danger zone?
+
+Format as JSON: {"value": number, "unit": "string", "min": number, "max": number, "status": "normal|warning|danger"}"""
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": image_url}}
+                        ]
+                    }
+                ],
+                max_tokens=300
+            )
+
+            content = response.choices[0].message.content
+            try:
+                if '```' in content:
+                    content = content.split('```')[1].split('```')[0]
+                    if content.startswith('json'):
+                        content = content[4:]
+                result = json.loads(content)
+            except:
+                result = {'raw': content}
+
+            result['success'] = True
+            return result
+
+        except Exception as e:
+            logger.error(f"Gauge reading failed: {e}")
+            return {'error': str(e), 'success': False}
+
+    @staticmethod
+    def compare_images(before_url: str, after_url: str, language: str = 'en') -> Dict[str, Any]:
+        """
+        Compare before/after images to identify changes.
+
+        Args:
+            before_url: URL of before image
+            after_url: URL of after image
+            language: Response language
+
+        Returns:
+            Comparison analysis
+        """
+        client = _get_client()
+        if not client:
+            return {'error': 'OpenAI not configured'}
+
+        lang_instruction = "Respond in Arabic." if language == 'ar' else "Respond in English."
+
+        prompt = f"""Compare these two inspection images (before and after).
+
+Identify:
+1. What has changed between the images?
+2. Has the condition improved or worsened?
+3. What repairs/work appear to have been done?
+4. Are there any remaining issues?
+
+{lang_instruction}
+Format as JSON: {{"changes": [], "condition_change": "improved|worsened|same", "work_done": "description", "remaining_issues": []}}"""
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": before_url}},
+                            {"type": "image_url", "image_url": {"url": after_url}}
+                        ]
+                    }
+                ],
+                max_tokens=800
+            )
+
+            content = response.choices[0].message.content
+            try:
+                if '```' in content:
+                    content = content.split('```')[1].split('```')[0]
+                    if content.startswith('json'):
+                        content = content[4:]
+                result = json.loads(content)
+            except:
+                result = {'raw': content}
+
+            result['success'] = True
+            return result
+
+        except Exception as e:
+            logger.error(f"Image comparison failed: {e}")
+            return {'error': str(e), 'success': False}
+
+
+class ReportService:
+    """GPT-4 Text - Generate reports and summaries."""
+
+    @staticmethod
+    def generate_inspection_report(inspection_data: Dict, language: str = 'en') -> Dict[str, Any]:
+        """
+        Generate a comprehensive inspection report.
+
+        Args:
+            inspection_data: Inspection details including answers, defects, etc.
+            language: Report language
+
+        Returns:
+            Generated report text
+        """
+        client = _get_client()
+        if not client:
+            return {'error': 'OpenAI not configured'}
+
+        lang_instruction = "Write the report in Arabic." if language == 'ar' else "Write the report in English."
+
+        prompt = f"""Generate a professional industrial equipment inspection report based on this data:
+
+{json.dumps(inspection_data, indent=2, default=str)}
+
+Include:
+1. Executive Summary (2-3 sentences)
+2. Equipment Information
+3. Inspection Findings (organized by category)
+4. Critical Issues (if any)
+5. Recommendations
+6. Overall Assessment (Pass/Fail/Needs Attention)
+
+{lang_instruction}
+Make it professional and suitable for management review."""
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=2000
+            )
+
+            return {
+                'success': True,
+                'report': response.choices[0].message.content
+            }
+
+        except Exception as e:
+            logger.error(f"Report generation failed: {e}")
+            return {'error': str(e), 'success': False}
+
+    @staticmethod
+    def summarize_defects(defects: List[Dict], language: str = 'en') -> Dict[str, Any]:
+        """
+        Summarize multiple defects into a brief overview.
+
+        Args:
+            defects: List of defect data
+            language: Summary language
+
+        Returns:
+            Summary text
+        """
+        client = _get_client()
+        if not client:
+            return {'error': 'OpenAI not configured'}
+
+        lang_instruction = "Respond in Arabic." if language == 'ar' else "Respond in English."
+
+        prompt = f"""Summarize these equipment defects for a manager:
+
+{json.dumps(defects, indent=2, default=str)}
+
+Provide:
+1. Total count and breakdown by severity
+2. Most critical issues requiring immediate attention
+3. Common patterns or recurring problems
+4. Recommended priority order for repairs
+
+{lang_instruction}
+Keep it concise (under 200 words)."""
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=500
+            )
+
+            return {
+                'success': True,
+                'summary': response.choices[0].message.content
+            }
+
+        except Exception as e:
+            logger.error(f"Defect summary failed: {e}")
+            return {'error': str(e), 'success': False}
+
+    @staticmethod
+    def translate(text: str, target_language: str) -> Dict[str, Any]:
+        """
+        Translate text between English and Arabic.
+
+        Args:
+            text: Text to translate
+            target_language: 'en' or 'ar'
+
+        Returns:
+            Translated text
+        """
+        client = _get_client()
+        if not client:
+            return {'error': 'OpenAI not configured'}
+
+        target = "English" if target_language == 'en' else "Arabic"
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": f"Translate the following text to {target}. Only provide the translation, nothing else."},
+                    {"role": "user", "content": text}
+                ],
+                max_tokens=1000
+            )
+
+            return {
+                'success': True,
+                'translation': response.choices[0].message.content
+            }
+
+        except Exception as e:
+            logger.error(f"Translation failed: {e}")
+            return {'error': str(e), 'success': False}
+
+
+class EmbeddingsService:
+    """Embeddings - Semantic search for similar defects."""
+
+    @staticmethod
+    def create_embedding(text: str) -> Optional[List[float]]:
+        """
+        Create an embedding vector for text.
+
+        Args:
+            text: Text to embed
+
+        Returns:
+            Embedding vector (1536 dimensions)
+        """
+        client = _get_client()
+        if not client:
+            return None
+
+        try:
+            response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text
+            )
+            return response.data[0].embedding
+
+        except Exception as e:
+            logger.error(f"Embedding creation failed: {e}")
+            return None
+
+    @staticmethod
+    def find_similar(query: str, items: List[Dict], text_field: str = 'description', top_k: int = 5) -> List[Dict]:
+        """
+        Find similar items using semantic search.
+
+        Args:
+            query: Search query
+            items: List of items to search (each must have text_field and optionally 'embedding')
+            text_field: Field containing text to compare
+            top_k: Number of results to return
+
+        Returns:
+            Top k most similar items with similarity scores
+        """
+        import numpy as np
+
+        query_embedding = EmbeddingsService.create_embedding(query)
+        if not query_embedding:
+            return []
+
+        results = []
+        for item in items:
+            # Get or create embedding for item
+            if 'embedding' in item and item['embedding']:
+                item_embedding = item['embedding']
+            else:
+                text = item.get(text_field, '')
+                if not text:
+                    continue
+                item_embedding = EmbeddingsService.create_embedding(text)
+                if not item_embedding:
+                    continue
+
+            # Calculate cosine similarity
+            similarity = np.dot(query_embedding, item_embedding) / (
+                np.linalg.norm(query_embedding) * np.linalg.norm(item_embedding)
+            )
+
+            results.append({
+                **item,
+                'similarity': float(similarity)
+            })
+
+        # Sort by similarity and return top k
+        results.sort(key=lambda x: x['similarity'], reverse=True)
+        return results[:top_k]
+
+
+class TTSService:
+    """Text-to-Speech - Convert text to audio."""
+
+    VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
+
+    @staticmethod
+    def text_to_speech(text: str, voice: str = 'nova') -> Optional[bytes]:
+        """
+        Convert text to speech audio.
+
+        Args:
+            text: Text to convert
+            voice: Voice to use (alloy, echo, fable, onyx, nova, shimmer)
+
+        Returns:
+            Audio bytes (MP3 format)
+        """
+        client = _get_client()
+        if not client:
+            return None
+
+        if voice not in TTSService.VOICES:
+            voice = 'nova'
+
+        try:
+            response = client.audio.speech.create(
+                model="tts-1",
+                voice=voice,
+                input=text
+            )
+            return response.content
+
+        except Exception as e:
+            logger.error(f"TTS failed: {e}")
+            return None
+
+    @staticmethod
+    def read_checklist_item(question: str, language: str = 'en') -> Optional[bytes]:
+        """
+        Generate audio for a checklist question.
+
+        Args:
+            question: Checklist question text
+            language: Language of the question
+
+        Returns:
+            Audio bytes
+        """
+        # Use appropriate voice for language
+        voice = 'nova' if language == 'en' else 'alloy'
+        return TTSService.text_to_speech(question, voice)
+
+
+class AssistantService:
+    """AI Assistant - Interactive helper for engineers."""
+
+    _assistant_id = None
+
+    @classmethod
+    def _get_or_create_assistant(cls) -> Optional[str]:
+        """Get or create the inspection assistant."""
+        if cls._assistant_id:
+            return cls._assistant_id
+
+        client = _get_client()
+        if not client:
+            return None
+
+        try:
+            # Check if assistant already exists
+            assistant_id = os.getenv('OPENAI_ASSISTANT_ID')
+            if assistant_id:
+                cls._assistant_id = assistant_id
+                return assistant_id
+
+            # Create new assistant
+            assistant = client.beta.assistants.create(
+                name="Inspection System Assistant",
+                instructions="""You are an expert industrial equipment inspection assistant. You help:
+- Engineers understand defect reports and prioritize repairs
+- Specialists diagnose equipment issues
+- Inspectors interpret checklist requirements
+- Quality engineers analyze inspection patterns
+
+You have knowledge of:
+- Industrial equipment maintenance
+- Safety standards and compliance
+- Defect classification and severity assessment
+- Repair procedures and best practices
+
+Always be helpful, precise, and safety-conscious.""",
+                model="gpt-4o",
+                tools=[{"type": "code_interpreter"}]
+            )
+
+            cls._assistant_id = assistant.id
+            logger.info(f"Created assistant: {assistant.id}")
+            return assistant.id
+
+        except Exception as e:
+            logger.error(f"Assistant creation failed: {e}")
+            return None
+
+    @staticmethod
+    def chat(message: str, thread_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Chat with the AI assistant.
+
+        Args:
+            message: User message
+            thread_id: Existing thread ID for conversation continuity
+
+        Returns:
+            Assistant response and thread ID
+        """
+        client = _get_client()
+        if not client:
+            return {'error': 'OpenAI not configured'}
+
+        assistant_id = AssistantService._get_or_create_assistant()
+        if not assistant_id:
+            return {'error': 'Could not create assistant'}
+
+        try:
+            # Create or use existing thread
+            if thread_id:
+                thread = client.beta.threads.retrieve(thread_id)
+            else:
+                thread = client.beta.threads.create()
+
+            # Add message to thread
+            client.beta.threads.messages.create(
+                thread_id=thread.id,
+                role="user",
+                content=message
+            )
+
+            # Run assistant
+            run = client.beta.threads.runs.create_and_poll(
+                thread_id=thread.id,
+                assistant_id=assistant_id
+            )
+
+            if run.status == 'completed':
+                # Get response
+                messages = client.beta.threads.messages.list(
+                    thread_id=thread.id,
+                    order='desc',
+                    limit=1
+                )
+
+                response_text = messages.data[0].content[0].text.value
+
+                return {
+                    'success': True,
+                    'response': response_text,
+                    'thread_id': thread.id
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'Run failed with status: {run.status}'
+                }
+
+        except Exception as e:
+            logger.error(f"Assistant chat failed: {e}")
+            return {'error': str(e), 'success': False}
+
+
+# Convenience exports
+vision = VisionService()
+reports = ReportService()
+embeddings = EmbeddingsService()
+tts = TTSService()
+assistant = AssistantService()

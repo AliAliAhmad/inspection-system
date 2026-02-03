@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
-import { Input, Button, Space, Typography, Spin, message } from 'antd';
-import { AudioOutlined, LoadingOutlined } from '@ant-design/icons';
-import { voiceApi } from '@inspection/shared';
+import { Input, Button, Space, Typography, Spin, message, Tooltip } from 'antd';
+import { AudioOutlined, LoadingOutlined, TranslationOutlined } from '@ant-design/icons';
+import { voiceApi, aiApi } from '@inspection/shared';
+import { useTranslation } from 'react-i18next';
 import type { TextAreaProps } from 'antd/es/input';
 
 interface VoiceTextAreaProps extends TextAreaProps {
@@ -16,14 +17,58 @@ interface VoiceTextAreaProps extends TextAreaProps {
 }
 
 export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalBlobUrl, language, ...textAreaProps }: VoiceTextAreaProps) {
+  const { t, i18n } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const [enText, setEnText] = useState<string | null>(null);
   const [arText, setArText] = useState<string | null>(null);
   const [transcriptionFailed, setTranscriptionFailed] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const localBlobUrlRef = useRef<string | null>(null);
+
+  // Translate the current text to both languages
+  const handleTranslate = useCallback(async () => {
+    const currentValue = (textAreaProps.value as string) || '';
+    if (!currentValue.trim()) {
+      message.warning(t('common.enterTextFirst', 'Please enter some text first'));
+      return;
+    }
+
+    setTranslating(true);
+    try {
+      // Translate to both languages in parallel
+      const [enResult, arResult] = await Promise.all([
+        aiApi.translate(currentValue, 'en'),
+        aiApi.translate(currentValue, 'ar'),
+      ]);
+
+      const enTranslation = (enResult.data as any)?.data?.translation || '';
+      const arTranslation = (arResult.data as any)?.data?.translation || '';
+
+      setEnText(enTranslation);
+      setArText(arTranslation);
+
+      // Update textarea with both translations
+      if (textAreaProps.onChange) {
+        const parts: string[] = [];
+        if (enTranslation) parts.push(`EN: ${enTranslation}`);
+        if (arTranslation) parts.push(`AR: ${arTranslation}`);
+        const combined = parts.join('\n');
+        const syntheticEvent = {
+          target: { value: combined },
+        } as React.ChangeEvent<HTMLTextAreaElement>;
+        textAreaProps.onChange(syntheticEvent);
+      }
+
+      message.success(t('common.translated', 'Text translated'));
+    } catch (error) {
+      message.error(t('common.translateError', 'Translation failed'));
+    } finally {
+      setTranslating(false);
+    }
+  }, [textAreaProps.value, textAreaProps.onChange, t]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -118,12 +163,20 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalB
     <div>
       <Space.Compact style={{ display: 'flex', width: '100%' }}>
         <Input.TextArea {...textAreaProps} style={{ ...textAreaProps.style, flex: 1 }} />
+        <Tooltip title={t('common.translate', 'Translate to EN/AR')}>
+          <Button
+            icon={translating ? <LoadingOutlined /> : <TranslationOutlined />}
+            onClick={handleTranslate}
+            disabled={transcribing || translating || recording}
+            style={{ height: 'auto', minHeight: 60 }}
+          />
+        </Tooltip>
         <Button
           type={recording ? 'primary' : 'default'}
           danger={recording}
           icon={transcribing ? <LoadingOutlined /> : <AudioOutlined />}
           onClick={handleMicClick}
-          disabled={transcribing}
+          disabled={transcribing || translating}
           style={{ height: 'auto', minHeight: 60 }}
           title={recording ? 'Stop recording' : 'Start voice input'}
         />
@@ -131,7 +184,13 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalB
 
       {transcribing && (
         <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
-          <Spin size="small" /> Saving &amp; transcribing...
+          <Spin size="small" /> {t('common.transcribing', 'Saving & transcribing...')}
+        </div>
+      )}
+
+      {translating && (
+        <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
+          <Spin size="small" /> {t('common.translating', 'Translating to EN/AR...')}
         </div>
       )}
 

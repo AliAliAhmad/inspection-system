@@ -401,8 +401,9 @@ def upload_answer_media(inspection_id):
 
     db.session.commit()
 
-    # Trigger GPT analysis
-    _analyze_media_async(file_record.file_path, media_type, inspection_id, int(checklist_item_id))
+    # Trigger GPT analysis using Cloudinary URL
+    cloudinary_url = file_record.file_path  # file_path now stores Cloudinary URL
+    _analyze_media_async(cloudinary_url, media_type, inspection_id, int(checklist_item_id))
 
     return jsonify({
         'status': 'success',
@@ -587,49 +588,28 @@ def delete_answer_video(inspection_id):
     return jsonify({'status': 'success', 'message': 'Video deleted'}), 200
 
 
-def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id):
+def _analyze_media_async(cloudinary_url, media_type, inspection_id, checklist_item_id):
     """
     Analyze a photo or video using GPT-4o-mini vision in a background thread.
+    Uses Cloudinary URL directly - no file reading needed.
     Appends result to the answer's comment field.
     """
     import threading
     import os
-    import base64
     import logging
     from flask import current_app
 
     logger = logging.getLogger(__name__)
 
-    # Read file content NOW before spawning thread (file might be deleted later on Render)
-    if not os.path.exists(file_path):
-        logger.warning("Analysis skipped: file not found at upload time: %s", file_path)
+    # Validate we have a Cloudinary URL
+    if not cloudinary_url or not cloudinary_url.startswith('http'):
+        logger.warning("Analysis skipped: invalid URL: %s", cloudinary_url)
         return
-
-    try:
-        with open(file_path, 'rb') as f:
-            file_data = f.read()
-    except Exception as e:
-        logger.warning("Analysis skipped: could not read file %s: %s", file_path, e)
-        return
-
-    # Skip very large files
-    if len(file_data) > 10 * 1024 * 1024:
-        logger.info("Analysis skipped: file too large (%s bytes)", len(file_data))
-        return
-
-    # Determine mime type from extension
-    ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
-    mime_map = {
-        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
-        'gif': 'image/gif', 'webp': 'image/webp', 'mp4': 'video/mp4',
-    }
-    mime = mime_map.get(ext, 'image/jpeg')
-    b64_data = base64.b64encode(file_data).decode('utf-8')
 
     app = current_app._get_current_object()
 
-    logger.info("Starting media analysis: file=%s type=%s inspection=%s item=%s size=%s",
-                file_path, media_type, inspection_id, checklist_item_id, len(file_data))
+    logger.info("Starting media analysis: url=%s type=%s inspection=%s item=%s",
+                cloudinary_url, media_type, inspection_id, checklist_item_id)
 
     def _run_analysis():
         with app.app_context():
@@ -650,7 +630,7 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
                             "Be concise and specific."
                         )
 
-                        # Use b64_data and mime computed before thread started
+                        # Use Cloudinary URL directly - GPT can fetch from URL
                         response = client.chat.completions.create(
                             model='gpt-4o-mini',
                             messages=[{
@@ -658,7 +638,7 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
                                 'content': [
                                     {'type': 'text', 'text': prompt},
                                     {'type': 'image_url', 'image_url': {
-                                        'url': f'data:{mime};base64,{b64_data}',
+                                        'url': cloudinary_url,
                                         'detail': 'low',
                                     }}
                                 ]
@@ -717,12 +697,54 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
     thread.start()
 
 
+@bp.route('/<int:inspection_id>/report', methods=['GET'])
+@jwt_required()
+def download_inspection_report(inspection_id):
+    """
+    Generate and download PDF report for an inspection.
+
+    Returns:
+        PDF file download
+    """
+    from flask import send_file
+    from app.services.pdf_report_service import generate_inspection_report
+
+    inspection = db.session.get(Inspection, inspection_id)
+    if not inspection:
+        raise NotFoundError(f"Inspection with ID {inspection_id} not found")
+
+    current_user = get_current_user()
+
+    # Technicians can only download their own reports
+    if current_user.role in ('inspector', 'specialist', 'technician') and inspection.technician_id != current_user.id:
+        raise ForbiddenError("Access denied")
+
+    lang = get_language(current_user)
+
+    # Get full inspection data with answers
+    inspection_data = inspection.to_dict(include_answers=True, language=lang)
+
+    # Generate PDF
+    pdf_bytes = generate_inspection_report(inspection_data, language=lang)
+
+    # Create filename
+    code = inspection.inspection_code or f"INS-{inspection.id}"
+    filename = f"inspection_report_{code}.pdf"
+
+    return send_file(
+        pdf_bytes,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
 @bp.route('/<int:inspection_id>', methods=['DELETE'])
 @jwt_required()
 def delete_inspection(inspection_id):
     """
     Delete draft inspection.
-    
+
     Returns:
         {
             "status": "success",
@@ -730,12 +752,12 @@ def delete_inspection(inspection_id):
         }
     """
     current_user_id = get_jwt_identity()
-    
+
     InspectionService.delete_inspection(
         inspection_id=inspection_id,
         current_user_id=current_user_id
     )
-    
+
     return jsonify({
         'status': 'success',
         'message': 'Inspection deleted'

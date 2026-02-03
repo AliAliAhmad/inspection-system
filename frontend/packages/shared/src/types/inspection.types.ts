@@ -1,5 +1,6 @@
 import { Equipment } from './equipment.types';
 import { User } from './user.types';
+import { FileRecord } from './file.types';
 
 export type InspectionStatus = 'draft' | 'submitted' | 'reviewed';
 export type InspectionResult = 'pass' | 'fail' | 'incomplete';
@@ -30,11 +31,11 @@ export interface InspectionAnswer {
   answer_value: string;
   comment: string | null;
   photo_path: string | null;
-  photo_file: { id: number; original_filename: string; mime_type: string; download_url: string } | null;
+  photo_file: FileRecord | null;
   video_path: string | null;
-  video_file: { id: number; original_filename: string; mime_type: string; download_url: string } | null;
+  video_file: FileRecord | null;
   voice_note_id: number | null;
-  voice_note: { id: number; filename: string; original_filename: string; mime_type?: string } | null;
+  voice_note: FileRecord | null;
   answered_at: string;
 }
 

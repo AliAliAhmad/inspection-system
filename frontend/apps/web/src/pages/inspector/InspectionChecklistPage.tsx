@@ -25,6 +25,7 @@ import {
   CheckCircleOutlined,
   ArrowLeftOutlined,
   SendOutlined,
+  AudioOutlined,
   SoundOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -32,14 +33,73 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   inspectionsApi,
+  voiceApi,
+  aiApi,
   Inspection,
   InspectionAnswer,
   ChecklistItem,
   InspectionProgress,
 } from '@inspection/shared';
-import VoiceTextArea from '../../components/VoiceTextArea';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+/**
+ * Convert Cloudinary audio URL to MP3 format for better iOS compatibility
+ */
+function getAudioMp3Url(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/f_mp3/');
+}
+
+/**
+ * Generate waveform image URL from Cloudinary audio URL
+ */
+function getWaveformUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return '';
+  return url
+    .replace('/upload/', '/upload/fl_waveform,co_rgb:25D366,b_rgb:DCF8C6,w_200,h_32/')
+    .replace(/\.[^.]+$/, '.png');
+}
+
+/**
+ * Optimize Cloudinary video URL with auto-format and auto-quality
+ * - f_auto: Picks best format for viewer's browser (MP4, WebM, etc.)
+ * - q_auto: Automatic quality optimization (reduces file size 40-60%)
+ */
+function getOptimizedVideoUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/f_auto,q_auto/');
+}
+
+/**
+ * Generate video thumbnail/poster image from Cloudinary video URL
+ * Extracts frame at 1 second as a JPG thumbnail
+ */
+function getVideoThumbnailUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return '';
+  return url
+    .replace('/upload/', '/upload/so_1,w_310,h_220,c_fill,q_auto/')
+    .replace(/\.[^.]+$/, '.jpg');
+}
+
+/**
+ * Optimize Cloudinary image URL with auto-format, auto-quality, and enhancement
+ * - f_auto: Best format for browser (WebP, AVIF, JPEG)
+ * - q_auto: Smart compression (30-50% smaller)
+ * - e_improve: Auto-enhance colors/contrast for poorly lit photos
+ */
+function getOptimizedPhotoUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/f_auto,q_auto,e_improve/');
+}
+
+/**
+ * Generate photo thumbnail for WhatsApp-style bubbles
+ * - Optimized size for quick loading
+ * - c_fill with g_auto for smart cropping
+ */
+function getPhotoThumbnailUrl(url: string, width = 240, height = 180): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},h_${height},c_fill,g_auto/`);
+}
 
 export default function InspectionChecklistPage() {
   const { t, i18n } = useTranslation();
@@ -288,18 +348,6 @@ interface ChecklistItemCardProps {
   isSubmitted: boolean;
 }
 
-function openFileInput(accept: string, capture: boolean, onFile: (file: File) => void) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = accept;
-  if (capture) input.capture = 'environment';
-  input.onchange = () => {
-    const file = input.files?.[0];
-    if (file) onFile(file);
-  };
-  input.click();
-}
-
 function ChecklistItemCard({
   item,
   existingAnswer,
@@ -320,6 +368,40 @@ function ChecklistItemCard({
   const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
   const [photoLoadError, setPhotoLoadError] = useState(false);
 
+  // WhatsApp-style voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isReadingAloud, setIsReadingAloud] = useState(false);
+
+  // Read question aloud using TTS
+  const readAloud = async () => {
+    if (isReadingAloud) return;
+    setIsReadingAloud(true);
+    try {
+      const questionText = getQuestionText(item);
+      const audioBlob = await aiApi.readChecklistItem(questionText, i18n.language);
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => {
+        setIsReadingAloud(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      audio.onerror = () => {
+        setIsReadingAloud(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      audio.play();
+    } catch (err) {
+      console.warn('TTS failed:', err);
+      setIsReadingAloud(false);
+    }
+  };
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
+
   const isFailed = currentValue === 'fail' || currentValue === 'no';
   const hasExistingVoice = !!(existingAnswer?.voice_note_id || voiceNoteId);
   const [showComment, setShowComment] = useState(isFailed || hasExistingVoice || !!existingAnswer?.comment);
@@ -328,57 +410,187 @@ function ChecklistItemCard({
     if (isFailed) setShowComment(true);
   }, [isFailed]);
 
-  // Sync voiceNoteId with existingAnswer updates
   useEffect(() => {
     if (existingAnswer?.voice_note_id) {
       setVoiceNoteId(existingAnswer.voice_note_id);
     }
   }, [existingAnswer?.voice_note_id]);
 
-  const token = localStorage.getItem('access_token') || '';
-
-  // Single voice player: use local blob if just recorded, else server stream
-  const voiceStreamUrl = localBlobUrl
-    ? null
-    : (existingAnswer?.voice_note_id
-      ? `${API_BASE}/api/files/${existingAnswer.voice_note_id}/stream?token=${token}`
-      : null);
-
-  const audioSrc = localBlobUrl || voiceStreamUrl;
-
-  // Photo preview: local blob first (instant), server stream on reload
-  const serverPhotoUrl = existingAnswer?.photo_file
-    ? `${API_BASE}/api/files/${existingAnswer.photo_file.id}/stream?token=${token}`
-    : null;
-  const photoSrc = localPhotoUrl || serverPhotoUrl;
-
-  // Video preview: local blob first, server stream on reload
-  const serverVideoUrl = existingAnswer?.video_file
-    ? `${API_BASE}/api/files/${existingAnswer.video_file.id}/stream?token=${token}`
-    : null;
-  const videoSrc = localVideoUrl || serverVideoUrl;
+  // Cloudinary URLs - direct access, no token needed
+  const voiceUrl = localBlobUrl || existingAnswer?.voice_note?.url || null;
+  const photoUrl = localPhotoUrl || existingAnswer?.photo_file?.url || null;
+  const videoUrl = localVideoUrl || existingAnswer?.video_file?.url || null;
 
   const handleAnswerChange = (value: string) => {
     setCurrentValue(value);
     onAnswer(item.id, value, undefined, voiceNoteId);
   };
 
-  // Upload media mutation (auto-detects photo vs video on backend)
+  // WhatsApp-style hold to record
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      // Start timer
+      timerRef.current = window.setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    } catch {
+      message.error(t('inspection.mic_denied', 'Microphone access denied'));
+    }
+  }, [t]);
+
+  const stopRecording = useCallback(async () => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
+
+    // Clear timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    return new Promise<void>((resolve) => {
+      mediaRecorderRef.current!.onstop = async () => {
+        const stream = mediaRecorderRef.current!.stream;
+        stream.getTracks().forEach((t) => t.stop());
+
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        setIsRecording(false);
+
+        if (blob.size < 100) {
+          message.warning(t('inspection.recording_too_short', 'Recording too short'));
+          resolve();
+          return;
+        }
+
+        // Create local preview
+        const blobUrl = URL.createObjectURL(blob);
+        setLocalBlobUrl(blobUrl);
+
+        // Upload and transcribe
+        setIsTranscribing(true);
+        try {
+          const result = await voiceApi.transcribe(blob, undefined, undefined, i18n.language);
+
+          if (result.audio_file?.id) {
+            setVoiceNoteId(result.audio_file.id);
+            voiceNoteIdRef.current = result.audio_file.id;
+            onAnswer(item.id, currentValue || '', undefined, result.audio_file.id);
+          }
+
+          if (!result.transcription_failed && (result.en || result.ar)) {
+            const parts: string[] = [];
+            if (result.en) parts.push(`EN: ${result.en}`);
+            if (result.ar) parts.push(`AR: ${result.ar}`);
+            const combined = parts.join('\n');
+            onAnswer(item.id, currentValue || '', combined, voiceNoteIdRef.current);
+          }
+
+          refetchInspection();
+        } catch {
+          message.warning(t('inspection.voice_upload_failed', 'Voice upload failed'));
+        } finally {
+          setIsTranscribing(false);
+        }
+
+        resolve();
+      };
+
+      mediaRecorderRef.current!.stop();
+    });
+  }, [currentValue, i18n.language, item.id, onAnswer, refetchInspection, t]);
+
+  // Upload media mutation with AI analysis
   const uploadMediaMutation = useMutation({
-    mutationFn: (file: File) => {
-      // Create local preview immediately
+    mutationFn: async (file: File) => {
       const blobUrl = URL.createObjectURL(file);
-      if (file.type.startsWith('video/')) {
+      const isVideo = file.type.startsWith('video/');
+      if (isVideo) {
         setLocalVideoUrl(blobUrl);
       } else {
         setLocalPhotoUrl(blobUrl);
         setPhotoLoadError(false);
       }
-      return inspectionsApi.uploadMedia(inspectionId, item.id, file);
+      const response = await inspectionsApi.uploadMedia(inspectionId, item.id, file);
+      return { response, isVideo };
     },
-    onSuccess: () => {
+    onSuccess: async ({ response, isVideo }) => {
       message.success(t('inspection.mediaUploaded', 'Media uploaded'));
       refetchInspection();
+
+      // Get the Cloudinary URL from response
+      const data = (response.data as any)?.data;
+      const mediaUrl = isVideo
+        ? data?.video_file?.url || data?.url
+        : data?.photo_file?.url || data?.url;
+
+      if (mediaUrl && mediaUrl.includes('cloudinary.com')) {
+        // Auto-analyze with AI
+        setIsAnalyzing(true);
+        try {
+          // For videos, use thumbnail URL for analysis
+          const analyzeUrl = isVideo
+            ? mediaUrl.replace('/upload/', '/upload/so_1,w_640,h_480,c_fill/').replace(/\.[^.]+$/, '.jpg')
+            : mediaUrl;
+
+          // Get analysis in both languages
+          const [enResult, arResult] = await Promise.all([
+            aiApi.analyzeDefect(analyzeUrl, 'en'),
+            aiApi.analyzeDefect(analyzeUrl, 'ar'),
+          ]);
+
+          const enData = (enResult.data as any)?.data;
+          const arData = (arResult.data as any)?.data;
+
+          if (enData?.success || arData?.success) {
+            // Format analysis as bilingual comment
+            const formatAnalysis = (data: any, lang: string) => {
+              if (!data || !data.success) return '';
+              const prefix = lang === 'en' ? '🔍 AI Analysis (EN)' : '🔍 تحليل الذكاء الاصطناعي (AR)';
+              const lines = [prefix];
+              if (data.description) lines.push(`• ${lang === 'en' ? 'Issue' : 'المشكلة'}: ${data.description}`);
+              if (data.severity) lines.push(`• ${lang === 'en' ? 'Severity' : 'الخطورة'}: ${data.severity}`);
+              if (data.cause) lines.push(`• ${lang === 'en' ? 'Cause' : 'السبب'}: ${data.cause}`);
+              if (data.recommendation) lines.push(`• ${lang === 'en' ? 'Action' : 'الإجراء'}: ${data.recommendation}`);
+              if (data.safety_risk) lines.push(`• ${lang === 'en' ? 'Safety' : 'السلامة'}: ${data.safety_risk}`);
+              return lines.join('\n');
+            };
+
+            const enAnalysis = formatAnalysis(enData, 'en');
+            const arAnalysis = formatAnalysis(arData, 'ar');
+            const combinedAnalysis = [enAnalysis, '', arAnalysis].filter(Boolean).join('\n');
+
+            if (combinedAnalysis) {
+              // Update comment with AI analysis
+              const existingComment = existingAnswer?.comment || '';
+              const newComment = existingComment
+                ? `${existingComment}\n\n${combinedAnalysis}`
+                : combinedAnalysis;
+
+              onAnswer(item.id, currentValue || '', newComment, voiceNoteId);
+              setShowComment(true);
+              message.success(t('inspection.aiAnalysisComplete', 'AI analysis complete'));
+            }
+          }
+        } catch (err) {
+          console.warn('AI analysis failed:', err);
+          // Silent fail - media is still uploaded
+        } finally {
+          setIsAnalyzing(false);
+          refetchInspection();
+        }
+      }
     },
     onError: (err: any) => {
       message.error(err?.response?.data?.message || t('common.error'));
@@ -400,6 +612,7 @@ function ChecklistItemCard({
   const deletePhotoMutation = useMutation({
     mutationFn: () => inspectionsApi.deletePhoto(inspectionId, item.id),
     onSuccess: () => {
+      setLocalPhotoUrl(null);
       message.success(t('inspection.photoDeleted', 'Photo deleted'));
       refetchInspection();
     },
@@ -409,11 +622,25 @@ function ChecklistItemCard({
   const deleteVideoMutation = useMutation({
     mutationFn: () => inspectionsApi.deleteVideo(inspectionId, item.id),
     onSuccess: () => {
+      setLocalVideoUrl(null);
       message.success(t('inspection.videoDeleted', 'Video deleted'));
       refetchInspection();
     },
     onError: () => message.error(t('common.error')),
   });
+
+  // Camera button - opens camera directly
+  const openCamera = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*';
+    input.capture = 'environment';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) uploadMediaMutation.mutate(file);
+    };
+    input.click();
+  };
 
   const renderAnswerInput = () => {
     const disabled = isSubmitted;
@@ -443,17 +670,17 @@ function ChecklistItemCard({
         );
       case 'text':
         return (
-          <VoiceTextArea
-            defaultValue={currentValue}
-            rows={2}
-            placeholder={t('inspection.answer', 'Enter answer')}
+          <InputNumber
+            defaultValue={currentValue ? Number(currentValue) : undefined}
+            placeholder={t('inspection.answer', 'Enter value')}
             disabled={disabled}
-            language={i18n.language}
             onBlur={(e) => {
-              if (e.target.value && e.target.value !== (existingAnswer?.answer_value ?? '')) {
-                onAnswer(item.id, e.target.value, undefined, voiceNoteId);
+              const val = e.target.value;
+              if (val && val !== currentValue) {
+                onAnswer(item.id, val, undefined, voiceNoteId);
               }
             }}
+            style={{ width: '100%' }}
           />
         );
       case 'numeric':
@@ -476,6 +703,12 @@ function ChecklistItemCard({
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <Card
       style={{ marginBottom: 12 }}
@@ -483,6 +716,15 @@ function ChecklistItemCard({
       title={
         <Space wrap>
           <Typography.Text strong>{getQuestionText(item)}</Typography.Text>
+          <Button
+            type="text"
+            size="small"
+            icon={<SoundOutlined />}
+            loading={isReadingAloud}
+            onClick={readAloud}
+            title={t('inspection.readAloud', 'Read aloud')}
+            style={{ color: isReadingAloud ? '#1677ff' : '#999' }}
+          />
           {item.category && (
             <Tag color={item.category === 'mechanical' ? 'blue' : 'gold'}>
               {item.category}
@@ -504,47 +746,49 @@ function ChecklistItemCard({
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         {renderAnswerInput()}
 
-        {/* Action buttons: comment toggle + photo/video upload */}
-        <Space wrap>
-          {!showComment && !isSubmitted && (
-            <Button size="small" type="link" onClick={() => setShowComment(true)}>
-              {t('inspection.comment', 'Comment')}
-            </Button>
-          )}
-
-          {!isSubmitted && (
-            <>
-              <Button
-                size="small"
-                type="link"
-                icon={<CameraOutlined />}
-                loading={uploadMediaMutation.isPending}
-                onClick={() => openFileInput('image/*,video/*', true, (file) => uploadMediaMutation.mutate(file))}
-              >
-                {t('inspection.camera', 'Camera')}
+        {/* Action buttons */}
+        {!isSubmitted && (
+          <Space wrap>
+            {!showComment && (
+              <Button size="small" type="link" onClick={() => setShowComment(true)}>
+                {t('inspection.comment', 'Comment')}
               </Button>
-              <Upload
-                accept="image/*,video/*"
-                showUploadList={false}
-                beforeUpload={(file) => { uploadMediaMutation.mutate(file); return false; }}
-              >
-                <Button size="small" type="link" icon={<PictureOutlined />} loading={uploadMediaMutation.isPending}>
-                  {t('inspection.gallery', 'Gallery')}
-                </Button>
-              </Upload>
-            </>
-          )}
-        </Space>
+            )}
 
-        {/* Photo preview */}
-        {photoSrc && (
+            {/* Camera button - opens camera directly */}
+            <Button
+              size="small"
+              type="primary"
+              icon={<CameraOutlined />}
+              loading={uploadMediaMutation.isPending}
+              onClick={openCamera}
+              style={{ background: '#25D366', borderColor: '#25D366' }}
+            >
+              {t('inspection.camera', 'Camera')}
+            </Button>
+
+            {/* Gallery button */}
+            <Upload
+              accept="image/*,video/*"
+              showUploadList={false}
+              beforeUpload={(file) => { uploadMediaMutation.mutate(file); return false; }}
+            >
+              <Button size="small" icon={<PictureOutlined />} loading={uploadMediaMutation.isPending}>
+                {t('inspection.gallery', 'Gallery')}
+              </Button>
+            </Upload>
+          </Space>
+        )}
+
+        {/* Photo preview - WhatsApp style bubble with Cloudinary optimizations */}
+        {photoUrl && (
           <div style={{
             position: 'relative',
             display: 'inline-block',
-            border: '1px solid #d9d9d9',
-            borderRadius: 4,
+            background: '#DCF8C6',
+            borderRadius: 8,
             padding: 4,
-            background: '#fafafa',
+            maxWidth: 250,
           }}>
             {photoLoadError ? (
               <div style={{
@@ -556,12 +800,28 @@ function ChecklistItemCard({
                 {t('inspection.photo_load_error', 'Photo unavailable')}
               </div>
             ) : (
-              <img
-                src={photoSrc}
-                alt="Inspection photo"
-                style={{ maxWidth: 200, maxHeight: 150, objectFit: 'contain', borderRadius: 4, display: 'block' }}
-                onError={() => setPhotoLoadError(true)}
-              />
+              <a href={getOptimizedPhotoUrl(photoUrl)} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={getPhotoThumbnailUrl(photoUrl)}
+                  alt="Inspection photo"
+                  style={{ maxWidth: 240, maxHeight: 180, objectFit: 'contain', borderRadius: 6, display: 'block', cursor: 'pointer' }}
+                  onError={() => setPhotoLoadError(true)}
+                  title={t('inspection.clickToEnlarge', 'Click to view full size')}
+                />
+              </a>
+            )}
+            {/* AI Analyzing indicator */}
+            {isAnalyzing && (
+              <div style={{
+                position: 'absolute', bottom: 8, left: 8, right: 8,
+                background: 'rgba(0,0,0,0.7)', borderRadius: 4, padding: '4px 8px',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <Spin size="small" />
+                <Typography.Text style={{ color: '#fff', fontSize: 11 }}>
+                  {t('inspection.aiAnalyzing', 'AI Analyzing...')}
+                </Typography.Text>
+              </div>
             )}
             {!isSubmitted && (
               <Button
@@ -575,28 +835,42 @@ function ChecklistItemCard({
                   setLocalPhotoUrl(null);
                   setPhotoLoadError(false);
                 }}
-                style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}
+                style={{ position: 'absolute', top: 8, right: 8 }}
               />
             )}
           </div>
         )}
 
-        {/* Video preview */}
-        {videoSrc && (
+        {/* Video preview - WhatsApp style bubble with Cloudinary optimizations */}
+        {videoUrl && (
           <div style={{
             position: 'relative',
             display: 'inline-block',
-            border: '1px solid #d9d9d9',
-            borderRadius: 4,
+            background: '#DCF8C6',
+            borderRadius: 8,
             padding: 4,
-            background: '#fafafa',
+            maxWidth: 320,
           }}>
             <video
               controls
-              src={videoSrc}
-              style={{ maxWidth: 300, maxHeight: 200, borderRadius: 4, display: 'block' }}
+              src={getOptimizedVideoUrl(videoUrl)}
+              poster={getVideoThumbnailUrl(videoUrl) || undefined}
+              style={{ maxWidth: 310, maxHeight: 220, borderRadius: 6, display: 'block', background: '#000' }}
               preload="metadata"
             />
+            {/* AI Analyzing indicator */}
+            {isAnalyzing && (
+              <div style={{
+                position: 'absolute', bottom: 8, left: 8, right: 8,
+                background: 'rgba(0,0,0,0.7)', borderRadius: 4, padding: '4px 8px',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <Spin size="small" />
+                <Typography.Text style={{ color: '#fff', fontSize: 11 }}>
+                  {t('inspection.aiAnalyzing', 'AI Analyzing...')}
+                </Typography.Text>
+              </div>
+            )}
             {!isSubmitted && (
               <Button
                 type="primary"
@@ -608,88 +882,125 @@ function ChecklistItemCard({
                   deleteVideoMutation.mutate();
                   setLocalVideoUrl(null);
                 }}
-                style={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}
+                style={{ position: 'absolute', top: 8, right: 8 }}
               />
             )}
           </div>
         )}
 
-        {/* Voice recording area — always visible on fail/no */}
-        {showComment && (
-          <div>
-            {!isSubmitted && (
-              <VoiceTextArea
-                value={existingAnswer?.comment ?? ''}
-                rows={2}
-                placeholder={
-                  isFailed
-                    ? t('inspection.fail_comment', 'Record a voice note for failed items...')
-                    : t('inspection.comment', 'Record a voice note...')
-                }
-                disabled={true}
-                language={i18n.language}
-                onVoiceRecorded={(audioFileId) => {
-                  setVoiceNoteId(audioFileId);
-                  voiceNoteIdRef.current = audioFileId;
-                  onAnswer(item.id, currentValue || '', undefined, audioFileId);
-                }}
-                onTranscribed={(en, ar) => {
-                  const parts: string[] = [];
-                  if (en) parts.push(`EN: ${en}`);
-                  if (ar) parts.push(`AR: ${ar}`);
-                  const combined = parts.join('\n');
-                  onAnswer(item.id, currentValue || '', combined, voiceNoteIdRef.current);
-                }}
-                onLocalBlobUrl={(url) => setLocalBlobUrl(url)}
-              />
-            )}
+        {/* Voice recording area */}
+        {showComment && !isSubmitted && (
+          <div style={{
+            background: '#f0f2f5',
+            borderRadius: 24,
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+            {/* Hold to record button - WhatsApp style */}
+            <Button
+              type={isRecording ? 'primary' : 'default'}
+              danger={isRecording}
+              shape="circle"
+              size="large"
+              icon={<AudioOutlined />}
+              loading={isTranscribing}
+              onMouseDown={startRecording}
+              onMouseUp={stopRecording}
+              onMouseLeave={() => isRecording && stopRecording()}
+              onTouchStart={startRecording}
+              onTouchEnd={stopRecording}
+              style={{
+                background: isRecording ? '#ff4d4f' : '#25D366',
+                borderColor: isRecording ? '#ff4d4f' : '#25D366',
+                color: '#fff',
+              }}
+            />
 
-            {/* Single audio player — blob or server stream */}
-            {audioSrc && !isSubmitted && (
-              <div
-                style={{
-                  marginTop: 6,
-                  padding: '6px 10px',
-                  background: '#f0f5ff',
-                  borderRadius: 4,
-                  border: '1px solid #d6e4ff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <SoundOutlined style={{ color: '#1677ff', fontSize: 14 }} />
-                <audio controls src={audioSrc} style={{ height: 32, flex: 1 }} preload="auto" />
-                <Button
-                  type="text"
-                  danger
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  loading={deleteVoiceMutation.isPending}
-                  onClick={() => deleteVoiceMutation.mutate()}
-                />
-              </div>
-            )}
-
-            {/* Read-only: show existing comment text */}
-            {existingAnswer?.comment && (
-              <div style={{ marginTop: 6, padding: '6px 10px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e8e8e8', fontSize: 12 }}>
-                <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{existingAnswer.comment}</Typography.Text>
-              </div>
-            )}
-
-            {/* Validation warning */}
-            {isFailed && !hasExistingVoice && !isSubmitted && (
-              <Typography.Text type="warning" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
-                {t('inspection.fail_requires_voice', 'Voice recording is required for failed items')}
+            {isRecording ? (
+              <Typography.Text style={{ color: '#ff4d4f', fontWeight: 500 }}>
+                {formatTime(recordingTime)} - {t('inspection.release_to_send', 'Release to send')}
               </Typography.Text>
-            )}
-            {isFailed && !existingAnswer?.photo_path && !existingAnswer?.video_path && !isSubmitted && (
-              <Typography.Text type="warning" style={{ fontSize: 12, marginTop: 2, display: 'block' }}>
-                {t('inspection.fail_requires_media', 'Photo or video is required for failed items')}
+            ) : isTranscribing ? (
+              <Typography.Text type="secondary">
+                {t('inspection.transcribing', 'Transcribing...')}
+              </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">
+                {t('inspection.hold_to_record', 'Hold to record')}
               </Typography.Text>
             )}
           </div>
+        )}
+
+        {/* Voice playback - WhatsApp style bubble with waveform */}
+        {voiceUrl && !isSubmitted && (
+          <div style={{
+            background: '#DCF8C6',
+            borderRadius: 8,
+            padding: '8px 12px',
+            maxWidth: 320,
+          }}>
+            {/* Waveform visualization (only for Cloudinary URLs) */}
+            {getWaveformUrl(voiceUrl) && (
+              <img
+                src={getWaveformUrl(voiceUrl)}
+                alt="Audio waveform"
+                style={{
+                  width: '100%',
+                  height: 32,
+                  borderRadius: 4,
+                  marginBottom: 6,
+                  display: 'block',
+                }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* Audio player with MP3 fallback for iOS */}
+              <audio controls style={{ height: 36, flex: 1 }} preload="metadata">
+                {voiceUrl.includes('cloudinary.com') && (
+                  <source src={getAudioMp3Url(voiceUrl)} type="audio/mpeg" />
+                )}
+                <source src={voiceUrl} type="audio/webm" />
+              </audio>
+              <Button
+                type="text"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                loading={deleteVoiceMutation.isPending}
+                onClick={() => deleteVoiceMutation.mutate()}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Comment display */}
+        {existingAnswer?.comment && (
+          <div style={{
+            background: '#DCF8C6',
+            borderRadius: 8,
+            padding: '8px 12px',
+            maxWidth: 400,
+          }}>
+            <Typography.Text style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
+              {existingAnswer.comment}
+            </Typography.Text>
+          </div>
+        )}
+
+        {/* Validation warnings */}
+        {isFailed && !hasExistingVoice && !isSubmitted && (
+          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+            {t('inspection.fail_requires_voice', 'Voice recording is required for failed items')}
+          </Typography.Text>
+        )}
+        {isFailed && !existingAnswer?.photo_path && !existingAnswer?.video_path && !isSubmitted && (
+          <Typography.Text type="warning" style={{ fontSize: 12 }}>
+            {t('inspection.fail_requires_media', 'Photo or video is required for failed items')}
+          </Typography.Text>
         )}
       </Space>
     </Card>

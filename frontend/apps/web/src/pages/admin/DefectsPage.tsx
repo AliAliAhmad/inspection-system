@@ -12,14 +12,18 @@ import {
   Input,
   Space,
   message,
+  List,
+  Spin,
+  Empty,
 } from 'antd';
-import { ToolOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { ToolOutlined, InfoCircleOutlined, SearchOutlined, RobotOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import {
   defectsApi,
   usersApi,
+  aiApi,
   type Defect,
   type DefectStatus,
   type AssignSpecialistPayload,
@@ -61,6 +65,12 @@ export default function DefectsPage() {
   const [assignForm] = Form.useForm();
   const [category, setCategory] = useState<string | undefined>();
 
+  // AI Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['defects', activeStatus, page],
     queryFn: () => defectsApi.list({ status: activeStatus, page, per_page: 20 }).then(r => r.data),
@@ -98,6 +108,28 @@ export default function DefectsPage() {
 
   const specialists: any[] =
     specialistsData?.data?.data || (specialistsData?.data as any)?.data || [];
+
+  // AI Search for similar defects
+  const handleSearchSimilar = async () => {
+    if (!searchQuery.trim()) {
+      message.warning(t('defects.enterSearchQuery', 'Please enter a search query'));
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const response = await aiApi.searchSimilarDefects(searchQuery.trim(), 10);
+      const results = (response.data as any)?.data?.results || [];
+      setSearchResults(results);
+      if (results.length === 0) {
+        message.info(t('defects.noSimilarFound', 'No similar defects found'));
+      }
+    } catch (error) {
+      message.error(t('defects.searchError', 'Failed to search for similar defects'));
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const columns: ColumnsType<Defect> = [
     {
@@ -205,6 +237,14 @@ export default function DefectsPage() {
   return (
     <Card
       title={<Typography.Title level={4}>{t('nav.defects', 'Defects')}</Typography.Title>}
+      extra={
+        <Button
+          icon={<RobotOutlined />}
+          onClick={() => setSearchModalOpen(true)}
+        >
+          {t('defects.findSimilar', 'Find Similar Defects')}
+        </Button>
+      }
     >
       <Tabs
         activeKey={activeStatus || 'all'}
@@ -323,6 +363,107 @@ export default function DefectsPage() {
             </Form.Item>
           )}
         </Form>
+      </Modal>
+
+      {/* AI Search Similar Defects Modal */}
+      <Modal
+        title={
+          <Space>
+            <RobotOutlined />
+            {t('defects.findSimilar', 'Find Similar Defects')}
+          </Space>
+        }
+        open={searchModalOpen}
+        onCancel={() => {
+          setSearchModalOpen(false);
+          setSearchQuery('');
+          setSearchResults([]);
+        }}
+        footer={null}
+        width={700}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text type="secondary">
+            {t('defects.searchHint', 'Describe a defect or issue to find similar past defects using AI')}
+          </Typography.Text>
+        </div>
+        <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('defects.searchPlaceholder', 'e.g., hydraulic leak in cylinder, electrical fault in motor...')}
+            onPressEnter={handleSearchSimilar}
+            disabled={isSearching}
+            style={{ flex: 1 }}
+          />
+          <Button
+            type="primary"
+            icon={<SearchOutlined />}
+            onClick={handleSearchSimilar}
+            loading={isSearching}
+          >
+            {t('common.search', 'Search')}
+          </Button>
+        </Space.Compact>
+
+        {isSearching && (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 16 }}>
+              <Typography.Text type="secondary">
+                {t('defects.searchingAI', 'Searching with AI...')}
+              </Typography.Text>
+            </div>
+          </div>
+        )}
+
+        {!isSearching && searchResults.length > 0 && (
+          <List
+            dataSource={searchResults}
+            renderItem={(item: any) => (
+              <List.Item
+                style={{
+                  background: '#fafafa',
+                  marginBottom: 8,
+                  borderRadius: 8,
+                  padding: 12,
+                }}
+              >
+                <List.Item.Meta
+                  title={
+                    <Space>
+                      <Typography.Text strong>#{item.id}</Typography.Text>
+                      <Tag color={severityColors[item.severity] || 'default'}>
+                        {item.severity?.toUpperCase()}
+                      </Tag>
+                      <Tag color={statusColors[item.status] || 'default'}>
+                        {statusLabels[item.status] || item.status?.toUpperCase()}
+                      </Tag>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {Math.round((item.similarity || 0) * 100)}% {t('defects.similar', 'similar')}
+                      </Typography.Text>
+                    </Space>
+                  }
+                  description={
+                    <Typography.Paragraph
+                      ellipsis={{ rows: 2 }}
+                      style={{ marginBottom: 0 }}
+                    >
+                      {item.description}
+                    </Typography.Paragraph>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        )}
+
+        {!isSearching && searchResults.length === 0 && searchQuery && (
+          <Empty
+            description={t('defects.noResults', 'No similar defects found')}
+            style={{ padding: 40 }}
+          />
+        )}
       </Modal>
     </Card>
   );

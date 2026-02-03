@@ -3,6 +3,7 @@ import { useAuth } from './providers/AuthProvider';
 import AppRouter from './router/AppRouter';
 import LoginPage from './pages/auth/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
+import AiAssistantChat from './components/AiAssistantChat';
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -22,6 +23,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AppRouter />
+      <AiAssistantChat />
     </ErrorBoundary>
   );
 }

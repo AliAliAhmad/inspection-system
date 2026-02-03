@@ -14,12 +14,13 @@ import {
   Typography,
   Tabs,
 } from 'antd';
-import { CheckCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, EyeOutlined, FilePdfOutlined, DownloadOutlined, RobotOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import {
   inspectionsApi,
+  aiApi,
   type Inspection,
   type InspectionStatus,
   type InspectionResult,
@@ -55,6 +56,74 @@ export default function AllInspectionsPage() {
   const [reviewForm] = Form.useForm();
   const [viewOpen, setViewOpen] = useState(false);
   const [viewingInspectionId, setViewingInspectionId] = useState<number | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [generatingAiReport, setGeneratingAiReport] = useState(false);
+  const [aiReportContent, setAiReportContent] = useState<string | null>(null);
+  const [aiReportModalOpen, setAiReportModalOpen] = useState(false);
+
+  const handleGenerateAiReport = async (inspection: Inspection) => {
+    setGeneratingAiReport(true);
+    try {
+      // Prepare inspection data for AI
+      const inspectionData = {
+        id: inspection.id,
+        equipment: inspection.equipment?.name || `Equipment ${inspection.equipment_id}`,
+        equipment_type: inspection.equipment?.equipment_type,
+        technician: inspection.technician?.full_name || `Technician ${inspection.technician_id}`,
+        status: inspection.status,
+        result: inspection.result,
+        started_at: inspection.started_at,
+        submitted_at: inspection.submitted_at,
+        answers: (inspection.answers || []).map((a: any) => ({
+          question: a.checklist_item?.question_text,
+          answer: a.answer_value,
+          comment: a.comment,
+          category: a.checklist_item?.category,
+          critical: a.checklist_item?.critical_failure,
+        })),
+      };
+
+      // Get report in both languages
+      const [enResult, arResult] = await Promise.all([
+        aiApi.generateReport(inspectionData, 'en'),
+        aiApi.generateReport(inspectionData, 'ar'),
+      ]);
+
+      const enReport = (enResult.data as any)?.data?.report || '';
+      const arReport = (arResult.data as any)?.data?.report || '';
+
+      const combinedReport = `📋 INSPECTION REPORT (EN)\n${'='.repeat(50)}\n\n${enReport}\n\n\n📋 تقرير الفحص (AR)\n${'='.repeat(50)}\n\n${arReport}`;
+
+      setAiReportContent(combinedReport);
+      setAiReportModalOpen(true);
+      message.success(t('inspections.aiReportGenerated', 'AI Report generated'));
+    } catch (error) {
+      message.error(t('inspections.aiReportError', 'Failed to generate AI report'));
+    } finally {
+      setGeneratingAiReport(false);
+    }
+  };
+
+  const handleDownloadReport = async (inspectionId: number) => {
+    setDownloadingId(inspectionId);
+    try {
+      const response = await inspectionsApi.downloadReport(inspectionId);
+      const blob = new Blob([response.data as BlobPart], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `inspection_report_${inspectionId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      message.success(t('inspections.reportDownloaded', 'Report downloaded'));
+    } catch (error) {
+      message.error(t('inspections.reportError', 'Failed to download report'));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['inspections', page, perPage, statusFilter],
@@ -145,6 +214,16 @@ export default function AllInspectionsPage() {
           >
             {t('common.view', 'View')}
           </Button>
+          {record.status !== 'draft' && (
+            <Button
+              type="link"
+              icon={<FilePdfOutlined />}
+              loading={downloadingId === record.id}
+              onClick={() => handleDownloadReport(record.id)}
+            >
+              PDF
+            </Button>
+          )}
           {record.status === 'submitted' && (
             <Button type="link" icon={<CheckCircleOutlined />} onClick={() => openReview(record)}>
               {t('inspections.review', 'Review')}
@@ -237,7 +316,27 @@ export default function AllInspectionsPage() {
           setViewOpen(false);
           setViewingInspectionId(null);
         }}
-        footer={null}
+        footer={
+          viewInspectionQuery.data && viewInspectionQuery.data.status !== 'draft' ? (
+            <Space>
+              <Button
+                icon={<RobotOutlined />}
+                loading={generatingAiReport}
+                onClick={() => viewInspectionQuery.data && handleGenerateAiReport(viewInspectionQuery.data)}
+              >
+                {t('inspections.aiReport', 'AI Report')}
+              </Button>
+              <Button
+                type="primary"
+                icon={<DownloadOutlined />}
+                loading={downloadingId === viewingInspectionId}
+                onClick={() => viewingInspectionId && handleDownloadReport(viewingInspectionId)}
+              >
+                {t('inspections.downloadReport', 'Download PDF Report')}
+              </Button>
+            </Space>
+          ) : null
+        }
         width={700}
         destroyOnClose
       >
@@ -290,6 +389,45 @@ export default function AllInspectionsPage() {
             ))}
           </Space>
         )}
+      </Modal>
+
+      {/* AI Report Modal */}
+      <Modal
+        title={
+          <Space>
+            <RobotOutlined />
+            {t('inspections.aiReport', 'AI Generated Report')}
+          </Space>
+        }
+        open={aiReportModalOpen}
+        onCancel={() => {
+          setAiReportModalOpen(false);
+          setAiReportContent(null);
+        }}
+        footer={
+          <Button onClick={() => {
+            if (aiReportContent) {
+              navigator.clipboard.writeText(aiReportContent);
+              message.success(t('common.copied', 'Copied to clipboard'));
+            }
+          }}>
+            {t('common.copy', 'Copy to Clipboard')}
+          </Button>
+        }
+        width={800}
+      >
+        <div style={{
+          maxHeight: '60vh',
+          overflowY: 'auto',
+          background: '#f5f5f5',
+          padding: 16,
+          borderRadius: 8,
+          whiteSpace: 'pre-wrap',
+          fontFamily: 'monospace',
+          fontSize: 13,
+        }}>
+          {aiReportContent}
+        </div>
       </Modal>
     </Card>
   );

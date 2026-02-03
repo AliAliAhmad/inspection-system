@@ -12,14 +12,14 @@ export interface InspectionAnswerSummary {
     id: number;
     original_filename: string;
     mime_type: string;
-    download_url: string;
+    url: string | null;  // Cloudinary URL - direct access
   } | null;
   video_path: string | null;
   video_file: {
     id: number;
     original_filename: string;
     mime_type: string;
-    download_url: string;
+    url: string | null;  // Cloudinary URL - direct access
   } | null;
   voice_note_id: number | null;
   voice_note: {
@@ -27,6 +27,7 @@ export interface InspectionAnswerSummary {
     filename: string;
     original_filename: string;
     mime_type: string;
+    url: string | null;  // Cloudinary URL - direct access
   } | null;
   checklist_item: {
     id: number;

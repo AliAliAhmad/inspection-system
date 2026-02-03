@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { Card, Tag, Typography, Space } from 'antd';
-import { SoundOutlined, PictureOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
+import { Card, Tag, Typography, Space, Button, Tooltip } from 'antd';
+import { SoundOutlined, PictureOutlined, VideoCameraOutlined, WarningOutlined, BgColorsOutlined, TagsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { InspectionAnswerSummary } from '@inspection/shared';
-
-const API_BASE = import.meta.env.VITE_API_URL || '';
 
 interface InspectionFindingCardProps {
   answer: InspectionAnswerSummary;
@@ -18,27 +16,95 @@ const answerColors: Record<string, string> = {
   yes: 'green',
 };
 
+/**
+ * Convert Cloudinary audio URL to MP3 format for better iOS compatibility
+ */
+function getAudioMp3Url(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  // Insert f_mp3 transformation
+  return url.replace('/upload/', '/upload/f_mp3/');
+}
+
+/**
+ * Generate waveform image URL from Cloudinary audio URL
+ */
+function getWaveformUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return '';
+  // Generate waveform: blue color, white background, 280x40 size
+  return url
+    .replace('/upload/', '/upload/fl_waveform,co_rgb:1677ff,b_rgb:f0f5ff,w_280,h_40/')
+    .replace(/\.[^.]+$/, '.png'); // Change extension to png
+}
+
+/**
+ * Optimize Cloudinary video URL with auto-format and auto-quality
+ * - f_auto: Picks best format for viewer's browser (MP4, WebM, etc.)
+ * - q_auto: Automatic quality optimization (reduces file size 40-60%)
+ */
+function getOptimizedVideoUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/f_auto,q_auto/');
+}
+
+/**
+ * Generate video thumbnail/poster image from Cloudinary video URL
+ * Extracts frame at 1 second as a JPG thumbnail
+ */
+function getVideoThumbnailUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return '';
+  return url
+    .replace('/upload/', '/upload/so_1,w_400,h_250,c_fill,q_auto/')
+    .replace(/\.[^.]+$/, '.jpg');
+}
+
+/**
+ * Optimize Cloudinary image URL with auto-format, auto-quality, and enhancement
+ * - f_auto: Best format for browser (WebP, AVIF, JPEG)
+ * - q_auto: Smart compression (30-50% smaller)
+ * - e_improve: Auto-enhance colors/contrast for poorly lit photos
+ */
+function getOptimizedPhotoUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/f_auto,q_auto,e_improve/');
+}
+
+/**
+ * Generate photo thumbnail for list views
+ * - Small size for fast loading
+ * - c_fill with g_auto for smart cropping
+ */
+function getPhotoThumbnailUrl(url: string, width = 300, height = 200): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},h_${height},c_fill,g_auto/`);
+}
+
+/**
+ * Remove background from image using Cloudinary AI
+ * - e_background_removal: AI-powered background removal
+ */
+function getBackgroundRemovedUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/e_background_removal/');
+}
+
 export default function InspectionFindingCard({ answer, title }: InspectionFindingCardProps) {
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === 'ar';
-  const token = localStorage.getItem('access_token') || '';
   const [photoLoadError, setPhotoLoadError] = useState(false);
+  const [showBgRemoved, setShowBgRemoved] = useState(false);
 
   const questionText = isArabic && answer.checklist_item?.question_text_ar
     ? answer.checklist_item.question_text_ar
     : answer.checklist_item?.question_text || '';
 
-  const photoStreamUrl = answer.photo_file
-    ? `${API_BASE}/api/files/${answer.photo_file.id}/stream?token=${token}`
-    : null;
+  // Cloudinary URLs - direct access, no token needed
+  const photoFile = answer.photo_file as any;
+  const photoUrl = photoFile?.url || null;
+  const videoUrl = (answer.video_file as any)?.url || null;
+  const voiceUrl = (answer.voice_note as any)?.url || null;
 
-  const videoStreamUrl = answer.video_file
-    ? `${API_BASE}/api/files/${answer.video_file.id}/stream?token=${token}`
-    : null;
-
-  const voiceStreamUrl = answer.voice_note_id
-    ? `${API_BASE}/api/files/${answer.voice_note_id}/stream?token=${token}`
-    : null;
+  // AI tags from Cloudinary (auto-detected objects, scenes, etc.)
+  const aiTags = photoFile?.ai_tags as Array<{ tag: string; confidence: number }> | null;
 
   return (
     <Card
@@ -85,12 +151,23 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
           </Tag>
         </div>
 
-        {/* Photo */}
-        {photoStreamUrl && (
+        {/* Photo - with Cloudinary optimizations and AI features */}
+        {photoUrl && (
           <div style={{ background: '#fff', padding: '8px 12px', borderRadius: 4, border: '1px solid #f0f0f0' }}>
-            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              <PictureOutlined /> {t('inspection.photo', 'Photo')}:
-            </Typography.Text>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                <PictureOutlined /> {t('inspection.photo', 'Photo')}:
+              </Typography.Text>
+              <Tooltip title={showBgRemoved ? t('inspection.showOriginal', 'Show original') : t('inspection.removeBg', 'Remove background')}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<BgColorsOutlined />}
+                  onClick={() => setShowBgRemoved(!showBgRemoved)}
+                  style={{ color: showBgRemoved ? '#1677ff' : '#999' }}
+                />
+              </Tooltip>
+            </div>
             {photoLoadError ? (
               <div style={{
                 width: 200, height: 120,
@@ -101,49 +178,94 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
                 {t('inspection.photo_load_error', 'Photo unavailable')}
               </div>
             ) : (
-              <img
-                src={photoStreamUrl}
-                alt="Inspection photo"
-                style={{ maxWidth: 300, maxHeight: 200, objectFit: 'contain', borderRadius: 4, display: 'block' }}
-                onError={() => setPhotoLoadError(true)}
-              />
+              <a href={showBgRemoved ? getBackgroundRemovedUrl(photoUrl) : photoUrl} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={showBgRemoved ? getBackgroundRemovedUrl(getPhotoThumbnailUrl(photoUrl)) : getPhotoThumbnailUrl(photoUrl)}
+                  alt="Inspection photo"
+                  style={{
+                    maxWidth: 300, maxHeight: 200, objectFit: 'contain', borderRadius: 4, display: 'block', cursor: 'pointer',
+                    background: showBgRemoved ? '#f5f5f5' : 'transparent'
+                  }}
+                  onError={() => setPhotoLoadError(true)}
+                  title={t('inspection.clickToEnlarge', 'Click to view full size')}
+                />
+              </a>
+            )}
+            {/* AI-detected tags */}
+            {aiTags && aiTags.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                  <TagsOutlined /> {t('inspection.aiDetected', 'AI Detected')}:
+                </Typography.Text>
+                <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {aiTags.slice(0, 5).map((tag, idx) => (
+                    <Tag key={idx} color="blue" style={{ fontSize: 11, margin: 0 }}>
+                      {tag.tag} {tag.confidence < 1 && `(${Math.round(tag.confidence * 100)}%)`}
+                    </Tag>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
 
-        {/* Video */}
-        {videoStreamUrl && (
+        {/* Video - with Cloudinary optimizations */}
+        {videoUrl && (
           <div style={{ background: '#fff', padding: '8px 12px', borderRadius: 4, border: '1px solid #f0f0f0' }}>
             <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
               <VideoCameraOutlined /> {t('inspection.video', 'Video')}:
             </Typography.Text>
             <video
               controls
-              src={videoStreamUrl}
-              style={{ maxWidth: 400, maxHeight: 250, borderRadius: 4 }}
+              src={getOptimizedVideoUrl(videoUrl)}
+              poster={getVideoThumbnailUrl(videoUrl) || undefined}
+              style={{ maxWidth: 400, maxHeight: 250, borderRadius: 4, background: '#000' }}
               preload="metadata"
             />
           </div>
         )}
 
-        {/* Voice note */}
-        {voiceStreamUrl && (
+        {/* Voice note with waveform */}
+        {voiceUrl && (
           <div
             style={{
               background: '#f0f5ff',
-              padding: '8px 12px',
-              borderRadius: 4,
+              padding: '12px',
+              borderRadius: 8,
               border: '1px solid #d6e4ff',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
             }}
           >
-            <SoundOutlined style={{ color: '#1677ff', fontSize: 14 }} />
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t('inspection.voiceNote', 'Voice Note')}:
-            </Typography.Text>
-            <audio controls src={voiceStreamUrl} style={{ height: 32, flex: 1 }} preload="auto" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <SoundOutlined style={{ color: '#1677ff', fontSize: 16 }} />
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('inspection.voiceNote', 'Voice Note')}
+              </Typography.Text>
+            </div>
+            {/* Waveform visualization */}
+            {getWaveformUrl(voiceUrl) && (
+              <img
+                src={getWaveformUrl(voiceUrl)}
+                alt="Audio waveform"
+                style={{
+                  width: '100%',
+                  maxWidth: 280,
+                  height: 40,
+                  borderRadius: 4,
+                  marginBottom: 8,
+                  display: 'block',
+                }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
+            {/* Audio player with MP3 fallback for iOS */}
+            <audio
+              controls
+              style={{ width: '100%', height: 36 }}
+              preload="metadata"
+            >
+              <source src={getAudioMp3Url(voiceUrl)} type="audio/mpeg" />
+              <source src={voiceUrl} type="audio/webm" />
+            </audio>
           </div>
         )}
 

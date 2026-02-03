@@ -1,6 +1,6 @@
 """
 Voice transcription and translation API endpoints.
-Records audio → saves file permanently → Whisper transcription → bilingual output (EN + AR).
+Records audio → uploads to Cloudinary → Whisper transcription → bilingual output (EN + AR).
 The audio file is always saved even if transcription fails.
 """
 
@@ -8,6 +8,7 @@ import os
 import tempfile
 import logging
 import subprocess
+import requests
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.translation_service import TranslationService
@@ -54,6 +55,27 @@ def _convert_to_wav(source_path):
                 pass
         return source_path
 
+
+def _download_from_cloudinary(url, suffix='.webm'):
+    """
+    Download file from Cloudinary URL to a temp file for processing.
+    Returns the temp file path.
+    """
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        tmp.write(response.content)
+        tmp.close()
+
+        logger.info("Downloaded from Cloudinary: %s bytes", len(response.content))
+        return tmp.name
+    except Exception as e:
+        logger.error("Failed to download from Cloudinary: %s", e)
+        return None
+
+
 bp = Blueprint('voice', __name__)
 
 
@@ -61,7 +83,7 @@ bp = Blueprint('voice', __name__)
 @jwt_required()
 def transcribe():
     """
-    Save an audio recording and transcribe it to both English and Arabic text.
+    Save an audio recording to Cloudinary and transcribe it to both English and Arabic text.
 
     Accepts: multipart/form-data with 'audio' file field.
              Optional: 'related_type', 'related_id' for linking the audio to an entity.
@@ -69,7 +91,7 @@ def transcribe():
         "status": "success",
         "data": {
             "en": "...", "ar": "...", "detected_language": "en|ar",
-            "audio_file": { file record dict },
+            "audio_file": { file record dict with Cloudinary URL },
             "transcription_failed": false
         }
     }
@@ -91,15 +113,19 @@ def transcribe():
         except (ValueError, TypeError):
             related_id = None
 
-    # --- 1. Save the audio file permanently ---
+    # --- 1. Read audio content before upload (needed for both upload and transcription) ---
+    audio_content = audio_file.read()
+    audio_file.seek(0)  # Reset for upload
+
+    # Ensure filename has an extension
+    filename = audio_file.filename or 'recording.webm'
+    if '.' not in filename:
+        filename = filename + '.webm'
+    audio_file.filename = filename
+
+    # --- 2. Save the audio file to Cloudinary ---
     audio_file_record = None
     try:
-        # Ensure filename has an extension
-        filename = audio_file.filename or 'recording.webm'
-        if '.' not in filename:
-            filename = filename + '.webm'
-        audio_file.filename = filename
-
         audio_file_record = FileService.upload_file(
             file=audio_file,
             uploaded_by=user_id,
@@ -107,16 +133,18 @@ def transcribe():
             related_id=related_id,
             category='voice_notes',
         )
-        logger.info("Voice recording saved: file_id=%s user_id=%s", audio_file_record.id, user_id)
+        logger.info("Voice recording saved to Cloudinary: file_id=%s user_id=%s url=%s",
+                    audio_file_record.id, user_id, audio_file_record.file_path)
     except Exception as e:
         logger.error("Failed to save voice recording: %s", e)
         # Continue to try transcription even if file save fails
 
-    # --- 2. Attempt transcription ---
+    # --- 3. Attempt transcription ---
     en_text = ''
     ar_text = ''
     detected_language = 'unknown'
     transcription_failed = False
+    temp_files_to_cleanup = []
 
     try:
         from openai import OpenAI
@@ -128,63 +156,53 @@ def transcribe():
         else:
             client = OpenAI(api_key=api_key)
 
-            # We need to read from the saved file (audio_file stream was consumed by upload)
-            if audio_file_record and os.path.exists(audio_file_record.file_path):
-                source_path = audio_file_record.file_path
-            else:
-                # Fallback: re-read from request if file save failed
-                audio_file.seek(0)
-                suffix = _get_suffix(audio_file.filename or 'audio.webm')
-                tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-                audio_file.save(tmp)
-                tmp.close()
-                source_path = tmp.name
+            # Create temp file from audio content for Whisper
+            suffix = _get_suffix(filename)
+            tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+            tmp.write(audio_content)
+            tmp.close()
+            source_path = tmp.name
+            temp_files_to_cleanup.append(source_path)
 
             # Convert to WAV for better Whisper accuracy
             whisper_path = _convert_to_wav(source_path)
-            wav_was_created = (whisper_path != source_path)
+            if whisper_path != source_path:
+                temp_files_to_cleanup.append(whisper_path)
 
-            try:
-                # Build Whisper API kwargs
-                whisper_kwargs = {
-                    'model': 'whisper-1',
-                    'response_format': 'verbose_json',
-                    'prompt': WHISPER_PROMPT,
-                }
-                if language_hint in ('en', 'ar'):
-                    whisper_kwargs['language'] = language_hint
+            # Build Whisper API kwargs
+            whisper_kwargs = {
+                'model': 'whisper-1',
+                'response_format': 'verbose_json',
+                'prompt': WHISPER_PROMPT,
+            }
+            if language_hint in ('en', 'ar'):
+                whisper_kwargs['language'] = language_hint
 
-                with open(whisper_path, 'rb') as f:
-                    whisper_kwargs['file'] = f
-                    transcript = client.audio.transcriptions.create(**whisper_kwargs)
+            with open(whisper_path, 'rb') as f:
+                whisper_kwargs['file'] = f
+                transcript = client.audio.transcriptions.create(**whisper_kwargs)
 
-                text = transcript.text.strip() if transcript.text else ''
-                detected_language = getattr(transcript, 'language', None) or 'unknown'
+            text = transcript.text.strip() if transcript.text else ''
+            detected_language = getattr(transcript, 'language', None) or 'unknown'
 
-                if text:
-                    result = TranslationService.auto_translate(text)
-                    en_text = result.get('en') or text
-                    ar_text = result.get('ar') or text
-
-            finally:
-                # Clean up WAV temp file
-                if wav_was_created and os.path.exists(whisper_path):
-                    try:
-                        os.unlink(whisper_path)
-                    except OSError:
-                        pass
-                # Clean up temp file if we created one from fallback
-                if not audio_file_record or not os.path.exists(audio_file_record.file_path):
-                    try:
-                        os.unlink(source_path)
-                    except OSError:
-                        pass
+            if text:
+                result = TranslationService.auto_translate(text)
+                en_text = result.get('en') or text
+                ar_text = result.get('ar') or text
 
     except Exception as e:
         logger.error("Voice transcription failed: %s", e)
         transcription_failed = True
+    finally:
+        # Clean up temp files
+        for temp_file in temp_files_to_cleanup:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+            except OSError:
+                pass
 
-    # --- 3. Build response ---
+    # --- 4. Build response ---
     response_data = {
         'en': en_text,
         'ar': ar_text,

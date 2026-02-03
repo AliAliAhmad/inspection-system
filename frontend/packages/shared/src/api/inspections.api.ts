@@ -98,4 +98,11 @@ export const inspectionsApi = {
   remove(id: number) {
     return getApiClient().delete<ApiResponse>(`/api/inspections/${id}`);
   },
+
+  /** Download PDF report for an inspection */
+  downloadReport(id: number) {
+    return getApiClient().get(`/api/inspections/${id}/report`, {
+      responseType: 'blob',
+    });
+  },
 };
