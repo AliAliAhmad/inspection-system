@@ -195,7 +195,7 @@ class FileService:
         )
         os.makedirs(upload_dir, exist_ok=True)
 
-        file_path = os.path.join(upload_dir, unique_name)
+        file_path = os.path.abspath(os.path.join(upload_dir, unique_name))
         file.save(file_path)
 
         # Validate file content matches extension (magic bytes check)

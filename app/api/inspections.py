@@ -593,19 +593,45 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
     Appends result to the answer's comment field.
     """
     import threading
+    import os
+    import base64
+    import logging
     from flask import current_app
+
+    logger = logging.getLogger(__name__)
+
+    # Read file content NOW before spawning thread (file might be deleted later on Render)
+    if not os.path.exists(file_path):
+        logger.warning("Analysis skipped: file not found at upload time: %s", file_path)
+        return
+
+    try:
+        with open(file_path, 'rb') as f:
+            file_data = f.read()
+    except Exception as e:
+        logger.warning("Analysis skipped: could not read file %s: %s", file_path, e)
+        return
+
+    # Skip very large files
+    if len(file_data) > 10 * 1024 * 1024:
+        logger.info("Analysis skipped: file too large (%s bytes)", len(file_data))
+        return
+
+    # Determine mime type from extension
+    ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
+    mime_map = {
+        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+        'gif': 'image/gif', 'webp': 'image/webp', 'mp4': 'video/mp4',
+    }
+    mime = mime_map.get(ext, 'image/jpeg')
+    b64_data = base64.b64encode(file_data).decode('utf-8')
 
     app = current_app._get_current_object()
 
+    logger.info("Starting media analysis: file=%s type=%s inspection=%s item=%s size=%s",
+                file_path, media_type, inspection_id, checklist_item_id, len(file_data))
+
     def _run_analysis():
-        import os
-        import base64
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.info("Starting media analysis: file=%s type=%s inspection=%s item=%s",
-                    file_path, media_type, inspection_id, checklist_item_id)
-
         with app.app_context():
             try:
                 for attempt in range(2):  # Retry once on failure
@@ -615,31 +641,8 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
                             logger.warning("Analysis skipped: OPENAI_API_KEY not set")
                             return
 
-                        if not os.path.exists(file_path):
-                            logger.warning("Analysis skipped: file not found: %s", file_path)
-                            return
-
                         from openai import OpenAI
                         client = OpenAI(api_key=api_key)
-
-                        # Read and encode the image
-                        with open(file_path, 'rb') as f:
-                            data = f.read()
-
-                        # Skip very large files
-                        if len(data) > 10 * 1024 * 1024:
-                            logger.info("Analysis skipped: file too large (%s bytes)", len(data))
-                            return
-
-                        b64 = base64.b64encode(data).decode('utf-8')
-
-                        # Determine mime type
-                        ext = file_path.rsplit('.', 1)[-1].lower() if '.' in file_path else 'jpg'
-                        mime_map = {
-                            'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
-                            'gif': 'image/gif', 'webp': 'image/webp', 'mp4': 'video/mp4',
-                        }
-                        mime = mime_map.get(ext, 'image/jpeg')
 
                         prompt = (
                             "Describe what you see in this inspection image in 1-2 short sentences. "
@@ -647,6 +650,7 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
                             "Be concise and specific."
                         )
 
+                        # Use b64_data and mime computed before thread started
                         response = client.chat.completions.create(
                             model='gpt-4o-mini',
                             messages=[{
@@ -654,7 +658,7 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
                                 'content': [
                                     {'type': 'text', 'text': prompt},
                                     {'type': 'image_url', 'image_url': {
-                                        'url': f'data:{mime};base64,{b64}',
+                                        'url': f'data:{mime};base64,{b64_data}',
                                         'detail': 'low',
                                     }}
                                 ]
