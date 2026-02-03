@@ -603,6 +603,8 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
         import logging
 
         logger = logging.getLogger(__name__)
+        logger.info("Starting media analysis: file=%s type=%s inspection=%s item=%s",
+                    file_path, media_type, inspection_id, checklist_item_id)
 
         with app.app_context():
             try:
@@ -610,6 +612,7 @@ def _analyze_media_async(file_path, media_type, inspection_id, checklist_item_id
                     try:
                         api_key = os.getenv('OPENAI_API_KEY')
                         if not api_key:
+                            logger.warning("Analysis skipped: OPENAI_API_KEY not set")
                             return
 
                         if not os.path.exists(file_path):

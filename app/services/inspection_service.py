@@ -57,14 +57,22 @@ class InspectionService:
             raise ForbiddenError("You are not assigned to inspect this equipment")
 
         # Check for existing draft inspection
-        existing_draft = Inspection.query.filter_by(
-            equipment_id=equipment_id,
-            technician_id=technician_id,
-            status='draft'
-        ).first()
+        # If assignment_id is provided, check by assignment; otherwise by equipment
+        if assignment_id:
+            existing_draft = Inspection.query.filter_by(
+                assignment_id=assignment_id,
+                technician_id=technician_id,
+                status='draft'
+            ).first()
+        else:
+            existing_draft = Inspection.query.filter_by(
+                equipment_id=equipment_id,
+                technician_id=technician_id,
+                status='draft'
+            ).first()
 
         if existing_draft:
-            raise ValidationError("Draft inspection already exists for this equipment")
+            raise ValidationError("Draft inspection already exists for this assignment")
 
         # Get template: prefer explicit template_id (from assignment), then assignment's template_id
         if not template_id and assignment.template_id:
