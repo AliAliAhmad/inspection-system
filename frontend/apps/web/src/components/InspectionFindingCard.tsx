@@ -1,4 +1,5 @@
-import { Card, Tag, Typography, Space, Image } from 'antd';
+import { useState } from 'react';
+import { Card, Tag, Typography, Space } from 'antd';
 import { SoundOutlined, PictureOutlined, VideoCameraOutlined, WarningOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { InspectionAnswerSummary } from '@inspection/shared';
@@ -21,6 +22,7 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === 'ar';
   const token = localStorage.getItem('access_token') || '';
+  const [photoLoadError, setPhotoLoadError] = useState(false);
 
   const questionText = isArabic && answer.checklist_item?.question_text_ar
     ? answer.checklist_item.question_text_ar
@@ -89,12 +91,23 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
             <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
               <PictureOutlined /> {t('inspection.photo', 'Photo')}:
             </Typography.Text>
-            <Image
-              src={photoStreamUrl}
-              alt="Inspection photo"
-              style={{ maxWidth: 300, maxHeight: 200, objectFit: 'contain', borderRadius: 4 }}
-              fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN88P/BfwAJhAPk4kCKjgAAAABJRU5ErkJggg=="
-            />
+            {photoLoadError ? (
+              <div style={{
+                width: 200, height: 120,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#999', fontSize: 12, background: '#fafafa', borderRadius: 4,
+              }}>
+                <PictureOutlined style={{ fontSize: 24, marginRight: 8 }} />
+                {t('inspection.photo_load_error', 'Photo unavailable')}
+              </div>
+            ) : (
+              <img
+                src={photoStreamUrl}
+                alt="Inspection photo"
+                style={{ maxWidth: 300, maxHeight: 200, objectFit: 'contain', borderRadius: 4, display: 'block' }}
+                onError={() => setPhotoLoadError(true)}
+              />
+            )}
           </div>
         )}
 

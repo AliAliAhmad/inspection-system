@@ -86,14 +86,24 @@ class InspectionService:
                 )
 
         # Generate inspection code: ASSET-ORDER-DATE
+        # Use a unique counter that accounts for ALL inspections for this equipment (not just today)
+        # to avoid UNIQUE constraint violations
         now = datetime.utcnow()
         date_str = now.strftime('%Y%m%d')
-        existing_count = Inspection.query.filter(
-            Inspection.equipment_id == equipment_id,
-            Inspection.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
-        ).count()
-        order_num = existing_count + 1
         asset_code = equipment.serial_number if equipment.serial_number else f'EQ{equipment_id}'
+
+        # Get the highest order number for this asset code prefix to avoid collisions
+        import re
+        existing_codes = db.session.query(Inspection.inspection_code).filter(
+            Inspection.inspection_code.like(f'{asset_code}-%')
+        ).all()
+        max_order = 0
+        for (code,) in existing_codes:
+            if code:
+                match = re.search(rf'^{re.escape(asset_code)}-(\d+)-', code)
+                if match:
+                    max_order = max(max_order, int(match.group(1)))
+        order_num = max_order + 1
         inspection_code = f'{asset_code}-{order_num:03d}-{date_str}'
 
         # Create new inspection
