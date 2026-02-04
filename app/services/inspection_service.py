@@ -342,7 +342,14 @@ class InspectionService:
         inspection.status = 'submitted'
         inspection.result = 'fail' if failed_answers else 'pass'
         inspection.submitted_at = datetime.utcnow()
-        
+
+        # Update assignment status to completed
+        if inspection.assignment_id:
+            from app.models import InspectionAssignment
+            assignment = db.session.get(InspectionAssignment, inspection.assignment_id)
+            if assignment:
+                assignment.status = 'completed'
+
         db.session.commit()
         
         # Update weekly completion tracking
