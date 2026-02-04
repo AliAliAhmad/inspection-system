@@ -25,7 +25,7 @@ class Config:
 
     # File uploads
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', os.path.join(basedir, 'instance', 'uploads'))
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size (videos can be large)
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
 
     # Rate limiting
