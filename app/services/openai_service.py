@@ -44,17 +44,17 @@ class VisionService:
 
         lang_instruction = "Respond in Arabic." if language == 'ar' else "Respond in English."
 
-        prompt = f"""You are an industrial equipment inspection expert. Analyze this inspection photo and provide:
+        prompt = f"""You are an industrial equipment inspection expert. Analyze this inspection photo:
 
-1. **Defect Description**: What problem do you see? Be specific about the type of damage/issue.
-2. **Location**: Where on the equipment is the defect located?
-3. **Severity**: Rate as CRITICAL, HIGH, MEDIUM, or LOW
-4. **Cause**: What likely caused this issue?
-5. **Recommendation**: What action should be taken and how urgently?
-6. **Safety Risk**: Any immediate safety concerns?
+1. **Description**: What do you see in this image? Describe the equipment, component, or area shown.
+2. **Condition**: Is there any visible damage, wear, defect, or issue? If everything looks normal, say "No issues detected - equipment appears in good condition".
+3. **Severity**: If issues found, rate as CRITICAL, HIGH, MEDIUM, or LOW. If no issues, say "N/A".
+4. **Cause**: If issues found, what likely caused them? If no issues, say "N/A".
+5. **Recommendation**: What action should be taken? If no issues, say "Continue regular maintenance".
+6. **Safety Risk**: Any safety concerns? If none, say "None identified".
 
 {lang_instruction}
-Format your response as JSON with keys: description, location, severity, cause, recommendation, safety_risk"""
+Format your response as JSON with keys: description, severity, cause, recommendation, safety_risk"""
 
         try:
             response = client.chat.completions.create(

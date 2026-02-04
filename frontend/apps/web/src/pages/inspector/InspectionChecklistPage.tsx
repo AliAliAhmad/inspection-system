@@ -102,6 +102,148 @@ function getPhotoThumbnailUrl(url: string, width = 240, height = 180): string {
   return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},h_${height},c_fill,g_auto/`);
 }
 
+// Custom Voice Player component to handle webm duration issues
+function VoicePlayer({ url, onDelete, isDeleting }: { url: string; onDelete?: () => void; isDeleting?: boolean }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Use MP3 version from Cloudinary for better compatibility
+  const audioUrl = url.includes('cloudinary.com') ? getAudioMp3Url(url) : url;
+  const waveformUrl = url.includes('cloudinary.com') ? getWaveformUrl(url) : '';
+
+  useEffect(() => {
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+
+    audio.addEventListener('loadedmetadata', () => {
+      if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    });
+
+    audio.addEventListener('durationchange', () => {
+      if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      setCurrentTime(audio.currentTime);
+      // Update duration if we get it during playback
+      if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration) && duration === 0) {
+        setDuration(audio.duration);
+      }
+    });
+
+    audio.addEventListener('ended', () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    });
+
+    audio.addEventListener('error', () => {
+      console.warn('Audio load error, trying original URL');
+      // Fallback to original URL if MP3 conversion fails
+      if (audio.src !== url) {
+        audio.src = url;
+      }
+    });
+
+    // Force load to get duration
+    audio.load();
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, [audioUrl, url]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch(err => {
+        console.error('Play failed:', err);
+      });
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds) || seconds === Infinity) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div style={{
+      background: '#DCF8C6',
+      borderRadius: 8,
+      padding: '8px 12px',
+      maxWidth: 320,
+    }}>
+      {waveformUrl && (
+        <img
+          src={waveformUrl}
+          alt="Audio waveform"
+          style={{
+            width: '100%',
+            height: 32,
+            borderRadius: 4,
+            marginBottom: 6,
+            display: 'block',
+          }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        />
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Button
+          type="primary"
+          shape="circle"
+          size="small"
+          icon={isPlaying ? <span style={{ fontSize: 10 }}>⏸</span> : <span style={{ fontSize: 10 }}>▶</span>}
+          onClick={togglePlay}
+          style={{ background: '#25D366', borderColor: '#25D366', minWidth: 28, width: 28, height: 28 }}
+        />
+        <div style={{ flex: 1 }}>
+          <div style={{
+            height: 4,
+            background: '#c5e1a5',
+            borderRadius: 2,
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%',
+              width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%',
+              background: '#25D366',
+              transition: 'width 0.1s',
+            }} />
+          </div>
+          <Typography.Text style={{ fontSize: 10, color: '#666' }}>
+            {formatTime(currentTime)} / {duration > 0 ? formatTime(duration) : '--:--'}
+          </Typography.Text>
+        </div>
+        {onDelete && (
+          <Button
+            type="text"
+            danger
+            size="small"
+            icon={<DeleteOutlined />}
+            loading={isDeleting}
+            onClick={onDelete}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function InspectionChecklistPage() {
   const { t, i18n } = useTranslation();
   const { id } = useParams<{ id: string }>();
@@ -1092,65 +1234,13 @@ function ChecklistItemCard({
           </div>
         )}
 
-        {/* Voice playback - WhatsApp style bubble with waveform */}
+        {/* Voice playback - WhatsApp style bubble with custom player */}
         {voiceUrl && (
-          <div style={{
-            background: '#DCF8C6',
-            borderRadius: 8,
-            padding: '8px 12px',
-            maxWidth: 320,
-          }}>
-            {/* Waveform visualization (only for Cloudinary URLs) */}
-            {getWaveformUrl(voiceUrl) && (
-              <img
-                src={getWaveformUrl(voiceUrl)}
-                alt="Audio waveform"
-                style={{
-                  width: '100%',
-                  height: 32,
-                  borderRadius: 4,
-                  marginBottom: 6,
-                  display: 'block',
-                }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* Audio player with MP3 fallback for iOS - use auto preload to fix 0:00 bug */}
-              <audio
-                controls
-                style={{ height: 36, flex: 1 }}
-                preload="auto"
-                onLoadedMetadata={(e) => {
-                  // Force duration calculation
-                  const audio = e.target as HTMLAudioElement;
-                  if (audio.duration === Infinity || isNaN(audio.duration)) {
-                    // Seek to end and back to calculate duration
-                    audio.currentTime = 1e101;
-                    audio.ontimeupdate = function() {
-                      audio.ontimeupdate = null;
-                      audio.currentTime = 0;
-                    };
-                  }
-                }}
-              >
-                {voiceUrl.includes('cloudinary.com') && (
-                  <source src={getAudioMp3Url(voiceUrl)} type="audio/mpeg" />
-                )}
-                <source src={voiceUrl} type="audio/webm" />
-              </audio>
-              {!isSubmitted && (
-                <Button
-                  type="text"
-                  danger
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  loading={deleteVoiceMutation.isPending}
-                  onClick={() => deleteVoiceMutation.mutate()}
-                />
-              )}
-            </div>
-          </div>
+          <VoicePlayer
+            url={voiceUrl}
+            onDelete={!isSubmitted ? () => deleteVoiceMutation.mutate() : undefined}
+            isDeleting={deleteVoiceMutation.isPending}
+          />
         )}
 
         {/* Voice Transcription Box */}
