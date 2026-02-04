@@ -197,10 +197,15 @@ class InspectionService:
         ).first()
         
         if existing_answer:
-            # Update existing answer
+            # Update existing answer - only update fields that are explicitly provided
             existing_answer.answer_value = answer_value
-            existing_answer.comment = comment
-            existing_answer.photo_path = photo_path
+            # Only update comment if explicitly provided (not None)
+            # to avoid wiping AI analysis when just changing answer value
+            if comment is not None:
+                existing_answer.comment = comment
+            # Only update photo_path if explicitly provided
+            if photo_path is not None:
+                existing_answer.photo_path = photo_path
             if voice_note_id:
                 existing_answer.voice_note_id = voice_note_id
             existing_answer.answered_at = datetime.utcnow()

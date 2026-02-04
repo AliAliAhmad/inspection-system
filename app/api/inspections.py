@@ -82,6 +82,18 @@ def get_or_start_by_assignment(assignment_id):
             template_id=existing.template_id
         ).order_by(ChecklistItem.order_index).all()
         inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
+
+        # Debug: log media file info for answers
+        import logging
+        logger = logging.getLogger(__name__)
+        for ans in inspection_dict.get('answers', []):
+            if ans.get('photo_file') or ans.get('video_file') or ans.get('voice_note'):
+                logger.info("Answer %s media: photo_file=%s video_file=%s voice_note=%s",
+                    ans.get('checklist_item_id'),
+                    ans.get('photo_file', {}).get('url', 'NONE') if ans.get('photo_file') else 'NULL',
+                    ans.get('video_file', {}).get('url', 'NONE') if ans.get('video_file') else 'NULL',
+                    ans.get('voice_note', {}).get('url', 'NONE') if ans.get('voice_note') else 'NULL')
+
         return jsonify({'status': 'success', 'data': inspection_dict}), 200
 
     # Auto-create: start a new inspection using template from assignment
