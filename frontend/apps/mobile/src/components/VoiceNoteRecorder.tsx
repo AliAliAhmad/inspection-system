@@ -14,7 +14,9 @@ import { voiceApi } from '@inspection/shared';
 interface VoiceNoteRecorderProps {
   onVoiceNoteRecorded: (voiceNoteId: number, transcription?: { en: string; ar: string }) => void;
   existingVoiceUrl?: string | null;
+  existingTranscription?: { en: string; ar: string } | null;
   disabled?: boolean;
+  language?: string;
 }
 
 /**
@@ -38,7 +40,9 @@ function getAudioMp3Url(url: string): string {
 export default function VoiceNoteRecorder({
   onVoiceNoteRecorded,
   existingVoiceUrl,
+  existingTranscription,
   disabled = false,
+  language = 'en',
 }: VoiceNoteRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -46,6 +50,7 @@ export default function VoiceNoteRecorder({
   const [localAudioUri, setLocalAudioUri] = useState<string | null>(null);
   const [cloudinaryUrl, setCloudinaryUrl] = useState<string | null>(existingVoiceUrl || null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [transcription, setTranscription] = useState<{ en: string; ar: string } | null>(existingTranscription || null);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
@@ -115,10 +120,9 @@ export default function VoiceNoteRecorder({
 
       if (result.audio_file?.id) {
         setCloudinaryUrl(result.audio_file.url || null);
-        onVoiceNoteRecorded(result.audio_file.id, {
-          en: result.en || '',
-          ar: result.ar || '',
-        });
+        const trans = { en: result.en || '', ar: result.ar || '' };
+        setTranscription(trans);
+        onVoiceNoteRecorded(result.audio_file.id, trans);
       }
     } catch (err) {
       console.error('Failed to upload voice note:', err);
@@ -233,6 +237,26 @@ export default function VoiceNoteRecorder({
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Transcription Display */}
+      {transcription && (transcription.en || transcription.ar) && !isRecording && !isUploading && (
+        <View style={styles.transcriptionContainer}>
+          <Text style={styles.transcriptionLabel}>📝 Transcription:</Text>
+          <Text style={styles.transcriptionText}>
+            {language === 'ar' ? transcription.ar : transcription.en}
+          </Text>
+          {language === 'en' && transcription.ar && (
+            <Text style={styles.transcriptionSecondary}>
+              العربية: {transcription.ar}
+            </Text>
+          )}
+          {language === 'ar' && transcription.en && (
+            <Text style={styles.transcriptionSecondary}>
+              English: {transcription.en}
+            </Text>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -320,5 +344,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#075E54',
     fontWeight: '500',
+  },
+  transcriptionContainer: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1677ff',
+  },
+  transcriptionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  transcriptionText: {
+    fontSize: 14,
+    color: '#212121',
+    lineHeight: 20,
+  },
+  transcriptionSecondary: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 });

@@ -63,6 +63,7 @@ interface LocalAnswers {
     video_url?: string;       // Cloudinary URL for video
     voice_note_id?: number;   // Voice note file ID
     voice_note_url?: string;  // Cloudinary URL for voice note
+    voice_transcription?: { en: string; ar: string };  // Voice transcription
     isUploading?: boolean;    // Upload in progress
   };
 }
@@ -97,22 +98,39 @@ export default function InspectionChecklistScreen() {
   // Sync server answers into local state when inspection data loads
   useEffect(() => {
     if (inspection?.answers) {
-      const existing: LocalAnswers = {};
-      inspection.answers.forEach((ans: InspectionAnswer) => {
-        // Get Cloudinary URLs from file records if available
-        const photoUrl = (ans.photo_file as any)?.url || null;
-        const videoUrl = (ans.video_file as any)?.url || null;
-        const voiceNoteUrl = (ans.voice_note as any)?.url || null;
-        existing[ans.checklist_item_id] = {
-          answer_value: ans.answer_value,
-          comment: ans.comment ?? undefined,
-          photo_url: photoUrl ?? undefined,
-          video_url: videoUrl ?? undefined,
-          voice_note_id: ans.voice_note_id ?? undefined,
-          voice_note_url: voiceNoteUrl ?? undefined,
-        };
+      setLocalAnswers((prev) => {
+        const merged: LocalAnswers = { ...prev };
+        inspection.answers.forEach((ans: InspectionAnswer) => {
+          // Get Cloudinary URLs from file records if available
+          const photoUrl = (ans.photo_file as any)?.url || null;
+          const videoUrl = (ans.video_file as any)?.url || null;
+          const voiceNoteUrl = (ans.voice_note as any)?.url || null;
+
+          const serverData = {
+            answer_value: ans.answer_value,
+            comment: ans.comment ?? undefined,
+            photo_url: photoUrl ?? undefined,
+            video_url: videoUrl ?? undefined,
+            voice_note_id: ans.voice_note_id ?? undefined,
+            voice_note_url: voiceNoteUrl ?? undefined,
+          };
+
+          // Merge: keep local upload state, but update comment from server (for AI analysis)
+          merged[ans.checklist_item_id] = {
+            ...serverData,
+            ...prev[ans.checklist_item_id],
+            // Always use server comment if it has AI analysis
+            comment: (ans.comment && (ans.comment.includes('[Photo]:') || ans.comment.includes('[Video]:')))
+              ? ans.comment
+              : (prev[ans.checklist_item_id]?.comment ?? ans.comment ?? undefined),
+            // Use server URLs if available
+            photo_url: photoUrl || prev[ans.checklist_item_id]?.photo_url,
+            video_url: videoUrl || prev[ans.checklist_item_id]?.video_url,
+            voice_note_url: voiceNoteUrl || prev[ans.checklist_item_id]?.voice_note_url,
+          };
+        });
+        return merged;
       });
-      setLocalAnswers((prev) => ({ ...existing, ...prev }));
     }
   }, [inspection]);
 
@@ -248,8 +266,16 @@ export default function InspectionChecklistScreen() {
           },
         }));
 
-        // Refresh inspection data
+        // Refresh inspection data immediately
         queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+
+        // Poll for AI analysis (runs in background, takes a few seconds)
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+        }, 5000);
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+        }, 10000);
       } catch (error) {
         console.error('Photo upload failed:', error);
         Alert.alert(t('common.error'), 'Failed to upload photo');
@@ -422,6 +448,7 @@ export default function InspectionChecklistScreen() {
       [checklistItemId]: {
         ...prev[checklistItemId],
         voice_note_id: voiceNoteId,
+        voice_transcription: transcription,
       },
     }));
 
@@ -496,6 +523,14 @@ export default function InspectionChecklistScreen() {
         }));
 
         queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+
+        // Poll for AI analysis (runs in background, takes a few seconds)
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+        }, 5000);
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+        }, 10000);
       } catch (error) {
         console.error('Video upload failed:', error);
         Alert.alert(t('common.error'), 'Failed to upload video');
@@ -511,6 +546,19 @@ export default function InspectionChecklistScreen() {
     },
     [id, queryClient, t],
   );
+
+  // Helper to extract AI analysis from comment
+  const extractAnalysis = (comment: string | undefined, type: 'photo' | 'video'): string | null => {
+    if (!comment) return null;
+    const prefix = type === 'photo' ? '[Photo]:' : '[Video]:';
+    const lines = comment.split('\n');
+    for (const line of lines) {
+      if (line.startsWith(prefix)) {
+        return line.substring(prefix.length).trim();
+      }
+    }
+    return null;
+  };
 
   const renderChecklistItem = (item: ChecklistItem) => {
     const questionText = isArabic && item.question_text_ar
@@ -591,7 +639,9 @@ export default function InspectionChecklistScreen() {
         <VoiceNoteRecorder
           onVoiceNoteRecorded={(voiceNoteId, transcription) => handleVoiceNoteRecorded(item.id, voiceNoteId, transcription)}
           existingVoiceUrl={voiceNoteUrl}
+          existingTranscription={currentAnswer?.voice_transcription}
           disabled={isUploading}
+          language={i18n.language}
         />
 
         {commentExpanded ? (
@@ -623,6 +673,20 @@ export default function InspectionChecklistScreen() {
           </View>
         ) : null}
 
+        {/* Photo AI Analysis */}
+        {(() => {
+          const photoAnalysis = extractAnalysis(currentAnswer?.comment, 'photo');
+          if (photoAnalysis && photoSource && !isUploading) {
+            return (
+              <View style={styles.analysisContainer}>
+                <Text style={styles.analysisLabel}>🤖 AI Analysis:</Text>
+                <Text style={styles.analysisText}>{photoAnalysis}</Text>
+              </View>
+            );
+          }
+          return null;
+        })()}
+
         {/* Video preview */}
         {videoSource ? (
           <View style={styles.videoContainer}>
@@ -641,6 +705,20 @@ export default function InspectionChecklistScreen() {
             )}
           </View>
         ) : null}
+
+        {/* Video AI Analysis */}
+        {(() => {
+          const videoAnalysis = extractAnalysis(currentAnswer?.comment, 'video');
+          if (videoAnalysis && videoSource && !isUploading) {
+            return (
+              <View style={styles.analysisContainer}>
+                <Text style={styles.analysisLabel}>🤖 AI Analysis:</Text>
+                <Text style={styles.analysisText}>{videoAnalysis}</Text>
+              </View>
+            );
+          }
+          return null;
+        })()}
       </View>
     );
   };
@@ -1038,6 +1116,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 14,
     fontWeight: '600',
+  },
+  analysisContainer: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1976D2',
+  },
+  analysisLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginBottom: 4,
+  },
+  analysisText: {
+    fontSize: 14,
+    color: '#212121',
+    lineHeight: 20,
   },
   submitButton: {
     backgroundColor: '#1976D2',

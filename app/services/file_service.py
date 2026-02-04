@@ -122,21 +122,19 @@ class FileService:
             # Reset file pointer for potential re-read
             file.seek(0)
 
-            # Upload options
+            # Upload options (explicitly disable default preset to avoid ML add-ons)
             upload_options = {
                 'folder': folder,
                 'resource_type': resource_type,
                 'invalidate': True,
+                'upload_preset': None,  # Override default preset
             }
 
-            # For images, add optimization and AI features
+            # For images, add optimization
             if resource_type == 'image':
                 upload_options['transformation'] = [
                     {'quality': 'auto:good', 'fetch_format': 'auto'}
                 ]
-                # Enable Cloudinary AI auto-tagging (free tier: google_tagging)
-                upload_options['categorization'] = 'google_tagging'
-                upload_options['auto_tagging'] = 0.6  # Confidence threshold 60%
 
             # Upload
             result = cloudinary.uploader.upload(
@@ -231,15 +229,13 @@ class FileService:
                 'folder': folder,
                 'resource_type': resource_type,
                 'invalidate': True,
+                'upload_preset': None,  # Override default preset
             }
 
             if resource_type == 'image':
                 upload_options['transformation'] = [
                     {'quality': 'auto:good', 'fetch_format': 'auto'}
                 ]
-                # Enable Cloudinary AI auto-tagging
-                upload_options['categorization'] = 'google_tagging'
-                upload_options['auto_tagging'] = 0.6
 
             result = cloudinary.uploader.upload(
                 file_bytes,
