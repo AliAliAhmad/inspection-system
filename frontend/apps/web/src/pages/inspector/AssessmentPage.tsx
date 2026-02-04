@@ -44,7 +44,7 @@ export default function AssessmentPage() {
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [urgentReason, setUrgentReason] = useState('');
 
-  // First try to fetch existing assessment, if 404 we create one
+  // First try to fetch existing assessment, if 404 we try to create one
   const {
     data: assessment,
     isLoading,
@@ -57,10 +57,19 @@ export default function AssessmentPage() {
         const res = await assessmentsApi.get(assignmentId);
         return res.data.data as FinalAssessment;
       } catch (err: any) {
-        // If not found, create one
+        // If not found, try to create one
         if (err?.response?.status === 404) {
-          const createRes = await assessmentsApi.create(assignmentId);
-          return createRes.data.data as FinalAssessment;
+          try {
+            const createRes = await assessmentsApi.create(assignmentId);
+            return createRes.data.data as FinalAssessment;
+          } catch (createErr: any) {
+            // If creation fails (e.g. both inspectors not done yet), return null
+            const msg = createErr?.response?.data?.message || createErr?.response?.data?.error || '';
+            if (msg.includes('Both inspectors') || msg.includes('complete')) {
+              return null;
+            }
+            throw createErr;
+          }
         }
         throw err;
       }
@@ -101,11 +110,38 @@ export default function AssessmentPage() {
   }
 
   if (error) {
-    return <Alert type="error" message={t('common.error')} showIcon />;
+    return (
+      <div>
+        <Space style={{ marginBottom: 16 }}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/inspector/assignments')}>
+            {t('common.back')}
+          </Button>
+        </Space>
+        <Alert type="error" message={t('common.error')} showIcon />
+      </div>
+    );
   }
 
   if (!assessment) {
-    return <Alert type="warning" message={t('common.noData')} showIcon />;
+    return (
+      <div>
+        <Space style={{ marginBottom: 16 }}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/inspector/assignments')}>
+            {t('common.back')}
+          </Button>
+        </Space>
+        <Result
+          status="info"
+          title="Assessment Not Ready"
+          subTitle="Both the mechanical and electrical inspectors must complete their checklists before the final assessment can begin."
+          extra={
+            <Button type="primary" onClick={() => navigate('/inspector/assignments')}>
+              Back to Assignments
+            </Button>
+          }
+        />
+      </div>
+    );
   }
 
   // Determine if the current user is mech or elec inspector
