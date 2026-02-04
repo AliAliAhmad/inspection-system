@@ -98,9 +98,10 @@ export default function InspectionChecklistScreen() {
   // Sync server answers into local state when inspection data loads
   useEffect(() => {
     if (inspection?.answers) {
+      const answers = inspection.answers;
       setLocalAnswers((prev) => {
         const merged: LocalAnswers = { ...prev };
-        inspection.answers.forEach((ans: InspectionAnswer) => {
+        answers.forEach((ans: InspectionAnswer) => {
           // Get Cloudinary URLs from file records if available
           const photoUrl = (ans.photo_file as any)?.url || null;
           const videoUrl = (ans.video_file as any)?.url || null;
@@ -547,15 +548,62 @@ export default function InspectionChecklistScreen() {
     [id, queryClient, t],
   );
 
-  // Helper to extract AI analysis from comment
-  const extractAnalysis = (comment: string | undefined, type: 'photo' | 'video'): string | null => {
+  // Helper to extract AI analysis from comment (supports new bilingual format)
+  const extractAnalysis = (comment: string | undefined, type: 'photo' | 'video' | 'voice'): { en: string; ar: string } | null => {
     if (!comment) return null;
-    const prefix = type === 'photo' ? '[Photo]:' : '[Video]:';
+
+    // Check for new bilingual format (🔍 Photo Analysis (EN) / 🔍 Video Analysis (EN))
+    const typeLabel = type === 'photo' ? 'Photo' : type === 'video' ? 'Video' : 'Voice';
+    const enMarker = type === 'voice' ? 'EN:' : `🔍 ${typeLabel} Analysis (EN)`;
+    const arMarker = type === 'voice' ? 'AR:' : `🔍 تحليل`;
+
+    let enContent = '';
+    let arContent = '';
+    let inEnSection = false;
+    let inArSection = false;
+
     const lines = comment.split('\n');
     for (const line of lines) {
-      if (line.startsWith(prefix)) {
-        return line.substring(prefix.length).trim();
+      if (type === 'voice') {
+        // Voice transcription format: EN: ... / AR: ...
+        if (line.startsWith('EN:')) {
+          enContent = line.replace('EN:', '').trim();
+        } else if (line.startsWith('AR:')) {
+          arContent = line.replace('AR:', '').trim();
+        }
+      } else {
+        // Photo/Video analysis format
+        if (line.includes(enMarker)) {
+          inEnSection = true;
+          inArSection = false;
+          enContent = '';
+        } else if (line.includes(arMarker) && (line.includes('(AR)') || line.includes('صورة') || line.includes('فيديو'))) {
+          inEnSection = false;
+          inArSection = true;
+          arContent = '';
+        } else if (inEnSection && line.startsWith('•')) {
+          enContent += (enContent ? '\n' : '') + line;
+        } else if (inArSection && line.startsWith('•')) {
+          arContent += (arContent ? '\n' : '') + line;
+        }
       }
+    }
+
+    // Fallback to old format [Photo]: / [Video]:
+    if (!enContent && !arContent) {
+      const oldPrefix = type === 'photo' ? '[Photo]:' : type === 'video' ? '[Video]:' : null;
+      if (oldPrefix) {
+        for (const line of lines) {
+          if (line.startsWith(oldPrefix)) {
+            enContent = line.substring(oldPrefix.length).trim();
+            break;
+          }
+        }
+      }
+    }
+
+    if (enContent || arContent) {
+      return { en: enContent, ar: arContent };
     }
     return null;
   };
@@ -673,14 +721,50 @@ export default function InspectionChecklistScreen() {
           </View>
         ) : null}
 
+        {/* Voice Transcription Box */}
+        {(() => {
+          const voiceAnalysis = currentAnswer?.voice_transcription || extractAnalysis(currentAnswer?.comment, 'voice');
+          if (voiceAnalysis && (voiceAnalysis.en || voiceAnalysis.ar)) {
+            return (
+              <View style={[styles.analysisContainer, { borderLeftColor: '#722ed1' }]}>
+                <Text style={[styles.analysisLabel, { color: '#722ed1' }]}>🎤 Voice Transcription / النص الصوتي</Text>
+                {voiceAnalysis.en ? (
+                  <View style={styles.bilingualSection}>
+                    <Text style={styles.langTag}>EN</Text>
+                    <Text style={styles.analysisText}>{voiceAnalysis.en}</Text>
+                  </View>
+                ) : null}
+                {voiceAnalysis.ar ? (
+                  <View style={[styles.bilingualSection, { marginTop: 8 }]}>
+                    <Text style={[styles.langTag, { backgroundColor: '#52c41a' }]}>AR</Text>
+                    <Text style={[styles.analysisText, { textAlign: 'right' }]}>{voiceAnalysis.ar}</Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          }
+          return null;
+        })()}
+
         {/* Photo AI Analysis */}
         {(() => {
           const photoAnalysis = extractAnalysis(currentAnswer?.comment, 'photo');
-          if (photoAnalysis && photoSource && !isUploading) {
+          if (photoAnalysis && photoSource && !isUploading && (photoAnalysis.en || photoAnalysis.ar)) {
             return (
-              <View style={styles.analysisContainer}>
-                <Text style={styles.analysisLabel}>🤖 AI Analysis:</Text>
-                <Text style={styles.analysisText}>{photoAnalysis}</Text>
+              <View style={[styles.analysisContainer, { borderLeftColor: '#52c41a' }]}>
+                <Text style={[styles.analysisLabel, { color: '#52c41a' }]}>📷 Photo Analysis / تحليل الصورة</Text>
+                {photoAnalysis.en ? (
+                  <View style={styles.bilingualSection}>
+                    <Text style={styles.langTag}>EN</Text>
+                    <Text style={styles.analysisText}>{photoAnalysis.en}</Text>
+                  </View>
+                ) : null}
+                {photoAnalysis.ar ? (
+                  <View style={[styles.bilingualSection, { marginTop: 8 }]}>
+                    <Text style={[styles.langTag, { backgroundColor: '#52c41a' }]}>AR</Text>
+                    <Text style={[styles.analysisText, { textAlign: 'right' }]}>{photoAnalysis.ar}</Text>
+                  </View>
+                ) : null}
               </View>
             );
           }
@@ -709,11 +793,22 @@ export default function InspectionChecklistScreen() {
         {/* Video AI Analysis */}
         {(() => {
           const videoAnalysis = extractAnalysis(currentAnswer?.comment, 'video');
-          if (videoAnalysis && videoSource && !isUploading) {
+          if (videoAnalysis && videoSource && !isUploading && (videoAnalysis.en || videoAnalysis.ar)) {
             return (
-              <View style={styles.analysisContainer}>
-                <Text style={styles.analysisLabel}>🤖 AI Analysis:</Text>
-                <Text style={styles.analysisText}>{videoAnalysis}</Text>
+              <View style={[styles.analysisContainer, { borderLeftColor: '#1890ff' }]}>
+                <Text style={[styles.analysisLabel, { color: '#1890ff' }]}>🎬 Video Analysis / تحليل الفيديو</Text>
+                {videoAnalysis.en ? (
+                  <View style={styles.bilingualSection}>
+                    <Text style={styles.langTag}>EN</Text>
+                    <Text style={styles.analysisText}>{videoAnalysis.en}</Text>
+                  </View>
+                ) : null}
+                {videoAnalysis.ar ? (
+                  <View style={[styles.bilingualSection, { marginTop: 8 }]}>
+                    <Text style={[styles.langTag, { backgroundColor: '#52c41a' }]}>AR</Text>
+                    <Text style={[styles.analysisText, { textAlign: 'right' }]}>{videoAnalysis.ar}</Text>
+                  </View>
+                ) : null}
               </View>
             );
           }
@@ -1135,6 +1230,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#212121',
     lineHeight: 20,
+    flex: 1,
+  },
+  bilingualSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  langTag: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+    backgroundColor: '#1890ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginTop: 2,
   },
   submitButton: {
     backgroundColor: '#1976D2',

@@ -185,7 +185,7 @@ export default function VoiceNoteRecorder({
 
   return (
     <View style={styles.container}>
-      {/* Recording/Mic Button */}
+      {/* Compact Recording Row */}
       <View style={styles.recordingRow}>
         <TouchableOpacity
           style={[
@@ -203,85 +203,65 @@ export default function VoiceNoteRecorder({
           )}
         </TouchableOpacity>
 
-        {isRecording && (
+        {isRecording ? (
           <View style={styles.recordingInfo}>
             <View style={styles.recordingDot} />
             <Text style={styles.recordingTime}>{formatTime(recordingTime)}</Text>
-            <Text style={styles.recordingLabel}>Recording...</Text>
           </View>
-        )}
-
-        {isUploading && (
-          <Text style={styles.uploadingText}>Uploading voice note...</Text>
-        )}
-      </View>
-
-      {/* Audio Playback */}
-      {hasAudio && !isRecording && !isUploading && (
-        <View style={styles.audioPlayer}>
-          {waveformUrl && (
-            <Image
-              source={{ uri: waveformUrl }}
-              style={styles.waveform}
-              resizeMode="contain"
-            />
-          )}
+        ) : isUploading ? (
+          <Text style={styles.uploadingText}>Uploading...</Text>
+        ) : hasAudio ? (
+          // Compact audio playback
           <TouchableOpacity
-            style={styles.playButton}
+            style={styles.compactPlayButton}
             onPress={isPlaying ? stopAudio : playAudio}
           >
-            <Text style={styles.playIcon}>{isPlaying ? '⏹' : '▶️'}</Text>
-            <Text style={styles.playLabel}>
-              {isPlaying ? 'Stop' : 'Play voice note'}
+            <Text style={styles.playIconSmall}>{isPlaying ? '⏹' : '▶️'}</Text>
+            <Text style={styles.playLabelSmall}>
+              {isPlaying ? 'Stop' : 'Play'}
             </Text>
+            {waveformUrl && (
+              <Image
+                source={{ uri: waveformUrl }}
+                style={styles.waveformSmall}
+                resizeMode="contain"
+              />
+            )}
           </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Transcription Display */}
-      {transcription && (transcription.en || transcription.ar) && !isRecording && !isUploading && (
-        <View style={styles.transcriptionContainer}>
-          <Text style={styles.transcriptionLabel}>📝 Transcription:</Text>
-          <Text style={styles.transcriptionText}>
-            {language === 'ar' ? transcription.ar : transcription.en}
-          </Text>
-          {language === 'en' && transcription.ar && (
-            <Text style={styles.transcriptionSecondary}>
-              العربية: {transcription.ar}
-            </Text>
-          )}
-          {language === 'ar' && transcription.en && (
-            <Text style={styles.transcriptionSecondary}>
-              English: {transcription.en}
-            </Text>
-          )}
-        </View>
-      )}
+        ) : (
+          <Text style={styles.hintText}>Hold to record</Text>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 8,
+    marginVertical: 4,
   },
   recordingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+    backgroundColor: '#f0f2f5',
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    alignSelf: 'flex-start',
   },
   micButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#25D366',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 2,
+    elevation: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    shadowOpacity: 0.15,
+    shadowRadius: 1,
   },
   micButtonRecording: {
     backgroundColor: '#f5222d',
@@ -290,84 +270,53 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   micIcon: {
-    fontSize: 22,
+    fontSize: 14,
   },
   recordingInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#f5222d',
   },
   recordingTime: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#212121',
+    color: '#f5222d',
     fontVariant: ['tabular-nums'],
   },
-  recordingLabel: {
-    fontSize: 12,
+  uploadingText: {
+    fontSize: 11,
+    color: '#1677ff',
+  },
+  hintText: {
+    fontSize: 11,
     color: '#999',
   },
-  uploadingText: {
-    fontSize: 12,
-    color: '#1677ff',
-    marginLeft: 8,
-  },
-  audioPlayer: {
-    marginTop: 8,
-    padding: 10,
-    backgroundColor: '#DCF8C6',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#c5e1a5',
-  },
-  waveform: {
-    width: '100%',
-    height: 32,
-    marginBottom: 8,
-    borderRadius: 4,
-  },
-  playButton: {
+  compactPlayButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    backgroundColor: '#DCF8C6',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
   },
-  playIcon: {
-    fontSize: 18,
+  playIconSmall: {
+    fontSize: 14,
   },
-  playLabel: {
-    fontSize: 13,
+  playLabelSmall: {
+    fontSize: 11,
     color: '#075E54',
     fontWeight: '500',
   },
-  transcriptionContainer: {
-    marginTop: 8,
-    padding: 12,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#1677ff',
-  },
-  transcriptionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 4,
-  },
-  transcriptionText: {
-    fontSize: 14,
-    color: '#212121',
-    lineHeight: 20,
-  },
-  transcriptionSecondary: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 6,
-    fontStyle: 'italic',
+  waveformSmall: {
+    width: 60,
+    height: 20,
+    borderRadius: 2,
   },
 });
