@@ -92,6 +92,7 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
   const isArabic = i18n.language === 'ar';
   const [photoLoadError, setPhotoLoadError] = useState(false);
   const [showBgRemoved, setShowBgRemoved] = useState(false);
+  const [videoLoadError, setVideoLoadError] = useState(false);
 
   const questionText = isArabic && answer.checklist_item?.question_text_ar
     ? answer.checklist_item.question_text_ar
@@ -168,29 +169,17 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
                 />
               </Tooltip>
             </div>
-            {photoLoadError ? (
-              <div style={{
-                width: 200, height: 120,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#999', fontSize: 12, background: '#fafafa', borderRadius: 4,
-              }}>
-                <PictureOutlined style={{ fontSize: 24, marginRight: 8 }} />
-                {t('inspection.photo_load_error', 'Photo unavailable')}
-              </div>
-            ) : (
-              <a href={showBgRemoved ? getBackgroundRemovedUrl(photoUrl) : photoUrl} target="_blank" rel="noopener noreferrer">
-                <img
-                  src={showBgRemoved ? getBackgroundRemovedUrl(getPhotoThumbnailUrl(photoUrl)) : getPhotoThumbnailUrl(photoUrl)}
-                  alt="Inspection photo"
-                  style={{
-                    maxWidth: 300, maxHeight: 200, objectFit: 'contain', borderRadius: 4, display: 'block', cursor: 'pointer',
-                    background: showBgRemoved ? '#f5f5f5' : 'transparent'
-                  }}
-                  onError={() => setPhotoLoadError(true)}
-                  title={t('inspection.clickToEnlarge', 'Click to view full size')}
-                />
-              </a>
-            )}
+            <a href={photoUrl} target="_blank" rel="noopener noreferrer">
+              <img
+                src={photoLoadError ? photoUrl : getPhotoThumbnailUrl(photoUrl)}
+                alt="Inspection photo"
+                style={{
+                  maxWidth: 300, maxHeight: 200, objectFit: 'contain', borderRadius: 4, display: 'block', cursor: 'pointer',
+                }}
+                onError={() => { if (!photoLoadError) setPhotoLoadError(true); }}
+                title={t('inspection.clickToEnlarge', 'Click to view full size')}
+              />
+            </a>
             {/* AI-detected tags */}
             {aiTags && aiTags.length > 0 && (
               <div style={{ marginTop: 8 }}>
@@ -217,8 +206,7 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
             </Typography.Text>
             <video
               controls
-              src={getOptimizedVideoUrl(videoUrl)}
-              poster={getVideoThumbnailUrl(videoUrl) || undefined}
+              src={videoUrl}
               style={{ maxWidth: 400, maxHeight: 250, borderRadius: 4, background: '#000' }}
               preload="metadata"
             />
@@ -241,30 +229,13 @@ export default function InspectionFindingCard({ answer, title }: InspectionFindi
                 {t('inspection.voiceNote', 'Voice Note')}
               </Typography.Text>
             </div>
-            {/* Waveform visualization */}
-            {getWaveformUrl(voiceUrl) && (
-              <img
-                src={getWaveformUrl(voiceUrl)}
-                alt="Audio waveform"
-                style={{
-                  width: '100%',
-                  maxWidth: 280,
-                  height: 40,
-                  borderRadius: 4,
-                  marginBottom: 8,
-                  display: 'block',
-                }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-            )}
-            {/* Audio player with MP3 fallback for iOS */}
+            {/* Audio player */}
             <audio
               controls
               style={{ width: '100%', height: 36 }}
               preload="metadata"
             >
-              <source src={getAudioMp3Url(voiceUrl)} type="audio/mpeg" />
-              <source src={voiceUrl} type="audio/webm" />
+              <source src={voiceUrl} />
             </audio>
           </div>
         )}

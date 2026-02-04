@@ -8,15 +8,17 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { Audio, Video, ResizeMode } from 'expo-av';
+import { useTranslation } from 'react-i18next';
 import { tokenStorage } from '../storage/token-storage';
 import type { InspectionAnswer } from '@inspection/shared';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface InspectionFindingDisplayProps {
-  answer: InspectionAnswer;
+  answer: InspectionAnswer | any;
   title?: string;
+  defectDescription?: string | null;
 }
 
 const ANSWER_COLORS: Record<string, string> = {
@@ -26,27 +28,13 @@ const ANSWER_COLORS: Record<string, string> = {
   no: '#E53935',
 };
 
-function getCloudinaryOptimizedUrl(url: string, width: number): string {
-  if (!url || !url.includes('cloudinary.com')) return url;
-  return url.replace('/upload/', `/upload/c_fill,w_${width},q_auto,f_auto/`);
-}
-
-function getAudioMp3Url(url: string): string {
-  if (!url || !url.includes('cloudinary.com')) return url;
-  return url.replace('/upload/', '/upload/f_mp3/');
-}
-
-function getWaveformUrl(url: string): string {
-  if (!url || !url.includes('cloudinary.com')) return '';
-  return url
-    .replace('/upload/', '/upload/fl_waveform,co_rgb:25D366,b_rgb:DCF8C6,w_200,h_32/')
-    .replace(/\.[^.]+$/, '.png');
-}
-
 export default function InspectionFindingDisplay({
   answer,
   title,
+  defectDescription,
 }: InspectionFindingDisplayProps) {
+  const { t, i18n } = useTranslation();
+  const isArabic = i18n.language === 'ar';
   const [token, setToken] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -54,37 +42,34 @@ export default function InspectionFindingDisplay({
 
   useEffect(() => {
     tokenStorage.getAccessToken().then(setToken);
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
   }, []);
 
   const answerValue = answer.answer_value?.toLowerCase() || '';
   const answerColor = ANSWER_COLORS[answerValue] || '#757575';
-  const hasPhoto = !!(answer.photo_path || (answer as any).photo_url);
-  const hasVoice = !!(answer.voice_note_id || (answer as any).voice_note);
+
+  // Get question text (Arabic or English)
+  const questionText = isArabic && answer.checklist_item?.question_text_ar
+    ? answer.checklist_item.question_text_ar
+    : answer.checklist_item?.question_text || '';
+
+  // Get media URLs from file objects (Cloudinary direct URLs)
+  const photoUrl = answer.photo_file?.url || null;
+  const videoUrl = answer.video_file?.url || null;
+  const voiceUrl = answer.voice_note?.url || null;
+
+  const hasPhoto = !!photoUrl;
+  const hasVideo = !!videoUrl;
+  const hasVoice = !!voiceUrl || !!answer.voice_note_id;
   const hasComment = !!answer.comment;
 
-  // Get photo URL
-  const getPhotoUrl = (): string | null => {
-    if ((answer as any).photo_url) {
-      return getCloudinaryOptimizedUrl((answer as any).photo_url, Math.round(SCREEN_WIDTH - 64));
-    }
-    if (answer.photo_path) {
-      // If it's a full URL already
-      if (answer.photo_path.startsWith('http')) {
-        return getCloudinaryOptimizedUrl(answer.photo_path, Math.round(SCREEN_WIDTH - 64));
-      }
-      // Build API URL for photo
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001';
-      return `${baseUrl}${answer.photo_path}`;
-    }
-    return null;
-  };
-
-  // Get voice note URL
+  // Get voice note URL with token fallback
   const getVoiceUrl = (): string | null => {
-    const voiceNote = (answer as any).voice_note;
-    if (voiceNote?.url) {
-      return getAudioMp3Url(voiceNote.url);
-    }
+    if (voiceUrl) return voiceUrl;
     if (answer.voice_note_id && token) {
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001';
       return `${baseUrl}/api/files/${answer.voice_note_id}/stream?token=${token}`;
@@ -92,17 +77,9 @@ export default function InspectionFindingDisplay({
     return null;
   };
 
-  const getWaveformImageUrl = (): string | null => {
-    const voiceNote = (answer as any).voice_note;
-    if (voiceNote?.url) {
-      return getWaveformUrl(voiceNote.url);
-    }
-    return null;
-  };
-
   const handlePlayVoice = async () => {
-    const voiceUrl = getVoiceUrl();
-    if (!voiceUrl) return;
+    const url = getVoiceUrl();
+    if (!url) return;
 
     try {
       if (soundRef.current) {
@@ -119,7 +96,7 @@ export default function InspectionFindingDisplay({
         playsInSilentModeIOS: true,
       });
 
-      const { sound } = await Audio.Sound.createAsync({ uri: voiceUrl });
+      const { sound } = await Audio.Sound.createAsync({ uri: url });
       soundRef.current = sound;
       setIsPlaying(true);
 
@@ -138,31 +115,58 @@ export default function InspectionFindingDisplay({
     }
   };
 
-  const photoUrl = getPhotoUrl();
-  const waveformUrl = getWaveformImageUrl();
-
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header with question and answer badge */}
       <View style={styles.header}>
-        {title && <Text style={styles.title} numberOfLines={2}>{title}</Text>}
+        {(title || questionText) && (
+          <Text style={[styles.title, isArabic && styles.rtlText]} numberOfLines={3}>
+            {title || questionText}
+          </Text>
+        )}
         <View style={[styles.answerBadge, { backgroundColor: answerColor }]}>
           <Text style={styles.answerText}>{answer.answer_value?.toUpperCase() || 'N/A'}</Text>
         </View>
       </View>
 
-      {/* Comment */}
+      {/* Category & Critical indicator */}
+      {answer.checklist_item?.category && (
+        <View style={styles.tagsRow}>
+          <View style={[styles.categoryTag, { backgroundColor: answer.checklist_item.category === 'mechanical' ? '#E3F2FD' : '#FFF8E1' }]}>
+            <Text style={{ fontSize: 11, color: answer.checklist_item.category === 'mechanical' ? '#1565C0' : '#F57F17', fontWeight: '600' }}>
+              {answer.checklist_item.category}
+            </Text>
+          </View>
+          {answer.checklist_item?.critical_failure && (
+            <View style={[styles.categoryTag, { backgroundColor: '#FFEBEE' }]}>
+              <Text style={{ fontSize: 11, color: '#C62828', fontWeight: '600' }}>
+                {t('inspection.critical', 'Critical')}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Defect description */}
+      {defectDescription && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{t('common.description', 'Description')}:</Text>
+          <Text style={[styles.commentText, isArabic && styles.rtlText]}>{defectDescription}</Text>
+        </View>
+      )}
+
+      {/* Comment / AI Analysis */}
       {hasComment && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Comment:</Text>
-          <Text style={styles.commentText}>{answer.comment}</Text>
+          <Text style={styles.sectionLabel}>{t('inspection.comment', 'Comment')}:</Text>
+          <Text style={[styles.commentText, isArabic && styles.rtlText]}>{answer.comment}</Text>
         </View>
       )}
 
       {/* Photo */}
-      {hasPhoto && photoUrl && (
+      {hasPhoto && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Photo:</Text>
+          <Text style={styles.sectionLabel}>{t('inspection.photo', 'Photo')}:</Text>
           <Image
             source={{ uri: photoUrl }}
             style={styles.photo}
@@ -171,18 +175,24 @@ export default function InspectionFindingDisplay({
         </View>
       )}
 
+      {/* Video */}
+      {hasVideo && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>{t('inspection.video', 'Video')}:</Text>
+          <Video
+            source={{ uri: videoUrl }}
+            style={styles.video}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+          />
+        </View>
+      )}
+
       {/* Voice Note */}
       {hasVoice && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Voice Note:</Text>
+          <Text style={styles.sectionLabel}>{t('inspection.voiceNote', 'Voice Note')}:</Text>
           <View style={styles.audioPlayer}>
-            {waveformUrl && (
-              <Image
-                source={{ uri: waveformUrl }}
-                style={styles.waveform}
-                resizeMode="contain"
-              />
-            )}
             <TouchableOpacity
               style={styles.playButton}
               onPress={handlePlayVoice}
@@ -191,19 +201,23 @@ export default function InspectionFindingDisplay({
               {isLoadingAudio ? (
                 <ActivityIndicator size="small" color="#075E54" />
               ) : (
-                <Text style={styles.playIcon}>{isPlaying ? '⏹' : '▶️'}</Text>
+                <Text style={styles.playIcon}>{isPlaying ? '\u23F9' : '\u25B6\uFE0F'}</Text>
               )}
               <Text style={styles.playLabel}>
-                {isLoadingAudio ? 'Loading...' : isPlaying ? 'Stop' : 'Play voice note'}
+                {isLoadingAudio
+                  ? t('common.loading', 'Loading...')
+                  : isPlaying
+                    ? t('common.stop', 'Stop')
+                    : t('inspection.playVoiceNote', 'Play voice note')}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
 
-      {/* No additional media */}
-      {!hasComment && !hasPhoto && !hasVoice && (
-        <Text style={styles.noDataText}>No additional details</Text>
+      {/* No media fallback */}
+      {!hasComment && !hasPhoto && !hasVideo && !hasVoice && (
+        <Text style={styles.noDataText}>{t('common.noData', 'No additional details')}</Text>
       )}
     </View>
   );
@@ -220,6 +234,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
   },
   header: {
     flexDirection: 'row',
@@ -234,6 +250,10 @@ const styles = StyleSheet.create({
     color: '#212121',
     marginRight: 12,
   },
+  rtlText: {
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
   answerBadge: {
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -243,6 +263,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#fff',
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  categoryTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   section: {
     marginBottom: 12,
@@ -264,18 +294,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#f5f5f5',
   },
+  video: {
+    width: '100%',
+    height: 220,
+    borderRadius: 8,
+    backgroundColor: '#000',
+  },
   audioPlayer: {
-    padding: 10,
+    padding: 12,
     backgroundColor: '#DCF8C6',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#c5e1a5',
-  },
-  waveform: {
-    width: '100%',
-    height: 32,
-    marginBottom: 8,
-    borderRadius: 4,
   },
   playButton: {
     flexDirection: 'row',
