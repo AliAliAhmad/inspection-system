@@ -414,7 +414,10 @@ class InspectionService:
                 raise ValidationError(
                     f"Voice recording is required for failed item: {item.question_text[:50] if item else 'Unknown'}"
                 )
-            if not answer.photo_path and not answer.video_path:
+            # Check for photo/video - either via file_id (new Cloudinary) or path (legacy)
+            has_photo = answer.photo_file_id or answer.photo_path
+            has_video = answer.video_file_id or answer.video_path
+            if not has_photo and not has_video:
                 item = answer.checklist_item
                 raise ValidationError(
                     f"Photo or video is required for failed item: {item.question_text[:50] if item else 'Unknown'}"
