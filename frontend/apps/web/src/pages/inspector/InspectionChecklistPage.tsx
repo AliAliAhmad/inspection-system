@@ -102,127 +102,10 @@ function getPhotoThumbnailUrl(url: string, width = 240, height = 180): string {
   return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},h_${height},c_fill,g_auto/`);
 }
 
-// Custom Voice Player component to handle webm duration issues
+// Simple Voice Player using native <audio> element — most reliable cross-browser
 function VoicePlayer({ url, onDelete, isDeleting }: { url: string; onDelete?: () => void; isDeleting?: boolean }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [error, setError] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const durationRef = useRef(0);
-
-  // Guard against empty/invalid URL
   if (!url) {
-    return (
-      <div style={{ background: '#DCF8C6', borderRadius: 8, padding: '8px 12px', maxWidth: 320 }}>
-        <Typography.Text type="secondary">No audio available</Typography.Text>
-      </div>
-    );
-  }
-
-  // Use MP3 version from Cloudinary for better compatibility
-  const audioUrl = url.includes('cloudinary.com') ? getAudioMp3Url(url) : url;
-  const waveformUrl = url.includes('cloudinary.com') ? getWaveformUrl(url) : '';
-
-  useEffect(() => {
-    setError(false);
-    const audio = new Audio();
-    audioRef.current = audio;
-
-    const handleLoadedMetadata = () => {
-      if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
-        setDuration(audio.duration);
-        durationRef.current = audio.duration;
-      }
-    };
-
-    const handleDurationChange = () => {
-      if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
-        setDuration(audio.duration);
-        durationRef.current = audio.duration;
-      }
-    };
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
-      // Update duration if we get it during playback
-      if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration) && durationRef.current === 0) {
-        setDuration(audio.duration);
-        durationRef.current = audio.duration;
-      }
-    };
-
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    };
-
-    const handleError = () => {
-      console.warn('Audio load error for:', audio.src);
-      // If MP3 failed, try original URL
-      if (audio.src.includes('/f_mp3/') && url) {
-        console.log('Trying original URL...');
-        audio.src = url;
-        audio.load();
-      } else {
-        setError(true);
-      }
-    };
-
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('durationchange', handleDurationChange);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError);
-
-    // Set source and load
-    audio.src = audioUrl;
-    audio.preload = 'auto';
-    audio.load();
-
-    return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('durationchange', handleDurationChange);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-      audio.pause();
-      audio.src = '';
-    };
-  }, [audioUrl, url]);
-
-  const togglePlay = () => {
-    if (!audioRef.current || error) return;
-
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(err => {
-        console.error('Play failed:', err);
-        setError(true);
-      });
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    if (!seconds || isNaN(seconds) || seconds === Infinity) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  if (error) {
-    return (
-      <div style={{ background: '#DCF8C6', borderRadius: 8, padding: '8px 12px', maxWidth: 320 }}>
-        <Typography.Text type="warning">Audio playback error</Typography.Text>
-        {onDelete && (
-          <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={onDelete} loading={isDeleting} style={{ marginLeft: 8 }} />
-        )}
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -232,61 +115,26 @@ function VoicePlayer({ url, onDelete, isDeleting }: { url: string; onDelete?: ()
       padding: '8px 12px',
       maxWidth: 320,
     }}>
-      {waveformUrl && (
-        <img
-          src={waveformUrl}
-          alt="Audio waveform"
-          style={{
-            width: '100%',
-            height: 32,
-            borderRadius: 4,
-            marginBottom: 6,
-            display: 'block',
-          }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
-      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Button
-          type="primary"
-          shape="circle"
-          size="small"
-          icon={isPlaying ? <span style={{ fontSize: 10 }}>⏸</span> : <span style={{ fontSize: 10 }}>▶</span>}
-          onClick={togglePlay}
-          style={{ background: '#25D366', borderColor: '#25D366', minWidth: 28, width: 28, height: 28 }}
-        />
-        <div style={{ flex: 1 }}>
-          <div style={{
-            height: 4,
-            background: '#c5e1a5',
-            borderRadius: 2,
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              height: '100%',
-              width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%',
-              background: '#25D366',
-              transition: 'width 0.1s',
-            }} />
-          </div>
-          <Typography.Text style={{ fontSize: 10, color: '#666' }}>
-            {formatTime(currentTime)} / {duration > 0 ? formatTime(duration) : '--:--'}
-          </Typography.Text>
-        </div>
+        <audio controls preload="metadata" style={{ flex: 1, height: 36 }}>
+          <source src={url} />
+        </audio>
         {onDelete && (
           <Button
             type="text"
             danger
             size="small"
             icon={<DeleteOutlined />}
-            loading={isDeleting}
             onClick={onDelete}
+            loading={isDeleting}
           />
         )}
       </div>
     </div>
   );
 }
+
+// Keep this for backward compat reference but unused
 
 export default function InspectionChecklistPage() {
   const { t, i18n } = useTranslation();
@@ -1181,7 +1029,7 @@ function ChecklistItemCard({
           </Space>
         )}
 
-        {/* Photo preview - WhatsApp style bubble with Cloudinary optimizations */}
+        {/* Photo preview - WhatsApp style bubble */}
         {photoUrl && (
           <div style={{
             position: 'relative',
@@ -1191,26 +1039,20 @@ function ChecklistItemCard({
             padding: 4,
             maxWidth: 250,
           }}>
-            {photoLoadError ? (
-              <div style={{
-                width: 200, height: 120,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#999', fontSize: 12,
-              }}>
-                <PictureOutlined style={{ fontSize: 24, marginRight: 8 }} />
-                {t('inspection.photo_load_error', 'Photo unavailable')}
-              </div>
-            ) : (
-              <a href={getOptimizedPhotoUrl(photoUrl)} target="_blank" rel="noopener noreferrer">
-                <img
-                  src={getPhotoThumbnailUrl(photoUrl)}
-                  alt="Inspection photo"
-                  style={{ maxWidth: 240, maxHeight: 180, objectFit: 'contain', borderRadius: 6, display: 'block', cursor: 'pointer' }}
-                  onError={() => setPhotoLoadError(true)}
-                  title={t('inspection.clickToEnlarge', 'Click to view full size')}
-                />
-              </a>
-            )}
+            <a href={photoUrl} target="_blank" rel="noopener noreferrer">
+              <img
+                src={photoLoadError ? photoUrl : getPhotoThumbnailUrl(photoUrl)}
+                alt="Inspection photo"
+                style={{ maxWidth: 240, maxHeight: 180, objectFit: 'contain', borderRadius: 6, display: 'block', cursor: 'pointer' }}
+                onError={(e) => {
+                  if (!photoLoadError) {
+                    // Thumbnail transformation failed — try raw URL
+                    setPhotoLoadError(true);
+                  }
+                }}
+                title={t('inspection.clickToEnlarge', 'Click to view full size')}
+              />
+            </a>
             {/* AI Analyzing indicator */}
             {isAnalyzing && (
               <div style={{
@@ -1255,8 +1097,7 @@ function ChecklistItemCard({
           }}>
             <video
               controls
-              src={getOptimizedVideoUrl(videoUrl)}
-              poster={getVideoThumbnailUrl(videoUrl) || undefined}
+              src={videoUrl}
               style={{ maxWidth: 310, maxHeight: 220, borderRadius: 6, display: 'block', background: '#000' }}
               preload="metadata"
             />
