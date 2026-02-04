@@ -40,11 +40,20 @@ def list_assessments():
     }), 200
 
 
-@bp.route('/<int:assessment_id>', methods=['GET'])
+@bp.route('/<int:id_value>', methods=['GET'])
 @jwt_required()
-def get_assessment(assessment_id):
-    """Get assessment details."""
-    assessment = FinalAssessment.query.get_or_404(assessment_id)
+def get_assessment(id_value):
+    """Get assessment details. Looks up by assessment ID first, then by assignment ID."""
+    # First try as assessment_id (direct lookup)
+    assessment = FinalAssessment.query.get(id_value)
+    if not assessment:
+        # Try as assignment_id (the frontend passes assignmentId)
+        assessment = FinalAssessment.query.filter_by(
+            inspection_assignment_id=id_value
+        ).first()
+    if not assessment:
+        from app.exceptions.api_exceptions import NotFoundError
+        raise NotFoundError(f"Assessment not found for ID {id_value}")
     return jsonify({
         'status': 'success',
         'data': assessment.to_dict()

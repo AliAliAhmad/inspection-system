@@ -695,6 +695,25 @@ function ChecklistItemCard({
     localAnalysisSetRef.current = false;
   }, [item.id]);
 
+  // Debug: log media data when component mounts or answer changes
+  useEffect(() => {
+    if (existingAnswer) {
+      const pf = existingAnswer.photo_file;
+      const vf = existingAnswer.video_file;
+      const vn = existingAnswer.voice_note;
+      if (pf || vf || vn) {
+        console.log(`[Media Debug] Item ${item.id}:`, {
+          photo_file: pf ? { id: pf.id, url: pf.url } : null,
+          video_file: vf ? { id: vf.id, url: vf.url } : null,
+          voice_note: vn ? { id: vn.id, url: vn.url } : null,
+          photo_path: existingAnswer.photo_path,
+          video_path: existingAnswer.video_path,
+          voice_note_id: existingAnswer.voice_note_id,
+        });
+      }
+    }
+  }, [existingAnswer, item.id]);
+
   // Read question aloud using TTS
   const readAloud = async () => {
     if (isReadingAloud) return;
@@ -741,9 +760,31 @@ function ChecklistItemCard({
   const photoUrl = localPhotoUrl || existingAnswer?.photo_file?.url || null;
   const videoUrl = localVideoUrl || existingAnswer?.video_file?.url || null;
 
+  // Build combined comment from all analysis sources for persistence
+  const buildAnalysisComment = useCallback(() => {
+    const parts: string[] = [];
+    if (photoAnalysis?.en || photoAnalysis?.ar) {
+      if (photoAnalysis.en) parts.push(photoAnalysis.en);
+      if (photoAnalysis.ar) parts.push(photoAnalysis.ar);
+    }
+    if (videoAnalysis?.en || videoAnalysis?.ar) {
+      if (videoAnalysis.en) parts.push(videoAnalysis.en);
+      if (videoAnalysis.ar) parts.push(videoAnalysis.ar);
+    }
+    if (voiceTranscription?.en || voiceTranscription?.ar) {
+      const voiceParts: string[] = [];
+      if (voiceTranscription?.en) voiceParts.push(`EN: ${voiceTranscription.en}`);
+      if (voiceTranscription?.ar) voiceParts.push(`AR: ${voiceTranscription.ar}`);
+      if (voiceParts.length > 0) parts.push(voiceParts.join('\n'));
+    }
+    return parts.length > 0 ? parts.join('\n\n') : undefined;
+  }, [photoAnalysis, videoAnalysis, voiceTranscription]);
+
   const handleAnswerChange = (value: string) => {
     setCurrentValue(value);
-    onAnswer(item.id, value, undefined, voiceNoteId);
+    // Include any AI analysis/transcription in the comment for persistence
+    const analysisComment = buildAnalysisComment();
+    onAnswer(item.id, value, analysisComment, voiceNoteId);
   };
 
   // WhatsApp-style hold to record
@@ -806,6 +847,7 @@ function ChecklistItemCard({
           if (result.audio_file?.id) {
             setVoiceNoteId(result.audio_file.id);
             voiceNoteIdRef.current = result.audio_file.id;
+            // Save voice_note_id association (answer_value can be empty - backend handles it)
             onAnswer(item.id, currentValue || '', undefined, result.audio_file.id);
           }
 
@@ -814,12 +856,13 @@ function ChecklistItemCard({
             setVoiceTranscription({ en: result.en || '', ar: result.ar || '' });
             localAnalysisSetRef.current = true; // Mark that we set this locally
 
-            // Build comment with transcription
-            const parts: string[] = [];
-            if (result.en) parts.push(`EN: ${result.en}`);
-            if (result.ar) parts.push(`AR: ${result.ar}`);
-            const combined = parts.join('\n');
-            onAnswer(item.id, currentValue || '', combined, voiceNoteIdRef.current);
+            // Save transcription as comment (will be included when user answers)
+            if (currentValue) {
+              const analysisComment = buildAnalysisComment();
+              if (analysisComment) {
+                onAnswer(item.id, currentValue, analysisComment, voiceNoteIdRef.current);
+              }
+            }
           }
 
           // Delay refetch to allow server to save
@@ -922,19 +965,15 @@ function ChecklistItemCard({
             }
             localAnalysisSetRef.current = true; // Mark that we set this locally
 
-            const combinedAnalysis = [enAnalysis, '', arAnalysis].filter(Boolean).join('\n');
-
-            if (combinedAnalysis) {
-              // Update comment with AI analysis (for persistence)
-              const existingComment = existingAnswer?.comment || '';
-              const newComment = existingComment
-                ? `${existingComment}\n\n${combinedAnalysis}`
-                : combinedAnalysis;
-
-              onAnswer(item.id, currentValue || '', newComment, voiceNoteId);
-              setShowComment(true);
-              message.success(t('inspection.aiAnalysisComplete', 'AI analysis complete'));
+            // Only persist to server if user has already answered (otherwise saved when they answer)
+            if (currentValue) {
+              const analysisComment = buildAnalysisComment();
+              if (analysisComment) {
+                onAnswer(item.id, currentValue, analysisComment, voiceNoteId);
+              }
             }
+            setShowComment(true);
+            message.success(t('inspection.aiAnalysisComplete', 'AI analysis complete'));
           }
         } catch (err) {
           console.warn('AI analysis failed:', err);
@@ -1039,7 +1078,7 @@ function ChecklistItemCard({
             onBlur={(e) => {
               const val = e.target.value;
               if (val && val !== currentValue) {
-                onAnswer(item.id, val, undefined, voiceNoteId);
+                handleAnswerChange(val);
               }
             }}
             style={{ width: '100%' }}
@@ -1054,7 +1093,7 @@ function ChecklistItemCard({
             onBlur={(e) => {
               const val = e.target.value;
               if (val && val !== currentValue) {
-                onAnswer(item.id, val, undefined, voiceNoteId);
+                handleAnswerChange(val);
               }
             }}
             style={{ width: 200 }}
@@ -1352,7 +1391,7 @@ function ChecklistItemCard({
             {t('inspection.fail_requires_voice', 'Voice recording is required for failed items')}
           </Typography.Text>
         )}
-        {isFailed && !existingAnswer?.photo_path && !existingAnswer?.video_path && !isSubmitted && (
+        {isFailed && !existingAnswer?.photo_path && !existingAnswer?.video_path && !existingAnswer?.photo_file && !existingAnswer?.video_file && !photoUrl && !videoUrl && !isSubmitted && (
           <Typography.Text type="warning" style={{ fontSize: 12 }}>
             {t('inspection.fail_requires_media', 'Photo or video is required for failed items')}
           </Typography.Text>

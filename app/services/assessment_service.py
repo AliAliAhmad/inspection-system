@@ -24,8 +24,14 @@ class AssessmentService:
         if not assignment:
             raise NotFoundError(f"Assignment {assignment_id} not found")
 
-        if assignment.status != 'both_complete':
-            raise ValidationError("Both inspectors must complete their checklists first")
+        # Allow assessment creation when both inspectors are done
+        # Accept 'both_complete', 'assessment_pending', or 'completed' (backward compat)
+        allowed_statuses = ['both_complete', 'assessment_pending', 'completed']
+        if assignment.status not in allowed_statuses:
+            raise ValidationError(
+                f"Both inspectors must complete their checklists first. "
+                f"Current status: {assignment.status}"
+            )
 
         # Check if assessment already exists
         existing = FinalAssessment.query.filter_by(

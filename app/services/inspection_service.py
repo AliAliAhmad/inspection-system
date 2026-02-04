@@ -45,16 +45,30 @@ class InspectionService:
             raise ValidationError("Invalid inspector")
 
         # Check if inspector is assigned to this equipment via InspectionAssignment
-        assignment = InspectionAssignment.query.filter(
-            InspectionAssignment.equipment_id == equipment_id,
-            db.or_(
-                InspectionAssignment.mechanical_inspector_id == technician_id,
-                InspectionAssignment.electrical_inspector_id == technician_id
-            ),
-            InspectionAssignment.status.in_(['assigned', 'in_progress', 'mech_complete', 'elec_complete'])
-        ).first()
-        if not assignment:
-            raise ForbiddenError("You are not assigned to inspect this equipment")
+        # If assignment_id is given, use it directly; otherwise search by equipment
+        if assignment_id:
+            assignment = db.session.get(InspectionAssignment, assignment_id)
+            if not assignment:
+                raise NotFoundError(f"Assignment {assignment_id} not found")
+            if technician_id not in (assignment.mechanical_inspector_id, assignment.electrical_inspector_id):
+                raise ForbiddenError("You are not assigned to this inspection")
+            # Allow starting inspection for active assignments
+            active_statuses = ['assigned', 'in_progress', 'mech_complete', 'elec_complete']
+            if assignment.status not in active_statuses:
+                raise ForbiddenError(
+                    f"Cannot start inspection - assignment status is '{assignment.status}'"
+                )
+        else:
+            assignment = InspectionAssignment.query.filter(
+                InspectionAssignment.equipment_id == equipment_id,
+                db.or_(
+                    InspectionAssignment.mechanical_inspector_id == technician_id,
+                    InspectionAssignment.electrical_inspector_id == technician_id
+                ),
+                InspectionAssignment.status.in_(['assigned', 'in_progress', 'mech_complete', 'elec_complete'])
+            ).first()
+            if not assignment:
+                raise ForbiddenError("You are not assigned to inspect this equipment")
 
         # Check for existing draft inspection
         # If assignment_id is provided, check by assignment; otherwise by equipment
@@ -184,21 +198,19 @@ class InspectionService:
         if item.template_id != inspection.template_id:
             raise ValidationError("Checklist item does not belong to inspection template")
         
-        # Validate answer based on type
-        InspectionService._validate_answer_value(item.answer_type, answer_value)
-        
-        # Note: critical failure photo requirement is enforced at submit time,
-        # not at answer time, so inspectors can mark fail and upload photo after.
-
         # Check if answer already exists
         existing_answer = InspectionAnswer.query.filter_by(
             inspection_id=inspection_id,
             checklist_item_id=checklist_item_id
         ).first()
-        
+
         if existing_answer:
             # Update existing answer - only update fields that are explicitly provided
-            existing_answer.answer_value = answer_value
+            # If answer_value is non-empty, validate and update it
+            # If empty, keep the existing answer_value (allows saving just comment/voice)
+            if answer_value:
+                InspectionService._validate_answer_value(item.answer_type, answer_value)
+                existing_answer.answer_value = answer_value
             # Only update comment if explicitly provided (not None)
             # to avoid wiping AI analysis when just changing answer value
             if comment is not None:
@@ -211,11 +223,13 @@ class InspectionService:
             existing_answer.answered_at = datetime.utcnow()
             answer = existing_answer
         else:
-            # Create new answer
+            # Create new answer - validate answer_value if non-empty
+            if answer_value:
+                InspectionService._validate_answer_value(item.answer_type, answer_value)
             answer = InspectionAnswer(
                 inspection_id=inspection_id,
                 checklist_item_id=checklist_item_id,
-                answer_value=answer_value,
+                answer_value=answer_value or '',
                 comment=comment,
                 photo_path=photo_path,
                 voice_note_id=voice_note_id
@@ -343,12 +357,16 @@ class InspectionService:
         inspection.result = 'fail' if failed_answers else 'pass'
         inspection.submitted_at = datetime.utcnow()
 
-        # Update assignment status to completed
+        # Mark this inspector's part as complete on the assignment
         if inspection.assignment_id:
-            from app.models import InspectionAssignment
-            assignment = db.session.get(InspectionAssignment, inspection.assignment_id)
-            if assignment:
-                assignment.status = 'completed'
+            try:
+                from app.services.inspection_list_service import InspectionListService
+                InspectionListService.mark_inspector_complete(
+                    inspection.assignment_id,
+                    inspection.technician_id
+                )
+            except Exception as e:
+                logger.warning("Could not update assignment status: %s", e)
 
         db.session.commit()
         

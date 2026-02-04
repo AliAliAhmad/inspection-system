@@ -69,10 +69,18 @@ def get_or_start_by_assignment(assignment_id):
         raise ForbiddenError("You are not assigned to this inspection")
 
     # Check for existing inspection for this assignment + user
+    # First look for draft, then for any status (so user can still see submitted data)
     existing = Inspection.query.filter_by(
         assignment_id=assignment_id,
         technician_id=current_user.id,
     ).filter(Inspection.status == 'draft').first()
+
+    if not existing:
+        # Also check for submitted/reviewed inspections (read-only view)
+        existing = Inspection.query.filter_by(
+            assignment_id=assignment_id,
+            technician_id=current_user.id,
+        ).order_by(Inspection.started_at.desc()).first()
 
     if existing:
         inspection_dict = existing.to_dict(include_answers=True, language=language)
@@ -87,12 +95,19 @@ def get_or_start_by_assignment(assignment_id):
         import logging
         logger = logging.getLogger(__name__)
         for ans in inspection_dict.get('answers', []):
-            if ans.get('photo_file') or ans.get('video_file') or ans.get('voice_note'):
-                logger.info("Answer %s media: photo_file=%s video_file=%s voice_note=%s",
-                    ans.get('checklist_item_id'),
-                    ans.get('photo_file', {}).get('url', 'NONE') if ans.get('photo_file') else 'NULL',
-                    ans.get('video_file', {}).get('url', 'NONE') if ans.get('video_file') else 'NULL',
-                    ans.get('voice_note', {}).get('url', 'NONE') if ans.get('voice_note') else 'NULL')
+            item_id = ans.get('checklist_item_id')
+            pf = ans.get('photo_file')
+            vf = ans.get('video_file')
+            vn = ans.get('voice_note')
+            if pf or vf or vn:
+                logger.info("Answer item=%s: photo_file=%s video_file=%s voice_note=%s",
+                    item_id,
+                    pf.get('url', 'NO_URL') if pf else 'NULL',
+                    vf.get('url', 'NO_URL') if vf else 'NULL',
+                    vn.get('url', 'NO_URL') if vn else 'NULL')
+            else:
+                # Log even answers without media so we can see photo_file_id
+                logger.debug("Answer item=%s: no media files attached", item_id)
 
         return jsonify({'status': 'success', 'data': inspection_dict}), 200
 
@@ -413,9 +428,8 @@ def upload_answer_media(inspection_id):
 
     db.session.commit()
 
-    # Trigger GPT analysis using Cloudinary URL
-    cloudinary_url = file_record.file_path  # file_path now stores Cloudinary URL
-    _analyze_media_async(cloudinary_url, media_type, inspection_id, int(checklist_item_id))
+    # AI analysis is handled client-side to avoid race conditions
+    # (both frontend and backend were writing to comment field with different formats)
 
     return jsonify({
         'status': 'success',
