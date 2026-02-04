@@ -625,9 +625,11 @@ def _analyze_media_async(cloudinary_url, media_type, inspection_id, checklist_it
                         client = OpenAI(api_key=api_key)
 
                         prompt = (
-                            "Describe what you see in this inspection image in 1-2 short sentences. "
-                            "Focus on identifying any defects, damage, or issues visible. "
-                            "Be concise and specific."
+                            "Analyze this industrial inspection image. "
+                            "Identify any defects, damage, wear, or issues visible. "
+                            "Provide your response in BOTH English and Arabic, using this exact format:\n"
+                            "EN: [Your analysis in English - 1-2 sentences]\n"
+                            "AR: [نفس التحليل بالعربية - جملة أو جملتين]"
                         )
 
                         # Use Cloudinary URL directly - GPT can fetch from URL
@@ -643,7 +645,7 @@ def _analyze_media_async(cloudinary_url, media_type, inspection_id, checklist_it
                                     }}
                                 ]
                             }],
-                            max_tokens=150,
+                            max_tokens=300,
                             timeout=30,
                         )
 
@@ -662,7 +664,7 @@ def _analyze_media_async(cloudinary_url, media_type, inspection_id, checklist_it
                             return
 
                         prefix = '[Photo]:' if media_type == 'image' else '[Video]:'
-                        analysis_line = f'{prefix} {analysis}'
+                        analysis_line = f'{prefix}\n{analysis}'
 
                         # Append — don't overwrite existing comment
                         if answer.comment:
