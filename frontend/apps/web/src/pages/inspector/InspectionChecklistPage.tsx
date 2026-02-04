@@ -870,14 +870,26 @@ function ChecklistItemCard({
         }
         try {
           // For videos, use thumbnail URL for analysis
-          const analyzeUrl = isVideo
-            ? mediaUrl.replace('/upload/', '/upload/so_1,w_640,h_480,c_fill/').replace(/\.[^.]+$/, '.jpg')
-            : mediaUrl;
+          // Cloudinary video thumbnail: so_auto (auto select best frame), f_jpg (force JPG output)
+          let analyzeUrl = mediaUrl;
+          if (isVideo) {
+            // Extract thumbnail from video - use auto frame selection and explicit format
+            analyzeUrl = mediaUrl
+              .replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
+              .replace(/\.(mp4|mov|webm|avi|mkv)$/i, '.jpg');
+            console.log('Video thumbnail URL for analysis:', analyzeUrl);
+          }
 
           // Get analysis in both languages
           const [enResult, arResult] = await Promise.all([
-            aiApi.analyzeDefect(analyzeUrl, 'en'),
-            aiApi.analyzeDefect(analyzeUrl, 'ar'),
+            aiApi.analyzeDefect(analyzeUrl, 'en').catch(err => {
+              console.error('EN analysis failed:', err);
+              return { data: { data: { success: false } } };
+            }),
+            aiApi.analyzeDefect(analyzeUrl, 'ar').catch(err => {
+              console.error('AR analysis failed:', err);
+              return { data: { data: { success: false } } };
+            }),
           ]);
 
           const enData = (enResult.data as any)?.data;

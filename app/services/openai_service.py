@@ -88,7 +88,7 @@ Format your response as JSON with keys: description, severity, cause, recommenda
             return result
 
         except Exception as e:
-            logger.error(f"Vision analysis failed: {e}")
+            logger.error(f"Vision analysis failed for URL {image_url[:100]}...: {e}")
             return {'error': str(e), 'success': False}
 
     @staticmethod
