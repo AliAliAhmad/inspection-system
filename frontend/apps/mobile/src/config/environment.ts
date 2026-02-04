@@ -8,7 +8,7 @@ interface Environment {
 
 const ENV: Record<string, Environment> = {
   development: {
-    apiUrl: 'http://localhost:5000',
+    apiUrl: 'http://10.16.219.247:5001',
     appName: 'Inspection System (Dev)',
     isDev: true,
   },

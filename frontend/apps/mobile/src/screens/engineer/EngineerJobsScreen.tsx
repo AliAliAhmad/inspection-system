@@ -69,7 +69,7 @@ export default function EngineerJobsScreen() {
   const renderJob = useCallback(({ item }: { item: EngineerJob }) => (
     <TouchableOpacity
       style={styles.card}
-      onPress={() => navigation.navigate('EngineerJobDetail', { id: item.id })}
+      onPress={() => navigation.navigate('EngineerJobDetail', { jobId: item.id })}
       activeOpacity={0.7}
     >
       <View style={styles.cardHeader}>

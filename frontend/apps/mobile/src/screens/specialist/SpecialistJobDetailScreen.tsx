@@ -86,7 +86,7 @@ export default function SpecialistJobDetailScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ScreenRoute>();
   const queryClient = useQueryClient();
-  const { id } = route.params;
+  const { jobId: id } = route.params;
 
   // Timer state
   const [elapsedSeconds, setElapsedSeconds] = useState(0);

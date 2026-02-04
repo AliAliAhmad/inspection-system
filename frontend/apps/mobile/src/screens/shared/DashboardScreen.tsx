@@ -71,9 +71,22 @@ export default function DashboardScreen() {
             <StatCard title={t('nav.defects')} value={adminData.open_defects} color={adminData.open_defects > 0 ? '#cf1322' : undefined} />
             <StatCard title={t('nav.leaves')} value={adminData.active_leaves} />
           </View>
+
           <Text style={styles.sectionTitle}>{t('nav.quick_links', 'Quick Access')}</Text>
           <QuickLink label={t('nav.routines', 'Inspection Routines')} onPress={() => navigation.navigate('InspectionRoutines')} />
           <QuickLink label={t('nav.defects', 'Defects')} onPress={() => navigation.navigate('Defects')} />
+          <QuickLink label={t('nav.equipment', 'Equipment')} onPress={() => navigation.navigate('Equipment')} />
+          <QuickLink label={t('nav.checklists', 'Checklists')} onPress={() => navigation.navigate('Checklists')} />
+          <QuickLink label={t('nav.allInspections', 'All Inspections')} onPress={() => navigation.navigate('AllInspections')} />
+          <QuickLink label={t('nav.allSpecialistJobs', 'Specialist Jobs')} onPress={() => navigation.navigate('AllSpecialistJobs')} />
+          <QuickLink label={t('nav.allEngineerJobs', 'Engineer Jobs')} onPress={() => navigation.navigate('AllEngineerJobs')} />
+          <QuickLink label={t('nav.schedules', 'Schedules')} onPress={() => navigation.navigate('Schedules')} />
+          <QuickLink label={t('nav.teamRoster', 'Team Roster')} onPress={() => navigation.navigate('TeamRoster')} />
+          <QuickLink label={t('nav.backlog', 'Backlog')} onPress={() => navigation.navigate('Backlog')} />
+          <QuickLink label={t('nav.leaveApprovals', 'Leave Approvals')} onPress={() => navigation.navigate('LeaveApprovals')} />
+          <QuickLink label={t('nav.bonusApprovals', 'Bonus Approvals')} onPress={() => navigation.navigate('BonusApprovals')} />
+          <QuickLink label={t('nav.inspectionAssignments', 'Assignment Lists')} onPress={() => navigation.navigate('InspectionAssignments')} />
+          <QuickLink label={t('nav.qualityReviews', 'Quality Reviews')} onPress={() => navigation.navigate('QualityReviewsAdmin')} />
         </>
       ) : dashData ? (
         <View style={styles.grid}>

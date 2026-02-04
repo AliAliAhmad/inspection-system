@@ -33,7 +33,7 @@ const PAUSE_CATEGORIES: PauseCategory[] = [
 export default function EngineerJobDetailScreen() {
   const { t } = useTranslation();
   const route = useRoute<RouteProp<RootStackParamList, 'EngineerJobDetail'>>();
-  const { id } = route.params;
+  const { jobId: id } = route.params;
   const queryClient = useQueryClient();
 
   const [completeModalVisible, setCompleteModalVisible] = useState(false);

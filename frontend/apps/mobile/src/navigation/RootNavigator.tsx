@@ -14,18 +14,45 @@ import OverdueReviewsScreen from '../screens/quality_engineer/OverdueReviewsScre
 import InspectionRoutinesScreen from '../screens/admin/InspectionRoutinesScreen';
 import DefectsScreen from '../screens/admin/DefectsScreen';
 
+// New admin screens
+import EquipmentScreen from '../screens/admin/EquipmentScreen';
+import ChecklistsScreen from '../screens/admin/ChecklistsScreen';
+import AllInspectionsScreen from '../screens/admin/AllInspectionsScreen';
+import AllSpecialistJobsScreen from '../screens/admin/AllSpecialistJobsScreen';
+import AllEngineerJobsScreen from '../screens/admin/AllEngineerJobsScreen';
+import SchedulesScreen from '../screens/admin/SchedulesScreen';
+import TeamRosterScreen from '../screens/admin/TeamRosterScreen';
+import BacklogScreen from '../screens/admin/BacklogScreen';
+import LeaveApprovalsScreen from '../screens/admin/LeaveApprovalsScreen';
+import BonusApprovalsScreen from '../screens/admin/BonusApprovalsScreen';
+import InspectionAssignmentsScreen from '../screens/admin/InspectionAssignmentsScreen';
+import QualityReviewsAdminScreen from '../screens/admin/QualityReviewsAdminScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
   Assessment: { id: number };
-  SpecialistJobDetail: { id: number };
-  EngineerJobDetail: { id: number };
+  SpecialistJobDetail: { jobId: number };
+  EngineerJobDetail: { jobId: number };
   CreateJob: undefined;
   TeamAssignment: undefined;
   ReviewDetail: { id: number };
   OverdueReviews: undefined;
   InspectionRoutines: undefined;
   Defects: undefined;
+  // Admin screens
+  Equipment: undefined;
+  Checklists: undefined;
+  AllInspections: undefined;
+  AllSpecialistJobs: undefined;
+  AllEngineerJobs: undefined;
+  Schedules: undefined;
+  TeamRoster: undefined;
+  Backlog: undefined;
+  LeaveApprovals: undefined;
+  BonusApprovals: undefined;
+  InspectionAssignments: undefined;
+  QualityReviewsAdmin: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -44,6 +71,19 @@ export default function RootNavigator() {
       <Stack.Screen name="OverdueReviews" component={OverdueReviewsScreen} options={{ headerShown: true, title: 'Overdue Reviews' }} />
       <Stack.Screen name="InspectionRoutines" component={InspectionRoutinesScreen} options={{ headerShown: true, title: 'Inspection Routines' }} />
       <Stack.Screen name="Defects" component={DefectsScreen} options={{ headerShown: true, title: 'Defects' }} />
+      {/* Admin screens */}
+      <Stack.Screen name="Equipment" component={EquipmentScreen} options={{ headerShown: true, title: 'Equipment' }} />
+      <Stack.Screen name="Checklists" component={ChecklistsScreen} options={{ headerShown: true, title: 'Checklists' }} />
+      <Stack.Screen name="AllInspections" component={AllInspectionsScreen} options={{ headerShown: true, title: 'All Inspections' }} />
+      <Stack.Screen name="AllSpecialistJobs" component={AllSpecialistJobsScreen} options={{ headerShown: true, title: 'Specialist Jobs' }} />
+      <Stack.Screen name="AllEngineerJobs" component={AllEngineerJobsScreen} options={{ headerShown: true, title: 'Engineer Jobs' }} />
+      <Stack.Screen name="Schedules" component={SchedulesScreen} options={{ headerShown: true, title: 'Schedules' }} />
+      <Stack.Screen name="TeamRoster" component={TeamRosterScreen} options={{ headerShown: true, title: 'Team Roster' }} />
+      <Stack.Screen name="Backlog" component={BacklogScreen} options={{ headerShown: true, title: 'Backlog' }} />
+      <Stack.Screen name="LeaveApprovals" component={LeaveApprovalsScreen} options={{ headerShown: true, title: 'Leave Approvals' }} />
+      <Stack.Screen name="BonusApprovals" component={BonusApprovalsScreen} options={{ headerShown: true, title: 'Bonus Approvals' }} />
+      <Stack.Screen name="InspectionAssignments" component={InspectionAssignmentsScreen} options={{ headerShown: true, title: 'Assignments' }} />
+      <Stack.Screen name="QualityReviewsAdmin" component={QualityReviewsAdminScreen} options={{ headerShown: true, title: 'Quality Reviews' }} />
     </Stack.Navigator>
   );
 }

@@ -128,7 +128,7 @@ export default function SpecialistJobsScreen() {
           setPlannedTimeModalVisible(true);
         }
       } else {
-        navigation.navigate('SpecialistJobDetail', { id: job.id });
+        navigation.navigate('SpecialistJobDetail', { jobId: job.id });
       }
     },
     [navigation, t, enterPlannedTimeMutation],

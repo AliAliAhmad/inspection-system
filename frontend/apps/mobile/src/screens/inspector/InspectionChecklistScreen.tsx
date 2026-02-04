@@ -11,7 +11,9 @@ import {
   RefreshControl,
   Image,
 } from 'react-native';
+import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
+import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -57,6 +59,10 @@ interface LocalAnswers {
     comment?: string;
     photo_uri?: string;       // Local URI for preview while uploading
     photo_url?: string;       // Cloudinary URL after upload
+    video_uri?: string;       // Local URI for video preview
+    video_url?: string;       // Cloudinary URL for video
+    voice_note_id?: number;   // Voice note file ID
+    voice_note_url?: string;  // Cloudinary URL for voice note
     isUploading?: boolean;    // Upload in progress
   };
 }
@@ -93,12 +99,17 @@ export default function InspectionChecklistScreen() {
     if (inspection?.answers) {
       const existing: LocalAnswers = {};
       inspection.answers.forEach((ans: InspectionAnswer) => {
-        // Get Cloudinary URL from photo_file if available
+        // Get Cloudinary URLs from file records if available
         const photoUrl = (ans.photo_file as any)?.url || null;
+        const videoUrl = (ans.video_file as any)?.url || null;
+        const voiceNoteUrl = (ans.voice_note as any)?.url || null;
         existing[ans.checklist_item_id] = {
           answer_value: ans.answer_value,
           comment: ans.comment ?? undefined,
           photo_url: photoUrl ?? undefined,
+          video_url: videoUrl ?? undefined,
+          voice_note_id: ans.voice_note_id ?? undefined,
+          voice_note_url: voiceNoteUrl ?? undefined,
         };
       });
       setLocalAnswers((prev) => ({ ...existing, ...prev }));
@@ -114,7 +125,7 @@ export default function InspectionChecklistScreen() {
   });
 
   const answerMutation = useMutation({
-    mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string }) =>
+    mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string; voice_note_id?: number }) =>
       inspectionsApi.answerQuestion(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inspectionProgress', id] });
@@ -404,6 +415,103 @@ export default function InspectionChecklistScreen() {
     }
   };
 
+  // Handle voice note recorded
+  const handleVoiceNoteRecorded = useCallback((checklistItemId: number, voiceNoteId: number, transcription?: { en: string; ar: string }) => {
+    setLocalAnswers((prev) => ({
+      ...prev,
+      [checklistItemId]: {
+        ...prev[checklistItemId],
+        voice_note_id: voiceNoteId,
+      },
+    }));
+
+    // Save voice note ID with answer
+    const current = localAnswers[checklistItemId];
+    if (current?.answer_value) {
+      answerMutation.mutate({
+        checklist_item_id: checklistItemId,
+        answer_value: current.answer_value,
+        comment: current.comment,
+        voice_note_id: voiceNoteId,
+      });
+    }
+  }, [localAnswers, answerMutation]);
+
+  // Handle video recording
+  const handleRecordVideo = useCallback(
+    async (checklistItemId: number) => {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('common.error'), 'Camera permission is required.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        quality: 0.7,
+        videoMaxDuration: 60, // Max 60 seconds
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        uploadVideo(checklistItemId, asset.uri, asset.fileName || 'video.mp4');
+      }
+    },
+    [t],
+  );
+
+  // Upload video to Cloudinary
+  const uploadVideo = useCallback(
+    async (checklistItemId: number, uri: string, fileName: string) => {
+      setLocalAnswers((prev) => ({
+        ...prev,
+        [checklistItemId]: {
+          ...prev[checklistItemId],
+          video_uri: uri,
+          isUploading: true,
+        },
+      }));
+
+      try {
+        const formData = new FormData();
+        formData.append('file', {
+          uri,
+          name: fileName || 'video.mp4',
+          type: 'video/mp4',
+        } as any);
+        formData.append('checklist_item_id', String(checklistItemId));
+
+        const response = await inspectionsApi.uploadMedia(id, checklistItemId, formData as any);
+        const data = (response.data as any)?.data;
+        const cloudinaryUrl = data?.video_file?.url || data?.url;
+
+        setLocalAnswers((prev) => ({
+          ...prev,
+          [checklistItemId]: {
+            ...prev[checklistItemId],
+            video_uri: undefined,
+            video_url: cloudinaryUrl,
+            isUploading: false,
+          },
+        }));
+
+        queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+      } catch (error) {
+        console.error('Video upload failed:', error);
+        Alert.alert(t('common.error'), 'Failed to upload video');
+        setLocalAnswers((prev) => ({
+          ...prev,
+          [checklistItemId]: {
+            ...prev[checklistItemId],
+            video_uri: undefined,
+            isUploading: false,
+          },
+        }));
+      }
+    },
+    [id, queryClient, t],
+  );
+
   const renderChecklistItem = (item: ChecklistItem) => {
     const questionText = isArabic && item.question_text_ar
       ? item.question_text_ar
@@ -413,6 +521,10 @@ export default function InspectionChecklistScreen() {
 
     // Photo URL: prefer Cloudinary URL, fallback to local URI during upload
     const photoSource = currentAnswer?.photo_url || currentAnswer?.photo_uri;
+    // Video URL: prefer Cloudinary URL, fallback to local URI
+    const videoSource = currentAnswer?.video_url || currentAnswer?.video_uri;
+    // Voice note URL
+    const voiceNoteUrl = currentAnswer?.voice_note_url;
     const isUploading = currentAnswer?.isUploading;
 
     return (
@@ -465,7 +577,22 @@ export default function InspectionChecklistScreen() {
           >
             <Text style={styles.galleryButtonText}>{t('inspection.photo')}</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.videoButton, isUploading && styles.buttonDisabled]}
+            onPress={() => handleRecordVideo(item.id)}
+            disabled={isUploading}
+          >
+            <Text style={styles.videoButtonText}>{t('inspection.video', 'Video')}</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Voice Note Recorder */}
+        <VoiceNoteRecorder
+          onVoiceNoteRecorded={(voiceNoteId, transcription) => handleVoiceNoteRecorded(item.id, voiceNoteId, transcription)}
+          existingVoiceUrl={voiceNoteUrl}
+          disabled={isUploading}
+        />
 
         {commentExpanded ? (
           <VoiceTextInput
@@ -491,6 +618,25 @@ export default function InspectionChecklistScreen() {
               <View style={styles.uploadOverlay}>
                 <ActivityIndicator color="#fff" size="large" />
                 <Text style={styles.uploadingText}>Uploading...</Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {/* Video preview */}
+        {videoSource ? (
+          <View style={styles.videoContainer}>
+            <Video
+              source={{ uri: videoSource }}
+              style={styles.videoPreview}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              isLooping={false}
+            />
+            {isUploading && (
+              <View style={styles.uploadOverlay}>
+                <ActivityIndicator color="#fff" size="large" />
+                <Text style={styles.uploadingText}>Uploading video...</Text>
               </View>
             )}
           </View>
@@ -834,6 +980,27 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  videoButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#E8F5E9',
+  },
+  videoButtonText: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '500',
+  },
+  videoContainer: {
+    position: 'relative',
+    marginTop: 8,
+  },
+  videoPreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: '#000',
   },
   commentInput: {
     borderWidth: 1,
