@@ -628,6 +628,18 @@ function ChecklistItemCard({
     return parts.length > 0 ? parts.join('\n\n') : undefined;
   }, [photoAnalysis, videoAnalysis, voiceTranscription]);
 
+  // Auto-save analysis comment when any analysis state changes
+  // This runs AFTER React commits the new state, so buildAnalysisComment reads correct values
+  useEffect(() => {
+    if (!localAnalysisSetRef.current) return;
+    const comment = buildAnalysisComment();
+    if (comment) {
+      const answerValue = currentValue || existingAnswer?.answer_value || '';
+      onAnswer(item.id, answerValue, comment, voiceNoteId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildAnalysisComment]);
+
   const handleAnswerChange = (value: string) => {
     setCurrentValue(value);
     // Include any AI analysis/transcription in the comment for persistence
@@ -703,14 +715,7 @@ function ChecklistItemCard({
             // Store transcription in state for display
             setVoiceTranscription({ en: result.en || '', ar: result.ar || '' });
             localAnalysisSetRef.current = true; // Mark that we set this locally
-
-            // Save transcription as comment (will be included when user answers)
-            if (currentValue) {
-              const analysisComment = buildAnalysisComment();
-              if (analysisComment) {
-                onAnswer(item.id, currentValue, analysisComment, voiceNoteIdRef.current);
-              }
-            }
+            // Transcription will be auto-saved by the useEffect that watches buildAnalysisComment
           }
 
           // Delay refetch to allow server to save
@@ -812,14 +817,7 @@ function ChecklistItemCard({
               setPhotoAnalysis({ en: enAnalysis, ar: arAnalysis });
             }
             localAnalysisSetRef.current = true; // Mark that we set this locally
-
-            // Only persist to server if user has already answered (otherwise saved when they answer)
-            if (currentValue) {
-              const analysisComment = buildAnalysisComment();
-              if (analysisComment) {
-                onAnswer(item.id, currentValue, analysisComment, voiceNoteId);
-              }
-            }
+            // Analysis will be auto-saved by the useEffect that watches buildAnalysisComment
             setShowComment(true);
             message.success(t('inspection.aiAnalysisComplete', 'AI analysis complete'));
           }
