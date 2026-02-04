@@ -27,6 +27,7 @@ import {
   SendOutlined,
   AudioOutlined,
   SoundOutlined,
+  VideoCameraOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -348,6 +349,116 @@ interface ChecklistItemCardProps {
   isSubmitted: boolean;
 }
 
+// Helper to extract analysis from comment
+function extractAnalysisFromComment(comment: string | null | undefined): {
+  photoAnalysis: { en: string; ar: string } | null;
+  videoAnalysis: { en: string; ar: string } | null;
+  voiceTranscription: { en: string; ar: string } | null;
+  otherComment: string;
+} {
+  if (!comment) return { photoAnalysis: null, videoAnalysis: null, voiceTranscription: null, otherComment: '' };
+
+  let photoAnalysis: { en: string; ar: string } | null = null;
+  let videoAnalysis: { en: string; ar: string } | null = null;
+  let voiceTranscription: { en: string; ar: string } | null = null;
+  const otherParts: string[] = [];
+
+  const lines = comment.split('\n');
+  let currentSection = '';
+  let enContent = '';
+  let arContent = '';
+
+  for (const line of lines) {
+    // Check for AI Analysis sections (photo or video)
+    if (line.includes('🔍 AI Analysis (EN)') || line.includes('🔍 Photo Analysis (EN)')) {
+      if (currentSection && (enContent || arContent)) {
+        if (currentSection === 'photo') photoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
+        else if (currentSection === 'video') videoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
+        else if (currentSection === 'voice') voiceTranscription = { en: enContent.trim(), ar: arContent.trim() };
+      }
+      currentSection = 'photo';
+      enContent = line + '\n';
+      arContent = '';
+    } else if (line.includes('🔍 Video Analysis (EN)')) {
+      if (currentSection && (enContent || arContent)) {
+        if (currentSection === 'photo') photoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
+        else if (currentSection === 'video') videoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
+        else if (currentSection === 'voice') voiceTranscription = { en: enContent.trim(), ar: arContent.trim() };
+      }
+      currentSection = 'video';
+      enContent = line + '\n';
+      arContent = '';
+    } else if (line.includes('🔍 تحليل الذكاء الاصطناعي (AR)') || line.includes('🔍 Photo Analysis (AR)') || line.includes('🔍 Video Analysis (AR)')) {
+      arContent = line + '\n';
+    } else if (line.startsWith('EN:') && !currentSection) {
+      // Voice transcription format
+      currentSection = 'voice';
+      enContent = line.replace('EN:', '').trim();
+    } else if (line.startsWith('AR:') && currentSection === 'voice') {
+      arContent = line.replace('AR:', '').trim();
+    } else if (currentSection) {
+      if (arContent) {
+        arContent += line + '\n';
+      } else {
+        enContent += line + '\n';
+      }
+    } else if (line.trim()) {
+      otherParts.push(line);
+    }
+  }
+
+  // Handle last section
+  if (currentSection && (enContent || arContent)) {
+    if (currentSection === 'photo') photoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
+    else if (currentSection === 'video') videoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
+    else if (currentSection === 'voice') voiceTranscription = { en: enContent.trim(), ar: arContent.trim() };
+  }
+
+  return { photoAnalysis, videoAnalysis, voiceTranscription, otherComment: otherParts.join('\n') };
+}
+
+// Analysis display box component
+function AnalysisBox({ title, titleAr, icon, enContent, arContent, color }: {
+  title: string;
+  titleAr: string;
+  icon: React.ReactNode;
+  enContent: string;
+  arContent: string;
+  color: string;
+}) {
+  return (
+    <div style={{
+      background: '#f6ffed',
+      border: `1px solid ${color}`,
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        {icon}
+        <Typography.Text strong style={{ color }}>{title}</Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>/ {titleAr}</Typography.Text>
+      </div>
+      {enContent && (
+        <div style={{ marginBottom: 8 }}>
+          <Tag color="blue" style={{ marginBottom: 4 }}>EN</Tag>
+          <Typography.Text style={{ whiteSpace: 'pre-wrap', fontSize: 13, display: 'block' }}>
+            {enContent.replace(/^🔍.*\n?/, '').trim()}
+          </Typography.Text>
+        </div>
+      )}
+      {arContent && (
+        <div style={{ direction: 'rtl', textAlign: 'right' }}>
+          <Tag color="green" style={{ marginBottom: 4 }}>AR</Tag>
+          <Typography.Text style={{ whiteSpace: 'pre-wrap', fontSize: 13, display: 'block' }}>
+            {arContent.replace(/^🔍.*\n?/, '').trim()}
+          </Typography.Text>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChecklistItemCard({
   item,
   existingAnswer,
@@ -373,7 +484,23 @@ function ChecklistItemCard({
   const [recordingTime, setRecordingTime] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAnalyzingVideo, setIsAnalyzingVideo] = useState(false);
   const [isReadingAloud, setIsReadingAloud] = useState(false);
+
+  // Separate state for each analysis type
+  const [photoAnalysis, setPhotoAnalysis] = useState<{ en: string; ar: string } | null>(null);
+  const [videoAnalysis, setVideoAnalysis] = useState<{ en: string; ar: string } | null>(null);
+  const [voiceTranscription, setVoiceTranscription] = useState<{ en: string; ar: string } | null>(null);
+
+  // Extract analysis from existing comment on mount
+  useEffect(() => {
+    if (existingAnswer?.comment) {
+      const extracted = extractAnalysisFromComment(existingAnswer.comment);
+      if (extracted.photoAnalysis) setPhotoAnalysis(extracted.photoAnalysis);
+      if (extracted.videoAnalysis) setVideoAnalysis(extracted.videoAnalysis);
+      if (extracted.voiceTranscription) setVoiceTranscription(extracted.voiceTranscription);
+    }
+  }, [existingAnswer?.comment]);
 
   // Read question aloud using TTS
   const readAloud = async () => {
@@ -490,6 +617,10 @@ function ChecklistItemCard({
           }
 
           if (!result.transcription_failed && (result.en || result.ar)) {
+            // Store transcription in state for display
+            setVoiceTranscription({ en: result.en || '', ar: result.ar || '' });
+
+            // Build comment with transcription
             const parts: string[] = [];
             if (result.en) parts.push(`EN: ${result.en}`);
             if (result.ar) parts.push(`AR: ${result.ar}`);
@@ -537,7 +668,11 @@ function ChecklistItemCard({
 
       if (mediaUrl && mediaUrl.includes('cloudinary.com')) {
         // Auto-analyze with AI
-        setIsAnalyzing(true);
+        if (isVideo) {
+          setIsAnalyzingVideo(true);
+        } else {
+          setIsAnalyzing(true);
+        }
         try {
           // For videos, use thumbnail URL for analysis
           const analyzeUrl = isVideo
@@ -555,9 +690,11 @@ function ChecklistItemCard({
 
           if (enData?.success || arData?.success) {
             // Format analysis as bilingual comment
+            const typeLabel = isVideo ? 'Video' : 'Photo';
+            const typeLabelAr = isVideo ? 'فيديو' : 'صورة';
             const formatAnalysis = (data: any, lang: string) => {
               if (!data || !data.success) return '';
-              const prefix = lang === 'en' ? '🔍 AI Analysis (EN)' : '🔍 تحليل الذكاء الاصطناعي (AR)';
+              const prefix = lang === 'en' ? `🔍 ${typeLabel} Analysis (EN)` : `🔍 تحليل ${typeLabelAr} (AR)`;
               const lines = [prefix];
               if (data.description) lines.push(`• ${lang === 'en' ? 'Issue' : 'المشكلة'}: ${data.description}`);
               if (data.severity) lines.push(`• ${lang === 'en' ? 'Severity' : 'الخطورة'}: ${data.severity}`);
@@ -569,10 +706,18 @@ function ChecklistItemCard({
 
             const enAnalysis = formatAnalysis(enData, 'en');
             const arAnalysis = formatAnalysis(arData, 'ar');
+
+            // Store in state for separate display
+            if (isVideo) {
+              setVideoAnalysis({ en: enAnalysis, ar: arAnalysis });
+            } else {
+              setPhotoAnalysis({ en: enAnalysis, ar: arAnalysis });
+            }
+
             const combinedAnalysis = [enAnalysis, '', arAnalysis].filter(Boolean).join('\n');
 
             if (combinedAnalysis) {
-              // Update comment with AI analysis
+              // Update comment with AI analysis (for persistence)
               const existingComment = existingAnswer?.comment || '';
               const newComment = existingComment
                 ? `${existingComment}\n\n${combinedAnalysis}`
@@ -585,9 +730,16 @@ function ChecklistItemCard({
           }
         } catch (err) {
           console.warn('AI analysis failed:', err);
-          // Silent fail - media is still uploaded
+          message.warning(isVideo
+            ? t('inspection.videoAnalysisFailed', 'Video analysis failed')
+            : t('inspection.photoAnalysisFailed', 'Photo analysis failed')
+          );
         } finally {
-          setIsAnalyzing(false);
+          if (isVideo) {
+            setIsAnalyzingVideo(false);
+          } else {
+            setIsAnalyzing(false);
+          }
           refetchInspection();
         }
       }
@@ -603,6 +755,7 @@ function ChecklistItemCard({
     onSuccess: () => {
       setVoiceNoteId(undefined);
       setLocalBlobUrl(null);
+      setVoiceTranscription(null);
       message.success(t('inspection.voiceDeleted', 'Voice note deleted'));
       refetchInspection();
     },
@@ -834,6 +987,7 @@ function ChecklistItemCard({
                   deletePhotoMutation.mutate();
                   setLocalPhotoUrl(null);
                   setPhotoLoadError(false);
+                  setPhotoAnalysis(null);
                 }}
                 style={{ position: 'absolute', top: 8, right: 8 }}
               />
@@ -858,8 +1012,8 @@ function ChecklistItemCard({
               style={{ maxWidth: 310, maxHeight: 220, borderRadius: 6, display: 'block', background: '#000' }}
               preload="metadata"
             />
-            {/* AI Analyzing indicator */}
-            {isAnalyzing && (
+            {/* AI Analyzing indicator for video */}
+            {isAnalyzingVideo && (
               <div style={{
                 position: 'absolute', bottom: 8, left: 8, right: 8,
                 background: 'rgba(0,0,0,0.7)', borderRadius: 4, padding: '4px 8px',
@@ -867,7 +1021,7 @@ function ChecklistItemCard({
               }}>
                 <Spin size="small" />
                 <Typography.Text style={{ color: '#fff', fontSize: 11 }}>
-                  {t('inspection.aiAnalyzing', 'AI Analyzing...')}
+                  {t('inspection.aiAnalyzingVideo', 'AI Analyzing Video...')}
                 </Typography.Text>
               </div>
             )}
@@ -881,6 +1035,7 @@ function ChecklistItemCard({
                 onClick={() => {
                   deleteVideoMutation.mutate();
                   setLocalVideoUrl(null);
+                  setVideoAnalysis(null);
                 }}
                 style={{ position: 'absolute', top: 8, right: 8 }}
               />
@@ -888,23 +1043,23 @@ function ChecklistItemCard({
           </div>
         )}
 
-        {/* Voice recording area */}
+        {/* Voice recording area - compact design */}
         {showComment && !isSubmitted && (
           <div style={{
             background: '#f0f2f5',
-            borderRadius: 24,
-            padding: '8px 16px',
-            display: 'flex',
+            borderRadius: 16,
+            padding: '4px 12px',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: 12,
+            gap: 8,
           }}>
-            {/* Hold to record button - WhatsApp style */}
+            {/* Hold to record button - smaller */}
             <Button
               type={isRecording ? 'primary' : 'default'}
               danger={isRecording}
               shape="circle"
-              size="large"
-              icon={<AudioOutlined />}
+              size="small"
+              icon={<AudioOutlined style={{ fontSize: 12 }} />}
               loading={isTranscribing}
               onMouseDown={startRecording}
               onMouseUp={stopRecording}
@@ -915,27 +1070,30 @@ function ChecklistItemCard({
                 background: isRecording ? '#ff4d4f' : '#25D366',
                 borderColor: isRecording ? '#ff4d4f' : '#25D366',
                 color: '#fff',
+                width: 28,
+                height: 28,
+                minWidth: 28,
               }}
             />
 
             {isRecording ? (
-              <Typography.Text style={{ color: '#ff4d4f', fontWeight: 500 }}>
-                {formatTime(recordingTime)} - {t('inspection.release_to_send', 'Release to send')}
+              <Typography.Text style={{ color: '#ff4d4f', fontWeight: 500, fontSize: 12 }}>
+                {formatTime(recordingTime)}
               </Typography.Text>
             ) : isTranscribing ? (
-              <Typography.Text type="secondary">
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {t('inspection.transcribing', 'Transcribing...')}
               </Typography.Text>
             ) : (
-              <Typography.Text type="secondary">
-                {t('inspection.hold_to_record', 'Hold to record')}
+              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                {t('inspection.hold_mic', 'Hold 🎙️')}
               </Typography.Text>
             )}
           </div>
         )}
 
         {/* Voice playback - WhatsApp style bubble with waveform */}
-        {voiceUrl && !isSubmitted && (
+        {voiceUrl && (
           <div style={{
             background: '#DCF8C6',
             borderRadius: 8,
@@ -958,37 +1116,77 @@ function ChecklistItemCard({
               />
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* Audio player with MP3 fallback for iOS */}
-              <audio controls style={{ height: 36, flex: 1 }} preload="metadata">
+              {/* Audio player with MP3 fallback for iOS - use auto preload to fix 0:00 bug */}
+              <audio
+                controls
+                style={{ height: 36, flex: 1 }}
+                preload="auto"
+                onLoadedMetadata={(e) => {
+                  // Force duration calculation
+                  const audio = e.target as HTMLAudioElement;
+                  if (audio.duration === Infinity || isNaN(audio.duration)) {
+                    // Seek to end and back to calculate duration
+                    audio.currentTime = 1e101;
+                    audio.ontimeupdate = function() {
+                      audio.ontimeupdate = null;
+                      audio.currentTime = 0;
+                    };
+                  }
+                }}
+              >
                 {voiceUrl.includes('cloudinary.com') && (
                   <source src={getAudioMp3Url(voiceUrl)} type="audio/mpeg" />
                 )}
                 <source src={voiceUrl} type="audio/webm" />
               </audio>
-              <Button
-                type="text"
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-                loading={deleteVoiceMutation.isPending}
-                onClick={() => deleteVoiceMutation.mutate()}
-              />
+              {!isSubmitted && (
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  loading={deleteVoiceMutation.isPending}
+                  onClick={() => deleteVoiceMutation.mutate()}
+                />
+              )}
             </div>
           </div>
         )}
 
-        {/* Comment display */}
-        {existingAnswer?.comment && (
-          <div style={{
-            background: '#DCF8C6',
-            borderRadius: 8,
-            padding: '8px 12px',
-            maxWidth: 400,
-          }}>
-            <Typography.Text style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
-              {existingAnswer.comment}
-            </Typography.Text>
-          </div>
+        {/* Voice Transcription Box */}
+        {voiceTranscription && (voiceTranscription.en || voiceTranscription.ar) && (
+          <AnalysisBox
+            title="Voice Transcription"
+            titleAr="النص الصوتي"
+            icon={<AudioOutlined style={{ color: '#722ed1' }} />}
+            enContent={voiceTranscription.en}
+            arContent={voiceTranscription.ar}
+            color="#722ed1"
+          />
+        )}
+
+        {/* Photo Analysis Box */}
+        {photoAnalysis && (photoAnalysis.en || photoAnalysis.ar) && (
+          <AnalysisBox
+            title="Photo Analysis"
+            titleAr="تحليل الصورة"
+            icon={<PictureOutlined style={{ color: '#52c41a' }} />}
+            enContent={photoAnalysis.en}
+            arContent={photoAnalysis.ar}
+            color="#52c41a"
+          />
+        )}
+
+        {/* Video Analysis Box */}
+        {videoAnalysis && (videoAnalysis.en || videoAnalysis.ar) && (
+          <AnalysisBox
+            title="Video Analysis"
+            titleAr="تحليل الفيديو"
+            icon={<VideoCameraOutlined style={{ color: '#1890ff' }} />}
+            enContent={videoAnalysis.en}
+            arContent={videoAnalysis.ar}
+            color="#1890ff"
+          />
         )}
 
         {/* Validation warnings */}
