@@ -64,7 +64,7 @@ services:
         value: strict-origin-when-cross-origin
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://inspection-api-o3hz.onrender.com; media-src 'self' blob: https://inspection-api-o3hz.onrender.com; frame-ancestors 'self';"
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://res.cloudinary.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://inspection-api-o3hz.onrender.com https://res.cloudinary.com; media-src 'self' blob: https://inspection-api-o3hz.onrender.com https://res.cloudinary.com; frame-ancestors 'self';"
     routes:
       - type: rewrite
         source: /*
