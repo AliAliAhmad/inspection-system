@@ -1,9 +1,10 @@
-import { jsx as _jsx } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { Spin } from 'antd';
 import { useAuth } from './providers/AuthProvider';
 import AppRouter from './router/AppRouter';
 import LoginPage from './pages/auth/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
+import AiAssistantChat from './components/AiAssistantChat';
 export default function App() {
     const { isAuthenticated, isLoading } = useAuth();
     if (isLoading) {
@@ -12,6 +13,6 @@ export default function App() {
     if (!isAuthenticated) {
         return _jsx(LoginPage, {});
     }
-    return (_jsx(ErrorBoundary, { children: _jsx(AppRouter, {}) }));
+    return (_jsxs(ErrorBoundary, { children: [_jsx(AppRouter, {}), _jsx(AiAssistantChat, {})] }));
 }
 //# sourceMappingURL=App.js.map

@@ -107,60 +107,92 @@ function VoicePlayer({ url, onDelete, isDeleting }: { url: string; onDelete?: ()
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [error, setError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const durationRef = useRef(0);
+
+  // Guard against empty/invalid URL
+  if (!url) {
+    return (
+      <div style={{ background: '#DCF8C6', borderRadius: 8, padding: '8px 12px', maxWidth: 320 }}>
+        <Typography.Text type="secondary">No audio available</Typography.Text>
+      </div>
+    );
+  }
 
   // Use MP3 version from Cloudinary for better compatibility
   const audioUrl = url.includes('cloudinary.com') ? getAudioMp3Url(url) : url;
   const waveformUrl = url.includes('cloudinary.com') ? getWaveformUrl(url) : '';
 
   useEffect(() => {
-    const audio = new Audio(audioUrl);
+    setError(false);
+    const audio = new Audio();
     audioRef.current = audio;
 
-    audio.addEventListener('loadedmetadata', () => {
+    const handleLoadedMetadata = () => {
       if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
         setDuration(audio.duration);
+        durationRef.current = audio.duration;
       }
-    });
+    };
 
-    audio.addEventListener('durationchange', () => {
+    const handleDurationChange = () => {
       if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
         setDuration(audio.duration);
+        durationRef.current = audio.duration;
       }
-    });
+    };
 
-    audio.addEventListener('timeupdate', () => {
+    const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
       // Update duration if we get it during playback
-      if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration) && duration === 0) {
+      if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration) && durationRef.current === 0) {
         setDuration(audio.duration);
+        durationRef.current = audio.duration;
       }
-    });
+    };
 
-    audio.addEventListener('ended', () => {
+    const handleEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
-    });
+    };
 
-    audio.addEventListener('error', () => {
-      console.warn('Audio load error, trying original URL');
-      // Fallback to original URL if MP3 conversion fails
-      if (audio.src !== url) {
+    const handleError = () => {
+      console.warn('Audio load error for:', audio.src);
+      // If MP3 failed, try original URL
+      if (audio.src.includes('/f_mp3/') && url) {
+        console.log('Trying original URL...');
         audio.src = url;
+        audio.load();
+      } else {
+        setError(true);
       }
-    });
+    };
 
-    // Force load to get duration
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('durationchange', handleDurationChange);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+
+    // Set source and load
+    audio.src = audioUrl;
+    audio.preload = 'auto';
     audio.load();
 
     return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('durationchange', handleDurationChange);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
       audio.pause();
       audio.src = '';
     };
   }, [audioUrl, url]);
 
   const togglePlay = () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || error) return;
 
     if (isPlaying) {
       audioRef.current.pause();
@@ -170,6 +202,7 @@ function VoicePlayer({ url, onDelete, isDeleting }: { url: string; onDelete?: ()
         setIsPlaying(true);
       }).catch(err => {
         console.error('Play failed:', err);
+        setError(true);
       });
     }
   };
@@ -180,6 +213,17 @@ function VoicePlayer({ url, onDelete, isDeleting }: { url: string; onDelete?: ()
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  if (error) {
+    return (
+      <div style={{ background: '#DCF8C6', borderRadius: 8, padding: '8px 12px', maxWidth: 320 }}>
+        <Typography.Text type="warning">Audio playback error</Typography.Text>
+        {onDelete && (
+          <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={onDelete} loading={isDeleting} style={{ marginLeft: 8 }} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -629,20 +673,27 @@ function ChecklistItemCard({
   const [isAnalyzingVideo, setIsAnalyzingVideo] = useState(false);
   const [isReadingAloud, setIsReadingAloud] = useState(false);
 
-  // Separate state for each analysis type
+  // Separate state for each analysis type - use refs to track if we've set from local action
   const [photoAnalysis, setPhotoAnalysis] = useState<{ en: string; ar: string } | null>(null);
   const [videoAnalysis, setVideoAnalysis] = useState<{ en: string; ar: string } | null>(null);
   const [voiceTranscription, setVoiceTranscription] = useState<{ en: string; ar: string } | null>(null);
+  const localAnalysisSetRef = useRef(false); // Track if analysis was set locally (not from server)
 
-  // Extract analysis from existing comment on mount
+  // Extract analysis from existing comment on mount - but don't overwrite local state
   useEffect(() => {
-    if (existingAnswer?.comment) {
+    // Only extract from server if we haven't set analysis locally
+    if (existingAnswer?.comment && !localAnalysisSetRef.current) {
       const extracted = extractAnalysisFromComment(existingAnswer.comment);
       if (extracted.photoAnalysis) setPhotoAnalysis(extracted.photoAnalysis);
       if (extracted.videoAnalysis) setVideoAnalysis(extracted.videoAnalysis);
       if (extracted.voiceTranscription) setVoiceTranscription(extracted.voiceTranscription);
     }
   }, [existingAnswer?.comment]);
+
+  // Reset local flag when component unmounts or item changes
+  useEffect(() => {
+    localAnalysisSetRef.current = false;
+  }, [item.id]);
 
   // Read question aloud using TTS
   const readAloud = async () => {
@@ -761,6 +812,7 @@ function ChecklistItemCard({
           if (!result.transcription_failed && (result.en || result.ar)) {
             // Store transcription in state for display
             setVoiceTranscription({ en: result.en || '', ar: result.ar || '' });
+            localAnalysisSetRef.current = true; // Mark that we set this locally
 
             // Build comment with transcription
             const parts: string[] = [];
@@ -770,7 +822,8 @@ function ChecklistItemCard({
             onAnswer(item.id, currentValue || '', combined, voiceNoteIdRef.current);
           }
 
-          refetchInspection();
+          // Delay refetch to allow server to save
+          setTimeout(() => refetchInspection(), 1000);
         } catch {
           message.warning(t('inspection.voice_upload_failed', 'Voice upload failed'));
         } finally {
@@ -855,6 +908,7 @@ function ChecklistItemCard({
             } else {
               setPhotoAnalysis({ en: enAnalysis, ar: arAnalysis });
             }
+            localAnalysisSetRef.current = true; // Mark that we set this locally
 
             const combinedAnalysis = [enAnalysis, '', arAnalysis].filter(Boolean).join('\n');
 
@@ -882,7 +936,8 @@ function ChecklistItemCard({
           } else {
             setIsAnalyzing(false);
           }
-          refetchInspection();
+          // Delay refetch to allow server to save the comment
+          setTimeout(() => refetchInspection(), 1500);
         }
       }
     },
