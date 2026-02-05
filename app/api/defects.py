@@ -5,7 +5,7 @@ Defect management endpoints.
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.models import Defect, SpecialistJob, User
+from app.models import Defect, Inspection, SpecialistJob, User
 from app.extensions import db, safe_commit
 from app.services.defect_service import DefectService
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
@@ -56,7 +56,11 @@ def list_defects():
     severity = request.args.get('severity')
     if severity:
         query = query.filter_by(severity=severity)
-    
+
+    equipment_id = request.args.get('equipment_id', type=int)
+    if equipment_id:
+        query = query.join(Inspection).filter(Inspection.equipment_id == equipment_id)
+
     query = query.order_by(Defect.due_date, Defect.severity.desc())
     items, pagination = paginate(query)
     lang = get_language(current_user)

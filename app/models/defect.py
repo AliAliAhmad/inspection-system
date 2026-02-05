@@ -95,6 +95,21 @@ class Defect(db.Model):
             'occurrence_count': self.occurrence_count,
         }
 
+        # Include equipment info via inspection
+        equipment = self.inspection.equipment if self.inspection else None
+        if equipment:
+            data['equipment'] = {
+                'id': equipment.id,
+                'name': equipment.name_ar if language == 'ar' and equipment.name_ar else equipment.name,
+                'serial_number': equipment.serial_number,
+                'equipment_type': equipment.equipment_type,
+                'berth': equipment.berth,
+            }
+            data['equipment_id'] = equipment.id
+        else:
+            data['equipment'] = None
+            data['equipment_id'] = None
+
         # Include the inspection answer that caused this defect (first occurrence)
         if self.inspection_id and self.checklist_item_id:
             from app.models.inspection import InspectionAnswer

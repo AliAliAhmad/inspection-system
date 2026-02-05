@@ -68,6 +68,14 @@ export interface Defect {
   inspection_answer: InspectionAnswerSummary | null;
   occurrence_count: number;
   occurrences: DefectOccurrence[];
+  equipment_id: number | null;
+  equipment: {
+    id: number;
+    name: string;
+    serial_number: string;
+    equipment_type: string;
+    berth: string | null;
+  } | null;
 }
 
 export interface DefectAssessment {

@@ -25,6 +25,7 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   defectsApi,
   usersApi,
+  equipmentApi,
   aiApi,
   type Defect,
   type DefectStatus,
@@ -67,6 +68,8 @@ export default function DefectsPage() {
   const [assignForm] = Form.useForm();
   const [category, setCategory] = useState<string | undefined>();
 
+  const [equipmentFilter, setEquipmentFilter] = useState<number | undefined>();
+
   // AI Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -74,9 +77,17 @@ export default function DefectsPage() {
   const [isSearching, setIsSearching] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['defects', activeStatus, page],
-    queryFn: () => defectsApi.list({ status: activeStatus, page, per_page: 20 }).then(r => r.data),
+    queryKey: ['defects', activeStatus, page, equipmentFilter],
+    queryFn: () => defectsApi.list({ status: activeStatus, page, per_page: 20, equipment_id: equipmentFilter }).then(r => r.data),
   });
+
+  // Fetch equipment list for filter
+  const { data: equipmentData } = useQuery({
+    queryKey: ['equipment-list'],
+    queryFn: () => equipmentApi.list({ per_page: 500 }).then(r => r.data),
+  });
+
+  const equipmentList: any[] = equipmentData?.data || [];
 
   // Fetch specialists when modal is open
   const { data: specialistsData } = useQuery({
@@ -139,6 +150,22 @@ export default function DefectsPage() {
       dataIndex: 'id',
       key: 'id',
       width: 70,
+    },
+    {
+      title: t('defects.equipment', 'Equipment'),
+      key: 'equipment',
+      width: 180,
+      render: (_: unknown, record: Defect) => {
+        if (!record.equipment) return '-';
+        return (
+          <div>
+            <div style={{ fontWeight: 500 }}>{record.equipment.name}</div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {record.equipment.serial_number}
+            </Typography.Text>
+          </div>
+        );
+      },
     },
     {
       title: t('defects.description', 'Description'),
@@ -265,6 +292,25 @@ export default function DefectsPage() {
         items={tabItems}
       />
 
+      <div style={{ marginBottom: 16 }}>
+        <Space>
+          <Typography.Text strong>{t('defects.filterByEquipment', 'Equipment')}:</Typography.Text>
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('defects.selectEquipment', 'Filter by equipment...')}
+            style={{ width: 300 }}
+            value={equipmentFilter}
+            onChange={(val) => { setEquipmentFilter(val); setPage(1); }}
+            options={equipmentList.map((eq: any) => ({
+              value: eq.id,
+              label: `${eq.name} (${eq.serial_number})`,
+            }))}
+          />
+        </Space>
+      </div>
+
       <Table
         rowKey="id"
         columns={columns}
@@ -335,7 +381,7 @@ export default function DefectsPage() {
           showSizeChanger: false,
           onChange: (p) => setPage(p),
         }}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1300 }}
       />
 
       {/* Assign Specialist Modal */}

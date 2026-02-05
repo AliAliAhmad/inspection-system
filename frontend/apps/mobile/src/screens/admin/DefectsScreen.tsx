@@ -69,6 +69,12 @@ function DefectCard({ defect }: { defect: Defect }) {
         )}
       </View>
 
+      {defect.equipment && (
+        <Text style={styles.equipmentText} numberOfLines={1}>
+          {defect.equipment.name} — {defect.equipment.serial_number}
+        </Text>
+      )}
+
       <View style={styles.badgeRow}>
         <Badge label={defect.severity} color={severityColor} />
         <Badge label={statusLabel} color={statusColor} />
@@ -288,6 +294,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     fontWeight: '700',
+  },
+  equipmentText: {
+    fontSize: 13,
+    color: '#1565C0',
+    fontWeight: '500',
+    marginBottom: 8,
   },
   badgeRow: {
     flexDirection: 'row',

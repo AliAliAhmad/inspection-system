@@ -11,6 +11,7 @@ import {
 export interface DefectListParams extends PaginationParams {
   status?: DefectStatus;
   severity?: DefectSeverity;
+  equipment_id?: number;
 }
 
 export interface AssignSpecialistPayload {
