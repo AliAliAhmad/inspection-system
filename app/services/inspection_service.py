@@ -97,14 +97,28 @@ class InspectionService:
             if not template:
                 raise NotFoundError(f"Checklist template with ID {template_id} not found")
         else:
-            # Fallback: look up by equipment type (legacy)
+            # Fallback 1: look up by equipment type on ChecklistTemplate
             template = ChecklistTemplate.query.filter_by(
                 equipment_type=equipment.equipment_type,
                 is_active=True
             ).first()
+
+            # Fallback 2: look up via InspectionRoutine that covers this equipment type
+            if not template:
+                from app.models.schedule import InspectionRoutine
+                routines = InspectionRoutine.query.filter_by(is_active=True).all()
+                for routine in routines:
+                    if equipment.equipment_type in (routine.asset_types or []):
+                        template = db.session.get(ChecklistTemplate, routine.template_id)
+                        if template:
+                            # Also fix the assignment so this lookup isn't needed again
+                            assignment.template_id = template.id
+                            break
+
             if not template:
                 raise NotFoundError(
-                    f"No checklist template found. Please assign a template in the inspection routine."
+                    f"No checklist template found for equipment type '{equipment.equipment_type}'. "
+                    f"Please assign a template in the inspection routine."
                 )
 
         # Generate inspection code: ASSET-ORDER-DATE

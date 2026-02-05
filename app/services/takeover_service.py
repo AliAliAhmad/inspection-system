@@ -167,6 +167,7 @@ class TakeoverService:
                 new_assignment = InspectionAssignment(
                     inspection_list_id=assignment.inspection_list_id,
                     equipment_id=assignment.equipment_id,
+                    template_id=assignment.template_id,
                     berth=assignment.berth,
                     mechanical_inspector_id=takeover.requested_by,
                     electrical_inspector_id=takeover.partner_id,
