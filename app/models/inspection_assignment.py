@@ -79,7 +79,7 @@ class InspectionAssignment(db.Model):
         elif self.status == 'elec_complete':
             return 'mechanical_inspection'
         elif self.status in ('both_complete', 'assessment_pending'):
-            from app.models.assessment import FinalAssessment
+            from app.models.final_assessment import FinalAssessment
             fa = FinalAssessment.query.filter_by(
                 inspection_assignment_id=self.id
             ).first()
