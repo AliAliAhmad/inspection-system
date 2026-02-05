@@ -279,44 +279,58 @@ class InspectionService:
         # text type accepts any value
     
     @staticmethod
-    def get_inspection_progress(inspection_id):
+    def get_inspection_progress(inspection_id, inspector_category=None):
         """
-        Calculate inspection progress.
-        
+        Calculate inspection progress, optionally filtered by inspector category.
+
         Args:
             inspection_id: ID of inspection
-        
+            inspector_category: Optional category filter ('mechanical' or 'electrical')
+
         Returns:
             Dictionary with progress information
         """
         inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError(f"Inspection with ID {inspection_id} not found")
-        
-        # Get all items in template
-        all_items = ChecklistItem.query.filter_by(
-            template_id=inspection.template_id
-        ).all()
-        
-        # Get answered items
-        answered_items = InspectionAnswer.query.filter_by(
-            inspection_id=inspection_id
-        ).count()
-        
-        # Get required items
+
+        # Get items in template, filtered by category if provided
+        items_query = ChecklistItem.query.filter_by(template_id=inspection.template_id)
+        if inspector_category:
+            items_query = items_query.filter_by(category=inspector_category)
+        all_items = items_query.all()
+        all_item_ids = [item.id for item in all_items]
+
+        # Get answered items (only counting items in this category)
+        if all_item_ids:
+            answered_items = InspectionAnswer.query.filter(
+                InspectionAnswer.inspection_id == inspection_id,
+                InspectionAnswer.checklist_item_id.in_(all_item_ids)
+            ).count()
+        else:
+            answered_items = 0
+
+        # Required items in this category
         required_items = [item for item in all_items if item.is_required]
-        answered_required = InspectionAnswer.query.join(ChecklistItem).filter(
-            InspectionAnswer.inspection_id == inspection_id,
-            ChecklistItem.is_required == True
-        ).count()
-        
+        if all_item_ids:
+            answered_required = InspectionAnswer.query.join(ChecklistItem).filter(
+                InspectionAnswer.inspection_id == inspection_id,
+                ChecklistItem.is_required == True,
+                ChecklistItem.id.in_(all_item_ids)
+            ).count()
+        else:
+            answered_required = 0
+
+        pct = round((answered_items / len(all_items)) * 100) if all_items else 0
+
         return {
             'total_items': len(all_items),
             'answered_items': answered_items,
             'required_items': len(required_items),
             'answered_required': answered_required,
             'is_complete': answered_required == len(required_items),
-            'progress_percentage': round((answered_items / len(all_items)) * 100) if all_items else 0
+            'progress_percentage': pct,
+            'percentage': pct,
         }
     
     @staticmethod
@@ -352,11 +366,12 @@ class InspectionService:
             if user.role != 'admin' and inspection.technician_id != int(current_user_id):
                 raise ForbiddenError("You can only submit your own inspections")
         
-        # Validate all required questions are answered
+        # Validate required questions for this inspector's category
         InspectionService._validate_completeness(inspection)
-        
-        # Check for failed items and create defects
-        failed_answers = InspectionService._get_failed_answers(inspection_id)
+
+        # Check for failed items and create defects (only for inspector's category)
+        inspector_category = InspectionService._get_inspector_category(inspection)
+        failed_answers = InspectionService._get_failed_answers(inspection_id, inspector_category)
         
         for answer in failed_answers:
             # Auto-create defect for each failure
@@ -407,50 +422,76 @@ class InspectionService:
         return inspection
 
     @staticmethod
+    def _get_inspector_category(inspection):
+        """
+        Determine which category (mechanical/electrical) the inspector
+        is responsible for, based on their assignment slot.
+        """
+        if not inspection.assignment_id:
+            return None
+        assignment = db.session.get(InspectionAssignment, inspection.assignment_id)
+        if not assignment:
+            return None
+        if inspection.technician_id == assignment.mechanical_inspector_id:
+            return 'mechanical'
+        elif inspection.technician_id == assignment.electrical_inspector_id:
+            return 'electrical'
+        return None
+
+    @staticmethod
     def _validate_completeness(inspection):
         """
-        Validate that all required questions are answered.
-        
+        Validate that all required questions are answered for the inspector's category.
+
         Args:
             inspection: Inspection object
-        
+
         Raises:
             ValidationError: If required questions are missing
         """
-        # Get all required items
-        required_items = ChecklistItem.query.filter_by(
+        # Determine inspector's category from assignment
+        inspector_category = InspectionService._get_inspector_category(inspection)
+
+        # Get required items filtered by inspector's category
+        required_query = ChecklistItem.query.filter_by(
             template_id=inspection.template_id,
             is_required=True
-        ).all()
-        
+        )
+        if inspector_category:
+            required_query = required_query.filter_by(category=inspector_category)
+        required_items = required_query.all()
+
         # Get answered item IDs
         answered_item_ids = [
             answer.checklist_item_id
             for answer in inspection.answers.all()
         ]
-        
+
         # Find missing required items
         missing_items = [
             item for item in required_items
             if item.id not in answered_item_ids
         ]
-        
+
         if missing_items:
             missing_questions = [item.question_text[:50] for item in missing_items]
             raise ValidationError(
                 f"Missing {len(missing_items)} required answer(s). "
                 f"Please answer: {', '.join(missing_questions)}"
             )
-        
-        # Validate all fail/no answers have voice note + (photo or video)
-        failed_without_evidence = InspectionAnswer.query.join(ChecklistItem).filter(
+
+        # Validate fail/no answers have voice note + (photo or video) — only for inspector's category
+        evidence_query = InspectionAnswer.query.join(ChecklistItem).filter(
             InspectionAnswer.inspection_id == inspection.id,
             ChecklistItem.answer_type.in_(['pass_fail', 'yes_no']),
             db.or_(
                 InspectionAnswer.answer_value == 'fail',
                 InspectionAnswer.answer_value == 'no'
             )
-        ).all()
+        )
+        if inspector_category:
+            evidence_query = evidence_query.filter(ChecklistItem.category == inspector_category)
+        failed_without_evidence = evidence_query.all()
 
         for answer in failed_without_evidence:
             if not answer.voice_note_id:
@@ -468,26 +509,29 @@ class InspectionService:
                 )
     
     @staticmethod
-    def _get_failed_answers(inspection_id):
+    def _get_failed_answers(inspection_id, inspector_category=None):
         """
         Get all failed answers (pass_fail or yes_no type).
-        
+
         Args:
             inspection_id: ID of inspection
-        
+            inspector_category: Optional category filter ('mechanical' or 'electrical')
+
         Returns:
             List of failed InspectionAnswer objects
         """
-        failed_answers = InspectionAnswer.query.join(ChecklistItem).filter(
+        query = InspectionAnswer.query.join(ChecklistItem).filter(
             InspectionAnswer.inspection_id == inspection_id,
             ChecklistItem.answer_type.in_(['pass_fail', 'yes_no']),
             db.or_(
                 InspectionAnswer.answer_value == 'fail',
                 InspectionAnswer.answer_value == 'no'
             )
-        ).all()
-        
-        return failed_answers
+        )
+        if inspector_category:
+            query = query.filter(ChecklistItem.category == inspector_category)
+
+        return query.all()
     
     @staticmethod
     def review_inspection(inspection_id, reviewer_id, notes=None):

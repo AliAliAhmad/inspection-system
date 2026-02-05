@@ -134,11 +134,24 @@ export default function InspectionAssignmentsPage() {
     if (u.covering_for) coverUserIds.add(u.id);
   }
 
+  const PENDING_LABELS: Record<string, string> = {
+    both_inspections: 'Pending: Both inspections',
+    mechanical_inspection: 'Pending: Mechanical inspection',
+    electrical_inspection: 'Pending: Electrical inspection',
+    both_verdicts: 'Pending: Both verdicts',
+    mechanical_verdict: 'Pending: Mechanical verdict',
+    electrical_verdict: 'Pending: Electrical verdict',
+  };
+
   const statusColor = (s: string) => {
     switch (s) {
       case 'completed': return 'green';
       case 'assigned': return 'blue';
       case 'in_progress': return 'processing';
+      case 'mech_complete': return 'purple';
+      case 'elec_complete': return 'purple';
+      case 'both_complete': return 'cyan';
+      case 'assessment_pending': return 'orange';
       case 'unassigned': return 'default';
       default: return 'default';
     }
@@ -184,8 +197,17 @@ export default function InspectionAssignmentsPage() {
       title: t('assignments.status', 'Status'),
       dataIndex: 'status',
       key: 'status',
-      width: 120,
-      render: (v: string) => <Tag color={statusColor(v)}>{(v || 'unknown').toUpperCase()}</Tag>,
+      width: 180,
+      render: (v: string, record: any) => (
+        <div>
+          <Tag color={statusColor(v)}>{(v || 'unknown').replace(/_/g, ' ').toUpperCase()}</Tag>
+          {record.pending_on && PENDING_LABELS[record.pending_on] ? (
+            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+              {PENDING_LABELS[record.pending_on]}
+            </div>
+          ) : null}
+        </div>
+      ),
     },
     {
       title: t('assignments.mechInspector', 'Mech Inspector'),

@@ -24,12 +24,11 @@ class AssessmentService:
         if not assignment:
             raise NotFoundError(f"Assignment {assignment_id} not found")
 
-        # Allow assessment creation when both inspectors are done
-        # Accept 'both_complete', 'assessment_pending', or 'completed' (backward compat)
-        allowed_statuses = ['both_complete', 'assessment_pending', 'completed']
+        # Allow assessment creation once at least one inspector has submitted
+        allowed_statuses = ['mech_complete', 'elec_complete', 'both_complete', 'assessment_pending', 'completed']
         if assignment.status not in allowed_statuses:
             raise ValidationError(
-                f"Both inspectors must complete their checklists first. "
+                f"At least one inspector must complete their checklist first. "
                 f"Current status: {assignment.status}"
             )
 
@@ -47,7 +46,9 @@ class AssessmentService:
             electrical_inspector_id=assignment.electrical_inspector_id
         )
         db.session.add(assessment)
-        assignment.status = 'assessment_pending'
+        # Only set assessment_pending when both checklists are done
+        if assignment.status == 'both_complete':
+            assignment.status = 'assessment_pending'
         db.session.commit()
         logger.info("Assessment created: assessment_id=%s assignment_id=%s equipment_id=%s", assessment.id, assignment_id, assignment.equipment_id)
 

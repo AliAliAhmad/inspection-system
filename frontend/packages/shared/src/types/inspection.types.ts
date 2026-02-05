@@ -73,5 +73,9 @@ export interface AnswerPayload {
 export interface InspectionProgress {
   total_items: number;
   answered_items: number;
+  required_items: number;
+  answered_required: number;
+  is_complete: boolean;
+  progress_percentage: number;
   percentage: number;
 }

@@ -160,10 +160,14 @@ export default function InspectionChecklistScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
       queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
-      navigation.goBack();
+      navigation.replace('Assessment', { id });
     },
-    onError: () => {
-      Alert.alert(t('common.error'), t('common.error'));
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        t('common.error');
+      Alert.alert(t('common.error'), message);
     },
   });
 

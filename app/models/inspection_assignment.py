@@ -70,6 +70,29 @@ class InspectionAssignment(db.Model):
     assigner = db.relationship('User', foreign_keys=[assigned_by])
     original_assignment = db.relationship('InspectionAssignment', remote_side=[id])
 
+    def _compute_pending_on(self):
+        """Compute what this assignment is currently waiting on."""
+        if self.status in ('assigned', 'in_progress'):
+            return 'both_inspections'
+        elif self.status == 'mech_complete':
+            return 'electrical_inspection'
+        elif self.status == 'elec_complete':
+            return 'mechanical_inspection'
+        elif self.status in ('both_complete', 'assessment_pending'):
+            from app.models.assessment import FinalAssessment
+            fa = FinalAssessment.query.filter_by(
+                inspection_assignment_id=self.id
+            ).first()
+            if fa:
+                if not fa.mech_verdict and not fa.elec_verdict:
+                    return 'both_verdicts'
+                elif not fa.mech_verdict:
+                    return 'mechanical_verdict'
+                elif not fa.elec_verdict:
+                    return 'electrical_verdict'
+            return 'both_verdicts'
+        return None
+
     def to_dict(self, language='en'):
         return {
             'id': self.id,
@@ -88,6 +111,9 @@ class InspectionAssignment(db.Model):
             'deadline': self.deadline.isoformat() if self.deadline else None,
             'backlog_triggered': self.backlog_triggered,
             'status': self.status,
+            'pending_on': self._compute_pending_on(),
+            'mech_completed_at': self.mech_completed_at.isoformat() if self.mech_completed_at else None,
+            'elec_completed_at': self.elec_completed_at.isoformat() if self.elec_completed_at else None,
             'is_takeover': self.is_takeover,
             'mech_points_awarded': self.mech_points_awarded,
             'elec_points_awarded': self.elec_points_awarded,

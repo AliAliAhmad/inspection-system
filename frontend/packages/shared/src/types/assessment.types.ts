@@ -27,6 +27,9 @@ export interface InspectionAssignment {
   berth: string | null;
   shift: 'day' | 'night';
   status: string;
+  pending_on: string | null;
+  mech_completed_at: string | null;
+  elec_completed_at: string | null;
   deadline: string | null;
   backlog_triggered: boolean;
   backlog_triggered_at: string | null;

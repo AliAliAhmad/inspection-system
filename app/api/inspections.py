@@ -185,23 +185,23 @@ def answer_question(inspection_id):
 @jwt_required()
 def get_progress(inspection_id):
     """
-    Get inspection progress.
-    
-    Returns:
-        {
-            "status": "success",
-            "progress": {
-                "total_items": 5,
-                "answered_items": 3,
-                "required_items": 4,
-                "answered_required": 2,
-                "is_complete": false,
-                "progress_percentage": 60
-            }
-        }
+    Get inspection progress filtered by the current inspector's category.
     """
-    progress = InspectionService.get_inspection_progress(inspection_id)
-    
+    current_user_id = int(get_jwt_identity())
+
+    # Determine inspector's category from the assignment
+    inspector_category = None
+    inspection = db.session.get(Inspection, inspection_id)
+    if inspection and inspection.assignment_id:
+        assignment = db.session.get(InspectionAssignment, inspection.assignment_id)
+        if assignment:
+            if current_user_id == assignment.mechanical_inspector_id:
+                inspector_category = 'mechanical'
+            elif current_user_id == assignment.electrical_inspector_id:
+                inspector_category = 'electrical'
+
+    progress = InspectionService.get_inspection_progress(inspection_id, inspector_category)
+
     return jsonify({
         'status': 'success',
         'progress': progress

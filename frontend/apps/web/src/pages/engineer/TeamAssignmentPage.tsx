@@ -140,11 +140,39 @@ export default function TeamAssignmentPage() {
       title: t('common.status', 'Status'),
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => (
-        <Tag color={status === 'assigned' ? 'blue' : status === 'completed' ? 'green' : 'default'}>
-          {t(`status.${status}`, status)}
-        </Tag>
-      ),
+      width: 180,
+      render: (status: string, record: InspectionAssignment) => {
+        const color = (() => {
+          switch (status) {
+            case 'completed': return 'green';
+            case 'assigned': return 'blue';
+            case 'in_progress': return 'processing';
+            case 'mech_complete':
+            case 'elec_complete': return 'purple';
+            case 'both_complete': return 'cyan';
+            case 'assessment_pending': return 'orange';
+            default: return 'default';
+          }
+        })();
+        const pendingLabels: Record<string, string> = {
+          both_inspections: 'Pending: Both inspections',
+          mechanical_inspection: 'Pending: Mechanical inspection',
+          electrical_inspection: 'Pending: Electrical inspection',
+          both_verdicts: 'Pending: Both verdicts',
+          mechanical_verdict: 'Pending: Mechanical verdict',
+          electrical_verdict: 'Pending: Electrical verdict',
+        };
+        return (
+          <div>
+            <Tag color={color}>{t(`status.${status}`, status.replace(/_/g, ' '))}</Tag>
+            {record.pending_on && pendingLabels[record.pending_on] ? (
+              <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                {pendingLabels[record.pending_on]}
+              </div>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       title: t('common.mechanical_inspector', 'Mechanical Inspector'),

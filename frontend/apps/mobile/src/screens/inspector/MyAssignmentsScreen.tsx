@@ -28,8 +28,21 @@ const FILTER_OPTIONS: FilterStatus[] = ['all', 'assigned', 'in_progress', 'compl
 const STATUS_COLORS: Record<string, string> = {
   assigned: '#2196F3',
   in_progress: '#FF9800',
+  mech_complete: '#7B1FA2',
+  elec_complete: '#7B1FA2',
+  both_complete: '#00BCD4',
+  assessment_pending: '#FF5722',
   completed: '#4CAF50',
   pending: '#9E9E9E',
+};
+
+const PENDING_LABELS: Record<string, string> = {
+  both_inspections: 'Pending: Both inspections',
+  mechanical_inspection: 'Pending: Mechanical inspection',
+  electrical_inspection: 'Pending: Electrical inspection',
+  both_verdicts: 'Pending: Both verdicts',
+  mechanical_verdict: 'Pending: Mechanical verdict',
+  electrical_verdict: 'Pending: Electrical verdict',
 };
 
 export default function MyAssignmentsScreen() {
@@ -57,13 +70,19 @@ export default function MyAssignmentsScreen() {
 
   const handlePress = useCallback(
     (assignment: InspectionAssignment) => {
-      if (assignment.status === 'completed') {
+      const isMech = user?.id === assignment.mechanical_inspector_id;
+      const isElec = user?.id === assignment.electrical_inspector_id;
+      const thisInspectorDone =
+        (isMech && assignment.mech_completed_at) ||
+        (isElec && assignment.elec_completed_at);
+
+      if (thisInspectorDone || assignment.status === 'completed') {
         navigation.navigate('Assessment', { id: assignment.id });
       } else {
         navigation.navigate('InspectionChecklist', { id: assignment.id });
       }
     },
-    [navigation],
+    [navigation, user],
   );
 
   const getFilterLabel = (filter: FilterStatus): string => {
@@ -122,8 +141,13 @@ export default function MyAssignmentsScreen() {
           <Text style={styles.equipmentName} numberOfLines={1}>
             {equipmentName}
           </Text>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusBadgeText}>{item.status.replace('_', ' ')}</Text>
+          <View>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+              <Text style={styles.statusBadgeText}>{item.status.replace(/_/g, ' ')}</Text>
+            </View>
+            {item.pending_on && PENDING_LABELS[item.pending_on] ? (
+              <Text style={styles.pendingOnText}>{PENDING_LABELS[item.pending_on]}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -289,6 +313,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'capitalize',
+  },
+  pendingOnText: {
+    fontSize: 10,
+    color: '#757575',
+    marginTop: 3,
+    textAlign: 'right',
   },
   equipmentType: {
     fontSize: 13,
