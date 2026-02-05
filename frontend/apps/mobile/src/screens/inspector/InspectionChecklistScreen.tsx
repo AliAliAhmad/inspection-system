@@ -84,16 +84,19 @@ export default function InspectionChecklistScreen() {
     data: inspection,
     isLoading,
     isError,
+    error,
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ['inspection', id],
-    queryFn: () => inspectionsApi.get(id),
+    queryKey: ['inspection', 'by-assignment', id],
+    queryFn: () => inspectionsApi.getByAssignment(id),
     select: (res) => {
       const ins = (res.data as any).data ?? res.data;
       return ins as Inspection;
     },
   });
+
+  const inspectionId = inspection?.id;
 
   // Sync server answers into local state when inspection data loads
   useEffect(() => {
@@ -138,24 +141,25 @@ export default function InspectionChecklistScreen() {
   const {
     data: progress,
   } = useQuery({
-    queryKey: ['inspectionProgress', id],
-    queryFn: () => inspectionsApi.getProgress(id),
+    queryKey: ['inspectionProgress', inspectionId],
+    queryFn: () => inspectionsApi.getProgress(inspectionId!),
     select: (res) => res.data.data ?? res.data,
+    enabled: !!inspectionId,
   });
 
   const answerMutation = useMutation({
     mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string; voice_note_id?: number }) =>
-      inspectionsApi.answerQuestion(id, payload),
+      inspectionsApi.answerQuestion(inspectionId!, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inspectionProgress', id] });
+      queryClient.invalidateQueries({ queryKey: ['inspectionProgress', inspectionId] });
     },
   });
 
   const submitMutation = useMutation({
-    mutationFn: () => inspectionsApi.submit(id),
+    mutationFn: () => inspectionsApi.submit(inspectionId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
-      queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+      queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
       navigation.goBack();
     },
     onError: () => {
@@ -252,7 +256,7 @@ export default function InspectionChecklistScreen() {
         formData.append('checklist_item_id', String(checklistItemId));
 
         // Upload to Cloudinary via API
-        const response = await inspectionsApi.uploadMedia(id, checklistItemId, formData as any);
+        const response = await inspectionsApi.uploadMedia(inspectionId!, checklistItemId, formData as any);
         const data = (response.data as any)?.data;
         const cloudinaryUrl = data?.photo_file?.url || data?.url;
 
@@ -268,14 +272,14 @@ export default function InspectionChecklistScreen() {
         }));
 
         // Refresh inspection data immediately
-        queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+        queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
 
         // Poll for AI analysis (runs in background, takes a few seconds)
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+          queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
         }, 5000);
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+          queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
         }, 10000);
       } catch (error) {
         console.error('Photo upload failed:', error);
@@ -509,7 +513,7 @@ export default function InspectionChecklistScreen() {
         } as any);
         formData.append('checklist_item_id', String(checklistItemId));
 
-        const response = await inspectionsApi.uploadMedia(id, checklistItemId, formData as any);
+        const response = await inspectionsApi.uploadMedia(inspectionId!, checklistItemId, formData as any);
         const data = (response.data as any)?.data;
         const cloudinaryUrl = data?.video_file?.url || data?.url;
 
@@ -523,14 +527,14 @@ export default function InspectionChecklistScreen() {
           },
         }));
 
-        queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+        queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
 
         // Poll for AI analysis (runs in background, takes a few seconds)
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+          queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
         }, 5000);
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['inspection', id] });
+          queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
         }, 10000);
       } catch (error) {
         console.error('Video upload failed:', error);
@@ -827,23 +831,42 @@ export default function InspectionChecklistScreen() {
   }
 
   if (isError || !inspection) {
+    const errorMessage =
+      (error as any)?.response?.data?.message ||
+      (error as any)?.response?.data?.error ||
+      (error as any)?.message ||
+      t('common.error');
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>{t('common.error')}</Text>
+        <Text style={styles.errorText}>{errorMessage}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
           <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.retryButton, { backgroundColor: '#757575', marginTop: 8 }]}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.retryButtonText}>{t('common.back', 'Back')}</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   const inspData = inspection as Inspection;
-  const checklistItems = (inspData.answers ?? [])
-    .map((a: InspectionAnswer) => a.checklist_item)
-    .filter((item): item is ChecklistItem => item !== null)
-    .sort((a, b) => a.order_index - b.order_index);
 
-  // If no checklist items from answers, we still show the equipment info
+  // Merge checklist items from two sources:
+  // 1. checklist_items array from getByAssignment response (includes all template items)
+  // 2. checklist_item objects nested in each answer (includes answered items)
+  const rawChecklistItems: ChecklistItem[] = (inspData as any).checklist_items ?? [];
+  const itemsFromAnswers: ChecklistItem[] = (inspData.answers ?? [])
+    .map((a: InspectionAnswer) => a.checklist_item)
+    .filter((item): item is ChecklistItem => item !== null);
+  const allItems = [...rawChecklistItems, ...itemsFromAnswers];
+  const checklistItems = Array.from(
+    new Map(allItems.map((item) => [item.id, item])).values(),
+  ).sort((a, b) => a.order_index - b.order_index);
+
+  // If no checklist items, we still show the equipment info
   const progressData = progress as InspectionProgress | undefined;
   const progressPct = progressData?.percentage ?? 0;
 

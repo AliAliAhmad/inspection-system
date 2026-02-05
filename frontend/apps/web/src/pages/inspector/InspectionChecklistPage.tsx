@@ -228,7 +228,24 @@ export default function InspectionChecklistPage() {
   }
 
   if (error) {
-    return <Alert type="error" message={t('common.error')} showIcon />;
+    const errorMessage =
+      (error as any)?.response?.data?.message ||
+      (error as any)?.response?.data?.error ||
+      (error as any)?.message ||
+      t('common.error');
+    return (
+      <Alert
+        type="error"
+        message={t('common.error')}
+        description={errorMessage}
+        showIcon
+        action={
+          <Button size="small" onClick={() => navigate('/inspector/assignments')}>
+            {t('common.back', 'Back')}
+          </Button>
+        }
+      />
+    );
   }
 
   if (!inspection) {
