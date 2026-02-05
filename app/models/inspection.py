@@ -141,11 +141,15 @@ class InspectionAnswer(db.Model):
     
     def to_dict(self, language='en'):
         """Convert answer to dictionary."""
-        from app.utils.bilingual import get_bilingual_text
-        comment = get_bilingual_text(
-            'inspection_answer', self.id, 'comment',
-            self.comment, language
-        ) if self.comment else self.comment
+        comment = self.comment
+        # Only use bilingual lookup for non-analysis comments
+        # Analysis comments (containing 🔍 or EN:/AR:) are already bilingual
+        if comment and '🔍' not in comment and not comment.startswith('EN:'):
+            from app.utils.bilingual import get_bilingual_text
+            comment = get_bilingual_text(
+                'inspection_answer', self.id, 'comment',
+                comment, language
+            )
 
         # Use direct file ID relationships
         photo_file_record = self.photo_file if self.photo_file_id else None

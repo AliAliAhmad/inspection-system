@@ -164,11 +164,15 @@ def answer_question(inspection_id):
     )
 
     # Auto-translate comment if provided
+    # Skip translation for AI analysis comments — they're already bilingual (EN + AR)
     if data.get('comment'):
-        from app.utils.bilingual import auto_translate_and_save
-        auto_translate_and_save('inspection_answer', answer.id, {
-            'comment': data['comment']
-        })
+        comment_text = data['comment']
+        is_analysis = '🔍' in comment_text or comment_text.startswith('EN:')
+        if not is_analysis:
+            from app.utils.bilingual import auto_translate_and_save
+            auto_translate_and_save('inspection_answer', answer.id, {
+                'comment': comment_text
+            })
 
     return jsonify({
         'status': 'success',
