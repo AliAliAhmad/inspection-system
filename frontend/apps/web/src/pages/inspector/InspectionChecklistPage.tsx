@@ -419,32 +419,34 @@ function extractAnalysisFromComment(comment: string | null | undefined): {
   let enContent = '';
   let arContent = '';
 
+  const finalizeCurrent = () => {
+    if (currentSection && (enContent || arContent)) {
+      if (currentSection === 'photo') photoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
+      else if (currentSection === 'video') videoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
+      else if (currentSection === 'voice') voiceTranscription = { en: enContent.trim(), ar: arContent.trim() };
+    }
+  };
+
   for (const line of lines) {
     // Check for AI Analysis sections (photo or video)
     if (line.includes('🔍 AI Analysis (EN)') || line.includes('🔍 Photo Analysis (EN)')) {
-      if (currentSection && (enContent || arContent)) {
-        if (currentSection === 'photo') photoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
-        else if (currentSection === 'video') videoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
-        else if (currentSection === 'voice') voiceTranscription = { en: enContent.trim(), ar: arContent.trim() };
-      }
+      finalizeCurrent();
       currentSection = 'photo';
       enContent = line + '\n';
       arContent = '';
     } else if (line.includes('🔍 Video Analysis (EN)')) {
-      if (currentSection && (enContent || arContent)) {
-        if (currentSection === 'photo') photoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
-        else if (currentSection === 'video') videoAnalysis = { en: enContent.trim(), ar: arContent.trim() };
-        else if (currentSection === 'voice') voiceTranscription = { en: enContent.trim(), ar: arContent.trim() };
-      }
+      finalizeCurrent();
       currentSection = 'video';
       enContent = line + '\n';
       arContent = '';
-    } else if (line.includes('🔍 تحليل الذكاء الاصطناعي (AR)') || line.includes('🔍 Photo Analysis (AR)') || line.includes('🔍 Video Analysis (AR)')) {
+    } else if (line.includes('🔍 تحليل الذكاء الاصطناعي (AR)') || line.includes('🔍 تحليل صورة (AR)') || line.includes('🔍 Photo Analysis (AR)') || line.includes('🔍 Video Analysis (AR)') || line.includes('🔍 تحليل فيديو (AR)')) {
       arContent = line + '\n';
-    } else if (line.startsWith('EN:') && !currentSection) {
-      // Voice transcription format
+    } else if (line.startsWith('EN:')) {
+      // Voice transcription format — finalize any previous section first
+      finalizeCurrent();
       currentSection = 'voice';
       enContent = line.replace('EN:', '').trim();
+      arContent = '';
     } else if (line.startsWith('AR:') && currentSection === 'voice') {
       arContent = line.replace('AR:', '').trim();
     } else if (currentSection) {
