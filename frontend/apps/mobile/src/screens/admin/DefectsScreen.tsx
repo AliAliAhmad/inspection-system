@@ -58,9 +58,16 @@ function DefectCard({ defect }: { defect: Defect }) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardDescription} numberOfLines={2}>
-        {defect.description}
-      </Text>
+      <View style={styles.cardDescriptionRow}>
+        <Text style={styles.cardDescription} numberOfLines={2}>
+          {defect.description}
+        </Text>
+        {defect.occurrence_count > 1 && (
+          <View style={styles.occurrenceBadge}>
+            <Text style={styles.occurrenceBadgeText}>x{defect.occurrence_count}</Text>
+          </View>
+        )}
+      </View>
 
       <View style={styles.badgeRow}>
         <Badge label={defect.severity} color={severityColor} />
@@ -256,11 +263,31 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  cardDescriptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
   cardDescription: {
     fontSize: 14,
     color: '#212121',
     lineHeight: 20,
-    marginBottom: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  occurrenceBadge: {
+    backgroundColor: '#E53935',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 28,
+    alignItems: 'center',
+  },
+  occurrenceBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   badgeRow: {
     flexDirection: 'row',

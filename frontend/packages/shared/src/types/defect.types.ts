@@ -39,6 +39,17 @@ export interface InspectionAnswerSummary {
   answered_at: string | null;
 }
 
+export interface DefectOccurrence {
+  id: number;
+  defect_id: number;
+  inspection_id: number;
+  occurrence_number: number;
+  found_by_id: number | null;
+  found_by: { id: number; full_name: string } | null;
+  found_at: string | null;
+  inspection_answer: InspectionAnswerSummary | null;
+}
+
 export interface Defect {
   id: number;
   inspection_id: number;
@@ -55,6 +66,8 @@ export interface Defect {
   resolved_by_id: number | null;
   created_at: string;
   inspection_answer: InspectionAnswerSummary | null;
+  occurrence_count: number;
+  occurrences: DefectOccurrence[];
 }
 
 export interface DefectAssessment {

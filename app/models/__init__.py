@@ -9,6 +9,7 @@ from app.models.equipment import Equipment
 from app.models.checklist import ChecklistTemplate, ChecklistItem
 from app.models.inspection import Inspection, InspectionAnswer
 from app.models.defect import Defect
+from app.models.defect_occurrence import DefectOccurrence
 from app.models.schedule import InspectionSchedule, InspectionRoutine, WeeklyCompletion
 from app.models.notification import Notification
 from app.models.rating import InspectionRating
@@ -57,6 +58,7 @@ __all__ = [
     'Inspection',
     'InspectionAnswer',
     'Defect',
+    'DefectOccurrence',
     'InspectionSchedule',
     'InspectionRoutine',
     'WeeklyCompletion',

@@ -2,7 +2,7 @@
 Service for managing defects and corrective actions.
 """
 
-from app.models import Defect, ChecklistItem, Inspection, User
+from app.models import Defect, DefectOccurrence, ChecklistItem, Inspection, User
 from app.extensions import db
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from datetime import datetime, date, timedelta
@@ -14,29 +14,64 @@ class DefectService:
     @staticmethod
     def create_defect_from_failure(inspection_id, checklist_item_id, technician_id):
         """
-        Auto-create defect from failed inspection item.
-        Called automatically when inspection is submitted.
-        
+        Auto-create defect from failed inspection item, or increment occurrence
+        if the same defect already exists (open/in_progress) on the same equipment.
+
         Args:
             inspection_id: ID of inspection
             checklist_item_id: ID of failed item
             technician_id: ID of technician to assign
-        
+
         Returns:
-            Created Defect object
+            Created or updated Defect object
         """
         item = db.session.get(ChecklistItem, checklist_item_id)
         if not item:
             raise NotFoundError("Checklist item not found")
-        
-        # Determine severity
+
+        inspection = db.session.get(Inspection, inspection_id)
+        if not inspection:
+            raise NotFoundError("Inspection not found")
+
+        # Check for existing open/in_progress defect for same checklist item + equipment
+        existing = Defect.query.join(Inspection).filter(
+            Defect.checklist_item_id == checklist_item_id,
+            Inspection.equipment_id == inspection.equipment_id,
+            Defect.status.in_(['open', 'in_progress'])
+        ).first()
+
+        from app.services.notification_service import NotificationService
+
+        if existing:
+            # Increment occurrence count on existing defect
+            existing.occurrence_count += 1
+            occ = DefectOccurrence(
+                defect_id=existing.id,
+                inspection_id=inspection_id,
+                occurrence_number=existing.occurrence_count,
+                found_by_id=technician_id,
+                found_at=datetime.utcnow()
+            )
+            db.session.add(occ)
+            db.session.commit()
+
+            # Notify about recurring defect
+            if existing.assigned_to_id:
+                NotificationService.create_notification(
+                    user_id=existing.assigned_to_id,
+                    type='defect_recurring',
+                    title=f'Recurring Defect (x{existing.occurrence_count})',
+                    message=f'Defect found again: {existing.description}. Occurrence #{existing.occurrence_count}.',
+                    related_type='defect',
+                    related_id=existing.id
+                )
+
+            return existing
+
+        # No existing defect — create new one
         severity = 'critical' if item.critical_failure else 'medium'
-        
-        # Calculate due date based on severity
         due_date = DefectService._calculate_due_date(severity)
-        
-        # Create defect
-        # Build Arabic description from checklist item if available
+
         description_ar = None
         if item.question_text_ar:
             description_ar = f"فشل: {item.question_text_ar}"
@@ -49,14 +84,24 @@ class DefectService:
             description_ar=description_ar,
             status='open',
             assigned_to_id=technician_id,
-            due_date=due_date
+            due_date=due_date,
+            occurrence_count=1
         )
-        
         db.session.add(defect)
         db.session.commit()
-        
-        # Create notification for technician (NEW - ADD THIS)
-        from app.services.notification_service import NotificationService
+
+        # Create first occurrence record
+        occ = DefectOccurrence(
+            defect_id=defect.id,
+            inspection_id=inspection_id,
+            occurrence_number=1,
+            found_by_id=technician_id,
+            found_at=datetime.utcnow()
+        )
+        db.session.add(occ)
+        db.session.commit()
+
+        # Notify technician
         NotificationService.create_notification(
             user_id=technician_id,
             type='defect_created',
@@ -65,8 +110,7 @@ class DefectService:
             related_type='defect',
             related_id=defect.id
         )
-        
-        
+
         return defect
     
     @staticmethod

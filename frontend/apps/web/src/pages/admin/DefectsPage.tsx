@@ -15,6 +15,8 @@ import {
   List,
   Spin,
   Empty,
+  Badge,
+  Collapse,
 } from 'antd';
 import { ToolOutlined, InfoCircleOutlined, SearchOutlined, RobotOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -143,6 +145,17 @@ export default function DefectsPage() {
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
+      render: (desc: string, record: Defect) => (
+        <Space>
+          <span>{desc}</span>
+          {record.occurrence_count > 1 && (
+            <Badge
+              count={`x${record.occurrence_count}`}
+              style={{ backgroundColor: '#ff4d4f' }}
+            />
+          )}
+        </Space>
+      ),
     },
     {
       title: t('defects.severity', 'Severity'),
@@ -259,15 +272,56 @@ export default function DefectsPage() {
         loading={isLoading}
         locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
         expandable={{
-          expandedRowRender: (record: Defect) =>
-            record.inspection_answer ? (
+          expandedRowRender: (record: Defect) => {
+            const occurrences = record.occurrences ?? [];
+            if (occurrences.length > 1) {
+              const ordinalLabel = (n: number) => {
+                const s = ['th', 'st', 'nd', 'rd'];
+                const v = n % 100;
+                return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+              };
+              return (
+                <Collapse
+                  defaultActiveKey={[occurrences[occurrences.length - 1]?.id]}
+                  items={occurrences.map((occ) => ({
+                    key: occ.id,
+                    label: (
+                      <Space>
+                        <Tag color="blue">{ordinalLabel(occ.occurrence_number)} Occurrence</Tag>
+                        {occ.found_by && (
+                          <Typography.Text type="secondary">
+                            Found by: {occ.found_by.full_name}
+                          </Typography.Text>
+                        )}
+                        {occ.found_at && (
+                          <Typography.Text type="secondary">
+                            — {new Date(occ.found_at).toLocaleDateString()}
+                          </Typography.Text>
+                        )}
+                      </Space>
+                    ),
+                    children: occ.inspection_answer ? (
+                      <InspectionFindingCard answer={occ.inspection_answer} />
+                    ) : (
+                      <Typography.Text type="secondary">
+                        {t('common.noData', 'No inspection data')}
+                      </Typography.Text>
+                    ),
+                  }))}
+                />
+              );
+            }
+            // Single occurrence — show directly
+            return record.inspection_answer ? (
               <InspectionFindingCard answer={record.inspection_answer} />
             ) : (
               <Typography.Text type="secondary">{t('common.noData', 'No inspection data')}</Typography.Text>
-            ),
-          rowExpandable: (record: Defect) => !!record.inspection_answer,
+            );
+          },
+          rowExpandable: (record: Defect) =>
+            !!record.inspection_answer || (record.occurrences?.length ?? 0) > 0,
           expandIcon: ({ expanded, onExpand, record }) =>
-            record.inspection_answer ? (
+            record.inspection_answer || (record.occurrences?.length ?? 0) > 0 ? (
               <InfoCircleOutlined
                 style={{ color: expanded ? '#1677ff' : '#999', cursor: 'pointer' }}
                 onClick={(e) => onExpand(record, e)}

@@ -38,6 +38,9 @@ class Defect(db.Model):
     resolved_at = db.Column(db.DateTime, nullable=True)
     resolution_notes = db.Column(db.Text, nullable=True)
 
+    # Occurrence tracking
+    occurrence_count = db.Column(db.Integer, default=1, nullable=False)
+
     # Work order grouping (for urgent multi-defect scenarios)
     work_order_id = db.Column(db.String(50), nullable=True)
 
@@ -48,6 +51,7 @@ class Defect(db.Model):
     inspection = db.relationship('Inspection', back_populates='defects')
     checklist_item = db.relationship('ChecklistItem', back_populates='defects')
     assigned_to = db.relationship('User', backref='assigned_defects')
+    occurrences = db.relationship('DefectOccurrence', back_populates='defect', order_by='DefectOccurrence.occurrence_number')
 
     __table_args__ = (
         db.CheckConstraint(
@@ -87,10 +91,11 @@ class Defect(db.Model):
             'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
             'resolution_notes': self.resolution_notes,
             'work_order_id': self.work_order_id,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'occurrence_count': self.occurrence_count,
         }
 
-        # Include the inspection answer that caused this defect
+        # Include the inspection answer that caused this defect (first occurrence)
         if self.inspection_id and self.checklist_item_id:
             from app.models.inspection import InspectionAnswer
             answer = InspectionAnswer.query.filter_by(
@@ -100,6 +105,12 @@ class Defect(db.Model):
             data['inspection_answer'] = answer.to_dict(language=language) if answer else None
         else:
             data['inspection_answer'] = None
+
+        # Include all occurrences with their media
+        data['occurrences'] = [
+            occ.to_dict(language=language, checklist_item_id=self.checklist_item_id)
+            for occ in self.occurrences
+        ]
 
         return data
 

@@ -37,9 +37,16 @@ def list_defects():
     
     query = Defect.query
     
-    # Filter by role
+    # Filter by role — admin and engineer see all, technician sees only assigned
     if current_user.role == 'technician':
         query = query.filter_by(assigned_to_id=current_user.id)
+    elif current_user.role == 'specialist':
+        # Specialists see defects assigned to them via specialist jobs
+        from app.models import SpecialistJob
+        specialist_defect_ids = db.session.query(SpecialistJob.defect_id).filter(
+            SpecialistJob.specialist_id == current_user.id
+        ).subquery()
+        query = query.filter(Defect.id.in_(specialist_defect_ids))
     
     # Apply filters
     status = request.args.get('status')
