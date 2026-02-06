@@ -1,159 +1,114 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { engineerJobsApi } from '@inspection/shared';
+import { inspectionAssignmentsApi } from '@inspection/shared';
+import type { InspectionAssignment } from '@inspection/shared';
 
-const PRIORITY_COLORS: Record<string, string> = {
-  critical: '#E53935',
-  high: '#FF9800',
-  medium: '#FFC107',
-  low: '#4CAF50',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: '#FF9800',
-  in_progress: '#1976D2',
-  completed: '#4CAF50',
-  cancelled: '#757575',
+const SHIFT_COLORS: Record<string, string> = {
+  day: '#1976D2',
+  night: '#7B1FA2',
 };
 
 function Badge({ label, color }: { label: string; color: string }) {
   return (
     <View style={[styles.badge, { backgroundColor: color }]}>
-      <Text style={styles.badgeText}>{label.replace(/_/g, ' ')}</Text>
+      <Text style={styles.badgeText}>{label}</Text>
     </View>
   );
 }
 
-interface BacklogItem {
-  id: number;
-  title?: string;
-  description?: string;
-  priority: string;
-  status: string;
-  equipment_id?: number;
-  equipment?: { name: string };
-  assigned_to_id?: number;
-  assigned_to?: { full_name: string };
-  created_at?: string;
-  due_date?: string;
-  specialist_job?: { description?: string };
-  defect?: { description?: string };
+function formatDateTime(iso: string | null): string {
+  if (!iso) return '-';
+  return new Date(iso).toLocaleString();
 }
 
-function BacklogCard({ item }: { item: BacklogItem }) {
-  const priorityColor = PRIORITY_COLORS[item.priority] ?? '#757575';
-  const statusColor = STATUS_COLORS[item.status] ?? '#757575';
+function getOverdueHours(deadline: string | null): number {
+  if (!deadline) return 0;
+  const diff = Date.now() - new Date(deadline).getTime();
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60)));
+}
+
+function getOverdueLabel(hours: number): string {
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remaining = hours % 24;
+    return `${days}d ${remaining}h`;
+  }
+  return `${hours}h`;
+}
+
+function getOverdueColor(hours: number): string {
+  if (hours >= 24) return '#E53935';
+  if (hours >= 8) return '#FF9800';
+  return '#FFC107';
+}
+
+function BacklogCard({ item }: { item: InspectionAssignment }) {
+  const overdueHours = getOverdueHours(item.deadline);
+  const overdueColor = getOverdueColor(overdueHours);
+  const shiftColor = SHIFT_COLORS[item.shift ?? 'day'] ?? '#757575';
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardId}>#{item.id}</Text>
-        <View style={styles.badgeRow}>
-          <Badge label={item.priority} color={priorityColor} />
-          <Badge label={item.status} color={statusColor} />
-        </View>
+        <Text style={styles.equipmentName}>
+          {item.equipment?.name || `Equipment #${item.equipment_id}`}
+        </Text>
+        <Badge label={item.shift || 'day'} color={shiftColor} />
       </View>
 
-      <Text style={styles.cardTitle}>
-        {item.title || item.specialist_job?.description || item.defect?.description || `Job #${item.id}`}
-      </Text>
-
-      {item.description && (
-        <Text style={styles.cardDescription} numberOfLines={2}>
-          {item.description}
-        </Text>
-      )}
+      <View style={styles.cardInfoRow}>
+        <Text style={styles.cardLabel}>Status: </Text>
+        <Badge label={item.status?.replace(/_/g, ' ') || 'unknown'} color="#757575" />
+      </View>
 
       <View style={styles.cardInfoRow}>
-        <Text style={styles.cardLabel}>Equipment: </Text>
-        <Text style={styles.cardValue}>
-          {item.equipment?.name || (item.equipment_id ? `#${item.equipment_id}` : '-')}
+        <Text style={styles.cardLabel}>Deadline: </Text>
+        <Text style={[styles.cardValue, { color: '#E53935' }]}>
+          {formatDateTime(item.deadline)}
         </Text>
       </View>
 
       <View style={styles.cardInfoRow}>
-        <Text style={styles.cardLabel}>Assigned to: </Text>
-        <Text style={styles.cardValue}>
-          {item.assigned_to?.full_name || (item.assigned_to_id ? `#${item.assigned_to_id}` : 'Unassigned')}
-        </Text>
+        <Text style={styles.cardLabel}>Assigned at: </Text>
+        <Text style={styles.cardValue}>{formatDateTime(item.assigned_at)}</Text>
       </View>
 
-      <View style={styles.cardFooter}>
-        {item.created_at && (
-          <Text style={styles.dateText}>
-            Created: {new Date(item.created_at).toLocaleDateString()}
-          </Text>
-        )}
-        {item.due_date && (
-          <Text style={styles.dueDateText}>
-            Due: {new Date(item.due_date).toLocaleDateString()}
-          </Text>
-        )}
+      <View style={styles.overdueRow}>
+        <Text style={styles.overdueLabel}>Overdue by:</Text>
+        <Badge label={getOverdueLabel(overdueHours)} color={overdueColor} />
       </View>
     </View>
   );
 }
 
-interface FilterOption {
-  label: string;
-  value: string | null;
-}
-
 export default function BacklogScreen() {
   const { t } = useTranslation();
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-
-  const filters: FilterOption[] = [
-    { label: t('backlog.all', 'All'), value: null },
-    { label: t('backlog.pending', 'Pending'), value: 'pending' },
-    { label: t('backlog.in_progress', 'In Progress'), value: 'in_progress' },
-    { label: t('backlog.completed', 'Completed'), value: 'completed' },
-  ];
 
   const backlogQuery = useQuery({
-    queryKey: ['backlog', activeFilter, page],
+    queryKey: ['backlog-assignments'],
     queryFn: () =>
-      engineerJobsApi.list({
-        page,
-        per_page: 20,
-        ...(activeFilter ? { status: activeFilter as any } : {}),
+      inspectionAssignmentsApi.getBacklog().then((r) => {
+        const d = r.data;
+        return Array.isArray(d) ? d : (d as any).data ?? [];
       }),
   });
 
-  const responseData = (backlogQuery.data?.data as any) ?? backlogQuery.data;
-  const items: BacklogItem[] = responseData?.data ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
-
-  const handleFilterChange = useCallback((value: string | null) => {
-    setActiveFilter(value);
-    setPage(1);
-  }, []);
+  const assignments: InspectionAssignment[] = backlogQuery.data || [];
 
   const handleRefresh = useCallback(() => {
-    setPage(1);
     backlogQuery.refetch();
   }, [backlogQuery]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !backlogQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
-  }, [hasNextPage, backlogQuery.isFetching]);
-
-  if (backlogQuery.isLoading && page === 1) {
+  if (backlogQuery.isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -163,64 +118,32 @@ export default function BacklogScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{t('nav.backlog', 'Backlog')}</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>{t('nav.backlog', 'Overdue Inspections')}</Text>
+        {assignments.length > 0 && (
+          <Badge label={String(assignments.length)} color="#E53935" />
+        )}
+      </View>
 
-      {/* Filter Chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-        style={styles.filterScroll}
-      >
-        {filters.map((filter) => {
-          const isActive = activeFilter === filter.value;
-          return (
-            <TouchableOpacity
-              key={filter.label}
-              style={[
-                styles.filterChip,
-                isActive ? styles.filterChipActive : styles.filterChipInactive,
-              ]}
-              onPress={() => handleFilterChange(filter.value)}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  isActive ? styles.filterChipTextActive : styles.filterChipTextInactive,
-                ]}
-              >
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      {/* Backlog List */}
       <FlatList
-        data={items}
+        data={assignments}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <BacklogCard item={item} />}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={backlogQuery.isRefetching && page === 1}
+            refreshing={backlogQuery.isRefetching}
             onRefresh={handleRefresh}
           />
         }
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
-        ListFooterComponent={
-          backlogQuery.isFetching && page > 1 ? (
-            <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color="#1976D2" />
-            </View>
-          ) : null
-        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{t('backlog.empty', 'No backlog items found.')}</Text>
+            <Text style={styles.emptyText}>
+              {t('backlog.noOverdue', 'No overdue inspections')}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {t('backlog.allCaughtUp', 'All inspections are up to date!')}
+            </Text>
           </View>
         }
       />
@@ -231,31 +154,20 @@ export default function BacklogScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#212121', padding: 16, paddingBottom: 8 },
-  filterScroll: { maxHeight: 48, paddingBottom: 4 },
-  filterRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  filterChipActive: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
-  filterChipInactive: { backgroundColor: '#fff', borderColor: '#BDBDBD' },
-  filterChipText: { fontSize: 13, fontWeight: '600' },
-  filterChipTextActive: { color: '#fff' },
-  filterChipTextInactive: { color: '#616161' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingBottom: 8, gap: 10 },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#212121' },
   listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardId: { fontSize: 14, fontWeight: '600', color: '#757575' },
-  badgeRow: { flexDirection: 'row', gap: 6 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#212121', marginBottom: 4 },
-  cardDescription: { fontSize: 13, color: '#616161', marginBottom: 8 },
-  cardInfoRow: { flexDirection: 'row', marginBottom: 4 },
-  cardLabel: { fontSize: 13, color: '#757575' },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2, borderLeftWidth: 4, borderLeftColor: '#E53935' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  equipmentName: { fontSize: 16, fontWeight: '600', color: '#212121', flex: 1, marginRight: 10 },
+  cardInfoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  cardLabel: { fontSize: 13, color: '#757575', width: 90 },
   cardValue: { fontSize: 13, color: '#424242', fontWeight: '500', flex: 1 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  dateText: { fontSize: 12, color: '#757575' },
-  dueDateText: { fontSize: 12, color: '#E53935', fontWeight: '500' },
+  overdueRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f0f0f0', gap: 10 },
+  overdueLabel: { fontSize: 14, fontWeight: '600', color: '#424242' },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 11, fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
-  footerLoader: { paddingVertical: 16, alignItems: 'center' },
-  emptyContainer: { paddingTop: 60, alignItems: 'center' },
-  emptyText: { fontSize: 15, color: '#757575' },
+  emptyContainer: { paddingTop: 80, alignItems: 'center' },
+  emptyText: { fontSize: 16, color: '#4CAF50', fontWeight: '600' },
+  emptySubtext: { fontSize: 14, color: '#757575', marginTop: 4 },
 });

@@ -21,10 +21,13 @@ import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import {
   specialistJobsApi,
+  defectAssessmentsApi,
   SpecialistJob,
   PauseLog,
   PauseCategory,
+  getApiClient,
 } from '@inspection/shared';
+import * as ImagePicker from 'expo-image-picker';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'SpecialistJobDetail'>;
@@ -103,6 +106,15 @@ export default function SpecialistJobDetailScreen() {
 
   // Incomplete modal state
   const [incompleteModalVisible, setIncompleteModalVisible] = useState(false);
+
+  // Defect assessment state
+  const [assessmentModalVisible, setAssessmentModalVisible] = useState(false);
+  const [assessmentVerdict, setAssessmentVerdict] = useState<'confirm' | 'reject' | 'minor'>('confirm');
+  const [technicalNotes, setTechnicalNotes] = useState('');
+
+  // Cleaning photo state
+  const [cleaningPhotoUri, setCleaningPhotoUri] = useState<string | null>(null);
+  const [uploadingCleaning, setUploadingCleaning] = useState(false);
 
   // Fetch job
   const {
@@ -215,6 +227,19 @@ export default function SpecialistJobDetailScreen() {
     onError: () => Alert.alert(t('common.error'), t('common.error')),
   });
 
+  const defectAssessmentMutation = useMutation({
+    mutationFn: (payload: { defect_id: number; verdict: 'confirm' | 'reject' | 'minor'; technical_notes: string }) =>
+      defectAssessmentsApi.create(payload),
+    onSuccess: () => {
+      setAssessmentModalVisible(false);
+      setAssessmentVerdict('confirm');
+      setTechnicalNotes('');
+      queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
+      Alert.alert(t('common.success', 'Success'), t('jobs.assessment_submitted', 'Assessment submitted'));
+    },
+    onError: () => Alert.alert(t('common.error'), t('common.error')),
+  });
+
   const handleStart = useCallback(() => {
     Alert.alert(t('common.confirm'), t('jobs.start') + '?', [
       { text: t('common.cancel'), style: 'cancel' },
@@ -244,6 +269,77 @@ export default function SpecialistJobDetailScreen() {
       { text: t('common.confirm'), onPress: () => cleaningMutation.mutate() },
     ]);
   }, [t, cleaningMutation]);
+
+  const handleTakeCleaningPhoto = useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('common.error'), 'Camera permission required');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      await uploadCleaningPhoto(result.assets[0].uri);
+    }
+  }, [t]);
+
+  const handlePickCleaningPhoto = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('common.error'), 'Gallery permission required');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      await uploadCleaningPhoto(result.assets[0].uri);
+    }
+  }, [t]);
+
+  const uploadCleaningPhoto = useCallback(async (uri: string) => {
+    setUploadingCleaning(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: 'cleaning.jpg',
+        type: 'image/jpeg',
+      } as any);
+      formData.append('entity_type', 'specialist_job');
+      formData.append('entity_id', String(id));
+      formData.append('file_category', 'cleaning');
+
+      await getApiClient().post('/api/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setCleaningPhotoUri(uri);
+      cleaningMutation.mutate();
+    } catch (error) {
+      console.error('Cleaning photo upload failed:', error);
+      Alert.alert(t('common.error'), 'Failed to upload photo');
+    } finally {
+      setUploadingCleaning(false);
+    }
+  }, [id, cleaningMutation, t]);
+
+  const handleDefectAssessmentSubmit = useCallback(() => {
+    if (!technicalNotes.trim()) {
+      Alert.alert(t('common.error'), 'Technical notes required');
+      return;
+    }
+    const defectId = (jobData as any)?.defect_id;
+    if (!defectId) return;
+    defectAssessmentMutation.mutate({
+      defect_id: defectId,
+      verdict: assessmentVerdict,
+      technical_notes: technicalNotes,
+    });
+  }, [jobData, assessmentVerdict, technicalNotes, defectAssessmentMutation, t]);
 
   // Loading state
   if (isLoading) {
@@ -469,22 +565,60 @@ export default function SpecialistJobDetailScreen() {
           </View>
         )}
 
-        {/* Cleaning button - available for in_progress / completed */}
+        {/* Cleaning section - available for in_progress / completed */}
         {(jobData.status === 'in_progress' || jobData.status === 'completed') && (
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              styles.cleaningButton,
-              cleaningMutation.isPending && styles.buttonDisabled,
-            ]}
-            onPress={handleCleaning}
-            disabled={cleaningMutation.isPending}
-          >
-            {cleaningMutation.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.actionButtonText}>Cleaning Done</Text>
+          <View style={styles.cleaningSection}>
+            <Text style={styles.cleaningLabel}>Cleaning Evidence</Text>
+            <View style={styles.cleaningButtons}>
+              <TouchableOpacity
+                style={[styles.cleaningPhotoBtn, uploadingCleaning && styles.buttonDisabled]}
+                onPress={handleTakeCleaningPhoto}
+                disabled={uploadingCleaning}
+              >
+                <Text style={styles.cleaningPhotoBtnText}>📷 Camera</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.cleaningPhotoBtn, uploadingCleaning && styles.buttonDisabled]}
+                onPress={handlePickCleaningPhoto}
+                disabled={uploadingCleaning}
+              >
+                <Text style={styles.cleaningPhotoBtnText}>🖼️ Gallery</Text>
+              </TouchableOpacity>
+            </View>
+            {uploadingCleaning && (
+              <View style={styles.uploadingRow}>
+                <ActivityIndicator size="small" color="#00897B" />
+                <Text style={styles.uploadingText}>Uploading...</Text>
+              </View>
             )}
+            {cleaningPhotoUri && (
+              <Text style={styles.cleaningSuccessText}>✓ Photo uploaded</Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.cleaningButton,
+                cleaningMutation.isPending && styles.buttonDisabled,
+              ]}
+              onPress={handleCleaning}
+              disabled={cleaningMutation.isPending}
+            >
+              {cleaningMutation.isPending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.actionButtonText}>Mark Cleaning Done</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Defect Assessment - available when job has defect_id and not yet assessed */}
+        {(jobData as any)?.defect_id && (jobData.status === 'in_progress' || jobData.status === 'completed') && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.assessmentButton]}
+            onPress={() => setAssessmentModalVisible(true)}
+          >
+            <Text style={styles.actionButtonText}>Submit Defect Assessment</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -688,6 +822,80 @@ export default function SpecialistJobDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Defect Assessment Modal */}
+      <Modal
+        visible={assessmentModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAssessmentModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Defect Assessment</Text>
+
+            <Text style={styles.modalLabel}>Verdict</Text>
+            <View style={styles.verdictPicker}>
+              {(['confirm', 'reject', 'minor'] as const).map((verdict) => (
+                <TouchableOpacity
+                  key={verdict}
+                  style={[
+                    styles.verdictOption,
+                    assessmentVerdict === verdict && (
+                      verdict === 'confirm' ? styles.verdictConfirm :
+                      verdict === 'reject' ? styles.verdictReject :
+                      styles.verdictMinor
+                    ),
+                  ]}
+                  onPress={() => setAssessmentVerdict(verdict)}
+                >
+                  <Text
+                    style={[
+                      styles.verdictOptionText,
+                      assessmentVerdict === verdict && styles.verdictOptionTextActive,
+                    ]}
+                  >
+                    {verdict === 'confirm' ? 'Confirm' : verdict === 'reject' ? 'Reject' : 'Minor'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalLabel}>Technical Notes *</Text>
+            <VoiceTextInput
+              style={styles.modalTextInput}
+              value={technicalNotes}
+              onChangeText={setTechnicalNotes}
+              placeholder="Technical notes..."
+              multiline
+              numberOfLines={4}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setAssessmentModalVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalSubmitButton,
+                  defectAssessmentMutation.isPending && styles.buttonDisabled,
+                ]}
+                onPress={handleDefectAssessmentSubmit}
+                disabled={defectAssessmentMutation.isPending}
+              >
+                {defectAssessmentMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalSubmitText}>{t('common.submit')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -854,7 +1062,55 @@ const styles = StyleSheet.create({
   },
   cleaningButton: {
     backgroundColor: '#00897B',
-    marginTop: 4,
+    marginTop: 8,
+  },
+  assessmentButton: {
+    backgroundColor: '#5E35B1',
+    marginTop: 12,
+  },
+  cleaningSection: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#E0F2F1',
+    borderRadius: 8,
+  },
+  cleaningLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#00695C',
+    marginBottom: 8,
+  },
+  cleaningButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cleaningPhotoBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#00897B',
+    alignItems: 'center',
+  },
+  cleaningPhotoBtnText: {
+    color: '#00897B',
+    fontWeight: '600',
+  },
+  uploadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  uploadingText: {
+    color: '#00897B',
+    fontSize: 13,
+  },
+  cleaningSuccessText: {
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginTop: 8,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -1088,6 +1344,35 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   categoryOptionTextActive: {
+    color: '#fff',
+  },
+  verdictPicker: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  verdictOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#e8e8e8',
+    alignItems: 'center',
+  },
+  verdictConfirm: {
+    backgroundColor: '#4CAF50',
+  },
+  verdictReject: {
+    backgroundColor: '#F44336',
+  },
+  verdictMinor: {
+    backgroundColor: '#FF9800',
+  },
+  verdictOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+  },
+  verdictOptionTextActive: {
     color: '#fff',
   },
 

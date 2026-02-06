@@ -27,6 +27,8 @@ import {
   InspectionAnswer,
   ChecklistItem,
   InspectionProgress,
+  getApiClient,
+  aiApi,
 } from '@inspection/shared';
 
 /**
@@ -48,6 +50,17 @@ function getOptimizedPhotoUrl(url: string): string {
 function getPhotoThumbnailUrl(url: string, width = 300, height = 150): string {
   if (!url || !url.includes('cloudinary.com')) return url;
   return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width},h_${height},c_fill,g_auto/`);
+}
+
+/**
+ * Convert Cloudinary video URL to MP4 format for better mobile compatibility
+ * - f_mp4: Convert to MP4 format (universally supported)
+ * - vc_h264: Use H.264 codec for wide compatibility
+ * - q_auto: Smart compression
+ */
+function getVideoPlaybackUrl(url: string): string {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  return url.replace('/upload/', '/upload/f_mp4,vc_h264,q_auto/');
 }
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -77,7 +90,6 @@ export default function InspectionChecklistScreen() {
   const isArabic = i18n.language === 'ar';
 
   const [localAnswers, setLocalAnswers] = useState<LocalAnswers>({});
-  const [expandedComments, setExpandedComments] = useState<Set<number>>(new Set());
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   const {
@@ -98,6 +110,23 @@ export default function InspectionChecklistScreen() {
 
   const inspectionId = inspection?.id;
 
+  // Helper to extract voice transcription from comment
+  const extractVoiceTranscription = (comment: string | null | undefined): { en: string; ar: string } | undefined => {
+    if (!comment) return undefined;
+    let en = '';
+    let ar = '';
+    const lines = comment.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('EN:')) {
+        en = line.replace('EN:', '').trim();
+      } else if (line.startsWith('AR:')) {
+        ar = line.replace('AR:', '').trim();
+      }
+    }
+    if (en || ar) return { en, ar };
+    return undefined;
+  };
+
   // Sync server answers into local state when inspection data loads
   useEffect(() => {
     if (inspection?.answers) {
@@ -110,6 +139,9 @@ export default function InspectionChecklistScreen() {
           const videoUrl = (ans.video_file as any)?.url || null;
           const voiceNoteUrl = (ans.voice_note as any)?.url || null;
 
+          // Extract voice transcription from comment if present
+          const voiceTranscription = extractVoiceTranscription(ans.comment);
+
           const serverData = {
             answer_value: ans.answer_value,
             comment: ans.comment ?? undefined,
@@ -117,20 +149,23 @@ export default function InspectionChecklistScreen() {
             video_url: videoUrl ?? undefined,
             voice_note_id: ans.voice_note_id ?? undefined,
             voice_note_url: voiceNoteUrl ?? undefined,
+            voice_transcription: voiceTranscription,
           };
 
-          // Merge: keep local upload state, but update comment from server (for AI analysis)
+          // Merge: keep local upload state, but update from server
           merged[ans.checklist_item_id] = {
             ...serverData,
             ...prev[ans.checklist_item_id],
             // Always use server comment if it has AI analysis
-            comment: (ans.comment && (ans.comment.includes('[Photo]:') || ans.comment.includes('[Video]:')))
+            comment: (ans.comment && (ans.comment.includes('🔍') || ans.comment.includes('🎬') || ans.comment.includes('[Photo]:') || ans.comment.includes('[Video]:')))
               ? ans.comment
               : (prev[ans.checklist_item_id]?.comment ?? ans.comment ?? undefined),
             // Use server URLs if available
             photo_url: photoUrl || prev[ans.checklist_item_id]?.photo_url,
             video_url: videoUrl || prev[ans.checklist_item_id]?.video_url,
             voice_note_url: voiceNoteUrl || prev[ans.checklist_item_id]?.voice_note_url,
+            // Restore voice transcription from server if not already in local state
+            voice_transcription: prev[ans.checklist_item_id]?.voice_transcription || voiceTranscription,
           };
         });
         return merged;
@@ -197,46 +232,8 @@ export default function InspectionChecklistScreen() {
     [answerMutation, localAnswers],
   );
 
-  const handleComment = useCallback(
-    (checklistItemId: number, comment: string) => {
-      setLocalAnswers((prev) => ({
-        ...prev,
-        [checklistItemId]: {
-          ...prev[checklistItemId],
-          comment,
-        },
-      }));
-    },
-    [],
-  );
 
-  const saveComment = useCallback(
-    (checklistItemId: number) => {
-      const current = localAnswers[checklistItemId];
-      if (current?.answer_value) {
-        answerMutation.mutate({
-          checklist_item_id: checklistItemId,
-          answer_value: current.answer_value,
-          comment: current.comment,
-        });
-      }
-    },
-    [answerMutation, localAnswers],
-  );
-
-  const toggleComment = useCallback((itemId: number) => {
-    setExpandedComments((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) {
-        next.delete(itemId);
-      } else {
-        next.add(itemId);
-      }
-      return next;
-    });
-  }, []);
-
-  // Upload photo to Cloudinary via API
+  // Upload photo to Cloudinary via API and run AI analysis
   const uploadPhoto = useCallback(
     async (checklistItemId: number, uri: string, fileName: string) => {
       // Set uploading state
@@ -250,7 +247,7 @@ export default function InspectionChecklistScreen() {
       }));
 
       try {
-        // Create FormData for React Native
+        // Create FormData for React Native - must use this format
         const formData = new FormData();
         formData.append('file', {
           uri,
@@ -259,8 +256,12 @@ export default function InspectionChecklistScreen() {
         } as any);
         formData.append('checklist_item_id', String(checklistItemId));
 
-        // Upload to Cloudinary via API
-        const response = await inspectionsApi.uploadMedia(inspectionId!, checklistItemId, formData as any);
+        // Upload directly via API client (not through shared API which rebuilds FormData)
+        const response = await getApiClient().post(
+          `/api/inspections/${inspectionId}/upload-media`,
+          formData,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
         const data = (response.data as any)?.data;
         const cloudinaryUrl = data?.photo_file?.url || data?.url;
 
@@ -275,19 +276,60 @@ export default function InspectionChecklistScreen() {
           },
         }));
 
-        // Refresh inspection data immediately
-        queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
+        // Run AI analysis if we got a Cloudinary URL
+        if (cloudinaryUrl && cloudinaryUrl.includes('cloudinary.com')) {
+          try {
+            // Analyze in both languages
+            const [enResult, arResult] = await Promise.all([
+              aiApi.analyzeDefect(cloudinaryUrl, 'en').catch(() => null),
+              aiApi.analyzeDefect(cloudinaryUrl, 'ar').catch(() => null),
+            ]);
 
-        // Poll for AI analysis (runs in background, takes a few seconds)
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
-        }, 5000);
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
-        }, 10000);
-      } catch (error) {
+            const enData = (enResult?.data as any)?.data;
+            const arData = (arResult?.data as any)?.data;
+
+            if (enData?.success || arData?.success) {
+              // Format analysis like web does
+              const parts: string[] = [];
+              if (enData?.success) {
+                parts.push(`🔍 Photo Analysis (EN)\n• Issue: ${enData.description}\n• Severity: ${enData.severity}\n• Cause: ${enData.cause}\n• Action: ${enData.recommendation}\n• Safety: ${enData.safety_risk}`);
+              }
+              if (arData?.success) {
+                parts.push(`🔍 تحليل الصورة (AR)\n• المشكلة: ${arData.description}\n• الخطورة: ${arData.severity}\n• السبب: ${arData.cause}\n• الإجراء: ${arData.recommendation}\n• السلامة: ${arData.safety_risk}`);
+              }
+
+              const analysisComment = parts.join('\n\n');
+              const currentAnswer = localAnswers[checklistItemId];
+
+              // Save the analysis as comment
+              if (currentAnswer?.answer_value) {
+                answerMutation.mutate({
+                  checklist_item_id: checklistItemId,
+                  answer_value: currentAnswer.answer_value,
+                  comment: analysisComment,
+                });
+              }
+
+              // Update local state with analysis
+              setLocalAnswers((prev) => ({
+                ...prev,
+                [checklistItemId]: {
+                  ...prev[checklistItemId],
+                  comment: analysisComment,
+                },
+              }));
+            }
+          } catch (aiError) {
+            console.warn('AI analysis failed:', aiError);
+          }
+        }
+
+        // Refresh inspection data
+        queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
+      } catch (error: any) {
         console.error('Photo upload failed:', error);
-        Alert.alert(t('common.error'), 'Failed to upload photo');
+        const message = error?.response?.data?.message || error?.message || 'Failed to upload photo';
+        Alert.alert(t('common.error'), message);
 
         // Clear uploading state on error
         setLocalAnswers((prev) => ({
@@ -300,7 +342,7 @@ export default function InspectionChecklistScreen() {
         }));
       }
     },
-    [id, queryClient, t],
+    [id, inspectionId, queryClient, t, localAnswers, answerMutation],
   );
 
   const handleTakePhoto = useCallback(
@@ -359,6 +401,82 @@ export default function InspectionChecklistScreen() {
       ],
     );
   }, [t, submitMutation]);
+
+  // Delete photo mutation
+  const deletePhotoMutation = useMutation({
+    mutationFn: (checklistItemId: number) =>
+      inspectionsApi.deletePhoto(inspectionId!, checklistItemId),
+    onSuccess: (_, checklistItemId) => {
+      setLocalAnswers((prev) => ({
+        ...prev,
+        [checklistItemId]: {
+          ...prev[checklistItemId],
+          photo_url: undefined,
+          photo_uri: undefined,
+        },
+      }));
+      queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
+      Alert.alert(t('common.success', 'Success'), t('inspection.photoDeleted', 'Photo deleted'));
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || t('common.error');
+      Alert.alert(t('common.error'), message);
+    },
+  });
+
+  // Delete video mutation
+  const deleteVideoMutation = useMutation({
+    mutationFn: (checklistItemId: number) =>
+      inspectionsApi.deleteVideo(inspectionId!, checklistItemId),
+    onSuccess: (_, checklistItemId) => {
+      setLocalAnswers((prev) => ({
+        ...prev,
+        [checklistItemId]: {
+          ...prev[checklistItemId],
+          video_url: undefined,
+          video_uri: undefined,
+        },
+      }));
+      queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
+      Alert.alert(t('common.success', 'Success'), t('inspection.videoDeleted', 'Video deleted'));
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || t('common.error');
+      Alert.alert(t('common.error'), message);
+    },
+  });
+
+  // Handle delete photo with confirmation
+  const handleDeletePhoto = useCallback((checklistItemId: number) => {
+    Alert.alert(
+      t('common.confirm', 'Confirm'),
+      t('inspection.deletePhotoConfirm', 'Delete this photo?'),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        {
+          text: t('common.delete', 'Delete'),
+          style: 'destructive',
+          onPress: () => deletePhotoMutation.mutate(checklistItemId),
+        },
+      ],
+    );
+  }, [t, deletePhotoMutation]);
+
+  // Handle delete video with confirmation
+  const handleDeleteVideo = useCallback((checklistItemId: number) => {
+    Alert.alert(
+      t('common.confirm', 'Confirm'),
+      t('inspection.deleteVideoConfirm', 'Delete this video?'),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        {
+          text: t('common.delete', 'Delete'),
+          style: 'destructive',
+          onPress: () => deleteVideoMutation.mutate(checklistItemId),
+        },
+      ],
+    );
+  }, [t, deleteVideoMutation]);
 
   const renderYesNo = (item: ChecklistItem) => {
     const val = localAnswers[item.id]?.answer_value;
@@ -496,7 +614,7 @@ export default function InspectionChecklistScreen() {
     [t],
   );
 
-  // Upload video to Cloudinary
+  // Upload video to Cloudinary and run AI analysis
   const uploadVideo = useCallback(
     async (checklistItemId: number, uri: string, fileName: string) => {
       setLocalAnswers((prev) => ({
@@ -509,6 +627,7 @@ export default function InspectionChecklistScreen() {
       }));
 
       try {
+        // Create FormData for React Native
         const formData = new FormData();
         formData.append('file', {
           uri,
@@ -517,7 +636,12 @@ export default function InspectionChecklistScreen() {
         } as any);
         formData.append('checklist_item_id', String(checklistItemId));
 
-        const response = await inspectionsApi.uploadMedia(inspectionId!, checklistItemId, formData as any);
+        // Upload directly via API client
+        const response = await getApiClient().post(
+          `/api/inspections/${inspectionId}/upload-media`,
+          formData,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
         const data = (response.data as any)?.data;
         const cloudinaryUrl = data?.video_file?.url || data?.url;
 
@@ -531,18 +655,64 @@ export default function InspectionChecklistScreen() {
           },
         }));
 
-        queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
+        // Run AI analysis on video thumbnail if we got a Cloudinary URL
+        if (cloudinaryUrl && cloudinaryUrl.includes('cloudinary.com')) {
+          try {
+            // Extract thumbnail from video for analysis
+            const thumbnailUrl = cloudinaryUrl
+              .replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
+              .replace(/\.(mp4|mov|webm|avi|mkv)$/i, '.jpg');
 
-        // Poll for AI analysis (runs in background, takes a few seconds)
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
-        }, 5000);
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
-        }, 10000);
-      } catch (error) {
+            // Analyze in both languages
+            const [enResult, arResult] = await Promise.all([
+              aiApi.analyzeDefect(thumbnailUrl, 'en').catch(() => null),
+              aiApi.analyzeDefect(thumbnailUrl, 'ar').catch(() => null),
+            ]);
+
+            const enData = (enResult?.data as any)?.data;
+            const arData = (arResult?.data as any)?.data;
+
+            if (enData?.success || arData?.success) {
+              // Format analysis like web does
+              const parts: string[] = [];
+              if (enData?.success) {
+                parts.push(`🎬 Video Analysis (EN)\n• Issue: ${enData.description}\n• Severity: ${enData.severity}\n• Cause: ${enData.cause}\n• Action: ${enData.recommendation}\n• Safety: ${enData.safety_risk}`);
+              }
+              if (arData?.success) {
+                parts.push(`🎬 تحليل الفيديو (AR)\n• المشكلة: ${arData.description}\n• الخطورة: ${arData.severity}\n• السبب: ${arData.cause}\n• الإجراء: ${arData.recommendation}\n• السلامة: ${arData.safety_risk}`);
+              }
+
+              const analysisComment = parts.join('\n\n');
+              const currentAnswer = localAnswers[checklistItemId];
+
+              // Save the analysis as comment
+              if (currentAnswer?.answer_value) {
+                answerMutation.mutate({
+                  checklist_item_id: checklistItemId,
+                  answer_value: currentAnswer.answer_value,
+                  comment: analysisComment,
+                });
+              }
+
+              // Update local state with analysis
+              setLocalAnswers((prev) => ({
+                ...prev,
+                [checklistItemId]: {
+                  ...prev[checklistItemId],
+                  comment: analysisComment,
+                },
+              }));
+            }
+          } catch (aiError) {
+            console.warn('Video AI analysis failed:', aiError);
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
+      } catch (error: any) {
         console.error('Video upload failed:', error);
-        Alert.alert(t('common.error'), 'Failed to upload video');
+        const message = error?.response?.data?.message || error?.message || 'Failed to upload video';
+        Alert.alert(t('common.error'), message);
         setLocalAnswers((prev) => ({
           ...prev,
           [checklistItemId]: {
@@ -553,7 +723,7 @@ export default function InspectionChecklistScreen() {
         }));
       }
     },
-    [id, queryClient, t],
+    [id, inspectionId, queryClient, t, localAnswers, answerMutation],
   );
 
   // Helper to extract AI analysis from comment (supports new bilingual format)
@@ -620,7 +790,6 @@ export default function InspectionChecklistScreen() {
     const questionText = isArabic && item.question_text_ar
       ? item.question_text_ar
       : item.question_text;
-    const commentExpanded = expandedComments.has(item.id);
     const currentAnswer = localAnswers[item.id];
 
     // Photo URL: prefer Cloudinary URL, fallback to local URI during upload
@@ -660,13 +829,6 @@ export default function InspectionChecklistScreen() {
 
         <View style={styles.actionRow}>
           <TouchableOpacity
-            style={styles.commentToggle}
-            onPress={() => toggleComment(item.id)}
-          >
-            <Text style={styles.commentToggleText}>{t('inspection.comment')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[styles.cameraButton, isUploading && styles.buttonDisabled]}
             onPress={() => handleTakePhoto(item.id)}
             disabled={isUploading}
@@ -700,17 +862,30 @@ export default function InspectionChecklistScreen() {
           language={i18n.language}
         />
 
-        {commentExpanded ? (
-          <VoiceTextInput
-            style={styles.commentInput}
-            value={currentAnswer?.comment ?? ''}
-            onChangeText={(text) => handleComment(item.id, text)}
-            onBlur={() => saveComment(item.id)}
-            placeholder={t('inspection.comment')}
-            multiline
-            numberOfLines={2}
-          />
-        ) : null}
+        {/* Validation warnings for failed items */}
+        {(() => {
+          const isFailed = currentAnswer?.answer_value === 'fail' || currentAnswer?.answer_value === 'no';
+          const hasVoice = !!currentAnswer?.voice_note_id || !!voiceNoteUrl;
+          const hasMedia = !!photoSource || !!videoSource;
+
+          if (isFailed && inspData.status === 'draft') {
+            return (
+              <View style={styles.validationWarnings}>
+                {!hasVoice && (
+                  <Text style={styles.validationWarningText}>
+                    ⚠️ {t('inspection.fail_requires_voice', 'Voice recording is required for failed items')}
+                  </Text>
+                )}
+                {!hasMedia && (
+                  <Text style={styles.validationWarningText}>
+                    ⚠️ {t('inspection.fail_requires_media', 'Photo or video is required for failed items')}
+                  </Text>
+                )}
+              </View>
+            );
+          }
+          return null;
+        })()}
 
         {/* Photo preview with upload indicator and Cloudinary optimizations */}
         {photoSource ? (
@@ -725,6 +900,19 @@ export default function InspectionChecklistScreen() {
                 <ActivityIndicator color="#fff" size="large" />
                 <Text style={styles.uploadingText}>Uploading...</Text>
               </View>
+            )}
+            {!isUploading && inspData.status === 'draft' && (
+              <TouchableOpacity
+                style={styles.deleteMediaButton}
+                onPress={() => handleDeletePhoto(item.id)}
+                disabled={deletePhotoMutation.isPending}
+              >
+                {deletePhotoMutation.isPending ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.deleteMediaButtonText}>✕</Text>
+                )}
+              </TouchableOpacity>
             )}
           </View>
         ) : null}
@@ -783,7 +971,7 @@ export default function InspectionChecklistScreen() {
         {videoSource ? (
           <View style={styles.videoContainer}>
             <Video
-              source={{ uri: videoSource }}
+              source={{ uri: getVideoPlaybackUrl(videoSource) }}
               style={styles.videoPreview}
               useNativeControls
               resizeMode={ResizeMode.CONTAIN}
@@ -794,6 +982,19 @@ export default function InspectionChecklistScreen() {
                 <ActivityIndicator color="#fff" size="large" />
                 <Text style={styles.uploadingText}>Uploading video...</Text>
               </View>
+            )}
+            {!isUploading && inspData.status === 'draft' && (
+              <TouchableOpacity
+                style={styles.deleteMediaButton}
+                onPress={() => handleDeleteVideo(item.id)}
+                disabled={deleteVideoMutation.isPending}
+              >
+                {deleteVideoMutation.isPending ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.deleteMediaButtonText}>✕</Text>
+                )}
+              </TouchableOpacity>
             )}
           </View>
         ) : null}
@@ -1145,17 +1346,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
-  commentToggle: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#E8EAF6',
-  },
-  commentToggleText: {
-    fontSize: 12,
-    color: '#3F51B5',
-    fontWeight: '500',
-  },
   cameraButton: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1201,17 +1391,6 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 8,
     backgroundColor: '#000',
-  },
-  commentInput: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 13,
-    minHeight: 50,
-    textAlignVertical: 'top',
-    marginTop: 8,
-    color: '#212121',
   },
   photoContainer: {
     position: 'relative',
@@ -1313,5 +1492,39 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  deleteMediaButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F44336',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
+  deleteMediaButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  validationWarnings: {
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9800',
+  },
+  validationWarningText: {
+    fontSize: 12,
+    color: '#E65100',
+    marginBottom: 4,
   },
 });

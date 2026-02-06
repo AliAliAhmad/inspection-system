@@ -32,6 +32,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
 const ROLE_OPTIONS: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
 const SHIFT_OPTIONS = ['day', 'night'];
 const LANGUAGE_OPTIONS = ['en', 'ar'];
+const SPECIALIZATION_OPTIONS = ['mechanical', 'electrical'];
 
 export default function AdminUsersScreen() {
   const { t } = useTranslation();
@@ -107,6 +108,32 @@ export default function AdminUsersScreen() {
       Alert.alert(t('common.error', 'Error'), t('users.update_failed', 'Failed to update user.'));
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: number) => usersApi.remove(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      Alert.alert(t('common.success', 'Success'), t('users.deleted', 'User deleted successfully.'));
+    },
+    onError: () => {
+      Alert.alert(t('common.error', 'Error'), t('users.delete_failed', 'Failed to delete user.'));
+    },
+  });
+
+  const handleDelete = (user: User) => {
+    Alert.alert(
+      t('users.delete_confirm_title', 'Delete User'),
+      t('users.delete_confirm_message', `Are you sure you want to delete ${user.full_name}?`),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        {
+          text: t('common.delete', 'Delete'),
+          style: 'destructive',
+          onPress: () => deleteMutation.mutate(user.id),
+        },
+      ]
+    );
+  };
 
   const resetCreateForm = () => {
     setCreateForm({
@@ -200,38 +227,54 @@ export default function AdminUsersScreen() {
     const isActive = item.is_active !== false;
 
     return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => openEditModal(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.nameRow}>
-            <View style={[styles.activeDot, { backgroundColor: isActive ? '#4CAF50' : '#E53935' }]} />
-            <Text style={styles.fullName} numberOfLines={1}>{item.full_name}</Text>
+      <View style={styles.card}>
+        <TouchableOpacity
+          onPress={() => openEditModal(item)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.nameRow}>
+              <View style={[styles.activeDot, { backgroundColor: isActive ? '#4CAF50' : '#E53935' }]} />
+              <Text style={styles.fullName} numberOfLines={1}>{item.full_name}</Text>
+            </View>
+            <View style={[styles.roleBadge, { backgroundColor: roleColor }]}>
+              <Text style={styles.roleBadgeText}>{t(`roles.${item.role}`, item.role)}</Text>
+            </View>
           </View>
-          <View style={[styles.roleBadge, { backgroundColor: roleColor }]}>
-            <Text style={styles.roleBadgeText}>{t(`roles.${item.role}`, item.role)}</Text>
-          </View>
-        </View>
 
-        <Text style={styles.emailText}>{item.email}</Text>
-        {item.employee_id ? (
-          <Text style={styles.detailText}>
-            {t('users.employee_id', 'Employee ID')}: {item.employee_id}
-          </Text>
-        ) : null}
-        {item.specialization ? (
-          <Text style={styles.detailText}>
-            {t('users.specialization', 'Specialization')}: {item.specialization}
-          </Text>
-        ) : null}
-        {item.shift ? (
-          <Text style={styles.detailText}>
-            {t('users.shift', 'Shift')}: {item.shift}
-          </Text>
-        ) : null}
-      </TouchableOpacity>
+          <Text style={styles.emailText}>{item.email}</Text>
+          {item.employee_id ? (
+            <Text style={styles.detailText}>
+              {t('users.employee_id', 'Employee ID')}: {item.employee_id}
+            </Text>
+          ) : null}
+          {item.specialization ? (
+            <Text style={styles.detailText}>
+              {t('users.specialization', 'Specialization')}: {item.specialization}
+            </Text>
+          ) : null}
+          {item.shift ? (
+            <Text style={styles.detailText}>
+              {t('users.shift', 'Shift')}: {item.shift}
+            </Text>
+          ) : null}
+        </TouchableOpacity>
+
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => openEditModal(item)}
+          >
+            <Text style={styles.editButtonText}>{t('common.edit', 'Edit')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDelete(item)}
+          >
+            <Text style={styles.deleteButtonText}>{t('common.delete', 'Delete')}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   }, [t]);
 
@@ -348,13 +391,22 @@ export default function AdminUsersScreen() {
               </View>
 
               <Text style={styles.fieldLabel}>{t('users.specialization', 'Specialization')}</Text>
-              <TextInput
-                style={styles.input}
-                value={editForm.specialization}
-                onChangeText={(v) => setEditForm((p) => ({ ...p, specialization: v }))}
-                placeholder={t('users.specialization_placeholder', 'e.g. mechanical, electrical')}
-                placeholderTextColor="#999"
-              />
+              <View style={styles.chipRow}>
+                {SPECIALIZATION_OPTIONS.map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[
+                      styles.specChip,
+                      editForm.specialization === s && styles.specChipActive,
+                    ]}
+                    onPress={() => setEditForm((p) => ({ ...p, specialization: p.specialization === s ? '' : s }))}
+                  >
+                    <Text style={[styles.specChipText, editForm.specialization === s && styles.specChipTextActive]}>
+                      {t(`users.${s}`, s)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <Text style={styles.fieldLabel}>{t('users.shift', 'Shift')}</Text>
               <View style={styles.chipRow}>
@@ -471,13 +523,22 @@ export default function AdminUsersScreen() {
               </View>
 
               <Text style={styles.fieldLabel}>{t('users.specialization', 'Specialization')}</Text>
-              <TextInput
-                style={styles.input}
-                value={createForm.specialization}
-                onChangeText={(v) => setCreateForm((p) => ({ ...p, specialization: v }))}
-                placeholder={t('users.specialization_placeholder', 'e.g. mechanical, electrical')}
-                placeholderTextColor="#999"
-              />
+              <View style={styles.chipRow}>
+                {SPECIALIZATION_OPTIONS.map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[
+                      styles.specChip,
+                      createForm.specialization === s && styles.specChipActive,
+                    ]}
+                    onPress={() => setCreateForm((p) => ({ ...p, specialization: p.specialization === s ? '' : s }))}
+                  >
+                    <Text style={[styles.specChipText, createForm.specialization === s && styles.specChipTextActive]}>
+                      {t(`users.${s}`, s)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               <Text style={styles.fieldLabel}>{t('users.shift', 'Shift')}</Text>
               <View style={styles.chipRow}>
@@ -608,6 +669,29 @@ const styles = StyleSheet.create({
   roleBadgeText: { color: '#fff', fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
   emailText: { fontSize: 13, color: '#616161', marginBottom: 4 },
   detailText: { fontSize: 12, color: '#757575', marginBottom: 2 },
+  cardActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  editButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 6,
+  },
+  editButtonText: { color: '#1976D2', fontSize: 13, fontWeight: '600' },
+  deleteButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 6,
+  },
+  deleteButtonText: { color: '#E53935', fontSize: 13, fontWeight: '600' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: '#424242', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: '#757575', textAlign: 'center' },
@@ -651,6 +735,10 @@ const styles = StyleSheet.create({
   langChipActive: { backgroundColor: '#1976D2' },
   langChipText: { fontSize: 13, fontWeight: '500', color: '#555' },
   langChipTextActive: { color: '#fff' },
+  specChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#e8e8e8' },
+  specChipActive: { backgroundColor: '#4CAF50' },
+  specChipText: { fontSize: 13, fontWeight: '500', color: '#555', textTransform: 'capitalize' },
+  specChipTextActive: { color: '#fff' },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

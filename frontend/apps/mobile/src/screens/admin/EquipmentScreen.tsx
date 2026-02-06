@@ -76,6 +76,7 @@ export default function EquipmentScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -90,12 +91,13 @@ export default function EquipmentScreen() {
   ];
 
   const equipmentQuery = useQuery({
-    queryKey: ['equipment', activeFilter, page, search],
+    queryKey: ['equipment', activeFilter, typeFilter, page, search],
     queryFn: () =>
       equipmentApi.list({
         page,
         per_page: 20,
         ...(activeFilter ? { status: activeFilter } : {}),
+        ...(typeFilter ? { equipment_type: typeFilter } : {}),
         ...(search ? { search } : {}),
       }),
   });
@@ -182,7 +184,8 @@ export default function EquipmentScreen() {
       berth: equipment.berth || undefined,
       manufacturer: equipment.manufacturer || undefined,
       model_number: equipment.model_number || undefined,
-    });
+      installation_date: (equipment as any).installation_date || undefined,
+    } as any);
     setModalVisible(true);
   };
 
@@ -235,6 +238,15 @@ export default function EquipmentScreen() {
           value={search}
           onChangeText={(text) => {
             setSearch(text);
+            setPage(1);
+          }}
+        />
+        <TextInput
+          style={[styles.searchInput, { marginTop: 8 }]}
+          placeholder={t('equipment.filterType', 'Filter by type...')}
+          value={typeFilter}
+          onChangeText={(text) => {
+            setTypeFilter(text);
             setPage(1);
           }}
         />
@@ -393,6 +405,14 @@ export default function EquipmentScreen() {
               value={formData.model_number || ''}
               onChangeText={(text) => setFormData({ ...formData, model_number: text })}
               placeholder={t('equipment.modelPlaceholder', 'Model number')}
+            />
+
+            <Text style={styles.fieldLabel}>{t('equipment.installationDate', 'Installation Date')}</Text>
+            <TextInput
+              style={styles.input}
+              value={(formData as any).installation_date || ''}
+              onChangeText={(text) => setFormData({ ...formData, installation_date: text } as any)}
+              placeholder="YYYY-MM-DD"
             />
 
             {editingEquipment && (

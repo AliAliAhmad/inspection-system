@@ -8,9 +8,12 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  Alert,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import * as DocumentPicker from 'expo-document-picker';
 import { inspectionRoutinesApi } from '@inspection/shared';
 import type { EquipmentSchedule, UpcomingEntry } from '@inspection/shared';
 
@@ -132,9 +135,18 @@ function ScheduleCard({ schedule }: { schedule: EquipmentSchedule }) {
   );
 }
 
+interface UploadResult {
+  created: number;
+  equipment_processed: number;
+  errors: string[];
+}
+
 export default function SchedulesScreen() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'schedule'>('upcoming');
+  const [uploadResultModalVisible, setUploadResultModalVisible] = useState(false);
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
 
   const schedulesQuery = useQuery({
     queryKey: ['inspection-schedules'],
@@ -146,6 +158,48 @@ export default function SchedulesScreen() {
     queryKey: ['inspection-schedules', 'upcoming'],
     queryFn: () => inspectionRoutinesApi.getUpcoming().then((r) => (r.data as any).data),
   });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (uri: string) => {
+      // Fetch file as blob and upload
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const file = new File([blob], 'schedule.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      return inspectionRoutinesApi.uploadSchedule(file);
+    },
+    onSuccess: (res) => {
+      const result = res.data as any;
+      setUploadResult({
+        created: result.created ?? 0,
+        equipment_processed: result.equipment_processed ?? 0,
+        errors: result.errors ?? [],
+      });
+      setUploadResultModalVisible(true);
+      queryClient.invalidateQueries({ queryKey: ['inspection-schedules'] });
+    },
+    onError: (err: any) => {
+      Alert.alert(
+        t('common.error', 'Error'),
+        err?.response?.data?.message || t('schedules.uploadError', 'Failed to upload schedule')
+      );
+    },
+  });
+
+  const handleImportSchedule = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        uploadMutation.mutate(file.uri);
+      }
+    } catch (error) {
+      Alert.alert(t('common.error', 'Error'), t('schedules.pickError', 'Failed to select file'));
+    }
+  };
 
   const schedules = schedulesQuery.data ?? [];
   const todayEntries: UpcomingEntry[] = upcomingQuery.data?.today ?? [];
@@ -170,7 +224,20 @@ export default function SchedulesScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{t('nav.schedules', 'Inspection Schedules')}</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>{t('nav.schedules', 'Inspection Schedules')}</Text>
+        <TouchableOpacity
+          style={styles.importButton}
+          onPress={handleImportSchedule}
+          disabled={uploadMutation.isPending}
+        >
+          {uploadMutation.isPending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.importButtonText}>{t('schedules.import', 'Import')}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
       {/* Tabs */}
       <View style={styles.tabRow}>
@@ -229,6 +296,46 @@ export default function SchedulesScreen() {
           }
         />
       )}
+
+      {/* Upload Result Modal */}
+      <Modal visible={uploadResultModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('schedules.uploadResult', 'Schedule Upload Result')}</Text>
+
+            {uploadResult && (
+              <View style={styles.resultContent}>
+                <Text style={styles.resultText}>
+                  <Text style={styles.resultNumber}>{uploadResult.created}</Text> {t('schedules.entriesCreated', 'schedule entries created')}
+                </Text>
+                <Text style={styles.resultText}>
+                  {t('schedules.forEquipment', 'for')} <Text style={styles.resultNumber}>{uploadResult.equipment_processed}</Text> {t('schedules.equipment', 'equipment')}
+                </Text>
+
+                {uploadResult.errors.length > 0 && (
+                  <View style={styles.warningsContainer}>
+                    <Text style={styles.warningsTitle}>
+                      ⚠️ {uploadResult.errors.length} {t('schedules.warnings', 'warnings')}
+                    </Text>
+                    <ScrollView style={styles.warningsList}>
+                      {uploadResult.errors.map((err, i) => (
+                        <Text key={i} style={styles.warningText}>• {err}</Text>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.okButton}
+              onPress={() => setUploadResultModalVisible(false)}
+            >
+              <Text style={styles.okButtonText}>{t('common.ok', 'OK')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -236,7 +343,10 @@ export default function SchedulesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#212121', padding: 16, paddingBottom: 8 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 8 },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#212121' },
+  importButton: { backgroundColor: '#1976D2', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  importButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   tabRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 8 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: '#1976D2' },
@@ -269,4 +379,16 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '600', color: '#fff' },
   emptyContainer: { paddingTop: 60, alignItems: 'center' },
   emptyText: { fontSize: 15, color: '#757575' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 400 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#212121', marginBottom: 16, textAlign: 'center' },
+  resultContent: { marginBottom: 20 },
+  resultText: { fontSize: 15, color: '#424242', marginBottom: 4 },
+  resultNumber: { fontWeight: '700', color: '#1976D2' },
+  warningsContainer: { marginTop: 16, backgroundColor: '#FFF3E0', padding: 12, borderRadius: 8 },
+  warningsTitle: { fontSize: 14, fontWeight: '600', color: '#E65100', marginBottom: 8 },
+  warningsList: { maxHeight: 120 },
+  warningText: { fontSize: 13, color: '#424242', marginBottom: 4 },
+  okButton: { backgroundColor: '#1976D2', paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  okButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 });
