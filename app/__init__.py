@@ -263,6 +263,147 @@ def create_app(config_name='development'):
         db.session.commit()
         print(f'Admin user created (id={admin.id})')
 
+    @app.cli.command('reset-data')
+    def reset_data():
+        """
+        Reset all data in the database while keeping admin users.
+        Deletes all test data and uploaded files from Cloudinary.
+        Use with caution - this is irreversible!
+        """
+        import click
+        import cloudinary
+        import cloudinary.api
+
+        # Confirm before proceeding
+        if not click.confirm('\n⚠️  WARNING: This will DELETE ALL DATA except admin users.\n'
+                            'This includes all equipment, inspections, defects, users, files, etc.\n'
+                            'This action is IRREVERSIBLE!\n\n'
+                            'Are you sure you want to continue?'):
+            print('Aborted.')
+            return
+
+        print('\n🔄 Starting data reset...\n')
+
+        # Import all models
+        from app.models import (
+            User, Equipment, ChecklistTemplate, ChecklistItem,
+            Inspection, InspectionAnswer, Defect, DefectOccurrence,
+            InspectionSchedule, InspectionRoutine, WeeklyCompletion,
+            Notification, InspectionRating, SpecialistJob, EngineerJob,
+            QualityReview, DefectAssessment, FinalAssessment,
+            InspectionList, InspectionAssignment, Leave, RosterEntry,
+            PauseLog, JobTakeover, BonusStar, File, SyncQueue,
+            TokenBlocklist, Translation, ImportLog, RoleSwapLog,
+            EquipmentStatusLog
+        )
+
+        # Step 1: Delete files from Cloudinary
+        print('📁 Deleting files from Cloudinary...')
+        files = File.query.all()
+        deleted_files = 0
+        failed_files = 0
+
+        if files:
+            # Initialize Cloudinary
+            cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME')
+            api_key = os.getenv('CLOUDINARY_API_KEY')
+            api_secret = os.getenv('CLOUDINARY_API_SECRET')
+
+            if all([cloud_name, api_key, api_secret]):
+                cloudinary.config(
+                    cloud_name=cloud_name,
+                    api_key=api_key,
+                    api_secret=api_secret,
+                    secure=True
+                )
+
+                for f in files:
+                    public_id = f.stored_filename
+                    if public_id and not public_id.startswith('/'):
+                        try:
+                            # Determine resource type
+                            resource_type = 'image'
+                            if f.mime_type:
+                                if 'video' in f.mime_type or 'audio' in f.mime_type:
+                                    resource_type = 'video'
+
+                            cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+                            deleted_files += 1
+                        except Exception as e:
+                            failed_files += 1
+                            print(f'  ⚠️  Failed to delete {public_id}: {e}')
+
+                print(f'  ✓ Deleted {deleted_files} files from Cloudinary')
+                if failed_files:
+                    print(f'  ⚠️  Failed to delete {failed_files} files')
+            else:
+                print('  ⚠️  Cloudinary not configured, skipping cloud file deletion')
+
+        # Step 2: Delete data from tables in correct order (children first)
+        # This order respects foreign key constraints
+        tables_to_clear = [
+            ('Notifications', Notification),
+            ('Bonus Stars', BonusStar),
+            ('Inspection Ratings', InspectionRating),
+            ('Quality Reviews', QualityReview),
+            ('Defect Assessments', DefectAssessment),
+            ('Final Assessments', FinalAssessment),
+            ('Inspection Answers', InspectionAnswer),
+            ('Defect Occurrences', DefectOccurrence),
+            ('Pause Logs', PauseLog),
+            ('Job Takeovers', JobTakeover),
+            ('Specialist Jobs', SpecialistJob),
+            ('Engineer Jobs', EngineerJob),
+            ('Defects', Defect),
+            ('Inspections', Inspection),
+            ('Inspection Assignments', InspectionAssignment),
+            ('Weekly Completions', WeeklyCompletion),
+            ('Inspection Schedules', InspectionSchedule),
+            ('Inspection Routines', InspectionRoutine),
+            ('Inspection Lists', InspectionList),
+            ('Checklist Items', ChecklistItem),
+            ('Checklist Templates', ChecklistTemplate),
+            ('Equipment Status Logs', EquipmentStatusLog),
+            ('Equipment', Equipment),
+            ('Roster Entries', RosterEntry),
+            ('Leaves', Leave),
+            ('Role Swap Logs', RoleSwapLog),
+            ('Import Logs', ImportLog),
+            ('Sync Queue', SyncQueue),
+            ('Translations', Translation),
+            ('Token Blocklist', TokenBlocklist),
+            ('Files', File),
+        ]
+
+        print('\n🗑️  Deleting database records...')
+        for name, model in tables_to_clear:
+            try:
+                count = model.query.delete()
+                db.session.commit()
+                if count > 0:
+                    print(f'  ✓ Deleted {count} {name}')
+            except Exception as e:
+                db.session.rollback()
+                print(f'  ⚠️  Error deleting {name}: {e}')
+
+        # Step 3: Delete non-admin users
+        print('\n👥 Deleting non-admin users...')
+        try:
+            non_admin_count = User.query.filter(User.role != 'admin').delete()
+            db.session.commit()
+            print(f'  ✓ Deleted {non_admin_count} non-admin users')
+        except Exception as e:
+            db.session.rollback()
+            print(f'  ⚠️  Error deleting users: {e}')
+
+        # Show remaining admin users
+        admins = User.query.filter_by(role='admin').all()
+        print(f'\n✅ Reset complete! Kept {len(admins)} admin user(s):')
+        for admin in admins:
+            print(f'   - {admin.full_name} ({admin.email})')
+
+        print('\n🎉 Database is now clean and ready for fresh data!')
+
     return app
 
 
