@@ -76,7 +76,6 @@ export default function UsersPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
-  const [fileList, setFileList] = useState<UploadFile[]>([]);
 
   // Role swap states
   const [swapHistoryModalOpen, setSwapHistoryModalOpen] = useState(false);
@@ -143,23 +142,20 @@ export default function UsersPage() {
     },
   });
 
-  // Import mutations
+  // Import mutation - same pattern as roster page
   const importMutation = useMutation({
     mutationFn: (file: File) => usersApi.import(file),
-    onSuccess: (response) => {
-      const result = response.data.data as ImportResult;
-      if (result) {
-        setImportResult(result);
-        message.success(
-          t('users.importSuccess', 'Import completed: {{created}} created, {{updated}} updated, {{failed}} failed', {
-            created: result.created.length,
-            updated: result.updated.length,
-            failed: result.failed.length,
-          })
-        );
-      }
+    onSuccess: (res) => {
+      const result = (res.data as any).data ?? res.data;
+      setImportResult(result);
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      setFileList([]);
+      message.success(
+        t('users.importSuccess', 'Import completed: {{created}} created, {{updated}} updated, {{failed}} failed', {
+          created: result.created?.length ?? 0,
+          updated: result.updated?.length ?? 0,
+          failed: result.failed?.length ?? 0,
+        })
+      );
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.message || err?.message || 'Import failed';
@@ -208,15 +204,6 @@ export default function UsersPage() {
     } catch (err) {
       message.error(t('users.downloadError', 'Failed to download template'));
     }
-  };
-
-  const handleImportUpload = () => {
-    if (fileList.length === 0) {
-      message.warning(t('users.selectFile', 'Please select a file to import'));
-      return;
-    }
-    const file = fileList[0].originFileObj as File;
-    importMutation.mutate(file);
   };
 
   const openEdit = (user: User) => {
@@ -580,11 +567,12 @@ export default function UsersPage() {
         onCancel={() => {
           setImportModalOpen(false);
           setImportResult(null);
-          setFileList([]);
         }}
-        onOk={handleImportUpload}
-        confirmLoading={importMutation.isPending}
-        okText={t('common.import', 'Import')}
+        footer={[
+          <Button key="cancel" onClick={() => setImportModalOpen(false)}>
+            {t('common.close', 'Close')}
+          </Button>,
+        ]}
         width={700}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -603,22 +591,19 @@ export default function UsersPage() {
             showIcon
           />
 
-          <Upload.Dragger
-            fileList={fileList}
-            beforeUpload={(file) => {
-              setFileList([file]);
-              return false;
-            }}
-            onRemove={() => setFileList([])}
+          <input
+            type="file"
             accept=".xlsx,.xls"
-            maxCount={1}
-          >
-            <p className="ant-upload-drag-icon">
-              <UploadOutlined style={{ fontSize: 48, color: '#1890ff' }} />
-            </p>
-            <p className="ant-upload-text">{t('users.dragFile', 'Click or drag Excel file here')}</p>
-            <p className="ant-upload-hint">{t('users.fileHint', 'Only .xlsx or .xls files are supported')}</p>
-          </Upload.Dragger>
+            style={{ display: 'block', marginBottom: 16 }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                importMutation.mutate(file);
+                e.target.value = '';
+              }
+            }}
+          />
+          {importMutation.isPending && <Typography.Text>Uploading...</Typography.Text>}
 
           {importResult && (
             <Alert
@@ -758,3 +743,4 @@ export default function UsersPage() {
     </Card>
   );
 }
+// BUILD: 1770489400

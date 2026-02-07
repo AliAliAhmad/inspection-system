@@ -38,9 +38,11 @@ export const usersApi = {
   import(file: File) {
     const formData = new FormData();
     formData.append('file', file);
-    return getApiClient().post<ApiResponse<ImportResult>>('/api/users/import', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return getApiClient().post<ApiResponse<ImportResult>>(
+      '/api/users/import',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
   },
 
   downloadTemplate() {

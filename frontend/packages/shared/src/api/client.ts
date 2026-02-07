@@ -30,11 +30,15 @@ export function initApiClient(baseURL: string, storage: ITokenStorage): AxiosIns
     headers: { 'Content-Type': 'application/json' },
   });
 
-  // Request interceptor: attach token + language
+  // Request interceptor: attach token + language, handle FormData
   apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     const token = await tokenStorage.getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Don't set Content-Type for FormData - let browser set it with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
     }
     return config;
   });
@@ -45,7 +49,10 @@ export function initApiClient(baseURL: string, storage: ITokenStorage): AxiosIns
     async (error: AxiosError) => {
       const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      // Skip token refresh for auth endpoints (login, register, refresh)
+      const isAuthEndpoint = originalRequest.url?.includes('/api/auth/');
+
+      if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
         if (isRefreshing) {
           return new Promise((resolve, reject) => {
             failedQueue.push({

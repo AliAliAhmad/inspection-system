@@ -69,6 +69,7 @@ export default function EquipmentPage() {
   const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [importFile, setImportFile] = useState<File | null>(null);
 
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -135,6 +136,7 @@ export default function EquipmentPage() {
       }
       queryClient.invalidateQueries({ queryKey: ['equipment'] });
       setFileList([]);
+      setImportFile(null);
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.message || err?.message || 'Import failed';
@@ -166,12 +168,12 @@ export default function EquipmentPage() {
   };
 
   const handleImportUpload = () => {
-    if (fileList.length === 0) {
+    console.log('handleImportUpload called, importFile:', importFile);
+    if (!importFile) {
       message.warning(t('equipment.selectFile', 'Please select a file to import'));
       return;
     }
-    const file = fileList[0].originFileObj as File;
-    importMutation.mutate(file);
+    importMutation.mutate(importFile);
   };
 
   const openEdit = (record: Equipment) => {
@@ -397,6 +399,7 @@ export default function EquipmentPage() {
           setImportModalOpen(false);
           setImportResult(null);
           setFileList([]);
+          setImportFile(null);
         }}
         onOk={handleImportUpload}
         confirmLoading={importMutation.isPending}
@@ -422,10 +425,15 @@ export default function EquipmentPage() {
           <Upload.Dragger
             fileList={fileList}
             beforeUpload={(file) => {
-              setFileList([file]);
+              console.log('beforeUpload called with file:', file);
+              setImportFile(file);
+              setFileList([file as unknown as UploadFile]);
               return false;
             }}
-            onRemove={() => setFileList([])}
+            onRemove={() => {
+              setImportFile(null);
+              setFileList([]);
+            }}
             accept=".xlsx,.xls"
             maxCount={1}
           >
