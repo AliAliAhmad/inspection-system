@@ -6,6 +6,8 @@ Includes equipment import, template download, and import history features.
 import json
 import io
 import re
+import logging
+import traceback
 from datetime import datetime
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -15,6 +17,8 @@ from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
 from app.utils.decorators import get_current_user, admin_required, get_language
 from app.utils.pagination import paginate
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint('equipment', __name__)
 
@@ -260,218 +264,229 @@ def import_equipment():
     Immutable fields (cannot be updated via import):
     - name, equipment_type, serial_number, manufacturer, model_number, installation_date, name_ar
     """
+    logger.info("Equipment import started")
     try:
         import pandas as pd
     except ImportError:
+        logger.error("pandas not installed")
         raise ValidationError("pandas library is required for Excel import")
 
-    if 'file' not in request.files:
-        raise ValidationError("No file provided")
-
-    file = request.files['file']
-    if not file.filename:
-        raise ValidationError("No file selected")
-
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise ValidationError("File must be an Excel file (.xlsx or .xls)")
-
-    admin_id = int(get_jwt_identity())
-
     try:
-        df = pd.read_excel(file)
-    except Exception as e:
-        raise ValidationError(f"Failed to read Excel file: {str(e)}")
+        if 'file' not in request.files:
+            raise ValidationError("No file provided")
 
-    # Normalize column names
-    df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+        file = request.files['file']
+        if not file.filename:
+            raise ValidationError("No file selected")
 
-    required_columns = [
-        'name', 'name_ar', 'serial_number', 'manufacturer', 'model_number',
-        'installation_date', 'equipment_type_2', 'capacity', 'berth', 'home_berth'
-    ]
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        raise ValidationError(f"Missing required columns: {', '.join(missing_columns)}")
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise ValidationError("File must be an Excel file (.xlsx or .xls)")
 
-    results = {
-        'created': [],
-        'updated': [],
-        'failed': []
-    }
+        admin_id = int(get_jwt_identity())
 
-    # Immutable fields that cannot be changed via import
-    immutable_fields = ['name', 'name_ar', 'serial_number', 'manufacturer', 'model_number', 'installation_date']
+        try:
+            df = pd.read_excel(file)
+        except Exception as e:
+            raise ValidationError(f"Failed to read Excel file: {str(e)}")
 
-    for idx, row in df.iterrows():
-        row_num = idx + 2  # Excel row number (1-indexed + header)
-        errors = []
+        # Normalize column names
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
 
-        # Extract data
-        name = str(row.get('name', '')).strip()
-        name_ar = str(row.get('name_ar', '')).strip()
-        serial_number = str(row.get('serial_number', '')).strip()
-        manufacturer = str(row.get('manufacturer', '')).strip()
-        model_number = str(row.get('model_number', '')).strip()
-        installation_date = row.get('installation_date')
-        equipment_type_2 = str(row.get('equipment_type_2', '')).strip()
-        capacity = str(row.get('capacity', '')).strip()
-        berth = row.get('berth')
-        home_berth = row.get('home_berth')
+        required_columns = [
+            'name', 'name_ar', 'serial_number', 'manufacturer', 'model_number',
+            'installation_date', 'equipment_type_2', 'capacity', 'berth', 'home_berth'
+        ]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValidationError(f"Missing required columns: {', '.join(missing_columns)}")
 
-        # Skip empty rows
-        if not name and not serial_number:
-            continue
-
-        # Validate required fields
-        if not name:
-            errors.append("name is required")
-        if not name_ar:
-            errors.append("name_ar is required")
-        if not serial_number:
-            errors.append("serial_number is required")
-        if not manufacturer:
-            errors.append("manufacturer is required")
-        if not model_number:
-            errors.append("model_number is required")
-        if not equipment_type_2:
-            errors.append("equipment_type_2 is required")
-        if not capacity:
-            errors.append("capacity is required")
-
-        # Validate and parse installation_date
-        parsed_date = _parse_date(installation_date)
-        if not parsed_date:
-            errors.append("installation_date is required and must be a valid date")
-
-        # Validate berth
-        berth_valid, berth_result = _validate_berth(berth)
-        if not berth_valid:
-            errors.append(berth_result)
-        else:
-            berth = berth_result
-
-        # Validate home_berth
-        home_berth_valid, home_berth_result = _validate_berth(home_berth)
-        if not home_berth_valid:
-            errors.append(home_berth_result)
-        else:
-            home_berth = home_berth_result
-
-        if errors:
-            results['failed'].append({
-                'row': row_num,
-                'serial_number': serial_number,
-                'name': name,
-                'errors': errors
-            })
-            continue
-
-        # Auto-generate equipment_type from name
-        equipment_type = Equipment.generate_equipment_type(name)
-
-        # Check if equipment exists by serial_number
-        existing_equipment = Equipment.query.filter_by(serial_number=serial_number).first()
-
-        if existing_equipment:
-            # Check for immutable field conflicts
-            immutable_conflicts = []
-            if existing_equipment.name != name:
-                immutable_conflicts.append(f"name (existing: {existing_equipment.name})")
-            if existing_equipment.name_ar != name_ar:
-                immutable_conflicts.append(f"name_ar (existing: {existing_equipment.name_ar})")
-            if existing_equipment.manufacturer != manufacturer:
-                immutable_conflicts.append(f"manufacturer (existing: {existing_equipment.manufacturer})")
-            if existing_equipment.model_number != model_number:
-                immutable_conflicts.append(f"model_number (existing: {existing_equipment.model_number})")
-            if existing_equipment.installation_date != parsed_date:
-                immutable_conflicts.append(f"installation_date (existing: {existing_equipment.installation_date})")
-
-            if immutable_conflicts:
-                results['failed'].append({
-                    'row': row_num,
-                    'serial_number': serial_number,
-                    'name': name,
-                    'errors': [f"Cannot update immutable fields: {', '.join(immutable_conflicts)}"]
-                })
-                continue
-
-            # Update allowed (mutable) fields
-            existing_equipment.equipment_type_2 = equipment_type_2
-            existing_equipment.capacity = capacity
-            existing_equipment.berth = berth
-            existing_equipment.home_berth = home_berth
-
-            results['updated'].append({
-                'row': row_num,
-                'serial_number': serial_number,
-                'name': name,
-                'equipment_type': equipment_type
-            })
-        else:
-            # Check for duplicate serial_number in same import
-            if any(r.get('serial_number') == serial_number for r in results['created']):
-                results['failed'].append({
-                    'row': row_num,
-                    'serial_number': serial_number,
-                    'name': name,
-                    'errors': ["Duplicate serial_number in same import"]
-                })
-                continue
-
-            # Create new equipment
-            equipment = Equipment(
-                name=name,
-                name_ar=name_ar,
-                equipment_type=equipment_type,
-                equipment_type_2=equipment_type_2,
-                serial_number=serial_number,
-                manufacturer=manufacturer,
-                model_number=model_number,
-                installation_date=parsed_date,
-                capacity=capacity,
-                berth=berth,
-                home_berth=home_berth,
-                status='active',
-                is_scrapped=False,
-                created_by_id=admin_id
-            )
-            db.session.add(equipment)
-            results['created'].append({
-                'row': row_num,
-                'serial_number': serial_number,
-                'name': name,
-                'equipment_type': equipment_type
-            })
-
-    try:
-        safe_commit()
-    except IntegrityError as e:
-        db.session.rollback()
-        raise ValidationError(f"Database error: {str(e)}")
-
-    # Log the import
-    import_log = ImportLog(
-        import_type='equipment',
-        admin_id=admin_id,
-        file_name=file.filename,
-        total_rows=len(df),
-        created_count=len(results['created']),
-        updated_count=len(results['updated']),
-        failed_count=len(results['failed']),
-        details=json.dumps(results['failed']) if results['failed'] else None
-    )
-    db.session.add(import_log)
-    safe_commit()
-
-    return jsonify({
-        'status': 'success',
-        'message': f"Import completed: {len(results['created'])} created, {len(results['updated'])} updated, {len(results['failed'])} failed",
-        'data': {
-            'created': results['created'],
-            'updated': results['updated'],
-            'failed': results['failed']
+        results = {
+            'created': [],
+            'updated': [],
+            'failed': []
         }
-    }), 200
+
+        # Immutable fields that cannot be changed via import
+        immutable_fields = ['name', 'name_ar', 'serial_number', 'manufacturer', 'model_number', 'installation_date']
+
+        for idx, row in df.iterrows():
+            row_num = idx + 2  # Excel row number (1-indexed + header)
+            errors = []
+
+            # Extract data
+            name = str(row.get('name', '')).strip()
+            name_ar = str(row.get('name_ar', '')).strip()
+            serial_number = str(row.get('serial_number', '')).strip()
+            manufacturer = str(row.get('manufacturer', '')).strip()
+            model_number = str(row.get('model_number', '')).strip()
+            installation_date = row.get('installation_date')
+            equipment_type_2 = str(row.get('equipment_type_2', '')).strip()
+            capacity = str(row.get('capacity', '')).strip()
+            berth = row.get('berth')
+            home_berth = row.get('home_berth')
+
+            # Skip empty rows
+            if not name and not serial_number:
+                continue
+
+            # Validate required fields
+            if not name:
+                errors.append("name is required")
+            if not name_ar:
+                errors.append("name_ar is required")
+            if not serial_number:
+                errors.append("serial_number is required")
+            if not manufacturer:
+                errors.append("manufacturer is required")
+            if not model_number:
+                errors.append("model_number is required")
+            if not equipment_type_2:
+                errors.append("equipment_type_2 is required")
+            if not capacity:
+                errors.append("capacity is required")
+
+            # Validate and parse installation_date
+            parsed_date = _parse_date(installation_date)
+            if not parsed_date:
+                errors.append("installation_date is required and must be a valid date")
+
+            # Validate berth
+            berth_valid, berth_result = _validate_berth(berth)
+            if not berth_valid:
+                errors.append(berth_result)
+            else:
+                berth = berth_result
+
+            # Validate home_berth
+            home_berth_valid, home_berth_result = _validate_berth(home_berth)
+            if not home_berth_valid:
+                errors.append(home_berth_result)
+            else:
+                home_berth = home_berth_result
+
+            if errors:
+                results['failed'].append({
+                    'row': row_num,
+                    'serial_number': serial_number,
+                    'name': name,
+                    'errors': errors
+                })
+                continue
+
+            # Auto-generate equipment_type from name
+            equipment_type = Equipment.generate_equipment_type(name)
+
+            # Check if equipment exists by serial_number
+            existing_equipment = Equipment.query.filter_by(serial_number=serial_number).first()
+
+            if existing_equipment:
+                # Check for immutable field conflicts
+                immutable_conflicts = []
+                if existing_equipment.name != name:
+                    immutable_conflicts.append(f"name (existing: {existing_equipment.name})")
+                if existing_equipment.name_ar != name_ar:
+                    immutable_conflicts.append(f"name_ar (existing: {existing_equipment.name_ar})")
+                if existing_equipment.manufacturer != manufacturer:
+                    immutable_conflicts.append(f"manufacturer (existing: {existing_equipment.manufacturer})")
+                if existing_equipment.model_number != model_number:
+                    immutable_conflicts.append(f"model_number (existing: {existing_equipment.model_number})")
+                if existing_equipment.installation_date != parsed_date:
+                    immutable_conflicts.append(f"installation_date (existing: {existing_equipment.installation_date})")
+
+                if immutable_conflicts:
+                    results['failed'].append({
+                        'row': row_num,
+                        'serial_number': serial_number,
+                        'name': name,
+                        'errors': [f"Cannot update immutable fields: {', '.join(immutable_conflicts)}"]
+                    })
+                    continue
+
+                # Update allowed (mutable) fields
+                existing_equipment.equipment_type_2 = equipment_type_2
+                existing_equipment.capacity = capacity
+                existing_equipment.berth = berth
+                existing_equipment.home_berth = home_berth
+
+                results['updated'].append({
+                    'row': row_num,
+                    'serial_number': serial_number,
+                    'name': name,
+                    'equipment_type': equipment_type
+                })
+            else:
+                # Check for duplicate serial_number in same import
+                if any(r.get('serial_number') == serial_number for r in results['created']):
+                    results['failed'].append({
+                        'row': row_num,
+                        'serial_number': serial_number,
+                        'name': name,
+                        'errors': ["Duplicate serial_number in same import"]
+                    })
+                    continue
+
+                # Create new equipment
+                equipment = Equipment(
+                    name=name,
+                    name_ar=name_ar,
+                    equipment_type=equipment_type,
+                    equipment_type_2=equipment_type_2,
+                    serial_number=serial_number,
+                    manufacturer=manufacturer,
+                    model_number=model_number,
+                    installation_date=parsed_date,
+                    capacity=capacity,
+                    berth=berth,
+                    home_berth=home_berth,
+                    status='active',
+                    is_scrapped=False,
+                    created_by_id=admin_id
+                )
+                db.session.add(equipment)
+                results['created'].append({
+                    'row': row_num,
+                    'serial_number': serial_number,
+                    'name': name,
+                    'equipment_type': equipment_type
+                })
+
+        try:
+            safe_commit()
+        except IntegrityError as e:
+            db.session.rollback()
+            raise ValidationError(f"Database error: {str(e)}")
+
+        # Log the import
+        import_log = ImportLog(
+            import_type='equipment',
+            admin_id=admin_id,
+            file_name=file.filename,
+            total_rows=len(df),
+            created_count=len(results['created']),
+            updated_count=len(results['updated']),
+            failed_count=len(results['failed']),
+            details=json.dumps(results['failed']) if results['failed'] else None
+        )
+        db.session.add(import_log)
+        safe_commit()
+
+        logger.info(f"Equipment import completed: {len(results['created'])} created, {len(results['updated'])} updated, {len(results['failed'])} failed")
+        return jsonify({
+            'status': 'success',
+            'message': f"Import completed: {len(results['created'])} created, {len(results['updated'])} updated, {len(results['failed'])} failed",
+            'data': {
+                'created': results['created'],
+                'updated': results['updated'],
+                'failed': results['failed']
+            }
+        }), 200
+
+    except ValidationError:
+        raise
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Equipment import failed with unexpected error: {str(e)}\n{traceback.format_exc()}")
+        raise ValidationError(f"Import failed: {str(e)}")
 
 
 @bp.route('/template', methods=['GET'])
