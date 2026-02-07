@@ -564,6 +564,7 @@ export default function UsersPage() {
                 <li>{t('users.importInstruction3', 'Full name must have 3 parts: first, father, family')}</li>
                 <li>{t('users.importInstruction4', 'Role: admin, inspector, specialist, engineer, quality_engineer, maintenance')}</li>
                 <li>{t('users.importInstruction5', 'Specialization: mechanical, electrical, hvac (not required for admin)')}</li>
+                <li>{t('users.importInstruction6', 'Email and phone are optional')}</li>
               </ul>
             }
             type="info"

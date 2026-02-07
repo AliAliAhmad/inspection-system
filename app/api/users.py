@@ -356,9 +356,9 @@ def import_team():
     Expected Excel columns:
     - SAP_ID (6 digits, required)
     - full_name (3 parts, required)
-    - email (required)
+    - email (optional)
     - role (required: admin, inspector, specialist, engineer, quality_engineer, maintenance)
-    - phone (required)
+    - phone (optional)
     - specialization (required for non-admin: mechanical, electrical, hvac)
     """
     try:
@@ -386,7 +386,7 @@ def import_team():
     # Normalize column names
     df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
 
-    required_columns = ['sap_id', 'full_name', 'email', 'role', 'phone', 'specialization']
+    required_columns = ['sap_id', 'full_name', 'role', 'specialization']
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         raise ValidationError(f"Missing required columns: {', '.join(missing_columns)}")
@@ -407,9 +407,11 @@ def import_team():
         # Extract and validate data
         sap_id = str(row.get('sap_id', '')).strip()
         full_name = str(row.get('full_name', '')).strip()
-        email = str(row.get('email', '')).strip()
+        email_raw = row.get('email', '')
+        email = str(email_raw).strip() if pd.notna(email_raw) and email_raw else None
         role = str(row.get('role', '')).strip().lower()
-        phone = str(row.get('phone', '')).strip()
+        phone_raw = row.get('phone', '')
+        phone = str(phone_raw).strip() if pd.notna(phone_raw) and phone_raw else None
         specialization = str(row.get('specialization', '')).strip().lower()
 
         # Validate SAP ID
@@ -590,9 +592,9 @@ def download_team_template():
     template_data = {
         'SAP_ID': ['123456', '123457', '123458'],
         'full_name': ['Ahmed Mohammed Hassan', 'Sara Ali Ahmed', 'Mohammed Ali'],
-        'email': ['ahmed@company.com', 'sara@company.com', 'mohammed@company.com'],
+        'email': ['ahmed@company.com', '', ''],  # Optional
         'role': ['inspector', 'specialist', 'maintenance'],
-        'phone': ['+966501234567', '+966507654321', '+966509876543'],
+        'phone': ['+966501234567', '', ''],  # Optional
         'specialization': ['mechanical', 'electrical', '']
     }
     df = pd.DataFrame(template_data)
