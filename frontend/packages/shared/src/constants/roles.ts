@@ -6,6 +6,7 @@ export const ROLES = {
   SPECIALIST: 'specialist' as UserRole,
   ENGINEER: 'engineer' as UserRole,
   QUALITY_ENGINEER: 'quality_engineer' as UserRole,
+  MAINTENANCE: 'maintenance' as UserRole,
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -14,6 +15,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   specialist: 'Specialist',
   engineer: 'Engineer',
   quality_engineer: 'Quality Engineer',
+  maintenance: 'Maintenance',
 };
 
 export const ROLE_LABELS_AR: Record<UserRole, string> = {
@@ -22,6 +24,7 @@ export const ROLE_LABELS_AR: Record<UserRole, string> = {
   specialist: '\u0623\u062E\u0635\u0627\u0626\u064A',
   engineer: '\u0645\u0647\u0646\u062F\u0633',
   quality_engineer: '\u0645\u0647\u0646\u062F\u0633 \u062C\u0648\u062F\u0629',
+  maintenance: '\u0635\u064A\u0627\u0646\u0629',
 };
 
 export function hasRole(user: { role: UserRole; minor_role: UserRole | null }, ...roles: UserRole[]): boolean {
