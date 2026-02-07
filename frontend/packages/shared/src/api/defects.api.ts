@@ -15,7 +15,7 @@ export interface DefectListParams extends PaginationParams {
 }
 
 export interface AssignSpecialistPayload {
-  specialist_id: number;
+  specialist_ids: number[];
   category?: 'major' | 'minor';
   major_reason?: string;
 }

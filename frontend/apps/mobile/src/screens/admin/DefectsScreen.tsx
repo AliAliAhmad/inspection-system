@@ -24,6 +24,7 @@ import type {
   DefectStatus,
   AssignSpecialistPayload,
 } from '@inspection/shared';
+import VoiceTextInput from '../../components/VoiceTextInput';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#E53935',
@@ -140,7 +141,7 @@ export default function DefectsScreen() {
   // Assign modal state
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [selectedDefect, setSelectedDefect] = useState<Defect | null>(null);
-  const [selectedSpecialist, setSelectedSpecialist] = useState<Specialist | null>(null);
+  const [selectedSpecialists, setSelectedSpecialists] = useState<Specialist[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<'minor' | 'major' | null>(null);
   const [majorReason, setMajorReason] = useState('');
   const [specialistPickerVisible, setSpecialistPickerVisible] = useState(false);
@@ -186,17 +187,15 @@ export default function DefectsScreen() {
     mutationFn: ({ id, payload }: { id: number; payload: AssignSpecialistPayload }) =>
       defectsApi.assignSpecialist(id, payload),
     onSuccess: (res) => {
-      const job = (res.data as any)?.data;
+      const jobs = (res.data as any)?.data;
+      const msg = (res.data as any)?.message || 'Specialist jobs created';
       queryClient.invalidateQueries({ queryKey: ['defects'] });
       setAssignModalVisible(false);
       setSelectedDefect(null);
-      setSelectedSpecialist(null);
+      setSelectedSpecialists([]);
       setSelectedCategory(null);
       setMajorReason('');
-      Alert.alert(
-        t('common.success', 'Success'),
-        t('defects.assignSuccess', `Specialist job ${job?.job_id || ''} created`)
-      );
+      Alert.alert(t('common.success', 'Success'), msg);
     },
     onError: (err: any) => {
       Alert.alert(
@@ -229,15 +228,15 @@ export default function DefectsScreen() {
 
   const handleAssignPress = (defect: Defect) => {
     setSelectedDefect(defect);
-    setSelectedSpecialist(null);
+    setSelectedSpecialists([]);
     setSelectedCategory(null);
     setMajorReason('');
     setAssignModalVisible(true);
   };
 
   const handleAssignSubmit = () => {
-    if (!selectedDefect || !selectedSpecialist) {
-      Alert.alert(t('common.error', 'Error'), 'Please select a specialist');
+    if (!selectedDefect || selectedSpecialists.length === 0) {
+      Alert.alert(t('common.error', 'Error'), 'Please select at least one specialist');
       return;
     }
     if (selectedCategory === 'major' && !majorReason.trim()) {
@@ -245,11 +244,23 @@ export default function DefectsScreen() {
       return;
     }
     const payload: AssignSpecialistPayload = {
-      specialist_id: selectedSpecialist.id,
+      specialist_ids: selectedSpecialists.map((s) => s.id),
       ...(selectedCategory ? { category: selectedCategory } : {}),
       ...(selectedCategory === 'major' && majorReason ? { major_reason: majorReason } : {}),
     };
     assignMutation.mutate({ id: selectedDefect.id, payload });
+  };
+
+  const toggleSpecialist = (specialist: Specialist) => {
+    setSelectedSpecialists((prev) => {
+      const exists = prev.find((s) => s.id === specialist.id);
+      if (exists) return prev.filter((s) => s.id !== specialist.id);
+      return [...prev, specialist];
+    });
+  };
+
+  const removeSpecialist = (id: number) => {
+    setSelectedSpecialists((prev) => prev.filter((s) => s.id !== id));
   };
 
   const handleSearchSimilar = async () => {
@@ -363,6 +374,7 @@ export default function DefectsScreen() {
               onPress={() => {
                 setAssignModalVisible(false);
                 setSelectedDefect(null);
+                setSelectedSpecialists([]);
               }}
             >
               <Text style={styles.modalCancel}>{t('common.cancel', 'Cancel')}</Text>
@@ -394,7 +406,7 @@ export default function DefectsScreen() {
               </View>
             )}
 
-            <Text style={styles.fieldLabel}>{t('defects.specialist', 'Specialist')}</Text>
+            <Text style={styles.fieldLabel}>{t('defects.specialists', 'Specialists')}</Text>
             {specialistsQuery.isLoading ? (
               <ActivityIndicator size="small" color="#1976D2" style={{ marginVertical: 16 }} />
             ) : (
@@ -402,13 +414,27 @@ export default function DefectsScreen() {
                 style={styles.pickerButton}
                 onPress={() => setSpecialistPickerVisible(true)}
               >
-                <Text style={[styles.pickerButtonText, !selectedSpecialist && styles.placeholderText]}>
-                  {selectedSpecialist
-                    ? `${selectedSpecialist.full_name} (${selectedSpecialist.role_id})`
-                    : 'Select specialist...'}
+                <Text style={[styles.pickerButtonText, selectedSpecialists.length === 0 && styles.placeholderText]}>
+                  {selectedSpecialists.length > 0
+                    ? `${selectedSpecialists.length} specialist(s) selected`
+                    : 'Select specialists...'}
                 </Text>
                 <Text style={styles.chevron}>▼</Text>
               </TouchableOpacity>
+            )}
+
+            {/* Selected specialists chips */}
+            {selectedSpecialists.length > 0 && (
+              <View style={styles.chipsContainer}>
+                {selectedSpecialists.map((s) => (
+                  <View key={s.id} style={styles.chip}>
+                    <Text style={styles.chipText}>{s.full_name}</Text>
+                    <TouchableOpacity onPress={() => removeSpecialist(s.id)} style={styles.chipRemove}>
+                      <Text style={styles.chipRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
             )}
 
             <Text style={styles.fieldLabel}>{t('defects.jobCategory', 'Job Category')}</Text>
@@ -442,7 +468,7 @@ export default function DefectsScreen() {
             {selectedCategory === 'major' && (
               <>
                 <Text style={styles.fieldLabel}>{t('defects.majorReason', 'Major Reason')}</Text>
-                <TextInput
+                <VoiceTextInput
                   style={styles.textArea}
                   value={majorReason}
                   onChangeText={setMajorReason}
@@ -467,29 +493,36 @@ export default function DefectsScreen() {
         <View style={styles.pickerModalOverlay}>
           <View style={styles.pickerModalContent}>
             <View style={styles.pickerModalHeader}>
-              <Text style={styles.pickerModalTitle}>{t('defects.selectSpecialist', 'Select Specialist')}</Text>
+              <Text style={styles.pickerModalTitle}>{t('defects.selectSpecialists', 'Select Specialists')}</Text>
               <TouchableOpacity onPress={() => setSpecialistPickerVisible(false)}>
-                <Text style={styles.pickerModalClose}>✕</Text>
+                <Text style={styles.pickerModalDone}>
+                  {t('common.done', 'Done')}
+                </Text>
               </TouchableOpacity>
             </View>
 
             <FlatList
               data={specialists}
               keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.specialistOption}
-                  onPress={() => {
-                    setSelectedSpecialist(item);
-                    setSpecialistPickerVisible(false);
-                  }}
-                >
-                  <Text style={styles.specialistName}>{item.full_name}</Text>
-                  <Text style={styles.specialistDetail}>
-                    {item.role_id} • {item.specialization || 'N/A'}
-                  </Text>
-                </TouchableOpacity>
-              )}
+              renderItem={({ item }) => {
+                const isSelected = selectedSpecialists.some((s) => s.id === item.id);
+                return (
+                  <TouchableOpacity
+                    style={[styles.specialistOption, isSelected && styles.specialistOptionSelected]}
+                    onPress={() => toggleSpecialist(item)}
+                  >
+                    <View style={styles.specialistOptionRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.specialistName}>{item.full_name}</Text>
+                        <Text style={styles.specialistDetail}>
+                          {item.role_id} • {item.specialization || 'N/A'}
+                        </Text>
+                      </View>
+                      {isSelected && <Text style={styles.checkMark}>✓</Text>}
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
               ListEmptyComponent={
                 <Text style={styles.noSpecialistsText}>No specialists available</Text>
               }
@@ -649,8 +682,17 @@ const styles = StyleSheet.create({
   pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
   pickerModalTitle: { fontSize: 17, fontWeight: '600', color: '#212121' },
   pickerModalClose: { fontSize: 20, color: '#757575', paddingHorizontal: 8 },
+  pickerModalDone: { fontSize: 16, color: '#1976D2', fontWeight: '600' },
   specialistList: { padding: 8 },
   specialistOption: { padding: 14, backgroundColor: '#f5f5f5', borderRadius: 8, marginBottom: 8 },
+  specialistOptionSelected: { backgroundColor: '#E3F2FD', borderWidth: 1, borderColor: '#1976D2' },
+  specialistOptionRow: { flexDirection: 'row', alignItems: 'center' },
+  checkMark: { fontSize: 18, color: '#1976D2', fontWeight: '700', marginLeft: 8 },
+  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E3F2FD', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#90CAF9' },
+  chipText: { fontSize: 13, color: '#1565C0', fontWeight: '500' },
+  chipRemove: { marginLeft: 6, paddingHorizontal: 2 },
+  chipRemoveText: { fontSize: 14, color: '#1565C0', fontWeight: '600' },
   specialistName: { fontSize: 15, fontWeight: '600', color: '#212121' },
   specialistDetail: { fontSize: 13, color: '#757575', marginTop: 2 },
   noSpecialistsText: { fontSize: 14, color: '#757575', textAlign: 'center', padding: 24 },

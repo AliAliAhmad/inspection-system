@@ -74,6 +74,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/engineer/jobs/create', name: t('nav.create_job'), icon: <AppstoreOutlined /> },
     { path: '/engineer/team-assignment', name: t('nav.team_assignment'), icon: <TeamOutlined /> },
     { path: '/engineer/pause-approvals', name: t('nav.pause_approvals'), icon: <PauseCircleOutlined /> },
+    { path: '/admin/defects', name: t('nav.defects'), icon: <BugOutlined /> },
   ];
 
   const qeItems: MenuDataItem[] = [

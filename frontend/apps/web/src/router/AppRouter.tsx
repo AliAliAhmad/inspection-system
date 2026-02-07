@@ -97,7 +97,7 @@ export default function AppRouter() {
             <Route path="bonus-approvals" element={<Navigate to="/admin/approvals?tab=bonus" replace />} />
             <Route path="reports" element={<RoleGuard roles={['admin']}><ReportsPage /></RoleGuard>} />
             <Route path="routines" element={<RoleGuard roles={['admin']}><InspectionRoutinesPage /></RoleGuard>} />
-            <Route path="defects" element={<RoleGuard roles={['admin']}><DefectsPage /></RoleGuard>} />
+            <Route path="defects" element={<RoleGuard roles={['admin', 'engineer']}><DefectsPage /></RoleGuard>} />
             <Route path="backlog" element={<RoleGuard roles={['admin']}><BacklogPage /></RoleGuard>} />
             <Route path="roster" element={<RoleGuard roles={['admin', 'engineer']}><TeamRosterPage /></RoleGuard>} />
             <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pauses" replace />} />

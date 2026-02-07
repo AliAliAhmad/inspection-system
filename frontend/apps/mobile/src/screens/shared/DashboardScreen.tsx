@@ -35,6 +35,7 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const isAdmin = user?.role === 'admin';
+  const isEngineer = user?.role === 'engineer';
 
   const { data: dashData, isLoading: dashLoading, refetch: dashRefetch } = useQuery({
     queryKey: ['dashboard'],
@@ -89,12 +90,20 @@ export default function DashboardScreen() {
           <QuickLink label={t('nav.qualityReviews', 'Quality Reviews')} onPress={() => navigation.navigate('QualityReviewsAdmin')} />
         </>
       ) : dashData ? (
-        <View style={styles.grid}>
-          <StatCard title={t('nav.inspections')} value={dashData.total_inspections} />
-          <StatCard title={t('nav.defects')} value={dashData.pending_defects} color={dashData.pending_defects > 0 ? '#cf1322' : undefined} />
-          <StatCard title="Active Jobs" value={dashData.active_jobs} />
-          <StatCard title="Completion" value={`${dashData.completion_rate}%`} color="#3f8600" />
-        </View>
+        <>
+          <View style={styles.grid}>
+            <StatCard title={t('nav.inspections')} value={dashData.total_inspections} />
+            <StatCard title={t('nav.defects')} value={dashData.pending_defects} color={dashData.pending_defects > 0 ? '#cf1322' : undefined} />
+            <StatCard title="Active Jobs" value={dashData.active_jobs} />
+            <StatCard title="Completion" value={`${dashData.completion_rate}%`} color="#3f8600" />
+          </View>
+          {isEngineer && (
+            <>
+              <Text style={styles.sectionTitle}>{t('nav.quick_links', 'Quick Access')}</Text>
+              <QuickLink label={t('nav.defects', 'Defects')} onPress={() => navigation.navigate('Defects')} />
+            </>
+          )}
+        </>
       ) : null}
     </ScrollView>
   );
