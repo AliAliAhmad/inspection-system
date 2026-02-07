@@ -658,7 +658,10 @@ def swap_roles(user_id):
     # Check for active inspections if user is inspector
     if user.role == 'inspector':
         active_assignments = InspectionAssignment.query.filter(
-            InspectionAssignment.technician_id == user_id,
+            db.or_(
+                InspectionAssignment.mechanical_inspector_id == user_id,
+                InspectionAssignment.electrical_inspector_id == user_id
+            ),
             InspectionAssignment.status.in_(['assigned', 'in_progress'])
         ).count()
         if active_assignments > 0:
