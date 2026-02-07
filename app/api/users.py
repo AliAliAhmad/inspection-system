@@ -71,7 +71,31 @@ def _generate_role_id(role):
 @admin_required()
 def list_users():
     """List all users. Admin only."""
-    query = User.query.filter_by(is_active=True)
+    query = User.query
+
+    # Filter by active status
+    is_active = request.args.get('is_active')
+    if is_active is not None:
+        query = query.filter_by(is_active=is_active.lower() == 'true')
+
+    # Filter by role
+    role = request.args.get('role')
+    if role:
+        query = query.filter_by(role=role)
+
+    # Search by name or email
+    search = request.args.get('search')
+    if search:
+        search_term = f'%{search}%'
+        query = query.filter(
+            db.or_(
+                User.full_name.ilike(search_term),
+                User.email.ilike(search_term),
+                User.employee_id.ilike(search_term)
+            )
+        )
+
+    query = query.order_by(User.full_name)
     items, pagination = paginate(query)
 
     # Find active leave coverage for on-leave users

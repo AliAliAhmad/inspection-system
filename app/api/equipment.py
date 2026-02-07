@@ -29,7 +29,7 @@ def list_equipment():
     List equipment. Filtered by role.
     - Technicians see only assigned equipment
     - Admins see all
-    
+
     Returns:
         {
             "status": "success",
@@ -37,13 +37,35 @@ def list_equipment():
         }
     """
     current_user = get_current_user()
-    
+
     query = Equipment.query
-    
+
     # Filter by role
     if current_user.role == 'technician':
         query = query.filter_by(assigned_technician_id=current_user.id)
-    
+
+    # Filter by status
+    status = request.args.get('status')
+    if status:
+        query = query.filter_by(status=status)
+
+    # Filter by equipment type
+    equipment_type = request.args.get('equipment_type')
+    if equipment_type:
+        query = query.filter_by(equipment_type=equipment_type)
+
+    # Search by name, serial number, or location
+    search = request.args.get('search')
+    if search:
+        search_term = f'%{search}%'
+        query = query.filter(
+            db.or_(
+                Equipment.name.ilike(search_term),
+                Equipment.serial_number.ilike(search_term),
+                Equipment.location.ilike(search_term)
+            )
+        )
+
     query = query.order_by(Equipment.name)
     items, pagination = paginate(query)
     lang = get_language(current_user)
