@@ -97,8 +97,16 @@ with app.app_context():
         db.session.rollback()
         print('roster_entries table already exists')
 
-    # Add wrong_finding columns to specialist_jobs
-    for col_name, col_type in [('wrong_finding_reason', 'TEXT'), ('wrong_finding_photo', 'VARCHAR(500)')]:
+    # Add missing columns to specialist_jobs
+    specialist_job_cols = [
+        ('wrong_finding_reason', 'TEXT'),
+        ('wrong_finding_photo', 'VARCHAR(500)'),
+        ('incomplete_notes', 'TEXT'),
+        ('incomplete_at', 'TIMESTAMP'),
+        ('incomplete_acknowledged_by', 'INTEGER REFERENCES users(id)'),
+        ('incomplete_acknowledged_at', 'TIMESTAMP'),
+    ]
+    for col_name, col_type in specialist_job_cols:
         try:
             db.session.execute(text(f'ALTER TABLE specialist_jobs ADD COLUMN {col_name} {col_type}'))
             db.session.commit()
