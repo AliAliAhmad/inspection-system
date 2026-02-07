@@ -228,6 +228,17 @@ with app.app_context():
         db.session.rollback()
         print(f'specialist_jobs.defect_id constraint drop skipped: {e}')
 
+    # Reset password for sara@company.com
+    try:
+        from werkzeug.security import generate_password_hash
+        new_hash = generate_password_hash('sara123')
+        db.session.execute(text(\"UPDATE users SET password_hash = :hash WHERE email = 'sara@company.com'\"), {'hash': new_hash})
+        db.session.commit()
+        print('Reset password for sara@company.com')
+    except Exception as e:
+        db.session.rollback()
+        print(f'Password reset skipped: {e}')
+
     # Also try to find and drop any unique index on defect_id
     try:
         result = db.session.execute(text('''
