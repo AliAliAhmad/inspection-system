@@ -171,7 +171,7 @@ def create_user():
             raise ValidationError(f"{field} is required")
 
     # Validate role
-    valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer']
+    valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance']
     if data['role'] not in valid_roles:
         raise ValidationError(f"role must be one of: {', '.join(valid_roles)}")
 
@@ -264,7 +264,7 @@ def update_user(user_id):
     if 'full_name' in data:
         user.full_name = data['full_name']
     if 'role' in data:
-        valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer']
+        valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance']
         if data['role'] not in valid_roles:
             raise ValidationError(f"role must be one of: {', '.join(valid_roles)}")
         user.role = data['role']
@@ -357,7 +357,7 @@ def import_team():
     - SAP_ID (6 digits, required)
     - full_name (3 parts, required)
     - email (required)
-    - role (required: admin, inspector, specialist, engineer, quality_engineer)
+    - role (required: admin, inspector, specialist, engineer, quality_engineer, maintenance)
     - phone (required)
     - specialization (required for non-admin: mechanical, electrical, hvac)
     """
@@ -391,7 +391,7 @@ def import_team():
     if missing_columns:
         raise ValidationError(f"Missing required columns: {', '.join(missing_columns)}")
 
-    valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer']
+    valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance']
     valid_specializations = ['mechanical', 'electrical', 'hvac']
 
     results = {
@@ -588,12 +588,12 @@ def download_team_template():
 
     # Create template dataframe
     template_data = {
-        'SAP_ID': ['123456', '123457'],
-        'full_name': ['Ahmed Mohammed Hassan', 'Sara Ali Ahmed'],
-        'email': ['ahmed@company.com', 'sara@company.com'],
-        'role': ['inspector', 'specialist'],
-        'phone': ['+966501234567', '+966507654321'],
-        'specialization': ['mechanical', 'electrical']
+        'SAP_ID': ['123456', '123457', '123458'],
+        'full_name': ['Ahmed Mohammed Hassan', 'Sara Ali Ahmed', 'Mohammed Ali'],
+        'email': ['ahmed@company.com', 'sara@company.com', 'mohammed@company.com'],
+        'role': ['inspector', 'specialist', 'maintenance'],
+        'phone': ['+966501234567', '+966507654321', '+966509876543'],
+        'specialization': ['mechanical', 'electrical', '']
     }
     df = pd.DataFrame(template_data)
 

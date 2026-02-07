@@ -77,11 +77,11 @@ class User(db.Model):
     # Constraints
     __table_args__ = (
         db.CheckConstraint(
-            "role IN ('admin', 'inspector', 'specialist', 'engineer', 'quality_engineer')",
+            "role IN ('admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance')",
             name='check_valid_role'
         ),
         db.CheckConstraint(
-            "minor_role IN ('inspector', 'specialist', 'engineer', 'quality_engineer') OR minor_role IS NULL",
+            "minor_role IN ('inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance') OR minor_role IS NULL",
             name='check_valid_minor_role'
         ),
         db.CheckConstraint(
@@ -231,7 +231,8 @@ class User(db.Model):
             'inspector': 'INS',
             'specialist': 'SPE',
             'engineer': 'ENG',
-            'quality_engineer': 'QE'
+            'quality_engineer': 'QE',
+            'maintenance': 'MNT'
         }
         prefix = prefix_map.get(role, 'USR')
 

@@ -48,7 +48,7 @@ import {
   type RoleSwapLog,
 } from '@inspection/shared';
 
-const ROLES: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
+const ROLES: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'];
 
 const roleColorMap: Record<UserRole, string> = {
   admin: 'red',
@@ -56,6 +56,7 @@ const roleColorMap: Record<UserRole, string> = {
   specialist: 'green',
   engineer: 'orange',
   quality_engineer: 'purple',
+  maintenance: 'cyan',
 };
 
 export default function UsersPage() {
@@ -561,7 +562,7 @@ export default function UsersPage() {
                 <li>{t('users.importInstruction1', 'Download the template and fill in the data')}</li>
                 <li>{t('users.importInstruction2', 'SAP_ID must be exactly 6 digits (used as initial password)')}</li>
                 <li>{t('users.importInstruction3', 'Full name must have 3 parts: first, father, family')}</li>
-                <li>{t('users.importInstruction4', 'Role: admin, inspector, specialist, engineer, quality_engineer')}</li>
+                <li>{t('users.importInstruction4', 'Role: admin, inspector, specialist, engineer, quality_engineer, maintenance')}</li>
                 <li>{t('users.importInstruction5', 'Specialization: mechanical, electrical, hvac (not required for admin)')}</li>
               </ul>
             }

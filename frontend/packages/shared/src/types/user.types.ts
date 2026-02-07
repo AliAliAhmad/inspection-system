@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'inspector' | 'specialist' | 'engineer' | 'quality_engineer';
+export type UserRole = 'admin' | 'inspector' | 'specialist' | 'engineer' | 'quality_engineer' | 'maintenance';
 export type Specialization = 'mechanical' | 'electrical' | null;
 
 export interface User {

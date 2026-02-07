@@ -337,6 +337,25 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('home_berth constraint already up to date')
+
+    # Update user role constraints to include 'maintenance'
+    try:
+        db.session.execute(text('ALTER TABLE users DROP CONSTRAINT IF EXISTS check_valid_role'))
+        db.session.execute(text(\"\"\"ALTER TABLE users ADD CONSTRAINT check_valid_role CHECK (role IN ('admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'))\"\"\"))
+        db.session.commit()
+        print('Updated role constraint to include maintenance')
+    except Exception:
+        db.session.rollback()
+        print('role constraint already up to date')
+
+    try:
+        db.session.execute(text('ALTER TABLE users DROP CONSTRAINT IF EXISTS check_valid_minor_role'))
+        db.session.execute(text(\"\"\"ALTER TABLE users ADD CONSTRAINT check_valid_minor_role CHECK (minor_role IN ('inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance') OR minor_role IS NULL)\"\"\"))
+        db.session.commit()
+        print('Updated minor_role constraint to include maintenance')
+    except Exception:
+        db.session.rollback()
+        print('minor_role constraint already up to date')
 "
 
 echo "Starting gunicorn..."
