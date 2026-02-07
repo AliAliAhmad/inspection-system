@@ -25,7 +25,8 @@ import {
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import type { ColumnsType, ExpandableConfig } from 'antd/es/table';
+import type { ColumnsType } from 'antd/es/table';
+import type { TableProps } from 'antd';
 import {
   specialistJobsApi,
   type SpecialistJob,
@@ -238,8 +239,8 @@ export default function AllSpecialistJobsPage() {
   ];
 
   // Expandable row for incomplete jobs to show reason and notes
-  const expandable: ExpandableConfig<SpecialistJob> = {
-    expandedRowRender: (record) => {
+  const expandable: TableProps<SpecialistJob>['expandable'] = {
+    expandedRowRender: (record: SpecialistJob) => {
       if (record.status !== 'incomplete') return null;
       const reasonLabel = record.incomplete_reason
         ? incompleteReasonLabels[record.incomplete_reason] || record.incomplete_reason
@@ -279,7 +280,7 @@ export default function AllSpecialistJobsPage() {
         />
       );
     },
-    rowExpandable: (record) => record.status === 'incomplete',
+    rowExpandable: (record: SpecialistJob) => record.status === 'incomplete',
   };
 
   const jobs = data?.data?.data || [];

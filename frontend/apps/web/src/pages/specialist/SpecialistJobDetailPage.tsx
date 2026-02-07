@@ -43,7 +43,17 @@ import {
   DefectAssessment,
   JobStatus,
   PauseCategory,
+  IncompleteReason,
 } from '@inspection/shared';
+
+const INCOMPLETE_REASON_OPTIONS: { value: IncompleteReason; label: string }[] = [
+  { value: 'no_spare_parts', label: 'No Spare Parts' },
+  { value: 'waiting_for_approval', label: 'Waiting for Approval' },
+  { value: 'equipment_in_use', label: 'Equipment in Use' },
+  { value: 'safety_concern', label: 'Safety Concern' },
+  { value: 'need_assistance', label: 'Need Assistance' },
+  { value: 'other', label: 'Other' },
+];
 import { useAuth } from '../../providers/AuthProvider';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import InspectionFindingCard from '../../components/InspectionFindingCard';
@@ -106,7 +116,8 @@ export default function SpecialistJobDetailPage() {
   const [completionStatus, setCompletionStatus] = useState<'pass' | 'incomplete'>('pass');
 
   const [incompleteModalOpen, setIncompleteModalOpen] = useState(false);
-  const [incompleteReason, setIncompleteReason] = useState('');
+  const [incompleteReason, setIncompleteReason] = useState<IncompleteReason>('no_spare_parts');
+  const [incompleteNotes, setIncompleteNotes] = useState('');
 
   // Defect assessment state
   const [assessmentVerdict, setAssessmentVerdict] = useState<'confirm' | 'reject' | 'minor'>('confirm');
@@ -213,11 +224,13 @@ export default function SpecialistJobDetailPage() {
   });
 
   const incompleteMarkMutation = useMutation({
-    mutationFn: (reason: string) => specialistJobsApi.markIncomplete(jobId, reason),
+    mutationFn: (payload: { reason: IncompleteReason; notes?: string }) =>
+      specialistJobsApi.markIncomplete(jobId, payload),
     onSuccess: () => {
       message.success(t('jobs.mark_incomplete'));
       setIncompleteModalOpen(false);
-      setIncompleteReason('');
+      setIncompleteReason('no_spare_parts');
+      setIncompleteNotes('');
       queryClient.invalidateQueries({ queryKey: ['specialist-jobs'] });
     },
     onError: () => message.error(t('common.error')),
@@ -288,9 +301,11 @@ export default function SpecialistJobDetailPage() {
   }, [workNotes, completionStatus, completeMutation]);
 
   const handleIncompleteSubmit = useCallback(() => {
-    if (!incompleteReason.trim()) return;
-    incompleteMarkMutation.mutate(incompleteReason);
-  }, [incompleteReason, incompleteMarkMutation]);
+    incompleteMarkMutation.mutate({
+      reason: incompleteReason,
+      notes: incompleteNotes.trim() || undefined,
+    });
+  }, [incompleteReason, incompleteNotes, incompleteMarkMutation]);
 
   const handleFileUpload = useCallback(
     (file: File) => {
@@ -738,20 +753,33 @@ export default function SpecialistJobDetailPage() {
         onOk={handleIncompleteSubmit}
         onCancel={() => {
           setIncompleteModalOpen(false);
-          setIncompleteReason('');
+          setIncompleteReason('no_spare_parts');
+          setIncompleteNotes('');
         }}
         confirmLoading={incompleteMarkMutation.isPending}
         okText={t('common.submit')}
         cancelText={t('common.cancel')}
-        okButtonProps={{ disabled: !incompleteReason.trim() }}
       >
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Typography.Text strong>{t('jobs.incomplete_reason')}</Typography.Text>
-          <VoiceTextArea
-            rows={4}
-            value={incompleteReason}
-            onChange={(e) => setIncompleteReason(e.target.value)}
-          />
+          <div>
+            <Typography.Text strong>{t('jobs.incomplete_reason')}</Typography.Text>
+            <Select
+              style={{ width: '100%', marginTop: 8 }}
+              value={incompleteReason}
+              onChange={(value) => setIncompleteReason(value)}
+              options={INCOMPLETE_REASON_OPTIONS}
+            />
+          </div>
+          <div>
+            <Typography.Text strong>{t('jobs.notes', 'Additional Notes')} ({t('common.optional', 'Optional')})</Typography.Text>
+            <VoiceTextArea
+              rows={3}
+              value={incompleteNotes}
+              onChange={(e) => setIncompleteNotes(e.target.value)}
+              placeholder="Additional details..."
+              style={{ marginTop: 8 }}
+            />
+          </div>
         </Space>
       </Modal>
 
