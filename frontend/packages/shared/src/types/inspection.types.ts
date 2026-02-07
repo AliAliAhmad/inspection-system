@@ -55,12 +55,20 @@ export interface ChecklistTemplate {
 export interface ChecklistItem {
   id: number;
   template_id: number;
+  item_code: string | null;
   question_text: string;
+  question_text_en: string;
   question_text_ar: string | null;
   answer_type: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
   category: 'mechanical' | 'electrical' | null;
   critical_failure: boolean;
   order_index: number;
+  action: string | null;
+  action_en: string | null;
+  action_ar: string | null;
+  numeric_rule: 'less_than' | 'greater_than' | 'between' | null;
+  min_value: number | null;
+  max_value: number | null;
 }
 
 export interface AnswerPayload {

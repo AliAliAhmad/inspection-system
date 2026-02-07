@@ -72,6 +72,10 @@ class ChecklistItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     template_id = db.Column(db.Integer, db.ForeignKey('checklist_templates.id'), nullable=False)
+
+    # Auto-generated item code: [Function 2 letters]-[Assembly 2 letters]-00X
+    item_code = db.Column(db.String(20), nullable=True)
+
     question_text = db.Column(db.Text, nullable=False)
     question_text_ar = db.Column(db.Text, nullable=True)
     answer_type = db.Column(
@@ -84,6 +88,16 @@ class ChecklistItem(db.Model):
     order_index = db.Column(db.Integer, nullable=False)
     pass_fail_rule = db.Column(db.JSON, nullable=True)
     critical_failure = db.Column(db.Boolean, default=False)
+
+    # Action/guide for inspector
+    action = db.Column(db.Text, nullable=True)
+    action_ar = db.Column(db.Text, nullable=True)
+
+    # Numeric validation rules (for answer_type='numeric')
+    numeric_rule = db.Column(db.String(20), nullable=True)  # 'less_than', 'greater_than', 'between'
+    min_value = db.Column(db.Float, nullable=True)
+    max_value = db.Column(db.Float, nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -104,6 +118,7 @@ class ChecklistItem(db.Model):
         return {
             'id': self.id,
             'template_id': self.template_id,
+            'item_code': self.item_code,
             'question_text': self.question_text_ar if language == 'ar' and self.question_text_ar else self.question_text,
             'question_text_en': self.question_text,
             'question_text_ar': self.question_text_ar,
@@ -111,7 +126,13 @@ class ChecklistItem(db.Model):
             'category': self.category,
             'is_required': self.is_required,
             'order_index': self.order_index,
-            'critical_failure': self.critical_failure
+            'critical_failure': self.critical_failure,
+            'action': self.action_ar if language == 'ar' and self.action_ar else self.action,
+            'action_en': self.action,
+            'action_ar': self.action_ar,
+            'numeric_rule': self.numeric_rule,
+            'min_value': self.min_value,
+            'max_value': self.max_value
         }
 
     def __repr__(self):

@@ -300,6 +300,24 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         print(f'specialist_jobs.defect_id index drop skipped: {e}')
+
+    # Add new columns to checklist_items for import feature
+    checklist_item_cols = [
+        ('item_code', 'VARCHAR(20)'),
+        ('action', 'TEXT'),
+        ('action_ar', 'TEXT'),
+        ('numeric_rule', 'VARCHAR(20)'),
+        ('min_value', 'FLOAT'),
+        ('max_value', 'FLOAT'),
+    ]
+    for col_name, col_type in checklist_item_cols:
+        try:
+            db.session.execute(text(f'ALTER TABLE checklist_items ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added {col_name} column to checklist_items')
+        except Exception:
+            db.session.rollback()
+            print(f'checklist_items.{col_name} already exists')
 "
 
 echo "Starting gunicorn..."

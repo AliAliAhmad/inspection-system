@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Card,
   Table,
@@ -14,8 +14,10 @@ import {
   message,
   Typography,
   InputNumber,
+  Upload,
+  Tooltip,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
@@ -104,6 +106,43 @@ export default function ChecklistsPage() {
     onError: () => message.error(t('checklists.itemDeleteError', 'Failed to delete item')),
   });
 
+  const importMutation = useMutation({
+    mutationFn: (file: File) => checklistsApi.import(file),
+    onSuccess: (res) => {
+      const itemsCount = res.data?.data?.items_count || 0;
+      message.success(t('checklists.importSuccess', `Template imported successfully with ${itemsCount} items`));
+      queryClient.invalidateQueries({ queryKey: ['checklists'] });
+    },
+    onError: (err: any) => {
+      const errorMsg = err?.response?.data?.message || t('checklists.importError', 'Failed to import template');
+      message.error(errorMsg);
+    },
+  });
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await checklistsApi.downloadTemplate();
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'checklist_import_template.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      message.error(t('checklists.downloadError', 'Failed to download template'));
+    }
+  };
+
+  const handleImportFile = (file: File) => {
+    importMutation.mutate(file);
+    return false; // Prevent default upload behavior
+  };
+
   const openAddItem = (template: ChecklistTemplate) => {
     setSelectedTemplate(template);
     itemForm.resetFields();
@@ -125,6 +164,7 @@ export default function ChecklistsPage() {
 
   const itemColumns: ColumnsType<ChecklistItem> = [
     { title: '#', dataIndex: 'order_index', key: 'order_index', width: 50 },
+    { title: t('checklists.itemCode', 'Item Code'), dataIndex: 'item_code', key: 'item_code', width: 100, render: (v: string | null) => v ? <Tag color="purple">{v}</Tag> : '-' },
     { title: t('checklists.question', 'Question'), dataIndex: 'question_text', key: 'question_text' },
     { title: t('checklists.questionAr', 'Question (AR)'), dataIndex: 'question_text_ar', key: 'question_text_ar', render: (v: string | null) => v || '-' },
     {
@@ -144,6 +184,13 @@ export default function ChecklistsPage() {
       dataIndex: 'critical_failure',
       key: 'critical_failure',
       render: (v: boolean) => v ? <Tag color="red">{t('common.yes', 'Yes')}</Tag> : <Tag>{t('common.no', 'No')}</Tag>,
+    },
+    {
+      title: t('checklists.action', 'Action/Guide'),
+      dataIndex: 'action',
+      key: 'action',
+      ellipsis: true,
+      render: (v: string | null) => v || '-',
     },
   ];
 
@@ -182,9 +229,25 @@ export default function ChecklistsPage() {
     <Card
       title={<Typography.Title level={4}>{t('nav.checklists', 'Checklists Management')}</Typography.Title>}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateTemplateOpen(true)}>
-          {t('checklists.createTemplate', 'Create Template')}
-        </Button>
+        <Space>
+          <Tooltip title={t('checklists.downloadTemplateTooltip', 'Download Excel template with 2 sheets: Template info and Items')}>
+            <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+              {t('checklists.downloadTemplate', 'Download Template')}
+            </Button>
+          </Tooltip>
+          <Upload
+            accept=".xlsx,.xls"
+            showUploadList={false}
+            beforeUpload={handleImportFile}
+          >
+            <Button icon={<UploadOutlined />} loading={importMutation.isPending}>
+              {t('checklists.import', 'Import Template')}
+            </Button>
+          </Upload>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateTemplateOpen(true)}>
+            {t('checklists.createTemplate', 'Create Template')}
+          </Button>
+        </Space>
       }
     >
       <Table

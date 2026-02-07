@@ -33,6 +33,11 @@ export interface CreateChecklistItemPayload {
 
 export interface UpdateChecklistItemPayload extends Partial<CreateChecklistItemPayload> {}
 
+export interface ImportResult {
+  template: ChecklistTemplate;
+  items_count: number;
+}
+
 export const checklistsApi = {
   listTemplates(params?: ChecklistListParams) {
     return getApiClient().get<PaginatedResponse<ChecklistTemplate>>('/api/checklists', { params });
@@ -59,6 +64,22 @@ export const checklistsApi = {
   deleteItem(templateId: number, itemId: number) {
     return getApiClient().delete<ApiResponse>(
       `/api/checklists/${templateId}/items/${itemId}`,
+    );
+  },
+
+  downloadTemplate() {
+    return getApiClient().get('/api/checklists/download-template', {
+      responseType: 'blob',
+    });
+  },
+
+  import(file: File | { uri: string; type: string; name: string }) {
+    const formData = new FormData();
+    formData.append('file', file as any);
+    return getApiClient().post<ApiResponse<ImportResult>>(
+      '/api/checklists/import',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
   },
 };
