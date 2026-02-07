@@ -505,15 +505,35 @@ def import_team():
                     })
                     continue
 
-            # Generate username
+            # Generate username - check for existing and make unique
             username = User.generate_username(full_name)
+            # Double-check username doesn't exist (in case of session issues)
+            existing_username = User.query.filter_by(username=username).first()
+            if existing_username:
+                # Try with number suffix
+                for i in range(2, 100):
+                    test_username = f"{username}{i}"
+                    if not User.query.filter_by(username=test_username).first():
+                        username = test_username
+                        break
 
-            # Generate role_id
+            # Generate role_id - check it doesn't already exist
             role_id = _generate_role_id(role)
+            # Double-check role_id doesn't exist
+            existing_role_id = User.query.filter_by(role_id=role_id).first()
+            if existing_role_id:
+                # Regenerate with higher number
+                role_id = _generate_role_id(role)
 
             # Generate minor role and minor_role_id
             minor_role = _get_minor_role(role)
-            minor_role_id = _generate_role_id(minor_role) if minor_role else None
+            minor_role_id = None
+            if minor_role:
+                minor_role_id = _generate_role_id(minor_role)
+                # Double-check minor_role_id doesn't exist
+                existing_minor = User.query.filter_by(minor_role_id=minor_role_id).first()
+                if existing_minor:
+                    minor_role_id = _generate_role_id(minor_role)
 
             # Create new user
             user = User(
@@ -549,7 +569,20 @@ def import_team():
         safe_commit()
     except IntegrityError as e:
         db.session.rollback()
-        raise ValidationError(f"Database error: {str(e)}")
+        error_msg = str(e)
+        # Try to identify which constraint failed
+        if 'username' in error_msg:
+            raise ValidationError(f"Duplicate username error. Please try again.")
+        elif 'role_id' in error_msg:
+            raise ValidationError(f"Duplicate role_id error. Please try again.")
+        elif 'minor_role_id' in error_msg:
+            raise ValidationError(f"Duplicate minor_role_id error. Please try again.")
+        elif 'sap_id' in error_msg:
+            raise ValidationError(f"Duplicate SAP_ID error. Some users may already exist.")
+        elif 'email' in error_msg:
+            raise ValidationError(f"Duplicate email error. Please check your data.")
+        else:
+            raise ValidationError(f"Database error: {error_msg}")
 
     # Log the import
     import_log = ImportLog(
