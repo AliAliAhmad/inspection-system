@@ -345,7 +345,7 @@ def create_app(config_name='development'):
                 'role_id': admin.role_id,
                 'is_active': admin.is_active,
                 'phone': admin.phone,
-                'preferred_language': admin.preferred_language,
+                'language': admin.language,
             })
         print(f'  ✓ Saved {len(admin_data)} admin user(s)')
 
@@ -410,7 +410,7 @@ def create_app(config_name='development'):
                 role_id=data['role_id'],
                 is_active=data['is_active'],
                 phone=data.get('phone'),
-                preferred_language=data.get('preferred_language', 'en'),
+                language=data.get('language', 'en'),
             )
             db.session.add(admin)
 
