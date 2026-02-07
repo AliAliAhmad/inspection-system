@@ -21,9 +21,13 @@ def upgrade():
     dialect = bind.dialect.name
 
     if dialect == 'postgresql':
-        # PostgreSQL: drop the unique constraint directly
-        # The constraint name is typically tablename_columnname_key
+        # PostgreSQL: try to drop both constraint and index variants
+        # The constraint name could be tablename_columnname_key or uq_tablename_columnname
         op.execute('ALTER TABLE specialist_jobs DROP CONSTRAINT IF EXISTS specialist_jobs_defect_id_key')
+        op.execute('ALTER TABLE specialist_jobs DROP CONSTRAINT IF EXISTS uq_specialist_jobs_defect_id')
+        # Also try dropping any unique index on defect_id
+        op.execute('DROP INDEX IF EXISTS specialist_jobs_defect_id_key')
+        op.execute('DROP INDEX IF EXISTS ix_specialist_jobs_defect_id')
     else:
         # SQLite: need to recreate the table without the unique constraint
         op.execute('''
