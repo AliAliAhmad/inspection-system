@@ -9,7 +9,7 @@ import {
   Image,
 } from 'react-native';
 import { Audio } from 'expo-av';
-import { voiceApi } from '@inspection/shared';
+import { getApiClient } from '@inspection/shared';
 
 interface VoiceNoteRecorderProps {
   onVoiceNoteRecorded: (voiceNoteId: number, transcription?: { en: string; ar: string }) => void;
@@ -113,24 +113,47 @@ export default function VoiceNoteRecorder({
       setLocalAudioUri(uri);
       setIsUploading(true);
 
-      // Upload to Cloudinary
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const result = await voiceApi.transcribe(blob);
+      // Create FormData for React Native file upload
+      const formData = new FormData();
+      formData.append('audio', {
+        uri,
+        name: 'recording.m4a',
+        type: 'audio/m4a',
+      } as any);
+      if (language) {
+        formData.append('language', language);
+      }
 
-      if (result.audio_file?.id) {
+      // Upload directly via API client
+      const response = await getApiClient().post(
+        '/api/voice/transcribe',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+
+      const result = (response.data as any)?.data;
+
+      if (result?.audio_file?.id) {
         setCloudinaryUrl(result.audio_file.url || null);
         const trans = { en: result.en || '', ar: result.ar || '' };
         setTranscription(trans);
         onVoiceNoteRecorded(result.audio_file.id, trans);
+      } else if (result?.transcription_failed) {
+        // Audio saved but transcription failed
+        Alert.alert('Note', 'Voice note saved. Transcription may not be available.');
+        if (result?.audio_file?.id) {
+          setCloudinaryUrl(result.audio_file.url || null);
+          onVoiceNoteRecorded(result.audio_file.id, undefined);
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to upload voice note:', err);
-      Alert.alert('Error', 'Failed to upload voice note');
+      const message = err?.response?.data?.message || err?.message || 'Failed to upload voice note';
+      Alert.alert('Error', message);
     } finally {
       setIsUploading(false);
     }
-  }, [onVoiceNoteRecorded]);
+  }, [onVoiceNoteRecorded, language]);
 
   const playAudio = useCallback(async () => {
     const audioUrl = cloudinaryUrl || localAudioUri;

@@ -24,10 +24,15 @@ const OfflineContext = createContext<OfflineContextValue>({
 export function OfflineProvider({ children }: { children: React.ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [pendingCount, setPendingCount] = useState(syncManager.getPendingCount());
+  const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const syncInProgress = useRef(false);
+
+  // Load initial pending count
+  useEffect(() => {
+    syncManager.getPendingCount().then(setPendingCount);
+  }, []);
 
   // Monitor network status
   useEffect(() => {
@@ -47,7 +52,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     try {
       const client = getApiClient();
       const result = await syncManager.processQueue(client);
-      setPendingCount(syncManager.getPendingCount());
+      const count = await syncManager.getPendingCount();
+      setPendingCount(count);
       setLastSyncAt(new Date().toISOString());
 
       // Invalidate queries to refresh data after sync
@@ -69,9 +75,10 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
   // Sync when app comes to foreground
   useEffect(() => {
-    const handleAppState = (nextState: AppStateStatus) => {
+    const handleAppState = async (nextState: AppStateStatus) => {
       if (nextState === 'active' && isOnline) {
-        setPendingCount(syncManager.getPendingCount());
+        const count = await syncManager.getPendingCount();
+        setPendingCount(count);
         triggerSync();
       }
     };
@@ -82,8 +89,9 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
   // Update pending count periodically
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPendingCount(syncManager.getPendingCount());
+    const interval = setInterval(async () => {
+      const count = await syncManager.getPendingCount();
+      setPendingCount(count);
     }, 5000);
     return () => clearInterval(interval);
   }, []);

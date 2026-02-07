@@ -39,7 +39,7 @@ export default function DashboardScreen() {
 
   const { data: dashData, isLoading: dashLoading, refetch: dashRefetch } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: () => reportsApi.getDashboard().then(r => r.data.data),
+    queryFn: () => reportsApi.getDashboard().then(r => r.data.data ?? { total_inspections: 0, pending_defects: 0, active_jobs: 0, completion_rate: 0 }),
     enabled: !isAdmin,
   });
 

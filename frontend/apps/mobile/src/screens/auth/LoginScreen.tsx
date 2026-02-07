@@ -31,10 +31,8 @@ export default function LoginScreen() {
     try {
       await login(username.trim(), password);
     } catch (err: any) {
-      Alert.alert(
-        t('common.error'),
-        err?.response?.data?.error || t('auth.login_failed'),
-      );
+      const message = err?.response?.data?.message || err?.response?.data?.error || err?.message || t('auth.login_failed');
+      Alert.alert(t('common.error'), message);
     } finally {
       setLoading(false);
     }
@@ -86,6 +84,7 @@ export default function LoginScreen() {
             {language === 'en' ? '\u0627\u0644\u0639\u0631\u0628\u064A\u0629' : 'English'}
           </Text>
         </TouchableOpacity>
+
       </View>
     </KeyboardAvoidingView>
   );

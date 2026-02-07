@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import type { TextInputProps } from 'react-native';
 import { Audio } from 'expo-av';
-import { voiceApi } from '@inspection/shared';
+import { getApiClient } from '@inspection/shared';
 
 interface VoiceTextInputProps extends TextInputProps {
   onTranscribed?: (en: string, ar: string) => void;
@@ -70,35 +70,48 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
       // Save URI for local playback
       setAudioUri(uri);
 
-      // Read the file and create a blob
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      // Create FormData for React Native file upload
+      const formData = new FormData();
+      formData.append('audio', {
+        uri,
+        name: 'recording.m4a',
+        type: 'audio/m4a',
+      } as any);
 
-      const result = await voiceApi.transcribe(blob);
+      // Upload directly via API client
+      const response = await getApiClient().post(
+        '/api/voice/transcribe',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
 
-      if (result.transcription_failed) {
+      const result = (response.data as any)?.data;
+
+      if (result?.transcription_failed) {
         setTranscriptionFailed(true);
         setEnText(null);
         setArText(null);
         Alert.alert('Voice Saved', 'Recording saved but transcription failed. You can type manually.');
       } else {
-        setEnText(result.en);
-        setArText(result.ar);
+        setEnText(result?.en || null);
+        setArText(result?.ar || null);
 
         // Put both languages into the input
         const parts: string[] = [];
-        if (result.en) parts.push(`EN: ${result.en}`);
-        if (result.ar) parts.push(`AR: ${result.ar}`);
+        if (result?.en) parts.push(`EN: ${result.en}`);
+        if (result?.ar) parts.push(`AR: ${result.ar}`);
         const combined = parts.join('\n');
         if (inputProps.onChangeText) {
           inputProps.onChangeText(combined);
         }
 
-        onTranscribed?.(result.en, result.ar);
+        onTranscribed?.(result?.en || '', result?.ar || '');
       }
-    } catch {
+    } catch (err: any) {
+      console.error('Voice transcription failed:', err);
       setTranscriptionFailed(true);
-      Alert.alert('Voice Saved', 'Recording saved but transcription failed.');
+      const message = err?.response?.data?.message || 'Recording saved but transcription failed.';
+      Alert.alert('Voice Saved', message);
     } finally {
       setTranscribing(false);
     }

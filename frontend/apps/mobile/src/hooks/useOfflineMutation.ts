@@ -40,7 +40,7 @@ export function useOfflineMutation<TData = unknown, TVariables = void>(
           ? offlineConfig.toPayload(variables)
           : (variables as unknown as Record<string, unknown>);
 
-        syncManager.enqueue({
+        await syncManager.enqueue({
           type: offlineConfig.type,
           endpoint,
           method: offlineConfig.method,

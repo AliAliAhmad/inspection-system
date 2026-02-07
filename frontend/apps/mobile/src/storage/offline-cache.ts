@@ -1,39 +1,45 @@
-import { createMMKV } from 'react-native-mmkv';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const storage = createMMKV({ id: 'offline-cache' });
+const CACHE_PREFIX = 'offline-cache:';
 
 export const offlineCache = {
   // Store data with a key
-  set<T>(key: string, data: T): void {
-    storage.set(key, JSON.stringify(data));
+  async set<T>(key: string, data: T): Promise<void> {
+    await AsyncStorage.setItem(CACHE_PREFIX + key, JSON.stringify(data));
   },
 
   // Get cached data
-  get<T>(key: string): T | null {
-    const raw = storage.getString(key);
+  async get<T>(key: string): Promise<T | null> {
+    const raw = await AsyncStorage.getItem(CACHE_PREFIX + key);
     if (!raw) return null;
     try { return JSON.parse(raw) as T; }
     catch { return null; }
   },
 
   // Remove cached data
-  remove(key: string): void {
-    storage.remove(key);
+  async remove(key: string): Promise<void> {
+    await AsyncStorage.removeItem(CACHE_PREFIX + key);
   },
 
   // Clear all cache
-  clear(): void {
-    storage.clearAll();
+  async clear(): Promise<void> {
+    const keys = await AsyncStorage.getAllKeys();
+    const cacheKeys = keys.filter(k => k.startsWith(CACHE_PREFIX));
+    await AsyncStorage.multiRemove(cacheKeys);
   },
 
   // Check if key exists
-  has(key: string): boolean {
-    return storage.contains(key);
+  async has(key: string): Promise<boolean> {
+    const value = await AsyncStorage.getItem(CACHE_PREFIX + key);
+    return value !== null;
   },
 
   // Get all keys
-  getAllKeys(): string[] {
-    return storage.getAllKeys();
+  async getAllKeys(): Promise<string[]> {
+    const keys = await AsyncStorage.getAllKeys();
+    return keys
+      .filter(k => k.startsWith(CACHE_PREFIX))
+      .map(k => k.slice(CACHE_PREFIX.length));
   },
 };
 

@@ -1,7 +1,6 @@
-import { createMMKV } from 'react-native-mmkv';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const queueStorage = createMMKV({ id: 'sync-queue' });
-const QUEUE_KEY = 'pending-operations';
+const QUEUE_KEY = 'sync-queue:pending-operations';
 
 export interface QueuedOperation {
   id: string;
@@ -13,68 +12,69 @@ export interface QueuedOperation {
   retryCount: number;
 }
 
-function getQueue(): QueuedOperation[] {
-  const raw = queueStorage.getString(QUEUE_KEY);
+async function getQueue(): Promise<QueuedOperation[]> {
+  const raw = await AsyncStorage.getItem(QUEUE_KEY);
   if (!raw) return [];
   try { return JSON.parse(raw); }
   catch { return []; }
 }
 
-function saveQueue(queue: QueuedOperation[]): void {
-  queueStorage.set(QUEUE_KEY, JSON.stringify(queue));
+async function saveQueue(queue: QueuedOperation[]): Promise<void> {
+  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 }
 
 export const syncManager = {
   // Add an operation to the queue
-  enqueue(op: Omit<QueuedOperation, 'id' | 'createdAt' | 'retryCount'>): void {
-    const queue = getQueue();
+  async enqueue(op: Omit<QueuedOperation, 'id' | 'createdAt' | 'retryCount'>): Promise<void> {
+    const queue = await getQueue();
     queue.push({
       ...op,
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       createdAt: new Date().toISOString(),
       retryCount: 0,
     });
-    saveQueue(queue);
+    await saveQueue(queue);
   },
 
   // Get all pending operations
-  getPending(): QueuedOperation[] {
+  async getPending(): Promise<QueuedOperation[]> {
     return getQueue();
   },
 
   // Get count of pending operations
-  getPendingCount(): number {
-    return getQueue().length;
+  async getPendingCount(): Promise<number> {
+    const queue = await getQueue();
+    return queue.length;
   },
 
   // Remove a completed operation
-  dequeue(id: string): void {
-    const queue = getQueue().filter(op => op.id !== id);
-    saveQueue(queue);
+  async dequeue(id: string): Promise<void> {
+    const queue = (await getQueue()).filter(op => op.id !== id);
+    await saveQueue(queue);
   },
 
   // Increment retry count for a failed operation
-  markRetry(id: string): void {
-    const queue = getQueue().map(op =>
+  async markRetry(id: string): Promise<void> {
+    const queue = (await getQueue()).map(op =>
       op.id === id ? { ...op, retryCount: op.retryCount + 1 } : op
     );
-    saveQueue(queue);
+    await saveQueue(queue);
   },
 
   // Remove operations that have failed too many times (max 5 retries)
-  pruneStale(): void {
-    const queue = getQueue().filter(op => op.retryCount < 5);
-    saveQueue(queue);
+  async pruneStale(): Promise<void> {
+    const queue = (await getQueue()).filter(op => op.retryCount < 5);
+    await saveQueue(queue);
   },
 
   // Clear all queued operations
-  clear(): void {
-    queueStorage.remove(QUEUE_KEY);
+  async clear(): Promise<void> {
+    await AsyncStorage.removeItem(QUEUE_KEY);
   },
 
   // Process the queue sequentially using the API client
   async processQueue(apiClient: import('axios').AxiosInstance): Promise<{ success: number; failed: number }> {
-    const queue = getQueue();
+    const queue = await getQueue();
     let success = 0;
     let failed = 0;
 
@@ -87,22 +87,22 @@ export const syncManager = {
         } else if (op.method === 'DELETE') {
           await apiClient.delete(op.endpoint);
         }
-        syncManager.dequeue(op.id);
+        await syncManager.dequeue(op.id);
         success++;
       } catch (error: unknown) {
         const status = (error as { response?: { status?: number } })?.response?.status;
         // Don't retry 4xx errors (except 408/429)
         if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
-          syncManager.dequeue(op.id);
+          await syncManager.dequeue(op.id);
           failed++;
         } else {
-          syncManager.markRetry(op.id);
+          await syncManager.markRetry(op.id);
           failed++;
         }
       }
     }
 
-    syncManager.pruneStale();
+    await syncManager.pruneStale();
     return { success, failed };
   },
 };
