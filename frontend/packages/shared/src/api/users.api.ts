@@ -6,6 +6,9 @@ import {
   User,
   CreateUserPayload,
   UpdateUserPayload,
+  ImportLog,
+  RoleSwapLog,
+  ImportResult,
 } from '../types';
 
 export interface UserListParams extends PaginationParams {
@@ -29,5 +32,31 @@ export const usersApi = {
 
   remove(userId: number) {
     return getApiClient().delete<ApiResponse>(`/api/users/${userId}`);
+  },
+
+  // Import endpoints
+  import(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return getApiClient().post<ApiResponse<ImportResult>>('/api/users/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  downloadTemplate() {
+    return getApiClient().get('/api/users/template', { responseType: 'blob' });
+  },
+
+  getImportHistory() {
+    return getApiClient().get<ApiResponse<ImportLog[]>>('/api/users/import-history');
+  },
+
+  // Role swap endpoints
+  swapRoles(userId: number) {
+    return getApiClient().post<ApiResponse<User>>(`/api/users/${userId}/swap-roles`);
+  },
+
+  getSwapHistory(userId: number) {
+    return getApiClient().get<ApiResponse<RoleSwapLog[]>>(`/api/users/${userId}/swap-history`);
   },
 };

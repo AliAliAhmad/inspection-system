@@ -15,16 +15,28 @@ import {
   Row,
   Col,
   DatePicker,
+  Upload,
+  Alert,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SearchOutlined,
+  UploadOutlined,
+  DownloadOutlined,
+  HistoryOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
+import type { UploadFile } from 'antd/es/upload/interface';
 import {
   equipmentApi,
   type Equipment,
   type EquipmentStatus,
   type CreateEquipmentPayload,
+  type ImportResult,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
 
@@ -51,6 +63,12 @@ export default function EquipmentPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
+
+  // Import states
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
 
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -99,6 +117,62 @@ export default function EquipmentPage() {
     },
     onError: () => message.error(t('equipment.deleteError', 'Failed to delete equipment')),
   });
+
+  // Import mutations
+  const importMutation = useMutation({
+    mutationFn: (file: File) => equipmentApi.import(file),
+    onSuccess: (response) => {
+      const result = response.data.data as ImportResult;
+      if (result) {
+        setImportResult(result);
+        message.success(
+          t('equipment.importSuccess', 'Import completed: {{created}} created, {{updated}} updated, {{failed}} failed', {
+            created: result.created.length,
+            updated: result.updated.length,
+            failed: result.failed.length,
+          })
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ['equipment'] });
+      setFileList([]);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Import failed';
+      message.error(msg);
+    },
+  });
+
+  const { data: importHistoryData, isLoading: importHistoryLoading } = useQuery({
+    queryKey: ['equipment-import-history'],
+    queryFn: () => equipmentApi.getImportHistory(),
+    enabled: importHistoryModalOpen,
+  });
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await equipmentApi.downloadTemplate();
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'equipment_import_template.xlsx';
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      message.error(t('equipment.downloadError', 'Failed to download template'));
+    }
+  };
+
+  const handleImportUpload = () => {
+    if (fileList.length === 0) {
+      message.warning(t('equipment.selectFile', 'Please select a file to import'));
+      return;
+    }
+    const file = fileList[0].originFileObj as File;
+    importMutation.mutate(file);
+  };
 
   const openEdit = (record: Equipment) => {
     setEditingEquipment(record);
@@ -221,9 +295,20 @@ export default function EquipmentPage() {
     <Card
       title={<Typography.Title level={4}>{t('nav.equipment', 'Equipment Management')}</Typography.Title>}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-          {t('equipment.create', 'Add Equipment')}
-        </Button>
+        <Space>
+          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+            {t('equipment.downloadTemplate', 'Download Template')}
+          </Button>
+          <Button icon={<UploadOutlined />} onClick={() => setImportModalOpen(true)}>
+            {t('equipment.import', 'Import')}
+          </Button>
+          <Button icon={<HistoryOutlined />} onClick={() => setImportHistoryModalOpen(true)}>
+            {t('equipment.importHistory', 'Import History')}
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+            {t('equipment.create', 'Add Equipment')}
+          </Button>
+        </Space>
       }
     >
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -302,6 +387,126 @@ export default function EquipmentPage() {
         <Form form={editForm} layout="vertical" onFinish={handleEditFinish}>
           {formFields}
         </Form>
+      </Modal>
+
+      {/* Import Modal */}
+      <Modal
+        title={t('equipment.importEquipment', 'Import Equipment')}
+        open={importModalOpen}
+        onCancel={() => {
+          setImportModalOpen(false);
+          setImportResult(null);
+          setFileList([]);
+        }}
+        onOk={handleImportUpload}
+        confirmLoading={importMutation.isPending}
+        okText={t('common.import', 'Import')}
+        width={700}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Alert
+            message={t('equipment.importInstructions', 'Import Instructions')}
+            description={
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li>{t('equipment.importInstruction1', 'Download the template and fill in the data')}</li>
+                <li>{t('equipment.importInstruction2', 'All columns are required')}</li>
+                <li>{t('equipment.importInstruction3', 'Berth and home_berth must be "east" or "west"')}</li>
+                <li>{t('equipment.importInstruction4', 'equipment_type is auto-generated from name')}</li>
+                <li>{t('equipment.importInstruction5', 'Immutable fields cannot be updated: name, serial_number, manufacturer, model_number, installation_date')}</li>
+              </ul>
+            }
+            type="info"
+            showIcon
+          />
+
+          <Upload.Dragger
+            fileList={fileList}
+            beforeUpload={(file) => {
+              setFileList([file]);
+              return false;
+            }}
+            onRemove={() => setFileList([])}
+            accept=".xlsx,.xls"
+            maxCount={1}
+          >
+            <p className="ant-upload-drag-icon">
+              <UploadOutlined style={{ fontSize: 48, color: '#1890ff' }} />
+            </p>
+            <p className="ant-upload-text">{t('equipment.dragFile', 'Click or drag Excel file here')}</p>
+            <p className="ant-upload-hint">{t('equipment.fileHint', 'Only .xlsx or .xls files are supported')}</p>
+          </Upload.Dragger>
+
+          {importResult && (
+            <Alert
+              message={t('equipment.importResults', 'Import Results')}
+              description={
+                <Space direction="vertical">
+                  <Typography.Text type="success">
+                    {t('equipment.created', 'Created')}: {importResult.created.length}
+                  </Typography.Text>
+                  <Typography.Text type="warning">
+                    {t('equipment.updated', 'Updated')}: {importResult.updated.length}
+                  </Typography.Text>
+                  <Typography.Text type="danger">
+                    {t('equipment.failed', 'Failed')}: {importResult.failed.length}
+                  </Typography.Text>
+                  {importResult.failed.length > 0 && (
+                    <div style={{ maxHeight: 150, overflowY: 'auto' }}>
+                      {importResult.failed.map((f, i) => (
+                        <Typography.Text key={i} type="danger" style={{ display: 'block' }}>
+                          Row {f.row}: {f.errors.join(', ')}
+                        </Typography.Text>
+                      ))}
+                    </div>
+                  )}
+                </Space>
+              }
+              type={importResult.failed.length > 0 ? 'warning' : 'success'}
+              showIcon
+            />
+          )}
+        </Space>
+      </Modal>
+
+      {/* Import History Modal */}
+      <Modal
+        title={t('equipment.importHistory', 'Import History')}
+        open={importHistoryModalOpen}
+        onCancel={() => setImportHistoryModalOpen(false)}
+        footer={null}
+        width={800}
+      >
+        <Table
+          rowKey="id"
+          loading={importHistoryLoading}
+          dataSource={importHistoryData?.data?.data || []}
+          columns={[
+            {
+              title: t('equipment.date', 'Date'),
+              dataIndex: 'created_at',
+              render: (v: string) => new Date(v).toLocaleString(),
+            },
+            { title: t('equipment.fileName', 'File Name'), dataIndex: 'file_name' },
+            { title: t('equipment.admin', 'Admin'), dataIndex: 'admin_name' },
+            { title: t('equipment.totalRows', 'Total'), dataIndex: 'total_rows' },
+            {
+              title: t('equipment.created', 'Created'),
+              dataIndex: 'created_count',
+              render: (v: number) => <Tag color="green">{v}</Tag>,
+            },
+            {
+              title: t('equipment.updated', 'Updated'),
+              dataIndex: 'updated_count',
+              render: (v: number) => <Tag color="orange">{v}</Tag>,
+            },
+            {
+              title: t('equipment.failed', 'Failed'),
+              dataIndex: 'failed_count',
+              render: (v: number) => (v > 0 ? <Tag color="red">{v}</Tag> : <Tag>{v}</Tag>),
+            },
+          ]}
+          pagination={{ pageSize: 10 }}
+        />
       </Modal>
     </Card>
   );

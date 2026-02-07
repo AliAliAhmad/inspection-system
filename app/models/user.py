@@ -19,15 +19,22 @@ class User(db.Model):
     # Primary Key
     id = db.Column(db.Integer, primary_key=True)
 
+    # SAP ID - Primary employee tracking ID (6 digits)
+    sap_id = db.Column(db.String(6), unique=True, nullable=True, index=True)
+
     # Authentication
-    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(255), unique=True, nullable=True, index=True)
     username = db.Column(db.String(100), unique=True, nullable=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    must_change_password = db.Column(db.Boolean, default=False, nullable=False)
 
     # Profile
     full_name = db.Column(db.String(255), nullable=False)
     phone = db.Column(db.String(50))
     language = db.Column(db.String(2), default='en')  # 'en' or 'ar'
+
+    # Tracking
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # Major Role
     role = db.Column(db.String(50), nullable=False, index=True)
@@ -65,6 +72,7 @@ class User(db.Model):
 
     # Relationships
     covering_for = db.relationship('User', remote_side=[id], foreign_keys=[leave_coverage_for])
+    created_by = db.relationship('User', remote_side=[id], foreign_keys=[created_by_id])
 
     # Constraints
     __table_args__ = (
@@ -77,7 +85,7 @@ class User(db.Model):
             name='check_valid_minor_role'
         ),
         db.CheckConstraint(
-            "specialization IN ('mechanical', 'electrical') OR specialization IS NULL",
+            "specialization IN ('mechanical', 'electrical', 'hvac') OR specialization IS NULL",
             name='check_valid_specialization'
         ),
         db.CheckConstraint(
@@ -122,6 +130,7 @@ class User(db.Model):
         """Convert user object to dictionary."""
         data = {
             'id': self.id,
+            'sap_id': self.sap_id,
             'email': self.email,
             'username': self.username,
             'full_name': self.full_name,
@@ -142,6 +151,8 @@ class User(db.Model):
             'annual_leave_balance': self.annual_leave_balance,
             'is_active': self.is_active,
             'language': self.language,
+            'must_change_password': self.must_change_password,
+            'created_by_id': self.created_by_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -155,24 +166,53 @@ class User(db.Model):
     def generate_username(full_name):
         """
         Auto-generate username from full name.
-        Format: firstname.X where X is first letter of last name.
-        Handles duplicates by appending a number.
+        Format: firstname.fatherinitial.familyinitial
+        Example: "Ahmed Mohammed Hassan" -> ahmed.m.h
+        Collision handling:
+        - Try ahmed.m.ha (2nd letter of family)
+        - Try ahmed.m.has (3rd letter of family)
+        - Then ahmed.m.h2, ahmed.m.h3, etc.
         """
         import re
         parts = full_name.strip().lower().split()
-        if len(parts) == 0:
-            base = 'user'
-        elif len(parts) == 1:
-            base = re.sub(r'[^a-z0-9]', '', parts[0])
+
+        if len(parts) < 3:
+            # Not enough parts, use simple format
+            if len(parts) == 0:
+                base = 'user'
+            elif len(parts) == 1:
+                base = re.sub(r'[^a-z0-9]', '', parts[0])
+            else:
+                first = re.sub(r'[^a-z0-9]', '', parts[0])
+                last = re.sub(r'[^a-z0-9]', '', parts[-1])
+                base = f"{first}.{last[:1]}" if last else first
         else:
+            # Full format: firstname.fatherinitial.familyinitial
             first = re.sub(r'[^a-z0-9]', '', parts[0])
-            last_initial = re.sub(r'[^a-z0-9]', '', parts[-1])[:1]
-            base = f"{first}.{last_initial}" if last_initial else first
+            father_initial = re.sub(r'[^a-z0-9]', '', parts[1])[:1]
+            family = re.sub(r'[^a-z0-9]', '', parts[-1])
+            family_initial = family[:1] if family else ''
+
+            base = f"{first}.{father_initial}.{family_initial}"
+
+            # Check for duplicates with progressive family letters
+            candidate = base
+            if not User.query.filter_by(username=candidate).first():
+                return candidate
+
+            # Try more letters from family name
+            for i in range(2, len(family) + 1):
+                candidate = f"{first}.{father_initial}.{family[:i]}"
+                if not User.query.filter_by(username=candidate).first():
+                    return candidate
+
+            # Fall back to numbers
+            base = f"{first}.{father_initial}.{family_initial}"
 
         if not base:
             base = 'user'
 
-        # Check for duplicates
+        # Check for duplicates with numbers
         candidate = base
         counter = 2
         while User.query.filter_by(username=candidate).first():
@@ -180,5 +220,46 @@ class User(db.Model):
             counter += 1
         return candidate
 
+    @staticmethod
+    def generate_role_id(role):
+        """
+        Auto-generate role_id based on role.
+        Format: PREFIX + 3-digit number (INS001, SPE001, ENG001, QE001, ADM001)
+        """
+        prefix_map = {
+            'admin': 'ADM',
+            'inspector': 'INS',
+            'specialist': 'SPE',
+            'engineer': 'ENG',
+            'quality_engineer': 'QE'
+        }
+        prefix = prefix_map.get(role, 'USR')
+
+        # Find the highest existing number for this prefix
+        existing = User.query.filter(User.role_id.like(f'{prefix}%')).all()
+        max_num = 0
+        for user in existing:
+            try:
+                num = int(user.role_id[len(prefix):])
+                if num > max_num:
+                    max_num = num
+            except (ValueError, IndexError):
+                continue
+
+        new_num = max_num + 1
+        return f"{prefix}{str(new_num).zfill(3)}"
+
+    @staticmethod
+    def get_minor_role(major_role):
+        """Get the paired minor role for a major role."""
+        pairing = {
+            'inspector': 'specialist',
+            'specialist': 'inspector',
+            'engineer': 'quality_engineer',
+            'quality_engineer': 'engineer',
+            'admin': None
+        }
+        return pairing.get(major_role)
+
     def __repr__(self):
-        return f'<User {self.email} ({self.role})>'
+        return f'<User {self.email or self.username} ({self.role})>'

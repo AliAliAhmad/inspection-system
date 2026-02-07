@@ -5,6 +5,8 @@ import {
   PaginationParams,
   Equipment,
   CreateEquipmentPayload,
+  ImportLog,
+  ImportResult,
 } from '../types';
 
 export interface EquipmentListParams extends PaginationParams {
@@ -36,5 +38,22 @@ export const equipmentApi = {
 
   getTypes() {
     return getApiClient().get<ApiResponse<string[]>>('/api/equipment/types');
+  },
+
+  // Import endpoints
+  import(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return getApiClient().post<ApiResponse<ImportResult>>('/api/equipment/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  downloadTemplate() {
+    return getApiClient().get('/api/equipment/template', { responseType: 'blob' });
+  },
+
+  getImportHistory() {
+    return getApiClient().get<ApiResponse<ImportLog[]>>('/api/equipment/import-history');
   },
 };

@@ -50,6 +50,10 @@ from app.models.token_blocklist import TokenBlocklist
 # Translation
 from app.models.translation import Translation
 
+# Import & Tracking Logs
+from app.models.import_log import ImportLog
+from app.models.role_swap_log import RoleSwapLog
+
 __all__ = [
     'User',
     'Equipment',
@@ -80,4 +84,6 @@ __all__ = [
     'SyncQueue',
     'TokenBlocklist',
     'Translation',
+    'ImportLog',
+    'RoleSwapLog',
 ]

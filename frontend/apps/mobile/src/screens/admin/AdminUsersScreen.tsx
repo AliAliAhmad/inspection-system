@@ -15,8 +15,9 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import * as DocumentPicker from 'expo-document-picker';
 import { usersApi } from '@inspection/shared';
-import type { User, UserRole } from '@inspection/shared';
+import type { User, UserRole, ImportResult, ImportLog, RoleSwapLog } from '@inspection/shared';
 
 type RoleFilter = UserRole | 'all';
 const ROLE_FILTERS: RoleFilter[] = ['all', 'admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
@@ -67,6 +68,15 @@ export default function AdminUsersScreen() {
     shift: 'day',
     language: 'en',
   });
+
+  // Import state
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importHistoryVisible, setImportHistoryVisible] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  // Swap history state
+  const [swapHistoryVisible, setSwapHistoryVisible] = useState(false);
+  const [swapHistoryUser, setSwapHistoryUser] = useState<User | null>(null);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['users', roleFilter, search, page],
@@ -119,6 +129,103 @@ export default function AdminUsersScreen() {
       Alert.alert(t('common.error', 'Error'), t('users.delete_failed', 'Failed to delete user.'));
     },
   });
+
+  // Import mutation
+  const importMutation = useMutation({
+    mutationFn: (file: File) => usersApi.import(file),
+    onSuccess: (response) => {
+      const result = response.data.data as ImportResult;
+      if (result) {
+        setImportResult(result);
+        Alert.alert(
+          t('common.success', 'Success'),
+          t('users.importSuccess', 'Created: {{created}}, Updated: {{updated}}, Failed: {{failed}}', {
+            created: result.created.length,
+            updated: result.updated.length,
+            failed: result.failed.length,
+          })
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setImporting(false);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Import failed';
+      Alert.alert(t('common.error', 'Error'), msg);
+      setImporting(false);
+    },
+  });
+
+  // Swap roles mutation
+  const swapRolesMutation = useMutation({
+    mutationFn: (userId: number) => usersApi.swapRoles(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      Alert.alert(t('common.success', 'Success'), t('users.swapSuccess', 'Roles swapped successfully'));
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Swap failed';
+      Alert.alert(t('common.error', 'Error'), msg);
+    },
+  });
+
+  // Import history query
+  const { data: importHistoryData, isLoading: importHistoryLoading } = useQuery({
+    queryKey: ['users-import-history'],
+    queryFn: () => usersApi.getImportHistory(),
+    enabled: importHistoryVisible,
+  });
+
+  // Swap history query
+  const { data: swapHistoryData, isLoading: swapHistoryLoading } = useQuery({
+    queryKey: ['users-swap-history', swapHistoryUser?.id],
+    queryFn: () => usersApi.getSwapHistory(swapHistoryUser!.id),
+    enabled: swapHistoryVisible && !!swapHistoryUser,
+  });
+
+  const handleImport = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setImporting(true);
+        // Create file object from URI
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const file = new File([blob], asset.name || 'import.xlsx', {
+          type: asset.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        importMutation.mutate(file);
+      }
+    } catch (error) {
+      Alert.alert(t('common.error', 'Error'), t('users.importPickError', 'Failed to pick file'));
+    }
+  };
+
+  const handleSwapRoles = (user: User) => {
+    if (!user.minor_role) {
+      Alert.alert(t('common.error', 'Error'), t('users.noMinorRole', 'User has no minor role to swap'));
+      return;
+    }
+    Alert.alert(
+      t('users.swapRoles', 'Swap Roles'),
+      t('users.swapConfirm', 'Swap {{major}} to {{minor}}?', {
+        major: user.role.replace('_', ' '),
+        minor: user.minor_role.replace('_', ' '),
+      }),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        { text: t('common.confirm', 'Confirm'), onPress: () => swapRolesMutation.mutate(user.id) },
+      ]
+    );
+  };
 
   const handleDelete = (user: User) => {
     Alert.alert(
@@ -267,6 +374,23 @@ export default function AdminUsersScreen() {
           >
             <Text style={styles.editButtonText}>{t('common.edit', 'Edit')}</Text>
           </TouchableOpacity>
+          {item.minor_role && (
+            <TouchableOpacity
+              style={styles.swapButton}
+              onPress={() => handleSwapRoles(item)}
+            >
+              <Text style={styles.swapButtonText}>{t('users.swap', 'Swap')}</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.swapHistoryButton}
+            onPress={() => {
+              setSwapHistoryUser(item);
+              setSwapHistoryVisible(true);
+            }}
+          >
+            <Text style={styles.swapHistoryButtonText}>{t('users.swapHistory', 'Swap Hist')}</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.deleteButton}
             onPress={() => handleDelete(item)}
@@ -313,12 +437,31 @@ export default function AdminUsersScreen() {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('nav.users', 'Users')}</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setCreateModalVisible(true)}
-        >
-          <Text style={styles.addButtonText}>{t('users.add_user', '+ Add User')}</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.importButton}
+            onPress={handleImport}
+            disabled={importing}
+          >
+            {importing ? (
+              <ActivityIndicator size="small" color="#1976D2" />
+            ) : (
+              <Text style={styles.importButtonText}>{t('users.import', 'Import')}</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => setImportHistoryVisible(true)}
+          >
+            <Text style={styles.historyButtonText}>{t('users.history', 'History')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setCreateModalVisible(true)}
+          >
+            <Text style={styles.addButtonText}>+</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search */}
@@ -593,6 +736,84 @@ export default function AdminUsersScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Import History Modal */}
+      <Modal visible={importHistoryVisible} animationType="slide" transparent onRequestClose={() => setImportHistoryVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('users.importHistory', 'Import History')}</Text>
+              <TouchableOpacity onPress={() => setImportHistoryVisible(false)}>
+                <Text style={styles.closeButton}>{t('common.close', 'Close')}</Text>
+              </TouchableOpacity>
+            </View>
+            {importHistoryLoading ? (
+              <ActivityIndicator size="large" color="#1976D2" style={{ marginTop: 20 }} />
+            ) : (
+              <FlatList
+                data={(importHistoryData?.data?.data || []) as ImportLog[]}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => (
+                  <View style={styles.historyCard}>
+                    <Text style={styles.historyDate}>{new Date(item.created_at).toLocaleString()}</Text>
+                    <Text style={styles.historyFile}>{item.file_name}</Text>
+                    <View style={styles.historyStats}>
+                      <Text style={styles.historyStatGreen}>+{item.created_count}</Text>
+                      <Text style={styles.historyStatOrange}>~{item.updated_count}</Text>
+                      <Text style={styles.historyStatRed}>✗{item.failed_count}</Text>
+                    </View>
+                  </View>
+                )}
+                ListEmptyComponent={
+                  <Text style={styles.emptySubtitle}>{t('users.noImportHistory', 'No import history')}</Text>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Swap History Modal */}
+      <Modal visible={swapHistoryVisible} animationType="slide" transparent onRequestClose={() => setSwapHistoryVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('users.swapHistory', 'Swap History')}</Text>
+              <TouchableOpacity onPress={() => { setSwapHistoryVisible(false); setSwapHistoryUser(null); }}>
+                <Text style={styles.closeButton}>{t('common.close', 'Close')}</Text>
+              </TouchableOpacity>
+            </View>
+            {swapHistoryUser && (
+              <View style={styles.swapUserInfo}>
+                <Text style={styles.swapUserName}>{swapHistoryUser.full_name}</Text>
+                <View style={[styles.roleBadge, { backgroundColor: ROLE_COLORS[swapHistoryUser.role] }]}>
+                  <Text style={styles.roleBadgeText}>{swapHistoryUser.role}</Text>
+                </View>
+              </View>
+            )}
+            {swapHistoryLoading ? (
+              <ActivityIndicator size="large" color="#1976D2" style={{ marginTop: 20 }} />
+            ) : (
+              <FlatList
+                data={(swapHistoryData?.data?.data || []) as RoleSwapLog[]}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => (
+                  <View style={styles.swapCard}>
+                    <Text style={styles.swapDate}>{new Date(item.created_at).toLocaleString()}</Text>
+                    <Text style={styles.swapChange}>
+                      {item.old_role} → {item.new_role}
+                    </Text>
+                    <Text style={styles.swapAdmin}>By: {item.admin_name}</Text>
+                  </View>
+                )}
+                ListEmptyComponent={
+                  <Text style={styles.emptySubtitle}>{t('users.noSwapHistory', 'No swap history')}</Text>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -608,7 +829,26 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   title: { fontSize: 22, fontWeight: 'bold', color: '#212121' },
+  importButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+  },
+  importButtonText: { color: '#1976D2', fontSize: 13, fontWeight: '600' },
+  historyButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+  },
+  historyButtonText: { color: '#616161', fontSize: 13, fontWeight: '500' },
   addButton: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -768,4 +1008,56 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { fontSize: 15, fontWeight: '600', color: '#fff' },
   disabledButton: { opacity: 0.6 },
+  swapButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 6,
+  },
+  swapButtonText: { color: '#E65100', fontSize: 13, fontWeight: '600' },
+  swapHistoryButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#F3E5F5',
+    borderRadius: 6,
+  },
+  swapHistoryButtonText: { color: '#7B1FA2', fontSize: 12, fontWeight: '500' },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  closeButton: { color: '#1976D2', fontSize: 16, fontWeight: '600' },
+  historyCard: {
+    backgroundColor: '#F5F5F5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  historyDate: { fontSize: 13, color: '#616161', marginBottom: 4 },
+  historyFile: { fontSize: 14, fontWeight: '600', color: '#212121', marginBottom: 6 },
+  historyStats: { flexDirection: 'row', gap: 12 },
+  historyStatGreen: { color: '#4CAF50', fontSize: 13, fontWeight: '600' },
+  historyStatOrange: { color: '#FF9800', fontSize: 13, fontWeight: '600' },
+  historyStatRed: { color: '#E53935', fontSize: 13, fontWeight: '600' },
+  swapUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+  },
+  swapUserName: { fontSize: 16, fontWeight: '600', color: '#212121' },
+  swapCard: {
+    backgroundColor: '#F5F5F5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  swapDate: { fontSize: 12, color: '#616161', marginBottom: 4 },
+  swapChange: { fontSize: 14, fontWeight: '600', color: '#212121', marginBottom: 4 },
+  swapAdmin: { fontSize: 12, color: '#757575' },
 });

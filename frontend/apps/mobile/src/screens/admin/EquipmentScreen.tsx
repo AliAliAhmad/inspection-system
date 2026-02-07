@@ -14,8 +14,9 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import * as DocumentPicker from 'expo-document-picker';
 import { equipmentApi } from '@inspection/shared';
-import type { Equipment, EquipmentStatus, CreateEquipmentPayload } from '@inspection/shared';
+import type { Equipment, EquipmentStatus, CreateEquipmentPayload, ImportResult, ImportLog } from '@inspection/shared';
 
 const STATUS_COLORS: Record<EquipmentStatus, string> = {
   active: '#4CAF50',
@@ -83,6 +84,10 @@ export default function EquipmentScreen() {
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
   const [formData, setFormData] = useState<Partial<CreateEquipmentPayload>>({});
 
+  // Import state
+  const [importHistoryVisible, setImportHistoryVisible] = useState(false);
+  const [importing, setImporting] = useState(false);
+
   const filters: FilterOption[] = [
     { label: t('equipment.filter_all', 'All'), value: null },
     { label: t('equipment.active', 'Active'), value: 'active' },
@@ -141,6 +146,63 @@ export default function EquipmentScreen() {
       Alert.alert(t('common.error', 'Error'), t('equipment.deleteError', 'Failed to delete equipment'));
     },
   });
+
+  // Import mutation
+  const importMutation = useMutation({
+    mutationFn: (file: File) => equipmentApi.import(file),
+    onSuccess: (response) => {
+      const result = response.data.data as ImportResult;
+      if (result) {
+        Alert.alert(
+          t('common.success', 'Success'),
+          t('equipment.importSuccess', 'Created: {{created}}, Updated: {{updated}}, Failed: {{failed}}', {
+            created: result.created.length,
+            updated: result.updated.length,
+            failed: result.failed.length,
+          })
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ['equipment'] });
+      setImporting(false);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Import failed';
+      Alert.alert(t('common.error', 'Error'), msg);
+      setImporting(false);
+    },
+  });
+
+  // Import history query
+  const { data: importHistoryData, isLoading: importHistoryLoading } = useQuery({
+    queryKey: ['equipment-import-history'],
+    queryFn: () => equipmentApi.getImportHistory(),
+    enabled: importHistoryVisible,
+  });
+
+  const handleImport = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setImporting(true);
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const file = new File([blob], asset.name || 'import.xlsx', {
+          type: asset.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        importMutation.mutate(file);
+      }
+    } catch (error) {
+      Alert.alert(t('common.error', 'Error'), t('equipment.importPickError', 'Failed to pick file'));
+    }
+  };
 
   const responseData = (equipmentQuery.data?.data as any) ?? equipmentQuery.data;
   const items: Equipment[] = responseData?.data ?? [];
@@ -225,9 +287,28 @@ export default function EquipmentScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.equipment', 'Equipment')}</Text>
-        <TouchableOpacity style={styles.addButton} onPress={handleOpenCreate}>
-          <Text style={styles.addButtonText}>+ {t('common.add', 'Add')}</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.importButton}
+            onPress={handleImport}
+            disabled={importing}
+          >
+            {importing ? (
+              <ActivityIndicator size="small" color="#1976D2" />
+            ) : (
+              <Text style={styles.importButtonText}>{t('equipment.import', 'Import')}</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => setImportHistoryVisible(true)}
+          >
+            <Text style={styles.historyButtonText}>{t('equipment.history', 'History')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.addButton} onPress={handleOpenCreate}>
+            <Text style={styles.addButtonText}>+</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search */}
@@ -425,6 +506,45 @@ export default function EquipmentScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Import History Modal */}
+      <Modal visible={importHistoryVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setImportHistoryVisible(false)}>
+              <Text style={styles.modalCancel}>{t('common.close', 'Close')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{t('equipment.importHistory', 'Import History')}</Text>
+            <View style={{ width: 50 }} />
+          </View>
+          {importHistoryLoading ? (
+            <ActivityIndicator size="large" color="#1976D2" style={{ marginTop: 40 }} />
+          ) : (
+            <FlatList
+              data={(importHistoryData?.data?.data || []) as ImportLog[]}
+              keyExtractor={(item) => String(item.id)}
+              contentContainerStyle={styles.listContent}
+              renderItem={({ item }) => (
+                <View style={styles.historyCard}>
+                  <Text style={styles.historyDate}>{new Date(item.created_at).toLocaleString()}</Text>
+                  <Text style={styles.historyFile}>{item.file_name}</Text>
+                  <Text style={styles.historyAdmin}>By: {item.admin_name}</Text>
+                  <View style={styles.historyStats}>
+                    <Text style={styles.historyStatGreen}>Created: {item.created_count}</Text>
+                    <Text style={styles.historyStatOrange}>Updated: {item.updated_count}</Text>
+                    <Text style={styles.historyStatRed}>Failed: {item.failed_count}</Text>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>{t('equipment.noImportHistory', 'No import history')}</Text>
+                </View>
+              }
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -433,8 +553,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 8 },
+  headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#212121' },
-  addButton: { backgroundColor: '#1976D2', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  importButton: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#E3F2FD', borderRadius: 8 },
+  importButtonText: { color: '#1976D2', fontSize: 13, fontWeight: '600' },
+  historyButton: { paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#F5F5F5', borderRadius: 8 },
+  historyButtonText: { color: '#616161', fontSize: 13, fontWeight: '500' },
+  addButton: { backgroundColor: '#1976D2', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   searchContainer: { paddingHorizontal: 16, paddingBottom: 8 },
   searchInput: { backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, borderWidth: 1, borderColor: '#e0e0e0' },
@@ -473,4 +598,12 @@ const styles = StyleSheet.create({
   statusChipTextActive: { color: '#fff' },
   deleteButton: { marginTop: 24, padding: 14, borderRadius: 8, backgroundColor: '#ffebee', alignItems: 'center' },
   deleteButtonText: { color: '#E53935', fontWeight: '600', fontSize: 15 },
+  historyCard: { backgroundColor: '#fff', padding: 14, borderRadius: 10, marginBottom: 10 },
+  historyDate: { fontSize: 12, color: '#757575', marginBottom: 4 },
+  historyFile: { fontSize: 15, fontWeight: '600', color: '#212121', marginBottom: 4 },
+  historyAdmin: { fontSize: 13, color: '#616161', marginBottom: 8 },
+  historyStats: { flexDirection: 'row', gap: 16 },
+  historyStatGreen: { color: '#4CAF50', fontSize: 13, fontWeight: '600' },
+  historyStatOrange: { color: '#FF9800', fontSize: 13, fontWeight: '600' },
+  historyStatRed: { color: '#E53935', fontSize: 13, fontWeight: '600' },
 });

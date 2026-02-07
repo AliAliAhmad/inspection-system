@@ -109,3 +109,62 @@ def logout():
     safe_commit()
 
     return jsonify({'status': 'success', 'message': 'Logged out'}), 200
+
+
+@bp.route('/change-password', methods=['POST'])
+@jwt_required()
+def change_password():
+    """
+    Change user password. Used for first-time login and regular password changes.
+
+    Request Body:
+        {
+            "old_password": "current_password",
+            "new_password": "new_secure_password"
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Password changed successfully"
+        }
+    """
+    from app.models import User
+    from app.extensions import db, safe_commit
+
+    data = request.get_json()
+
+    if not data:
+        raise ValidationError("Request body is required")
+
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+
+    if not old_password or not new_password:
+        raise ValidationError("old_password and new_password are required")
+
+    if len(new_password) < 6:
+        raise ValidationError("New password must be at least 6 characters")
+
+    if old_password == new_password:
+        raise ValidationError("New password must be different from current password")
+
+    current_user_id = int(get_jwt_identity())
+    user = db.session.get(User, current_user_id)
+
+    if not user:
+        raise ValidationError("User not found")
+
+    if not user.check_password(old_password):
+        raise ValidationError("Current password is incorrect")
+
+    # Set new password and clear must_change_password flag
+    user.set_password(new_password)
+    user.must_change_password = False
+    safe_commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Password changed successfully',
+        'user': user.to_dict()
+    }), 200

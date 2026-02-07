@@ -15,17 +15,37 @@ import {
   Typography,
   Row,
   Col,
+  Upload,
+  Dropdown,
+  Alert,
+  Timeline,
+  Descriptions,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SearchOutlined,
+  UploadOutlined,
+  DownloadOutlined,
+  HistoryOutlined,
+  SwapOutlined,
+  MoreOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
+import type { UploadFile } from 'antd/es/upload/interface';
+import type { MenuProps } from 'antd';
 import {
   usersApi,
   type User,
   type UserRole,
   type CreateUserPayload,
   type UpdateUserPayload,
+  type ImportLog,
+  type ImportResult,
+  type RoleSwapLog,
 } from '@inspection/shared';
 
 const ROLES: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
@@ -51,6 +71,16 @@ export default function UsersPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+
+  // Import states
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+
+  // Role swap states
+  const [swapHistoryModalOpen, setSwapHistoryModalOpen] = useState(false);
+  const [swapHistoryUser, setSwapHistoryUser] = useState<User | null>(null);
 
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -112,6 +142,82 @@ export default function UsersPage() {
       message.error(t('users.statusError', 'Failed to update user status'));
     },
   });
+
+  // Import mutations
+  const importMutation = useMutation({
+    mutationFn: (file: File) => usersApi.import(file),
+    onSuccess: (response) => {
+      const result = response.data.data as ImportResult;
+      if (result) {
+        setImportResult(result);
+        message.success(
+          t('users.importSuccess', 'Import completed: {{created}} created, {{updated}} updated, {{failed}} failed', {
+            created: result.created.length,
+            updated: result.updated.length,
+            failed: result.failed.length,
+          })
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setFileList([]);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Import failed';
+      message.error(msg);
+    },
+  });
+
+  const { data: importHistoryData, isLoading: importHistoryLoading } = useQuery({
+    queryKey: ['users-import-history'],
+    queryFn: () => usersApi.getImportHistory(),
+    enabled: importHistoryModalOpen,
+  });
+
+  // Role swap mutations
+  const swapRolesMutation = useMutation({
+    mutationFn: (userId: number) => usersApi.swapRoles(userId),
+    onSuccess: (response) => {
+      const user = response.data.data;
+      message.success(t('users.swapSuccess', 'Roles swapped successfully'));
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Swap failed';
+      message.error(msg);
+    },
+  });
+
+  const { data: swapHistoryData, isLoading: swapHistoryLoading } = useQuery({
+    queryKey: ['users-swap-history', swapHistoryUser?.id],
+    queryFn: () => usersApi.getSwapHistory(swapHistoryUser!.id),
+    enabled: swapHistoryModalOpen && !!swapHistoryUser,
+  });
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await usersApi.downloadTemplate();
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'team_import_template.xlsx';
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      message.error(t('users.downloadError', 'Failed to download template'));
+    }
+  };
+
+  const handleImportUpload = () => {
+    if (fileList.length === 0) {
+      message.warning(t('users.selectFile', 'Please select a file to import'));
+      return;
+    }
+    const file = fileList[0].originFileObj as File;
+    importMutation.mutate(file);
+  };
 
   const openEdit = (user: User) => {
     setEditingUser(user);
@@ -186,23 +292,60 @@ export default function UsersPage() {
     {
       title: t('common.actions', 'Actions'),
       key: 'actions',
-      render: (_: unknown, record: User) => (
-        <Space>
-          <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-            {t('common.edit', 'Edit')}
-          </Button>
-          <Popconfirm
-            title={t('users.deleteConfirm', 'Are you sure you want to delete this user?')}
-            onConfirm={() => deleteMutation.mutate(record.id)}
-            okText={t('common.yes', 'Yes')}
-            cancelText={t('common.no', 'No')}
-          >
-            <Button type="link" danger icon={<DeleteOutlined />}>
-              {t('common.delete', 'Delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
+      render: (_: unknown, record: User) => {
+        const menuItems: MenuProps['items'] = [
+          {
+            key: 'edit',
+            icon: <EditOutlined />,
+            label: t('common.edit', 'Edit'),
+            onClick: () => openEdit(record),
+          },
+          {
+            key: 'swap',
+            icon: <SwapOutlined />,
+            label: t('users.swapRoles', 'Swap Roles'),
+            disabled: !record.minor_role,
+            onClick: () => {
+              Modal.confirm({
+                title: t('users.confirmSwap', 'Confirm Role Swap'),
+                content: t('users.swapConfirmContent', 'Swap {{major}} to {{minor}}?', {
+                  major: record.role.replace('_', ' '),
+                  minor: record.minor_role?.replace('_', ' ') || '-',
+                }),
+                onOk: () => swapRolesMutation.mutate(record.id),
+              });
+            },
+          },
+          {
+            key: 'swapHistory',
+            icon: <HistoryOutlined />,
+            label: t('users.swapHistory', 'Swap History'),
+            onClick: () => {
+              setSwapHistoryUser(record);
+              setSwapHistoryModalOpen(true);
+            },
+          },
+          { type: 'divider' },
+          {
+            key: 'delete',
+            icon: <DeleteOutlined />,
+            label: t('common.delete', 'Delete'),
+            danger: true,
+            onClick: () => {
+              Modal.confirm({
+                title: t('users.deleteConfirm', 'Are you sure you want to delete this user?'),
+                onOk: () => deleteMutation.mutate(record.id),
+              });
+            },
+          },
+        ];
+
+        return (
+          <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+            <Button type="text" icon={<MoreOutlined />} />
+          </Dropdown>
+        );
+      },
     },
   ];
 
@@ -213,9 +356,20 @@ export default function UsersPage() {
     <Card
       title={<Typography.Title level={4}>{t('nav.users', 'Users Management')}</Typography.Title>}
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-          {t('users.create', 'Create User')}
-        </Button>
+        <Space>
+          <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+            {t('users.downloadTemplate', 'Download Template')}
+          </Button>
+          <Button icon={<UploadOutlined />} onClick={() => setImportModalOpen(true)}>
+            {t('users.import', 'Import')}
+          </Button>
+          <Button icon={<HistoryOutlined />} onClick={() => setImportHistoryModalOpen(true)}>
+            {t('users.importHistory', 'Import History')}
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+            {t('users.create', 'Create User')}
+          </Button>
+        </Space>
       }
     >
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -417,6 +571,189 @@ export default function UsersPage() {
             <Switch />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Import Modal */}
+      <Modal
+        title={t('users.importTeam', 'Import Team Members')}
+        open={importModalOpen}
+        onCancel={() => {
+          setImportModalOpen(false);
+          setImportResult(null);
+          setFileList([]);
+        }}
+        onOk={handleImportUpload}
+        confirmLoading={importMutation.isPending}
+        okText={t('common.import', 'Import')}
+        width={700}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Alert
+            message={t('users.importInstructions', 'Import Instructions')}
+            description={
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li>{t('users.importInstruction1', 'Download the template and fill in the data')}</li>
+                <li>{t('users.importInstruction2', 'SAP_ID must be exactly 6 digits (used as initial password)')}</li>
+                <li>{t('users.importInstruction3', 'Full name must have 3 parts: first, father, family')}</li>
+                <li>{t('users.importInstruction4', 'Role: admin, inspector, specialist, engineer, quality_engineer')}</li>
+                <li>{t('users.importInstruction5', 'Specialization: mechanical, electrical, hvac (not required for admin)')}</li>
+              </ul>
+            }
+            type="info"
+            showIcon
+          />
+
+          <Upload.Dragger
+            fileList={fileList}
+            beforeUpload={(file) => {
+              setFileList([file]);
+              return false;
+            }}
+            onRemove={() => setFileList([])}
+            accept=".xlsx,.xls"
+            maxCount={1}
+          >
+            <p className="ant-upload-drag-icon">
+              <UploadOutlined style={{ fontSize: 48, color: '#1890ff' }} />
+            </p>
+            <p className="ant-upload-text">{t('users.dragFile', 'Click or drag Excel file here')}</p>
+            <p className="ant-upload-hint">{t('users.fileHint', 'Only .xlsx or .xls files are supported')}</p>
+          </Upload.Dragger>
+
+          {importResult && (
+            <Alert
+              message={t('users.importResults', 'Import Results')}
+              description={
+                <Space direction="vertical">
+                  <Typography.Text type="success">
+                    {t('users.created', 'Created')}: {importResult.created.length}
+                  </Typography.Text>
+                  <Typography.Text type="warning">
+                    {t('users.updated', 'Updated')}: {importResult.updated.length}
+                  </Typography.Text>
+                  <Typography.Text type="danger">
+                    {t('users.failed', 'Failed')}: {importResult.failed.length}
+                  </Typography.Text>
+                  {importResult.failed.length > 0 && (
+                    <div style={{ maxHeight: 150, overflowY: 'auto' }}>
+                      {importResult.failed.map((f, i) => (
+                        <Typography.Text key={i} type="danger" style={{ display: 'block' }}>
+                          Row {f.row}: {f.errors.join(', ')}
+                        </Typography.Text>
+                      ))}
+                    </div>
+                  )}
+                </Space>
+              }
+              type={importResult.failed.length > 0 ? 'warning' : 'success'}
+              showIcon
+            />
+          )}
+        </Space>
+      </Modal>
+
+      {/* Import History Modal */}
+      <Modal
+        title={t('users.importHistory', 'Import History')}
+        open={importHistoryModalOpen}
+        onCancel={() => setImportHistoryModalOpen(false)}
+        footer={null}
+        width={800}
+      >
+        <Table
+          rowKey="id"
+          loading={importHistoryLoading}
+          dataSource={importHistoryData?.data?.data || []}
+          columns={[
+            {
+              title: t('users.date', 'Date'),
+              dataIndex: 'created_at',
+              render: (v: string) => new Date(v).toLocaleString(),
+            },
+            { title: t('users.fileName', 'File Name'), dataIndex: 'file_name' },
+            { title: t('users.admin', 'Admin'), dataIndex: 'admin_name' },
+            { title: t('users.totalRows', 'Total'), dataIndex: 'total_rows' },
+            {
+              title: t('users.created', 'Created'),
+              dataIndex: 'created_count',
+              render: (v: number) => <Tag color="green">{v}</Tag>,
+            },
+            {
+              title: t('users.updated', 'Updated'),
+              dataIndex: 'updated_count',
+              render: (v: number) => <Tag color="orange">{v}</Tag>,
+            },
+            {
+              title: t('users.failed', 'Failed'),
+              dataIndex: 'failed_count',
+              render: (v: number) => (v > 0 ? <Tag color="red">{v}</Tag> : <Tag>{v}</Tag>),
+            },
+          ]}
+          pagination={{ pageSize: 10 }}
+        />
+      </Modal>
+
+      {/* Role Swap History Modal */}
+      <Modal
+        title={t('users.swapHistory', 'Role Swap History')}
+        open={swapHistoryModalOpen}
+        onCancel={() => {
+          setSwapHistoryModalOpen(false);
+          setSwapHistoryUser(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        {swapHistoryUser && (
+          <Descriptions bordered column={1} size="small" style={{ marginBottom: 16 }}>
+            <Descriptions.Item label={t('users.userName', 'User')}>
+              {swapHistoryUser.full_name}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('users.currentRole', 'Current Role')}>
+              <Tag color={roleColorMap[swapHistoryUser.role]}>
+                {swapHistoryUser.role.replace('_', ' ').toUpperCase()}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('users.currentMinorRole', 'Current Minor Role')}>
+              {swapHistoryUser.minor_role ? (
+                <Tag color={roleColorMap[swapHistoryUser.minor_role]}>
+                  {swapHistoryUser.minor_role.replace('_', ' ').toUpperCase()}
+                </Tag>
+              ) : (
+                '-'
+              )}
+            </Descriptions.Item>
+          </Descriptions>
+        )}
+
+        {swapHistoryLoading ? (
+          <Typography.Text>{t('common.loading', 'Loading...')}</Typography.Text>
+        ) : (swapHistoryData?.data?.data || []).length === 0 ? (
+          <Typography.Text type="secondary">
+            {t('users.noSwapHistory', 'No role swap history found')}
+          </Typography.Text>
+        ) : (
+          <Timeline
+            items={(swapHistoryData?.data?.data || []).map((log: RoleSwapLog) => ({
+              color: 'blue',
+              children: (
+                <div>
+                  <Typography.Text strong>
+                    {new Date(log.created_at).toLocaleString()}
+                  </Typography.Text>
+                  <br />
+                  <Typography.Text>
+                    {log.old_role.replace('_', ' ')} ({log.old_role_id}) → {log.new_role.replace('_', ' ')} ({log.new_role_id})
+                  </Typography.Text>
+                  <br />
+                  <Typography.Text type="secondary">
+                    {t('users.by', 'By')}: {log.admin_name}
+                  </Typography.Text>
+                </div>
+              ),
+            }))}
+          />
+        )}
       </Modal>
     </Card>
   );
