@@ -195,6 +195,30 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('photo_file_id backfill skipped or already done')
+
+    # Drop unique constraint on specialist_jobs.defect_id to allow multiple specialists per defect
+    try:
+        # Find the actual constraint name from PostgreSQL system catalog
+        result = db.session.execute(text('''
+            SELECT con.conname
+            FROM pg_catalog.pg_constraint con
+            JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+            JOIN pg_catalog.pg_attribute att ON att.attrelid = rel.oid AND att.attnum = ANY(con.conkey)
+            WHERE rel.relname = 'specialist_jobs'
+              AND att.attname = 'defect_id'
+              AND con.contype = 'u'
+        '''))
+        row = result.fetchone()
+        if row:
+            constraint_name = row[0]
+            db.session.execute(text(f'ALTER TABLE specialist_jobs DROP CONSTRAINT {constraint_name}'))
+            db.session.commit()
+            print(f'Dropped unique constraint {constraint_name} from specialist_jobs.defect_id')
+        else:
+            print('No unique constraint found on specialist_jobs.defect_id')
+    except Exception as e:
+        db.session.rollback()
+        print(f'specialist_jobs.defect_id constraint drop skipped: {e}')
 "
 
 echo "Starting gunicorn..."
