@@ -21,7 +21,10 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1677ff"
       },
-      "package": "com.inspection.system"
+      "package": "com.inspection.system",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-secure-store",
@@ -30,8 +33,15 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "b78ac7ad-3b66-40ee-a122-411dd0d9afe0"
       }
+    },
+    "owner": "akaa",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b78ac7ad-3b66-40ee-a122-411dd0d9afe0"
     }
   }
 }
