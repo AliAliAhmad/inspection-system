@@ -51,7 +51,7 @@ export default function LoginScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder={t('auth.username')}
+          placeholder={t('auth.identifier', 'Email or Employee ID')}
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"

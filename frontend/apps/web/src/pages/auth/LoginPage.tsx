@@ -61,13 +61,12 @@ export default function LoginPage() {
           <Form.Item
             name="email"
             rules={[
-              { required: true, message: t('auth.email_required', 'Email is required') },
-              { type: 'email', message: t('auth.email_invalid', 'Please enter a valid email') },
+              { required: true, message: t('auth.identifier_required', 'Email or ID is required') },
             ]}
           >
             <Input
               prefix={<UserOutlined />}
-              placeholder={t('auth.email', 'Email')}
+              placeholder={t('auth.identifier', 'Email or Employee ID')}
               size="large"
             />
           </Form.Item>
