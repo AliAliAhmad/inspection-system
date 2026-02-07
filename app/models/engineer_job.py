@@ -135,8 +135,8 @@ class EngineerJob(db.Model):
             'major_reason': translated.get('major_reason', self.major_reason),
             'planned_time_days': self.planned_time_days,
             'planned_time_hours': float(self.planned_time_hours) if self.planned_time_hours else None,
-            'started_at': self.started_at.isoformat() if self.started_at else None,
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'started_at': (self.started_at.isoformat() + 'Z') if self.started_at else None,
+            'completed_at': (self.completed_at.isoformat() + 'Z') if self.completed_at else None,
             'actual_time_hours': float(self.actual_time_hours) if self.actual_time_hours else None,
             'status': self.status,
             'work_notes': translated.get('work_notes', self.work_notes),
@@ -147,7 +147,7 @@ class EngineerJob(db.Model):
             'qe_id': self.qe_id,
             'is_running': self.status == 'in_progress' and self.started_at is not None and not self.has_pending_pause(),
             'has_pending_pause': self.has_pending_pause(),
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': (self.created_at.isoformat() + 'Z') if self.created_at else None,
             'defect': self._get_defect_dict(language),
         }
 
