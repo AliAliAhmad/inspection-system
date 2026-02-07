@@ -192,12 +192,13 @@ export default function EquipmentScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setImporting(true);
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const file = new File([blob], asset.name || 'import.xlsx', {
+        // React Native FormData format - pass uri/type/name object directly
+        const fileData = {
+          uri: asset.uri,
           type: asset.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        });
-        importMutation.mutate(file);
+          name: asset.name || 'import.xlsx',
+        };
+        importMutation.mutate(fileData as any);
       }
     } catch (error) {
       Alert.alert(t('common.error', 'Error'), t('equipment.importPickError', 'Failed to pick file'));
