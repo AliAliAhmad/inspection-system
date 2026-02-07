@@ -318,6 +318,25 @@ with app.app_context():
         except Exception:
             db.session.rollback()
             print(f'checklist_items.{col_name} already exists')
+
+    # Update berth constraints to include 'both' option
+    try:
+        db.session.execute(text('ALTER TABLE equipment DROP CONSTRAINT IF EXISTS check_valid_berth'))
+        db.session.execute(text(\"\"\"ALTER TABLE equipment ADD CONSTRAINT check_valid_berth CHECK (berth IN ('east', 'west', 'both') OR berth IS NULL)\"\"\"))
+        db.session.commit()
+        print('Updated berth constraint to include both')
+    except Exception:
+        db.session.rollback()
+        print('berth constraint already up to date')
+
+    try:
+        db.session.execute(text('ALTER TABLE equipment DROP CONSTRAINT IF EXISTS check_valid_home_berth'))
+        db.session.execute(text(\"\"\"ALTER TABLE equipment ADD CONSTRAINT check_valid_home_berth CHECK (home_berth IN ('east', 'west', 'both') OR home_berth IS NULL)\"\"\"))
+        db.session.commit()
+        print('Updated home_berth constraint to include both')
+    except Exception:
+        db.session.rollback()
+        print('home_berth constraint already up to date')
 "
 
 echo "Starting gunicorn..."

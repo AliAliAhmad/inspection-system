@@ -279,7 +279,11 @@ export default function EquipmentPage() {
         </Select>
       </Form.Item>
       <Form.Item name="berth" label={t('equipment.berth', 'Berth')}>
-        <Input />
+        <Select allowClear placeholder={t('equipment.selectBerth', 'Select berth')}>
+          <Select.Option value="east">{t('equipment.east', 'East')}</Select.Option>
+          <Select.Option value="west">{t('equipment.west', 'West')}</Select.Option>
+          <Select.Option value="both">{t('equipment.both', 'Both')}</Select.Option>
+        </Select>
       </Form.Item>
       <Form.Item name="manufacturer" label={t('equipment.manufacturer', 'Manufacturer')}>
         <Input />
@@ -413,7 +417,7 @@ export default function EquipmentPage() {
               <ul style={{ margin: 0, paddingLeft: 20 }}>
                 <li>{t('equipment.importInstruction1', 'Download the template and fill in the data')}</li>
                 <li>{t('equipment.importInstruction2', 'All columns are required')}</li>
-                <li>{t('equipment.importInstruction3', 'Berth and home_berth must be "east" or "west"')}</li>
+                <li>{t('equipment.importInstruction3', 'Berth and home_berth must be "east", "west", or "both"')}</li>
                 <li>{t('equipment.importInstruction4', 'equipment_type is auto-generated from name')}</li>
                 <li>{t('equipment.importInstruction5', 'Immutable fields cannot be updated: name, serial_number, manufacturer, model_number, installation_date')}</li>
               </ul>

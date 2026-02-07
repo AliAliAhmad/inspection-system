@@ -19,7 +19,7 @@ from app.utils.pagination import paginate
 bp = Blueprint('equipment', __name__)
 
 # Valid berth values
-VALID_BERTHS = ['east', 'west']
+VALID_BERTHS = ['east', 'west', 'both']
 
 
 @bp.route('', methods=['GET'])
@@ -144,11 +144,11 @@ def create_equipment():
     # Validate berth values
     berth = str(data['berth']).strip().lower()
     if berth not in VALID_BERTHS:
-        raise ValidationError(f"berth must be 'east' or 'west', got: {data['berth']}")
+        raise ValidationError(f"berth must be 'east', 'west', or 'both', got: {data['berth']}")
 
     home_berth = str(data['home_berth']).strip().lower()
     if home_berth not in VALID_BERTHS:
-        raise ValidationError(f"home_berth must be 'east' or 'west', got: {data['home_berth']}")
+        raise ValidationError(f"home_berth must be 'east', 'west', or 'both', got: {data['home_berth']}")
 
     # Check for duplicate serial_number
     if Equipment.query.filter_by(serial_number=data['serial_number']).first():
@@ -228,7 +228,7 @@ def _validate_berth(berth):
         return False, "Berth is required"
     berth_lower = str(berth).strip().lower()
     if berth_lower not in VALID_BERTHS:
-        return False, f"Berth must be 'east' or 'west', got: {berth}"
+        return False, f"Berth must be 'east', 'west', or 'both', got: {berth}"
     return True, berth_lower
 
 
@@ -497,8 +497,8 @@ def download_equipment_template():
         'installation_date': ['2024-01-15', '2024-02-20'],
         'equipment_type_2': ['Mobile Harbor Crane', 'Electric Forklift'],
         'capacity': ['144 tons', '2.5 tons'],
-        'berth': ['east', 'west'],
-        'home_berth': ['east', 'west']
+        'berth': ['east', 'both'],
+        'home_berth': ['west', 'both']
     }
     df = pd.DataFrame(template_data)
 
@@ -578,12 +578,12 @@ def update_equipment(equipment_id):
     if 'berth' in data:
         berth = str(data['berth']).strip().lower()
         if berth not in VALID_BERTHS:
-            raise ValidationError(f"berth must be 'east' or 'west', got: {data['berth']}")
+            raise ValidationError(f"berth must be 'east', 'west', or 'both', got: {data['berth']}")
         equipment.berth = berth
     if 'home_berth' in data:
         home_berth = str(data['home_berth']).strip().lower()
         if home_berth not in VALID_BERTHS:
-            raise ValidationError(f"home_berth must be 'east' or 'west', got: {data['home_berth']}")
+            raise ValidationError(f"home_berth must be 'east', 'west', or 'both', got: {data['home_berth']}")
         equipment.home_berth = home_berth
     if 'status' in data:
         equipment.status = data['status']

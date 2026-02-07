@@ -61,11 +61,11 @@ class Equipment(db.Model):
             name='check_valid_equipment_status'
         ),
         db.CheckConstraint(
-            "berth IN ('east', 'west') OR berth IS NULL",
+            "berth IN ('east', 'west', 'both') OR berth IS NULL",
             name='check_valid_berth'
         ),
         db.CheckConstraint(
-            "home_berth IN ('east', 'west') OR home_berth IS NULL",
+            "home_berth IN ('east', 'west', 'both') OR home_berth IS NULL",
             name='check_valid_home_berth'
         ),
     )
