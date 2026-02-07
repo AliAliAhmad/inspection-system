@@ -10,3 +10,14 @@ html, body, #root {
 html[dir='rtl'] {
   direction: rtl;
 }
+
+/* Inactive user row styling */
+.inactive-row {
+  opacity: 0.5;
+  background-color: #f5f5f5 !important;
+  text-decoration: line-through;
+}
+
+.inactive-row:hover {
+  background-color: #ebebeb !important;
+}

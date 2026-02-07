@@ -228,6 +228,30 @@ with app.app_context():
         db.session.rollback()
         print(f'specialist_jobs.defect_id constraint drop skipped: {e}')
 
+    # Create role_swap_logs table if not exists
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS role_swap_logs (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                admin_id INTEGER NOT NULL REFERENCES users(id),
+                old_role VARCHAR(50) NOT NULL,
+                old_role_id VARCHAR(20) NOT NULL,
+                old_minor_role VARCHAR(50),
+                old_minor_role_id VARCHAR(20),
+                new_role VARCHAR(50) NOT NULL,
+                new_role_id VARCHAR(20) NOT NULL,
+                new_minor_role VARCHAR(50),
+                new_minor_role_id VARCHAR(20),
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+        '''))
+        db.session.commit()
+        print('Created role_swap_logs table')
+    except Exception:
+        db.session.rollback()
+        print('role_swap_logs table already exists')
+
     # Add missing columns to leaves table
     leave_cols = [
         ('scope', \"VARCHAR(20) DEFAULT 'major_only'\"),

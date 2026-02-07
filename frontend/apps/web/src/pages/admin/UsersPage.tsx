@@ -66,7 +66,6 @@ export default function UsersPage() {
   const [perPage, setPerPage] = useState(10);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string | undefined>();
-  const [activeFilter, setActiveFilter] = useState<boolean | undefined>();
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -85,9 +84,9 @@ export default function UsersPage() {
   const [editForm] = Form.useForm();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['users', page, perPage, search, roleFilter, activeFilter],
+    queryKey: ['users', page, perPage, search, roleFilter],
     queryFn: () =>
-      usersApi.list({ page, per_page: perPage, search: search || undefined, role: roleFilter, is_active: activeFilter }),
+      usersApi.list({ page, per_page: perPage, search: search || undefined, role: roleFilter }),
   });
 
   const createMutation = useMutation({
@@ -259,18 +258,6 @@ export default function UsersPage() {
       render: (val: string | null) => val ? val.charAt(0).toUpperCase() + val.slice(1) : '-',
     },
     {
-      title: t('users.active', 'Active'),
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (active: boolean, record: User) => (
-        <Switch
-          checked={active}
-          onChange={(checked) => toggleActiveMutation.mutate({ id: record.id, is_active: checked })}
-          loading={toggleActiveMutation.isPending}
-        />
-      ),
-    },
-    {
       title: t('users.points', 'Points'),
       dataIndex: 'total_points',
       key: 'total_points',
@@ -336,7 +323,12 @@ export default function UsersPage() {
     },
   ];
 
-  const users = data?.data?.data || [];
+  const rawUsers = data?.data?.data || [];
+  // Sort users: active first, inactive last
+  const users = [...rawUsers].sort((a, b) => {
+    if (a.is_active === b.is_active) return 0;
+    return a.is_active ? -1 : 1;
+  });
   const pagination = data?.data?.pagination;
 
   return (
@@ -390,21 +382,6 @@ export default function UsersPage() {
             ))}
           </Select>
         </Col>
-        <Col xs={12} sm={6}>
-          <Select
-            placeholder={t('users.filterActive', 'Filter by status')}
-            value={activeFilter}
-            onChange={(val) => {
-              setActiveFilter(val);
-              setPage(1);
-            }}
-            allowClear
-            style={{ width: '100%' }}
-          >
-            <Select.Option value={true}>{t('users.activeOnly', 'Active')}</Select.Option>
-            <Select.Option value={false}>{t('users.inactiveOnly', 'Inactive')}</Select.Option>
-          </Select>
-        </Col>
       </Row>
 
       <Table
@@ -413,6 +390,7 @@ export default function UsersPage() {
         dataSource={users}
         loading={isLoading}
         locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
+        rowClassName={(record) => record.is_active === false ? 'inactive-row' : ''}
         pagination={{
           current: pagination?.page || page,
           pageSize: pagination?.per_page || perPage,
