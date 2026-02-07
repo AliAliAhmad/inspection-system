@@ -168,8 +168,12 @@ def create_user():
     if language not in ['en', 'ar']:
         raise ValidationError("language must be 'en' or 'ar'")
 
+    # Auto-generate username from full name
+    username = User.generate_username(data['full_name'])
+
     user = User(
         email=data['email'],
+        username=username,
         full_name=data['full_name'],
         role=data['role'],
         role_id=role_id,
