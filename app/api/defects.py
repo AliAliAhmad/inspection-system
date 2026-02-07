@@ -9,7 +9,7 @@ from app.models import Defect, Inspection, SpecialistJob, User
 from app.extensions import db, safe_commit
 from app.services.defect_service import DefectService
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
-from app.utils.decorators import get_current_user, admin_required, get_language
+from app.utils.decorators import get_current_user, admin_required, role_required, get_language
 from app.utils.pagination import paginate
 
 bp = Blueprint('defects', __name__)
@@ -137,42 +137,71 @@ def close_defect(defect_id):
 
 @bp.route('/<int:defect_id>/assign-specialist', methods=['POST'])
 @jwt_required()
-@admin_required()
+@role_required('admin', 'engineer')
 def assign_specialist(defect_id):
     """
-    Create a specialist job from a defect. Admin only.
+    Create specialist jobs from a defect. Admin and Engineer.
 
     Request Body:
         {
-            "specialist_id": 5,
-            "category": "major",       // optional: "major" or "minor"
-            "major_reason": "..."       // required if category is "major"
+            "specialist_ids": [5, 8],    // required: one or more specialist IDs
+            "specialist_id": 5,          // legacy: single specialist (used if specialist_ids absent)
+            "category": "major",         // optional: "major" or "minor"
+            "major_reason": "..."        // required if category is "major"
         }
 
     Returns:
         {
             "status": "success",
-            "data": { specialist_job }
+            "data": [ specialist_job, ... ]
         }
     """
     defect = db.session.get(Defect, defect_id)
     if not defect:
         raise NotFoundError(f"Defect {defect_id} not found")
 
-    # Check if already assigned
-    existing = SpecialistJob.query.filter_by(defect_id=defect_id).first()
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body is required")
+
+    # Support both specialist_ids (array) and specialist_id (single) for backward compatibility
+    specialist_ids = data.get('specialist_ids')
+    if not specialist_ids:
+        single_id = data.get('specialist_id')
+        if not single_id:
+            raise ValidationError("specialist_ids is required")
+        specialist_ids = [single_id]
+
+    if not isinstance(specialist_ids, list) or len(specialist_ids) == 0:
+        raise ValidationError("specialist_ids must be a non-empty array")
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_ids = []
+    for sid in specialist_ids:
+        if sid not in seen:
+            seen.add(sid)
+            unique_ids.append(sid)
+    specialist_ids = unique_ids
+
+    # Check for existing assignments for these specialists on this defect
+    existing = SpecialistJob.query.filter(
+        SpecialistJob.defect_id == defect_id,
+        SpecialistJob.specialist_id.in_(specialist_ids)
+    ).all()
     if existing:
+        existing_names = ', '.join(j.job_id for j in existing)
         raise ValidationError(
-            f"Defect already assigned to specialist (Job {existing.job_id})"
+            f"Some specialists already assigned to this defect ({existing_names})"
         )
 
-    data = request.get_json()
-    if not data or 'specialist_id' not in data:
-        raise ValidationError("specialist_id is required")
-
-    specialist = db.session.get(User, data['specialist_id'])
-    if not specialist or specialist.role != 'specialist':
-        raise ValidationError("Invalid specialist user")
+    # Validate all specialists
+    specialists = []
+    for sid in specialist_ids:
+        specialist = db.session.get(User, sid)
+        if not specialist or specialist.role != 'specialist':
+            raise ValidationError(f"Invalid specialist user (id={sid})")
+        specialists.append(specialist)
 
     category = data.get('category')
     if category and category not in ('major', 'minor'):
@@ -182,25 +211,28 @@ def assign_specialist(defect_id):
 
     current_user_id = int(get_jwt_identity())
 
-    # Generate next universal_id and job_id
     max_uid = db.session.query(db.func.max(SpecialistJob.universal_id)).scalar()
     next_uid = (max_uid or 0) + 1
 
-    role_id_suffix = specialist.role_id[-3:] if specialist.role_id else '000'
-    job_id = f"SPE{role_id_suffix}-{str(next_uid).zfill(3)}"
+    created_jobs = []
+    for specialist in specialists:
+        role_id_suffix = specialist.role_id[-3:] if specialist.role_id else '000'
+        job_id = f"SPE{role_id_suffix}-{str(next_uid).zfill(3)}"
 
-    job = SpecialistJob(
-        universal_id=next_uid,
-        job_id=job_id,
-        defect_id=defect_id,
-        specialist_id=specialist.id,
-        assigned_by=current_user_id,
-        assigned_at=datetime.utcnow(),
-        category=category,
-        major_reason=data.get('major_reason'),
-        status='assigned',
-    )
-    db.session.add(job)
+        job = SpecialistJob(
+            universal_id=next_uid,
+            job_id=job_id,
+            defect_id=defect_id,
+            specialist_id=specialist.id,
+            assigned_by=current_user_id,
+            assigned_at=datetime.utcnow(),
+            category=category,
+            major_reason=data.get('major_reason'),
+            status='assigned',
+        )
+        db.session.add(job)
+        created_jobs.append((job, specialist))
+        next_uid += 1
 
     # Update defect status
     if defect.status == 'open':
@@ -208,19 +240,23 @@ def assign_specialist(defect_id):
 
     safe_commit()
 
-    # Send notification to specialist
+    # Send notifications to all assigned specialists
     from app.services.notification_service import NotificationService
-    NotificationService.create_notification(
-        user_id=specialist.id,
-        type='specialist_job_assigned',
-        title='New Specialist Job',
-        message=f'You have been assigned job {job.job_id} for defect #{defect_id}',
-        related_type='specialist_job',
-        related_id=job.id,
-    )
+    for job, specialist in created_jobs:
+        NotificationService.create_notification(
+            user_id=specialist.id,
+            type='specialist_job_assigned',
+            title='New Specialist Job',
+            message=f'You have been assigned job {job.job_id} for defect #{defect_id}',
+            related_type='specialist_job',
+            related_id=job.id,
+        )
+
+    jobs_data = [job.to_dict() for job, _ in created_jobs]
+    job_ids = ', '.join(j.job_id for j, _ in created_jobs)
 
     return jsonify({
         'status': 'success',
-        'message': f'Specialist job {job.job_id} created',
-        'data': job.to_dict(),
+        'message': f'Specialist jobs created: {job_ids}',
+        'data': jobs_data,
     }), 201

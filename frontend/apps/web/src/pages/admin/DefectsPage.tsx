@@ -418,20 +418,26 @@ export default function DefectsPage() {
         <Form
           form={assignForm}
           layout="vertical"
-          onFinish={(values: AssignSpecialistPayload) =>
-            selectedDefect &&
-            assignMutation.mutate({ id: selectedDefect.id, payload: values })
-          }
+          onFinish={(values: any) => {
+            if (!selectedDefect) return;
+            const payload: AssignSpecialistPayload = {
+              specialist_ids: values.specialist_ids,
+              ...(values.category ? { category: values.category } : {}),
+              ...(values.major_reason ? { major_reason: values.major_reason } : {}),
+            };
+            assignMutation.mutate({ id: selectedDefect.id, payload });
+          }}
         >
           <Form.Item
-            name="specialist_id"
-            label={t('defects.specialist', 'Specialist')}
-            rules={[{ required: true, message: 'Please select a specialist' }]}
+            name="specialist_ids"
+            label={t('defects.specialists', 'Specialists')}
+            rules={[{ required: true, message: 'Please select at least one specialist' }]}
           >
             <Select
+              mode="multiple"
               showSearch
               optionFilterProp="children"
-              placeholder={t('defects.selectSpecialist', 'Select specialist')}
+              placeholder={t('defects.selectSpecialists', 'Select specialists')}
             >
               {specialists.map((s: any) => (
                 <Select.Option key={s.id} value={s.id}>
