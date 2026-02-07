@@ -273,6 +273,7 @@ def create_app(config_name='development'):
         import click
         import cloudinary
         import cloudinary.api
+        from sqlalchemy import text
 
         # Confirm before proceeding
         if not click.confirm('\n⚠️  WARNING: This will DELETE ALL DATA except admin users.\n'
@@ -284,18 +285,8 @@ def create_app(config_name='development'):
 
         print('\n🔄 Starting data reset...\n')
 
-        # Import all models
-        from app.models import (
-            User, Equipment, ChecklistTemplate, ChecklistItem,
-            Inspection, InspectionAnswer, Defect, DefectOccurrence,
-            InspectionSchedule, InspectionRoutine, WeeklyCompletion,
-            Notification, InspectionRating, SpecialistJob, EngineerJob,
-            QualityReview, DefectAssessment, FinalAssessment,
-            InspectionList, InspectionAssignment, Leave, RosterEntry,
-            PauseLog, JobTakeover, BonusStar, File, SyncQueue,
-            TokenBlocklist, Translation, ImportLog, RoleSwapLog,
-            EquipmentStatusLog
-        )
+        # Import models for File query
+        from app.models import User, File
 
         # Step 1: Delete files from Cloudinary
         print('📁 Deleting files from Cloudinary...')
@@ -338,67 +329,114 @@ def create_app(config_name='development'):
                     print(f'  ⚠️  Failed to delete {failed_files} files')
             else:
                 print('  ⚠️  Cloudinary not configured, skipping cloud file deletion')
+        else:
+            print('  ✓ No files to delete')
 
-        # Step 2: Delete data from tables in correct order (children first)
-        # This order respects foreign key constraints
-        tables_to_clear = [
-            ('Notifications', Notification),
-            ('Bonus Stars', BonusStar),
-            ('Inspection Ratings', InspectionRating),
-            ('Quality Reviews', QualityReview),
-            ('Defect Assessments', DefectAssessment),
-            ('Final Assessments', FinalAssessment),
-            ('Inspection Answers', InspectionAnswer),
-            ('Defect Occurrences', DefectOccurrence),
-            ('Pause Logs', PauseLog),
-            ('Job Takeovers', JobTakeover),
-            ('Specialist Jobs', SpecialistJob),
-            ('Engineer Jobs', EngineerJob),
-            ('Defects', Defect),
-            ('Inspections', Inspection),
-            ('Inspection Assignments', InspectionAssignment),
-            ('Weekly Completions', WeeklyCompletion),
-            ('Inspection Schedules', InspectionSchedule),
-            ('Inspection Routines', InspectionRoutine),
-            ('Inspection Lists', InspectionList),
-            ('Checklist Items', ChecklistItem),
-            ('Checklist Templates', ChecklistTemplate),
-            ('Equipment Status Logs', EquipmentStatusLog),
-            ('Equipment', Equipment),
-            ('Roster Entries', RosterEntry),
-            ('Leaves', Leave),
-            ('Role Swap Logs', RoleSwapLog),
-            ('Import Logs', ImportLog),
-            ('Sync Queue', SyncQueue),
-            ('Translations', Translation),
-            ('Token Blocklist', TokenBlocklist),
-            ('Files', File),
+        # Step 2: Save admin users before truncating
+        print('\n👤 Saving admin users...')
+        admins = User.query.filter_by(role='admin').all()
+        admin_data = []
+        for admin in admins:
+            admin_data.append({
+                'email': admin.email,
+                'password_hash': admin.password_hash,
+                'full_name': admin.full_name,
+                'role': admin.role,
+                'role_id': admin.role_id,
+                'is_active': admin.is_active,
+                'phone': admin.phone,
+                'preferred_language': admin.preferred_language,
+            })
+        print(f'  ✓ Saved {len(admin_data)} admin user(s)')
+
+        # Step 3: Truncate all tables using CASCADE (PostgreSQL)
+        # This automatically handles foreign key constraints
+        print('\n🗑️  Truncating all tables...')
+
+        tables_to_truncate = [
+            'notifications',
+            'bonus_stars',
+            'inspection_ratings',
+            'quality_reviews',
+            'defect_assessments',
+            'final_assessments',
+            'inspection_answers',
+            'defect_occurrences',
+            'pause_logs',
+            'job_takeovers',
+            'specialist_jobs',
+            'engineer_jobs',
+            'defects',
+            'inspections',
+            'inspection_assignments',
+            'weekly_completions',
+            'inspection_schedules',
+            'inspection_routines',
+            'inspection_lists',
+            'checklist_items',
+            'checklist_templates',
+            'equipment_status_logs',
+            'equipment',
+            'roster_entries',
+            'leaves',
+            'role_swap_logs',
+            'import_logs',
+            'sync_queue',
+            'translations',
+            'token_blocklist',
+            'files',
+            'users',
         ]
 
-        print('\n🗑️  Deleting database records...')
-        for name, model in tables_to_clear:
-            try:
-                count = model.query.delete()
-                db.session.commit()
-                if count > 0:
-                    print(f'  ✓ Deleted {count} {name}')
-            except Exception as e:
-                db.session.rollback()
-                print(f'  ⚠️  Error deleting {name}: {e}')
-
-        # Step 3: Delete non-admin users
-        print('\n👥 Deleting non-admin users...')
         try:
-            non_admin_count = User.query.filter(User.role != 'admin').delete()
+            # Use TRUNCATE with CASCADE for all tables at once
+            tables_str = ', '.join(tables_to_truncate)
+            db.session.execute(text(f'TRUNCATE TABLE {tables_str} RESTART IDENTITY CASCADE'))
             db.session.commit()
-            print(f'  ✓ Deleted {non_admin_count} non-admin users')
+            print(f'  ✓ Truncated {len(tables_to_truncate)} tables')
         except Exception as e:
             db.session.rollback()
-            print(f'  ⚠️  Error deleting users: {e}')
+            print(f'  ⚠️  Error truncating tables: {e}')
+            return
 
-        # Show remaining admin users
+        # Step 4: Restore admin users
+        print('\n👤 Restoring admin users...')
+        for data in admin_data:
+            admin = User(
+                email=data['email'],
+                password_hash=data['password_hash'],
+                full_name=data['full_name'],
+                role=data['role'],
+                role_id=data['role_id'],
+                is_active=data['is_active'],
+                phone=data.get('phone'),
+                preferred_language=data.get('preferred_language', 'en'),
+            )
+            db.session.add(admin)
+
+        try:
+            db.session.commit()
+            print(f'  ✓ Restored {len(admin_data)} admin user(s)')
+        except Exception as e:
+            db.session.rollback()
+            print(f'  ⚠️  Error restoring admins: {e}')
+            # Create default admin if restore failed
+            from werkzeug.security import generate_password_hash
+            admin = User(
+                email='admin@inspection.com',
+                password_hash=generate_password_hash('Admin1234'),
+                full_name='System Admin',
+                role='admin',
+                role_id='ADM-001',
+                is_active=True,
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print('  ✓ Created default admin: admin@inspection.com / Admin1234')
+
+        # Show final status
         admins = User.query.filter_by(role='admin').all()
-        print(f'\n✅ Reset complete! Kept {len(admins)} admin user(s):')
+        print(f'\n✅ Reset complete! Admin user(s):')
         for admin in admins:
             print(f'   - {admin.full_name} ({admin.email})')
 
