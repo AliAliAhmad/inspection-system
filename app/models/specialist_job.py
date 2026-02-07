@@ -22,7 +22,7 @@ class SpecialistJob(db.Model):
     job_id = db.Column(db.String(50), unique=True, nullable=False, index=True)  # SPE001-001
 
     # Related Defect
-    defect_id = db.Column(db.Integer, db.ForeignKey('defects.id'), nullable=False, unique=True)
+    defect_id = db.Column(db.Integer, db.ForeignKey('defects.id'), nullable=False)
 
     # Assignment
     specialist_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
