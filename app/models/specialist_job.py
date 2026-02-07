@@ -64,7 +64,11 @@ class SpecialistJob(db.Model):
 
     # Completion Status
     completion_status = db.Column(db.String(50))  # 'pass', 'incomplete'
-    incomplete_reason = db.Column(db.Text)
+    incomplete_reason = db.Column(db.String(100))  # Predefined reason
+    incomplete_notes = db.Column(db.Text)  # Additional notes from specialist
+    incomplete_at = db.Column(db.DateTime)  # When marked incomplete
+    incomplete_acknowledged_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    incomplete_acknowledged_at = db.Column(db.DateTime)  # When admin acknowledged
 
     # Quality Engineer assignment
     qe_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -87,6 +91,7 @@ class SpecialistJob(db.Model):
     specialist = db.relationship('User', foreign_keys=[specialist_id], backref='specialist_jobs')
     assigner = db.relationship('User', foreign_keys=[assigned_by])
     quality_engineer = db.relationship('User', foreign_keys=[qe_id])
+    incomplete_acknowledger = db.relationship('User', foreign_keys=[incomplete_acknowledged_by])
 
     # Constraints
     __table_args__ = (
@@ -205,8 +210,8 @@ class SpecialistJob(db.Model):
             text_fields = {}
             if self.work_notes:
                 text_fields['work_notes'] = self.work_notes
-            if self.incomplete_reason:
-                text_fields['incomplete_reason'] = self.incomplete_reason
+            if self.incomplete_notes:
+                text_fields['incomplete_notes'] = self.incomplete_notes
             if self.major_reason:
                 text_fields['major_reason'] = self.major_reason
 
@@ -223,7 +228,12 @@ class SpecialistJob(db.Model):
                 'actual_time_hours': float(self.actual_time_hours) if self.actual_time_hours else None,
                 'work_notes': translated.get('work_notes', self.work_notes),
                 'completion_status': self.completion_status,
-                'incomplete_reason': translated.get('incomplete_reason', self.incomplete_reason),
+                'incomplete_reason': self.incomplete_reason,
+                'incomplete_notes': translated.get('incomplete_notes', self.incomplete_notes) if self.incomplete_notes else None,
+                'incomplete_at': (self.incomplete_at.isoformat() + 'Z') if self.incomplete_at else None,
+                'incomplete_acknowledged_by': self.incomplete_acknowledged_by,
+                'incomplete_acknowledged_at': (self.incomplete_acknowledged_at.isoformat() + 'Z') if self.incomplete_acknowledged_at else None,
+                'incomplete_acknowledger_name': self.incomplete_acknowledger.full_name if self.incomplete_acknowledger else None,
                 'major_reason': translated.get('major_reason', self.major_reason),
                 'time_rating': float(self.time_rating) if self.time_rating else None,
                 'qc_rating': float(self.qc_rating) if self.qc_rating else None,

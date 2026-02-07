@@ -298,7 +298,18 @@ def complete_job(job_id):
 @bp.route('/<int:job_id>/incomplete', methods=['POST'])
 @jwt_required()
 def mark_incomplete(job_id):
-    """Mark job as incomplete with reason."""
+    """
+    Mark job as incomplete with reason.
+
+    Request Body:
+        {
+            "reason": "no_spare_parts",     // required: predefined reason code
+            "notes": "Optional details..."  // optional: additional notes from specialist
+        }
+
+    Predefined reasons: no_spare_parts, waiting_for_approval, equipment_in_use,
+                       safety_concern, need_assistance, other
+    """
     user_id = get_jwt_identity()
     job = SpecialistJob.query.get_or_404(job_id)
 
@@ -309,28 +320,40 @@ def mark_incomplete(job_id):
 
     data = request.get_json()
     reason = data.get('reason')
-    if not reason or len(reason) < 10:
-        return jsonify({'status': 'error', 'message': 'Incomplete reason required (min 10 chars)'}), 400
+    notes = data.get('notes', '').strip()
+
+    valid_reasons = [
+        'no_spare_parts', 'waiting_for_approval', 'equipment_in_use',
+        'safety_concern', 'need_assistance', 'other'
+    ]
+    if not reason or reason not in valid_reasons:
+        return jsonify({
+            'status': 'error',
+            'message': f'Invalid reason. Must be one of: {", ".join(valid_reasons)}'
+        }), 400
 
     job.status = 'incomplete'
     job.completion_status = 'incomplete'
     job.incomplete_reason = reason
-    job.completed_at = datetime.utcnow()
+    job.incomplete_notes = notes if notes else None
+    job.incomplete_at = datetime.utcnow()
     safe_commit()
 
-    # Auto-translate incomplete reason
+    # Auto-translate incomplete notes if provided
     from app.utils.bilingual import auto_translate_and_save
-    auto_translate_and_save('specialist_job', job.id, {'incomplete_reason': reason})
+    if notes:
+        auto_translate_and_save('specialist_job', job.id, {'incomplete_notes': notes})
 
     # Notify admins
     from app.services.notification_service import NotificationService
     admins = User.query.filter_by(role='admin', is_active=True).all()
+    reason_display = reason.replace('_', ' ').title()
     for admin in admins:
         NotificationService.create_notification(
             user_id=admin.id,
             type='job_incomplete',
             title='Specialist Job Marked Incomplete',
-            message=f'Job {job.job_id} marked incomplete: {reason[:50]}',
+            message=f'Job {job.job_id} marked incomplete: {reason_display}. Needs acknowledgment.',
             related_type='specialist_job',
             related_id=job.id,
             priority='warning'
@@ -338,8 +361,77 @@ def mark_incomplete(job_id):
 
     return jsonify({
         'status': 'success',
-        'message': 'Job marked as incomplete',
+        'message': 'Job marked as incomplete. Admin acknowledgment required.',
         'data': job.to_dict(include_details=True)
+    }), 200
+
+
+@bp.route('/<int:job_id>/admin/acknowledge-incomplete', methods=['POST'])
+@jwt_required()
+@admin_required()
+def admin_acknowledge_incomplete(job_id):
+    """
+    Admin acknowledges an incomplete job, confirming they've reviewed it.
+
+    Request Body (optional):
+        {
+            "notes": "Will order parts tomorrow"
+        }
+    """
+    user = get_current_user()
+    job = SpecialistJob.query.get_or_404(job_id)
+
+    if job.status != 'incomplete':
+        return jsonify({'status': 'error', 'message': 'Job is not marked incomplete'}), 400
+
+    if job.incomplete_acknowledged_by:
+        return jsonify({
+            'status': 'error',
+            'message': f'Already acknowledged by {job.incomplete_acknowledger.full_name if job.incomplete_acknowledger else "admin"}'
+        }), 400
+
+    job.incomplete_acknowledged_by = user.id
+    job.incomplete_acknowledged_at = datetime.utcnow()
+    safe_commit()
+
+    # Notify the specialist
+    from app.services.notification_service import NotificationService
+    NotificationService.create_notification(
+        user_id=job.specialist_id,
+        type='incomplete_acknowledged',
+        title='Incomplete Job Acknowledged',
+        message=f'Job {job.job_id} incomplete status acknowledged by {user.full_name}.',
+        related_type='specialist_job',
+        related_id=job.id,
+    )
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Incomplete job acknowledged',
+        'data': job.to_dict(include_details=True)
+    }), 200
+
+
+@bp.route('/incomplete', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def get_incomplete_jobs():
+    """Get all incomplete jobs, optionally filtered by acknowledgment status."""
+    acknowledged = request.args.get('acknowledged')
+
+    query = SpecialistJob.query.filter_by(status='incomplete')
+
+    if acknowledged == 'true':
+        query = query.filter(SpecialistJob.incomplete_acknowledged_by.isnot(None))
+    elif acknowledged == 'false':
+        query = query.filter(SpecialistJob.incomplete_acknowledged_by.is_(None))
+
+    query = query.order_by(SpecialistJob.incomplete_at.desc())
+    jobs = query.all()
+
+    return jsonify({
+        'status': 'success',
+        'data': [job.to_dict(include_details=True) for job in jobs]
     }), 200
 
 

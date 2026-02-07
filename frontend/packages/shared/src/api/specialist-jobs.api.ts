@@ -5,6 +5,7 @@ import {
   PaginationParams,
   SpecialistJob,
   PauseLog,
+  IncompleteReason,
 } from '../types';
 
 export interface SpecialistJobListParams extends PaginationParams {
@@ -20,6 +21,11 @@ export interface CompleteJobPayload {
 export interface PauseRequestPayload {
   reason_category: 'parts' | 'duty_finish' | 'tools' | 'manpower' | 'oem' | 'error_record' | 'other';
   reason_details?: string;
+}
+
+export interface IncompletePayload {
+  reason: IncompleteReason;
+  notes?: string;
 }
 
 export const specialistJobsApi = {
@@ -59,10 +65,21 @@ export const specialistJobsApi = {
     );
   },
 
-  markIncomplete(jobId: number, reason: string) {
+  markIncomplete(jobId: number, payload: IncompletePayload) {
     return getApiClient().post<ApiResponse<SpecialistJob>>(
       `/api/jobs/${jobId}/incomplete`,
-      { reason },
+      payload,
+    );
+  },
+
+  getIncompleteJobs(acknowledged?: boolean) {
+    const params = acknowledged !== undefined ? { acknowledged: String(acknowledged) } : {};
+    return getApiClient().get<ApiResponse<SpecialistJob[]>>('/api/jobs/incomplete', { params });
+  },
+
+  acknowledgeIncomplete(jobId: number) {
+    return getApiClient().post<ApiResponse<SpecialistJob>>(
+      `/api/jobs/${jobId}/admin/acknowledge-incomplete`,
     );
   },
 

@@ -142,18 +142,23 @@ def assign_specialist(defect_id):
     """
     Create specialist jobs from a defect. Admin and Engineer.
 
+    Auto-assigns related defects: all open defects with the same equipment
+    and specialization (category) will be assigned to the same specialist(s).
+
     Request Body:
         {
             "specialist_ids": [5, 8],    // required: one or more specialist IDs
             "specialist_id": 5,          // legacy: single specialist (used if specialist_ids absent)
             "category": "major",         // optional: "major" or "minor"
-            "major_reason": "..."        // required if category is "major"
+            "major_reason": "...",       // required if category is "major"
+            "auto_assign_related": true  // optional: auto-assign related defects (default: true)
         }
 
     Returns:
         {
             "status": "success",
-            "data": [ specialist_job, ... ]
+            "data": [ specialist_job, ... ],
+            "related_defects_assigned": 2  // number of additional defects auto-assigned
         }
     """
     defect = db.session.get(Defect, defect_id)
@@ -184,17 +189,6 @@ def assign_specialist(defect_id):
             unique_ids.append(sid)
     specialist_ids = unique_ids
 
-    # Check for existing assignments for these specialists on this defect
-    existing = SpecialistJob.query.filter(
-        SpecialistJob.defect_id == defect_id,
-        SpecialistJob.specialist_id.in_(specialist_ids)
-    ).all()
-    if existing:
-        existing_names = ', '.join(j.job_id for j in existing)
-        raise ValidationError(
-            f"Some specialists already assigned to this defect ({existing_names})"
-        )
-
     # Validate all specialists
     specialists = []
     for sid in specialist_ids:
@@ -210,53 +204,89 @@ def assign_specialist(defect_id):
         raise ValidationError("major_reason is required when category is 'major'")
 
     current_user_id = int(get_jwt_identity())
+    auto_assign_related = data.get('auto_assign_related', True)
+
+    # Get the equipment_id from the primary defect's inspection
+    equipment_id = defect.inspection.equipment_id if defect.inspection else None
+    defect_category = defect.category  # mechanical/electrical
+
+    # Find all defects to assign (primary + related)
+    defects_to_assign = [defect]
+
+    if auto_assign_related and equipment_id and defect_category:
+        # Find related open defects with same equipment + same category (specialization)
+        related_defects = Defect.query.join(Inspection).filter(
+            Defect.id != defect_id,
+            Inspection.equipment_id == equipment_id,
+            Defect.category == defect_category,
+            Defect.status == 'open'
+        ).all()
+
+        # Filter out defects that already have specialist jobs
+        for rd in related_defects:
+            has_job = SpecialistJob.query.filter_by(defect_id=rd.id).first()
+            if not has_job:
+                defects_to_assign.append(rd)
 
     max_uid = db.session.query(db.func.max(SpecialistJob.universal_id)).scalar()
     next_uid = (max_uid or 0) + 1
 
     created_jobs = []
-    for specialist in specialists:
-        role_id_suffix = specialist.role_id[-3:] if specialist.role_id else '000'
-        job_id = f"SPE{role_id_suffix}-{str(next_uid).zfill(3)}"
+    for target_defect in defects_to_assign:
+        # Check for existing assignments for these specialists on this defect
+        existing = SpecialistJob.query.filter(
+            SpecialistJob.defect_id == target_defect.id,
+            SpecialistJob.specialist_id.in_(specialist_ids)
+        ).all()
 
-        job = SpecialistJob(
-            universal_id=next_uid,
-            job_id=job_id,
-            defect_id=defect_id,
-            specialist_id=specialist.id,
-            assigned_by=current_user_id,
-            assigned_at=datetime.utcnow(),
-            category=category,
-            major_reason=data.get('major_reason'),
-            status='assigned',
-        )
-        db.session.add(job)
-        created_jobs.append((job, specialist))
-        next_uid += 1
+        if existing:
+            # Skip this defect if already assigned
+            continue
 
-    # Update defect status
-    if defect.status == 'open':
-        defect.status = 'in_progress'
+        for specialist in specialists:
+            role_id_suffix = specialist.role_id[-3:] if specialist.role_id else '000'
+            job_id = f"SPE{role_id_suffix}-{str(next_uid).zfill(3)}"
+
+            job = SpecialistJob(
+                universal_id=next_uid,
+                job_id=job_id,
+                defect_id=target_defect.id,
+                specialist_id=specialist.id,
+                assigned_by=current_user_id,
+                assigned_at=datetime.utcnow(),
+                category=category,
+                major_reason=data.get('major_reason'),
+                status='assigned',
+            )
+            db.session.add(job)
+            created_jobs.append((job, specialist, target_defect))
+            next_uid += 1
+
+        # Update defect status
+        if target_defect.status == 'open':
+            target_defect.status = 'in_progress'
 
     safe_commit()
 
     # Send notifications to all assigned specialists
     from app.services.notification_service import NotificationService
-    for job, specialist in created_jobs:
+    for job, specialist, target_defect in created_jobs:
         NotificationService.create_notification(
             user_id=specialist.id,
             type='specialist_job_assigned',
             title='New Specialist Job',
-            message=f'You have been assigned job {job.job_id} for defect #{defect_id}',
+            message=f'You have been assigned job {job.job_id} for defect #{target_defect.id}',
             related_type='specialist_job',
             related_id=job.id,
         )
 
-    jobs_data = [job.to_dict() for job, _ in created_jobs]
-    job_ids = ', '.join(j.job_id for j, _ in created_jobs)
+    jobs_data = [job.to_dict() for job, _, _ in created_jobs]
+    job_ids = ', '.join(j.job_id for j, _, _ in created_jobs)
+    related_count = len(defects_to_assign) - 1  # Exclude the primary defect
 
     return jsonify({
         'status': 'success',
         'message': f'Specialist jobs created: {job_ids}',
         'data': jobs_data,
+        'related_defects_assigned': related_count,
     }), 201

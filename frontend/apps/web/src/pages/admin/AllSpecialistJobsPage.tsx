@@ -13,17 +13,35 @@ import {
   message,
   Typography,
   Tabs,
+  Descriptions,
+  Alert,
 } from 'antd';
-import { PauseCircleOutlined, StarOutlined, TrophyOutlined } from '@ant-design/icons';
+import {
+  PauseCircleOutlined,
+  StarOutlined,
+  TrophyOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import type { ColumnsType } from 'antd/es/table';
+import type { ColumnsType, ExpandableConfig } from 'antd/es/table';
 import {
   specialistJobsApi,
   type SpecialistJob,
   type JobStatus,
+  type IncompleteReason,
 } from '@inspection/shared';
 import VoiceTextArea from '../../components/VoiceTextArea';
+
+const incompleteReasonLabels: Record<IncompleteReason, string> = {
+  no_spare_parts: 'No Spare Parts',
+  waiting_for_approval: 'Waiting for Approval',
+  equipment_in_use: 'Equipment in Use',
+  safety_concern: 'Safety Concern',
+  need_assistance: 'Need Assistance',
+  other: 'Other',
+};
 
 const statusColorMap: Record<JobStatus, string> = {
   assigned: 'default',
@@ -91,6 +109,15 @@ export default function AllSpecialistJobsPage() {
       bonusForm.resetFields();
     },
     onError: () => message.error(t('specialistJobs.bonusError', 'Failed to award bonus')),
+  });
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: (jobId: number) => specialistJobsApi.acknowledgeIncomplete(jobId),
+    onSuccess: () => {
+      message.success(t('specialistJobs.acknowledgeSuccess', 'Incomplete job acknowledged'));
+      queryClient.invalidateQueries({ queryKey: ['specialist-jobs'] });
+    },
+    onError: () => message.error(t('specialistJobs.acknowledgeError', 'Failed to acknowledge')),
   });
 
   const columns: ColumnsType<SpecialistJob> = [
@@ -169,6 +196,22 @@ export default function AllSpecialistJobsPage() {
               {t('specialistJobs.forcePause', 'Force Pause')}
             </Button>
           )}
+          {record.status === 'incomplete' && !record.incomplete_acknowledged_by && (
+            <Button
+              type="primary"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={() => acknowledgeMutation.mutate(record.id)}
+              loading={acknowledgeMutation.isPending}
+            >
+              {t('specialistJobs.acknowledge', 'Acknowledge')}
+            </Button>
+          )}
+          {record.status === 'incomplete' && record.incomplete_acknowledged_by && (
+            <Tag color="green" icon={<CheckCircleOutlined />}>
+              {t('specialistJobs.acknowledged', 'Acknowledged')}
+            </Tag>
+          )}
           {(record.status === 'completed' || record.status === 'qc_approved') && (
             <>
               <Button
@@ -193,6 +236,51 @@ export default function AllSpecialistJobsPage() {
       ),
     },
   ];
+
+  // Expandable row for incomplete jobs to show reason and notes
+  const expandable: ExpandableConfig<SpecialistJob> = {
+    expandedRowRender: (record) => {
+      if (record.status !== 'incomplete') return null;
+      const reasonLabel = record.incomplete_reason
+        ? incompleteReasonLabels[record.incomplete_reason] || record.incomplete_reason
+        : '-';
+      return (
+        <Alert
+          type={record.incomplete_acknowledged_by ? 'success' : 'warning'}
+          icon={record.incomplete_acknowledged_by ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+          showIcon
+          message={
+            <Descriptions column={2} size="small">
+              <Descriptions.Item label={t('specialistJobs.incompleteReason', 'Reason')}>
+                {reasonLabel}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('specialistJobs.incompleteAt', 'Marked At')}>
+                {record.incomplete_at ? new Date(record.incomplete_at).toLocaleString() : '-'}
+              </Descriptions.Item>
+              {record.incomplete_notes && (
+                <Descriptions.Item label={t('specialistJobs.notes', 'Notes')} span={2}>
+                  {record.incomplete_notes}
+                </Descriptions.Item>
+              )}
+              {record.incomplete_acknowledged_by && (
+                <>
+                  <Descriptions.Item label={t('specialistJobs.acknowledgedBy', 'Acknowledged By')}>
+                    {record.incomplete_acknowledger_name || `Admin #${record.incomplete_acknowledged_by}`}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('specialistJobs.acknowledgedAt', 'Acknowledged At')}>
+                    {record.incomplete_acknowledged_at
+                      ? new Date(record.incomplete_acknowledged_at).toLocaleString()
+                      : '-'}
+                  </Descriptions.Item>
+                </>
+              )}
+            </Descriptions>
+          }
+        />
+      );
+    },
+    rowExpandable: (record) => record.status === 'incomplete',
+  };
 
   const jobs = data?.data?.data || [];
   const pagination = data?.data?.pagination;
@@ -220,6 +308,7 @@ export default function AllSpecialistJobsPage() {
         columns={columns}
         dataSource={jobs}
         loading={isLoading}
+        expandable={expandable}
         locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
         pagination={{
           current: pagination?.page || page,

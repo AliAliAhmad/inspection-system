@@ -25,8 +25,18 @@ import {
   SpecialistJob,
   PauseLog,
   PauseCategory,
+  IncompleteReason,
   getApiClient,
 } from '@inspection/shared';
+
+const INCOMPLETE_REASONS: { key: IncompleteReason; label: string }[] = [
+  { key: 'no_spare_parts', label: 'No Spare Parts' },
+  { key: 'waiting_for_approval', label: 'Waiting for Approval' },
+  { key: 'equipment_in_use', label: 'Equipment in Use' },
+  { key: 'safety_concern', label: 'Safety Concern' },
+  { key: 'need_assistance', label: 'Need Assistance' },
+  { key: 'other', label: 'Other' },
+];
 import * as ImagePicker from 'expo-image-picker';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -94,7 +104,8 @@ export default function SpecialistJobDetailScreen() {
 
   // Form state
   const [workNotesInput, setWorkNotesInput] = useState('');
-  const [incompleteReasonInput, setIncompleteReasonInput] = useState('');
+  const [incompleteReason, setIncompleteReason] = useState<IncompleteReason>('no_spare_parts');
+  const [incompleteNotes, setIncompleteNotes] = useState('');
 
   // Pause modal state
   const [pauseModalVisible, setPauseModalVisible] = useState(false);
@@ -195,10 +206,12 @@ export default function SpecialistJobDetailScreen() {
   });
 
   const incompleteMutation = useMutation({
-    mutationFn: (reason: string) => specialistJobsApi.markIncomplete(id, reason),
+    mutationFn: (payload: { reason: IncompleteReason; notes?: string }) =>
+      specialistJobsApi.markIncomplete(id, payload),
     onSuccess: () => {
       setIncompleteModalVisible(false);
-      setIncompleteReasonInput('');
+      setIncompleteReason('no_spare_parts');
+      setIncompleteNotes('');
       queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
       queryClient.invalidateQueries({ queryKey: ['specialistJobs'] });
     },
@@ -259,9 +272,11 @@ export default function SpecialistJobDetailScreen() {
   }, [completeMutation, workNotesInput]);
 
   const handleIncompleteSubmit = useCallback(() => {
-    if (!incompleteReasonInput.trim()) return;
-    incompleteMutation.mutate(incompleteReasonInput.trim());
-  }, [incompleteMutation, incompleteReasonInput]);
+    incompleteMutation.mutate({
+      reason: incompleteReason,
+      notes: incompleteNotes.trim() || undefined,
+    });
+  }, [incompleteMutation, incompleteReason, incompleteNotes]);
 
   const handleCleaning = useCallback(() => {
     Alert.alert(t('common.confirm'), t('common.confirm') + '?', [
@@ -509,7 +524,8 @@ export default function SpecialistJobDetailScreen() {
             <TouchableOpacity
               style={[styles.actionButton, styles.incompleteButton]}
               onPress={() => {
-                setIncompleteReasonInput('');
+                setIncompleteReason('no_spare_parts');
+                setIncompleteNotes('');
                 setIncompleteModalVisible(true);
               }}
             >
@@ -557,11 +573,32 @@ export default function SpecialistJobDetailScreen() {
           </View>
         )}
 
-        {/* Incomplete: show reason */}
+        {/* Incomplete: show reason and acknowledgment status */}
         {jobData.status === 'incomplete' && jobData.incomplete_reason && (
           <View style={styles.incompleteReasonBox}>
             <Text style={styles.incompleteReasonLabel}>{t('jobs.incomplete_reason')}:</Text>
-            <Text style={styles.incompleteReasonText}>{jobData.incomplete_reason}</Text>
+            <Text style={styles.incompleteReasonText}>
+              {INCOMPLETE_REASONS.find(r => r.key === jobData.incomplete_reason)?.label || jobData.incomplete_reason}
+            </Text>
+            {jobData.incomplete_notes && (
+              <>
+                <Text style={[styles.incompleteReasonLabel, { marginTop: 8 }]}>{t('jobs.notes', 'Notes')}:</Text>
+                <Text style={styles.incompleteReasonText}>{jobData.incomplete_notes}</Text>
+              </>
+            )}
+            {jobData.incomplete_acknowledged_by ? (
+              <View style={styles.acknowledgedBadge}>
+                <Text style={styles.acknowledgedText}>
+                  ✓ {t('jobs.acknowledged_by', 'Acknowledged by')} {jobData.incomplete_acknowledger_name || 'Admin'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.pendingAckBadge}>
+                <Text style={styles.pendingAckText}>
+                  ⏳ {t('jobs.waiting_acknowledgment', 'Waiting for admin acknowledgment')}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -787,11 +824,34 @@ export default function SpecialistJobDetailScreen() {
             <Text style={styles.modalTitle}>{t('jobs.mark_incomplete')}</Text>
 
             <Text style={styles.modalLabel}>{t('jobs.incomplete_reason')}</Text>
+            <View style={styles.incompleteReasonPicker}>
+              {INCOMPLETE_REASONS.map((item) => (
+                <TouchableOpacity
+                  key={item.key}
+                  style={[
+                    styles.incompleteReasonOption,
+                    incompleteReason === item.key && styles.incompleteReasonOptionActive,
+                  ]}
+                  onPress={() => setIncompleteReason(item.key)}
+                >
+                  <Text
+                    style={[
+                      styles.incompleteReasonOptionText,
+                      incompleteReason === item.key && styles.incompleteReasonOptionTextActive,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalLabel}>{t('jobs.notes', 'Additional Notes')} ({t('common.optional', 'Optional')})</Text>
             <VoiceTextInput
               style={styles.modalTextInput}
-              value={incompleteReasonInput}
-              onChangeText={setIncompleteReasonInput}
-              placeholder="Reason..."
+              value={incompleteNotes}
+              onChangeText={setIncompleteNotes}
+              placeholder="Additional details..."
               multiline
               numberOfLines={3}
             />
@@ -1187,6 +1247,58 @@ const styles = StyleSheet.create({
   incompleteReasonText: {
     fontSize: 14,
     color: '#212121',
+  },
+  incompleteReasonPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  incompleteReasonOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  incompleteReasonOptionActive: {
+    backgroundColor: '#F44336',
+    borderColor: '#F44336',
+  },
+  incompleteReasonOptionText: {
+    fontSize: 13,
+    color: '#C62828',
+    fontWeight: '500',
+  },
+  incompleteReasonOptionTextActive: {
+    color: '#fff',
+  },
+  acknowledgedBadge: {
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#E8F5E9',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  acknowledgedText: {
+    fontSize: 13,
+    color: '#2E7D32',
+    fontWeight: '600',
+  },
+  pendingAckBadge: {
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  pendingAckText: {
+    fontSize: 13,
+    color: '#E65100',
+    fontWeight: '600',
   },
 
   // Pause history

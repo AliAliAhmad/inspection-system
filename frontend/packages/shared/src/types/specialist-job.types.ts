@@ -2,6 +2,14 @@ export type JobStatus = 'assigned' | 'in_progress' | 'paused' | 'completed' | 'i
 export type CompletionStatus = 'pass' | 'incomplete';
 export type JobCategory = 'major' | 'minor';
 
+export type IncompleteReason =
+  | 'no_spare_parts'
+  | 'waiting_for_approval'
+  | 'equipment_in_use'
+  | 'safety_concern'
+  | 'need_assistance'
+  | 'other';
+
 export interface SpecialistJob {
   id: number;
   universal_id: number;
@@ -21,7 +29,12 @@ export interface SpecialistJob {
   actual_time_hours?: number | null;
   work_notes?: string | null;
   completion_status?: CompletionStatus | null;
-  incomplete_reason?: string | null;
+  incomplete_reason?: IncompleteReason | null;
+  incomplete_notes?: string | null;
+  incomplete_at?: string | null;
+  incomplete_acknowledged_by?: number | null;
+  incomplete_acknowledged_at?: string | null;
+  incomplete_acknowledger_name?: string | null;
   major_reason?: string | null;
   time_rating?: number | null;
   qc_rating?: number | null;
