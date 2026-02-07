@@ -141,7 +141,7 @@ def sample_equipment(db_session):
         equipment_type='centrifugal_pump',
         serial_number='TP-001',
         location='Building A',
-        berth='B20',
+        berth='east',
         status='active',
     )
     db_session.session.add(eq)
@@ -156,7 +156,7 @@ def make_equipment(db_session, name='Test Pump', serial='TP-001'):
         equipment_type='centrifugal_pump',
         serial_number=serial,
         location='Area A',
-        berth='B20',
+        berth='east',
         status='active',
     )
     db_session.session.add(eq)

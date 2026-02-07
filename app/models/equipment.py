@@ -10,7 +10,7 @@ from datetime import datetime
 class Equipment(db.Model):
     """
     Equipment model representing physical industrial equipment.
-    Supports dynamic berth locations (B20, B27, etc.).
+    Supports berth locations (east, west).
     """
     __tablename__ = 'equipment'
 

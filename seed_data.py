@@ -233,34 +233,34 @@ def seed_database():
         print("Creating equipment...")
 
         equipment_data = [
-            # Berth B20 - Centrifugal Pumps
-            ('Pump A-101', 'Centrifugal Pump', 'CP-2024-001', 'Terminal 1', 'B20', 'B20',
+            # East berth - Centrifugal Pumps
+            ('Pump A-101', 'Centrifugal Pump', 'CP-2024-001', 'Terminal 1', 'east', 'east',
              'Pump A-101 (Arabic)', 'Centrifugal Pump (Arabic)', 'Terminal 1 (Arabic)'),
-            ('Pump A-102', 'Centrifugal Pump', 'CP-2024-002', 'Terminal 1', 'B20', 'B20',
+            ('Pump A-102', 'Centrifugal Pump', 'CP-2024-002', 'Terminal 1', 'east', 'east',
              None, None, None),
-            ('Pump A-103', 'Centrifugal Pump', 'CP-2024-003', 'Terminal 1', 'B20', 'B20',
-             None, None, None),
-
-            # Berth B20 - Diesel Generators
-            ('Generator B-201', 'Diesel Generator', 'DG-2024-001', 'Terminal 1', 'B20', 'B20',
-             None, None, None),
-            ('Generator B-202', 'Diesel Generator', 'DG-2024-002', 'Terminal 1', 'B20', 'B20',
+            ('Pump A-103', 'Centrifugal Pump', 'CP-2024-003', 'Terminal 1', 'east', 'east',
              None, None, None),
 
-            # Berth B27 - Electric Motors
-            ('Motor C-301', 'Electric Motor', 'EM-2024-001', 'Terminal 2', 'B27', 'B27',
+            # East berth - Diesel Generators
+            ('Generator B-201', 'Diesel Generator', 'DG-2024-001', 'Terminal 1', 'east', 'east',
              None, None, None),
-            ('Motor C-302', 'Electric Motor', 'EM-2024-002', 'Terminal 2', 'B27', 'B27',
-             None, None, None),
-
-            # Berth B27 - Compressors
-            ('Compressor D-401', 'Compressor', 'CM-2024-001', 'Terminal 2', 'B27', 'B27',
-             None, None, None),
-            ('Compressor D-402', 'Compressor', 'CM-2024-002', 'Terminal 2', 'B27', 'B27',
+            ('Generator B-202', 'Diesel Generator', 'DG-2024-002', 'Terminal 1', 'east', 'east',
              None, None, None),
 
-            # Berth B20 - Cranes
-            ('Crane E-501', 'Crane', 'CR-2024-001', 'Terminal 1', 'B20', 'B20',
+            # West berth - Electric Motors
+            ('Motor C-301', 'Electric Motor', 'EM-2024-001', 'Terminal 2', 'west', 'west',
+             None, None, None),
+            ('Motor C-302', 'Electric Motor', 'EM-2024-002', 'Terminal 2', 'west', 'west',
+             None, None, None),
+
+            # West berth - Compressors
+            ('Compressor D-401', 'Compressor', 'CM-2024-001', 'Terminal 2', 'west', 'west',
+             None, None, None),
+            ('Compressor D-402', 'Compressor', 'CM-2024-002', 'Terminal 2', 'west', 'west',
+             None, None, None),
+
+            # East berth - Cranes
+            ('Crane E-501', 'Crane', 'CR-2024-001', 'Terminal 1', 'east', 'east',
              None, None, None),
         ]
 
@@ -466,7 +466,7 @@ def seed_database():
         print("  Email: qe1@company.com (day)")
         print("  Email: qe2@company.com (night)")
         print("  Password: qe123")
-        print("\nEquipment: 10 assets across berths B20 and B27")
+        print("\nEquipment: 10 assets across east and west berths")
         print("Templates: Centrifugal Pump (10 questions), Diesel Generator (8 questions)")
         print("Routines: 3 active inspection routines")
         print("\n" + "=" * 60 + "\n")

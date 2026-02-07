@@ -13,7 +13,7 @@ class TestEquipment:
             equipment_type='centrifugal_pump',
             serial_number='EQ-TEST-001',
             location='Building A',
-            berth='B20',
+            berth='east',
             status='active',
         )
         db_session.session.add(eq)
@@ -33,7 +33,7 @@ class TestEquipment:
             'equipment_type': 'centrifugal_pump',
             'serial_number': 'EQ-NEW-001',
             'location': 'Building B',
-            'berth': 'B27',
+            'berth': 'west',
         }, headers=headers)
         assert resp.status_code in (200, 201)
 

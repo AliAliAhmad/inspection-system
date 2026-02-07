@@ -111,7 +111,7 @@ def test_equipment(db_session):
         equipment_type='Centrifugal Pump',
         serial_number='E2E-PUMP-001',
         location='Test Area',
-        berth='B99',
+        berth='east',
         status='active',
     )
     db_session.session.add(eq)
@@ -208,7 +208,7 @@ def test_assignment(db_session, test_equipment, test_template, inspector_user):
         inspection_list_id=il.id,
         equipment_id=test_equipment.id,
         template_id=test_template.id,
-        berth='B99',
+        berth='east',
         shift='day',
         status='assigned',
         mechanical_inspector_id=inspector_user.id,
