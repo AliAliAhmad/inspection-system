@@ -25,6 +25,7 @@ _ROLE_PREFIXES = {
     'specialist': 'SPC',
     'engineer': 'ENG',
     'quality_engineer': 'QE',
+    'maintenance': 'MNT',
 }
 
 
