@@ -21,6 +21,7 @@ class User(db.Model):
 
     # Authentication
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    username = db.Column(db.String(100), unique=True, nullable=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
 
     # Profile
@@ -122,6 +123,7 @@ class User(db.Model):
         data = {
             'id': self.id,
             'email': self.email,
+            'username': self.username,
             'full_name': self.full_name,
             'phone': self.phone,
             'role': self.role,
@@ -148,6 +150,35 @@ class User(db.Model):
             data['password_hash'] = self.password_hash
 
         return data
+
+    @staticmethod
+    def generate_username(full_name):
+        """
+        Auto-generate username from full name.
+        Format: firstname.X where X is first letter of last name.
+        Handles duplicates by appending a number.
+        """
+        import re
+        parts = full_name.strip().lower().split()
+        if len(parts) == 0:
+            base = 'user'
+        elif len(parts) == 1:
+            base = re.sub(r'[^a-z0-9]', '', parts[0])
+        else:
+            first = re.sub(r'[^a-z0-9]', '', parts[0])
+            last_initial = re.sub(r'[^a-z0-9]', '', parts[-1])[:1]
+            base = f"{first}.{last_initial}" if last_initial else first
+
+        if not base:
+            base = 'user'
+
+        # Check for duplicates
+        candidate = base
+        counter = 2
+        while User.query.filter_by(username=candidate).first():
+            candidate = f"{base}{counter}"
+            counter += 1
+        return candidate
 
     def __repr__(self):
         return f'<User {self.email} ({self.role})>'
