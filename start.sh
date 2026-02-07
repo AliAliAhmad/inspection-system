@@ -228,6 +228,22 @@ with app.app_context():
         db.session.rollback()
         print(f'specialist_jobs.defect_id constraint drop skipped: {e}')
 
+    # Add missing columns to leaves table
+    leave_cols = [
+        ('scope', \"VARCHAR(20) DEFAULT 'major_only'\"),
+        ('coverage_user_id', 'INTEGER REFERENCES users(id)'),
+        ('other_reason', 'TEXT'),
+        ('rejection_reason', 'TEXT'),
+    ]
+    for col_name, col_type in leave_cols:
+        try:
+            db.session.execute(text(f'ALTER TABLE leaves ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added {col_name} column to leaves')
+        except Exception:
+            db.session.rollback()
+            print(f'leaves.{col_name} already exists')
+
     # Reset password for sara@company.com
     try:
         from werkzeug.security import generate_password_hash
