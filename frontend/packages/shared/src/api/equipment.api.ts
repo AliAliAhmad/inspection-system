@@ -54,4 +54,21 @@ export const equipmentApi = {
   getImportHistory() {
     return getApiClient().get<ApiResponse<ImportLog[]>>('/api/equipment/import-history');
   },
+
+  // Dashboard endpoints
+  getDashboard(params?: { status_color?: string; berth?: string }) {
+    return getApiClient().get<ApiResponse<any>>('/api/equipment/dashboard', { params });
+  },
+
+  getDetails(id: number) {
+    return getApiClient().get<ApiResponse<any>>(`/api/equipment/${id}/details`);
+  },
+
+  updateStatus(id: number, payload: { status: string; reason: string; next_action: string }) {
+    return getApiClient().put<ApiResponse<Equipment>>(`/api/equipment/${id}/status`, payload);
+  },
+
+  getStatusHistory(id: number) {
+    return getApiClient().get<ApiResponse<any[]>>(`/api/equipment/${id}/status-history`);
+  },
 };

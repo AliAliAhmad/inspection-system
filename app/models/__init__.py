@@ -53,6 +53,7 @@ from app.models.translation import Translation
 # Import & Tracking Logs
 from app.models.import_log import ImportLog
 from app.models.role_swap_log import RoleSwapLog
+from app.models.equipment_status_log import EquipmentStatusLog
 
 __all__ = [
     'User',
@@ -86,4 +87,5 @@ __all__ = [
     'Translation',
     'ImportLog',
     'RoleSwapLog',
+    'EquipmentStatusLog',
 ]

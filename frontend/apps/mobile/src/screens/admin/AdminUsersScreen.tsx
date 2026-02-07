@@ -20,7 +20,7 @@ import { usersApi } from '@inspection/shared';
 import type { User, UserRole, ImportResult, ImportLog, RoleSwapLog } from '@inspection/shared';
 
 type RoleFilter = UserRole | 'all';
-const ROLE_FILTERS: RoleFilter[] = ['all', 'admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
+const ROLE_FILTERS: RoleFilter[] = ['all', 'admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'];
 
 const ROLE_COLORS: Record<UserRole, string> = {
   admin: '#E53935',
@@ -28,9 +28,10 @@ const ROLE_COLORS: Record<UserRole, string> = {
   specialist: '#FF9800',
   engineer: '#4CAF50',
   quality_engineer: '#7B1FA2',
+  maintenance: '#795548',
 };
 
-const ROLE_OPTIONS: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
+const ROLE_OPTIONS: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'];
 const SHIFT_OPTIONS = ['day', 'night'];
 const LANGUAGE_OPTIONS = ['en', 'ar'];
 const SPECIALIZATION_OPTIONS = ['mechanical', 'electrical'];

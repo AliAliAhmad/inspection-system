@@ -85,7 +85,8 @@
     "quick_links": "وصول سريع",
     "backlog": "عمليات الفحص المتأخرة",
     "roster": "قائمة الفريق",
-    "inspectionSchedule": "جدول التفتيش"
+    "inspectionSchedule": "جدول التفتيش",
+    "equipment_dashboard": "لوحة حالة المعدات"
   },
   "status": {
     "active": "نشط",

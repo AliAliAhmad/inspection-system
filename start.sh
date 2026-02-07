@@ -356,6 +356,43 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('minor_role constraint already up to date')
+
+    # Add new columns to equipment for dashboard
+    equipment_dashboard_cols = [
+        ('stopped_at', 'TIMESTAMP'),
+        ('current_reason', 'TEXT'),
+        ('current_next_action', 'TEXT'),
+    ]
+    for col_name, col_type in equipment_dashboard_cols:
+        try:
+            db.session.execute(text(f'ALTER TABLE equipment ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added {col_name} column to equipment')
+        except Exception:
+            db.session.rollback()
+            print(f'equipment.{col_name} already exists')
+
+    # Create equipment_status_logs table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS equipment_status_logs (
+                id SERIAL PRIMARY KEY,
+                equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+                old_status VARCHAR(30),
+                new_status VARCHAR(30) NOT NULL,
+                reason TEXT NOT NULL,
+                next_action TEXT NOT NULL,
+                source_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+                source_id INTEGER,
+                changed_by_id INTEGER NOT NULL REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+        '''))
+        db.session.commit()
+        print('Created equipment_status_logs table')
+    except Exception:
+        db.session.rollback()
+        print('equipment_status_logs table already exists')
 "
 
 echo "Starting gunicorn..."

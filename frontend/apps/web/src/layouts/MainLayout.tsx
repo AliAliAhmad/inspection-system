@@ -25,6 +25,7 @@ import {
   BugOutlined,
   SyncOutlined,
   WarningOutlined,
+  ControlOutlined,
 } from '@ant-design/icons';
 import { Badge, Dropdown, Avatar, Space, Button } from 'antd';
 import { useQuery } from '@tanstack/react-query';
@@ -37,6 +38,7 @@ import { useNotificationAlerts } from '../hooks/useNotificationAlerts';
 function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] {
   const shared: MenuDataItem[] = [
     { path: '/', name: t('nav.dashboard'), icon: <DashboardOutlined /> },
+    { path: '/equipment-dashboard', name: t('nav.equipment_dashboard'), icon: <ControlOutlined /> },
     { path: '/notifications', name: t('nav.notifications'), icon: <BellOutlined /> },
     { path: '/leaderboard', name: t('nav.leaderboard'), icon: <TrophyOutlined /> },
     { path: '/leaves', name: t('nav.leaves'), icon: <CalendarOutlined /> },

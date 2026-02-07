@@ -31,6 +31,11 @@ class Equipment(db.Model):
     # Status: active, under_maintenance, out_of_service, stopped, paused
     status = db.Column(db.String(30), default='active')
 
+    # Status tracking for dashboard
+    stopped_at = db.Column(db.DateTime, nullable=True)  # When status became stopped/out_of_service
+    current_reason = db.Column(db.Text, nullable=True)  # Latest reason for status
+    current_next_action = db.Column(db.Text, nullable=True)  # Latest next action
+
     # Scrapped flag - when True, equipment is hidden from lists and no activities allowed
     is_scrapped = db.Column(db.Boolean, default=False, nullable=False)
 
@@ -75,6 +80,11 @@ class Equipment(db.Model):
         Asset name, equipment_type, serial_number, model_number, IDs
         are always English (technical identifiers). Only location is bilingual.
         """
+        # Calculate days stopped
+        days_stopped = None
+        if self.stopped_at and self.status in ('stopped', 'out_of_service'):
+            days_stopped = (datetime.utcnow() - self.stopped_at).days
+
         return {
             'id': self.id,
             'name': self.name,
@@ -89,6 +99,10 @@ class Equipment(db.Model):
             'berth': self.berth,
             'home_berth': self.home_berth,
             'status': self.status,
+            'stopped_at': self.stopped_at.isoformat() if self.stopped_at else None,
+            'days_stopped': days_stopped,
+            'current_reason': self.current_reason,
+            'current_next_action': self.current_next_action,
             'is_scrapped': self.is_scrapped,
             'capacity': self.capacity,
             'assigned_technician_id': self.assigned_technician_id,

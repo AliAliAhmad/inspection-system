@@ -85,7 +85,8 @@
     "quick_links": "Quick Access",
     "backlog": "Overdue Inspections",
     "roster": "Team Roster",
-    "inspectionSchedule": "Inspection Schedule"
+    "inspectionSchedule": "Inspection Schedule",
+    "equipment_dashboard": "Equipment Dashboard"
   },
   "status": {
     "active": "Active",

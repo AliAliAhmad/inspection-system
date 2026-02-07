@@ -10,7 +10,7 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-from app.models import Equipment, ImportLog
+from app.models import Equipment, ImportLog, EquipmentStatusLog, User, Inspection, Defect
 from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
 from app.utils.decorators import get_current_user, admin_required, get_language
@@ -626,4 +626,258 @@ def delete_equipment(equipment_id):
     return jsonify({
         'status': 'success',
         'message': 'Equipment decommissioned'
+    }), 200
+
+
+# ============================================================
+# EQUIPMENT DASHBOARD ENDPOINTS
+# ============================================================
+
+def get_status_color(status):
+    """Map equipment status to color category."""
+    if status == 'active':
+        return 'green'
+    elif status in ('under_maintenance', 'paused'):
+        return 'yellow'
+    else:  # stopped, out_of_service
+        return 'red'
+
+
+@bp.route('/dashboard', methods=['GET'])
+@jwt_required()
+def get_equipment_dashboard():
+    """
+    Get equipment dashboard data grouped by equipment_type and berth.
+    Accessible to all authenticated users.
+
+    Query params:
+        - status_color: 'green', 'yellow', 'red' (filter by color)
+        - berth: 'east', 'west', 'both' (filter by berth)
+
+    Returns grouped equipment with status colors and days stopped.
+    """
+    lang = get_language()
+
+    # Filters
+    status_color_filter = request.args.get('status_color')
+    berth_filter = request.args.get('berth')
+
+    # Query all non-scrapped equipment
+    query = Equipment.query.filter_by(is_scrapped=False)
+
+    # Apply berth filter
+    if berth_filter:
+        query = query.filter_by(berth=berth_filter)
+
+    # Get all equipment
+    all_equipment = query.order_by(Equipment.equipment_type, Equipment.berth, Equipment.name).all()
+
+    # Filter by status color if specified
+    if status_color_filter:
+        all_equipment = [e for e in all_equipment if get_status_color(e.status) == status_color_filter]
+
+    # Group by equipment_type and berth
+    grouped = {}
+    status_counts = {'green': 0, 'yellow': 0, 'red': 0}
+
+    for eq in all_equipment:
+        color = get_status_color(eq.status)
+        status_counts[color] += 1
+
+        key = f"{eq.equipment_type}|{eq.berth or 'unassigned'}"
+        if key not in grouped:
+            grouped[key] = {
+                'equipment_type': eq.equipment_type,
+                'berth': eq.berth,
+                'equipment': []
+            }
+
+        # Calculate days stopped
+        days_stopped = None
+        if eq.stopped_at and eq.status in ('stopped', 'out_of_service'):
+            days_stopped = (datetime.utcnow() - eq.stopped_at).days
+
+        grouped[key]['equipment'].append({
+            'id': eq.id,
+            'name': eq.name,
+            'name_ar': eq.name_ar,
+            'status': eq.status,
+            'status_color': color,
+            'days_stopped': days_stopped,
+        })
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'summary': status_counts,
+            'groups': list(grouped.values()),
+            'berths': ['east', 'west', 'both'],
+        }
+    }), 200
+
+
+@bp.route('/<int:equipment_id>/details', methods=['GET'])
+@jwt_required()
+def get_equipment_details(equipment_id):
+    """
+    Get full equipment details for dashboard popup.
+    Includes status source from workflow (inspections, defects).
+    """
+    lang = get_language()
+
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        raise NotFoundError(f"Equipment with ID {equipment_id} not found")
+
+    # Get equipment data
+    eq_data = equipment.to_dict(language=lang)
+
+    # Get latest status log
+    latest_log = EquipmentStatusLog.query.filter_by(equipment_id=equipment_id).order_by(
+        EquipmentStatusLog.created_at.desc()
+    ).first()
+
+    if latest_log:
+        eq_data['latest_status_change'] = latest_log.to_dict()
+    else:
+        eq_data['latest_status_change'] = None
+
+    # Get status sources from workflow
+    status_sources = []
+
+    # Check for failed inspections
+    failed_inspections = Inspection.query.filter_by(
+        equipment_id=equipment_id,
+        result='fail'
+    ).order_by(Inspection.submitted_at.desc()).limit(3).all()
+
+    for insp in failed_inspections:
+        technician_name = insp.technician.full_name if insp.technician else 'Unknown'
+        technician_role_id = insp.technician.role_id if insp.technician else ''
+        status_sources.append({
+            'type': 'inspection',
+            'id': insp.id,
+            'message': f"Failed inspection by {technician_role_id} - {technician_name}",
+            'date': insp.submitted_at.isoformat() if insp.submitted_at else None,
+        })
+
+    # Check for open defects
+    open_defects = Defect.query.filter_by(equipment_id=equipment_id).filter(
+        Defect.status.in_(['open', 'in_progress'])
+    ).order_by(Defect.created_at.desc()).limit(3).all()
+
+    for defect in open_defects:
+        status_sources.append({
+            'type': 'defect',
+            'id': defect.id,
+            'message': f"Defect #{defect.id}: {defect.description[:50] if defect.description else 'No description'}...",
+            'date': defect.created_at.isoformat() if defect.created_at else None,
+        })
+
+    eq_data['status_sources'] = status_sources
+
+    return jsonify({
+        'status': 'success',
+        'data': eq_data
+    }), 200
+
+
+@bp.route('/<int:equipment_id>/status', methods=['PUT'])
+@jwt_required()
+def update_equipment_status(equipment_id):
+    """
+    Update equipment status with mandatory reason and next action.
+    Admin and Engineer only.
+
+    Request Body:
+        {
+            "status": "stopped",
+            "reason": "Motor failure - bearing damage",
+            "next_action": "Waiting for spare parts from supplier"
+        }
+    """
+    current_user = get_current_user()
+    if current_user.role not in ('admin', 'engineer'):
+        return jsonify({
+            'status': 'error',
+            'message': 'Only admin and engineer can update equipment status'
+        }), 403
+
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        raise NotFoundError(f"Equipment with ID {equipment_id} not found")
+
+    data = request.get_json()
+
+    # Validate required fields
+    new_status = data.get('status')
+    reason = data.get('reason', '').strip()
+    next_action = data.get('next_action', '').strip()
+
+    if not new_status:
+        raise ValidationError("status is required")
+    if not reason:
+        raise ValidationError("reason is required")
+    if not next_action:
+        raise ValidationError("next_action is required")
+
+    valid_statuses = ['active', 'under_maintenance', 'out_of_service', 'stopped', 'paused']
+    if new_status not in valid_statuses:
+        raise ValidationError(f"status must be one of: {', '.join(valid_statuses)}")
+
+    old_status = equipment.status
+
+    # Create status log
+    status_log = EquipmentStatusLog(
+        equipment_id=equipment_id,
+        old_status=old_status,
+        new_status=new_status,
+        reason=reason,
+        next_action=next_action,
+        source_type='manual',
+        changed_by_id=current_user.id
+    )
+    db.session.add(status_log)
+
+    # Update equipment
+    equipment.status = new_status
+    equipment.current_reason = reason
+    equipment.current_next_action = next_action
+
+    # Update stopped_at
+    if new_status in ('stopped', 'out_of_service'):
+        if old_status not in ('stopped', 'out_of_service'):
+            # Just became stopped
+            equipment.stopped_at = datetime.utcnow()
+    else:
+        # No longer stopped
+        equipment.stopped_at = None
+
+    safe_commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Equipment status updated to {new_status}',
+        'equipment': equipment.to_dict()
+    }), 200
+
+
+@bp.route('/<int:equipment_id>/status-history', methods=['GET'])
+@jwt_required()
+def get_equipment_status_history(equipment_id):
+    """
+    Get status change history for equipment.
+    """
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        raise NotFoundError(f"Equipment with ID {equipment_id} not found")
+
+    # Get all status logs
+    logs = EquipmentStatusLog.query.filter_by(equipment_id=equipment_id).order_by(
+        EquipmentStatusLog.created_at.desc()
+    ).limit(50).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': [log.to_dict() for log in logs]
     }), 200
