@@ -153,11 +153,13 @@ export default function WorkPlanningPage() {
         const selectedWeek = dayjs(variables.week_start).startOf('isoWeek');
         const currentWeek = dayjs().startOf('isoWeek');
         const diffWeeks = selectedWeek.diff(currentWeek, 'week');
-        setWeekOffset(diffWeeks);
-        // Force refetch after a small delay to ensure state is updated
-        setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ['work-plans'] });
-        }, 100);
+
+        // If same week, just refetch. Otherwise set offset which triggers refetch via queryKey change
+        if (diffWeeks === weekOffset) {
+          refetch();
+        } else {
+          setWeekOffset(diffWeeks);
+        }
       } else {
         message.error(errorMsg);
       }
