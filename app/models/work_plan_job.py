@@ -36,6 +36,7 @@ class WorkPlanJob(db.Model):
 
     # SAP integration
     sap_order_number = db.Column(db.String(50))
+    sap_order_type = db.Column(db.String(20))  # Original SAP order type (PRM, COM, etc.)
 
     # Description from SAP or manual entry
     description = db.Column(db.Text)
@@ -145,6 +146,7 @@ class WorkPlanJob(db.Model):
             'inspection_assignment_id': self.inspection_assignment_id,
             'inspection_assignment': self.inspection_assignment.to_dict() if self.inspection_assignment else None,
             'sap_order_number': self.sap_order_number,
+            'sap_order_type': self.sap_order_type,
             'description': self.description,
             'cycle_id': self.cycle_id,
             'cycle': self.cycle.to_dict(language) if self.cycle else None,

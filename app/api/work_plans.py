@@ -898,15 +898,16 @@ def import_sap_orders():
             estimated_hours = float(row['estimated_hours'])
 
             # Map SAP type to our job type
-            if job_type_raw in ['PRM', 'PM']:
+            # Accept any SAP order type - map to internal job types
+            if job_type_raw in ['PRM', 'PM', 'PM01', 'PM02', 'PM03']:
                 job_type = 'pm'
-            elif job_type_raw in ['COM', 'CM']:
+            elif job_type_raw in ['COM', 'CM', 'CM01', 'CM02']:
                 job_type = 'defect'
-            elif job_type_raw == 'INS':
+            elif job_type_raw in ['INS', 'INSP']:
                 job_type = 'inspection'
             else:
-                errors.append(f"Row {idx + 2}: Unknown type '{job_type_raw}'. Use PRM, COM, or INS")
-                continue
+                # Default unknown types to PM (preventive maintenance)
+                job_type = 'pm'
 
             # Parse date
             try:
@@ -1028,6 +1029,7 @@ def import_sap_orders():
                 berth=equipment.berth,
                 equipment_id=equipment.id,
                 sap_order_number=order_number,
+                sap_order_type=job_type_raw,  # Store original SAP order type
                 description=description,
                 cycle_id=cycle_id,
                 pm_template_id=pm_template.id if pm_template else None,
@@ -1195,7 +1197,7 @@ def download_sap_import_template():
             ],
             'Description': [
                 'SAP order number (unique identifier)',
-                'PRM = Preventive Maintenance, COM = Corrective Maintenance, INS = Inspection',
+                'Any SAP order type (e.g., PRM, COM, INS, PM01, PM02, CM01). Stored as-is.',
                 'Equipment serial number (must exist in system)',
                 'Target date for the job (YYYY-MM-DD)',
                 'Estimated hours to complete',
