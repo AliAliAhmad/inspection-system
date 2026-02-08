@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, List, Tag, Button, Space, Input, Segmented, Empty, Spin, Badge, Tooltip } from 'antd';
+import { Card, Tag, Button, Space, Input, Segmented, Empty, Spin, Badge, Tooltip } from 'antd';
 import {
   PlusOutlined,
   UploadOutlined,
@@ -236,10 +236,11 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
           <span style={{ fontSize: 16 }}>📦</span>
           <span>Jobs Pool</span>
           <Badge count={allJobs.length} style={{ backgroundColor: '#1890ff' }} />
+          {sapCount > 0 && <Tag color="blue">{sapCount} SAP Orders</Tag>}
         </Space>
       }
       size="small"
-      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 400 }}
       bodyStyle={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 12 }}
       extra={
         <Tooltip title="Drag jobs to calendar to schedule">

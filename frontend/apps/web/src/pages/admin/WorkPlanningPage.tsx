@@ -661,8 +661,8 @@ export default function WorkPlanningPage() {
             )}
           </div>
 
-          {/* Right Side: Jobs Pool */}
-          <div style={{ width: 320, overflow: 'auto' }}>
+          {/* Right Side: Jobs Pool - Full Height */}
+          <div style={{ width: 400, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <JobsPool
               berth={berth}
               planId={currentPlan?.id}
@@ -680,8 +680,8 @@ export default function WorkPlanningPage() {
           </div>
         </div>
 
-        {/* Bottom: Employee Pool */}
-        <div style={{ marginTop: 12 }}>
+        {/* Bottom: Employee Pool - Full Width */}
+        <div style={{ marginTop: 8 }}>
           <EmployeePool weekStart={weekStartStr} />
         </div>
       </div>

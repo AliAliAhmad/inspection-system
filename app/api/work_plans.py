@@ -36,7 +36,6 @@ def engineer_or_admin_required():
 def debug_work_plan(week_start_str):
     """Debug endpoint to check work plan loading (temporary)."""
     try:
-        from sqlalchemy import text
         from collections import Counter
 
         week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
@@ -46,7 +45,7 @@ def debug_work_plan(week_start_str):
         if not plan:
             return jsonify({'status': 'no_plan'}), 200
 
-        # Get all jobs for this plan
+        # Get all scheduled jobs for this plan
         all_jobs = []
         for day in plan.days:
             for job in day.jobs:
@@ -57,17 +56,24 @@ def debug_work_plan(week_start_str):
                     'equipment_id': job.equipment_id
                 })
 
-        # Find duplicates by SAP order number
-        sap_orders = [j['sap_order'] for j in all_jobs if j['sap_order']]
-        duplicates = {k: v for k, v in Counter(sap_orders).items() if v > 1}
+        # Get pending SAP orders in the pool
+        pending_sap_orders = SAPWorkOrder.query.filter_by(
+            work_plan_id=plan.id,
+            status='pending'
+        ).count()
+
+        scheduled_sap_orders = SAPWorkOrder.query.filter_by(
+            work_plan_id=plan.id,
+            status='scheduled'
+        ).count()
 
         return jsonify({
             'status': 'ok',
             'plan_id': plan.id,
-            'total_jobs': len(all_jobs),
-            'unique_sap_orders': len(set(sap_orders)),
-            'duplicates': duplicates,
-            'sample_jobs': all_jobs[:10]
+            'total_scheduled_jobs': len(all_jobs),
+            'sap_orders_in_pool': pending_sap_orders,
+            'sap_orders_scheduled': scheduled_sap_orders,
+            'sample_jobs': all_jobs[:5]
         }), 200
 
     except Exception as e:
