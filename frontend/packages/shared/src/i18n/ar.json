@@ -185,5 +185,19 @@
     "mark_all_read": "تحديد الكل كمقروء",
     "no_notifications": "لا توجد إشعارات",
     "unread": "غير مقروء"
+  },
+  "work_plan": {
+    "no_plan": "لا توجد خطة عمل",
+    "no_plan_message": "لم يتم نشر خطة عمل لهذا الأسبوع.",
+    "no_jobs_this_day": "لا توجد مهام مجدولة لهذا اليوم",
+    "tap_for_today": "اضغط للانتقال لليوم",
+    "total_jobs": "إجمالي المهام",
+    "download_pdf": "PDF",
+    "jobs": "مهام",
+    "lead": "مسؤول",
+    "team_members": "أعضاء",
+    "job_type_pm": "صيانة",
+    "job_type_defect": "عيب",
+    "job_type_inspection": "تفتيش"
   }
 }

@@ -185,5 +185,19 @@
     "mark_all_read": "Mark All Read",
     "no_notifications": "No notifications",
     "unread": "Unread"
+  },
+  "work_plan": {
+    "no_plan": "No Work Plan",
+    "no_plan_message": "No work plan has been published for this week.",
+    "no_jobs_this_day": "No jobs scheduled for this day",
+    "tap_for_today": "Tap for today",
+    "total_jobs": "Total Jobs",
+    "download_pdf": "PDF",
+    "jobs": "jobs",
+    "lead": "Lead",
+    "team_members": "members",
+    "job_type_pm": "PM",
+    "job_type_defect": "DEFECT",
+    "job_type_inspection": "INSPECTION"
   }
 }
