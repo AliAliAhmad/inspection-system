@@ -157,4 +157,9 @@ export const workPlansApi = {
   getDayPdf(planId: number, dayDate: string) {
     return getApiClient().get<ApiResponse<{ pdf_url: string }>>(`/api/work-plans/${planId}/pdf/day/${dayDate}`);
   },
+
+  // Clear SAP orders from pool
+  clearPool(weekStart: string) {
+    return getApiClient().post<{ status: string; deleted: number }>(`/api/work-plans/clear-pool/${weekStart}`);
+  },
 };

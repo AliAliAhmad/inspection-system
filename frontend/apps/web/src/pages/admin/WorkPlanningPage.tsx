@@ -269,10 +269,22 @@ export default function WorkPlanningPage() {
         });
       }
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
       setImportModalOpen(false);
     },
     onError: (err: any) => {
       message.error(err.response?.data?.message || 'Import failed');
+    },
+  });
+
+  const clearPoolMutation = useMutation({
+    mutationFn: () => workPlansApi.clearPool(weekStartStr),
+    onSuccess: (response) => {
+      message.success(`Cleared ${response.data.deleted} jobs from pool`);
+      queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to clear pool');
     },
   });
 
@@ -555,6 +567,7 @@ export default function WorkPlanningPage() {
           }}
           onImportSAP={() => setImportModalOpen(true)}
           onDownloadTemplate={() => window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank')}
+          onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
           horizontal
         />
 

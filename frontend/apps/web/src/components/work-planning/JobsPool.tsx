@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Tag, Button, Space, Input, Segmented, Empty, Spin, Badge, Tooltip, Collapse } from 'antd';
+import { Card, Tag, Button, Space, Input, Segmented, Empty, Spin, Badge, Tooltip, Popconfirm, message } from 'antd';
 import {
   PlusOutlined,
   UploadOutlined,
@@ -7,6 +7,7 @@ import {
   SearchOutlined,
   DownOutlined,
   UpOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -155,6 +156,7 @@ interface JobsPoolProps {
   onImportSAP?: () => void;
   onDownloadTemplate?: () => void;
   onJobClick?: (job: any, jobType: string) => void;
+  onClearPool?: () => Promise<void>;
   horizontal?: boolean;
 }
 
@@ -165,6 +167,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   onImportSAP,
   onDownloadTemplate,
   onJobClick,
+  onClearPool,
   horizontal = false,
 }) => {
   const [filter, setFilter] = useState<string>('all');
@@ -286,6 +289,20 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
             <Button size="small" icon={<PlusOutlined />} onClick={onAddJob}>
               Add Job
             </Button>
+            {allJobs.length > 0 && onClearPool && (
+              <Popconfirm
+                title="Clear all jobs from pool?"
+                description="This will remove all SAP orders from the pool. You can re-import them later."
+                onConfirm={onClearPool}
+                okText="Yes, Clear"
+                cancelText="Cancel"
+                okButtonProps={{ danger: true }}
+              >
+                <Button size="small" danger icon={<DeleteOutlined />}>
+                  Clear Pool
+                </Button>
+              </Popconfirm>
+            )}
             <Button
               size="small"
               type="text"
