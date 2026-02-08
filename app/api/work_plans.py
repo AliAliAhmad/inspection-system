@@ -831,7 +831,7 @@ def import_sap_orders():
 
     Expected columns:
         - order_number: SAP order number (required)
-        - type: PM, CM (Corrective Maintenance), INS (Inspection) (required)
+        - type: PRM (Preventive Maintenance), COM (Corrective Maintenance), INS (Inspection) (required)
         - equipment_code: Equipment serial number (required)
         - date: Target date YYYY-MM-DD (required)
         - estimated_hours: Estimated hours (required)
@@ -898,14 +898,14 @@ def import_sap_orders():
             estimated_hours = float(row['estimated_hours'])
 
             # Map SAP type to our job type
-            if job_type_raw == 'PM':
+            if job_type_raw in ['PRM', 'PM']:
                 job_type = 'pm'
-            elif job_type_raw == 'CM':
+            elif job_type_raw in ['COM', 'CM']:
                 job_type = 'defect'
             elif job_type_raw == 'INS':
                 job_type = 'inspection'
             else:
-                errors.append(f"Row {idx + 2}: Unknown type '{job_type_raw}'")
+                errors.append(f"Row {idx + 2}: Unknown type '{job_type_raw}'. Use PRM, COM, or INS")
                 continue
 
             # Parse date
