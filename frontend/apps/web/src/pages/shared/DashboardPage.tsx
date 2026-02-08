@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Card, Row, Col, Statistic, Typography, Spin, Alert } from 'antd';
 import {
   CheckCircleOutlined,
@@ -8,28 +7,32 @@ import {
   TeamOutlined,
   AppstoreOutlined,
   CalendarOutlined,
-  AlertOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../providers/AuthProvider';
 import { reportsApi, DashboardData, AdminDashboardData } from '@inspection/shared';
+import { useOfflineQuery } from '../../hooks/useOfflineQuery';
+import { CACHE_KEYS } from '../../utils/offline-storage';
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const { t } = useTranslation();
   const isAdmin = user?.role === 'admin';
 
-  const { data: dashData, isLoading: dashLoading, error: dashError } = useQuery({
+  const { data: dashData, isLoading: dashLoading, error: dashError } = useOfflineQuery({
     queryKey: ['dashboard'],
     queryFn: () => reportsApi.getDashboard().then(r => r.data.data),
     enabled: !isAdmin,
+    cacheKey: CACHE_KEYS.dashboard,
+    cacheTtlMs: 15 * 60 * 1000, // 15 minutes
   });
 
-  const { data: adminData, isLoading: adminLoading, error: adminError } = useQuery({
+  const { data: adminData, isLoading: adminLoading, error: adminError } = useOfflineQuery({
     queryKey: ['admin-dashboard'],
     queryFn: () => reportsApi.getAdminDashboard().then(r => r.data.data),
     enabled: isAdmin,
+    cacheKey: 'admin-dashboard',
+    cacheTtlMs: 15 * 60 * 1000, // 15 minutes
   });
 
   const loading = isAdmin ? adminLoading : dashLoading;

@@ -19,7 +19,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { CameraOutlined, PictureOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   specialistJobsApi,
   filesApi,
@@ -28,6 +28,8 @@ import {
 } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
 import VoiceTextArea from '../../components/VoiceTextArea';
+import { useOfflineQuery } from '../../hooks/useOfflineQuery';
+import { CACHE_KEYS } from '../../utils/offline-storage';
 
 function openCameraInput(accept: string, onFile: (file: File) => void) {
   const input = document.createElement('input');
@@ -78,32 +80,35 @@ export default function SpecialistJobsPage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Pending tab: assigned jobs (not started yet)
-  const pendingQuery = useQuery({
+  const pendingQuery = useOfflineQuery({
     queryKey: ['specialist-jobs', 'list', 'pending'],
     queryFn: () =>
-      specialistJobsApi.list({ status: 'assigned' }),
-    select: (res) => res.data?.data ?? [],
+      specialistJobsApi.list({ status: 'assigned' }).then((res) => res.data?.data ?? []),
     enabled: activeTab === 'pending',
-    refetchOnMount: 'always',
+    refetchOnMount: 'always' as const,
+    cacheKey: `${CACHE_KEYS.specialistJobs}-pending`,
+    cacheTtlMs: 30 * 60 * 1000, // 30 minutes
   });
 
   // Active tab: in_progress + paused
-  const activeQuery = useQuery({
+  const activeQuery = useOfflineQuery({
     queryKey: ['specialist-jobs', 'list', 'active'],
     queryFn: () =>
-      specialistJobsApi.list({ status: 'in_progress,paused' }),
-    select: (res) => res.data?.data ?? [],
+      specialistJobsApi.list({ status: 'in_progress,paused' }).then((res) => res.data?.data ?? []),
     enabled: activeTab === 'active',
-    refetchOnMount: 'always',
+    refetchOnMount: 'always' as const,
+    cacheKey: `${CACHE_KEYS.specialistJobs}-active`,
+    cacheTtlMs: 15 * 60 * 1000, // 15 minutes - active jobs update more frequently
   });
 
-  const completedQuery = useQuery({
+  const completedQuery = useOfflineQuery({
     queryKey: ['specialist-jobs', 'list', 'completed'],
     queryFn: () =>
-      specialistJobsApi.list({ status: 'completed,incomplete,qc_approved,cancelled' }),
-    select: (res) => res.data?.data ?? [],
+      specialistJobsApi.list({ status: 'completed,incomplete,qc_approved,cancelled' }).then((res) => res.data?.data ?? []),
     enabled: activeTab === 'completed',
-    refetchOnMount: 'always',
+    refetchOnMount: 'always' as const,
+    cacheKey: `${CACHE_KEYS.specialistJobs}-completed`,
+    cacheTtlMs: 60 * 60 * 1000, // 1 hour - completed jobs don't change often
   });
 
   // Start job mutation (combined: set planned time + start)
@@ -287,17 +292,17 @@ export default function SpecialistJobsPage() {
     switch (activeTab) {
       case 'pending':
         return {
-          data: (pendingQuery.data as SpecialistJob[]) ?? [],
+          data: pendingQuery.data ?? [],
           loading: pendingQuery.isLoading,
         };
       case 'active':
         return {
-          data: (activeQuery.data as SpecialistJob[]) ?? [],
+          data: activeQuery.data ?? [],
           loading: activeQuery.isLoading,
         };
       case 'completed':
         return {
-          data: (completedQuery.data as SpecialistJob[]) ?? [],
+          data: completedQuery.data ?? [],
           loading: completedQuery.isLoading,
         };
     }

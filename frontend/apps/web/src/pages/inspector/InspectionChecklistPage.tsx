@@ -29,7 +29,7 @@ import {
   SoundOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -41,6 +41,8 @@ import {
   ChecklistItem,
   InspectionProgress,
 } from '@inspection/shared';
+import { useOfflineQuery } from '../../hooks/useOfflineQuery';
+import { CACHE_KEYS } from '../../utils/offline-storage';
 
 /**
  * Convert Cloudinary audio URL to MP3 format for better iOS compatibility
@@ -156,15 +158,17 @@ export default function InspectionChecklistPage() {
     isLoading,
     error,
     refetch: refetchInspection,
-  } = useQuery({
+  } = useOfflineQuery({
     queryKey: ['inspection', 'by-assignment', assignmentId],
     queryFn: () =>
       inspectionsApi.getByAssignment(assignmentId).then((r) => (r.data as any).data as Inspection),
+    cacheKey: CACHE_KEYS.inspection(assignmentId),
+    cacheTtlMs: 24 * 60 * 60 * 1000, // 24 hours - inspection data should persist
   });
 
   const inspectionId = inspection?.id;
 
-  const { data: progress, refetch: refetchProgress } = useQuery({
+  const { data: progress, refetch: refetchProgress } = useOfflineQuery({
     queryKey: ['inspection-progress', inspectionId],
     queryFn: () =>
       inspectionsApi
@@ -178,6 +182,8 @@ export default function InspectionChecklistPage() {
           } as InspectionProgress;
         }),
     enabled: !!inspectionId,
+    cacheKey: inspectionId ? CACHE_KEYS.inspectionProgress(inspectionId) : 'inspection-progress-unknown',
+    cacheTtlMs: 60 * 60 * 1000, // 1 hour - progress updates more frequently
   });
 
   const answerMutation = useMutation({

@@ -5,7 +5,6 @@ import {
   ArrowRightOutlined,
   EyeOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
@@ -13,6 +12,8 @@ import {
   inspectionAssignmentsApi,
   InspectionAssignment,
 } from '@inspection/shared';
+import { useOfflineQuery } from '../../hooks/useOfflineQuery';
+import { CACHE_KEYS } from '../../utils/offline-storage';
 
 const STATUS_COLOR: Record<string, string> = {
   pending: 'default',
@@ -28,7 +29,7 @@ export default function MyAssignmentsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error } = useOfflineQuery({
     queryKey: ['my-assignments', statusFilter, page],
     queryFn: () =>
       inspectionAssignmentsApi
@@ -38,6 +39,8 @@ export default function MyAssignmentsPage() {
           per_page: pageSize,
         })
         .then((r) => r.data),
+    cacheKey: `${CACHE_KEYS.myAssignments}-${statusFilter}-${page}`,
+    cacheTtlMs: 30 * 60 * 1000, // 30 minutes
   });
 
   const assignments = data?.data ?? [];
