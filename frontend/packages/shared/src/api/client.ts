@@ -117,4 +117,12 @@ export function getApiClient(): AxiosInstance {
   return apiClient;
 }
 
+/**
+ * Get the API base URL.
+ */
+export function getApiBaseUrl(): string {
+  if (!apiClient) throw new Error('API client not initialized. Call initApiClient() first.');
+  return apiClient.defaults.baseURL || '';
+}
+
 export { apiClient };

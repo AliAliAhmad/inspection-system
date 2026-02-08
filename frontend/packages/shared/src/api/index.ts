@@ -1,4 +1,4 @@
-export { initApiClient, getApiClient, setLanguage, apiClient } from './client';
+export { initApiClient, getApiClient, getApiBaseUrl, setLanguage, apiClient } from './client';
 
 export { authApi } from './auth.api';
 export { usersApi } from './users.api';

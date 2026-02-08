@@ -1,4 +1,4 @@
-import { getApiClient } from './client';
+import { getApiClient, getApiBaseUrl } from './client';
 import { ApiResponse } from '../types';
 
 export interface RosterWeekUser {
@@ -54,5 +54,9 @@ export const rosterApi = {
       '/api/roster/day-availability',
       { params: { date, ...(shift ? { shift } : {}) } },
     );
+  },
+
+  getTemplateUrl() {
+    return `${getApiBaseUrl()}/api/roster/template`;
   },
 };

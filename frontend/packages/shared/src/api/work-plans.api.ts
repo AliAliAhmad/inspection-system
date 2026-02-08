@@ -1,4 +1,4 @@
-import { getApiClient } from './client';
+import { getApiClient, getApiBaseUrl } from './client';
 import { ApiResponse } from '../types';
 import {
   WorkPlan,
@@ -138,11 +138,11 @@ export const workPlansApi = {
 
   // Templates
   getSAPImportTemplateUrl() {
-    return `/api/work-plans/templates/sap-import`;
+    return `${getApiBaseUrl()}/api/work-plans/templates/sap-import`;
   },
 
   getMaterialsTemplateUrl() {
-    return `/api/work-plans/templates/materials`;
+    return `${getApiBaseUrl()}/api/work-plans/templates/materials`;
   },
 
   // Day PDF
