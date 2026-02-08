@@ -83,7 +83,7 @@ class WorkPlan(db.Model):
             'published_at': self.published_at.isoformat() if self.published_at else None,
             'published_by_id': self.published_by_id,
             'pdf_file_id': self.pdf_file_id,
-            'pdf_url': self.pdf_file.url if self.pdf_file else None,
+            'pdf_url': self.pdf_file.get_url() if self.pdf_file else None,
             'notes': self.notes,
             'total_jobs': self.get_total_jobs(),
             'jobs_by_day': self.get_jobs_by_day(),

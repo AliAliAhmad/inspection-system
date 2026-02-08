@@ -638,13 +638,13 @@ def publish_plan(plan_id):
 
     week_str = plan.week_start.strftime('%Y-%m-%d')
     for user_id in assigned_user_ids:
-        NotificationService.create(
+        NotificationService.create_notification(
             user_id=user_id,
+            type='work_plan',
             title='Work Plan Published',
             message=f'A new work plan for week {week_str} has been published with jobs assigned to you.',
-            notification_type='work_plan',
-            reference_type='work_plan',
-            reference_id=plan.id
+            related_type='work_plan',
+            related_id=plan.id
         )
 
     db.session.commit()

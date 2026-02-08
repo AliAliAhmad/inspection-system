@@ -82,7 +82,7 @@ class WorkPlanPDF(FPDF):
 
             # Get job details
             job_type = job.job_type.upper()
-            equipment_name = job.equipment.code if job.equipment else '-'
+            equipment_name = job.equipment.name if job.equipment else '-'
             berth = (job.berth or 'both').title()
             hours = f"{job.estimated_hours:.1f}h"
 
@@ -205,11 +205,13 @@ class WorkPlanPDFService:
             from app.services.file_service import FileService
 
             with open(temp_path, 'rb') as f:
-                file_record = FileService.upload_file(
-                    file_data=f.read(),
-                    original_filename=filename,
+                file_record = FileService.upload_from_bytes(
+                    file_bytes=f.read(),
+                    filename=filename,
                     mime_type='application/pdf',
-                    uploader_id=plan.created_by_id,
+                    uploaded_by=plan.created_by_id,
+                    related_type='work_plan',
+                    related_id=plan.id,
                     category='work_plan'
                 )
 
