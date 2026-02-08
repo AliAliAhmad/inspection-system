@@ -36,10 +36,14 @@ import { notificationsApi } from '@inspection/shared';
 import { useNotificationAlerts } from '../hooks/useNotificationAlerts';
 
 function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] {
+  // Admin and engineer have Work Planning page, others get My Work Plan
+  const hasWorkPlanning = role === 'admin' || role === 'engineer';
+
   const shared: MenuDataItem[] = [
     { path: '/', name: t('nav.dashboard'), icon: <DashboardOutlined /> },
     { path: '/equipment-dashboard', name: t('nav.equipment_dashboard'), icon: <ControlOutlined /> },
-    { path: '/my-work-plan', name: t('nav.my_work_plan'), icon: <ClockCircleOutlined /> },
+    // Only show My Work Plan for non-admin/engineer users
+    ...(!hasWorkPlanning ? [{ path: '/my-work-plan', name: t('nav.my_work_plan'), icon: <ClockCircleOutlined /> }] : []),
     { path: '/notifications', name: t('nav.notifications'), icon: <BellOutlined /> },
     { path: '/leaderboard', name: t('nav.leaderboard'), icon: <TrophyOutlined /> },
     { path: '/leaves', name: t('nav.leaves'), icon: <CalendarOutlined /> },
