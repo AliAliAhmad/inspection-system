@@ -919,16 +919,21 @@ def import_sap_orders():
                 errors.append(f"Row {idx + 2}: Invalid date format")
                 continue
 
-            # Check date is within plan week
+            # Store the SAP required date as planned_date
+            sap_required_date = job_date
+
+            # If date is outside plan week, use first day of plan
             if job_date < plan.week_start or job_date > plan.week_end:
-                errors.append(f"Row {idx + 2}: Date {job_date} is outside plan week")
-                continue
+                job_date = plan.week_start
 
             # Find day
             day = WorkPlanDay.query.filter_by(work_plan_id=plan.id, date=job_date).first()
             if not day:
-                errors.append(f"Row {idx + 2}: Day not found for date {job_date}")
-                continue
+                # Fallback to first day if exact date not found
+                day = WorkPlanDay.query.filter_by(work_plan_id=plan.id).order_by(WorkPlanDay.date).first()
+                if not day:
+                    errors.append(f"Row {idx + 2}: No days found in work plan")
+                    continue
 
             # Find equipment by code or serial_number
             equipment = Equipment.query.filter(
@@ -1036,7 +1041,7 @@ def import_sap_orders():
                 overdue_value=overdue_value,
                 overdue_unit=overdue_unit,
                 maintenance_base=maintenance_base,
-                planned_date=planned_date,
+                planned_date=planned_date if planned_date else sap_required_date,
                 estimated_hours=pm_template.estimated_hours if pm_template else estimated_hours,
                 position=max_position + 1,
                 priority=priority,
@@ -1199,7 +1204,7 @@ def download_sap_import_template():
                 'SAP order number (unique identifier)',
                 'Any SAP order type (e.g., PRM, COM, INS, PM01, PM02, CM01). Stored as-is.',
                 'Equipment serial number (must exist in system)',
-                'Target date for the job (YYYY-MM-DD)',
+                'SAP required/due date (YYYY-MM-DD). Jobs outside plan week go to first day.',
                 'Estimated hours to complete',
                 'Job description/notes',
                 'low, normal, high, urgent',
