@@ -1149,7 +1149,6 @@ def get_available_jobs():
 # ==================== TEMPLATES ====================
 
 @bp.route('/templates/sap-import', methods=['GET'])
-@jwt_required()
 def download_sap_import_template():
     """
     Download Excel template for SAP work order import.
@@ -1226,7 +1225,6 @@ def download_sap_import_template():
 
 
 @bp.route('/templates/materials', methods=['GET'])
-@jwt_required()
 def download_materials_template():
     """
     Download Excel template for materials import.

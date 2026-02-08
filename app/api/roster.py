@@ -464,7 +464,6 @@ def get_day_availability():
 
 
 @bp.route('/template', methods=['GET'])
-@jwt_required()
 def download_roster_template():
     """
     Download Excel template for roster import.
@@ -475,8 +474,6 @@ def download_roster_template():
     from io import BytesIO
     import pandas as pd
     from datetime import timedelta
-
-    user = get_current_user()
 
     # Get all active users
     users = User.query.filter(User.is_active == True).order_by(User.role, User.full_name).all()
