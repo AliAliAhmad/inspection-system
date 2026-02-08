@@ -125,6 +125,38 @@ def cleanup_duplicate_jobs(week_start_str):
         }), 200
 
 
+@bp.route('/clear-jobs/<week_start_str>', methods=['POST'])
+def clear_all_jobs(week_start_str):
+    """Remove ALL jobs from a plan (use with caution!)."""
+    try:
+        week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
+        plan = WorkPlan.query.filter_by(week_start=week_date).first()
+        if not plan:
+            return jsonify({'status': 'no_plan'}), 404
+
+        deleted = 0
+        for day in plan.days:
+            for job in day.jobs:
+                db.session.delete(job)
+                deleted += 1
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'ok',
+            'deleted': deleted
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 200
+
+
 # ==================== WORK PLANS ====================
 
 @bp.route('', methods=['GET'])

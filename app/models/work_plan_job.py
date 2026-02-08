@@ -132,8 +132,34 @@ class WorkPlanJob(db.Model):
             Defect.status.in_(['open', 'in_progress'])
         ).all()
 
-    def to_dict(self, language='en'):
-        """Convert to dictionary."""
+    def to_dict(self, language='en', compact=False):
+        """Convert to dictionary.
+
+        Args:
+            language: Language code for translations
+            compact: If True, return minimal data for list views (faster)
+        """
+        # Compact mode for large lists - just essential fields
+        if compact:
+            return {
+                'id': self.id,
+                'work_plan_day_id': self.work_plan_day_id,
+                'job_type': self.job_type,
+                'berth': self.berth,
+                'equipment_id': self.equipment_id,
+                'equipment_name': self.equipment.name if self.equipment else None,
+                'equipment_serial': self.equipment.serial_number if self.equipment else None,
+                'sap_order_number': self.sap_order_number,
+                'sap_order_type': self.sap_order_type,
+                'description': self.description,
+                'overdue_value': self.overdue_value,
+                'overdue_unit': self.overdue_unit,
+                'computed_priority': self.computed_priority,
+                'estimated_hours': self.estimated_hours,
+                'priority': self.priority,
+                'assigned_users_count': len(self.assignments),
+            }
+
         data = {
             'id': self.id,
             'work_plan_day_id': self.work_plan_day_id,

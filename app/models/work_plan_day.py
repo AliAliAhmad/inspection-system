@@ -57,6 +57,9 @@ class WorkPlanDay(db.Model):
         """Convert to dictionary."""
         jobs_by_berth = self.get_jobs_by_berth()
 
+        # Use compact mode if there are many jobs (> 20) to avoid timeout
+        compact = len(self.jobs) > 20
+
         return {
             'id': self.id,
             'work_plan_id': self.work_plan_id,
@@ -65,10 +68,10 @@ class WorkPlanDay(db.Model):
             'notes': self.notes,
             'total_jobs': len(self.jobs),
             'total_hours': self.get_total_hours(),
-            'jobs': [job.to_dict(language) for job in self.jobs],
-            'jobs_east': [job.to_dict(language) for job in jobs_by_berth['east']],
-            'jobs_west': [job.to_dict(language) for job in jobs_by_berth['west']],
-            'jobs_both': [job.to_dict(language) for job in jobs_by_berth['both']],
+            'jobs': [job.to_dict(language, compact=compact) for job in self.jobs],
+            'jobs_east': [job.to_dict(language, compact=compact) for job in jobs_by_berth['east']],
+            'jobs_west': [job.to_dict(language, compact=compact) for job in jobs_by_berth['west']],
+            'jobs_both': [job.to_dict(language, compact=compact) for job in jobs_by_berth['both']],
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
