@@ -125,19 +125,11 @@ export default function WorkPlanningPage() {
   );
 
   // Fetch work plan for current week with full details
-  const { data: plansData, isLoading, refetch, error } = useQuery({
+  const { data: plansData, isLoading, refetch } = useQuery({
     queryKey: ['work-plans', weekStartStr],
-    queryFn: async () => {
-      console.log('Fetching work plans for week:', weekStartStr);
-      const response = await workPlansApi.list({ week_start: weekStartStr, include_days: true });
-      console.log('Work plans response:', response.data);
-      return response.data;
-    },
+    queryFn: () => workPlansApi.list({ week_start: weekStartStr, include_days: true }).then((r) => r.data),
     staleTime: 0, // Always refetch when week changes
   });
-
-  // Debug logging
-  console.log('plansData:', plansData, 'isLoading:', isLoading, 'error:', error);
 
   const currentPlan = plansData?.work_plans?.[0];
   const isDraft = currentPlan?.status === 'draft';

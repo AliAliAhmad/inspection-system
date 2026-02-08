@@ -577,6 +577,28 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('work_plan_materials table already exists')
+
+    # Add missing columns to work_plan_jobs table
+    work_plan_job_cols = [
+        ('sap_order_type', 'VARCHAR(20)'),
+        ('description', 'TEXT'),
+        ('cycle_id', 'INTEGER REFERENCES maintenance_cycles(id)'),
+        ('pm_template_id', 'INTEGER REFERENCES pm_templates(id)'),
+        ('overdue_value', 'FLOAT'),
+        ('overdue_unit', 'VARCHAR(10)'),
+        ('maintenance_base', 'VARCHAR(100)'),
+        ('planned_date', 'DATE'),
+        ('start_time', 'TIME'),
+        ('end_time', 'TIME'),
+    ]
+    for col_name, col_type in work_plan_job_cols:
+        try:
+            db.session.execute(text(f'ALTER TABLE work_plan_jobs ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added {col_name} column to work_plan_jobs')
+        except Exception:
+            db.session.rollback()
+            print(f'work_plan_jobs.{col_name} already exists')
 "
 
 echo "Starting gunicorn..."
