@@ -357,6 +357,16 @@ with app.app_context():
         db.session.rollback()
         print('minor_role constraint already up to date')
 
+    # Update specialization constraint to include 'hvac'
+    try:
+        db.session.execute(text('ALTER TABLE users DROP CONSTRAINT IF EXISTS check_valid_specialization'))
+        db.session.execute(text(\"\"\"ALTER TABLE users ADD CONSTRAINT check_valid_specialization CHECK (specialization IN ('mechanical', 'electrical', 'hvac') OR specialization IS NULL)\"\"\"))
+        db.session.commit()
+        print('Updated specialization constraint to include hvac')
+    except Exception:
+        db.session.rollback()
+        print('specialization constraint already up to date')
+
     # Add new columns to equipment for dashboard
     equipment_dashboard_cols = [
         ('stopped_at', 'TIMESTAMP'),
