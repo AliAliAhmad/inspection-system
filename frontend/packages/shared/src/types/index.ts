@@ -14,3 +14,4 @@ export * from './rating.types';
 export * from './schedule.types';
 export * from './file.types';
 export * from './work-plan.types';
+export * from './error.types';

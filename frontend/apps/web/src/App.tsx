@@ -4,6 +4,7 @@ import AppRouter from './router/AppRouter';
 import LoginPage from './pages/auth/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import AiAssistantChat from './components/AiAssistantChat';
+import OfflineBanner from './components/OfflineBanner';
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -22,6 +23,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+      <OfflineBanner />
       <AppRouter />
       <AiAssistantChat />
     </ErrorBoundary>
