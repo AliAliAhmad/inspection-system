@@ -723,7 +723,7 @@ def get_my_plan():
             'week_start': plan.week_start.isoformat(),
             'week_end': plan.week_end.isoformat(),
             'status': plan.status,
-            'pdf_url': plan.pdf_file.url if plan.pdf_file else None
+            'pdf_url': plan.pdf_file.get_url() if plan.pdf_file else None
         },
         'my_jobs': my_jobs,
         'total_jobs': sum(len(d['jobs']) for d in my_jobs)
