@@ -209,7 +209,9 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, onRefresh
                 {/* Specialization Groups */}
                 {(['mechanical', 'electrical', 'hvac', 'other'] as const).map(spec => {
                   const users = specs[spec] || [];
-                  if (users.length === 0) return null;
+                  // Filter out users on leave - only show available employees
+                  const availableUsers = users.filter(u => !leaveUserIds.has(u.id));
+                  if (availableUsers.length === 0) return null;
                   const specConfig = SPEC_CONFIG[spec] || { label: spec, emoji: '📋' };
 
                   return (
@@ -218,11 +220,11 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, onRefresh
                         {specConfig.emoji} {specConfig.label}
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap' }}>
-                        {users.map(user => (
+                        {availableUsers.map(user => (
                           <DraggableEmployee
                             key={user.id}
                             user={user}
-                            isOnLeave={leaveUserIds.has(user.id)}
+                            isOnLeave={false}
                           />
                         ))}
                       </div>
