@@ -1158,7 +1158,7 @@ def download_sap_import_template():
     # Create sample data with all columns
     sample_data = {
         'order_number': ['SAP-2026-001', 'SAP-2026-002', 'SAP-2026-003'],
-        'type': ['PM', 'CM', 'INS'],
+        'type': ['PRM', 'COM', 'INS'],
         'equipment_code': ['PUMP-001', 'CRANE-002', 'GEN-003'],
         'date': ['2026-02-10', '2026-02-11', '2026-02-12'],
         'estimated_hours': [4, 6, 2],
@@ -1195,7 +1195,7 @@ def download_sap_import_template():
             ],
             'Description': [
                 'SAP order number (unique identifier)',
-                'PM = Preventive Maintenance, CM = Corrective Maintenance, INS = Inspection',
+                'PRM = Preventive Maintenance, COM = Corrective Maintenance, INS = Inspection',
                 'Equipment serial number (must exist in system)',
                 'Target date for the job (YYYY-MM-DD)',
                 'Estimated hours to complete',
