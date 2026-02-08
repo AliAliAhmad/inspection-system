@@ -154,6 +154,10 @@ export default function WorkPlanningPage() {
         const currentWeek = dayjs().startOf('isoWeek');
         const diffWeeks = selectedWeek.diff(currentWeek, 'week');
         setWeekOffset(diffWeeks);
+        // Force refetch after a small delay to ensure state is updated
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+        }, 100);
       } else {
         message.error(errorMsg);
       }
