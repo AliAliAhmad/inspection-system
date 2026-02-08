@@ -249,3 +249,76 @@ def delete_cycle(cycle_id):
         'status': 'success',
         'message': 'Maintenance cycle deleted'
     }), 200
+
+
+@bp.route('/template', methods=['GET'])
+def download_cycles_template():
+    """
+    Download Excel template for maintenance cycles import.
+    No authentication required - template only contains sample format.
+    """
+    from flask import Response
+    from io import BytesIO
+    import pandas as pd
+
+    # Create sample data for running hours cycles
+    running_hours_data = {
+        'name': ['250h', '500h', '750h', '1000h', '1500h', '2000h'],
+        'name_ar': ['250 ساعة', '500 ساعة', '750 ساعة', '1000 ساعة', '1500 ساعة', '2000 ساعة'],
+        'cycle_type': ['running_hours'] * 6,
+        'hours_value': [250, 500, 750, 1000, 1500, 2000],
+        'calendar_value': ['', '', '', '', '', ''],
+        'calendar_unit': ['', '', '', '', '', ''],
+        'display_label': ['250 Hours', '500 Hours', '750 Hours', '1000 Hours', '1500 Hours', '2000 Hours'],
+        'display_label_ar': ['250 ساعة', '500 ساعة', '750 ساعة', '1000 ساعة', '1500 ساعة', '2000 ساعة'],
+    }
+
+    # Create sample data for calendar cycles
+    calendar_data = {
+        'name': ['weekly', '2-weeks', 'monthly', 'quarterly', '6-months', 'yearly'],
+        'name_ar': ['أسبوعي', 'أسبوعين', 'شهري', 'ربع سنوي', 'نصف سنوي', 'سنوي'],
+        'cycle_type': ['calendar'] * 6,
+        'hours_value': ['', '', '', '', '', ''],
+        'calendar_value': [1, 2, 1, 3, 6, 1],
+        'calendar_unit': ['weeks', 'weeks', 'months', 'months', 'months', 'months'],
+        'display_label': ['Weekly', '2 Weeks', 'Monthly', 'Quarterly', '6 Months', 'Yearly'],
+        'display_label_ar': ['أسبوعي', 'أسبوعين', 'شهري', 'ربع سنوي', 'نصف سنوي', 'سنوي'],
+    }
+
+    # Combine data
+    import pandas as pd
+    running_df = pd.DataFrame(running_hours_data)
+    calendar_df = pd.DataFrame(calendar_data)
+    combined_df = pd.concat([running_df, calendar_df], ignore_index=True)
+
+    # Create Excel file in memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        combined_df.to_excel(writer, sheet_name='Cycles', index=False)
+
+        # Add instructions sheet
+        instructions = pd.DataFrame({
+            'Column': ['name', 'name_ar', 'cycle_type', 'hours_value', 'calendar_value', 'calendar_unit', 'display_label', 'display_label_ar'],
+            'Required': ['Yes', 'No', 'Yes', 'Conditional', 'Conditional', 'Conditional', 'No', 'No'],
+            'Description': [
+                'Unique cycle name (e.g., 250h, monthly)',
+                'Arabic name',
+                'running_hours or calendar',
+                'Required if cycle_type is running_hours (e.g., 250, 500, 1000)',
+                'Required if cycle_type is calendar (e.g., 1, 2, 3)',
+                'Required if cycle_type is calendar: days, weeks, or months',
+                'Display label (defaults to name if not provided)',
+                'Arabic display label'
+            ]
+        })
+        instructions.to_excel(writer, sheet_name='Instructions', index=False)
+
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            'Content-Disposition': 'attachment; filename=maintenance_cycles_import.xlsx'
+        }
+    )

@@ -1,7 +1,7 @@
 /**
  * PM Templates API client
  */
-import { getApiClient } from './client';
+import { getApiClient, getApiBaseUrl } from './client';
 import type { ApiResponse } from '../types';
 import type {
   PMTemplate,
@@ -78,5 +78,12 @@ export const pmTemplatesApi = {
    */
   clone(templateId: number, payload: ClonePMTemplatePayload) {
     return getApiClient().post<ApiResponse<TemplateResponse>>(`/api/pm-templates/${templateId}/clone`, payload);
+  },
+
+  /**
+   * Get the URL for downloading the PM templates import template
+   */
+  getTemplateUrl() {
+    return `${getApiBaseUrl()}/api/pm-templates/template`;
   },
 };

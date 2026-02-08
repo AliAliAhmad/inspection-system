@@ -442,3 +442,102 @@ def find_template():
         'status': 'success',
         'template': template.to_dict(language, include_items=True)
     }), 200
+
+
+@bp.route('/template', methods=['GET'])
+def download_pm_template():
+    """
+    Download Excel template for PM template import.
+    No authentication required - template only contains sample format.
+    """
+    from flask import Response
+    from io import BytesIO
+    import pandas as pd
+
+    # Create sample data
+    sample_data = {
+        'name': ['Pump 250h Service', 'Crane Monthly Check', 'Generator 500h Service'],
+        'name_ar': ['صيانة المضخة 250 ساعة', 'فحص الرافعة الشهري', 'صيانة المولد 500 ساعة'],
+        'equipment_type': ['PUMP', 'CRANE', 'GENERATOR'],
+        'cycle_name': ['250h', 'monthly', '500h'],
+        'estimated_hours': [4, 2, 6],
+        'description': ['Standard 250-hour pump service', 'Monthly crane inspection', '500-hour generator maintenance'],
+    }
+
+    df = pd.DataFrame(sample_data)
+
+    # Checklist items sample
+    checklist_data = {
+        'template_name': ['Pump 250h Service', 'Pump 250h Service', 'Pump 250h Service', 'Crane Monthly Check', 'Crane Monthly Check'],
+        'item_code': ['P001', 'P002', 'P003', 'C001', 'C002'],
+        'question_text': ['Check oil level', 'Inspect seals for leaks', 'Test pressure gauge', 'Inspect wire ropes', 'Check limit switches'],
+        'question_text_ar': ['فحص مستوى الزيت', 'فحص الموانع للتسرب', 'اختبار مقياس الضغط', 'فحص الحبال السلكية', 'فحص مفاتيح الحد'],
+        'answer_type': ['pass_fail', 'pass_fail', 'numeric', 'pass_fail', 'pass_fail'],
+        'category': ['mechanical', 'mechanical', 'instrumentation', 'mechanical', 'electrical'],
+        'is_required': [True, True, True, True, True],
+        'action': ['Top up if low', 'Replace if damaged', 'Record value', 'Replace if worn', 'Adjust if needed'],
+    }
+
+    checklist_df = pd.DataFrame(checklist_data)
+
+    # Materials sample
+    materials_data = {
+        'template_name': ['Pump 250h Service', 'Pump 250h Service', 'Generator 500h Service'],
+        'material_code': ['FLT-001', 'OIL-002', 'FLT-003'],
+        'quantity': [1, 5, 2],
+    }
+
+    materials_df = pd.DataFrame(materials_data)
+
+    # Create Excel file in memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Templates', index=False)
+        checklist_df.to_excel(writer, sheet_name='Checklist Items', index=False)
+        materials_df.to_excel(writer, sheet_name='Materials', index=False)
+
+        # Add instructions sheet
+        instructions = pd.DataFrame({
+            'Sheet': ['Templates', 'Templates', 'Templates', 'Templates', 'Templates', 'Templates',
+                      'Checklist Items', 'Checklist Items', 'Checklist Items', 'Checklist Items',
+                      'Checklist Items', 'Checklist Items', 'Checklist Items', 'Checklist Items',
+                      'Materials', 'Materials', 'Materials'],
+            'Column': ['name', 'name_ar', 'equipment_type', 'cycle_name', 'estimated_hours', 'description',
+                       'template_name', 'item_code', 'question_text', 'question_text_ar',
+                       'answer_type', 'category', 'is_required', 'action',
+                       'template_name', 'material_code', 'quantity'],
+            'Required': ['Yes', 'No', 'Yes', 'Yes', 'No', 'No',
+                         'Yes', 'No', 'Yes', 'No',
+                         'No', 'No', 'No', 'No',
+                         'Yes', 'Yes', 'No'],
+            'Description': [
+                'Template name (unique)',
+                'Arabic name',
+                'Equipment type code (e.g., PUMP, CRANE, GENERATOR)',
+                'Cycle name matching existing cycle (e.g., 250h, 500h, monthly)',
+                'Estimated hours for the job (default: 4)',
+                'Template description',
+                'Name of template this item belongs to (must match Templates sheet)',
+                'Unique item code within template',
+                'Question/check text',
+                'Arabic question text',
+                'pass_fail, yes_no, numeric, or text (default: pass_fail)',
+                'mechanical, electrical, instrumentation, safety',
+                'TRUE or FALSE (default: TRUE)',
+                'Action to take if check fails',
+                'Name of template (must match Templates sheet)',
+                'Material code (must exist in materials)',
+                'Quantity required (default: 1)'
+            ]
+        })
+        instructions.to_excel(writer, sheet_name='Instructions', index=False)
+
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            'Content-Disposition': 'attachment; filename=pm_templates_import.xlsx'
+        }
+    )

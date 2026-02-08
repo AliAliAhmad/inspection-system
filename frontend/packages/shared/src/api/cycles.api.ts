@@ -1,7 +1,7 @@
 /**
  * Maintenance Cycles API client
  */
-import { getApiClient } from './client';
+import { getApiClient, getApiBaseUrl } from './client';
 import type { ApiResponse } from '../types';
 import type {
   MaintenanceCycle,
@@ -57,5 +57,12 @@ export const cyclesApi = {
    */
   delete(cycleId: number) {
     return getApiClient().delete<ApiResponse<void>>(`/api/cycles/${cycleId}`);
+  },
+
+  /**
+   * Get the URL for downloading the cycles import template
+   */
+  getTemplateUrl() {
+    return `${getApiBaseUrl()}/api/cycles/template`;
   },
 };

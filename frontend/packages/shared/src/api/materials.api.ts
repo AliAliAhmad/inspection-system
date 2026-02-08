@@ -1,4 +1,4 @@
-import { getApiClient } from './client';
+import { getApiClient, getApiBaseUrl } from './client';
 import { ApiResponse } from '../types';
 import {
   Material,
@@ -93,5 +93,12 @@ export const materialsApi = {
 
   deleteKit(kitId: number) {
     return getApiClient().delete<ApiResponse<void>>('/api/materials/kits/' + kitId);
+  },
+
+  /**
+   * Get the URL for downloading the materials import template
+   */
+  getTemplateUrl() {
+    return `${getApiBaseUrl()}/api/work-plans/templates/materials`;
   },
 };
