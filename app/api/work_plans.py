@@ -1189,7 +1189,7 @@ def download_sap_import_template():
                 'maintenance_base', 'overdue_value', 'overdue_unit', 'planned_date', 'note'
             ],
             'Required': [
-                'Yes', 'Yes', 'Yes', 'Yes', 'Yes',
+                'Yes', 'Yes', 'Yes', 'Yes', 'No',
                 'No', 'No', 'No', 'No', 'No',
                 'No', 'No', 'No', 'No', 'No'
             ],
