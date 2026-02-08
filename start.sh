@@ -578,12 +578,98 @@ with app.app_context():
         db.session.rollback()
         print('work_plan_materials table already exists')
 
+    # Create maintenance_cycles table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS maintenance_cycles (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                name_ar VARCHAR(100),
+                cycle_type VARCHAR(20) NOT NULL,
+                hours_value INTEGER,
+                calendar_value INTEGER,
+                calendar_unit VARCHAR(20),
+                display_label VARCHAR(50),
+                is_active BOOLEAN DEFAULT TRUE,
+                is_system BOOLEAN DEFAULT TRUE,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                CONSTRAINT check_cycle_type CHECK (cycle_type IN ('running_hours', 'calendar'))
+            )
+        '''))
+        db.session.commit()
+        print('Created maintenance_cycles table')
+    except Exception:
+        db.session.rollback()
+        print('maintenance_cycles table already exists')
+
+    # Create pm_templates table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS pm_templates (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                name_ar VARCHAR(255),
+                description TEXT,
+                equipment_type VARCHAR(100),
+                cycle_id INTEGER REFERENCES maintenance_cycles(id),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+        '''))
+        db.session.commit()
+        print('Created pm_templates table')
+    except Exception:
+        db.session.rollback()
+        print('pm_templates table already exists')
+
+    # Create pm_template_checklist_items table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS pm_template_checklist_items (
+                id SERIAL PRIMARY KEY,
+                template_id INTEGER NOT NULL REFERENCES pm_templates(id) ON DELETE CASCADE,
+                item_code VARCHAR(20),
+                question_text TEXT NOT NULL,
+                question_text_ar TEXT,
+                answer_type VARCHAR(20) DEFAULT 'pass_fail',
+                category VARCHAR(50),
+                is_required BOOLEAN DEFAULT TRUE,
+                order_index INTEGER DEFAULT 0,
+                action TEXT,
+                action_ar TEXT
+            )
+        '''))
+        db.session.commit()
+        print('Created pm_template_checklist_items table')
+    except Exception:
+        db.session.rollback()
+        print('pm_template_checklist_items table already exists')
+
+    # Create pm_template_materials table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS pm_template_materials (
+                id SERIAL PRIMARY KEY,
+                template_id INTEGER NOT NULL REFERENCES pm_templates(id) ON DELETE CASCADE,
+                material_id INTEGER NOT NULL REFERENCES materials(id),
+                quantity FLOAT NOT NULL DEFAULT 1
+            )
+        '''))
+        db.session.commit()
+        print('Created pm_template_materials table')
+    except Exception:
+        db.session.rollback()
+        print('pm_template_materials table already exists')
+
     # Add missing columns to work_plan_jobs table
     work_plan_job_cols = [
         ('sap_order_type', 'VARCHAR(20)'),
         ('description', 'TEXT'),
-        ('cycle_id', 'INTEGER REFERENCES maintenance_cycles(id)'),
-        ('pm_template_id', 'INTEGER REFERENCES pm_templates(id)'),
+        ('cycle_id', 'INTEGER'),
+        ('pm_template_id', 'INTEGER'),
         ('overdue_value', 'FLOAT'),
         ('overdue_unit', 'VARCHAR(10)'),
         ('maintenance_base', 'VARCHAR(100)'),
