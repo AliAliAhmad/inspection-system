@@ -103,27 +103,27 @@ def upgrade():
         batch_op.create_foreign_key('fk_work_plan_jobs_cycle_id', 'maintenance_cycles', ['cycle_id'], ['id'])
         batch_op.create_foreign_key('fk_work_plan_jobs_pm_template_id', 'pm_templates', ['pm_template_id'], ['id'])
 
-    # Seed default maintenance cycles
+    # Seed default maintenance cycles (use true/false for PostgreSQL booleans)
     op.execute("""
         INSERT INTO maintenance_cycles (name, name_ar, cycle_type, hours_value, display_label, display_label_ar, is_system, sort_order, is_active, created_at)
         VALUES
-        ('250h', '250 ساعة', 'running_hours', 250, '250 Hours', '250 ساعة', 1, 1, 1, CURRENT_TIMESTAMP),
-        ('500h', '500 ساعة', 'running_hours', 500, '500 Hours', '500 ساعة', 1, 2, 1, CURRENT_TIMESTAMP),
-        ('1000h', '1000 ساعة', 'running_hours', 1000, '1000 Hours', '1000 ساعة', 1, 3, 1, CURRENT_TIMESTAMP),
-        ('1500h', '1500 ساعة', 'running_hours', 1500, '1500 Hours', '1500 ساعة', 1, 4, 1, CURRENT_TIMESTAMP),
-        ('2000h', '2000 ساعة', 'running_hours', 2000, '2000 Hours', '2000 ساعة', 1, 5, 1, CURRENT_TIMESTAMP),
-        ('3000h', '3000 ساعة', 'running_hours', 3000, '3000 Hours', '3000 ساعة', 1, 6, 1, CURRENT_TIMESTAMP),
-        ('4000h', '4000 ساعة', 'running_hours', 4000, '4000 Hours', '4000 ساعة', 1, 7, 1, CURRENT_TIMESTAMP)
+        ('250h', '250 ساعة', 'running_hours', 250, '250 Hours', '250 ساعة', true, 1, true, CURRENT_TIMESTAMP),
+        ('500h', '500 ساعة', 'running_hours', 500, '500 Hours', '500 ساعة', true, 2, true, CURRENT_TIMESTAMP),
+        ('1000h', '1000 ساعة', 'running_hours', 1000, '1000 Hours', '1000 ساعة', true, 3, true, CURRENT_TIMESTAMP),
+        ('1500h', '1500 ساعة', 'running_hours', 1500, '1500 Hours', '1500 ساعة', true, 4, true, CURRENT_TIMESTAMP),
+        ('2000h', '2000 ساعة', 'running_hours', 2000, '2000 Hours', '2000 ساعة', true, 5, true, CURRENT_TIMESTAMP),
+        ('3000h', '3000 ساعة', 'running_hours', 3000, '3000 Hours', '3000 ساعة', true, 6, true, CURRENT_TIMESTAMP),
+        ('4000h', '4000 ساعة', 'running_hours', 4000, '4000 Hours', '4000 ساعة', true, 7, true, CURRENT_TIMESTAMP)
     """)
 
     op.execute("""
         INSERT INTO maintenance_cycles (name, name_ar, cycle_type, calendar_value, calendar_unit, display_label, display_label_ar, is_system, sort_order, is_active, created_at)
         VALUES
-        ('3-weeks', '3 أسابيع', 'calendar', 3, 'weeks', '3 Weeks', '3 أسابيع', 1, 10, 1, CURRENT_TIMESTAMP),
-        ('monthly', 'شهري', 'calendar', 1, 'months', 'Monthly', 'شهري', 1, 11, 1, CURRENT_TIMESTAMP),
-        ('quarterly', 'ربع سنوي', 'calendar', 3, 'months', 'Quarterly', 'ربع سنوي', 1, 12, 1, CURRENT_TIMESTAMP),
-        ('6-months', '6 أشهر', 'calendar', 6, 'months', '6 Months', '6 أشهر', 1, 13, 1, CURRENT_TIMESTAMP),
-        ('yearly', 'سنوي', 'calendar', 12, 'months', 'Yearly', 'سنوي', 1, 14, 1, CURRENT_TIMESTAMP)
+        ('3-weeks', '3 أسابيع', 'calendar', 3, 'weeks', '3 Weeks', '3 أسابيع', true, 10, true, CURRENT_TIMESTAMP),
+        ('monthly', 'شهري', 'calendar', 1, 'months', 'Monthly', 'شهري', true, 11, true, CURRENT_TIMESTAMP),
+        ('quarterly', 'ربع سنوي', 'calendar', 3, 'months', 'Quarterly', 'ربع سنوي', true, 12, true, CURRENT_TIMESTAMP),
+        ('6-months', '6 أشهر', 'calendar', 6, 'months', '6 Months', '6 أشهر', true, 13, true, CURRENT_TIMESTAMP),
+        ('yearly', 'سنوي', 'calendar', 12, 'months', 'Yearly', 'سنوي', true, 14, true, CURRENT_TIMESTAMP)
     """)
 
 
