@@ -88,7 +88,10 @@
     "inspectionSchedule": "جدول التفتيش",
     "equipment_dashboard": "لوحة حالة المعدات",
     "work_planning": "تخطيط العمل",
-    "my_work_plan": "خطة عملي"
+    "my_work_plan": "خطة عملي",
+    "materials": "المواد",
+    "pm_templates": "قوالب الصيانة الوقائية",
+    "maintenance_cycles": "دورات الصيانة"
   },
   "status": {
     "active": "نشط",

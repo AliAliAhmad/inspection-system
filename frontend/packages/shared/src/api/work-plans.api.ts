@@ -12,6 +12,8 @@ import {
   UpdateJobPayload,
   AssignUserPayload,
   AddMaterialPayload,
+  MoveJobPayload,
+  MoveJobResponse,
 } from '../types/work-plan.types';
 
 export interface WorkPlanListParams {
@@ -30,6 +32,8 @@ export interface SAPImportResponse {
   status: string;
   message: string;
   created: number;
+  templates_linked: number;
+  materials_added: number;
   errors: string[];
 }
 
@@ -70,6 +74,16 @@ export const workPlansApi = {
 
   removeJob(planId: number, jobId: number) {
     return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/${planId}/jobs/${jobId}`);
+  },
+
+  /**
+   * Move a job to a different day (for drag & drop)
+   */
+  moveJob(planId: number, jobId: number, payload: MoveJobPayload) {
+    return getApiClient().post<ApiResponse<MoveJobResponse>>(
+      `/api/work-plans/${planId}/jobs/${jobId}/move`,
+      payload
+    );
   },
 
   // Assignments

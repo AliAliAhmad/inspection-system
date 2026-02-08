@@ -5,7 +5,80 @@ import { Defect } from './defect.types';
 export type WorkPlanStatus = 'draft' | 'published';
 export type JobType = 'pm' | 'defect' | 'inspection';
 export type JobPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type ComputedPriority = 'normal' | 'high' | 'critical';
 export type Berth = 'east' | 'west' | 'both';
+export type CycleType = 'running_hours' | 'calendar';
+export type CalendarUnit = 'days' | 'weeks' | 'months';
+
+// ==================== MAINTENANCE CYCLES ====================
+
+export interface MaintenanceCycle {
+  id: number;
+  name: string;
+  name_ar: string | null;
+  cycle_type: CycleType;
+  hours_value: number | null;
+  calendar_value: number | null;
+  calendar_unit: CalendarUnit | null;
+  display_label: string;
+  display_label_en: string;
+  display_label_ar: string | null;
+  is_active: boolean;
+  is_system: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+// ==================== PM TEMPLATES ====================
+
+export interface PMTemplateChecklistItem {
+  id: number;
+  template_id: number;
+  item_code: string | null;
+  question_text: string;
+  question_text_en: string;
+  question_text_ar: string | null;
+  answer_type: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
+  category: 'mechanical' | 'electrical' | null;
+  is_required: boolean;
+  order_index: number;
+  action: string | null;
+  action_en: string | null;
+  action_ar: string | null;
+}
+
+export interface PMTemplateMaterial {
+  id: number;
+  template_id: number;
+  material_id: number;
+  material: Material | null;
+  quantity: number;
+}
+
+export interface PMTemplate {
+  id: number;
+  name: string;
+  name_en: string;
+  name_ar: string | null;
+  description: string | null;
+  description_en: string | null;
+  description_ar: string | null;
+  equipment_type: string;
+  cycle_id: number;
+  cycle: MaintenanceCycle | null;
+  estimated_hours: number;
+  is_active: boolean;
+  checklist_items: PMTemplateChecklistItem[];
+  checklist_items_count: number;
+  materials: PMTemplateMaterial[];
+  materials_count: number;
+  created_by_id: number | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ==================== MATERIALS ====================
 
 export interface Material {
   id: number;
@@ -85,6 +158,18 @@ export interface WorkPlanJob {
   inspection_assignment_id: number | null;
   inspection_assignment: any | null;
   sap_order_number: string | null;
+  description: string | null;
+  cycle_id: number | null;
+  cycle: MaintenanceCycle | null;
+  pm_template_id: number | null;
+  pm_template: PMTemplate | null;
+  overdue_value: number | null;
+  overdue_unit: 'hours' | 'days' | null;
+  computed_priority: ComputedPriority;
+  maintenance_base: string | null;
+  planned_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
   estimated_hours: number;
   position: number;
   priority: JobPriority;
@@ -205,6 +290,96 @@ export interface CreateMaterialKitPayload {
   description?: string;
   equipment_type?: string;
   items: { material_id: number; quantity: number }[];
+}
+
+export interface MoveJobPayload {
+  target_day_id: number;
+  position?: number;
+  start_time?: string;
+}
+
+export interface MoveJobResponse {
+  job: WorkPlanJob;
+  old_day_id: number;
+  new_day_id: number;
+}
+
+// ==================== CYCLES PAYLOADS ====================
+
+export interface CreateCyclePayload {
+  name: string;
+  name_ar?: string;
+  cycle_type: CycleType;
+  hours_value?: number;
+  calendar_value?: number;
+  calendar_unit?: CalendarUnit;
+  display_label?: string;
+  display_label_ar?: string;
+}
+
+export interface UpdateCyclePayload {
+  name?: string;
+  name_ar?: string;
+  hours_value?: number;
+  calendar_value?: number;
+  calendar_unit?: CalendarUnit;
+  display_label?: string;
+  display_label_ar?: string;
+  is_active?: boolean;
+  sort_order?: number;
+}
+
+// ==================== PM TEMPLATES PAYLOADS ====================
+
+export interface CreatePMTemplatePayload {
+  name: string;
+  name_ar?: string;
+  description?: string;
+  description_ar?: string;
+  equipment_type: string;
+  cycle_id: number;
+  estimated_hours?: number;
+  checklist_items?: {
+    item_code?: string;
+    question_text: string;
+    question_text_ar?: string;
+    answer_type?: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
+    category?: 'mechanical' | 'electrical';
+    is_required?: boolean;
+    order_index?: number;
+    action?: string;
+    action_ar?: string;
+  }[];
+  materials?: { material_id: number; quantity: number }[];
+}
+
+export interface UpdatePMTemplatePayload {
+  name?: string;
+  name_ar?: string;
+  description?: string;
+  description_ar?: string;
+  equipment_type?: string;
+  cycle_id?: number;
+  estimated_hours?: number;
+  is_active?: boolean;
+  checklist_items?: {
+    item_code?: string;
+    question_text: string;
+    question_text_ar?: string;
+    answer_type?: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
+    category?: 'mechanical' | 'electrical';
+    is_required?: boolean;
+    order_index?: number;
+    action?: string;
+    action_ar?: string;
+  }[];
+  materials?: { material_id: number; quantity: number }[];
+}
+
+export interface ClonePMTemplatePayload {
+  cycle_id: number;
+  name?: string;
+  name_ar?: string;
 }
 
 // Available jobs for planning

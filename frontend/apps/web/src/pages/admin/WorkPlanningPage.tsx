@@ -15,8 +15,8 @@ import {
   Col,
   Statistic,
   Badge,
-  Tooltip,
   Upload,
+  Divider,
 } from 'antd';
 import {
   PlusOutlined,
@@ -27,13 +27,15 @@ import {
   FilePdfOutlined,
   SendOutlined,
   UploadOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { workPlansApi, type WorkPlan } from '@inspection/shared';
+import { workPlansApi, type WorkPlan, type WorkPlanJob } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
+import { TimelineView, CalendarView, ViewToggle, type ViewMode } from '../../components/work-planning';
 
 dayjs.extend(isoWeek);
 
@@ -50,6 +52,7 @@ export default function WorkPlanningPage() {
   const queryClient = useQueryClient();
 
   const [weekOffset, setWeekOffset] = useState(0);
+  const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
@@ -59,7 +62,7 @@ export default function WorkPlanningPage() {
   const currentWeekStart = dayjs().startOf('isoWeek').add(weekOffset, 'week');
   const weekStartStr = currentWeekStart.format('YYYY-MM-DD');
 
-  // Fetch work plans
+  // Fetch work plan for current week with full details
   const { data: plansData, isLoading } = useQuery({
     queryKey: ['work-plans', weekStartStr],
     queryFn: () => workPlansApi.list({ week_start: weekStartStr, include_days: true }).then((r) => r.data),
@@ -121,19 +124,41 @@ export default function WorkPlanningPage() {
     mutationFn: ({ planId, file }: { planId: number; file: File }) => workPlansApi.importSAP(planId, file),
     onSuccess: (response) => {
       const data = response.data;
-      message.success(`Imported ${data.created} jobs`);
+      const successMsg = `Imported ${data.created} jobs`;
+      const extraInfo = data.templates_linked > 0
+        ? ` (${data.templates_linked} linked to PM templates, ${data.materials_added} materials added)`
+        : '';
+
+      message.success(successMsg + extraInfo);
+
       if (data.errors?.length) {
         Modal.warning({
-          title: 'Import completed with errors',
+          title: 'Import completed with some errors',
+          width: 600,
           content: (
             <div>
-              <p>Created: {data.created} jobs</p>
-              <p>Errors:</p>
-              <ul>
-                {data.errors.map((e, i) => (
-                  <li key={i}>{e}</li>
-                ))}
-              </ul>
+              <p>
+                <strong>Created:</strong> {data.created} jobs
+              </p>
+              {data.templates_linked > 0 && (
+                <p>
+                  <strong>Templates linked:</strong> {data.templates_linked}
+                </p>
+              )}
+              {data.materials_added > 0 && (
+                <p>
+                  <strong>Materials added:</strong> {data.materials_added}
+                </p>
+              )}
+              <Divider />
+              <p><strong>Errors ({data.errors.length}):</strong></p>
+              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                  {data.errors.map((e, i) => (
+                    <li key={i} style={{ color: '#ff4d4f' }}>{e}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
           ),
         });
@@ -158,8 +183,22 @@ export default function WorkPlanningPage() {
     return false;
   };
 
-  // Generate week days
-  const weekDays = Array.from({ length: 7 }, (_, i) => currentWeekStart.add(i, 'day'));
+  const handleJobClick = (job: WorkPlanJob) => {
+    if (currentPlan) {
+      const dayDate = dayjs(job.created_at).format('YYYY-MM-DD');
+      // Find the day this job belongs to
+      const day = currentPlan.days?.find(d =>
+        d.jobs_east?.some(j => j.id === job.id) ||
+        d.jobs_west?.some(j => j.id === job.id) ||
+        d.jobs_both?.some(j => j.id === job.id)
+      );
+      if (day) {
+        navigate(`/admin/work-plan/${currentPlan.id}/day/${day.date}`);
+      } else {
+        navigate(`/admin/work-plan/${currentPlan.id}`);
+      }
+    }
+  };
 
   const columns = [
     {
@@ -212,7 +251,7 @@ export default function WorkPlanningPage() {
                   setImportModalOpen(true);
                 }}
               >
-                Import SAP
+                Import
               </Button>
               <Button
                 type="link"
@@ -262,9 +301,12 @@ export default function WorkPlanningPage() {
             </Title>
           </Col>
           <Col>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-              New Week Plan
-            </Button>
+            <Space>
+              <ViewToggle value={viewMode} onChange={setViewMode} />
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
+                New Week Plan
+              </Button>
+            </Space>
           </Col>
         </Row>
 
@@ -273,90 +315,85 @@ export default function WorkPlanningPage() {
           <Row justify="space-between" align="middle">
             <Col>
               <Button icon={<LeftOutlined />} onClick={() => setWeekOffset((o) => o - 1)}>
-                Previous Week
+                Previous
               </Button>
             </Col>
-            <Col>
+            <Col style={{ textAlign: 'center' }}>
               <Title level={4} style={{ margin: 0 }}>
                 {currentWeekStart.format('MMMM D')} - {currentWeekStart.add(6, 'day').format('MMMM D, YYYY')}
               </Title>
               {weekOffset !== 0 && (
-                <Button type="link" onClick={() => setWeekOffset(0)}>
+                <Button type="link" onClick={() => setWeekOffset(0)} size="small">
                   Go to current week
                 </Button>
+              )}
+              {currentPlan && (
+                <div style={{ marginTop: 8 }}>
+                  <Tag color={STATUS_COLORS[currentPlan.status]}>{currentPlan.status.toUpperCase()}</Tag>
+                  <Text type="secondary" style={{ marginLeft: 8 }}>
+                    {currentPlan.total_jobs} jobs
+                  </Text>
+                  {currentPlan.status === 'draft' && (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<UploadOutlined />}
+                      onClick={() => {
+                        setSelectedPlanId(currentPlan.id);
+                        setImportModalOpen(true);
+                      }}
+                    >
+                      Import SAP
+                    </Button>
+                  )}
+                </div>
               )}
             </Col>
             <Col>
               <Button onClick={() => setWeekOffset((o) => o + 1)}>
-                Next Week <RightOutlined />
+                Next <RightOutlined />
               </Button>
             </Col>
           </Row>
         </Card>
 
-        {/* Week Calendar View */}
-        <Card style={{ marginBottom: 24 }}>
-          <Row gutter={8}>
-            {weekDays.map((day, idx) => {
-              const dayStr = day.format('YYYY-MM-DD');
-              const jobCount = currentPlan?.jobs_by_day?.[dayStr] || 0;
-              const isToday = day.isSame(dayjs(), 'day');
-
-              return (
-                <Col span={24 / 7} key={idx}>
-                  <Card
-                    size="small"
-                    hoverable={!!currentPlan}
-                    onClick={() => currentPlan && navigate(`/admin/work-plan/${currentPlan.id}/day/${dayStr}`)}
-                    style={{
-                      textAlign: 'center',
-                      background: isToday ? '#e6f7ff' : undefined,
-                      borderColor: isToday ? '#1890ff' : undefined,
-                    }}
-                  >
-                    <Text strong>{day.format('ddd')}</Text>
-                    <br />
-                    <Text>{day.format('MMM D')}</Text>
-                    <br />
-                    <Badge count={jobCount} showZero color={jobCount > 0 ? 'blue' : 'default'} />
-                  </Card>
-                </Col>
-              );
-            })}
-          </Row>
-          {!currentPlan && (
-            <div style={{ textAlign: 'center', padding: 16 }}>
-              <Text type="secondary">No plan for this week.</Text>
+        {/* Timeline/Calendar View */}
+        {currentPlan ? (
+          viewMode === 'timeline' ? (
+            <TimelineView
+              plan={currentPlan}
+              onJobClick={handleJobClick}
+              readOnly={currentPlan.status === 'published'}
+            />
+          ) : (
+            <CalendarView
+              plan={currentPlan}
+              onJobClick={handleJobClick}
+            />
+          )
+        ) : (
+          <Card style={{ marginBottom: 24 }}>
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Text type="secondary" style={{ fontSize: '16px' }}>No plan for this week.</Text>
               <br />
-              <Button type="primary" onClick={() => setCreateModalOpen(true)} style={{ marginTop: 8 }}>
+              <Button type="primary" onClick={() => setCreateModalOpen(true)} style={{ marginTop: 16 }}>
                 Create Plan for This Week
               </Button>
             </div>
-          )}
-          {currentPlan && (
-            <Row style={{ marginTop: 16 }} gutter={24} justify="center">
-              <Col>
-                <Statistic title="Total Jobs" value={currentPlan.total_jobs} />
-              </Col>
-              <Col>
-                <Statistic
-                  title="Status"
-                  valueRender={() => <Tag color={STATUS_COLORS[currentPlan.status]}>{currentPlan.status.toUpperCase()}</Tag>}
-                />
-              </Col>
-            </Row>
-          )}
-        </Card>
+          </Card>
+        )}
 
         {/* All Plans Table */}
-        <Title level={4}>All Work Plans</Title>
-        <Table
-          dataSource={allPlansData?.work_plans || []}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          pagination={{ pageSize: 10 }}
-        />
+        <div style={{ marginTop: 24 }}>
+          <Title level={4}>All Work Plans</Title>
+          <Table
+            dataSource={allPlansData?.work_plans || []}
+            columns={columns}
+            rowKey="id"
+            loading={isLoading}
+            pagination={{ pageSize: 10 }}
+          />
+        </div>
       </Card>
 
       {/* Create Modal */}
@@ -388,23 +425,44 @@ export default function WorkPlanningPage() {
         open={importModalOpen}
         onCancel={() => setImportModalOpen(false)}
         footer={null}
+        width={600}
       >
-        <p>Upload an Excel file with SAP work orders. Expected columns:</p>
-        <ul>
-          <li>order_number - SAP order number</li>
-          <li>type - PM, CM (Corrective), or INS (Inspection)</li>
-          <li>equipment_code - Equipment code</li>
-          <li>date - Target date (YYYY-MM-DD)</li>
-          <li>estimated_hours - Estimated hours</li>
-          <li>priority - (optional) low, normal, high, urgent</li>
-          <li>description - (optional) Job description</li>
-        </ul>
+        <p>Upload an Excel file with SAP work orders.</p>
+
+        <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f9f9f9' }}>
+          <Text strong>Required columns:</Text>
+          <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+            <li><code>order_number</code> - SAP order number</li>
+            <li><code>type</code> - PM, CM (Corrective), or INS (Inspection)</li>
+            <li><code>equipment_code</code> - Equipment serial number</li>
+            <li><code>date</code> - Target date (YYYY-MM-DD)</li>
+            <li><code>estimated_hours</code> - Estimated hours</li>
+          </ul>
+
+          <Text strong>Optional columns:</Text>
+          <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
+            <li><code>description</code> - Job description</li>
+            <li><code>priority</code> - low, normal, high, urgent</li>
+            <li><code>cycle_value</code> - Cycle value (e.g., 250, 500, 1000)</li>
+            <li><code>cycle_unit</code> - hours, days, weeks, months</li>
+            <li><code>maintenance_base</code> - running_hours, calendar, condition</li>
+            <li><code>overdue_value</code> - Hours or days overdue</li>
+            <li><code>overdue_unit</code> - hours or days</li>
+            <li><code>planned_date</code> - Original planned date</li>
+            <li><code>note</code> - Additional notes</li>
+          </ul>
+        </Card>
+
+        <p style={{ color: '#52c41a' }}>
+          PM jobs with matching cycles will auto-link to PM templates and add required materials.
+        </p>
+
         <Upload
           accept=".xlsx,.xls"
           beforeUpload={handleImport}
           showUploadList={false}
         >
-          <Button icon={<FileExcelOutlined />} loading={importMutation.isPending}>
+          <Button icon={<FileExcelOutlined />} loading={importMutation.isPending} type="primary">
             Select Excel File
           </Button>
         </Upload>

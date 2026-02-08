@@ -58,6 +58,8 @@ from app.models.equipment_status_log import EquipmentStatusLog
 # Work Planning
 from app.models.material import Material
 from app.models.material_kit import MaterialKit, MaterialKitItem
+from app.models.maintenance_cycle import MaintenanceCycle
+from app.models.pm_template import PMTemplate, PMTemplateChecklistItem, PMTemplateMaterial
 from app.models.work_plan import WorkPlan
 from app.models.work_plan_day import WorkPlanDay
 from app.models.work_plan_job import WorkPlanJob
@@ -101,6 +103,10 @@ __all__ = [
     'Material',
     'MaterialKit',
     'MaterialKitItem',
+    'MaintenanceCycle',
+    'PMTemplate',
+    'PMTemplateChecklistItem',
+    'PMTemplateMaterial',
     'WorkPlan',
     'WorkPlanDay',
     'WorkPlanJob',

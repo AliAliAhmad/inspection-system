@@ -26,6 +26,8 @@ import {
   SyncOutlined,
   WarningOutlined,
   ControlOutlined,
+  InboxOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 import { Badge, Dropdown, Avatar, Space, Button } from 'antd';
 import { useQuery } from '@tanstack/react-query';
@@ -52,6 +54,9 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
 
   const adminItems: MenuDataItem[] = [
     { path: '/admin/work-planning', name: t('nav.work_planning'), icon: <ScheduleOutlined /> },
+    { path: '/admin/materials', name: t('nav.materials'), icon: <InboxOutlined /> },
+    { path: '/admin/pm-templates', name: t('nav.pm_templates'), icon: <UnorderedListOutlined /> },
+    { path: '/admin/cycles', name: t('nav.maintenance_cycles'), icon: <ClockCircleOutlined /> },
     { path: '/admin/roster', name: t('nav.roster'), icon: <TeamOutlined /> },
     { path: '/admin/users', name: t('nav.users'), icon: <TeamOutlined /> },
     { path: '/admin/equipment', name: t('nav.equipment'), icon: <ToolOutlined /> },
@@ -79,6 +84,8 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
 
   const engineerItems: MenuDataItem[] = [
     { path: '/admin/work-planning', name: t('nav.work_planning'), icon: <ScheduleOutlined /> },
+    { path: '/admin/materials', name: t('nav.materials'), icon: <InboxOutlined /> },
+    { path: '/admin/pm-templates', name: t('nav.pm_templates'), icon: <UnorderedListOutlined /> },
     { path: '/engineer/jobs', name: t('nav.my_jobs'), icon: <ToolOutlined /> },
     { path: '/engineer/jobs/create', name: t('nav.create_job'), icon: <AppstoreOutlined /> },
     { path: '/engineer/team-assignment', name: t('nav.team_assignment'), icon: <TeamOutlined /> },

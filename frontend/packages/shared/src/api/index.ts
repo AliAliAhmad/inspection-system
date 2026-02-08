@@ -115,3 +115,7 @@ export type {
   KitsListResponse,
   LowStockResponse,
 } from './materials.api';
+export { cyclesApi } from './cycles.api';
+export type { CyclesListParams } from './cycles.api';
+export { pmTemplatesApi } from './pm-templates.api';
+export type { TemplatesListParams, FindTemplateParams } from './pm-templates.api';

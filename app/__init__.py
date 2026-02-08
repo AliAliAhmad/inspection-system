@@ -81,7 +81,7 @@ def create_app(config_name='development'):
         inspection_assignments, assessments, defect_assessments,
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
         files, sync, inspection_routines, roster, voice, ai,
-        work_plans, materials
+        work_plans, materials, cycles, pm_templates
     )
 
     # Core
@@ -138,6 +138,8 @@ def create_app(config_name='development'):
     # Work Planning
     app.register_blueprint(work_plans.bp, url_prefix='/api/work-plans')
     app.register_blueprint(materials.bp, url_prefix='/api/materials')
+    app.register_blueprint(cycles.bp, url_prefix='/api/cycles')
+    app.register_blueprint(pm_templates.bp, url_prefix='/api/pm-templates')
 
     # Initialize background scheduler (not in testing)
     if config_name != 'testing':

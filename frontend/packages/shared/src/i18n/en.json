@@ -88,7 +88,10 @@
     "inspectionSchedule": "Inspection Schedule",
     "equipment_dashboard": "Equipment Dashboard",
     "work_planning": "Work Planning",
-    "my_work_plan": "My Work Plan"
+    "my_work_plan": "My Work Plan",
+    "materials": "Materials",
+    "pm_templates": "PM Templates",
+    "maintenance_cycles": "Maintenance Cycles"
   },
   "status": {
     "active": "Active",

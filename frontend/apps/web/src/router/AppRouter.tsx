@@ -32,6 +32,9 @@ const BacklogPage = lazy(() => import('../pages/admin/BacklogPage'));
 const TeamRosterPage = lazy(() => import('../pages/admin/TeamRosterPage'));
 const WorkPlanningPage = lazy(() => import('../pages/admin/WorkPlanningPage'));
 const WorkPlanDayPage = lazy(() => import('../pages/admin/WorkPlanDayPage'));
+const MaterialsPage = lazy(() => import('../pages/admin/MaterialsPage'));
+const PMTemplatesPage = lazy(() => import('../pages/admin/PMTemplatesPage'));
+const CyclesPage = lazy(() => import('../pages/admin/CyclesPage'));
 
 // Inspector pages
 const MyAssignmentsPage = lazy(() => import('../pages/inspector/MyAssignmentsPage'));
@@ -111,6 +114,9 @@ export default function AppRouter() {
             <Route path="work-planning" element={<RoleGuard roles={['admin', 'engineer']}><WorkPlanningPage /></RoleGuard>} />
             <Route path="work-plan/:planId" element={<RoleGuard roles={['admin', 'engineer']}><WorkPlanningPage /></RoleGuard>} />
             <Route path="work-plan/:planId/day/:date" element={<RoleGuard roles={['admin', 'engineer']}><WorkPlanDayPage /></RoleGuard>} />
+            <Route path="materials" element={<RoleGuard roles={['admin', 'engineer']}><MaterialsPage /></RoleGuard>} />
+            <Route path="pm-templates" element={<RoleGuard roles={['admin', 'engineer']}><PMTemplatesPage /></RoleGuard>} />
+            <Route path="cycles" element={<RoleGuard roles={['admin']}><CyclesPage /></RoleGuard>} />
             <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pauses" replace />} />
           </Route>
 

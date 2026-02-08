@@ -37,6 +37,27 @@ class WorkPlanJob(db.Model):
     # SAP integration
     sap_order_number = db.Column(db.String(50))
 
+    # Description from SAP or manual entry
+    description = db.Column(db.Text)
+
+    # PM Template and Cycle (for PM jobs)
+    cycle_id = db.Column(db.Integer, db.ForeignKey('maintenance_cycles.id'))
+    pm_template_id = db.Column(db.Integer, db.ForeignKey('pm_templates.id'))
+
+    # Overdue tracking
+    overdue_value = db.Column(db.Float)  # Number of hours or days overdue
+    overdue_unit = db.Column(db.String(10))  # hours, days
+
+    # Maintenance base from SAP
+    maintenance_base = db.Column(db.String(100))  # running_hours, calendar, condition
+
+    # Planned date from SAP
+    planned_date = db.Column(db.Date)
+
+    # Time slots for timeline view
+    start_time = db.Column(db.Time)
+    end_time = db.Column(db.Time)
+
     # Time estimate (required when adding job)
     estimated_hours = db.Column(db.Float, nullable=False)
 
@@ -58,8 +79,28 @@ class WorkPlanJob(db.Model):
     equipment = db.relationship('Equipment')
     defect = db.relationship('Defect')
     inspection_assignment = db.relationship('InspectionAssignment')
+    cycle = db.relationship('MaintenanceCycle')
+    pm_template = db.relationship('PMTemplate')
     assignments = db.relationship('WorkPlanAssignment', back_populates='job', cascade='all, delete-orphan')
     materials = db.relationship('WorkPlanMaterial', back_populates='job', cascade='all, delete-orphan')
+
+    @property
+    def computed_priority(self):
+        """
+        Calculate priority based on overdue status.
+        Returns: 'normal' (on time), 'high' (overdue), 'critical' (severely overdue)
+        """
+        if not self.overdue_value or self.overdue_value <= 0:
+            return 'normal'
+
+        if self.overdue_unit == 'hours':
+            if self.overdue_value > 100:
+                return 'critical'
+            return 'high'
+        else:  # days
+            if self.overdue_value > 7:
+                return 'critical'
+            return 'high'
 
     # Constraints
     __table_args__ = (
@@ -104,6 +145,18 @@ class WorkPlanJob(db.Model):
             'inspection_assignment_id': self.inspection_assignment_id,
             'inspection_assignment': self.inspection_assignment.to_dict() if self.inspection_assignment else None,
             'sap_order_number': self.sap_order_number,
+            'description': self.description,
+            'cycle_id': self.cycle_id,
+            'cycle': self.cycle.to_dict(language) if self.cycle else None,
+            'pm_template_id': self.pm_template_id,
+            'pm_template': self.pm_template.to_dict(language, include_items=False) if self.pm_template else None,
+            'overdue_value': self.overdue_value,
+            'overdue_unit': self.overdue_unit,
+            'computed_priority': self.computed_priority,
+            'maintenance_base': self.maintenance_base,
+            'planned_date': self.planned_date.isoformat() if self.planned_date else None,
+            'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
+            'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
             'estimated_hours': self.estimated_hours,
             'position': self.position,
             'priority': self.priority,

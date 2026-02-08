@@ -9,7 +9,7 @@ from app.extensions import db
 from app.models import (
     WorkPlan, WorkPlanDay, WorkPlanJob, WorkPlanAssignment, WorkPlanMaterial,
     Material, MaterialKit, MaterialKitItem, User, Equipment, Defect,
-    InspectionAssignment, Notification
+    InspectionAssignment, Notification, MaintenanceCycle, PMTemplate, PMTemplateMaterial
 )
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from app.utils.decorators import get_current_user
@@ -730,6 +730,81 @@ def get_my_plan():
     }), 200
 
 
+# ==================== MOVE JOB (Drag & Drop) ====================
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/move', methods=['POST'])
+@jwt_required()
+def move_job(plan_id, job_id):
+    """
+    Move a job to a different day (for drag & drop rescheduling).
+
+    Request body:
+        {
+            "target_day_id": 123,
+            "position": 0,  // Optional, for ordering within the day
+            "start_time": "08:00"  // Optional, for timeline positioning
+        }
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot move jobs in a published work plan")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    data = request.get_json()
+    if not data or not data.get('target_day_id'):
+        raise ValidationError("target_day_id is required")
+
+    target_day = db.session.get(WorkPlanDay, data['target_day_id'])
+    if not target_day or target_day.work_plan_id != plan_id:
+        raise NotFoundError("Target day not found in this plan")
+
+    # Move to new day
+    old_day_id = job.work_plan_day_id
+    job.work_plan_day_id = target_day.id
+
+    # Update position if provided
+    if 'position' in data:
+        job.position = data['position']
+    else:
+        # Get next position on target day
+        max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter(
+            WorkPlanJob.work_plan_day_id == target_day.id,
+            WorkPlanJob.id != job_id
+        ).scalar() or 0
+        job.position = max_position + 1
+
+    # Update start_time if provided (for timeline view)
+    if 'start_time' in data and data['start_time']:
+        try:
+            job.start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+            # Calculate end_time based on estimated_hours
+            start_minutes = job.start_time.hour * 60 + job.start_time.minute
+            end_minutes = start_minutes + int(job.estimated_hours * 60)
+            end_hour = min(end_minutes // 60, 23)
+            end_minute = end_minutes % 60
+            job.end_time = datetime.strptime(f'{end_hour:02d}:{end_minute:02d}', '%H:%M').time()
+        except ValueError:
+            pass  # Ignore invalid time format
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Job moved to {target_day.date.strftime("%A, %B %d")}',
+        'job': job.to_dict(user.language or 'en'),
+        'old_day_id': old_day_id,
+        'new_day_id': target_day.id
+    }), 200
+
+
 # ==================== SAP IMPORT ====================
 
 @bp.route('/import-sap', methods=['POST'])
@@ -739,13 +814,20 @@ def import_sap_orders():
     Import SAP work orders from Excel file.
 
     Expected columns:
-        - order_number: SAP order number
-        - type: PM, CM (Corrective Maintenance), INS (Inspection)
-        - equipment_code: Equipment code
-        - description: Job description
-        - priority: low, normal, high, urgent
-        - date: Target date (YYYY-MM-DD)
-        - estimated_hours: Estimated hours
+        - order_number: SAP order number (required)
+        - type: PM, CM (Corrective Maintenance), INS (Inspection) (required)
+        - equipment_code: Equipment serial number (required)
+        - date: Target date YYYY-MM-DD (required)
+        - estimated_hours: Estimated hours (required)
+        - description: Job description (optional)
+        - cycle_value: Cycle value e.g. 250, 500 (optional, for PM)
+        - cycle_unit: 'hours' or 'days/weeks/months' (optional)
+        - maintenance_base: running_hours, calendar, condition (optional)
+        - priority: low, normal, high, urgent (optional)
+        - overdue_value: Hours or days overdue (optional)
+        - overdue_unit: 'hours' or 'days' (optional)
+        - planned_date: Original planned date (optional)
+        - note: Additional notes (optional)
 
     Request params:
         - plan_id: Work plan ID to import into
@@ -772,15 +854,23 @@ def import_sap_orders():
 
     try:
         df = pd.read_excel(BytesIO(file.read()))
+        # Normalize column names
+        df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
     except Exception as e:
         raise ValidationError(f"Failed to read Excel file: {str(e)}")
 
     required_columns = ['order_number', 'type', 'equipment_code', 'date', 'estimated_hours']
+    # Also accept equipment_serial as alternative to equipment_code
+    if 'equipment_serial' in df.columns and 'equipment_code' not in df.columns:
+        df['equipment_code'] = df['equipment_serial']
+
     missing = [c for c in required_columns if c not in df.columns]
     if missing:
         raise ValidationError(f"Missing required columns: {', '.join(missing)}")
 
     created = 0
+    templates_linked = 0
+    materials_added = 0
     errors = []
 
     for idx, row in df.iterrows():
@@ -823,34 +913,133 @@ def import_sap_orders():
                 errors.append(f"Row {idx + 2}: Day not found for date {job_date}")
                 continue
 
-            # Find equipment
-            equipment = Equipment.query.filter_by(code=equipment_code).first()
+            # Find equipment by code or serial_number
+            equipment = Equipment.query.filter(
+                db.or_(
+                    Equipment.code == equipment_code,
+                    Equipment.serial_number == equipment_code
+                )
+            ).first()
             if not equipment:
                 errors.append(f"Row {idx + 2}: Equipment '{equipment_code}' not found")
                 continue
 
-            # Create job
+            # Get next position
             max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
                 work_plan_day_id=day.id
             ).scalar() or 0
 
-            priority = str(row.get('priority', 'normal')).lower()
+            # Parse priority
+            priority = str(row.get('priority', 'normal')).lower() if pd.notna(row.get('priority')) else 'normal'
             if priority not in ['low', 'normal', 'high', 'urgent']:
                 priority = 'normal'
 
+            # Parse cycle information (for PM jobs)
+            cycle_id = None
+            pm_template = None
+            if job_type == 'pm':
+                cycle_value = row.get('cycle_value')
+                cycle_unit = str(row.get('cycle_unit', '')).lower().strip() if pd.notna(row.get('cycle_unit')) else None
+
+                if pd.notna(cycle_value):
+                    try:
+                        cycle_value = int(float(cycle_value))
+                        # Find matching cycle
+                        if cycle_unit in ['hours', 'h', 'hour']:
+                            cycle = MaintenanceCycle.query.filter_by(
+                                cycle_type='running_hours',
+                                hours_value=cycle_value,
+                                is_active=True
+                            ).first()
+                        elif cycle_unit in ['days', 'weeks', 'months']:
+                            cycle = MaintenanceCycle.query.filter_by(
+                                cycle_type='calendar',
+                                calendar_value=cycle_value,
+                                calendar_unit=cycle_unit,
+                                is_active=True
+                            ).first()
+                        else:
+                            # Default to running_hours if no unit specified
+                            cycle = MaintenanceCycle.query.filter_by(
+                                cycle_type='running_hours',
+                                hours_value=cycle_value,
+                                is_active=True
+                            ).first()
+
+                        if cycle:
+                            cycle_id = cycle.id
+                            # Try to find matching PM template
+                            pm_template = PMTemplate.find_for_job(equipment.equipment_type, cycle_id)
+                    except (ValueError, TypeError):
+                        pass
+
+            # Parse overdue information
+            overdue_value = None
+            overdue_unit = None
+            if pd.notna(row.get('overdue_value')):
+                try:
+                    overdue_value = float(row['overdue_value'])
+                    overdue_unit = str(row.get('overdue_unit', 'hours')).lower().strip() if pd.notna(row.get('overdue_unit')) else 'hours'
+                    if overdue_unit not in ['hours', 'days']:
+                        overdue_unit = 'hours' if job_type == 'pm' else 'days'
+                except (ValueError, TypeError):
+                    pass
+
+            # Parse planned_date
+            planned_date = None
+            if pd.notna(row.get('planned_date')):
+                try:
+                    if hasattr(row['planned_date'], 'date'):
+                        planned_date = row['planned_date'].date()
+                    else:
+                        planned_date = datetime.strptime(str(row['planned_date'])[:10], '%Y-%m-%d').date()
+                except:
+                    pass
+
+            # Get description and notes
+            description = str(row.get('description', '')).strip() if pd.notna(row.get('description')) else None
+            notes = str(row.get('note', '')).strip() if pd.notna(row.get('note')) else None
+            if not notes:
+                notes = str(row.get('notes', '')).strip() if pd.notna(row.get('notes')) else None
+
+            # Get maintenance base
+            maintenance_base = str(row.get('maintenance_base', '')).strip() if pd.notna(row.get('maintenance_base')) else None
+
+            # Create job
             job = WorkPlanJob(
                 work_plan_day_id=day.id,
                 job_type=job_type,
                 berth=equipment.berth,
                 equipment_id=equipment.id,
                 sap_order_number=order_number,
-                estimated_hours=estimated_hours,
+                description=description,
+                cycle_id=cycle_id,
+                pm_template_id=pm_template.id if pm_template else None,
+                overdue_value=overdue_value,
+                overdue_unit=overdue_unit,
+                maintenance_base=maintenance_base,
+                planned_date=planned_date,
+                estimated_hours=pm_template.estimated_hours if pm_template else estimated_hours,
                 position=max_position + 1,
                 priority=priority,
-                notes=str(row.get('description', '')).strip() if pd.notna(row.get('description')) else None
+                notes=notes
             )
 
             db.session.add(job)
+            db.session.flush()  # Get job ID for materials
+
+            # If PM template found, auto-add materials
+            if pm_template:
+                templates_linked += 1
+                for tm in pm_template.materials:
+                    wpm = WorkPlanMaterial(
+                        work_plan_job_id=job.id,
+                        material_id=tm.material_id,
+                        quantity=tm.quantity
+                    )
+                    db.session.add(wpm)
+                    materials_added += 1
+
             created += 1
 
         except Exception as e:
@@ -862,6 +1051,8 @@ def import_sap_orders():
         'status': 'success',
         'message': f'Import complete. Created {created} jobs.',
         'created': created,
+        'templates_linked': templates_linked,
+        'materials_added': materials_added,
         'errors': errors
     }), 200
 
