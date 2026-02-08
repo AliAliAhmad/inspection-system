@@ -125,9 +125,10 @@ export default function WorkPlanningPage() {
   );
 
   // Fetch work plan for current week with full details
-  const { data: plansData, isLoading } = useQuery({
+  const { data: plansData, isLoading, refetch } = useQuery({
     queryKey: ['work-plans', weekStartStr],
     queryFn: () => workPlansApi.list({ week_start: weekStartStr, include_days: true }).then((r) => r.data),
+    staleTime: 0, // Always refetch when week changes
   });
 
   const currentPlan = plansData?.work_plans?.[0];
@@ -146,13 +147,13 @@ export default function WorkPlanningPage() {
       const errorMsg = err.response?.data?.message || 'Failed to create plan';
       if (errorMsg.includes('already exists')) {
         message.info('A plan already exists for this week. Loading it now...');
+        setCreateModalOpen(false);
+        form.resetFields();
         // Navigate to the week that was selected
-        const selectedWeek = dayjs(variables.week_start);
+        const selectedWeek = dayjs(variables.week_start).startOf('isoWeek');
         const currentWeek = dayjs().startOf('isoWeek');
         const diffWeeks = selectedWeek.diff(currentWeek, 'week');
         setWeekOffset(diffWeeks);
-        setCreateModalOpen(false);
-        form.resetFields();
       } else {
         message.error(errorMsg);
       }
