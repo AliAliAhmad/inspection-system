@@ -4,7 +4,17 @@ const QUEUE_KEY = 'sync-queue:pending-operations';
 
 export interface QueuedOperation {
   id: string;
-  type: 'answer-question' | 'submit-inspection' | 'start-job' | 'complete-job' | 'pause-job' | 'mark-incomplete' | 'request-leave';
+  type:
+    | 'answer-question'
+    | 'submit-inspection'
+    | 'start-job'
+    | 'complete-job'
+    | 'pause-job'
+    | 'mark-incomplete'
+    | 'request-leave'
+    | 'request-pause'
+    | 'assess-defect'
+    | 'upload-cleaning';
   endpoint: string;
   method: 'POST' | 'PUT' | 'DELETE';
   payload: Record<string, unknown>;

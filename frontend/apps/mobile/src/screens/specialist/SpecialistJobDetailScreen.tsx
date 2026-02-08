@@ -13,7 +13,9 @@ import {
 } from 'react-native';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import InspectionFindingDisplay from '../../components/InspectionFindingDisplay';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useOfflineMutation } from '../../hooks/useOfflineMutation';
+import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -132,17 +134,17 @@ export default function SpecialistJobDetailScreen() {
   const [cleaningPhotoUri, setCleaningPhotoUri] = useState<string | null>(null);
   const [uploadingCleaning, setUploadingCleaning] = useState(false);
 
-  // Fetch job
+  // Fetch job with offline support
   const {
     data: job,
     isLoading,
     isError,
     refetch,
     isRefetching,
-  } = useQuery({
+  } = useOfflineQuery({
     queryKey: ['specialistJob', id],
-    queryFn: () => specialistJobsApi.get(id),
-    select: (res) => (res.data as any).data ?? res.data,
+    queryFn: () => specialistJobsApi.get(id).then((res) => (res.data as any).data ?? res.data),
+    cacheKey: `specialistJob-${id}`,
   });
 
   // Fetch pause history
@@ -185,15 +187,20 @@ export default function SpecialistJobDetailScreen() {
     }
   }, [jobData?.is_running, jobData?.started_at]);
 
-  // Mutations
-  const startMutation = useMutation({
+  // Mutations with offline support
+  const startMutation = useOfflineMutation({
     mutationFn: (plannedHours?: number) => specialistJobsApi.start(id, plannedHours),
+    offlineConfig: {
+      type: 'start-job',
+      endpoint: `/api/specialist-jobs/${id}/start`,
+      method: 'POST',
+      toPayload: (plannedHours) => plannedHours ? { planned_hours: plannedHours } : {},
+    },
+    invalidateKeys: [['specialistJob', id], ['specialistJobs']],
     onSuccess: () => {
       setStartModalVisible(false);
       setStartStep('details');
       setPlannedTimeInput('');
-      queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
-      queryClient.invalidateQueries({ queryKey: ['specialistJobs'] });
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.message || t('common.error');
@@ -201,44 +208,56 @@ export default function SpecialistJobDetailScreen() {
     },
   });
 
-  const completeMutation = useMutation({
+  const completeMutation = useOfflineMutation({
     mutationFn: (notes: string) =>
       specialistJobsApi.complete(id, {
         work_notes: notes || undefined,
         completion_status: 'pass',
       }),
+    offlineConfig: {
+      type: 'complete-job',
+      endpoint: `/api/specialist-jobs/${id}/complete`,
+      method: 'POST',
+      toPayload: (notes) => ({ work_notes: notes || undefined, completion_status: 'pass' }),
+    },
+    invalidateKeys: [['specialistJob', id], ['specialistJobs']],
     onSuccess: () => {
       setCompleteModalVisible(false);
       setWorkNotesInput('');
-      queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
-      queryClient.invalidateQueries({ queryKey: ['specialistJobs'] });
     },
     onError: () => Alert.alert(t('common.error'), t('common.error')),
   });
 
-  const incompleteMutation = useMutation({
+  const incompleteMutation = useOfflineMutation({
     mutationFn: (payload: { reason: IncompleteReason; notes?: string }) =>
       specialistJobsApi.markIncomplete(id, payload),
+    offlineConfig: {
+      type: 'mark-incomplete',
+      endpoint: `/api/specialist-jobs/${id}/mark-incomplete`,
+      method: 'POST',
+    },
+    invalidateKeys: [['specialistJob', id], ['specialistJobs']],
     onSuccess: () => {
       setIncompleteModalVisible(false);
       setIncompleteReason('no_spare_parts');
       setIncompleteNotes('');
-      queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
-      queryClient.invalidateQueries({ queryKey: ['specialistJobs'] });
     },
     onError: () => Alert.alert(t('common.error'), t('common.error')),
   });
 
-  const pauseMutation = useMutation({
+  const pauseMutation = useOfflineMutation({
     mutationFn: (payload: { reason_category: PauseCategory; reason_details?: string }) =>
       specialistJobsApi.requestPause(id, payload),
+    offlineConfig: {
+      type: 'request-pause',
+      endpoint: `/api/specialist-jobs/${id}/request-pause`,
+      method: 'POST',
+    },
+    invalidateKeys: [['specialistJob', id], ['specialistJobPauses', id], ['specialistJobs']],
     onSuccess: () => {
       setPauseModalVisible(false);
       setPauseCategory('parts');
       setPauseDetails('');
-      queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
-      queryClient.invalidateQueries({ queryKey: ['specialistJobPauses', id] });
-      queryClient.invalidateQueries({ queryKey: ['specialistJobs'] });
     },
     onError: () => Alert.alert(t('common.error'), t('common.error')),
   });
@@ -251,14 +270,19 @@ export default function SpecialistJobDetailScreen() {
     onError: () => Alert.alert(t('common.error'), t('common.error')),
   });
 
-  const defectAssessmentMutation = useMutation({
+  const defectAssessmentMutation = useOfflineMutation({
     mutationFn: (payload: { defect_id: number; verdict: 'confirm' | 'reject' | 'minor'; technical_notes: string }) =>
       defectAssessmentsApi.create(payload),
+    offlineConfig: {
+      type: 'assess-defect',
+      endpoint: '/api/defect-assessments',
+      method: 'POST',
+    },
+    invalidateKeys: [['specialistJob', id]],
     onSuccess: () => {
       setAssessmentModalVisible(false);
       setAssessmentVerdict('confirm');
       setTechnicalNotes('');
-      queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
       Alert.alert(t('common.success', 'Success'), t('jobs.assessment_submitted', 'Assessment submitted'));
     },
     onError: () => Alert.alert(t('common.error'), t('common.error')),
