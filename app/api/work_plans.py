@@ -937,7 +937,10 @@ def import_sap_orders():
 
             # Find equipment by code or serial_number
             equipment = Equipment.query.filter(
-                Equipment.serial_number == equipment_code
+                db.or_(
+                    Equipment.serial_number == equipment_code,
+                    Equipment.name == equipment_code
+                )
             ).first()
             if not equipment:
                 errors.append(f"Row {idx + 2}: Equipment '{equipment_code}' not found")
@@ -1200,7 +1203,7 @@ def download_sap_import_template():
             'Description': [
                 'SAP order number (unique identifier)',
                 'Any SAP order type (e.g., PRM, COM, INS, PM01, PM02, CM01). Stored as-is.',
-                'Equipment serial number (must exist in system)',
+                'Equipment name or serial number (must exist in system)',
                 'SAP required/due date (YYYY-MM-DD). Jobs outside plan week go to first day.',
                 'Estimated hours to complete',
                 'Job description/notes',
