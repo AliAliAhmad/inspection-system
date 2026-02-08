@@ -36,48 +36,87 @@ def debug_work_plan(week_start_str):
     """Debug endpoint to check work plan loading (temporary)."""
     try:
         from sqlalchemy import text
+        from collections import Counter
 
         week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
-
-        # Check if work_plan_jobs has the new columns
-        columns_check = {}
-        for col in ['sap_order_type', 'description', 'cycle_id', 'overdue_value']:
-            try:
-                result = db.session.execute(text(f"SELECT {col} FROM work_plan_jobs LIMIT 1"))
-                columns_check[col] = 'exists'
-            except Exception as e:
-                columns_check[col] = str(e)
 
         # Get the plan
         plan = WorkPlan.query.filter_by(week_start=week_date).first()
         if not plan:
-            return jsonify({'status': 'no_plan', 'columns': columns_check}), 200
+            return jsonify({'status': 'no_plan'}), 200
 
-        # Try to get days
-        days_info = []
+        # Get all jobs for this plan
+        all_jobs = []
         for day in plan.days:
-            day_info = {'date': day.date.isoformat(), 'jobs_count': len(day.jobs)}
-            # Try to serialize each job
-            jobs_ok = []
-            jobs_err = []
             for job in day.jobs:
-                try:
-                    job.to_dict('en')
-                    jobs_ok.append(job.id)
-                except Exception as e:
-                    jobs_err.append({'id': job.id, 'error': str(e)})
-            day_info['jobs_ok'] = jobs_ok
-            day_info['jobs_err'] = jobs_err
-            days_info.append(day_info)
+                all_jobs.append({
+                    'id': job.id,
+                    'day': day.date.isoformat(),
+                    'sap_order': job.sap_order_number,
+                    'equipment_id': job.equipment_id
+                })
+
+        # Find duplicates by SAP order number
+        sap_orders = [j['sap_order'] for j in all_jobs if j['sap_order']]
+        duplicates = {k: v for k, v in Counter(sap_orders).items() if v > 1}
 
         return jsonify({
             'status': 'ok',
             'plan_id': plan.id,
-            'columns': columns_check,
-            'days': days_info
+            'total_jobs': len(all_jobs),
+            'unique_sap_orders': len(set(sap_orders)),
+            'duplicates': duplicates,
+            'sample_jobs': all_jobs[:10]
         }), 200
 
     except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 200
+
+
+@bp.route('/cleanup/<week_start_str>', methods=['POST'])
+def cleanup_duplicate_jobs(week_start_str):
+    """Remove duplicate jobs (keep first occurrence by SAP order)."""
+    try:
+        week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
+        plan = WorkPlan.query.filter_by(week_start=week_date).first()
+        if not plan:
+            return jsonify({'status': 'no_plan'}), 404
+
+        # Collect all jobs with SAP orders
+        seen_orders = set()
+        jobs_to_delete = []
+
+        for day in plan.days:
+            for job in day.jobs:
+                if job.sap_order_number:
+                    if job.sap_order_number in seen_orders:
+                        jobs_to_delete.append(job.id)
+                    else:
+                        seen_orders.add(job.sap_order_number)
+
+        # Delete duplicates
+        deleted = 0
+        for job_id in jobs_to_delete:
+            job = db.session.get(WorkPlanJob, job_id)
+            if job:
+                db.session.delete(job)
+                deleted += 1
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'ok',
+            'deleted': deleted,
+            'remaining': len(seen_orders)
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
         import traceback
         return jsonify({
             'status': 'error',
