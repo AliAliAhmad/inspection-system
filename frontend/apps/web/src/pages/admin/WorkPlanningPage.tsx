@@ -142,12 +142,17 @@ export default function WorkPlanningPage() {
       setCreateModalOpen(false);
       form.resetFields();
     },
-    onError: (err: any) => {
+    onError: (err: any, variables) => {
       const errorMsg = err.response?.data?.message || 'Failed to create plan';
       if (errorMsg.includes('already exists')) {
         message.info('A plan already exists for this week. Loading it now...');
-        queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+        // Navigate to the week that was selected
+        const selectedWeek = dayjs(variables.week_start);
+        const currentWeek = dayjs().startOf('isoWeek');
+        const diffWeeks = selectedWeek.diff(currentWeek, 'week');
+        setWeekOffset(diffWeeks);
         setCreateModalOpen(false);
+        form.resetFields();
       } else {
         message.error(errorMsg);
       }
