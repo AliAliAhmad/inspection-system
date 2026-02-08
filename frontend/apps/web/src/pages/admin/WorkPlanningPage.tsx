@@ -395,7 +395,9 @@ export default function WorkPlanningPage() {
                       {
                         key: 'download-template',
                         label: '📄 Download SAP Template',
-                        onClick: () => message.info('Template download coming soon'),
+                        onClick: () => {
+                          window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank');
+                        },
                       },
                       { type: 'divider' },
                       {
@@ -602,7 +604,7 @@ export default function WorkPlanningPage() {
                 setJobDetailsModalOpen(true);
               }}
               onImportSAP={() => setImportModalOpen(true)}
-              onDownloadTemplate={() => message.info('Template download coming soon')}
+              onDownloadTemplate={() => window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank')}
             />
           </div>
         </div>

@@ -1128,3 +1128,163 @@ def get_available_jobs():
         'status': 'success',
         **result
     }), 200
+
+
+# ==================== TEMPLATES ====================
+
+@bp.route('/templates/sap-import', methods=['GET'])
+@jwt_required()
+def download_sap_import_template():
+    """
+    Download Excel template for SAP work order import.
+    """
+    from flask import Response
+
+    # Create sample data with all columns
+    sample_data = {
+        'order_number': ['SAP-2026-001', 'SAP-2026-002', 'SAP-2026-003'],
+        'type': ['PM', 'CM', 'INS'],
+        'equipment_code': ['PUMP-001', 'CRANE-002', 'GEN-003'],
+        'date': ['2026-02-10', '2026-02-11', '2026-02-12'],
+        'estimated_hours': [4, 6, 2],
+        'description': ['Monthly pump maintenance', 'Crane hydraulic repair', 'Generator inspection'],
+        'priority': ['normal', 'high', 'normal'],
+        'berth': ['east', 'west', 'both'],
+        'cycle_value': [250, '', ''],
+        'cycle_unit': ['hours', '', ''],
+        'maintenance_base': ['running_hours', 'calendar', ''],
+        'overdue_value': [50, 10, ''],
+        'overdue_unit': ['hours', 'days', ''],
+        'planned_date': ['2026-02-05', '2026-02-08', ''],
+        'note': ['Check bearings', 'Urgent - safety issue', ''],
+    }
+
+    df = pd.DataFrame(sample_data)
+
+    # Create Excel file in memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Work Orders', index=False)
+
+        # Add instructions sheet
+        instructions = pd.DataFrame({
+            'Column': [
+                'order_number', 'type', 'equipment_code', 'date', 'estimated_hours',
+                'description', 'priority', 'berth', 'cycle_value', 'cycle_unit',
+                'maintenance_base', 'overdue_value', 'overdue_unit', 'planned_date', 'note'
+            ],
+            'Required': [
+                'Yes', 'Yes', 'Yes', 'Yes', 'Yes',
+                'No', 'No', 'No', 'No', 'No',
+                'No', 'No', 'No', 'No', 'No'
+            ],
+            'Description': [
+                'SAP order number (unique identifier)',
+                'PM = Preventive Maintenance, CM = Corrective Maintenance, INS = Inspection',
+                'Equipment serial number (must exist in system)',
+                'Target date for the job (YYYY-MM-DD)',
+                'Estimated hours to complete',
+                'Job description/notes',
+                'low, normal, high, urgent',
+                'east, west, or both',
+                'Cycle value (e.g., 250, 500, 1000)',
+                'hours, days, weeks, months',
+                'running_hours, calendar, or condition',
+                'How much the job is overdue',
+                'hours or days',
+                'Original planned date (YYYY-MM-DD)',
+                'Additional notes'
+            ]
+        })
+        instructions.to_excel(writer, sheet_name='Instructions', index=False)
+
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            'Content-Disposition': 'attachment; filename=sap_import_template.xlsx'
+        }
+    )
+
+
+@bp.route('/templates/materials', methods=['GET'])
+@jwt_required()
+def download_materials_template():
+    """
+    Download Excel template for materials import.
+    """
+    from flask import Response
+
+    # Create sample data
+    sample_data = {
+        'code': ['FLT-001', 'OIL-002', 'BRG-003'],
+        'name': ['Oil Filter', 'Hydraulic Oil', 'Bearing 6205'],
+        'name_ar': ['فلتر زيت', 'زيت هيدروليكي', 'رمان بلي 6205'],
+        'category': ['filter', 'lubricant', 'bearing'],
+        'unit': ['pcs', 'liter', 'pcs'],
+        'current_stock': [50, 200, 30],
+        'min_stock': [15, 50, 10],
+    }
+
+    df = pd.DataFrame(sample_data)
+
+    # Create Excel file in memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Materials', index=False)
+
+        # Add instructions sheet
+        instructions = pd.DataFrame({
+            'Column': [
+                'code', 'name', 'name_ar', 'category', 'unit', 'current_stock', 'min_stock'
+            ],
+            'Required': [
+                'Yes', 'Yes', 'No', 'Yes', 'Yes', 'No', 'No'
+            ],
+            'Description': [
+                'Unique material code (used to update existing records)',
+                'Material name in English',
+                'Material name in Arabic',
+                'Category (filter, lubricant, bearing, seal, electrical, etc.)',
+                'Unit of measure (pcs, liter, meter, kg, etc.)',
+                'Current stock quantity (defaults to 0)',
+                'Minimum stock level for alerts (defaults to 10)'
+            ]
+        })
+        instructions.to_excel(writer, sheet_name='Instructions', index=False)
+
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            'Content-Disposition': 'attachment; filename=materials_import_template.xlsx'
+        }
+    )
+
+
+@bp.route('/<int:plan_id>/pdf/day/<day_date>', methods=['GET'])
+@jwt_required()
+def download_day_pdf(plan_id, day_date):
+    """
+    Generate and download PDF for a specific day.
+    """
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    from app.services.work_plan_pdf_service import WorkPlanPDFService
+    pdf_file = WorkPlanPDFService.generate_day_pdf(plan, day_date)
+
+    if not pdf_file:
+        raise ValidationError("Failed to generate PDF")
+
+    return jsonify({
+        'status': 'success',
+        'pdf_url': pdf_file.get_url()
+    }), 200

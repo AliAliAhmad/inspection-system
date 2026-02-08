@@ -135,4 +135,18 @@ export const workPlansApi = {
       { headers: { 'Content-Type': 'multipart/form-data' } }
     );
   },
+
+  // Templates
+  getSAPImportTemplateUrl() {
+    return `/api/work-plans/templates/sap-import`;
+  },
+
+  getMaterialsTemplateUrl() {
+    return `/api/work-plans/templates/materials`;
+  },
+
+  // Day PDF
+  getDayPdf(planId: number, dayDate: string) {
+    return getApiClient().get<ApiResponse<{ pdf_url: string }>>(`/api/work-plans/${planId}/pdf/day/${dayDate}`);
+  },
 };
