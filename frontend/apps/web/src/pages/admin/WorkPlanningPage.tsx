@@ -143,7 +143,14 @@ export default function WorkPlanningPage() {
       form.resetFields();
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.message || 'Failed to create plan');
+      const errorMsg = err.response?.data?.message || 'Failed to create plan';
+      if (errorMsg.includes('already exists')) {
+        message.info('A plan already exists for this week. Loading it now...');
+        queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+        setCreateModalOpen(false);
+      } else {
+        message.error(errorMsg);
+      }
     },
   });
 
