@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
-import { Card, Tag, Button, Space, Input, Segmented, Empty, Spin, Badge, Tooltip } from 'antd';
+import { Card, Tag, Button, Space, Input, Segmented, Empty, Spin, Badge, Tooltip, Collapse } from 'antd';
 import {
   PlusOutlined,
   UploadOutlined,
   DownloadOutlined,
   SearchOutlined,
-  ToolOutlined,
-  BugOutlined,
-  EyeOutlined,
-  ClockCircleOutlined,
-  WarningOutlined,
+  DownOutlined,
+  UpOutlined,
 } from '@ant-design/icons';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -29,10 +26,11 @@ interface DraggableJobItemProps {
   job: any;
   jobType: string;
   onClick?: () => void;
+  horizontal?: boolean;
 }
 
-const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick }) => {
-  const id = `pool-${jobType}-${job.equipment?.id || job.defect?.id || job.assignment?.id}`;
+const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, horizontal }) => {
+  const id = `pool-${jobType}-${job.id || job.equipment?.id || job.defect?.id || job.assignment?.id}`;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id,
@@ -47,6 +45,7 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
     cursor: 'grab',
+    ...(horizontal ? { flexShrink: 0, width: 200 } : {}),
   };
 
   const emoji = JOB_TYPES[jobType as keyof typeof JOB_TYPES]?.emoji || '📋';
@@ -88,9 +87,11 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
         hoverable
         onClick={onClick}
         style={{
-          marginBottom: 8,
+          marginBottom: horizontal ? 0 : 8,
+          marginRight: horizontal ? 8 : 0,
           borderLeft: `4px solid ${priorityColor === 'red' ? '#ff4d4f' : priorityColor === 'orange' ? '#faad14' : '#1890ff'}`,
           backgroundColor: isDragging ? '#f0f0f0' : '#fff',
+          height: horizontal ? '100%' : 'auto',
         }}
         bodyStyle={{ padding: '8px 12px' }}
       >
@@ -154,6 +155,7 @@ interface JobsPoolProps {
   onImportSAP?: () => void;
   onDownloadTemplate?: () => void;
   onJobClick?: (job: any, jobType: string) => void;
+  horizontal?: boolean;
 }
 
 export const JobsPool: React.FC<JobsPoolProps> = ({
@@ -163,9 +165,11 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   onImportSAP,
   onDownloadTemplate,
   onJobClick,
+  horizontal = false,
 }) => {
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState(false);
 
   // Fetch available jobs including SAP orders from pool
   const { data: availableJobs, isLoading } = useQuery({
@@ -229,6 +233,112 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   const defectCount = availableJobs?.defect_jobs?.length || 0;
   const inspectionCount = availableJobs?.inspection_jobs?.length || 0;
 
+  if (horizontal) {
+    // Horizontal layout - full width with horizontal scrolling
+    return (
+      <Card
+        size="small"
+        style={{ marginBottom: 8 }}
+        bodyStyle={{ padding: collapsed ? '8px 12px' : '12px' }}
+      >
+        {/* Header Row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: collapsed ? 0 : 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>📦</span>
+            <span style={{ fontWeight: 600 }}>Jobs Pool</span>
+            <Badge count={allJobs.length} style={{ backgroundColor: '#1890ff' }} />
+            {sapCount > 0 && <Tag color="blue">{sapCount} SAP</Tag>}
+            {defectCount > 0 && <Tag color="red">{defectCount} Defects</Tag>}
+            {inspectionCount > 0 && <Tag color="green">{inspectionCount} Inspect</Tag>}
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          {/* Search */}
+          <Input
+            placeholder="🔍 Search..."
+            prefix={<SearchOutlined />}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            allowClear
+            size="small"
+            style={{ width: 200 }}
+          />
+
+          {/* Filter Tabs */}
+          <Segmented
+            size="small"
+            value={filter}
+            onChange={v => setFilter(v as string)}
+            options={[
+              { label: 'All', value: 'all' },
+              ...(sapCount > 0 ? [{ label: `📦 ${sapCount}`, value: 'sap' }] : []),
+              { label: `🔴 ${defectCount}`, value: 'defect' },
+              { label: `✅ ${inspectionCount}`, value: 'inspection' },
+            ]}
+          />
+
+          {/* Action Buttons */}
+          <Space size={4}>
+            <Button size="small" type="primary" icon={<UploadOutlined />} onClick={onImportSAP}>
+              Import SAP
+            </Button>
+            <Button size="small" icon={<PlusOutlined />} onClick={onAddJob}>
+              Add Job
+            </Button>
+            <Button
+              size="small"
+              type="text"
+              icon={collapsed ? <DownOutlined /> : <UpOutlined />}
+              onClick={() => setCollapsed(!collapsed)}
+            />
+          </Space>
+        </div>
+
+        {/* Jobs Row - Horizontal Scroll */}
+        {!collapsed && (
+          <div
+            style={{
+              display: 'flex',
+              overflowX: 'auto',
+              gap: 0,
+              paddingBottom: 8,
+              minHeight: 100,
+            }}
+          >
+            {isLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: 20 }}>
+                <Spin />
+              </div>
+            ) : allJobs.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: 20, color: '#8c8c8c' }}>
+                {search ? "No jobs match search" : "No available jobs - Import SAP orders to get started"}
+              </div>
+            ) : (
+              allJobs.map(({ job, type }, index) => (
+                <DraggableJobItem
+                  key={`${type}-${job.id || index}`}
+                  job={job}
+                  jobType={type}
+                  onClick={() => onJobClick?.(job, type)}
+                  horizontal
+                />
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Collapsed hint */}
+        {collapsed && allJobs.length > 0 && (
+          <span style={{ fontSize: 12, color: '#8c8c8c', marginLeft: 8 }}>
+            👆 Drag jobs to calendar | Click to expand
+          </span>
+        )}
+      </Card>
+    );
+  }
+
+  // Vertical layout (original)
   return (
     <Card
       title={
@@ -288,7 +398,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
         ) : (
           allJobs.map(({ job, type }, index) => (
             <DraggableJobItem
-              key={`${type}-${index}`}
+              key={`${type}-${job.id || index}`}
               job={job}
               jobType={type}
               onClick={() => onJobClick?.(job, type)}
@@ -305,14 +415,14 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
           block
           onClick={onAddJob}
         >
-          ➕ Add Job
+          Add Job
         </Button>
         <Button
           icon={<UploadOutlined />}
           block
           onClick={onImportSAP}
         >
-          📥 Import SAP
+          Import SAP
         </Button>
         <Button
           type="link"
@@ -321,7 +431,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
           size="small"
           onClick={onDownloadTemplate}
         >
-          📄 Download Template
+          Download Template
         </Button>
       </Space>
     </Card>

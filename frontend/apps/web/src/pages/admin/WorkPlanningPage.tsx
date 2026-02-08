@@ -541,10 +541,25 @@ export default function WorkPlanningPage() {
           ]}
         />
 
-        {/* Main Content Area */}
-        <div style={{ flex: 1, display: 'flex', gap: 12, overflow: 'hidden' }}>
-          {/* Left Side: Calendar/Timeline */}
-          <div style={{ flex: 1, overflow: 'auto' }}>
+        {/* Jobs Pool - Full Width Horizontal */}
+        <JobsPool
+          berth={berth}
+          planId={currentPlan?.id}
+          onAddJob={() => setAddJobModalOpen(true)}
+          onJobClick={(job, type) => {
+            setSelectedJob({
+              ...job,
+              job_type: type as JobType,
+            } as any);
+            setJobDetailsModalOpen(true);
+          }}
+          onImportSAP={() => setImportModalOpen(true)}
+          onDownloadTemplate={() => window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank')}
+          horizontal
+        />
+
+        {/* Main Content Area - Calendar Full Width */}
+        <div style={{ flex: 1, overflow: 'auto' }}>
             {isLoading ? (
               <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spin size="large" />
@@ -586,7 +601,7 @@ export default function WorkPlanningPage() {
                     <span>🟢 On time</span>
                     <span>🟠 Overdue</span>
                     <span>🔴 Critical</span>
-                    {isDraft && <span style={{ color: '#1890ff' }}>| 👆 Drag jobs from right panel</span>}
+                    {isDraft && <span style={{ color: '#1890ff' }}>| 👆 Drag jobs from pool above</span>}
                   </div>
 
                   {/* Calendar Grid */}
@@ -660,25 +675,6 @@ export default function WorkPlanningPage() {
               </Card>
             )}
           </div>
-
-          {/* Right Side: Jobs Pool - Full Height */}
-          <div style={{ width: 400, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <JobsPool
-              berth={berth}
-              planId={currentPlan?.id}
-              onAddJob={() => setAddJobModalOpen(true)}
-              onJobClick={(job, type) => {
-                setSelectedJob({
-                  ...job,
-                  job_type: type as JobType,
-                } as any);
-                setJobDetailsModalOpen(true);
-              }}
-              onImportSAP={() => setImportModalOpen(true)}
-              onDownloadTemplate={() => window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank')}
-            />
-          </div>
-        </div>
 
         {/* Bottom: Employee Pool - Full Width */}
         <div style={{ marginTop: 8 }}>
