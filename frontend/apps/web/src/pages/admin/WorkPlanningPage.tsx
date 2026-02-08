@@ -125,11 +125,18 @@ export default function WorkPlanningPage() {
   );
 
   // Fetch work plan for current week with full details
-  const { data: plansData, isLoading, refetch } = useQuery({
+  const { data: plansData, isLoading, refetch, error, isError } = useQuery({
     queryKey: ['work-plans', weekStartStr],
     queryFn: () => workPlansApi.list({ week_start: weekStartStr, include_days: true }).then((r) => r.data),
     staleTime: 0, // Always refetch when week changes
+    retry: 1,
   });
+
+  // Show error if query failed
+  if (isError) {
+    console.error('Work plans query error:', error);
+    message.error('Failed to load work plan: ' + ((error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error'));
+  }
 
   const currentPlan = plansData?.work_plans?.[0];
   const isDraft = currentPlan?.status === 'draft';
@@ -514,6 +521,16 @@ export default function WorkPlanningPage() {
             {isLoading ? (
               <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spin size="large" />
+              </Card>
+            ) : isError ? (
+              <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center', color: '#ff4d4f' }}>
+                  <Text type="danger" style={{ fontSize: 16 }}>Error loading work plan</Text>
+                  <br />
+                  <Text type="secondary">{(error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error'}</Text>
+                  <br />
+                  <Button onClick={() => refetch()} style={{ marginTop: 16 }}>Retry</Button>
+                </div>
               </Card>
             ) : currentPlan ? (
               viewMode === 'timeline' ? (
