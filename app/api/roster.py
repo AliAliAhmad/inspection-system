@@ -460,3 +460,82 @@ def get_day_availability():
             'off': off
         }
     }), 200
+
+
+@bp.route('/template', methods=['GET'])
+@jwt_required()
+def download_roster_template():
+    """
+    Download Excel template for roster import.
+    Columns: Name, Role, Major ID, then date columns.
+    Values: D (day), N (night), Off, Leave, or empty.
+    """
+    from flask import Response
+    from io import BytesIO
+    import pandas as pd
+    from datetime import timedelta
+
+    user = get_current_user()
+
+    # Get all active users
+    users = User.query.filter(User.is_active == True).order_by(User.role, User.full_name).all()
+
+    # Generate 14 days of date columns starting from today
+    start_date = date.today()
+    dates = [start_date + timedelta(days=i) for i in range(14)]
+
+    # Build data
+    data = {
+        'Name': [u.full_name for u in users],
+        'Role': [u.role for u in users],
+        'Major ID': [u.role_id or '' for u in users],
+    }
+
+    # Add date columns with sample values
+    for i, d in enumerate(dates):
+        col_name = d.strftime('%d-%b')  # e.g., "08-Feb"
+        # Pre-fill with 'D' for day shift as default
+        data[col_name] = ['D' for _ in users]
+
+    df = pd.DataFrame(data)
+
+    # Create Excel file in memory
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Roster', index=False)
+
+        # Add instructions sheet
+        instructions = pd.DataFrame({
+            'Column': ['Name', 'Role', 'Major ID', 'Date Columns (e.g., 08-Feb)'],
+            'Required': ['Info Only', 'Info Only', 'Yes', 'Yes'],
+            'Description': [
+                'Employee name (for reference only, not used for matching)',
+                'Employee role (for reference only)',
+                'Major ID / Role ID - used to match with system users',
+                'Shift values: D = Day, N = Night, Off = Day off, Leave = On leave, Empty = No entry'
+            ]
+        })
+        instructions.to_excel(writer, sheet_name='Instructions', index=False)
+
+        # Add example values sheet
+        examples = pd.DataFrame({
+            'Value': ['D', 'N', 'Off', 'Leave', '(empty)'],
+            'Meaning': [
+                'Day Shift',
+                'Night Shift',
+                'Day Off',
+                'On Leave',
+                'No roster entry (user available but no specific shift)'
+            ]
+        })
+        examples.to_excel(writer, sheet_name='Shift Values', index=False)
+
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            'Content-Disposition': 'attachment; filename=roster_template.xlsx'
+        }
+    )

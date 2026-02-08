@@ -778,3 +778,87 @@ def get_swap_history(user_id):
         'status': 'success',
         'data': [log.to_dict() for log in logs]
     }), 200
+
+
+@bp.route('/export', methods=['GET'])
+@jwt_required()
+@admin_required()
+def export_users():
+    """
+    Export all users to Excel.
+    Admin only.
+
+    Query params:
+        - include_inactive: 'true' to include inactive users (default false)
+    """
+    import pandas as pd
+
+    include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
+
+    query = User.query
+    if not include_inactive:
+        query = query.filter(User.is_active == True)
+
+    users = query.order_by(User.role, User.full_name).all()
+
+    # Build data for export
+    data = {
+        'ID': [u.id for u in users],
+        'SAP ID': [u.sap_id or '' for u in users],
+        'Major ID': [u.role_id or '' for u in users],
+        'Full Name': [u.full_name for u in users],
+        'Email': [u.email or '' for u in users],
+        'Phone': [u.phone or '' for u in users],
+        'Role': [u.role for u in users],
+        'Minor Role': [u.minor_role or '' for u in users],
+        'Specialization': [u.specialization or '' for u in users],
+        'Language': [u.language or 'en' for u in users],
+        'Annual Leave Balance': [u.annual_leave_balance or 24 for u in users],
+        'Is Active': [u.is_active for u in users],
+        'Created At': [u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '' for u in users],
+        'Last Login': [u.last_login_at.strftime('%Y-%m-%d %H:%M') if u.last_login_at else 'Never' for u in users],
+    }
+
+    df = pd.DataFrame(data)
+
+    # Create Excel file in memory
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Users')
+
+        # Add summary sheet
+        summary_data = {
+            'Metric': [
+                'Total Users',
+                'Active Users',
+                'Inactive Users',
+                'Admins',
+                'Engineers',
+                'Specialists',
+                'Inspectors',
+                'Export Date'
+            ],
+            'Value': [
+                len(users),
+                len([u for u in users if u.is_active]),
+                len([u for u in users if not u.is_active]),
+                len([u for u in users if u.role == 'admin']),
+                len([u for u in users if u.role == 'engineer']),
+                len([u for u in users if u.role == 'specialist']),
+                len([u for u in users if u.role == 'inspector']),
+                datetime.now().strftime('%Y-%m-%d %H:%M')
+            ]
+        }
+        summary_df = pd.DataFrame(summary_data)
+        summary_df.to_excel(writer, index=False, sheet_name='Summary')
+
+    output.seek(0)
+
+    filename = f"users_export_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
