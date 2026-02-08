@@ -95,7 +95,8 @@ def _parse_shift_value(cell_value):
 def upload_roster():
     """
     Upload roster from Excel file.
-    Row 1 = headers: Name, Role, Major ID, then date columns.
+    Row 1 = headers: SAP ID, Name, Role, Major ID, then date columns.
+    SAP ID (Column A) is used for matching users.
     """
     if 'file' not in request.files:
         return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
@@ -147,24 +148,24 @@ def upload_roster():
     users_processed = 0
 
     for row_idx, row in enumerate(rows[1:], start=2):
-        if len(row) < 3:
+        if len(row) < 4:
             continue
 
-        # Column C (index 2) is Major ID
-        major_id = row[2]
-        if major_id is None:
+        # Column A (index 0) is SAP ID - used for matching
+        sap_id = row[0]
+        if sap_id is None:
             continue
-        major_id_str = str(major_id).strip()
-        if not major_id_str:
+        sap_id_str = str(sap_id).strip()
+        if not sap_id_str:
             continue
 
-        # Match user by role_id (case-insensitive)
+        # Match user by sap_id
         user = User.query.filter(
-            db.func.lower(User.role_id) == major_id_str.lower()
+            User.sap_id == sap_id_str
         ).first()
 
         if not user:
-            errors.append(f'Row {row_idx}: No user found with Major ID "{major_id_str}"')
+            errors.append(f'Row {row_idx}: No user found with SAP ID "{sap_id_str}"')
             continue
 
         # Delete all existing roster entries for this user
@@ -484,12 +485,12 @@ def download_roster_template():
     start_date = date.today()
     dates = [start_date + timedelta(days=i) for i in range(14)]
 
-    # Build data - Note: Major ID must be in Column C (index 2) for upload matching
+    # Build data - SAP ID in Column A (index 0) for upload matching
     data = {
+        'SAP ID': [u.sap_id or '' for u in users],
         'Name': [u.full_name for u in users],
         'Role': [u.role for u in users],
         'Major ID': [u.role_id or '' for u in users],
-        'SAP ID': [u.sap_id or '' for u in users],
     }
 
     # Add date columns with sample values
@@ -507,13 +508,13 @@ def download_roster_template():
 
         # Add instructions sheet
         instructions = pd.DataFrame({
-            'Column': ['Name', 'Role', 'Major ID', 'SAP ID', 'Date Columns (e.g., 08-Feb)'],
-            'Required': ['Info Only', 'Info Only', 'Yes', 'Info Only', 'Yes'],
+            'Column': ['SAP ID', 'Name', 'Role', 'Major ID', 'Date Columns (e.g., 08-Feb)'],
+            'Required': ['Yes', 'Info Only', 'Info Only', 'Info Only', 'Yes'],
             'Description': [
+                'SAP ID (6 digits) - REQUIRED: used to match with system users',
                 'Employee name (for reference only, not used for matching)',
                 'Employee role (for reference only)',
-                'Major ID / Role ID - REQUIRED: used to match with system users',
-                'SAP ID (for reference only)',
+                'Major ID / Role ID (for reference only)',
                 'Shift values: D = Day, N = Night, Off = Day off, Leave = On leave, Empty = No entry'
             ]
         })
