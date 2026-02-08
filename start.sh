@@ -403,6 +403,180 @@ with app.app_context():
     except Exception:
         db.session.rollback()
         print('equipment_status_logs table already exists')
+
+    # ========== WORK PLANNING TABLES ==========
+
+    # Create materials table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS materials (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(50) UNIQUE NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                name_ar VARCHAR(255),
+                category VARCHAR(50) NOT NULL,
+                unit VARCHAR(20) NOT NULL,
+                current_stock FLOAT DEFAULT 0 NOT NULL,
+                min_stock FLOAT DEFAULT 0 NOT NULL,
+                total_consumed FLOAT DEFAULT 0 NOT NULL,
+                consumption_start_date DATE,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                CONSTRAINT check_material_category CHECK (category IN ('lubricant', 'filter', 'spare_part', 'consumable', 'electrical', 'mechanical', 'hvac', 'other'))
+            )
+        '''))
+        db.session.commit()
+        print('Created materials table')
+    except Exception:
+        db.session.rollback()
+        print('materials table already exists')
+
+    # Create material_kits table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS material_kits (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                name_ar VARCHAR(255),
+                description TEXT,
+                equipment_type VARCHAR(100),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+        '''))
+        db.session.commit()
+        print('Created material_kits table')
+    except Exception:
+        db.session.rollback()
+        print('material_kits table already exists')
+
+    # Create material_kit_items table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS material_kit_items (
+                id SERIAL PRIMARY KEY,
+                kit_id INTEGER NOT NULL REFERENCES material_kits(id) ON DELETE CASCADE,
+                material_id INTEGER NOT NULL REFERENCES materials(id),
+                quantity FLOAT NOT NULL DEFAULT 1
+            )
+        '''))
+        db.session.commit()
+        print('Created material_kit_items table')
+    except Exception:
+        db.session.rollback()
+        print('material_kit_items table already exists')
+
+    # Create work_plans table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plans (
+                id SERIAL PRIMARY KEY,
+                week_start DATE NOT NULL UNIQUE,
+                week_end DATE NOT NULL,
+                status VARCHAR(20) DEFAULT 'draft' NOT NULL,
+                created_by_id INTEGER NOT NULL REFERENCES users(id),
+                published_at TIMESTAMP,
+                published_by_id INTEGER REFERENCES users(id),
+                pdf_file_id INTEGER REFERENCES files(id),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                CONSTRAINT check_work_plan_status CHECK (status IN ('draft', 'published'))
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plans table')
+    except Exception:
+        db.session.rollback()
+        print('work_plans table already exists')
+
+    # Create work_plan_days table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_days (
+                id SERIAL PRIMARY KEY,
+                work_plan_id INTEGER NOT NULL REFERENCES work_plans(id) ON DELETE CASCADE,
+                date DATE NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                UNIQUE(work_plan_id, date)
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_days table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_days table already exists')
+
+    # Create work_plan_jobs table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_jobs (
+                id SERIAL PRIMARY KEY,
+                work_plan_day_id INTEGER NOT NULL REFERENCES work_plan_days(id) ON DELETE CASCADE,
+                job_type VARCHAR(20) NOT NULL,
+                berth VARCHAR(10),
+                equipment_id INTEGER REFERENCES equipment(id),
+                defect_id INTEGER REFERENCES defects(id),
+                inspection_assignment_id INTEGER REFERENCES inspection_assignments(id),
+                sap_order_number VARCHAR(50),
+                estimated_hours FLOAT NOT NULL,
+                position INTEGER DEFAULT 0,
+                priority VARCHAR(20) DEFAULT 'normal',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                CONSTRAINT check_job_type CHECK (job_type IN ('pm', 'defect', 'inspection')),
+                CONSTRAINT check_job_berth CHECK (berth IN ('east', 'west', 'both') OR berth IS NULL),
+                CONSTRAINT check_job_priority CHECK (priority IN ('low', 'normal', 'high', 'urgent'))
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_jobs table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_jobs table already exists')
+
+    # Create work_plan_assignments table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_assignments (
+                id SERIAL PRIMARY KEY,
+                work_plan_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                is_lead BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                UNIQUE(work_plan_job_id, user_id)
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_assignments table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_assignments table already exists')
+
+    # Create work_plan_materials table
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_materials (
+                id SERIAL PRIMARY KEY,
+                work_plan_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id) ON DELETE CASCADE,
+                material_id INTEGER NOT NULL REFERENCES materials(id),
+                quantity FLOAT NOT NULL DEFAULT 1,
+                from_kit_id INTEGER REFERENCES material_kits(id),
+                actual_quantity FLOAT,
+                consumed_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_materials table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_materials table already exists')
 "
 
 echo "Starting gunicorn..."

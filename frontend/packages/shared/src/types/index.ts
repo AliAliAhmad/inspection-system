@@ -13,3 +13,4 @@ export * from './bonus-star.types';
 export * from './rating.types';
 export * from './schedule.types';
 export * from './file.types';
+export * from './work-plan.types';

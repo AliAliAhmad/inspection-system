@@ -86,7 +86,9 @@
     "backlog": "عمليات الفحص المتأخرة",
     "roster": "قائمة الفريق",
     "inspectionSchedule": "جدول التفتيش",
-    "equipment_dashboard": "لوحة حالة المعدات"
+    "equipment_dashboard": "لوحة حالة المعدات",
+    "work_planning": "تخطيط العمل",
+    "my_work_plan": "خطة عملي"
   },
   "status": {
     "active": "نشط",

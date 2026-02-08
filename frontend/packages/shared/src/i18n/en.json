@@ -86,7 +86,9 @@
     "backlog": "Overdue Inspections",
     "roster": "Team Roster",
     "inspectionSchedule": "Inspection Schedule",
-    "equipment_dashboard": "Equipment Dashboard"
+    "equipment_dashboard": "Equipment Dashboard",
+    "work_planning": "Work Planning",
+    "my_work_plan": "My Work Plan"
   },
   "status": {
     "active": "Active",

@@ -80,7 +80,8 @@ def create_app(config_name='development'):
         reports, schedules, ratings, notifications, specialist_jobs,
         inspection_assignments, assessments, defect_assessments,
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
-        files, sync, inspection_routines, roster, voice, ai
+        files, sync, inspection_routines, roster, voice, ai,
+        work_plans, materials
     )
 
     # Core
@@ -133,6 +134,10 @@ def create_app(config_name='development'):
 
     # AI services (OpenAI - Vision, Reports, Search, TTS, Assistant)
     app.register_blueprint(ai.bp, url_prefix='/api/ai')
+
+    # Work Planning
+    app.register_blueprint(work_plans.bp, url_prefix='/api/work-plans')
+    app.register_blueprint(materials.bp, url_prefix='/api/materials')
 
     # Initialize background scheduler (not in testing)
     if config_name != 'testing':

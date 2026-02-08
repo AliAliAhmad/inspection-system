@@ -102,3 +102,16 @@ export type {
   SearchResult,
   AssistantResponse,
 } from './ai.api';
+export { workPlansApi } from './work-plans.api';
+export type {
+  WorkPlanListParams,
+  WorkPlansListResponse,
+  SAPImportResponse,
+} from './work-plans.api';
+export { materialsApi } from './materials.api';
+export type {
+  MaterialListParams,
+  MaterialsListResponse,
+  KitsListResponse,
+  LowStockResponse,
+} from './materials.api';

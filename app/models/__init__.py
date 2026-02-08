@@ -55,6 +55,15 @@ from app.models.import_log import ImportLog
 from app.models.role_swap_log import RoleSwapLog
 from app.models.equipment_status_log import EquipmentStatusLog
 
+# Work Planning
+from app.models.material import Material
+from app.models.material_kit import MaterialKit, MaterialKitItem
+from app.models.work_plan import WorkPlan
+from app.models.work_plan_day import WorkPlanDay
+from app.models.work_plan_job import WorkPlanJob
+from app.models.work_plan_assignment import WorkPlanAssignment
+from app.models.work_plan_material import WorkPlanMaterial
+
 __all__ = [
     'User',
     'Equipment',
@@ -88,4 +97,13 @@ __all__ = [
     'ImportLog',
     'RoleSwapLog',
     'EquipmentStatusLog',
+    # Work Planning
+    'Material',
+    'MaterialKit',
+    'MaterialKitItem',
+    'WorkPlan',
+    'WorkPlanDay',
+    'WorkPlanJob',
+    'WorkPlanAssignment',
+    'WorkPlanMaterial',
 ]

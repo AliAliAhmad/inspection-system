@@ -12,6 +12,7 @@ const NotificationsPage = lazy(() => import('../pages/shared/NotificationsPage')
 const LeaderboardPage = lazy(() => import('../pages/shared/LeaderboardPage'));
 const LeavesPage = lazy(() => import('../pages/shared/LeavesPage'));
 const ProfilePage = lazy(() => import('../pages/shared/ProfilePage'));
+const MyWorkPlanPage = lazy(() => import('../pages/shared/MyWorkPlanPage'));
 
 // Admin pages
 const UsersPage = lazy(() => import('../pages/admin/UsersPage'));
@@ -29,6 +30,8 @@ const InspectionRoutinesPage = lazy(() => import('../pages/admin/InspectionRouti
 const DefectsPage = lazy(() => import('../pages/admin/DefectsPage'));
 const BacklogPage = lazy(() => import('../pages/admin/BacklogPage'));
 const TeamRosterPage = lazy(() => import('../pages/admin/TeamRosterPage'));
+const WorkPlanningPage = lazy(() => import('../pages/admin/WorkPlanningPage'));
+const WorkPlanDayPage = lazy(() => import('../pages/admin/WorkPlanDayPage'));
 
 // Inspector pages
 const MyAssignmentsPage = lazy(() => import('../pages/inspector/MyAssignmentsPage'));
@@ -83,6 +86,7 @@ export default function AppRouter() {
           <Route path="leaves" element={<LeavesPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="equipment-dashboard" element={<EquipmentDashboardPage />} />
+          <Route path="my-work-plan" element={<MyWorkPlanPage />} />
 
           {/* Admin routes */}
           <Route path="admin">
@@ -104,6 +108,9 @@ export default function AppRouter() {
             <Route path="defects" element={<RoleGuard roles={['admin', 'engineer']}><DefectsPage /></RoleGuard>} />
             <Route path="backlog" element={<RoleGuard roles={['admin']}><BacklogPage /></RoleGuard>} />
             <Route path="roster" element={<RoleGuard roles={['admin', 'engineer']}><TeamRosterPage /></RoleGuard>} />
+            <Route path="work-planning" element={<RoleGuard roles={['admin', 'engineer']}><WorkPlanningPage /></RoleGuard>} />
+            <Route path="work-plan/:planId" element={<RoleGuard roles={['admin', 'engineer']}><WorkPlanningPage /></RoleGuard>} />
+            <Route path="work-plan/:planId/day/:date" element={<RoleGuard roles={['admin', 'engineer']}><WorkPlanDayPage /></RoleGuard>} />
             <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pauses" replace />} />
           </Route>
 

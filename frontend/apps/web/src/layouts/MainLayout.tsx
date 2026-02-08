@@ -39,6 +39,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
   const shared: MenuDataItem[] = [
     { path: '/', name: t('nav.dashboard'), icon: <DashboardOutlined /> },
     { path: '/equipment-dashboard', name: t('nav.equipment_dashboard'), icon: <ControlOutlined /> },
+    { path: '/my-work-plan', name: t('nav.my_work_plan'), icon: <ClockCircleOutlined /> },
     { path: '/notifications', name: t('nav.notifications'), icon: <BellOutlined /> },
     { path: '/leaderboard', name: t('nav.leaderboard'), icon: <TrophyOutlined /> },
     { path: '/leaves', name: t('nav.leaves'), icon: <CalendarOutlined /> },
@@ -46,6 +47,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
   ];
 
   const adminItems: MenuDataItem[] = [
+    { path: '/admin/work-planning', name: t('nav.work_planning'), icon: <ScheduleOutlined /> },
     { path: '/admin/roster', name: t('nav.roster'), icon: <TeamOutlined /> },
     { path: '/admin/users', name: t('nav.users'), icon: <TeamOutlined /> },
     { path: '/admin/equipment', name: t('nav.equipment'), icon: <ToolOutlined /> },
@@ -72,6 +74,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
   ];
 
   const engineerItems: MenuDataItem[] = [
+    { path: '/admin/work-planning', name: t('nav.work_planning'), icon: <ScheduleOutlined /> },
     { path: '/engineer/jobs', name: t('nav.my_jobs'), icon: <ToolOutlined /> },
     { path: '/engineer/jobs/create', name: t('nav.create_job'), icon: <AppstoreOutlined /> },
     { path: '/engineer/team-assignment', name: t('nav.team_assignment'), icon: <TeamOutlined /> },

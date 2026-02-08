@@ -118,6 +118,11 @@ export default function SpecialistJobDetailScreen() {
   // Incomplete modal state
   const [incompleteModalVisible, setIncompleteModalVisible] = useState(false);
 
+  // Start job flow state (defect details -> confirm -> planned time)
+  const [startModalVisible, setStartModalVisible] = useState(false);
+  const [startStep, setStartStep] = useState<'details' | 'time'>('details');
+  const [plannedTimeInput, setPlannedTimeInput] = useState('');
+
   // Defect assessment state
   const [assessmentModalVisible, setAssessmentModalVisible] = useState(false);
   const [assessmentVerdict, setAssessmentVerdict] = useState<'confirm' | 'reject' | 'minor'>('confirm');
@@ -182,12 +187,18 @@ export default function SpecialistJobDetailScreen() {
 
   // Mutations
   const startMutation = useMutation({
-    mutationFn: () => specialistJobsApi.start(id),
+    mutationFn: (plannedHours?: number) => specialistJobsApi.start(id, plannedHours),
     onSuccess: () => {
+      setStartModalVisible(false);
+      setStartStep('details');
+      setPlannedTimeInput('');
       queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
       queryClient.invalidateQueries({ queryKey: ['specialistJobs'] });
     },
-    onError: () => Alert.alert(t('common.error'), t('common.error')),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || t('common.error');
+      Alert.alert(t('common.error'), msg);
+    },
   });
 
   const completeMutation = useMutation({
@@ -254,11 +265,30 @@ export default function SpecialistJobDetailScreen() {
   });
 
   const handleStart = useCallback(() => {
-    Alert.alert(t('common.confirm'), t('jobs.start') + '?', [
-      { text: t('common.cancel'), style: 'cancel' },
-      { text: t('common.confirm'), onPress: () => startMutation.mutate() },
-    ]);
-  }, [t, startMutation]);
+    // Open the start modal to show defect details first
+    setStartStep('details');
+    setPlannedTimeInput('');
+    setStartModalVisible(true);
+  }, []);
+
+  const handleStartConfirm = useCallback(() => {
+    // If job already has planned time, start directly
+    if (jobData?.has_planned_time) {
+      startMutation.mutate();
+    } else {
+      // Move to time input step
+      setStartStep('time');
+    }
+  }, [jobData, startMutation]);
+
+  const handleStartWithTime = useCallback(() => {
+    const hours = parseFloat(plannedTimeInput);
+    if (isNaN(hours) || hours <= 0) {
+      Alert.alert(t('common.error'), 'Please enter a valid number of hours');
+      return;
+    }
+    startMutation.mutate(hours);
+  }, [plannedTimeInput, startMutation, t]);
 
   const handlePauseSubmit = useCallback(() => {
     pauseMutation.mutate({
@@ -474,8 +504,8 @@ export default function SpecialistJobDetailScreen() {
       <View style={styles.actionsCard}>
         <Text style={styles.sectionTitle}>{t('common.actions')}</Text>
 
-        {/* Assigned with planned time: Start */}
-        {jobData.status === 'assigned' && jobData.has_planned_time && (
+        {/* Assigned: Start (with or without planned time) */}
+        {jobData.status === 'assigned' && (
           <TouchableOpacity
             style={[styles.actionButton, styles.startButton, startMutation.isPending && styles.buttonDisabled]}
             onPress={handleStart}
@@ -953,6 +983,127 @@ export default function SpecialistJobDetailScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Start Job Modal - Shows defect details first, then planned time input */}
+      <Modal
+        visible={startModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setStartModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {startStep === 'details' ? (
+              <>
+                <Text style={styles.modalTitle}>{t('jobs.review_before_start', 'Review Before Starting')}</Text>
+
+                {/* Defect Details Section */}
+                <ScrollView style={styles.startModalScroll}>
+                  {inspectionAnswer && (
+                    <View style={styles.startModalDefectSection}>
+                      <Text style={styles.startModalSectionTitle}>{t('jobs.inspectorFinding', "Inspector's Finding")}</Text>
+                      <InspectionFindingDisplay
+                        answer={inspectionAnswer}
+                        defectDescription={defectDescription}
+                      />
+                    </View>
+                  )}
+
+                  {!inspectionAnswer && defectDescription && (
+                    <View style={styles.startModalDefectSection}>
+                      <Text style={styles.startModalSectionTitle}>{t('defects.description', 'Defect Description')}</Text>
+                      <Text style={styles.startModalDefectText}>{defectDescription}</Text>
+                    </View>
+                  )}
+
+                  {jobData?.equipment_name && (
+                    <View style={styles.startModalInfoRow}>
+                      <Text style={styles.startModalInfoLabel}>{t('common.equipment', 'Equipment')}:</Text>
+                      <Text style={styles.startModalInfoValue}>{jobData.equipment_name}</Text>
+                    </View>
+                  )}
+
+                  {jobData?.category && (
+                    <View style={styles.startModalInfoRow}>
+                      <Text style={styles.startModalInfoLabel}>{t('jobs.category', 'Category')}:</Text>
+                      <Text style={[
+                        styles.startModalInfoValue,
+                        { color: jobData.category === 'major' ? '#D32F2F' : '#E65100', fontWeight: '600' }
+                      ]}>{jobData.category.toUpperCase()}</Text>
+                    </View>
+                  )}
+                </ScrollView>
+
+                <View style={styles.startModalConfirmBox}>
+                  <Text style={styles.startModalConfirmText}>
+                    {t('jobs.confirm_understand', 'I have reviewed the defect details and understand the work required.')}
+                  </Text>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.modalCancelButton}
+                    onPress={() => setStartModalVisible(false)}
+                  >
+                    <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.modalSubmitButton}
+                    onPress={handleStartConfirm}
+                  >
+                    <Text style={styles.modalSubmitText}>
+                      {jobData?.has_planned_time ? t('jobs.start') : t('common.next', 'Next')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalTitle}>{t('jobs.enter_planned_time', 'Enter Planned Time')}</Text>
+
+                <Text style={styles.modalLabel}>{t('jobs.how_long', 'How many hours do you expect this job to take?')}</Text>
+
+                <TextInput
+                  style={styles.plannedTimeInput}
+                  value={plannedTimeInput}
+                  onChangeText={setPlannedTimeInput}
+                  placeholder="e.g., 2.5"
+                  keyboardType="decimal-pad"
+                  autoFocus
+                />
+
+                <Text style={styles.plannedTimeHint}>
+                  {t('jobs.planned_time_hint', 'Enter the estimated hours to complete this job. This helps track performance and plan resources.')}
+                </Text>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.modalCancelButton}
+                    onPress={() => setStartStep('details')}
+                  >
+                    <Text style={styles.modalCancelText}>{t('common.back', 'Back')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalSubmitButton,
+                      styles.startSubmitButton,
+                      startMutation.isPending && styles.buttonDisabled,
+                    ]}
+                    onPress={handleStartWithTime}
+                    disabled={startMutation.isPending}
+                  >
+                    {startMutation.isPending ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.modalSubmitText}>{t('jobs.start')}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -1503,5 +1654,74 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+
+  // Start modal styles
+  startModalScroll: {
+    maxHeight: 300,
+    marginBottom: 16,
+  },
+  startModalDefectSection: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  startModalSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#424242',
+    marginBottom: 8,
+  },
+  startModalDefectText: {
+    fontSize: 14,
+    color: '#212121',
+    lineHeight: 20,
+  },
+  startModalInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  startModalInfoLabel: {
+    fontSize: 14,
+    color: '#757575',
+  },
+  startModalInfoValue: {
+    fontSize: 14,
+    color: '#212121',
+  },
+  startModalConfirmBox: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  startModalConfirmText: {
+    fontSize: 13,
+    color: '#2E7D32',
+    textAlign: 'center',
+  },
+  plannedTimeInput: {
+    borderWidth: 1,
+    borderColor: '#BDBDBD',
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 24,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+    color: '#212121',
+  },
+  plannedTimeHint: {
+    fontSize: 13,
+    color: '#757575',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  startSubmitButton: {
+    backgroundColor: '#4CAF50',
   },
 });
