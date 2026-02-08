@@ -125,9 +125,9 @@ def upload_roster():
     logger.info("Roster upload: %d rows, %d columns. First 5 headers: %s",
                 len(rows), len(headers), list(headers[:5]))
 
-    # Parse date columns (columns from index 3 onward)
+    # Parse date columns (columns from index 4 onward - after Name, Role, Major ID, SAP ID)
     date_columns = []  # list of (col_index, date_obj)
-    for col_idx in range(3, len(headers)):
+    for col_idx in range(4, len(headers)):
         parsed = _parse_date_header(headers[col_idx])
         if parsed:
             date_columns.append((col_idx, parsed))
@@ -138,8 +138,8 @@ def upload_roster():
         return jsonify({
             'status': 'error',
             'message': f'No valid date columns found in headers. '
-                       f'Expected date headers from column 4 onward. '
-                       f'Found headers: {[str(h) for h in headers[:6]]}'
+                       f'Expected date headers from column 5 onward (after Name, Role, Major ID, SAP ID). '
+                       f'Found headers: {[str(h) for h in headers[:7]]}'
         }), 400
 
     errors = []
@@ -484,11 +484,12 @@ def download_roster_template():
     start_date = date.today()
     dates = [start_date + timedelta(days=i) for i in range(14)]
 
-    # Build data
+    # Build data - Note: Major ID must be in Column C (index 2) for upload matching
     data = {
         'Name': [u.full_name for u in users],
         'Role': [u.role for u in users],
         'Major ID': [u.role_id or '' for u in users],
+        'SAP ID': [u.sap_id or '' for u in users],
     }
 
     # Add date columns with sample values
@@ -506,12 +507,13 @@ def download_roster_template():
 
         # Add instructions sheet
         instructions = pd.DataFrame({
-            'Column': ['Name', 'Role', 'Major ID', 'Date Columns (e.g., 08-Feb)'],
-            'Required': ['Info Only', 'Info Only', 'Yes', 'Yes'],
+            'Column': ['Name', 'Role', 'Major ID', 'SAP ID', 'Date Columns (e.g., 08-Feb)'],
+            'Required': ['Info Only', 'Info Only', 'Yes', 'Info Only', 'Yes'],
             'Description': [
                 'Employee name (for reference only, not used for matching)',
                 'Employee role (for reference only)',
-                'Major ID / Role ID - used to match with system users',
+                'Major ID / Role ID - REQUIRED: used to match with system users',
+                'SAP ID (for reference only)',
                 'Shift values: D = Day, N = Night, Off = Day off, Leave = On leave, Empty = No entry'
             ]
         })
