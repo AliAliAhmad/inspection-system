@@ -10,6 +10,7 @@ import LeaderboardScreen from '../screens/shared/LeaderboardScreen';
 import LeavesScreen from '../screens/shared/LeavesScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import MyWorkPlanScreen from '../screens/shared/MyWorkPlanScreen';
+import WorkPlanOverviewScreen from '../screens/admin/WorkPlanOverviewScreen';
 
 // Role screens
 import MyAssignmentsScreen from '../screens/inspector/MyAssignmentsScreen';
@@ -55,7 +56,7 @@ function EngineerTabs({ t }: { t: (key: string) => string }) {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
       <Tab.Screen name="Jobs" component={EngineerJobsScreen} options={{ tabBarLabel: t('nav.my_jobs') }} />
-      <Tab.Screen name="WorkPlan" component={MyWorkPlanScreen} options={{ tabBarLabel: t('nav.my_work_plan') }} />
+      <Tab.Screen name="WorkPlan" component={WorkPlanOverviewScreen} options={{ tabBarLabel: t('nav.work_planning') }} />
       <Tab.Screen name="Approvals" component={PauseApprovalsScreen} options={{ tabBarLabel: t('nav.pause_approvals') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
@@ -78,8 +79,8 @@ function AdminTabs({ t }: { t: (key: string) => string }) {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
+      <Tab.Screen name="WorkPlan" component={WorkPlanOverviewScreen} options={{ tabBarLabel: t('nav.work_planning') }} />
       <Tab.Screen name="Approvals" component={AdminApprovalsScreen} options={{ tabBarLabel: t('nav.approvals') }} />
-      <Tab.Screen name="WorkPlan" component={MyWorkPlanScreen} options={{ tabBarLabel: t('nav.my_work_plan') }} />
       <Tab.Screen name="Reports" component={AdminReportsScreen} options={{ tabBarLabel: t('nav.reports') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>

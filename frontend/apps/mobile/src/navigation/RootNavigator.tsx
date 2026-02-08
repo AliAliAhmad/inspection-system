@@ -28,6 +28,11 @@ import BonusApprovalsScreen from '../screens/admin/BonusApprovalsScreen';
 import InspectionAssignmentsScreen from '../screens/admin/InspectionAssignmentsScreen';
 import QualityReviewsAdminScreen from '../screens/admin/QualityReviewsAdminScreen';
 
+// Work Planning screens
+import WorkPlanOverviewScreen from '../screens/admin/WorkPlanOverviewScreen';
+import WorkPlanJobDetailScreen from '../screens/admin/WorkPlanJobDetailScreen';
+import UnassignedJobsScreen from '../screens/admin/UnassignedJobsScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
@@ -53,6 +58,10 @@ export type RootStackParamList = {
   BonusApprovals: undefined;
   InspectionAssignments: undefined;
   QualityReviewsAdmin: undefined;
+  // Work Planning
+  WorkPlanOverview: undefined;
+  WorkPlanJobDetail: { jobId: number; planId: number; dayId: number };
+  UnassignedJobs: { planId: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -84,6 +93,10 @@ export default function RootNavigator() {
       <Stack.Screen name="BonusApprovals" component={BonusApprovalsScreen} options={{ headerShown: true, title: 'Bonus Approvals' }} />
       <Stack.Screen name="InspectionAssignments" component={InspectionAssignmentsScreen} options={{ headerShown: true, title: 'Assignments' }} />
       <Stack.Screen name="QualityReviewsAdmin" component={QualityReviewsAdminScreen} options={{ headerShown: true, title: 'Quality Reviews' }} />
+      {/* Work Planning screens */}
+      <Stack.Screen name="WorkPlanOverview" component={WorkPlanOverviewScreen} options={{ headerShown: true, title: 'Work Planning' }} />
+      <Stack.Screen name="WorkPlanJobDetail" component={WorkPlanJobDetailScreen} options={{ headerShown: true, title: 'Job Details' }} />
+      <Stack.Screen name="UnassignedJobs" component={UnassignedJobsScreen} options={{ headerShown: true, title: 'Unassigned Jobs' }} />
     </Stack.Navigator>
   );
 }
