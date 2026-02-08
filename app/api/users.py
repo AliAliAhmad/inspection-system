@@ -405,6 +405,9 @@ def import_team():
     used_usernames = set()
     used_role_ids = set()
 
+    # Track highest role_id number per prefix for this batch
+    batch_role_counters = {}
+
     for idx, row in df.iterrows():
         row_num = idx + 2  # Excel row number (1-indexed + header)
         errors = []
@@ -524,20 +527,32 @@ def import_team():
                 break
             used_usernames.add(username)
 
-            # Generate role_id - check against database AND current batch
-            role_id = _generate_role_id(role)
-            while User.query.filter_by(role_id=role_id).first() or role_id in used_role_ids:
-                role_id = _generate_role_id(role)
+            # Generate role_id - use batch counter to avoid duplicates
+            prefix = _ROLE_PREFIXES.get(role)
+            if prefix not in batch_role_counters:
+                # Get starting number from database
+                base_role_id = _generate_role_id(role)
+                # Extract the number from base_role_id (e.g., "SPC-032" -> 32)
+                num_part = base_role_id.split('-')[1] if '-' in base_role_id else '001'
+                batch_role_counters[prefix] = int(num_part)
+            else:
+                batch_role_counters[prefix] += 1
+            role_id = f"{prefix}-{batch_role_counters[prefix]:03d}"
             used_role_ids.add(role_id)
 
             # Generate minor role and minor_role_id
             minor_role = _get_minor_role(role)
             minor_role_id = None
             if minor_role:
-                minor_role_id = _generate_role_id(minor_role)
-                # Check against database AND current batch
-                while User.query.filter_by(minor_role_id=minor_role_id).first() or minor_role_id in used_role_ids:
-                    minor_role_id = _generate_role_id(minor_role)
+                minor_prefix = _ROLE_PREFIXES.get(minor_role)
+                if minor_prefix not in batch_role_counters:
+                    # Get starting number from database
+                    base_minor_id = _generate_role_id(minor_role)
+                    num_part = base_minor_id.split('-')[1] if '-' in base_minor_id else '001'
+                    batch_role_counters[minor_prefix] = int(num_part)
+                else:
+                    batch_role_counters[minor_prefix] += 1
+                minor_role_id = f"{minor_prefix}-{batch_role_counters[minor_prefix]:03d}"
                 used_role_ids.add(minor_role_id)
 
             # Create new user
