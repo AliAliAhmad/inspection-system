@@ -198,7 +198,7 @@ export default function WorkPlanningPage() {
     },
   });
 
-  // Add job mutation (for drag from pool)
+  // Add job mutation (for drag from pool - non-SAP jobs)
   const addJobMutation = useMutation({
     mutationFn: (payload: { planId: number; dayId: number; jobType: JobType; berth: Berth; equipmentId?: number; defectId?: number; inspectionAssignmentId?: number; estimatedHours: number }) =>
       workPlansApi.addJob(payload.planId, {
@@ -217,6 +217,23 @@ export default function WorkPlanningPage() {
     },
     onError: (err: any) => {
       message.error(err.response?.data?.message || 'Failed to add job');
+    },
+  });
+
+  // Schedule SAP order mutation (for drag SAP orders from pool)
+  const scheduleSAPMutation = useMutation({
+    mutationFn: (payload: { planId: number; sapOrderId: number; dayId: number }) =>
+      workPlansApi.scheduleSAPOrder(payload.planId, {
+        sap_order_id: payload.sapOrderId,
+        day_id: payload.dayId,
+      }),
+    onSuccess: () => {
+      message.success('SAP order scheduled');
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to schedule SAP order');
     },
   });
 
@@ -284,23 +301,33 @@ export default function WorkPlanningPage() {
       const job = activeData.job;
       const targetDay = overData.day as WorkPlanDay;
       const targetBerth = overData.berth as Berth;
+      const jobType = activeData.jobType as string;
 
-      const equipmentId = job.equipment?.id;
-      const defectId = job.defect?.id;
-      const inspectionAssignmentId = job.assignment?.id;
-      const estimatedHours = job.estimated_hours || 4;
-      const jobType = activeData.jobType as JobType;
+      // Handle SAP orders specially
+      if (jobType === 'sap' && job.id) {
+        scheduleSAPMutation.mutate({
+          planId: currentPlan.id,
+          sapOrderId: job.id,
+          dayId: targetDay.id,
+        });
+      } else {
+        // Regular job from pool
+        const equipmentId = job.equipment?.id;
+        const defectId = job.defect?.id;
+        const inspectionAssignmentId = job.assignment?.id;
+        const estimatedHours = job.estimated_hours || 4;
 
-      addJobMutation.mutate({
-        planId: currentPlan.id,
-        dayId: targetDay.id,
-        jobType,
-        berth: targetBerth,
-        equipmentId,
-        defectId,
-        inspectionAssignmentId,
-        estimatedHours,
-      });
+        addJobMutation.mutate({
+          planId: currentPlan.id,
+          dayId: targetDay.id,
+          jobType: jobType as JobType,
+          berth: targetBerth,
+          equipmentId,
+          defectId,
+          inspectionAssignmentId,
+          estimatedHours,
+        });
+      }
     }
 
     // Case 2: Moving job between days
@@ -327,7 +354,7 @@ export default function WorkPlanningPage() {
       setPendingAssignment({ job, user });
       setAssignModalOpen(true);
     }
-  }, [currentPlan, isDraft, addJobMutation, moveMutation]);
+  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation]);
 
   const handleCreatePlan = (values: any) => {
     const weekStart = values.week_start.startOf('isoWeek').format('YYYY-MM-DD');
@@ -638,6 +665,7 @@ export default function WorkPlanningPage() {
           <div style={{ width: 320, overflow: 'auto' }}>
             <JobsPool
               berth={berth}
+              planId={currentPlan?.id}
               onAddJob={() => setAddJobModalOpen(true)}
               onJobClick={(job, type) => {
                 setSelectedJob({

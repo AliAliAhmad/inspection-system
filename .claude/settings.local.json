@@ -64,7 +64,11 @@
       "Bash(__NEW_LINE_98aa7b9f99b52e3b__ git commit -m \"$\\(cat <<''EOF''\nFix Excel import file upload for Users and Equipment pages\n\n- Use simple HTML input element instead of Ant Design Upload.Dragger\n- Add explicit Content-Type header for multipart/form-data requests\n- Match the working pattern from TeamRosterPage\n- Remove FormData Content-Type deletion that was causing issues\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git restore:*)",
       "Bash(FLASK_ENV=development python:*)",
-      "Bash(ssh:*)"
+      "Bash(ssh:*)",
+      "Bash(head:*)",
+      "Bash(docker compose ps:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker:*)"
     ]
   }
 }

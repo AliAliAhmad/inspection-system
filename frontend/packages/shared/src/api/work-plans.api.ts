@@ -120,9 +120,17 @@ export const workPlansApi = {
     return getApiClient().get<MyWorkPlanResponse & { status: string }>('/api/work-plans/my-plan', { params });
   },
 
-  // Available Jobs
-  getAvailableJobs(params?: { berth?: string; job_type?: string }) {
+  // Available Jobs (includes SAP orders from pool)
+  getAvailableJobs(params?: { berth?: string; job_type?: string; plan_id?: number }) {
     return getApiClient().get<AvailableJobsResponse & { status: string }>('/api/work-plans/available-jobs', { params });
+  },
+
+  // Schedule SAP order from pool to a day
+  scheduleSAPOrder(planId: number, payload: { sap_order_id: number; day_id: number; position?: number }) {
+    return getApiClient().post<ApiResponse<WorkPlanJob>>(
+      `/api/work-plans/${planId}/schedule-sap-order`,
+      payload
+    );
   },
 
   // SAP Import

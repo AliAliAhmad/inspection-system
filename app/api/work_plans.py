@@ -9,7 +9,8 @@ from app.extensions import db
 from app.models import (
     WorkPlan, WorkPlanDay, WorkPlanJob, WorkPlanAssignment, WorkPlanMaterial,
     Material, MaterialKit, MaterialKitItem, User, Equipment, Defect,
-    InspectionAssignment, Notification, MaintenanceCycle, PMTemplate, PMTemplateMaterial
+    InspectionAssignment, Notification, MaintenanceCycle, PMTemplate, PMTemplateMaterial,
+    SAPWorkOrder
 )
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from app.utils.decorators import get_current_user
@@ -447,6 +448,116 @@ def add_job(plan_id):
     return jsonify({
         'status': 'success',
         'message': 'Job added to plan',
+        'job': job.to_dict(user.language or 'en')
+    }), 201
+
+
+@bp.route('/<int:plan_id>/schedule-sap-order', methods=['POST'])
+@jwt_required()
+def schedule_sap_order(plan_id):
+    """
+    Schedule a SAP order from the pool to a specific day.
+    Creates a WorkPlanJob and marks the SAP order as scheduled.
+
+    Request body:
+        {
+            "sap_order_id": 123,
+            "day_id": 456,
+            "position": 0  // optional
+        }
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot add jobs to a published work plan")
+
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body is required")
+
+    sap_order_id = data.get('sap_order_id')
+    day_id = data.get('day_id')
+
+    if not sap_order_id:
+        raise ValidationError("sap_order_id is required")
+    if not day_id:
+        raise ValidationError("day_id is required")
+
+    # Get the SAP order
+    sap_order = db.session.get(SAPWorkOrder, sap_order_id)
+    if not sap_order or sap_order.work_plan_id != plan_id:
+        raise NotFoundError("SAP order not found in this plan")
+
+    if sap_order.status != 'pending':
+        raise ValidationError("SAP order has already been scheduled")
+
+    # Get the day
+    day = db.session.get(WorkPlanDay, day_id)
+    if not day or day.work_plan_id != plan_id:
+        raise NotFoundError("Day not found in this plan")
+
+    # Get next position
+    max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
+        work_plan_day_id=day.id
+    ).scalar() or 0
+    position = data.get('position', max_position + 1)
+
+    # Find PM template if applicable
+    pm_template = None
+    pm_template_id = None
+    if sap_order.job_type == 'pm' and sap_order.cycle_id:
+        equipment = db.session.get(Equipment, sap_order.equipment_id)
+        if equipment:
+            pm_template = PMTemplate.find_for_job(equipment.equipment_type, sap_order.cycle_id)
+            if pm_template:
+                pm_template_id = pm_template.id
+
+    # Create job from SAP order
+    job = WorkPlanJob(
+        work_plan_day_id=day.id,
+        job_type=sap_order.job_type,
+        berth=sap_order.berth,
+        equipment_id=sap_order.equipment_id,
+        sap_order_number=sap_order.order_number,
+        sap_order_type=sap_order.order_type,
+        description=sap_order.description,
+        cycle_id=sap_order.cycle_id,
+        pm_template_id=pm_template_id,
+        overdue_value=sap_order.overdue_value,
+        overdue_unit=sap_order.overdue_unit,
+        maintenance_base=sap_order.maintenance_base,
+        planned_date=sap_order.planned_date or sap_order.required_date,
+        estimated_hours=sap_order.estimated_hours,
+        position=position,
+        priority=sap_order.priority,
+        notes=sap_order.notes
+    )
+
+    db.session.add(job)
+    db.session.flush()
+
+    # Auto-add materials from PM template
+    if pm_template:
+        for tm in pm_template.materials:
+            wpm = WorkPlanMaterial(
+                work_plan_job_id=job.id,
+                material_id=tm.material_id,
+                quantity=tm.quantity
+            )
+            db.session.add(wpm)
+
+    # Mark SAP order as scheduled
+    sap_order.status = 'scheduled'
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'SAP order scheduled',
         'job': job.to_dict(user.language or 'en')
     }), 201
 
@@ -1013,8 +1124,7 @@ def import_sap_orders():
         raise ValidationError(f"Missing required columns: {', '.join(missing)}")
 
     created = 0
-    templates_linked = 0
-    materials_added = 0
+    skipped = 0
     errors = []
 
     for idx, row in df.iterrows():
@@ -1023,10 +1133,14 @@ def import_sap_orders():
             job_type_raw = str(row['type']).strip().upper()
             equipment_code = str(row['equipment_code']).strip()
             date_str = str(row['date']).strip()
-            estimated_hours = float(row['estimated_hours'])
+
+            # Parse estimated_hours (optional now, default to 4)
+            try:
+                estimated_hours = float(row['estimated_hours']) if pd.notna(row.get('estimated_hours')) else 4.0
+            except:
+                estimated_hours = 4.0
 
             # Map SAP type to our job type
-            # Accept any SAP order type - map to internal job types
             if job_type_raw in ['PRM', 'PM', 'PM01', 'PM02', 'PM03']:
                 job_type = 'pm'
             elif job_type_raw in ['COM', 'CM', 'CM01', 'CM02']:
@@ -1034,36 +1148,19 @@ def import_sap_orders():
             elif job_type_raw in ['INS', 'INSP']:
                 job_type = 'inspection'
             else:
-                # Default unknown types to PM (preventive maintenance)
-                job_type = 'pm'
+                job_type = 'pm'  # Default unknown to PM
 
             # Parse date
             try:
                 if hasattr(row['date'], 'date'):
-                    job_date = row['date'].date()
+                    required_date = row['date'].date()
                 else:
-                    job_date = datetime.strptime(date_str[:10], '%Y-%m-%d').date()
+                    required_date = datetime.strptime(date_str[:10], '%Y-%m-%d').date()
             except:
                 errors.append(f"Row {idx + 2}: Invalid date format")
                 continue
 
-            # Store the SAP required date as planned_date
-            sap_required_date = job_date
-
-            # If date is outside plan week, use first day of plan
-            if job_date < plan.week_start or job_date > plan.week_end:
-                job_date = plan.week_start
-
-            # Find day
-            day = WorkPlanDay.query.filter_by(work_plan_id=plan.id, date=job_date).first()
-            if not day:
-                # Fallback to first day if exact date not found
-                day = WorkPlanDay.query.filter_by(work_plan_id=plan.id).order_by(WorkPlanDay.date).first()
-                if not day:
-                    errors.append(f"Row {idx + 2}: No days found in work plan")
-                    continue
-
-            # Find equipment by code or serial_number
+            # Find equipment
             equipment = Equipment.query.filter(
                 db.or_(
                     Equipment.serial_number == equipment_code,
@@ -1074,65 +1171,49 @@ def import_sap_orders():
                 errors.append(f"Row {idx + 2}: Equipment '{equipment_code}' not found")
                 continue
 
-            # Get next position
-            max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
-                work_plan_day_id=day.id
-            ).scalar() or 0
+            # Check if order already exists in staging
+            existing = SAPWorkOrder.query.filter_by(
+                work_plan_id=plan.id,
+                order_number=order_number
+            ).first()
+            if existing:
+                skipped += 1
+                continue
 
-            # Parse priority
+            # Parse optional fields
             priority = str(row.get('priority', 'normal')).lower() if pd.notna(row.get('priority')) else 'normal'
             if priority not in ['low', 'normal', 'high', 'urgent']:
                 priority = 'normal'
 
-            # Parse cycle information (for PM jobs)
+            description = str(row.get('description', '')).strip() if pd.notna(row.get('description')) else None
+            notes = str(row.get('note', '')).strip() if pd.notna(row.get('note')) else None
+            if not notes:
+                notes = str(row.get('notes', '')).strip() if pd.notna(row.get('notes')) else None
+            maintenance_base = str(row.get('maintenance_base', '')).strip() if pd.notna(row.get('maintenance_base')) else None
+
+            # Parse cycle info
             cycle_id = None
-            pm_template = None
-            if job_type == 'pm':
-                cycle_value = row.get('cycle_value')
-                cycle_unit = str(row.get('cycle_unit', '')).lower().strip() if pd.notna(row.get('cycle_unit')) else None
+            if job_type == 'pm' and pd.notna(row.get('cycle_value')):
+                try:
+                    cycle_value = int(float(row['cycle_value']))
+                    cycle_unit = str(row.get('cycle_unit', '')).lower().strip() if pd.notna(row.get('cycle_unit')) else None
+                    if cycle_unit in ['hours', 'h', 'hour']:
+                        cycle = MaintenanceCycle.query.filter_by(cycle_type='running_hours', hours_value=cycle_value, is_active=True).first()
+                    else:
+                        cycle = MaintenanceCycle.query.filter_by(cycle_type='running_hours', hours_value=cycle_value, is_active=True).first()
+                    if cycle:
+                        cycle_id = cycle.id
+                except:
+                    pass
 
-                if pd.notna(cycle_value):
-                    try:
-                        cycle_value = int(float(cycle_value))
-                        # Find matching cycle
-                        if cycle_unit in ['hours', 'h', 'hour']:
-                            cycle = MaintenanceCycle.query.filter_by(
-                                cycle_type='running_hours',
-                                hours_value=cycle_value,
-                                is_active=True
-                            ).first()
-                        elif cycle_unit in ['days', 'weeks', 'months']:
-                            cycle = MaintenanceCycle.query.filter_by(
-                                cycle_type='calendar',
-                                calendar_value=cycle_value,
-                                calendar_unit=cycle_unit,
-                                is_active=True
-                            ).first()
-                        else:
-                            # Default to running_hours if no unit specified
-                            cycle = MaintenanceCycle.query.filter_by(
-                                cycle_type='running_hours',
-                                hours_value=cycle_value,
-                                is_active=True
-                            ).first()
-
-                        if cycle:
-                            cycle_id = cycle.id
-                            # Try to find matching PM template
-                            pm_template = PMTemplate.find_for_job(equipment.equipment_type, cycle_id)
-                    except (ValueError, TypeError):
-                        pass
-
-            # Parse overdue information
+            # Parse overdue info
             overdue_value = None
             overdue_unit = None
             if pd.notna(row.get('overdue_value')):
                 try:
                     overdue_value = float(row['overdue_value'])
                     overdue_unit = str(row.get('overdue_unit', 'hours')).lower().strip() if pd.notna(row.get('overdue_unit')) else 'hours'
-                    if overdue_unit not in ['hours', 'days']:
-                        overdue_unit = 'hours' if job_type == 'pm' else 'days'
-                except (ValueError, TypeError):
+                except:
                     pass
 
             # Parse planned_date
@@ -1146,51 +1227,28 @@ def import_sap_orders():
                 except:
                     pass
 
-            # Get description and notes
-            description = str(row.get('description', '')).strip() if pd.notna(row.get('description')) else None
-            notes = str(row.get('note', '')).strip() if pd.notna(row.get('note')) else None
-            if not notes:
-                notes = str(row.get('notes', '')).strip() if pd.notna(row.get('notes')) else None
-
-            # Get maintenance base
-            maintenance_base = str(row.get('maintenance_base', '')).strip() if pd.notna(row.get('maintenance_base')) else None
-
-            # Create job
-            job = WorkPlanJob(
-                work_plan_day_id=day.id,
+            # Create SAP work order in staging (pool)
+            sap_order = SAPWorkOrder(
+                work_plan_id=plan.id,
+                order_number=order_number,
+                order_type=job_type_raw,
                 job_type=job_type,
-                berth=equipment.berth,
                 equipment_id=equipment.id,
-                sap_order_number=order_number,
-                sap_order_type=job_type_raw,  # Store original SAP order type
                 description=description,
+                estimated_hours=estimated_hours,
+                priority=priority,
+                berth=equipment.berth,
                 cycle_id=cycle_id,
-                pm_template_id=pm_template.id if pm_template else None,
+                maintenance_base=maintenance_base,
+                required_date=required_date,
+                planned_date=planned_date,
                 overdue_value=overdue_value,
                 overdue_unit=overdue_unit,
-                maintenance_base=maintenance_base,
-                planned_date=planned_date if planned_date else sap_required_date,
-                estimated_hours=pm_template.estimated_hours if pm_template else estimated_hours,
-                position=max_position + 1,
-                priority=priority,
-                notes=notes
+                notes=notes,
+                status='pending'
             )
 
-            db.session.add(job)
-            db.session.flush()  # Get job ID for materials
-
-            # If PM template found, auto-add materials
-            if pm_template:
-                templates_linked += 1
-                for tm in pm_template.materials:
-                    wpm = WorkPlanMaterial(
-                        work_plan_job_id=job.id,
-                        material_id=tm.material_id,
-                        quantity=tm.quantity
-                    )
-                    db.session.add(wpm)
-                    materials_added += 1
-
+            db.session.add(sap_order)
             created += 1
 
         except Exception as e:
@@ -1200,10 +1258,9 @@ def import_sap_orders():
 
     return jsonify({
         'status': 'success',
-        'message': f'Import complete. Created {created} jobs.',
+        'message': f'Import complete. Added {created} orders to pool.',
         'created': created,
-        'templates_linked': templates_linked,
-        'materials_added': materials_added,
+        'skipped': skipped,
         'errors': errors
     }), 200
 
@@ -1215,26 +1272,40 @@ def import_sap_orders():
 def get_available_jobs():
     """
     Get available jobs that can be added to a work plan.
-    Returns open defects and PM-due equipment.
+    Returns SAP orders (from pool), open defects, and PM-due equipment.
 
     Query params:
         - berth: Filter by berth (east, west)
-        - job_type: Filter by type (pm, defect, inspection)
+        - job_type: Filter by type (pm, defect, inspection, sap)
+        - plan_id: Required for SAP orders - get orders for specific plan
     """
     user = get_current_user()
     language = user.language or 'en'
 
     berth = request.args.get('berth')
     job_type = request.args.get('job_type')
+    plan_id = request.args.get('plan_id')
 
     result = {
         'pm_jobs': [],
         'defect_jobs': [],
-        'inspection_jobs': []
+        'inspection_jobs': [],
+        'sap_orders': []
     }
 
-    # Get equipment for PM jobs (all running equipment)
-    if not job_type or job_type == 'pm':
+    # Get pending SAP orders from pool (most important - show first)
+    if not job_type or job_type in ['sap', 'pm', 'defect']:
+        if plan_id:
+            sap_query = SAPWorkOrder.query.filter_by(work_plan_id=int(plan_id), status='pending')
+            if berth and berth != 'both':
+                sap_query = sap_query.filter(
+                    db.or_(SAPWorkOrder.berth == berth, SAPWorkOrder.berth == 'both', SAPWorkOrder.berth == None)
+                )
+            sap_orders = sap_query.order_by(SAPWorkOrder.required_date, SAPWorkOrder.order_number).all()
+            result['sap_orders'] = [o.to_dict(language) for o in sap_orders]
+
+    # Get equipment for PM jobs (all running equipment) - only if no SAP orders or explicitly requested
+    if (not job_type or job_type == 'pm') and not result['sap_orders']:
         eq_query = Equipment.query.filter(Equipment.is_active == True)
         if berth and berth != 'both':
             eq_query = eq_query.filter(

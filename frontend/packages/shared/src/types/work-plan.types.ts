@@ -382,6 +382,30 @@ export interface ClonePMTemplatePayload {
   name_ar?: string;
 }
 
+// SAP Work Order (in staging/pool)
+export interface SAPWorkOrder {
+  id: number;
+  work_plan_id: number;
+  order_number: string;
+  order_type: string;
+  job_type: JobType;
+  equipment_id: number;
+  equipment: Equipment | null;
+  description: string | null;
+  estimated_hours: number;
+  priority: JobPriority;
+  berth: Berth | null;
+  cycle_id: number | null;
+  maintenance_base: string | null;
+  required_date: string | null;
+  planned_date: string | null;
+  overdue_value: number | null;
+  overdue_unit: string | null;
+  notes: string | null;
+  status: 'pending' | 'scheduled';
+  created_at: string;
+}
+
 // Available jobs for planning
 export interface AvailablePMJob {
   equipment: Equipment;
@@ -404,4 +428,5 @@ export interface AvailableJobsResponse {
   pm_jobs: AvailablePMJob[];
   defect_jobs: AvailableDefectJob[];
   inspection_jobs: AvailableInspectionJob[];
+  sap_orders: SAPWorkOrder[];
 }

@@ -664,6 +664,40 @@ with app.app_context():
         db.session.rollback()
         print('pm_template_materials table already exists')
 
+    # Create sap_work_orders table for staging imported SAP orders
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS sap_work_orders (
+                id SERIAL PRIMARY KEY,
+                work_plan_id INTEGER NOT NULL REFERENCES work_plans(id) ON DELETE CASCADE,
+                order_number VARCHAR(50) NOT NULL,
+                order_type VARCHAR(20) NOT NULL,
+                job_type VARCHAR(20) NOT NULL,
+                equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+                description TEXT,
+                estimated_hours FLOAT DEFAULT 4.0,
+                priority VARCHAR(20) DEFAULT 'normal',
+                berth VARCHAR(10),
+                cycle_id INTEGER,
+                maintenance_base VARCHAR(100),
+                required_date DATE,
+                planned_date DATE,
+                overdue_value FLOAT,
+                overdue_unit VARCHAR(10),
+                notes TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                UNIQUE(work_plan_id, order_number),
+                CONSTRAINT check_sap_job_type CHECK (job_type IN ('pm', 'defect', 'inspection')),
+                CONSTRAINT check_sap_order_status CHECK (status IN ('pending', 'scheduled'))
+            )
+        '''))
+        db.session.commit()
+        print('Created sap_work_orders table')
+    except Exception:
+        db.session.rollback()
+        print('sap_work_orders table already exists')
+
     # Add missing columns to work_plan_jobs table
     work_plan_job_cols = [
         ('sap_order_type', 'VARCHAR(20)'),

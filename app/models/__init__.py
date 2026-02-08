@@ -65,6 +65,7 @@ from app.models.work_plan_day import WorkPlanDay
 from app.models.work_plan_job import WorkPlanJob
 from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.work_plan_material import WorkPlanMaterial
+from app.models.sap_work_order import SAPWorkOrder
 
 __all__ = [
     'User',
@@ -112,4 +113,5 @@ __all__ = [
     'WorkPlanJob',
     'WorkPlanAssignment',
     'WorkPlanMaterial',
+    'SAPWorkOrder',
 ]

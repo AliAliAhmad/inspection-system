@@ -14,11 +14,12 @@ import {
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { workPlansApi, type AvailablePMJob, type AvailableDefectJob } from '@inspection/shared';
+import { workPlansApi, type AvailablePMJob, type AvailableDefectJob, type SAPWorkOrder } from '@inspection/shared';
 
 // Job type config
 const JOB_TYPES = {
   all: { label: '📋 All', emoji: '📋' },
+  sap: { label: '📦 SAP', emoji: '📦' },
   pm: { label: '🔧 PM', emoji: '🔧' },
   defect: { label: '🔴 Defect', emoji: '🔴' },
   inspection: { label: '✅ Inspect', emoji: '✅' },
@@ -49,7 +50,7 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
   };
 
   const emoji = JOB_TYPES[jobType as keyof typeof JOB_TYPES]?.emoji || '📋';
-  const hasOrder = !!job.sap_order_number;
+  const hasOrder = !!job.sap_order_number || !!job.order_number;
   const isOverdue = job.overdue_value && job.overdue_value > 0;
   const defectStatus = job.defect?.status;
 
@@ -58,7 +59,13 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
   let subtitle = '';
   let priorityColor = 'blue';
 
-  if (jobType === 'pm') {
+  if (jobType === 'sap') {
+    // SAP order from pool
+    title = job.equipment?.serial_number || job.equipment?.name || 'Unknown';
+    subtitle = job.order_number + (job.description ? ` - ${job.description.substring(0, 30)}` : '');
+    priorityColor = job.priority === 'high' || job.priority === 'urgent' ? 'orange' : 'blue';
+    if (isOverdue) priorityColor = 'red';
+  } else if (jobType === 'pm') {
     title = job.equipment?.serial_number || job.equipment?.name || 'Unknown';
     subtitle = job.equipment?.equipment_type || '';
     if (job.related_defects_count > 0) {
@@ -142,6 +149,7 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
 
 interface JobsPoolProps {
   berth?: string;
+  planId?: number;
   onAddJob?: () => void;
   onImportSAP?: () => void;
   onDownloadTemplate?: () => void;
@@ -150,6 +158,7 @@ interface JobsPoolProps {
 
 export const JobsPool: React.FC<JobsPoolProps> = ({
   berth,
+  planId,
   onAddJob,
   onImportSAP,
   onDownloadTemplate,
@@ -158,10 +167,10 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
 
-  // Fetch available jobs
+  // Fetch available jobs including SAP orders from pool
   const { data: availableJobs, isLoading } = useQuery({
-    queryKey: ['available-jobs', berth],
-    queryFn: () => workPlansApi.getAvailableJobs({ berth }).then(r => r.data),
+    queryKey: ['available-jobs', berth, planId],
+    queryFn: () => workPlansApi.getAvailableJobs({ berth, plan_id: planId }).then(r => r.data),
   });
 
   // Combine and filter jobs
@@ -170,7 +179,15 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
 
     const jobs: Array<{ job: any; type: string }> = [];
 
-    if (filter === 'all' || filter === 'pm') {
+    // SAP orders first (most important - from imported pool)
+    if (filter === 'all' || filter === 'sap') {
+      (availableJobs.sap_orders || []).forEach((j: SAPWorkOrder) => {
+        jobs.push({ job: j, type: 'sap' });
+      });
+    }
+
+    // Only show PM jobs if no SAP orders (to avoid duplicates)
+    if ((filter === 'all' || filter === 'pm') && !availableJobs.sap_orders?.length) {
       (availableJobs.pm_jobs || []).forEach((j: AvailablePMJob) => {
         jobs.push({ job: j, type: 'pm' });
       });
@@ -197,7 +214,9 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
         return (
           (equipment.serial_number || '').toLowerCase().includes(searchLower) ||
           (equipment.name || '').toLowerCase().includes(searchLower) ||
-          (defect.description || '').toLowerCase().includes(searchLower)
+          (defect.description || '').toLowerCase().includes(searchLower) ||
+          (job.order_number || '').toLowerCase().includes(searchLower) ||
+          (job.description || '').toLowerCase().includes(searchLower)
         );
       });
     }
@@ -205,6 +224,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     return jobs;
   }, [availableJobs, filter, search]);
 
+  const sapCount = availableJobs?.sap_orders?.length || 0;
   const pmCount = availableJobs?.pm_jobs?.length || 0;
   const defectCount = availableJobs?.defect_jobs?.length || 0;
   const inspectionCount = availableJobs?.inspection_jobs?.length || 0;
@@ -245,8 +265,8 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
         value={filter}
         onChange={v => setFilter(v as string)}
         options={[
-          { label: <><Badge count={pmCount + defectCount + inspectionCount} size="small" offset={[8, 0]}>All</Badge></>, value: 'all' },
-          { label: <><span>🔧</span> <Badge count={pmCount} size="small" /></>, value: 'pm' },
+          { label: <><Badge count={sapCount + defectCount + inspectionCount} size="small" offset={[8, 0]}>All</Badge></>, value: 'all' },
+          ...(sapCount > 0 ? [{ label: <><span>📦</span> <Badge count={sapCount} size="small" style={{ backgroundColor: '#1890ff' }} /></>, value: 'sap' }] : []),
           { label: <><span>🔴</span> <Badge count={defectCount} size="small" /></>, value: 'defect' },
           { label: <><span>✅</span> <Badge count={inspectionCount} size="small" /></>, value: 'inspection' },
         ]}
