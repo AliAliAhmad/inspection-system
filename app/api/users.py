@@ -401,6 +401,10 @@ def import_team():
         'failed': []
     }
 
+    # Track generated usernames and role_ids within this import batch
+    used_usernames = set()
+    used_role_ids = set()
+
     for idx, row in df.iterrows():
         row_num = idx + 2  # Excel row number (1-indexed + header)
         errors = []
@@ -507,33 +511,34 @@ def import_team():
 
             # Generate username - check for existing and make unique
             username = User.generate_username(full_name)
-            # Double-check username doesn't exist (in case of session issues)
-            existing_username = User.query.filter_by(username=username).first()
-            if existing_username:
+            # Check against database AND current batch
+            while User.query.filter_by(username=username).first() or username in used_usernames:
                 # Try with number suffix
-                for i in range(2, 100):
+                for i in range(2, 1000):
                     test_username = f"{username}{i}"
-                    if not User.query.filter_by(username=test_username).first():
+                    if not User.query.filter_by(username=test_username).first() and test_username not in used_usernames:
                         username = test_username
                         break
+                else:
+                    continue
+                break
+            used_usernames.add(username)
 
-            # Generate role_id - check it doesn't already exist
+            # Generate role_id - check against database AND current batch
             role_id = _generate_role_id(role)
-            # Double-check role_id doesn't exist
-            existing_role_id = User.query.filter_by(role_id=role_id).first()
-            if existing_role_id:
-                # Regenerate with higher number
+            while User.query.filter_by(role_id=role_id).first() or role_id in used_role_ids:
                 role_id = _generate_role_id(role)
+            used_role_ids.add(role_id)
 
             # Generate minor role and minor_role_id
             minor_role = _get_minor_role(role)
             minor_role_id = None
             if minor_role:
                 minor_role_id = _generate_role_id(minor_role)
-                # Double-check minor_role_id doesn't exist
-                existing_minor = User.query.filter_by(minor_role_id=minor_role_id).first()
-                if existing_minor:
+                # Check against database AND current batch
+                while User.query.filter_by(minor_role_id=minor_role_id).first() or minor_role_id in used_role_ids:
                     minor_role_id = _generate_role_id(minor_role)
+                used_role_ids.add(minor_role_id)
 
             # Create new user
             user = User(
