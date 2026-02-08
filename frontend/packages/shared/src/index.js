@@ -12,6 +12,7 @@ export * from './utils/role-guards';
 export * from './utils/date-utils';
 export * from './utils/sanitize';
 export * from './utils/notification-routes';
+export * from './utils/api-error';
 // Hooks
 export * from './hooks/useAuth';
 export * from './hooks/useLanguage';
