@@ -937,10 +937,7 @@ def import_sap_orders():
 
             # Find equipment by code or serial_number
             equipment = Equipment.query.filter(
-                db.or_(
-                    Equipment.code == equipment_code,
-                    Equipment.serial_number == equipment_code
-                )
+                Equipment.serial_number == equipment_code
             ).first()
             if not equipment:
                 errors.append(f"Row {idx + 2}: Equipment '{equipment_code}' not found")
@@ -1112,7 +1109,7 @@ def get_available_jobs():
             eq_query = eq_query.filter(
                 db.or_(Equipment.berth == berth, Equipment.berth == 'both')
             )
-        equipment_list = eq_query.order_by(Equipment.code).all()
+        equipment_list = eq_query.order_by(Equipment.serial_number).all()
         result['pm_jobs'] = [{
             'equipment': eq.to_dict(),
             'job_type': 'pm',
