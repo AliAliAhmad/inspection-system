@@ -48,6 +48,18 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
+            // Cache JS/CSS chunks with StaleWhileRevalidate for fast offline + updates
+            urlPattern: /\/assets\/.*\.(?:js|css)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'assets-cache',
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+              },
+            },
+          },
+          {
             // Cache API responses with network-first strategy
             urlPattern: /\/api\/.*/,
             handler: 'NetworkFirst',
