@@ -601,8 +601,13 @@ def remove_material(plan_id, job_id, material_id):
 def publish_plan(plan_id):
     """
     Publish a work plan. Generates PDF and sends notifications.
+
+    Query params:
+        - send_email: 'true' to send email to planning team (default true)
     """
     user = engineer_or_admin_required()
+
+    send_email = request.args.get('send_email', 'true').lower() == 'true'
 
     plan = db.session.get(WorkPlan, plan_id)
     if not plan:
@@ -617,6 +622,7 @@ def publish_plan(plan_id):
 
     # Generate PDF
     from app.services.work_plan_pdf_service import WorkPlanPDFService
+    pdf_file = None
     try:
         pdf_file = WorkPlanPDFService.generate_plan_pdf(plan)
         plan.pdf_file_id = pdf_file.id if pdf_file else None
@@ -629,7 +635,7 @@ def publish_plan(plan_id):
     plan.published_at = datetime.utcnow()
     plan.published_by_id = user.id
 
-    # Send notifications to all assigned users
+    # Send in-app notifications to all assigned users
     assigned_user_ids = set()
     for day in plan.days:
         for job in day.jobs:
@@ -637,9 +643,9 @@ def publish_plan(plan_id):
                 assigned_user_ids.add(assignment.user_id)
 
     week_str = plan.week_start.strftime('%Y-%m-%d')
-    for user_id in assigned_user_ids:
+    for uid in assigned_user_ids:
         NotificationService.create_notification(
-            user_id=user_id,
+            user_id=uid,
             type='work_plan',
             title='Work Plan Published',
             message=f'A new work plan for week {week_str} has been published with jobs assigned to you.',
@@ -649,9 +655,19 @@ def publish_plan(plan_id):
 
     db.session.commit()
 
+    # Send email to planning team (async-ish, non-blocking)
+    email_sent = False
+    if send_email:
+        try:
+            from app.services.email_service import EmailService
+            email_sent = EmailService.send_work_plan_notification(plan, pdf_file)
+        except Exception as e:
+            print(f"Email notification failed: {e}")
+
     return jsonify({
         'status': 'success',
         'message': 'Work plan published',
+        'email_sent': email_sent,
         'work_plan': plan.to_dict(user.language or 'en')
     }), 200
 
@@ -1287,4 +1303,52 @@ def download_day_pdf(plan_id, day_date):
     return jsonify({
         'status': 'success',
         'pdf_url': pdf_file.get_url()
+    }), 200
+
+
+# ==================== EMAIL SETTINGS ====================
+
+@bp.route('/email/test', methods=['POST'])
+@jwt_required()
+def test_email():
+    """
+    Send a test email to verify email configuration.
+    Only admins can use this endpoint.
+    """
+    user = get_current_user()
+    if user.role != 'admin':
+        raise ForbiddenError("Only admins can test email configuration")
+
+    data = request.get_json() or {}
+    to_email = data.get('email', user.email)
+
+    if not to_email:
+        raise ValidationError("Email address required")
+
+    from app.services.email_service import EmailService
+    success = EmailService.send_test_email(to_email)
+
+    return jsonify({
+        'status': 'success' if success else 'error',
+        'message': 'Test email sent' if success else 'Failed to send test email. Check email configuration.',
+        'to': to_email
+    }), 200 if success else 500
+
+
+@bp.route('/email/recipients', methods=['GET'])
+@jwt_required()
+def get_email_recipients():
+    """
+    Get configured planning team email recipients.
+    """
+    user = get_current_user()
+    if user.role not in ['admin', 'engineer']:
+        raise ForbiddenError("Only admins and engineers can view email recipients")
+
+    from app.services.email_service import EmailService
+    recipients = EmailService.get_planning_recipients()
+
+    return jsonify({
+        'status': 'success',
+        'recipients': recipients
     }), 200
