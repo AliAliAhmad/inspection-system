@@ -102,7 +102,7 @@ export default function MyWorkPlanPage() {
         {job.equipment && (
           <div>
             <Text strong>Equipment: </Text>
-            <Text>{job.equipment.code} - {job.equipment.name}</Text>
+            <Text>{job.equipment.serial_number} - {job.equipment.name}</Text>
           </div>
         )}
 

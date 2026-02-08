@@ -261,7 +261,7 @@ export default function WorkPlanDayPage() {
 
         {job.equipment && (
           <Text strong>
-            {job.equipment.code} - {job.equipment.name}
+            {job.equipment.serial_number} - {job.equipment.name}
           </Text>
         )}
 
@@ -431,7 +431,7 @@ export default function WorkPlanDayPage() {
                 optionFilterProp="label"
                 options={availableJobs?.pm_jobs?.map((j: AvailablePMJob) => ({
                   value: j.equipment.id,
-                  label: `${j.equipment.code} - ${j.equipment.name}`,
+                  label: `${j.equipment.serial_number} - ${j.equipment.name}`,
                 }))}
                 placeholder="Select equipment for PM"
               />
@@ -450,7 +450,7 @@ export default function WorkPlanDayPage() {
                   optionFilterProp="label"
                   options={availableJobs?.defect_jobs?.map((j: AvailableDefectJob) => ({
                     value: j.defect.id,
-                    label: `${j.equipment?.code || 'N/A'} - ${j.defect.description?.substring(0, 50)}...`,
+                    label: `${j.equipment?.serial_number || 'N/A'} - ${j.defect.description?.substring(0, 50)}...`,
                   }))}
                   placeholder="Select defect to repair"
                 />
