@@ -36,6 +36,11 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Force new service worker to activate immediately
+        skipWaiting: true,
+        clientsClaim: true,
+        // Clean old caches when new SW activates
+        cleanupOutdatedCaches: true,
         // Precache all built assets for offline support
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         // Navigation fallback for SPA - serve index.html for all navigation requests
