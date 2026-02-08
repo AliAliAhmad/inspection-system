@@ -13,24 +13,60 @@ const STORES = {
 } as const;
 
 let dbInstance: IDBDatabase | null = null;
+let dbClosing = false;
+let dbOpenPromise: Promise<IDBDatabase> | null = null;
 
 /**
  * Initialize and get the IndexedDB instance.
  */
 async function getDB(): Promise<IDBDatabase> {
+  // If database is closing, wait a bit and retry
+  if (dbClosing) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (dbClosing) {
+      throw new Error('Database is closing');
+    }
+  }
+
+  // If we have an active instance, return it
   if (dbInstance) return dbInstance;
 
-  return new Promise((resolve, reject) => {
+  // If already opening, wait for that promise
+  if (dbOpenPromise) return dbOpenPromise;
+
+  dbOpenPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
       console.error('Failed to open IndexedDB:', request.error);
+      dbOpenPromise = null;
       reject(request.error);
     };
 
     request.onsuccess = () => {
-      dbInstance = request.result;
-      resolve(dbInstance);
+      const db = request.result;
+
+      // Handle unexpected close (browser cleanup, etc.)
+      db.onclose = () => {
+        console.warn('IndexedDB connection closed unexpectedly');
+        dbInstance = null;
+        dbClosing = false;
+        dbOpenPromise = null;
+      };
+
+      // Handle version change (another tab upgraded)
+      db.onversionchange = () => {
+        console.warn('IndexedDB version change detected, closing connection');
+        dbClosing = true;
+        db.close();
+        dbInstance = null;
+        dbClosing = false;
+        dbOpenPromise = null;
+      };
+
+      dbInstance = db;
+      dbOpenPromise = null;
+      resolve(db);
     };
 
     request.onupgradeneeded = (event) => {
@@ -53,6 +89,8 @@ async function getDB(): Promise<IDBDatabase> {
       }
     };
   });
+
+  return dbOpenPromise;
 }
 
 /**
@@ -240,34 +278,58 @@ export async function cleanupExpiredCache(): Promise<number> {
 
 /**
  * Add an operation to the sync queue.
+ * Retries on database closing errors to prevent data loss.
  */
 export async function enqueueSyncOperation(
   operation: Omit<SyncOperation, 'id' | 'createdAt' | 'retryCount'>
 ): Promise<number> {
-  try {
-    const db = await getDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORES.SYNC_QUEUE, 'readwrite');
-      const store = transaction.objectStore(STORES.SYNC_QUEUE);
+  const maxRetries = 3;
 
-      const op: SyncOperation = {
-        ...operation,
-        createdAt: Date.now(),
-        retryCount: 0,
-      };
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const db = await getDB();
+      return await new Promise<number>((resolve, reject) => {
+        const transaction = db.transaction(STORES.SYNC_QUEUE, 'readwrite');
+        const store = transaction.objectStore(STORES.SYNC_QUEUE);
 
-      const request = store.add(op);
+        const op: SyncOperation = {
+          ...operation,
+          createdAt: Date.now(),
+          retryCount: 0,
+        };
 
-      request.onsuccess = () => resolve(request.result as number);
-      request.onerror = () => {
-        console.error('Failed to enqueue sync operation:', request.error);
-        reject(request.error);
-      };
-    });
-  } catch (error) {
-    console.error('Sync enqueue error:', error);
-    throw error;
+        const request = store.add(op);
+
+        request.onsuccess = () => resolve(request.result as number);
+        request.onerror = () => {
+          console.error('Failed to enqueue sync operation:', request.error);
+          reject(request.error);
+        };
+
+        // Handle transaction errors
+        transaction.onerror = () => {
+          reject(transaction.error);
+        };
+      });
+    } catch (error) {
+      const isClosingError =
+        error instanceof Error &&
+        (error.message.includes('closing') ||
+          error.message.includes('InvalidStateError') ||
+          error.name === 'InvalidStateError');
+
+      if (isClosingError && attempt < maxRetries) {
+        console.warn(`Sync enqueue retry ${attempt + 1}/${maxRetries}`);
+        await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+        continue;
+      }
+
+      console.error('Sync enqueue error:', error);
+      throw error;
+    }
   }
+
+  throw new Error('Failed to enqueue after max retries');
 }
 
 /**
@@ -411,6 +473,58 @@ export async function clearSyncQueue(): Promise<void> {
   } catch (error) {
     console.error('Sync clear error:', error);
   }
+}
+
+// ==================== DATABASE MANAGEMENT ====================
+
+/**
+ * Close the database connection gracefully.
+ * Call this before page unload if needed.
+ */
+export function closeDatabase(): void {
+  if (dbInstance) {
+    dbClosing = true;
+    dbInstance.close();
+    dbInstance = null;
+    dbClosing = false;
+    dbOpenPromise = null;
+  }
+}
+
+/**
+ * Check if the database is available.
+ */
+export function isDatabaseAvailable(): boolean {
+  return !dbClosing && typeof indexedDB !== 'undefined';
+}
+
+/**
+ * Retry an operation if it fails due to database closing.
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 2
+): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const isClosingError =
+        error instanceof Error &&
+        (error.message.includes('closing') ||
+          error.message.includes('InvalidStateError'));
+
+      if (isClosingError && i < maxRetries) {
+        // Wait a bit for DB to reopen
+        await new Promise((resolve) => setTimeout(resolve, 100 * (i + 1)));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
 }
 
 // ==================== PREDEFINED CACHE KEYS ====================
