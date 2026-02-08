@@ -1,6 +1,7 @@
 import React from 'react';
 import { Tooltip, Tag, Badge } from 'antd';
 import { UserOutlined, ToolOutlined, WarningOutlined } from '@ant-design/icons';
+import { useDroppable } from '@dnd-kit/core';
 import type { WorkPlanJob, ComputedPriority } from '@inspection/shared';
 import { useTranslation } from 'react-i18next';
 
@@ -30,6 +31,7 @@ interface TimelineJobBlockProps {
   onClick?: () => void;
   isDragging?: boolean;
   compact?: boolean;
+  droppable?: boolean; // Enable dropping employees on this job
 }
 
 export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
@@ -37,8 +39,16 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
   onClick,
   isDragging = false,
   compact = false,
+  droppable = true,
 }) => {
   const { t } = useTranslation();
+
+  // Make this a drop target for employees
+  const { setNodeRef, isOver } = useDroppable({
+    id: `job-${job.id}`,
+    data: { type: 'job', job },
+    disabled: !droppable,
+  });
 
   const priority = job.computed_priority || 'normal';
   const style = PRIORITY_STYLES[priority];
@@ -49,19 +59,19 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
   const leadUser = job.assignments?.find(a => a.is_lead)?.user;
 
   const containerStyle: React.CSSProperties = {
-    backgroundColor: style.bg,
-    borderLeft: `4px solid ${style.border}`,
+    backgroundColor: isOver ? '#d9f7be' : style.bg,
+    borderLeft: `4px solid ${isOver ? '#52c41a' : style.border}`,
     borderRadius: '6px',
     padding: compact ? '6px 8px' : '8px 12px',
     cursor: onClick ? 'pointer' : 'default',
     opacity: isDragging ? 0.5 : 1,
-    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : '0 1px 4px rgba(0,0,0,0.08)',
-    transition: 'box-shadow 0.2s, opacity 0.2s',
+    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : isOver ? '0 0 0 2px #52c41a' : '0 1px 4px rgba(0,0,0,0.08)',
+    transition: 'box-shadow 0.2s, opacity 0.2s, background-color 0.2s',
     marginBottom: '4px',
   };
 
   const content = (
-    <div style={containerStyle} onClick={onClick}>
+    <div ref={setNodeRef} style={containerStyle} onClick={onClick}>
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: compact ? '2px' : '4px' }}>
         <span style={{ fontSize: compact ? '14px' : '16px' }}>{JOB_TYPE_EMOJI[job.job_type]}</span>

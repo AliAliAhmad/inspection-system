@@ -4,4 +4,6 @@ export { TimelineDay } from './TimelineDay';
 export { TimelineView } from './TimelineView';
 export { CalendarView } from './CalendarView';
 export { ViewToggle } from './ViewToggle';
+export { JobsPool } from './JobsPool';
+export { EmployeePool } from './EmployeePool';
 export type { ViewMode } from './ViewToggle';
