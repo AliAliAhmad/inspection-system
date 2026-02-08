@@ -309,9 +309,15 @@ export default function WorkPlanningPage() {
   };
 
   const handleImport = (file: File) => {
-    if (currentPlan) {
-      importMutation.mutate({ planId: currentPlan.id, file });
+    if (!currentPlan) {
+      message.error('Please create or select a work plan first');
+      return false;
     }
+    if (!isDraft) {
+      message.error('Cannot import to a published plan');
+      return false;
+    }
+    importMutation.mutate({ planId: currentPlan.id, file });
     return false;
   };
 
@@ -596,6 +602,7 @@ export default function WorkPlanningPage() {
           <div style={{ width: 320, overflow: 'auto' }}>
             <JobsPool
               berth={berth}
+              onAddJob={() => setAddJobModalOpen(true)}
               onJobClick={(job, type) => {
                 setSelectedJob({
                   ...job,
@@ -868,6 +875,49 @@ export default function WorkPlanningPage() {
               </Col>
             </Row>
           </div>
+        )}
+      </Modal>
+
+      {/* Add Job Modal */}
+      <Modal
+        title="➕ Add Job"
+        open={addJobModalOpen}
+        onCancel={() => setAddJobModalOpen(false)}
+        footer={null}
+        width={500}
+      >
+        {currentPlan && isDraft ? (
+          <div>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              Drag jobs from the Jobs Pool on the right side and drop them onto a day in the calendar.
+              Or use "Import SAP Orders" to bulk import from Excel.
+            </Text>
+            <Divider />
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Button
+                type="primary"
+                icon={<UploadOutlined />}
+                onClick={() => {
+                  setAddJobModalOpen(false);
+                  setImportModalOpen(true);
+                }}
+                block
+              >
+                📥 Import SAP Orders
+              </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank')}
+                block
+              >
+                📄 Download Template
+              </Button>
+            </Space>
+          </div>
+        ) : (
+          <Text type="warning">
+            {!currentPlan ? 'Create a work plan first.' : 'Cannot add jobs to a published plan.'}
+          </Text>
         )}
       </Modal>
     </DndContext>
