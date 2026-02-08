@@ -11,7 +11,7 @@ interface OfflineMutationOptions<TData, TVariables> extends Omit<UseMutationOpti
     method: QueuedOperation['method'];
     toPayload?: (variables: TVariables) => Record<string, unknown>;
   };
-  invalidateKeys?: string[][];
+  invalidateKeys?: unknown[][];
 }
 
 /**

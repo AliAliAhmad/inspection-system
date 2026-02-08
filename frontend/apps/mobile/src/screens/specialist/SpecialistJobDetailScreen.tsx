@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import InspectionFindingDisplay from '../../components/InspectionFindingDisplay';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOfflineMutation } from '../../hooks/useOfflineMutation';
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 import { useTranslation } from 'react-i18next';
@@ -298,7 +298,7 @@ export default function SpecialistJobDetailScreen() {
   const handleStartConfirm = useCallback(() => {
     // If job already has planned time, start directly
     if (jobData?.has_planned_time) {
-      startMutation.mutate();
+      startMutation.mutate(undefined);
     } else {
       // Move to time input step
       setStartStep('time');
@@ -1043,10 +1043,10 @@ export default function SpecialistJobDetailScreen() {
                     </View>
                   )}
 
-                  {jobData?.equipment_name && (
+                  {(jobData as any)?.defect?.equipment?.name && (
                     <View style={styles.startModalInfoRow}>
                       <Text style={styles.startModalInfoLabel}>{t('common.equipment', 'Equipment')}:</Text>
-                      <Text style={styles.startModalInfoValue}>{jobData.equipment_name}</Text>
+                      <Text style={styles.startModalInfoValue}>{(jobData as any).defect.equipment.name}</Text>
                     </View>
                   )}
 

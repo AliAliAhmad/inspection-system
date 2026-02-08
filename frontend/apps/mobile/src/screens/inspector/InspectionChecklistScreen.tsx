@@ -14,7 +14,7 @@ import {
 import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,6 +30,7 @@ import {
   getApiClient,
   aiApi,
 } from '@inspection/shared';
+import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 
 /**
  * Optimize Cloudinary image URL with auto-format, auto-quality, and enhancement
@@ -99,13 +100,14 @@ export default function InspectionChecklistScreen() {
     error,
     refetch,
     isRefetching,
-  } = useQuery({
+  } = useOfflineQuery<Inspection>({
     queryKey: ['inspection', 'by-assignment', id],
-    queryFn: () => inspectionsApi.getByAssignment(id),
-    select: (res) => {
+    queryFn: async () => {
+      const res = await inspectionsApi.getByAssignment(id);
       const ins = (res.data as any).data ?? res.data;
       return ins as Inspection;
     },
+    cacheKey: `inspection-${id}`,
   });
 
   const inspectionId = inspection?.id;
@@ -175,11 +177,15 @@ export default function InspectionChecklistScreen() {
 
   const {
     data: progress,
-  } = useQuery({
+  } = useOfflineQuery<InspectionProgress>({
     queryKey: ['inspectionProgress', inspectionId],
-    queryFn: () => inspectionsApi.getProgress(inspectionId!),
-    select: (res) => res.data.data ?? res.data,
+    queryFn: async () => {
+      const res = await inspectionsApi.getProgress(inspectionId!);
+      const data = res.data.data ?? res.data;
+      return data as InspectionProgress;
+    },
     enabled: !!inspectionId,
+    cacheKey: inspectionId ? `inspection-progress-${inspectionId}` : 'inspection-progress-unknown',
   });
 
   const answerMutation = useMutation({
