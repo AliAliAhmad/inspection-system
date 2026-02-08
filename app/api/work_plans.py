@@ -29,6 +29,63 @@ def engineer_or_admin_required():
     return user
 
 
+# ==================== DIAGNOSTIC ====================
+
+@bp.route('/debug/<week_start_str>', methods=['GET'])
+def debug_work_plan(week_start_str):
+    """Debug endpoint to check work plan loading (temporary)."""
+    try:
+        from sqlalchemy import text
+
+        week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
+
+        # Check if work_plan_jobs has the new columns
+        columns_check = {}
+        for col in ['sap_order_type', 'description', 'cycle_id', 'overdue_value']:
+            try:
+                result = db.session.execute(text(f"SELECT {col} FROM work_plan_jobs LIMIT 1"))
+                columns_check[col] = 'exists'
+            except Exception as e:
+                columns_check[col] = str(e)
+
+        # Get the plan
+        plan = WorkPlan.query.filter_by(week_start=week_date).first()
+        if not plan:
+            return jsonify({'status': 'no_plan', 'columns': columns_check}), 200
+
+        # Try to get days
+        days_info = []
+        for day in plan.days:
+            day_info = {'date': day.date.isoformat(), 'jobs_count': len(day.jobs)}
+            # Try to serialize each job
+            jobs_ok = []
+            jobs_err = []
+            for job in day.jobs:
+                try:
+                    job.to_dict('en')
+                    jobs_ok.append(job.id)
+                except Exception as e:
+                    jobs_err.append({'id': job.id, 'error': str(e)})
+            day_info['jobs_ok'] = jobs_ok
+            day_info['jobs_err'] = jobs_err
+            days_info.append(day_info)
+
+        return jsonify({
+            'status': 'ok',
+            'plan_id': plan.id,
+            'columns': columns_check,
+            'days': days_info
+        }), 200
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 200
+
+
 # ==================== WORK PLANS ====================
 
 @bp.route('', methods=['GET'])
