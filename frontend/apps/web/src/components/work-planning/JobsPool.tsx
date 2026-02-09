@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Card, Tag, Button, Space, Input, Select, Empty, Spin, Badge, Popconfirm, Tabs, Tooltip } from 'antd';
+import { Card, Tag, Button, Space, Input, Select, Empty, Spin, Badge, Popconfirm, Tabs, Tooltip, Avatar } from 'antd';
 import {
   PlusOutlined,
   UploadOutlined,
@@ -176,6 +176,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'prm' | 'defect' | 'ins'>('prm');
   const [prmSubTab, setPrmSubTab] = useState<'hourly' | 'calendar'>('hourly');
+  const [searchText, setSearchText] = useState<string>('');
   const [equipmentFilter, setEquipmentFilter] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
 
@@ -213,6 +214,18 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
 
     // Filter function
     const filterJob = (job: any) => {
+      // Text search filter
+      if (searchText) {
+        const search = searchText.toLowerCase();
+        const equipName = (job.equipment?.name || '').toLowerCase();
+        const equipSerial = (job.equipment?.serial_number || '').toLowerCase();
+        const description = (job.description || job.defect?.description || '').toLowerCase();
+        const orderNum = (job.order_number || '').toLowerCase();
+        if (!equipName.includes(search) && !equipSerial.includes(search) &&
+            !description.includes(search) && !orderNum.includes(search)) {
+          return false;
+        }
+      }
       // Equipment filter
       if (equipmentFilter && job.equipment?.id?.toString() !== equipmentFilter) {
         return false;
@@ -303,7 +316,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     })).filter(filterJob);
 
     return { prmJobs: prm, defectJobs: defect, insJobs: ins };
-  }, [availableJobs, equipmentFilter, priorityFilter, prmSubTab]);
+  }, [availableJobs, searchText, equipmentFilter, priorityFilter, prmSubTab]);
 
   // Counts
   const prmCount = prmJobs.length;
@@ -412,6 +425,16 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
 
             {/* Filters */}
             <Space direction="vertical" style={{ width: '100%' }} size={6}>
+              {/* Text Search */}
+              <Input
+                placeholder="Search equipment, description..."
+                allowClear
+                size="small"
+                prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
+
               {/* Equipment Filter */}
               <Select
                 placeholder="Filter by equipment..."
@@ -514,7 +537,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
             ) : currentJobs.length === 0 ? (
               <Empty
                 description={
-                  equipmentFilter || priorityFilter !== 'all'
+                  searchText || equipmentFilter || priorityFilter !== 'all'
                     ? "No jobs match filters"
                     : `No ${activeTab.toUpperCase()} jobs available`
                 }

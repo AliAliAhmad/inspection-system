@@ -32,6 +32,7 @@ interface TimelineJobBlockProps {
   isDragging?: boolean;
   compact?: boolean;
   droppable?: boolean; // Enable dropping employees on this job
+  showTeam?: boolean; // Show team avatars
 }
 
 export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
@@ -40,6 +41,7 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
   isDragging = false,
   compact = false,
   droppable = true,
+  showTeam = false,
 }) => {
   const { t } = useTranslation();
 
@@ -110,10 +112,39 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {/* Team indicator */}
         {teamCount > 0 && (
-          <span style={{ fontSize: compact ? '11px' : '12px', color: '#595959' }}>
-            👥 {leadUser ? leadUser.full_name.split(' ')[0] : teamCount}
-            {teamCount > 1 && !compact && ` +${teamCount - 1}`}
-          </span>
+          showTeam ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+              {job.assignments?.slice(0, 3).map((a, idx) => (
+                <Tooltip key={a.id} title={`${a.user?.full_name}${a.is_lead ? ' (Lead)' : ''}`}>
+                  <div style={{
+                    width: compact ? 18 : 22,
+                    height: compact ? 18 : 22,
+                    borderRadius: '50%',
+                    backgroundColor: a.is_lead ? '#1890ff' : '#d9d9d9',
+                    color: a.is_lead ? '#fff' : '#595959',
+                    fontSize: compact ? 9 : 10,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginLeft: idx > 0 ? -6 : 0,
+                    border: '2px solid #fff',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                  }}>
+                    {a.user?.full_name?.charAt(0) || '?'}
+                  </div>
+                </Tooltip>
+              ))}
+              {teamCount > 3 && (
+                <span style={{ fontSize: 10, color: '#8c8c8c', marginLeft: 2 }}>+{teamCount - 3}</span>
+              )}
+            </div>
+          ) : (
+            <span style={{ fontSize: compact ? '11px' : '12px', color: '#595959' }}>
+              👥 {leadUser ? leadUser.full_name.split(' ')[0] : teamCount}
+              {teamCount > 1 && !compact && ` +${teamCount - 1}`}
+            </span>
+          )
         )}
 
         {/* Overdue badge */}

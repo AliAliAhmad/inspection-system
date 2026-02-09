@@ -612,7 +612,7 @@ export default function WorkPlanningPage() {
         />
 
         {/* Main Content Area - Calendar (with right margin for sidebar) */}
-        <div style={{ flex: 1, overflow: 'auto', marginRight: '30%' }}>
+        <div style={{ flex: 1, overflow: 'auto', marginRight: '20%' }}>
             {isLoading ? (
               <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spin size="large" />
@@ -672,7 +672,7 @@ export default function WorkPlanningPage() {
                             <Card
                               size="small"
                               style={{
-                                minHeight: 200,
+                                minHeight: 320,
                                 backgroundColor: isToday ? '#f6ffed' : undefined,
                                 borderColor: isToday ? '#52c41a' : undefined,
                               }}
@@ -698,13 +698,14 @@ export default function WorkPlanningPage() {
                                   {isDraft ? 'Drop jobs here' : 'No jobs'}
                                 </div>
                               ) : (
-                                <div style={{ maxHeight: 150, overflowY: 'auto' }}>
+                                <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                                   {jobs.map((job) => (
                                     <TimelineJobBlock
                                       key={job.id}
                                       job={job}
                                       onClick={() => handleJobClick(job)}
                                       compact
+                                      showTeam
                                     />
                                   ))}
                                 </div>
@@ -730,7 +731,7 @@ export default function WorkPlanningPage() {
           </div>
 
         {/* Bottom: Employee Pool (with right margin for sidebar) */}
-        <div style={{ marginTop: 8, marginRight: '30%' }}>
+        <div style={{ marginTop: 8, marginRight: '20%' }}>
           <EmployeePool weekStart={weekStartStr} />
         </div>
       </div>
