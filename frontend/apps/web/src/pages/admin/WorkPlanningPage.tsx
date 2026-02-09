@@ -599,6 +599,7 @@ export default function WorkPlanningPage() {
         <JobsPool
           berth={berth}
           planId={currentPlan?.id}
+          days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
           onAddJob={() => setAddJobModalOpen(true)}
           onJobClick={(job, type) => {
             setSelectedJob({
@@ -609,6 +610,27 @@ export default function WorkPlanningPage() {
           }}
           onImportSAP={() => setImportModalOpen(true)}
           onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
+          onQuickSchedule={(job, jobType, dayId) => {
+            if (!currentPlan || !isDraft) return;
+            if (jobType === 'sap' && job.id) {
+              scheduleSAPMutation.mutate({
+                planId: currentPlan.id,
+                sapOrderId: job.id,
+                dayId: dayId,
+              });
+            } else {
+              addJobMutation.mutate({
+                planId: currentPlan.id,
+                dayId: dayId,
+                jobType: jobType as JobType,
+                berth: berth as Berth,
+                equipmentId: job.equipment?.id,
+                defectId: job.defect?.id,
+                inspectionAssignmentId: job.assignment?.id,
+                estimatedHours: job.estimated_hours || 4,
+              });
+            }
+          }}
         />
 
         {/* Main Content Area - Calendar (with right margin for sidebar) */}
@@ -732,7 +754,10 @@ export default function WorkPlanningPage() {
 
         {/* Bottom: Employee Pool (with right margin for sidebar) */}
         <div style={{ marginTop: 8, marginRight: '20%' }}>
-          <EmployeePool weekStart={weekStartStr} />
+          <EmployeePool
+            weekStart={weekStartStr}
+            jobs={currentPlan?.days?.flatMap(d => [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])]) || []}
+          />
         </div>
       </div>
 

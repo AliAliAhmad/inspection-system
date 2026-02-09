@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Card, Tag, Button, Space, Input, Select, Empty, Spin, Badge, Popconfirm, Tabs, Tooltip, Avatar } from 'antd';
+import { Card, Tag, Button, Space, Input, Select, Empty, Spin, Badge, Popconfirm, Tabs, Tooltip, Avatar, Dropdown, type MenuProps } from 'antd';
 import {
   PlusOutlined,
   UploadOutlined,
@@ -42,9 +42,11 @@ interface DraggableJobItemProps {
   job: any;
   jobType: string;
   onClick?: () => void;
+  days?: { id: number; date: string; day_name: string }[];
+  onQuickSchedule?: (job: any, jobType: string, dayId: number) => void;
 }
 
-const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick }) => {
+const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, days = [], onQuickSchedule }) => {
   const id = `pool-${jobType}-${job.id || job.equipment?.id || job.defect?.id || job.assignment?.id}`;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -82,75 +84,100 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
     low: '#8c8c8c',
   };
 
-  return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
-      <Card
-        size="small"
-        hoverable
-        onClick={onClick}
-        style={{
-          marginBottom: 8,
-          borderLeft: `4px solid ${isOverdue ? '#ff4d4f' : priorityColors[priority] || '#1890ff'}`,
-          backgroundColor: isDragging ? '#f0f0f0' : '#fff',
-        }}
-        bodyStyle={{ padding: '10px 12px' }}
-      >
-        {/* Equipment Name - Bold */}
+  // Context menu for quick scheduling
+  const contextMenuItems: MenuProps['items'] = days.length > 0 && onQuickSchedule ? [
+    {
+      key: 'schedule-header',
+      label: <span style={{ fontWeight: 600, color: '#8c8c8c' }}>Quick Schedule to:</span>,
+      disabled: true,
+    },
+    { type: 'divider' },
+    ...days.map(day => ({
+      key: `day-${day.id}`,
+      label: `${day.day_name} (${day.date.slice(5)})`,
+      onClick: () => onQuickSchedule(job, jobType, day.id),
+    })),
+  ] : [];
+
+  const cardContent = (
+    <Card
+      size="small"
+      hoverable
+      onClick={onClick}
+      style={{
+        marginBottom: 8,
+        borderLeft: `4px solid ${isOverdue ? '#ff4d4f' : priorityColors[priority] || '#1890ff'}`,
+        backgroundColor: isDragging ? '#f0f0f0' : '#fff',
+      }}
+      bodyStyle={{ padding: '10px 12px' }}
+    >
+      {/* Equipment Name - Bold */}
+      <div style={{
+        fontWeight: 700,
+        fontSize: 13,
+        marginBottom: 4,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }}>
+        {equipmentName}
+      </div>
+
+      {/* Description */}
+      {description && (
         <div style={{
-          fontWeight: 700,
-          fontSize: 13,
-          marginBottom: 4,
+          fontSize: 12,
+          color: '#595959',
+          marginBottom: 6,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap'
         }}>
-          {equipmentName}
+          {description.substring(0, 50)}{description.length > 50 ? '...' : ''}
         </div>
+      )}
 
-        {/* Description */}
-        {description && (
-          <div style={{
-            fontSize: 12,
-            color: '#595959',
-            marginBottom: 6,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
-          }}>
-            {description.substring(0, 50)}{description.length > 50 ? '...' : ''}
-          </div>
-        )}
+      {/* Overdue - Bold Red (shown prominently if overdue) */}
+      {isOverdue && (
+        <div style={{
+          fontWeight: 700,
+          fontSize: 12,
+          color: '#ff4d4f',
+          marginBottom: 6,
+        }}>
+          <WarningOutlined /> {job.overdue_value}{job.overdue_unit === 'hours' ? 'h' : 'd'} overdue
+        </div>
+      )}
 
-        {/* Overdue - Bold Red (shown prominently if overdue) */}
-        {isOverdue && (
-          <div style={{
-            fontWeight: 700,
-            fontSize: 12,
-            color: '#ff4d4f',
-            marginBottom: 6,
-          }}>
-            <WarningOutlined /> {job.overdue_value}{job.overdue_unit === 'hours' ? 'h' : 'd'} overdue
-          </div>
-        )}
+      {/* Tags Row */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Priority Tag */}
+        <Tag
+          color={priority === 'urgent' ? 'error' : priority === 'high' ? 'warning' : 'default'}
+          style={{ fontSize: 10, margin: 0 }}
+        >
+          {priority.toUpperCase()}
+        </Tag>
 
-        {/* Tags Row */}
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Priority Tag */}
-          <Tag
-            color={priority === 'urgent' ? 'error' : priority === 'high' ? 'warning' : 'default'}
-            style={{ fontSize: 10, margin: 0 }}
-          >
-            {priority.toUpperCase()}
+        {/* Cycle Tag for PRM */}
+        {cycleLabel && (
+          <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
+            {cycleLabel}
           </Tag>
+        )}
+      </div>
+    </Card>
+  );
 
-          {/* Cycle Tag for PRM */}
-          {cycleLabel && (
-            <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
-              {cycleLabel}
-            </Tag>
-          )}
-        </div>
-      </Card>
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+      {contextMenuItems.length > 0 ? (
+        <Dropdown menu={{ items: contextMenuItems }} trigger={['contextMenu']}>
+          {cardContent}
+        </Dropdown>
+      ) : (
+        cardContent
+      )}
     </div>
   );
 };
@@ -158,20 +185,24 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
 interface JobsPoolProps {
   berth?: string;
   planId?: number;
+  days?: { id: number; date: string; day_name: string }[];
   onAddJob?: () => void;
   onImportSAP?: () => void;
   onDownloadTemplate?: () => void;
   onJobClick?: (job: any, jobType: string) => void;
   onClearPool?: () => Promise<void>;
+  onQuickSchedule?: (job: any, jobType: string, dayId: number) => void;
 }
 
 export const JobsPool: React.FC<JobsPoolProps> = ({
   berth,
   planId,
+  days = [],
   onAddJob,
   onImportSAP,
   onJobClick,
   onClearPool,
+  onQuickSchedule,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'prm' | 'defect' | 'ins'>('prm');
@@ -550,6 +581,8 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
                   job={job}
                   jobType={currentJobType}
                   onClick={() => onJobClick?.(job, currentJobType)}
+                  days={days}
+                  onQuickSchedule={onQuickSchedule}
                 />
               ))
             )}

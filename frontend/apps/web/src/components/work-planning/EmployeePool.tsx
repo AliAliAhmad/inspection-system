@@ -23,9 +23,11 @@ const SPEC_CONFIG: Record<string, { label: string; emoji: string }> = {
 interface DraggableEmployeeProps {
   user: any;
   isOnLeave: boolean;
+  assignedHours?: number;
+  maxHours?: number;
 }
 
-const DraggableEmployee: React.FC<DraggableEmployeeProps> = ({ user, isOnLeave }) => {
+const DraggableEmployee: React.FC<DraggableEmployeeProps> = ({ user, isOnLeave, assignedHours = 0, maxHours = 40 }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `employee-${user.id}`,
     data: { type: 'employee', user },
@@ -39,38 +41,69 @@ const DraggableEmployee: React.FC<DraggableEmployeeProps> = ({ user, isOnLeave }
     .substring(0, 2)
     .toUpperCase() || '?';
 
+  const workloadPercent = Math.min((assignedHours / maxHours) * 100, 100);
+  const workloadColor = workloadPercent > 80 ? '#ff4d4f' : workloadPercent > 50 ? '#faad14' : '#52c41a';
+
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : isOnLeave ? 0.5 : 1,
     cursor: isOnLeave ? 'not-allowed' : 'grab',
     display: 'inline-flex',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: 4,
-    padding: '2px 8px',
+    gap: 2,
+    padding: '4px 8px',
     backgroundColor: isDragging ? '#e6f7ff' : isOnLeave ? '#f5f5f5' : '#fff',
     border: `1px ${isOnLeave ? 'dashed' : 'solid'} #d9d9d9`,
-    borderRadius: 12,
+    borderRadius: 8,
     marginRight: 6,
     marginBottom: 4,
     textDecoration: isOnLeave ? 'line-through' : 'none',
+    minWidth: 60,
   };
 
+  const tooltipText = isOnLeave
+    ? `${user.full_name} - On Leave`
+    : `${user.full_name}\n${assignedHours}h assigned this week`;
+
   return (
-    <Tooltip title={isOnLeave ? `${user.full_name} - On Leave` : `Drag to assign ${user.full_name}`}>
+    <Tooltip title={tooltipText}>
       <div ref={setNodeRef} style={style} {...(isOnLeave ? {} : { ...listeners, ...attributes })}>
-        <Avatar
-          size={16}
-          style={{
-            backgroundColor: isOnLeave ? '#d9d9d9' : ROLE_CONFIG[user.role]?.color || '#1890ff',
-            fontSize: 8,
-          }}
-        >
-          {initials}
-        </Avatar>
-        <span style={{ fontSize: 11, color: isOnLeave ? '#8c8c8c' : '#262626' }}>
-          {user.full_name?.split(' ')[0]}
-        </span>
-        {isOnLeave && <span style={{ fontSize: 9 }}>🏖️</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Avatar
+            size={18}
+            style={{
+              backgroundColor: isOnLeave ? '#d9d9d9' : ROLE_CONFIG[user.role]?.color || '#1890ff',
+              fontSize: 9,
+            }}
+          >
+            {initials}
+          </Avatar>
+          <span style={{ fontSize: 11, color: isOnLeave ? '#8c8c8c' : '#262626', fontWeight: 500 }}>
+            {user.full_name?.split(' ')[0]}
+          </span>
+          {isOnLeave && <span style={{ fontSize: 9 }}>🏖️</span>}
+        </div>
+        {!isOnLeave && assignedHours > 0 && (
+          <div style={{ width: '100%', marginTop: 2 }}>
+            <div style={{
+              height: 3,
+              backgroundColor: '#f0f0f0',
+              borderRadius: 2,
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                width: `${workloadPercent}%`,
+                height: '100%',
+                backgroundColor: workloadColor,
+                transition: 'width 0.3s',
+              }} />
+            </div>
+            <div style={{ fontSize: 9, color: '#8c8c8c', textAlign: 'center', marginTop: 1 }}>
+              {assignedHours}h
+            </div>
+          </div>
+        )}
       </div>
     </Tooltip>
   );
@@ -78,10 +111,11 @@ const DraggableEmployee: React.FC<DraggableEmployeeProps> = ({ user, isOnLeave }
 
 interface EmployeePoolProps {
   weekStart?: string;
+  jobs?: any[]; // All jobs from current plan to calculate workload
   onRefresh?: () => void;
 }
 
-export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, onRefresh }) => {
+export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = [], onRefresh }) => {
   // Fetch users
   const { data: usersData, isLoading: usersLoading, refetch: refetchUsers } = useQuery({
     queryKey: ['users', 'active'],
@@ -111,6 +145,19 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, onRefresh
     }
     return ids;
   }, [rosterData]);
+
+  // Calculate assigned hours per user
+  const userHoursMap = useMemo(() => {
+    const hoursMap = new Map<number, number>();
+    jobs.forEach((job: any) => {
+      const hours = job.estimated_hours || 0;
+      (job.assignments || []).forEach((assignment: any) => {
+        const userId = assignment.user_id;
+        hoursMap.set(userId, (hoursMap.get(userId) || 0) + hours);
+      });
+    });
+    return hoursMap;
+  }, [jobs]);
 
   // Group users by role -> specialization
   const groupedUsers = useMemo(() => {
@@ -225,6 +272,7 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, onRefresh
                             key={user.id}
                             user={user}
                             isOnLeave={false}
+                            assignedHours={userHoursMap.get(user.id) || 0}
                           />
                         ))}
                       </div>
