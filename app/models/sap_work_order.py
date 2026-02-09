@@ -91,6 +91,7 @@ class SAPWorkOrder(db.Model):
             'priority': self.priority,
             'berth': self.berth,
             'cycle_id': self.cycle_id,
+            'cycle': self.cycle.to_dict(language) if self.cycle else None,
             'maintenance_base': self.maintenance_base,
             'required_date': self.required_date.isoformat() if self.required_date else None,
             'planned_date': self.planned_date.isoformat() if self.planned_date else None,

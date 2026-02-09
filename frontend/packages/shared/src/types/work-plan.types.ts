@@ -396,6 +396,7 @@ export interface SAPWorkOrder {
   priority: JobPriority;
   berth: Berth | null;
   cycle_id: number | null;
+  cycle: MaintenanceCycle | null;
   maintenance_base: string | null;
   required_date: string | null;
   planned_date: string | null;

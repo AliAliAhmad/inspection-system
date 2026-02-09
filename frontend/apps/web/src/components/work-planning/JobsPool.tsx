@@ -1,36 +1,48 @@
-import React, { useState } from 'react';
-import { Card, Tag, Button, Space, Input, Segmented, Empty, Spin, Badge, Tooltip, Popconfirm, message } from 'antd';
+import React, { useState, useMemo } from 'react';
+import { Card, Tag, Button, Space, Input, Select, Empty, Spin, Badge, Popconfirm, Tabs } from 'antd';
 import {
   PlusOutlined,
   UploadOutlined,
-  DownloadOutlined,
-  SearchOutlined,
-  DownOutlined,
-  UpOutlined,
   DeleteOutlined,
+  SearchOutlined,
+  ToolOutlined,
+  BugOutlined,
+  EyeOutlined,
+  ClockCircleOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { workPlansApi, type AvailablePMJob, type AvailableDefectJob, type SAPWorkOrder } from '@inspection/shared';
 
-// Job type config
-const JOB_TYPES = {
-  all: { label: '📋 All', emoji: '📋' },
-  sap: { label: '📦 SAP', emoji: '📦' },
-  pm: { label: '🔧 PM', emoji: '🔧' },
-  defect: { label: '🔴 Defect', emoji: '🔴' },
-  inspection: { label: '✅ Inspect', emoji: '✅' },
+// Priority order for sorting
+const PRIORITY_ORDER: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  normal: 2,
+  low: 3,
+};
+
+// Cycle hours for sorting (descending)
+const HOURS_CYCLES = [4000, 3000, 2000, 1500, 1000, 500, 250];
+
+// Calendar cycles for sorting (ascending)
+const CALENDAR_ORDER: Record<string, number> = {
+  '3-weeks': 1,
+  'monthly': 2,
+  'quarterly': 3,
+  '6-months': 4,
+  'yearly': 5,
 };
 
 interface DraggableJobItemProps {
   job: any;
   jobType: string;
   onClick?: () => void;
-  horizontal?: boolean;
 }
 
-const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, horizontal }) => {
+const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick }) => {
   const id = `pool-${jobType}-${job.id || job.equipment?.id || job.defect?.id || job.assignment?.id}`;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -46,40 +58,27 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
     cursor: 'grab',
-    ...(horizontal ? { flexShrink: 0, width: 200 } : {}),
   };
 
-  const emoji = JOB_TYPES[jobType as keyof typeof JOB_TYPES]?.emoji || '📋';
-  const hasOrder = !!job.sap_order_number || !!job.order_number;
   const isOverdue = job.overdue_value && job.overdue_value > 0;
-  const defectStatus = job.defect?.status;
+  const priority = job.priority || 'normal';
 
-  // Get display info based on job type
-  let title = '';
-  let subtitle = '';
-  let priorityColor = 'blue';
+  // Get equipment name
+  const equipmentName = job.equipment?.serial_number || job.equipment?.name || 'Unknown Equipment';
 
-  if (jobType === 'sap') {
-    // SAP order from pool
-    title = job.equipment?.serial_number || job.equipment?.name || 'Unknown';
-    subtitle = job.order_number + (job.description ? ` - ${job.description.substring(0, 30)}` : '');
-    priorityColor = job.priority === 'high' || job.priority === 'urgent' ? 'orange' : 'blue';
-    if (isOverdue) priorityColor = 'red';
-  } else if (jobType === 'pm') {
-    title = job.equipment?.serial_number || job.equipment?.name || 'Unknown';
-    subtitle = job.equipment?.equipment_type || '';
-    if (job.related_defects_count > 0) {
-      priorityColor = 'orange';
-    }
-  } else if (jobType === 'defect') {
-    title = job.equipment?.serial_number || 'Unknown Equipment';
-    subtitle = job.defect?.description?.substring(0, 40) + '...' || '';
-    priorityColor = defectStatus === 'in_progress' ? 'orange' : 'red';
-  } else if (jobType === 'inspection') {
-    title = job.equipment?.serial_number || 'Unknown';
-    subtitle = job.template?.name || 'Inspection';
-    priorityColor = 'green';
-  }
+  // Get description
+  const description = job.description || job.defect?.description || '';
+
+  // Get cycle info for PRM
+  const cycleLabel = job.cycle?.display_label || job.maintenance_base || '';
+
+  // Priority colors
+  const priorityColors: Record<string, string> = {
+    urgent: '#ff4d4f',
+    high: '#fa8c16',
+    normal: '#1890ff',
+    low: '#8c8c8c',
+  };
 
   return (
     <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
@@ -88,61 +87,61 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
         hoverable
         onClick={onClick}
         style={{
-          marginBottom: horizontal ? 0 : 8,
-          marginRight: horizontal ? 8 : 0,
-          borderLeft: `4px solid ${priorityColor === 'red' ? '#ff4d4f' : priorityColor === 'orange' ? '#faad14' : '#1890ff'}`,
+          marginBottom: 8,
+          borderLeft: `4px solid ${isOverdue ? '#ff4d4f' : priorityColors[priority] || '#1890ff'}`,
           backgroundColor: isDragging ? '#f0f0f0' : '#fff',
-          height: horizontal ? '100%' : 'auto',
         }}
-        bodyStyle={{ padding: '8px 12px' }}
+        bodyStyle={{ padding: '10px 12px' }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <span style={{ fontSize: 18 }}>{emoji}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontWeight: 500,
-              fontSize: 13,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}>
-              {title}
-            </div>
-            <div style={{
-              fontSize: 11,
-              color: '#8c8c8c',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}>
-              {subtitle}
-            </div>
-            <div style={{ marginTop: 4, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {!hasOrder && jobType !== 'pm' && (
-                <Tag color="error" style={{ fontSize: 10, margin: 0, padding: '0 4px' }}>
-                  ⚠️ No Order
-                </Tag>
-              )}
-              {isOverdue && (
-                <Tag color="warning" style={{ fontSize: 10, margin: 0, padding: '0 4px' }}>
-                  ⏰ Overdue
-                </Tag>
-              )}
-              {jobType === 'pm' && job.related_defects_count > 0 && (
-                <Tag color="orange" style={{ fontSize: 10, margin: 0, padding: '0 4px' }}>
-                  🔴 {job.related_defects_count} defects
-                </Tag>
-              )}
-              {jobType === 'defect' && defectStatus && (
-                <Tag
-                  color={defectStatus === 'in_progress' ? 'processing' : 'default'}
-                  style={{ fontSize: 10, margin: 0, padding: '0 4px' }}
-                >
-                  {defectStatus === 'in_progress' ? '🔄 In Progress' : '📋 Open'}
-                </Tag>
-              )}
-            </div>
+        {/* Equipment Name */}
+        <div style={{
+          fontWeight: 600,
+          fontSize: 13,
+          marginBottom: 4,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}>
+          {equipmentName}
+        </div>
+
+        {/* Description */}
+        {description && (
+          <div style={{
+            fontSize: 12,
+            color: '#595959',
+            marginBottom: 6,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {description.substring(0, 50)}{description.length > 50 ? '...' : ''}
           </div>
+        )}
+
+        {/* Tags Row */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Priority Tag */}
+          <Tag
+            color={priority === 'urgent' ? 'error' : priority === 'high' ? 'warning' : 'default'}
+            style={{ fontSize: 10, margin: 0 }}
+          >
+            {priority.toUpperCase()}
+          </Tag>
+
+          {/* Cycle Tag for PRM */}
+          {cycleLabel && (
+            <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
+              {cycleLabel}
+            </Tag>
+          )}
+
+          {/* Overdue Tag */}
+          {isOverdue && (
+            <Tag color="error" style={{ fontSize: 10, margin: 0 }}>
+              <WarningOutlined /> {job.overdue_value}{job.overdue_unit === 'hours' ? 'h' : 'd'} overdue
+            </Tag>
+          )}
         </div>
       </Card>
     </div>
@@ -157,7 +156,6 @@ interface JobsPoolProps {
   onDownloadTemplate?: () => void;
   onJobClick?: (job: any, jobType: string) => void;
   onClearPool?: () => Promise<void>;
-  horizontal?: boolean;
 }
 
 export const JobsPool: React.FC<JobsPoolProps> = ({
@@ -165,14 +163,13 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   planId,
   onAddJob,
   onImportSAP,
-  onDownloadTemplate,
   onJobClick,
   onClearPool,
-  horizontal = false,
 }) => {
-  const [filter, setFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
-  const [collapsed, setCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<'prm' | 'defect' | 'ins'>('prm');
+  const [prmSubTab, setPrmSubTab] = useState<'hourly' | 'calendar'>('hourly');
+  const [equipmentFilter, setEquipmentFilter] = useState<string>('');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
 
   // Fetch available jobs including SAP orders from pool
   const { data: availableJobs, isLoading } = useQuery({
@@ -180,278 +177,320 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     queryFn: () => workPlansApi.getAvailableJobs({ berth, plan_id: planId }).then(r => r.data),
   });
 
-  // Combine and filter jobs
-  const allJobs = React.useMemo(() => {
+  // Get unique equipment list for filter
+  const equipmentList = useMemo(() => {
     if (!availableJobs) return [];
+    const equipmentMap = new Map<string, { id: number; name: string }>();
 
-    const jobs: Array<{ job: any; type: string }> = [];
+    [...(availableJobs.sap_orders || []), ...(availableJobs.defect_jobs || [])].forEach((job: any) => {
+      const eq = job.equipment;
+      if (eq && eq.id) {
+        equipmentMap.set(eq.id.toString(), {
+          id: eq.id,
+          name: eq.serial_number || eq.name || `Equipment ${eq.id}`
+        });
+      }
+    });
 
-    // SAP orders first (most important - from imported pool)
-    if (filter === 'all' || filter === 'sap') {
-      (availableJobs.sap_orders || []).forEach((j: SAPWorkOrder) => {
-        jobs.push({ job: j, type: 'sap' });
-      });
+    return Array.from(equipmentMap.values());
+  }, [availableJobs]);
+
+  // Filter and sort jobs
+  const { prmJobs, defectJobs, insJobs } = useMemo(() => {
+    if (!availableJobs) return { prmJobs: [], defectJobs: [], insJobs: [] };
+
+    const sapOrders = availableJobs.sap_orders || [];
+    const defects = availableJobs.defect_jobs || [];
+    const inspections = availableJobs.inspection_jobs || [];
+
+    // Filter function
+    const filterJob = (job: any) => {
+      // Equipment filter
+      if (equipmentFilter && job.equipment?.id?.toString() !== equipmentFilter) {
+        return false;
+      }
+      // Priority filter
+      if (priorityFilter !== 'all' && job.priority !== priorityFilter) {
+        return false;
+      }
+      return true;
+    };
+
+    // PRM Jobs - from SAP orders with job_type === 'pm'
+    let prm = sapOrders
+      .filter((j: SAPWorkOrder) => j.job_type === 'pm')
+      .filter(filterJob);
+
+    // Sort PRM jobs
+    prm = prm.sort((a: SAPWorkOrder, b: SAPWorkOrder) => {
+      // Overdue first
+      const aOverdue = (a.overdue_value || 0) > 0 ? 1 : 0;
+      const bOverdue = (b.overdue_value || 0) > 0 ? 1 : 0;
+      if (bOverdue !== aOverdue) return bOverdue - aOverdue;
+
+      // Then by cycle type
+      const aIsHourly = a.maintenance_base === 'running_hours';
+      const bIsHourly = b.maintenance_base === 'running_hours';
+
+      if (prmSubTab === 'hourly') {
+        // Show hourly cycles, sorted descending by hours
+        if (aIsHourly && !bIsHourly) return -1;
+        if (!aIsHourly && bIsHourly) return 1;
+        if (aIsHourly && bIsHourly) {
+          const aHours = a.cycle?.hours_value || 0;
+          const bHours = b.cycle?.hours_value || 0;
+          return bHours - aHours; // Descending
+        }
+      } else {
+        // Show calendar cycles, sorted ascending
+        if (!aIsHourly && bIsHourly) return -1;
+        if (aIsHourly && !bIsHourly) return 1;
+        if (!aIsHourly && !bIsHourly) {
+          const aOrder = CALENDAR_ORDER[a.cycle?.name || ''] || 99;
+          const bOrder = CALENDAR_ORDER[b.cycle?.name || ''] || 99;
+          return aOrder - bOrder; // Ascending
+        }
+      }
+
+      return 0;
+    });
+
+    // Filter PRM by sub-tab
+    if (prmSubTab === 'hourly') {
+      prm = prm.filter((j: SAPWorkOrder) => j.maintenance_base === 'running_hours');
+    } else {
+      prm = prm.filter((j: SAPWorkOrder) => j.maintenance_base === 'calendar' || j.maintenance_base !== 'running_hours');
     }
 
-    // Only show PM jobs if no SAP orders (to avoid duplicates)
-    if ((filter === 'all' || filter === 'pm') && !availableJobs.sap_orders?.length) {
-      (availableJobs.pm_jobs || []).forEach((j: AvailablePMJob) => {
-        jobs.push({ job: j, type: 'pm' });
-      });
-    }
+    // Defect Jobs - from SAP orders with job_type === 'defect' + defect_jobs
+    let defect = [
+      ...sapOrders.filter((j: SAPWorkOrder) => j.job_type === 'defect'),
+      ...defects.map((d: AvailableDefectJob) => ({
+        ...d,
+        equipment: d.equipment,
+        description: d.defect?.description,
+        priority: 'normal',
+      })),
+    ].filter(filterJob);
 
-    if (filter === 'all' || filter === 'defect') {
-      (availableJobs.defect_jobs || []).forEach((j: AvailableDefectJob) => {
-        jobs.push({ job: j, type: 'defect' });
-      });
-    }
+    // Sort defects by priority (urgent first), then overdue
+    defect = defect.sort((a: any, b: any) => {
+      // Overdue first
+      const aOverdue = (a.overdue_value || 0) > 0 ? 1 : 0;
+      const bOverdue = (b.overdue_value || 0) > 0 ? 1 : 0;
+      if (bOverdue !== aOverdue) return bOverdue - aOverdue;
 
-    if (filter === 'all' || filter === 'inspection') {
-      (availableJobs.inspection_jobs || []).forEach((j: any) => {
-        jobs.push({ job: j, type: 'inspection' });
-      });
-    }
+      // Then by priority
+      const aPriority = PRIORITY_ORDER[a.priority || 'normal'] || 2;
+      const bPriority = PRIORITY_ORDER[b.priority || 'normal'] || 2;
+      return aPriority - bPriority;
+    });
 
-    // Filter by search
-    if (search) {
-      const searchLower = search.toLowerCase();
-      return jobs.filter(({ job }) => {
-        const equipment = job.equipment || {};
-        const defect = job.defect || {};
-        return (
-          (equipment.serial_number || '').toLowerCase().includes(searchLower) ||
-          (equipment.name || '').toLowerCase().includes(searchLower) ||
-          (defect.description || '').toLowerCase().includes(searchLower) ||
-          (job.order_number || '').toLowerCase().includes(searchLower) ||
-          (job.description || '').toLowerCase().includes(searchLower)
-        );
-      });
-    }
+    // Inspection Jobs
+    let ins = inspections.map((i: any) => ({
+      ...i,
+      equipment: i.assignment?.equipment,
+      description: i.assignment?.template?.name || 'Inspection',
+      priority: 'normal',
+    })).filter(filterJob);
 
-    return jobs;
-  }, [availableJobs, filter, search]);
+    return { prmJobs: prm, defectJobs: defect, insJobs: ins };
+  }, [availableJobs, equipmentFilter, priorityFilter, prmSubTab]);
 
-  const sapCount = availableJobs?.sap_orders?.length || 0;
-  const pmCount = availableJobs?.pm_jobs?.length || 0;
-  const defectCount = availableJobs?.defect_jobs?.length || 0;
-  const inspectionCount = availableJobs?.inspection_jobs?.length || 0;
+  // Counts
+  const prmCount = prmJobs.length;
+  const defectCount = defectJobs.length;
+  const insCount = insJobs.length;
+  const totalCount = prmCount + defectCount + insCount;
 
-  if (horizontal) {
-    // Horizontal layout - full width with horizontal scrolling
-    return (
-      <Card
-        size="small"
-        style={{ marginBottom: 8 }}
-        bodyStyle={{ padding: collapsed ? '8px 12px' : '12px' }}
-      >
-        {/* Header Row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: collapsed ? 0 : 12 }}>
+  // Get current jobs based on active tab
+  const currentJobs = activeTab === 'prm' ? prmJobs : activeTab === 'defect' ? defectJobs : insJobs;
+  const currentJobType = activeTab === 'prm' ? 'sap' : activeTab === 'defect' ? 'defect' : 'inspection';
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        width: '30%',
+        height: '100vh',
+        backgroundColor: '#fff',
+        boxShadow: '-2px 0 8px rgba(0,0,0,0.15)',
+        zIndex: 1000,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        padding: '16px',
+        borderBottom: '1px solid #f0f0f0',
+        backgroundColor: '#fafafa'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>📦</span>
-            <span style={{ fontWeight: 600 }}>Jobs Pool</span>
-            <Badge count={allJobs.length} style={{ backgroundColor: '#1890ff' }} />
-            {sapCount > 0 && <Tag color="blue">{sapCount} SAP</Tag>}
-            {defectCount > 0 && <Tag color="red">{defectCount} Defects</Tag>}
-            {inspectionCount > 0 && <Tag color="green">{inspectionCount} Inspect</Tag>}
+            <span style={{ fontSize: 18 }}>📦</span>
+            <span style={{ fontWeight: 600, fontSize: 16 }}>Jobs Pool</span>
+            <Badge count={totalCount} style={{ backgroundColor: '#1890ff' }} />
           </div>
-
-          <div style={{ flex: 1 }} />
-
-          {/* Search */}
-          <Input
-            placeholder="🔍 Search..."
-            prefix={<SearchOutlined />}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            allowClear
-            size="small"
-            style={{ width: 200 }}
-          />
-
-          {/* Filter Tabs */}
-          <Segmented
-            size="small"
-            value={filter}
-            onChange={v => setFilter(v as string)}
-            options={[
-              { label: 'All', value: 'all' },
-              ...(sapCount > 0 ? [{ label: `📦 ${sapCount}`, value: 'sap' }] : []),
-              { label: `🔴 ${defectCount}`, value: 'defect' },
-              { label: `✅ ${inspectionCount}`, value: 'inspection' },
-            ]}
-          />
-
-          {/* Action Buttons */}
           <Space size={4}>
             <Button size="small" type="primary" icon={<UploadOutlined />} onClick={onImportSAP}>
-              Import SAP
+              Import
             </Button>
             <Button size="small" icon={<PlusOutlined />} onClick={onAddJob}>
-              Add Job
+              Add
             </Button>
-            {allJobs.length > 0 && onClearPool && (
+            {totalCount > 0 && onClearPool && (
               <Popconfirm
                 title="Clear all jobs from pool?"
-                description="This will remove all SAP orders from the pool. You can re-import them later."
+                description="This will remove all SAP orders from the pool."
                 onConfirm={onClearPool}
-                okText="Yes, Clear"
+                okText="Clear"
                 cancelText="Cancel"
                 okButtonProps={{ danger: true }}
               >
-                <Button size="small" danger icon={<DeleteOutlined />}>
-                  Clear Pool
-                </Button>
+                <Button size="small" danger icon={<DeleteOutlined />} />
               </Popconfirm>
             )}
-            <Button
-              size="small"
-              type="text"
-              icon={collapsed ? <DownOutlined /> : <UpOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
-            />
           </Space>
         </div>
 
-        {/* Jobs Row - Horizontal Scroll */}
-        {!collapsed && (
-          <div
-            style={{
-              display: 'flex',
-              overflowX: 'auto',
-              gap: 0,
-              paddingBottom: 8,
-              minHeight: 100,
-            }}
-          >
-            {isLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: 20 }}>
-                <Spin />
-              </div>
-            ) : allJobs.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: 20, color: '#8c8c8c' }}>
-                {search ? "No jobs match search" : "No available jobs - Import SAP orders to get started"}
-              </div>
-            ) : (
-              allJobs.map(({ job, type }, index) => (
-                <DraggableJobItem
-                  key={`${type}-${job.id || index}`}
-                  job={job}
-                  jobType={type}
-                  onClick={() => onJobClick?.(job, type)}
-                  horizontal
-                />
-              ))
-            )}
+        {/* Filters */}
+        <Space direction="vertical" style={{ width: '100%' }} size={8}>
+          {/* Equipment Filter */}
+          <Select
+            placeholder="Filter by equipment..."
+            allowClear
+            showSearch
+            style={{ width: '100%' }}
+            size="small"
+            value={equipmentFilter || undefined}
+            onChange={(v) => setEquipmentFilter(v || '')}
+            filterOption={(input, option) =>
+              (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={equipmentList.map(eq => ({ value: eq.id.toString(), label: eq.name }))}
+          />
+
+          {/* Priority Filter */}
+          <div style={{ display: 'flex', gap: 4 }}>
+            {['all', 'urgent', 'high', 'normal'].map(p => (
+              <Button
+                key={p}
+                size="small"
+                type={priorityFilter === p ? 'primary' : 'default'}
+                danger={p === 'urgent' && priorityFilter === p}
+                onClick={() => setPriorityFilter(p)}
+                style={{ flex: 1, fontSize: 11 }}
+              >
+                {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
+              </Button>
+            ))}
           </div>
-        )}
-
-        {/* Collapsed hint */}
-        {collapsed && allJobs.length > 0 && (
-          <span style={{ fontSize: 12, color: '#8c8c8c', marginLeft: 8 }}>
-            👆 Drag jobs to calendar | Click to expand
-          </span>
-        )}
-      </Card>
-    );
-  }
-
-  // Vertical layout (original)
-  return (
-    <Card
-      title={
-        <Space>
-          <span style={{ fontSize: 16 }}>📦</span>
-          <span>Jobs Pool</span>
-          <Badge count={allJobs.length} style={{ backgroundColor: '#1890ff' }} />
-          {sapCount > 0 && <Tag color="blue">{sapCount} SAP Orders</Tag>}
         </Space>
-      }
-      size="small"
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 400 }}
-      bodyStyle={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 12 }}
-      extra={
-        <Tooltip title="Drag jobs to calendar to schedule">
-          <span style={{ color: '#8c8c8c', fontSize: 12 }}>👆 Drag to schedule</span>
-        </Tooltip>
-      }
-    >
-      {/* Search */}
-      <Input
-        placeholder="🔍 Search equipment..."
-        prefix={<SearchOutlined />}
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        allowClear
+      </div>
+
+      {/* Tabs */}
+      <Tabs
+        activeKey={activeTab}
+        onChange={(k) => setActiveTab(k as 'prm' | 'defect' | 'ins')}
         size="small"
-        style={{ marginBottom: 8 }}
+        style={{ padding: '0 16px' }}
+        items={[
+          {
+            key: 'prm',
+            label: (
+              <span>
+                <ToolOutlined /> PRM <Badge count={prmCount} size="small" style={{ marginLeft: 4 }} />
+              </span>
+            ),
+          },
+          {
+            key: 'defect',
+            label: (
+              <span>
+                <BugOutlined /> Defect <Badge count={defectCount} size="small" style={{ marginLeft: 4 }} />
+              </span>
+            ),
+          },
+          {
+            key: 'ins',
+            label: (
+              <span>
+                <EyeOutlined /> INS <Badge count={insCount} size="small" style={{ marginLeft: 4 }} />
+              </span>
+            ),
+          },
+        ]}
       />
 
-      {/* Filter */}
-      <Segmented
-        size="small"
-        block
-        value={filter}
-        onChange={v => setFilter(v as string)}
-        options={[
-          { label: <><Badge count={sapCount + defectCount + inspectionCount} size="small" offset={[8, 0]}>All</Badge></>, value: 'all' },
-          ...(sapCount > 0 ? [{ label: <><span>📦</span> <Badge count={sapCount} size="small" style={{ backgroundColor: '#1890ff' }} /></>, value: 'sap' }] : []),
-          { label: <><span>🔴</span> <Badge count={defectCount} size="small" /></>, value: 'defect' },
-          { label: <><span>✅</span> <Badge count={inspectionCount} size="small" /></>, value: 'inspection' },
-        ]}
-        style={{ marginBottom: 12 }}
-      />
+      {/* PRM Sub-tabs */}
+      {activeTab === 'prm' && (
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0' }}>
+          <Space size={4}>
+            <Button
+              size="small"
+              type={prmSubTab === 'hourly' ? 'primary' : 'default'}
+              onClick={() => setPrmSubTab('hourly')}
+              icon={<ClockCircleOutlined />}
+            >
+              Hourly
+            </Button>
+            <Button
+              size="small"
+              type={prmSubTab === 'calendar' ? 'primary' : 'default'}
+              onClick={() => setPrmSubTab('calendar')}
+            >
+              Calendar
+            </Button>
+          </Space>
+          <span style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 12 }}>
+            {prmSubTab === 'hourly' ? '(4000h → 250h)' : '(3-weeks → yearly)'}
+          </span>
+        </div>
+      )}
 
       {/* Jobs List */}
-      <div style={{ flex: 1, overflowY: 'auto', marginBottom: 12 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <Spin />
           </div>
-        ) : allJobs.length === 0 ? (
+        ) : currentJobs.length === 0 ? (
           <Empty
-            description={search ? "No jobs match search" : "No available jobs"}
+            description={
+              equipmentFilter || priorityFilter !== 'all'
+                ? "No jobs match filters"
+                : `No ${activeTab.toUpperCase()} jobs available`
+            }
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         ) : (
-          allJobs.map(({ job, type }, index) => (
+          currentJobs.map((job: any, index: number) => (
             <DraggableJobItem
-              key={`${type}-${job.id || index}`}
+              key={`${currentJobType}-${job.id || index}`}
               job={job}
-              jobType={type}
-              onClick={() => onJobClick?.(job, type)}
+              jobType={currentJobType}
+              onClick={() => onJobClick?.(job, currentJobType)}
             />
           ))
         )}
       </div>
 
-      {/* Action Buttons */}
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          block
-          onClick={onAddJob}
-        >
-          Add Job
-        </Button>
-        <Button
-          icon={<UploadOutlined />}
-          block
-          onClick={onImportSAP}
-        >
-          Import SAP
-        </Button>
-        <Button
-          type="link"
-          icon={<DownloadOutlined />}
-          block
-          size="small"
-          onClick={onDownloadTemplate}
-        >
-          Download Template
-        </Button>
-      </Space>
-    </Card>
+      {/* Footer hint */}
+      <div style={{
+        padding: '12px 16px',
+        borderTop: '1px solid #f0f0f0',
+        backgroundColor: '#fafafa',
+        fontSize: 12,
+        color: '#8c8c8c',
+        textAlign: 'center'
+      }}>
+        👆 Drag jobs to calendar to schedule
+      </div>
+    </div>
   );
 };
 

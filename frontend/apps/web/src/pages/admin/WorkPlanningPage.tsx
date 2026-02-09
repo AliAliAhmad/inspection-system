@@ -553,7 +553,7 @@ export default function WorkPlanningPage() {
           ]}
         />
 
-        {/* Jobs Pool - Full Width Horizontal */}
+        {/* Jobs Pool - Fixed Right Sidebar */}
         <JobsPool
           berth={berth}
           planId={currentPlan?.id}
@@ -566,13 +566,11 @@ export default function WorkPlanningPage() {
             setJobDetailsModalOpen(true);
           }}
           onImportSAP={() => setImportModalOpen(true)}
-          onDownloadTemplate={() => window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank')}
           onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
-          horizontal
         />
 
-        {/* Main Content Area - Calendar Full Width */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        {/* Main Content Area - Calendar (with right margin for sidebar) */}
+        <div style={{ flex: 1, overflow: 'auto', marginRight: '30%' }}>
             {isLoading ? (
               <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spin size="large" />
@@ -689,8 +687,8 @@ export default function WorkPlanningPage() {
             )}
           </div>
 
-        {/* Bottom: Employee Pool - Full Width */}
-        <div style={{ marginTop: 8 }}>
+        {/* Bottom: Employee Pool (with right margin for sidebar) */}
+        <div style={{ marginTop: 8, marginRight: '30%' }}>
           <EmployeePool weekStart={weekStartStr} />
         </div>
       </div>
