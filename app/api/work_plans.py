@@ -1340,7 +1340,10 @@ def get_available_jobs():
 
     # Get equipment for PM jobs (all running equipment) - only if no SAP orders or explicitly requested
     if (not job_type or job_type == 'pm') and not result['sap_orders']:
-        eq_query = Equipment.query.filter(Equipment.is_active == True)
+        eq_query = Equipment.query.filter(
+            Equipment.status == 'active',
+            Equipment.is_scrapped == False
+        )
         if berth and berth != 'both':
             eq_query = eq_query.filter(
                 db.or_(Equipment.berth == berth, Equipment.berth == 'both')
@@ -1367,14 +1370,17 @@ def get_available_jobs():
             'equipment': d.inspection.equipment.to_dict() if d.inspection and d.inspection.equipment else None
         } for d in defects]
 
-    # Get pending inspection assignments
+    # Get pending inspection assignments (unassigned or assigned but not completed)
     if not job_type or job_type == 'inspection':
+        from app.models.inspection_list import InspectionList
         today = datetime.utcnow().date()
-        assignment_query = InspectionAssignment.query.filter(
-            InspectionAssignment.status == 'pending',
-            InspectionAssignment.due_date >= today
+        assignment_query = InspectionAssignment.query.join(
+            InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id
+        ).filter(
+            InspectionAssignment.status.in_(['unassigned', 'assigned', 'in_progress']),
+            InspectionList.target_date >= today
         )
-        assignments = assignment_query.order_by(InspectionAssignment.due_date).all()
+        assignments = assignment_query.order_by(InspectionList.target_date).all()
         result['inspection_jobs'] = [{
             'assignment': a.to_dict(),
             'job_type': 'inspection'
