@@ -49,6 +49,7 @@ services:
     buildCommand: |
       npm install -g pnpm@9 &&
       pnpm install --no-frozen-lockfile &&
+      pnpm --filter @inspection/shared build &&
       VITE_API_URL=https://inspection-api-o3hz.onrender.com pnpm --filter @inspection/web build
     staticPublishPath: apps/web/dist
     pullRequestPreviewsEnabled: true
