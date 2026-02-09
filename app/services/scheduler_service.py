@@ -127,6 +127,228 @@ def init_scheduler(app):
         if overdue:
             logger.warning(f"Found {len(overdue)} overdue QE reviews")
 
+    # 7. Auto-flag work plan jobs at end of day shift (7 PM)
+    @run_with_context
+    def auto_flag_day_shift():
+        from app.api.work_plan_tracking import _auto_flag_jobs
+        from datetime import date
+        logger.info("Running: auto_flag_day_shift")
+        flagged = _auto_flag_jobs(date.today(), 'day')
+        if flagged:
+            logger.info(f"Auto-flagged {flagged} day shift jobs")
+
+    # 8. Auto-flag work plan jobs at end of night shift (7 AM)
+    @run_with_context
+    def auto_flag_night_shift():
+        from app.api.work_plan_tracking import _auto_flag_jobs
+        from datetime import date, timedelta
+        logger.info("Running: auto_flag_night_shift")
+        # Night shift date is the previous day (started 7 PM yesterday)
+        flagged = _auto_flag_jobs(date.today() - timedelta(days=1), 'night')
+        if flagged:
+            logger.info(f"Auto-flagged {flagged} night shift jobs")
+
+    # 9. Send daily review reminders (hourly check)
+    @run_with_context
+    def send_review_reminders():
+        from app.models.work_plan_daily_review import WorkPlanDailyReview
+        from app.services.notification_service import NotificationService
+        from datetime import date, datetime
+        logger.info("Running: send_review_reminders")
+
+        now = datetime.utcnow()
+        hour = now.hour
+        today = date.today()
+
+        # Day shift review window: 5 PM (17:00) - 1 AM (01:00)
+        # Night shift review window: 3 AM (03:00) - 6 AM (06:00)
+        if 17 <= hour or hour < 1:
+            # Check day shift reviews
+            reviews = WorkPlanDailyReview.query.filter_by(
+                date=today, shift_type='day'
+            ).filter(WorkPlanDailyReview.status != 'submitted').all()
+            for review in reviews:
+                review.reminders_sent = (review.reminders_sent or 0) + 1
+                review.last_reminder_at = now
+                NotificationService.create_notification(
+                    user_id=review.engineer_id,
+                    type='review_reminder',
+                    title='Daily Review Reminder',
+                    message=f'Your day shift review for {today.isoformat()} is still pending. Please complete it.',
+                    related_type='work_plan_daily_review',
+                    related_id=review.id,
+                    priority='critical' if review.reminders_sent > 2 else 'urgent'
+                )
+            db.session.commit()
+
+        if 3 <= hour < 6:
+            # Check night shift reviews
+            yesterday = today - timedelta(days=1)
+            reviews = WorkPlanDailyReview.query.filter_by(
+                date=yesterday, shift_type='night'
+            ).filter(WorkPlanDailyReview.status != 'submitted').all()
+            for review in reviews:
+                review.reminders_sent = (review.reminders_sent or 0) + 1
+                review.last_reminder_at = now
+                NotificationService.create_notification(
+                    user_id=review.engineer_id,
+                    type='review_reminder',
+                    title='Night Shift Review Reminder',
+                    message=f'Your night shift review for {yesterday.isoformat()} is still pending.',
+                    related_type='work_plan_daily_review',
+                    related_id=review.id,
+                    priority='critical' if review.reminders_sent > 2 else 'urgent'
+                )
+            db.session.commit()
+
+    # 10. Compute daily performance at midnight
+    @run_with_context
+    def compute_daily_performance():
+        from app.api.work_plan_tracking import _compute_daily_performance
+        from datetime import date, timedelta
+        logger.info("Running: compute_daily_performance")
+        yesterday = date.today() - timedelta(days=1)
+        computed = _compute_daily_performance(yesterday)
+        logger.info(f"Computed performance for {computed} workers")
+
+    # 11. Send morning job notifications (7 AM)
+    @run_with_context
+    def send_morning_notifications():
+        from app.models import WorkPlanAssignment, WorkPlanJob, WorkPlanDay
+        from app.models.work_plan_job_tracking import WorkPlanJobTracking
+        from app.models.work_plan_performance import WorkPlanPerformance
+        from app.services.notification_service import NotificationService
+        from datetime import date, timedelta
+        logger.info("Running: send_morning_notifications")
+
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+
+        # Get all users with assignments today
+        assignments = db.session.query(
+            WorkPlanAssignment.user_id
+        ).join(
+            WorkPlanJob, WorkPlanAssignment.work_plan_job_id == WorkPlanJob.id
+        ).join(
+            WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id
+        ).filter(
+            WorkPlanDay.date == today
+        ).distinct().all()
+
+        for (user_id,) in assignments:
+            # Count today's jobs
+            today_count = db.session.query(WorkPlanAssignment).join(
+                WorkPlanJob, WorkPlanAssignment.work_plan_job_id == WorkPlanJob.id
+            ).join(
+                WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id
+            ).filter(
+                WorkPlanAssignment.user_id == user_id,
+                WorkPlanDay.date == today
+            ).count()
+
+            # Count carry-overs
+            carry_over_count = db.session.query(WorkPlanJobTracking).join(
+                WorkPlanJob, WorkPlanJobTracking.work_plan_job_id == WorkPlanJob.id
+            ).join(
+                WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id
+            ).filter(
+                WorkPlanDay.date == today,
+                WorkPlanJobTracking.is_carry_over == True
+            ).count()
+
+            # Yesterday's stats
+            yesterday_perf = WorkPlanPerformance.query.filter_by(
+                user_id=user_id,
+                period_type='daily',
+                period_start=yesterday
+            ).first()
+
+            msg = f"Today: {today_count} jobs assigned"
+            if carry_over_count:
+                msg += f" ({carry_over_count} carry-over)"
+            if yesterday_perf:
+                msg += f". Yesterday: {yesterday_perf.completion_rate}% completion"
+
+            NotificationService.create_notification(
+                user_id=user_id,
+                type='morning_briefing',
+                title='Good Morning - Daily Briefing',
+                message=msg,
+                priority='info'
+            )
+
+        logger.info(f"Sent morning notifications to {len(assignments)} workers")
+
+    # 12. Red zone alert - check jobs exceeding 80% estimated time
+    @run_with_context
+    def check_red_zone():
+        from app.models import WorkPlanJob, WorkPlanDay
+        from app.models.work_plan_job_tracking import WorkPlanJobTracking
+        from app.services.notification_service import NotificationService
+        from datetime import date, datetime
+        logger.info("Running: check_red_zone")
+
+        today = date.today()
+        now = datetime.utcnow()
+
+        # Get all in-progress jobs
+        in_progress = db.session.query(WorkPlanJobTracking).join(
+            WorkPlanJob, WorkPlanJobTracking.work_plan_job_id == WorkPlanJob.id
+        ).join(
+            WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id
+        ).filter(
+            WorkPlanDay.date == today,
+            WorkPlanJobTracking.status == 'in_progress'
+        ).all()
+
+        for tracking in in_progress:
+            job = tracking.work_plan_job
+            if not job.estimated_hours or not tracking.started_at:
+                continue
+
+            elapsed_seconds = (now - tracking.started_at).total_seconds()
+            paused_seconds = (tracking.total_paused_minutes or 0) * 60
+            working_seconds = elapsed_seconds - paused_seconds
+            working_hours = working_seconds / 3600
+
+            threshold = float(job.estimated_hours) * 0.8
+            if working_hours >= threshold:
+                # Already sent alert? Check logs
+                from app.models.work_plan_job_log import WorkPlanJobLog
+                already_alerted = WorkPlanJobLog.query.filter_by(
+                    work_plan_job_id=job.id,
+                    event_type='auto_flagged'
+                ).filter(
+                    WorkPlanJobLog.event_data.contains({'type': 'red_zone'})
+                ).first()
+
+                if not already_alerted:
+                    day = db.session.get(WorkPlanDay, job.work_plan_day_id)
+                    plan = db.session.get(WorkPlan, day.work_plan_id) if day else None
+
+                    if plan and plan.created_by_id:
+                        NotificationService.create_notification(
+                            user_id=plan.created_by_id,
+                            type='red_zone_alert',
+                            title='Red Zone Alert',
+                            message=f'Job on {job.equipment.name if job.equipment else "unknown"} has exceeded 80% of estimated time ({round(working_hours, 1)}h / {job.estimated_hours}h)',
+                            related_type='work_plan_job',
+                            related_id=job.id,
+                            priority='urgent'
+                        )
+
+                        # Log the alert
+                        log = WorkPlanJobLog(
+                            work_plan_job_id=job.id,
+                            user_id=plan.created_by_id,
+                            event_type='auto_flagged',
+                            event_data={'type': 'red_zone', 'working_hours': round(working_hours, 1)}
+                        )
+                        db.session.add(log)
+
+        db.session.commit()
+        logger.info(f"Red zone check completed for {len(in_progress)} in-progress jobs")
+
     # Schedule jobs
     scheduler.add_job(
         generate_daily_lists,
@@ -176,8 +398,57 @@ def init_scheduler(app):
         replace_existing=True
     )
 
+    # Work Plan Tracking jobs
+    scheduler.add_job(
+        auto_flag_day_shift,
+        CronTrigger(hour=19, minute=0),
+        id='auto_flag_day_shift',
+        name='Auto-flag unfinished day shift jobs at 7 PM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        auto_flag_night_shift,
+        CronTrigger(hour=7, minute=0),
+        id='auto_flag_night_shift',
+        name='Auto-flag unfinished night shift jobs at 7 AM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        send_review_reminders,
+        IntervalTrigger(hours=1),
+        id='send_review_reminders',
+        name='Send hourly review reminders during review windows',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        compute_daily_performance,
+        CronTrigger(hour=0, minute=45),
+        id='compute_daily_performance',
+        name='Compute daily performance at 00:45',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        send_morning_notifications,
+        CronTrigger(hour=7, minute=0),
+        id='send_morning_notifications',
+        name='Send morning job briefing at 7 AM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        check_red_zone,
+        IntervalTrigger(minutes=30),
+        id='check_red_zone',
+        name='Check for jobs exceeding 80% estimated time every 30 min',
+        replace_existing=True
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
-    logger.info("Background scheduler started with 6 scheduled jobs")
+    logger.info("Background scheduler started with 12 scheduled jobs")
 
     return scheduler
