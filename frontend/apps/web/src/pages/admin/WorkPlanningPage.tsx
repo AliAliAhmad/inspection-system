@@ -49,7 +49,7 @@ import {
 } from '@dnd-kit/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType } from '@inspection/shared';
+import { workPlansApi, equipmentApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -61,6 +61,8 @@ import {
   TimelineJobBlock,
   type ViewMode
 } from '../../components/work-planning';
+import VoiceTextArea from '../../components/VoiceTextArea';
+import { InputNumber } from 'antd';
 
 dayjs.extend(isoWeek);
 
@@ -285,6 +287,46 @@ export default function WorkPlanningPage() {
     },
     onError: (err: any) => {
       message.error(err.response?.data?.message || 'Failed to clear pool');
+    },
+  });
+
+  // Fetch equipment list for Add Job form
+  const { data: equipmentData } = useQuery({
+    queryKey: ['equipment-list'],
+    queryFn: () => equipmentApi.list({ per_page: 500 }).then((r) => r.data),
+  });
+  const equipmentList = ((equipmentData as any)?.equipment || (equipmentData as any)?.data || []).filter((eq: any) => eq.is_active !== false);
+
+  // Manual add job mutation
+  const manualAddJobMutation = useMutation({
+    mutationFn: (values: {
+      day_id: number;
+      job_type: JobType;
+      berth: Berth;
+      equipment_id: number;
+      description?: string;
+      estimated_hours: number;
+      priority: JobPriority;
+      notes?: string;
+    }) => workPlansApi.addJob(currentPlan!.id, {
+      day_id: values.day_id,
+      job_type: values.job_type,
+      berth: values.berth,
+      equipment_id: values.equipment_id,
+      description: values.description,
+      estimated_hours: values.estimated_hours,
+      priority: values.priority,
+      notes: values.notes,
+    }),
+    onSuccess: () => {
+      message.success('Job added successfully');
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+      setAddJobModalOpen(false);
+      addJobForm.resetFields();
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to add job');
     },
   });
 
@@ -951,40 +993,161 @@ export default function WorkPlanningPage() {
 
       {/* Add Job Modal */}
       <Modal
-        title="➕ Add Job"
+        title="➕ Add Job Manually"
         open={addJobModalOpen}
-        onCancel={() => setAddJobModalOpen(false)}
+        onCancel={() => {
+          setAddJobModalOpen(false);
+          addJobForm.resetFields();
+        }}
         footer={null}
-        width={500}
+        width={600}
       >
         {currentPlan && isDraft ? (
-          <div>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-              Drag jobs from the Jobs Pool on the right side and drop them onto a day in the calendar.
-              Or use "Import SAP Orders" to bulk import from Excel.
-            </Text>
+          <Form
+            form={addJobForm}
+            layout="vertical"
+            onFinish={(values) => {
+              manualAddJobMutation.mutate({
+                day_id: values.day_id,
+                job_type: values.job_type,
+                berth: values.berth || berth,
+                equipment_id: values.equipment_id,
+                description: values.description,
+                estimated_hours: values.estimated_hours,
+                priority: values.priority || 'normal',
+                notes: values.notes,
+              });
+            }}
+            initialValues={{
+              job_type: 'pm',
+              berth: berth,
+              priority: 'normal',
+              estimated_hours: 4,
+            }}
+          >
+            {/* Day Selection */}
+            <Form.Item
+              name="day_id"
+              label="Day"
+              rules={[{ required: true, message: 'Select a day' }]}
+            >
+              <Select placeholder="Select day to add job">
+                {(currentPlan.days || [])
+                  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                  .map((day) => (
+                    <Select.Option key={day.id} value={day.id}>
+                      {dayjs(day.date).format('ddd, MMM D')} - {day.day_name}
+                    </Select.Option>
+                  ))}
+              </Select>
+            </Form.Item>
+
+            {/* Equipment Selection */}
+            <Form.Item
+              name="equipment_id"
+              label="Equipment"
+              rules={[{ required: true, message: 'Select equipment' }]}
+            >
+              <Select
+                placeholder="Select equipment"
+                showSearch
+                filterOption={(input, option) =>
+                  (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
+                }
+                options={equipmentList.map((eq: any) => ({
+                  value: eq.id,
+                  label: `${eq.serial_number || eq.name} - ${eq.equipment_type || ''}`,
+                }))}
+              />
+            </Form.Item>
+
+            <Row gutter={16}>
+              {/* Job Type */}
+              <Col span={8}>
+                <Form.Item
+                  name="job_type"
+                  label="Job Type"
+                  rules={[{ required: true }]}
+                >
+                  <Select>
+                    <Select.Option value="pm">PM</Select.Option>
+                    <Select.Option value="defect">Defect</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+
+              {/* Berth */}
+              <Col span={8}>
+                <Form.Item name="berth" label="Berth">
+                  <Select>
+                    <Select.Option value="east">East</Select.Option>
+                    <Select.Option value="west">West</Select.Option>
+                    <Select.Option value="both">Both</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+
+              {/* Priority */}
+              <Col span={8}>
+                <Form.Item name="priority" label="Priority">
+                  <Select>
+                    <Select.Option value="low">Low</Select.Option>
+                    <Select.Option value="normal">Normal</Select.Option>
+                    <Select.Option value="high">High</Select.Option>
+                    <Select.Option value="urgent">Urgent</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+
+            {/* Estimated Hours */}
+            <Form.Item
+              name="estimated_hours"
+              label="Estimated Hours"
+              rules={[{ required: true, message: 'Enter estimated hours' }]}
+            >
+              <InputNumber min={0.5} max={24} step={0.5} style={{ width: '100%' }} />
+            </Form.Item>
+
+            {/* Description */}
+            <Form.Item name="description" label="Description">
+              <Input.TextArea rows={2} placeholder="Job description" />
+            </Form.Item>
+
+            {/* Notes with Voice Recording */}
+            <Form.Item name="notes" label="Notes (Voice Recording)">
+              <VoiceTextArea
+                rows={3}
+                placeholder="Add notes or use microphone to record voice..."
+                value={addJobForm.getFieldValue('notes')}
+                onChange={(e) => addJobForm.setFieldValue('notes', e.target.value)}
+              />
+            </Form.Item>
+
+            {/* Actions */}
             <Divider />
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space style={{ width: '100%', justifyContent: 'space-between' }}>
               <Button
-                type="primary"
-                icon={<UploadOutlined />}
                 onClick={() => {
                   setAddJobModalOpen(false);
                   setImportModalOpen(true);
                 }}
-                block
+                icon={<UploadOutlined />}
               >
-                📥 Import SAP Orders
+                Import SAP Instead
               </Button>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={() => window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank')}
-                block
-              >
-                📄 Download Template
-              </Button>
+              <Space>
+                <Button onClick={() => setAddJobModalOpen(false)}>Cancel</Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={manualAddJobMutation.isPending}
+                >
+                  Add Job
+                </Button>
+              </Space>
             </Space>
-          </div>
+          </Form>
         ) : (
           <Text type="warning">
             {!currentPlan ? 'Create a work plan first.' : 'Cannot add jobs to a published plan.'}

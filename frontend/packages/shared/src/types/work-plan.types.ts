@@ -249,6 +249,7 @@ export interface AddJobPayload {
   defect_id?: number;
   inspection_assignment_id?: number;
   sap_order_number?: string;
+  description?: string;
   estimated_hours: number;
   priority?: JobPriority;
   notes?: string;

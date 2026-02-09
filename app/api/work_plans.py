@@ -469,6 +469,7 @@ def add_job(plan_id):
         defect_id=defect_id,
         inspection_assignment_id=inspection_assignment_id,
         sap_order_number=data.get('sap_order_number'),
+        description=data.get('description'),
         estimated_hours=float(data['estimated_hours']),
         position=max_position + 1,
         priority=data.get('priority', 'normal'),
