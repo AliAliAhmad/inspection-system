@@ -64,6 +64,10 @@ from app.models.import_log import ImportLog
 from app.models.role_swap_log import RoleSwapLog
 from app.models.equipment_status_log import EquipmentStatusLog
 
+# Materials Enhancement - Storage & Vendor (must be before Material due to FK)
+from app.models.storage_location import StorageLocation
+from app.models.vendor import Vendor
+
 # Work Planning
 from app.models.material import Material
 from app.models.material_kit import MaterialKit, MaterialKitItem
@@ -75,6 +79,14 @@ from app.models.work_plan_job import WorkPlanJob
 from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.work_plan_material import WorkPlanMaterial
 from app.models.sap_work_order import SAPWorkOrder
+
+# Materials Enhancement - Advanced Models (after Material due to FK)
+from app.models.material_batch import MaterialBatch
+from app.models.stock_history import StockHistory
+from app.models.material_vendor import MaterialVendor
+from app.models.stock_reservation import StockReservation
+from app.models.inventory_count import InventoryCount, InventoryCountItem
+from app.models.price_history import PriceHistory
 
 # Work Plan Tracking & Performance
 from app.models.work_plan_job_tracking import WorkPlanJobTracking
@@ -89,6 +101,16 @@ from app.models.work_plan_performance import WorkPlanPerformance
 from app.models.equipment_watch import EquipmentWatch
 from app.models.equipment_note import EquipmentNote
 from app.models.equipment_certification import EquipmentCertification
+
+# Gamification & Leaderboard
+from app.models.achievement import Achievement
+from app.models.user_achievement import UserAchievement
+from app.models.user_streak import UserStreak
+from app.models.challenge import Challenge
+from app.models.user_challenge import UserChallenge
+from app.models.user_level import UserLevel
+from app.models.point_history import PointHistory
+from app.models.leaderboard_snapshot import LeaderboardSnapshot
 
 __all__ = [
     'User',
@@ -131,6 +153,9 @@ __all__ = [
     'ImportLog',
     'RoleSwapLog',
     'EquipmentStatusLog',
+    # Materials Enhancement - Storage & Vendor
+    'StorageLocation',
+    'Vendor',
     # Work Planning
     'Material',
     'MaterialKit',
@@ -145,6 +170,14 @@ __all__ = [
     'WorkPlanAssignment',
     'WorkPlanMaterial',
     'SAPWorkOrder',
+    # Materials Enhancement - Advanced Models
+    'MaterialBatch',
+    'StockHistory',
+    'MaterialVendor',
+    'StockReservation',
+    'InventoryCount',
+    'InventoryCountItem',
+    'PriceHistory',
     # Work Plan Tracking & Performance
     'WorkPlanJobTracking',
     'WorkPlanJobLog',
@@ -157,4 +190,13 @@ __all__ = [
     'EquipmentWatch',
     'EquipmentNote',
     'EquipmentCertification',
+    # Gamification & Leaderboard
+    'Achievement',
+    'UserAchievement',
+    'UserStreak',
+    'Challenge',
+    'UserChallenge',
+    'UserLevel',
+    'PointHistory',
+    'LeaderboardSnapshot',
 ]

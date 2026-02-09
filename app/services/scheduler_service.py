@@ -282,7 +282,7 @@ def init_scheduler(app):
     # 12. Red zone alert - check jobs exceeding 80% estimated time
     @run_with_context
     def check_red_zone():
-        from app.models import WorkPlanJob, WorkPlanDay
+        from app.models import WorkPlanJob, WorkPlanDay, WorkPlan
         from app.models.work_plan_job_tracking import WorkPlanJobTracking
         from app.services.notification_service import NotificationService
         from datetime import date, datetime
@@ -348,6 +348,46 @@ def init_scheduler(app):
 
         db.session.commit()
         logger.info(f"Red zone check completed for {len(in_progress)} in-progress jobs")
+
+    # 13. Generate daily leaderboard snapshot (midnight)
+    @run_with_context
+    def generate_leaderboard_snapshot():
+        from app.services.leaderboard_ai_service import LeaderboardAIService
+        logger.info("Running: generate_leaderboard_snapshot")
+        service = LeaderboardAIService()
+        count = service.generate_daily_snapshot()
+        logger.info(f"Generated leaderboard snapshots for {count} users")
+
+    # 14. Create weekly challenges (Sunday night at 11 PM)
+    @run_with_context
+    def create_weekly_challenges():
+        from app.services.gamification_service import GamificationService
+        logger.info("Running: create_weekly_challenges")
+        service = GamificationService()
+        count = service.create_weekly_challenges()
+        if count:
+            logger.info(f"Created {count} weekly challenges")
+        else:
+            logger.info("Weekly challenges already exist or none created")
+
+    # 15. Check for broken streaks and send reminders
+    @run_with_context
+    def check_broken_streaks():
+        from app.services.gamification_service import GamificationService
+        logger.info("Running: check_broken_streaks")
+        service = GamificationService()
+        at_risk = service.check_broken_streaks()
+        if at_risk:
+            logger.info(f"Sent {at_risk} streak reminder notifications")
+
+    # 16. Update achievement progress periodically
+    @run_with_context
+    def update_achievement_progress():
+        from app.services.gamification_service import GamificationService
+        logger.info("Running: update_achievement_progress")
+        service = GamificationService()
+        updated = service.update_achievement_progress()
+        logger.info(f"Updated progress for {updated} achievements")
 
     # Schedule jobs
     scheduler.add_job(
@@ -447,8 +487,181 @@ def init_scheduler(app):
         replace_existing=True
     )
 
+    # Leaderboard & Gamification jobs
+    scheduler.add_job(
+        generate_leaderboard_snapshot,
+        CronTrigger(hour=0, minute=0),
+        id='generate_leaderboard_snapshot',
+        name='Generate daily leaderboard snapshot at midnight',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        create_weekly_challenges,
+        CronTrigger(day_of_week='sun', hour=23, minute=0),
+        id='create_weekly_challenges',
+        name='Create weekly challenges Sunday at 11 PM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        check_broken_streaks,
+        CronTrigger(hour=8, minute=0),
+        id='check_broken_streaks',
+        name='Check for broken streaks daily at 8 AM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        update_achievement_progress,
+        IntervalTrigger(hours=6),
+        id='update_achievement_progress',
+        name='Update achievement progress every 6 hours',
+        replace_existing=True
+    )
+
+    # =========================================================================
+    # Material/Stock Management Jobs
+    # =========================================================================
+
+    # 17. Daily low stock check (6 AM)
+    @run_with_context
+    def check_daily_low_stock():
+        from app.services.stock_alert_service import StockAlertService
+        logger.info("Running: check_daily_low_stock")
+        alerts = StockAlertService.send_stock_alerts()
+        logger.info(f"Sent {alerts} stock alerts")
+
+    # 18. Weekly expiry check (Monday 7 AM)
+    @run_with_context
+    def check_weekly_expiry():
+        from app.services.stock_alert_service import StockAlertService
+        from app.services.notification_service import NotificationService
+        from app.models import User
+        from sqlalchemy import or_
+        logger.info("Running: check_weekly_expiry")
+
+        expiring = StockAlertService.check_expiring_batches(days_ahead=30)
+
+        if expiring:
+            # Notify warehouse managers and admins
+            users = User.query.filter(
+                User.is_active == True,
+                or_(User.role == 'admin', User.role == 'warehouse')
+            ).all()
+
+            for user in users:
+                NotificationService.create_notification(
+                    user_id=user.id,
+                    type='weekly_expiry_report',
+                    title='Weekly Expiry Report',
+                    message=f'{len(expiring)} batches will expire within the next 30 days',
+                    related_type='batch_expiry',
+                    priority='warning',
+                    action_url='/materials/batches?filter=expiring'
+                )
+
+            logger.info(f"Found {len(expiring)} expiring batches, notified {len(users)} users")
+
+    # 19. Monthly consumption report (1st of month at 6 AM)
+    @run_with_context
+    def generate_monthly_consumption_report():
+        from app.services.material_ai_service import MaterialAIService
+        from app.services.notification_service import NotificationService
+        from app.models import User
+        from sqlalchemy import or_
+        logger.info("Running: generate_monthly_consumption_report")
+
+        service = MaterialAIService()
+        report = service.generate_consumption_report(period='monthly')
+
+        # Notify admins and warehouse managers
+        users = User.query.filter(
+            User.is_active == True,
+            or_(User.role == 'admin', User.role == 'warehouse')
+        ).all()
+
+        for user in users:
+            NotificationService.create_notification(
+                user_id=user.id,
+                type='monthly_consumption_report',
+                title=f'Monthly Consumption Report - {report.get("period", "This Month")}',
+                message=f'Total consumed: {report.get("total_consumed", 0)} units, Value: ${report.get("total_value", 0):.2f}',
+                related_type='consumption_report',
+                priority='info',
+                action_url='/materials/reports/consumption'
+            )
+
+        logger.info(f"Generated monthly consumption report, notified {len(users)} users")
+
+    # 20. Daily reorder point check (8 AM)
+    @run_with_context
+    def check_daily_reorder():
+        from app.services.stock_alert_service import StockAlertService
+        from app.services.notification_service import NotificationService
+        from app.models import User
+        from sqlalchemy import or_
+        logger.info("Running: check_daily_reorder")
+
+        needs_reorder = StockAlertService.check_reorder_needed()
+        critical = [r for r in needs_reorder if r['urgency'] == 'critical']
+        high = [r for r in needs_reorder if r['urgency'] == 'high']
+
+        if critical or high:
+            users = User.query.filter(
+                User.is_active == True,
+                or_(User.role == 'admin', User.role == 'warehouse')
+            ).all()
+
+            for user in users:
+                message = f'{len(critical)} critical and {len(high)} high priority materials need reordering'
+                NotificationService.create_notification(
+                    user_id=user.id,
+                    type='reorder_check',
+                    title='Daily Reorder Check',
+                    message=message,
+                    related_type='reorder_alert',
+                    priority='urgent' if critical else 'warning',
+                    action_url='/materials?filter=reorder_needed'
+                )
+
+            logger.info(f"Found {len(needs_reorder)} materials needing reorder ({len(critical)} critical)")
+
+    # Schedule Material/Stock jobs
+    scheduler.add_job(
+        check_daily_low_stock,
+        CronTrigger(hour=6, minute=0),
+        id='check_daily_low_stock',
+        name='Check low stock daily at 6 AM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        check_weekly_expiry,
+        CronTrigger(day_of_week='mon', hour=7, minute=0),
+        id='check_weekly_expiry',
+        name='Check expiring batches weekly on Monday at 7 AM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        generate_monthly_consumption_report,
+        CronTrigger(day=1, hour=6, minute=0),
+        id='generate_monthly_consumption_report',
+        name='Generate monthly consumption report on 1st at 6 AM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        check_daily_reorder,
+        CronTrigger(hour=8, minute=0),
+        id='check_daily_reorder',
+        name='Check reorder needs daily at 8 AM',
+        replace_existing=True
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
-    logger.info("Background scheduler started with 12 scheduled jobs")
+    logger.info("Background scheduler started with 20 scheduled jobs")
 
     return scheduler

@@ -71,7 +71,7 @@ export type {
   LeaveBalanceData,
 } from './leaves.api';
 export { leaderboardsApi } from './leaderboards.api';
-export type { LeaderboardParams, LeaderboardEntry } from './leaderboards.api';
+export type { LeaderboardParams, HistoricalParams, PointHistoryParams } from './leaderboards.api';
 export { bonusStarsApi } from './bonus-stars.api';
 export type { RequestBonusPayload } from './bonus-stars.api';
 export { reportsApi } from './reports.api';
@@ -128,6 +128,20 @@ export type {
   MaterialsListResponse,
   KitsListResponse,
   LowStockResponse,
+  StockHistoryResponse,
+  BatchesResponse,
+  LocationsResponse,
+  VendorsResponse,
+  AlertsResponse,
+  ReservationsResponse,
+  CountsResponse,
+  CountItemsResponse,
+  ABCAnalysisResponse,
+  InsightsResponse,
+  AnomaliesResponse,
+  CostOptimizationResponse,
+  DeadStockResponse,
+  NaturalLanguageSearchResponse,
 } from './materials.api';
 export { cyclesApi } from './cycles.api';
 export type { CyclesListParams } from './cycles.api';

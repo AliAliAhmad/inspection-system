@@ -16,3 +16,5 @@ export * from './file.types';
 export * from './work-plan.types';
 export * from './work-plan-tracking.types';
 export * from './error.types';
+export * from './leaderboard.types';
+export * from './material.types';

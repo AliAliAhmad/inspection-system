@@ -9,9 +9,15 @@ from app.extensions import db
 from app.models import Material, MaterialKit, MaterialKitItem, User
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from app.utils.decorators import get_current_user
-from datetime import datetime
+from datetime import datetime, date
+from app.services.material_ai_service import MaterialAIService
+from app.services.stock_alert_service import StockAlertService
+from app.services.material_service import MaterialService
 
 bp = Blueprint('materials', __name__)
+
+material_ai = MaterialAIService()
+stock_alerts = StockAlertService()
 
 
 def engineer_or_admin_required():
@@ -185,42 +191,128 @@ def update_material(material_id):
     }), 200
 
 
+# ==================== STOCK OPERATIONS ====================
+
 @bp.route('/<int:material_id>/consume', methods=['POST'])
 @jwt_required()
 def consume_material(material_id):
     """
-    Record material consumption.
+    Consume material with full tracking.
+    Body: { quantity, reason, job_id?, batch_id? }
+    """
+    user = get_current_user()
+    data = request.get_json()
+    result = MaterialService.consume(
+        material_id=material_id,
+        quantity=data['quantity'],
+        user_id=user.id,
+        reason=data.get('reason'),
+        job_id=data.get('job_id'),
+        batch_id=data.get('batch_id')
+    )
+    return jsonify({'status': 'success', 'data': result})
 
-    Request body:
-        {
-            "quantity": 5.0
-        }
+
+@bp.route('/<int:material_id>/restock', methods=['POST'])
+@jwt_required()
+def restock_material(material_id):
+    """
+    Restock material with batch creation.
+    Body: { quantity, batch_info?, vendor_id?, unit_price? }
     """
     user = engineer_or_admin_required()
-
-    material = db.session.get(Material, material_id)
-    if not material:
-        raise NotFoundError("Material not found")
-
     data = request.get_json()
-    quantity = data.get('quantity', 0)
+    result = MaterialService.restock(
+        material_id=material_id,
+        quantity=data['quantity'],
+        user_id=user.id,
+        batch_info=data.get('batch_info'),
+        vendor_id=data.get('vendor_id')
+    )
+    return jsonify({'status': 'success', 'data': result})
 
-    if quantity <= 0:
-        raise ValidationError("Quantity must be positive")
 
-    if quantity > material.current_stock:
-        raise ValidationError(f"Insufficient stock. Available: {material.current_stock}")
+@bp.route('/<int:material_id>/adjust', methods=['POST'])
+@jwt_required()
+def adjust_stock(material_id):
+    """
+    Manual stock adjustment with audit trail.
+    Body: { new_quantity, reason }
+    """
+    user = engineer_or_admin_required()
+    data = request.get_json()
+    result = MaterialService.adjust(
+        material_id=material_id,
+        new_quantity=data['new_quantity'],
+        user_id=user.id,
+        reason=data['reason']
+    )
+    return jsonify({'status': 'success', 'data': result})
 
-    material.current_stock -= quantity
-    material.total_consumed += quantity
 
-    db.session.commit()
+@bp.route('/<int:material_id>/transfer', methods=['POST'])
+@jwt_required()
+def transfer_stock(material_id):
+    """
+    Transfer between locations.
+    Body: { from_location_id, to_location_id, quantity }
+    """
+    user = engineer_or_admin_required()
+    data = request.get_json()
+    result = MaterialService.transfer(
+        material_id=material_id,
+        from_location_id=data['from_location_id'],
+        to_location_id=data['to_location_id'],
+        quantity=data['quantity'],
+        user_id=user.id
+    )
+    return jsonify({'status': 'success', 'data': result})
 
-    return jsonify({
-        'status': 'success',
-        'message': f'Consumed {quantity} {material.unit}',
-        'material': material.to_dict(user.language or 'en')
-    }), 200
+
+@bp.route('/<int:material_id>/reserve', methods=['POST'])
+@jwt_required()
+def reserve_stock(material_id):
+    """
+    Reserve stock for upcoming job.
+    Body: { quantity, job_id?, work_plan_id?, needed_by_date? }
+    """
+    user = get_current_user()
+    data = request.get_json()
+    result = MaterialService.reserve(
+        material_id=material_id,
+        quantity=data['quantity'],
+        user_id=user.id,
+        job_id=data.get('job_id'),
+        needed_by=data.get('needed_by_date')
+    )
+    return jsonify({'status': 'success', 'data': result})
+
+
+@bp.route('/reservations/<int:reservation_id>/fulfill', methods=['POST'])
+@jwt_required()
+def fulfill_reservation(reservation_id):
+    """Fulfill a reservation."""
+    user = get_current_user()
+    result = MaterialService.fulfill_reservation(reservation_id, user.id)
+    return jsonify({'status': 'success', 'data': result})
+
+
+@bp.route('/reservations/<int:reservation_id>/cancel', methods=['POST'])
+@jwt_required()
+def cancel_reservation(reservation_id):
+    """Cancel a reservation."""
+    user = get_current_user()
+    data = request.get_json() or {}
+    result = MaterialService.cancel_reservation(reservation_id, user.id, data.get('reason'))
+    return jsonify({'status': 'success', 'data': result})
+
+
+@bp.route('/<int:material_id>/summary', methods=['GET'])
+@jwt_required()
+def get_stock_summary(material_id):
+    """Get comprehensive stock summary."""
+    summary = MaterialService.get_stock_summary(material_id)
+    return jsonify({'status': 'success', 'data': summary})
 
 
 @bp.route('/stock-check', methods=['POST'])
@@ -518,3 +610,374 @@ def import_materials():
         'updated': updated,
         'errors': errors
     }), 200
+
+
+# ==================== HISTORY ====================
+
+@bp.route('/<int:material_id>/history', methods=['GET'])
+@jwt_required()
+def get_stock_history(material_id):
+    """Get stock change history."""
+    from app.models import StockHistory
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    query = StockHistory.query.filter_by(material_id=material_id).order_by(StockHistory.created_at.desc())
+    pagination = query.paginate(page=page, per_page=per_page)
+
+    return jsonify({
+        'status': 'success',
+        'data': [h.to_dict() for h in pagination.items],
+        'pagination': {'page': page, 'total': pagination.total}
+    })
+
+
+# ==================== BATCHES ====================
+
+@bp.route('/<int:material_id>/batches', methods=['GET'])
+@jwt_required()
+def list_batches(material_id):
+    """List batches for a material."""
+    from app.models import MaterialBatch
+    status = request.args.get('status')
+    query = MaterialBatch.query.filter_by(material_id=material_id)
+    if status:
+        query = query.filter_by(status=status)
+    batches = query.order_by(MaterialBatch.expiry_date.asc().nullslast()).all()
+    return jsonify({'status': 'success', 'data': [b.to_dict() for b in batches]})
+
+
+@bp.route('/batches/<int:batch_id>', methods=['GET'])
+@jwt_required()
+def get_batch(batch_id):
+    """Get batch details."""
+    from app.models import MaterialBatch
+    batch = MaterialBatch.query.get_or_404(batch_id)
+    return jsonify({'status': 'success', 'data': batch.to_dict()})
+
+
+@bp.route('/batches/expiring', methods=['GET'])
+@jwt_required()
+def get_expiring_batches():
+    """Get batches expiring soon."""
+    days = request.args.get('days', 30, type=int)
+    batches = stock_alerts.check_expiring_batches(days)
+    return jsonify({'status': 'success', 'data': batches})
+
+
+# ==================== LOCATIONS ====================
+
+@bp.route('/locations', methods=['GET'])
+@jwt_required()
+def list_locations():
+    """List storage locations."""
+    from app.models import StorageLocation
+    locations = StorageLocation.query.filter_by(is_active=True).all()
+    return jsonify({'status': 'success', 'data': [l.to_dict() for l in locations]})
+
+
+@bp.route('/locations', methods=['POST'])
+@jwt_required()
+def create_location():
+    """Create storage location."""
+    user = engineer_or_admin_required()
+    data = request.get_json()
+    from app.models import StorageLocation
+    location = StorageLocation(
+        code=data['code'],
+        name=data['name'],
+        name_ar=data.get('name_ar'),
+        warehouse=data.get('warehouse'),
+        zone=data.get('zone'),
+        aisle=data.get('aisle'),
+        shelf=data.get('shelf'),
+        bin=data.get('bin')
+    )
+    db.session.add(location)
+    db.session.commit()
+    return jsonify({'status': 'success', 'data': location.to_dict()}), 201
+
+
+@bp.route('/locations/<int:location_id>', methods=['PUT'])
+@jwt_required()
+def update_location(location_id):
+    """Update storage location."""
+    user = engineer_or_admin_required()
+    from app.models import StorageLocation
+    location = StorageLocation.query.get_or_404(location_id)
+    data = request.get_json()
+    for field in ['name', 'name_ar', 'warehouse', 'zone', 'aisle', 'shelf', 'bin', 'is_active']:
+        if field in data:
+            setattr(location, field, data[field])
+    db.session.commit()
+    return jsonify({'status': 'success', 'data': location.to_dict()})
+
+
+# ==================== VENDORS ====================
+
+@bp.route('/vendors', methods=['GET'])
+@jwt_required()
+def list_vendors():
+    """List vendors."""
+    from app.models import Vendor
+    vendors = Vendor.query.filter_by(is_active=True).all()
+    return jsonify({'status': 'success', 'data': [v.to_dict() for v in vendors]})
+
+
+@bp.route('/vendors', methods=['POST'])
+@jwt_required()
+def create_vendor():
+    """Create vendor."""
+    user = engineer_or_admin_required()
+    data = request.get_json()
+    from app.models import Vendor
+    vendor = Vendor(
+        code=data['code'],
+        name=data['name'],
+        name_ar=data.get('name_ar'),
+        contact_person=data.get('contact_person'),
+        email=data.get('email'),
+        phone=data.get('phone'),
+        address=data.get('address'),
+        payment_terms=data.get('payment_terms'),
+        lead_time_days=data.get('lead_time_days')
+    )
+    db.session.add(vendor)
+    db.session.commit()
+    return jsonify({'status': 'success', 'data': vendor.to_dict()}), 201
+
+
+@bp.route('/vendors/<int:vendor_id>', methods=['PUT'])
+@jwt_required()
+def update_vendor(vendor_id):
+    """Update vendor."""
+    user = engineer_or_admin_required()
+    from app.models import Vendor
+    vendor = Vendor.query.get_or_404(vendor_id)
+    data = request.get_json()
+    for field in ['name', 'name_ar', 'contact_person', 'email', 'phone', 'address', 'payment_terms', 'lead_time_days', 'is_active']:
+        if field in data:
+            setattr(vendor, field, data[field])
+    db.session.commit()
+    return jsonify({'status': 'success', 'data': vendor.to_dict()})
+
+
+# ==================== ALERTS ====================
+
+@bp.route('/alerts', methods=['GET'])
+@jwt_required()
+def get_alerts():
+    """Get stock alert summary."""
+    summary = stock_alerts.get_alert_summary()
+    return jsonify({'status': 'success', 'data': summary})
+
+
+@bp.route('/alerts/low-stock', methods=['GET'])
+@jwt_required()
+def get_low_stock_alerts():
+    """Get low stock alerts."""
+    alerts = stock_alerts.check_low_stock()
+    return jsonify({'status': 'success', 'data': alerts})
+
+
+@bp.route('/alerts/reorder', methods=['GET'])
+@jwt_required()
+def get_reorder_alerts():
+    """Get reorder needed alerts."""
+    alerts = stock_alerts.check_reorder_needed()
+    return jsonify({'status': 'success', 'data': alerts})
+
+
+# ==================== INVENTORY COUNT ====================
+
+@bp.route('/counts', methods=['GET'])
+@jwt_required()
+def list_counts():
+    """List inventory counts."""
+    from app.models import InventoryCount
+    counts = InventoryCount.query.order_by(InventoryCount.count_date.desc()).limit(20).all()
+    return jsonify({'status': 'success', 'data': [c.to_dict() for c in counts]})
+
+
+@bp.route('/counts', methods=['POST'])
+@jwt_required()
+def create_count():
+    """Start a new inventory count."""
+    user = engineer_or_admin_required()
+    data = request.get_json()
+    from app.models import InventoryCount
+    count = InventoryCount(
+        count_date=data.get('count_date', date.today()),
+        count_type=data.get('count_type', 'full'),
+        created_by_id=user.id
+    )
+    db.session.add(count)
+    db.session.commit()
+    return jsonify({'status': 'success', 'data': count.to_dict()}), 201
+
+
+@bp.route('/counts/<int:count_id>/items', methods=['POST'])
+@jwt_required()
+def add_count_item(count_id):
+    """Add/update count item."""
+    user = get_current_user()
+    data = request.get_json()
+    from app.models import InventoryCount, InventoryCountItem, Material
+
+    count = InventoryCount.query.get_or_404(count_id)
+    material = Material.query.get_or_404(data['material_id'])
+
+    item = InventoryCountItem.query.filter_by(
+        count_id=count_id,
+        material_id=data['material_id']
+    ).first()
+
+    if not item:
+        item = InventoryCountItem(
+            count_id=count_id,
+            material_id=data['material_id'],
+            system_quantity=material.current_stock
+        )
+        db.session.add(item)
+
+    item.counted_quantity = data['counted_quantity']
+    item.variance = item.counted_quantity - item.system_quantity
+    item.counted_by_id = user.id
+    item.counted_at = datetime.utcnow()
+    item.notes = data.get('notes')
+
+    db.session.commit()
+    return jsonify({'status': 'success', 'data': item.to_dict()})
+
+
+@bp.route('/counts/<int:count_id>/approve', methods=['POST'])
+@jwt_required()
+def approve_count(count_id):
+    """Approve count and apply adjustments."""
+    user = engineer_or_admin_required()
+    from app.models import InventoryCount
+
+    count = InventoryCount.query.get_or_404(count_id)
+    count.status = 'approved'
+    count.approved_by_id = user.id
+
+    # Apply adjustments
+    for item in count.items:
+        if item.variance != 0:
+            MaterialService.adjust(
+                material_id=item.material_id,
+                new_quantity=item.counted_quantity,
+                user_id=user.id,
+                reason=f'Inventory count adjustment (Count #{count_id})'
+            )
+
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': 'Count approved and adjustments applied'})
+
+
+# ==================== AI FEATURES ====================
+
+@bp.route('/ai/reorder-prediction/<int:material_id>', methods=['GET'])
+@jwt_required()
+def predict_reorder(material_id):
+    """Get AI reorder prediction."""
+    prediction = material_ai.predict_reorder_date(material_id)
+    return jsonify({'status': 'success', 'data': prediction})
+
+
+@bp.route('/ai/demand-forecast/<int:material_id>', methods=['GET'])
+@jwt_required()
+def forecast_demand(material_id):
+    """Get AI demand forecast."""
+    days = request.args.get('days', 30, type=int)
+    forecast = material_ai.forecast_demand(material_id, days)
+    return jsonify({'status': 'success', 'data': forecast})
+
+
+@bp.route('/ai/anomalies', methods=['GET'])
+@jwt_required()
+def get_consumption_anomalies():
+    """Get consumption anomalies."""
+    material_id = request.args.get('material_id', type=int)
+    anomalies = material_ai.detect_consumption_anomalies(material_id)
+    return jsonify({'status': 'success', 'data': anomalies})
+
+
+@bp.route('/ai/optimal-reorder/<int:material_id>', methods=['GET'])
+@jwt_required()
+def get_optimal_reorder(material_id):
+    """Get AI-calculated optimal reorder settings."""
+    settings = material_ai.calculate_optimal_reorder_point(material_id)
+    return jsonify({'status': 'success', 'data': settings})
+
+
+@bp.route('/ai/cost-optimization', methods=['GET'])
+@jwt_required()
+def get_cost_optimization():
+    """Get cost optimization suggestions."""
+    suggestions = material_ai.suggest_cost_optimization()
+    return jsonify({'status': 'success', 'data': suggestions})
+
+
+@bp.route('/ai/insights', methods=['GET'])
+@jwt_required()
+def get_material_insights():
+    """Get AI usage insights."""
+    material_id = request.args.get('material_id', type=int)
+    insights = material_ai.get_usage_insights(material_id)
+    return jsonify({'status': 'success', 'data': insights})
+
+
+@bp.route('/ai/search', methods=['POST'])
+@jwt_required()
+def natural_language_search():
+    """Natural language material search."""
+    data = request.get_json()
+    result = material_ai.natural_language_search(data.get('query', ''))
+    return jsonify({'status': 'success', 'data': result})
+
+
+@bp.route('/ai/abc-analysis', methods=['GET'])
+@jwt_required()
+def get_abc_analysis():
+    """Get ABC inventory analysis."""
+    analysis = material_ai.get_abc_analysis()
+    return jsonify({'status': 'success', 'data': analysis})
+
+
+@bp.route('/ai/dead-stock', methods=['GET'])
+@jwt_required()
+def get_dead_stock():
+    """Get dead stock report."""
+    months = request.args.get('months', 6, type=int)
+    dead_stock = material_ai.get_dead_stock(months)
+    return jsonify({'status': 'success', 'data': dead_stock})
+
+
+@bp.route('/ai/budget-forecast', methods=['GET'])
+@jwt_required()
+def get_budget_forecast():
+    """Get budget forecast."""
+    days = request.args.get('days', 30, type=int)
+    forecast = material_ai.forecast_budget(days)
+    return jsonify({'status': 'success', 'data': forecast})
+
+
+# ==================== REPORTS ====================
+
+@bp.route('/reports/consumption', methods=['GET'])
+@jwt_required()
+def get_consumption_report():
+    """Get consumption report."""
+    period = request.args.get('period', 'monthly')
+    report = material_ai.generate_consumption_report(period)
+    return jsonify({'status': 'success', 'data': report})
+
+
+@bp.route('/reports/export', methods=['GET'])
+@jwt_required()
+def export_materials():
+    """Export materials to Excel."""
+    # Generate Excel export
+    # Return file download
+    pass

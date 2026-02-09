@@ -73,7 +73,10 @@
       "Bash(gh run list:*)",
       "Bash(export FLASK_APP=app:create_app:*)",
       "Bash(/usr/bin/python3:*)",
-      "Bash(/Users/AliAliAhmad_1_2/Desktop/inspection_system/venv/bin/python:*)"
+      "Bash(/Users/AliAliAhmad_1_2/Desktop/inspection_system/venv/bin/python:*)",
+      "Bash(for:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)"
     ]
   }
 }

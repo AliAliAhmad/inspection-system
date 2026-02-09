@@ -226,49 +226,68 @@ class AnalyticsService:
         }
 
     @staticmethod
-    def leaderboard(role=None, period='all_time'):
+    def leaderboard(role=None, period='all_time', limit=50):
         """
-        Get user rankings by points.
+        Enhanced leaderboard with gamification data.
+        Now includes: level, tier, streak, rank_change, achievements_count
 
         Args:
             role: Filter by role (inspector, specialist, engineer, quality_engineer)
             period: all_time, monthly, weekly, daily
+            limit: Maximum number of results (default 50)
+
+        Returns:
+            List of users with enhanced gamification data
         """
-        query = User.query.filter_by(is_active=True)
+        try:
+            from app.services.leaderboard_ai_service import LeaderboardAIService
+            leaderboard_service = LeaderboardAIService()
+            return leaderboard_service.get_leaderboard(role=role, period=period, limit=limit)
+        except Exception as e:
+            # Fallback to basic leaderboard if AI service fails
+            import logging
+            logging.getLogger(__name__).warning(f"LeaderboardAIService failed, using fallback: {e}")
 
-        if role:
-            query = query.filter(db.or_(User.role == role, User.minor_role == role))
+            query = User.query.filter_by(is_active=True)
 
-        users = query.all()
+            if role:
+                query = query.filter(db.or_(User.role == role, User.minor_role == role))
 
-        rankings = []
-        for u in users:
-            if role == 'inspector':
-                points = u.inspector_points or 0
-            elif role == 'specialist':
-                points = u.specialist_points or 0
-            elif role == 'engineer':
-                points = u.engineer_points or 0
-            elif role == 'quality_engineer':
-                points = u.qe_points or 0
-            else:
-                points = u.total_points or 0
+            users = query.all()
 
-            rankings.append({
-                'user_id': u.id,
-                'full_name': u.full_name,
-                'role': u.role,
-                'role_id': u.role_id,
-                'employee_id': u.role_id,
-                'points': points,
-                'total_points': points,
-                'specialization': u.specialization,
-            })
+            rankings = []
+            for u in users:
+                if role == 'inspector':
+                    points = u.inspector_points or 0
+                elif role == 'specialist':
+                    points = u.specialist_points or 0
+                elif role == 'engineer':
+                    points = u.engineer_points or 0
+                elif role == 'quality_engineer':
+                    points = u.qe_points or 0
+                else:
+                    points = u.total_points or 0
 
-        rankings.sort(key=lambda x: x['points'], reverse=True)
+                rankings.append({
+                    'user_id': u.id,
+                    'full_name': u.full_name,
+                    'role': u.role,
+                    'role_id': u.role_id,
+                    'employee_id': u.role_id,
+                    'points': points,
+                    'total_points': points,
+                    'specialization': u.specialization,
+                    'level': 1,
+                    'tier': 'bronze',
+                    'streak': 0,
+                    'rank_change': 0,
+                    'achievements_count': 0,
+                })
 
-        # Add rank
-        for i, r in enumerate(rankings):
-            r['rank'] = i + 1
+            rankings.sort(key=lambda x: x['points'], reverse=True)
 
-        return rankings
+            # Add rank
+            for i, r in enumerate(rankings[:limit]):
+                r['rank'] = i + 1
+
+            return rankings[:limit]

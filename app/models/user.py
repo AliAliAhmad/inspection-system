@@ -262,5 +262,15 @@ class User(db.Model):
         }
         return pairing.get(major_role)
 
+    def get_rank_change(self, period='weekly'):
+        """Get rank change from previous period.
+
+        Returns:
+            int or None: Positive means improved (moved up), negative means dropped.
+                        None if not enough data.
+        """
+        from app.models.leaderboard_snapshot import LeaderboardSnapshot
+        return LeaderboardSnapshot.get_rank_change(self.id, period)
+
     def __repr__(self):
         return f'<User {self.email or self.username} ({self.role})>'

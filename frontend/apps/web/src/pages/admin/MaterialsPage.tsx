@@ -9,18 +9,19 @@ import {
   Select,
   Tag,
   Space,
-  Popconfirm,
   message,
   Typography,
   Row,
   Col,
   Upload,
-  Badge,
-  Statistic,
   Divider,
   Alert,
   InputNumber,
   Switch,
+  Tabs,
+  FloatButton,
+  Drawer,
+  Badge,
 } from 'antd';
 import {
   PlusOutlined,
@@ -31,11 +32,40 @@ import {
   WarningOutlined,
   CheckCircleOutlined,
   ReloadOutlined,
+  MinusOutlined,
+  ScanOutlined,
+  SettingOutlined,
+  LineChartOutlined,
+  BellOutlined,
+  RobotOutlined,
+  AuditOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import { materialsApi, type Material, type CreateMaterialPayload } from '@inspection/shared';
+
+// Import new components
+import {
+  MaterialDashboard,
+  StockLevelGauge,
+  StockHistoryTimeline,
+  BatchList,
+  ExpiryAlertCard,
+  ConsumptionChart,
+  CategoryBreakdownChart,
+  ABCAnalysisChart,
+  AIReorderCard,
+  CostOptimizationPanel,
+  MaterialInsightsPanel,
+  QuickConsumeModal,
+  QuickRestockModal,
+  InventoryCountModal,
+  BarcodeScanner,
+  ReservationList,
+  VendorCard,
+  LocationSelector,
+} from '../../components/materials';
 
 const { Title, Text } = Typography;
 
@@ -67,15 +97,29 @@ export default function MaterialsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
+  // Filters
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>();
   const [showLowStock, setShowLowStock] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
 
+  // Modals
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [quickConsumeOpen, setQuickConsumeOpen] = useState(false);
+  const [quickRestockOpen, setQuickRestockOpen] = useState(false);
+  const [inventoryCountOpen, setInventoryCountOpen] = useState(false);
+  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+
+  // AI Sidebar
+  const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
+
+  // Active Tab
+  const [activeTab, setActiveTab] = useState('inventory');
 
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -98,20 +142,27 @@ export default function MaterialsPage() {
     queryFn: () => materialsApi.checkLowStock(),
   });
 
+  // Fetch alerts
+  const { data: alertsData } = useQuery({
+    queryKey: ['materials', 'alerts'],
+    queryFn: () => materialsApi.getAlerts(),
+  });
+
   const materials = materialsData?.data?.materials || [];
   const lowStockCount = lowStockData?.data?.low_stock_count || 0;
+  const alertsCount = alertsData?.data?.count || 0;
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: (payload: CreateMaterialPayload) => materialsApi.create(payload),
     onSuccess: () => {
-      message.success('Material created successfully');
+      message.success(t('materials.created_success', 'Material created successfully'));
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       setCreateModalOpen(false);
       createForm.resetFields();
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.message || 'Failed to create material');
+      message.error(err.response?.data?.message || t('common.error', 'Failed to create material'));
     },
   });
 
@@ -125,14 +176,14 @@ export default function MaterialsPage() {
       payload: Partial<CreateMaterialPayload> & { is_active?: boolean };
     }) => materialsApi.update(id, payload),
     onSuccess: () => {
-      message.success('Material updated successfully');
+      message.success(t('materials.updated_success', 'Material updated successfully'));
       queryClient.invalidateQueries({ queryKey: ['materials'] });
       setEditModalOpen(false);
       setEditingMaterial(null);
       editForm.resetFields();
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.message || 'Failed to update material');
+      message.error(err.response?.data?.message || t('common.error', 'Failed to update material'));
     },
   });
 
@@ -141,30 +192,22 @@ export default function MaterialsPage() {
     mutationFn: (file: File) => materialsApi.import(file),
     onSuccess: (response) => {
       const data = response.data;
-      message.success(`Import complete: ${data.created} created, ${data.updated} updated`);
+      message.success(`${t('materials.import_complete', 'Import complete')}: ${data.created} ${t('materials.created', 'created')}, ${data.updated} ${t('materials.updated', 'updated')}`);
 
       if (data.errors?.length) {
         Modal.warning({
-          title: 'Import completed with some errors',
+          title: t('materials.import_with_errors', 'Import completed with some errors'),
           width: 600,
           content: (
             <div>
-              <p>
-                <strong>Created:</strong> {data.created} materials
-              </p>
-              <p>
-                <strong>Updated:</strong> {data.updated} materials
-              </p>
+              <p><strong>{t('materials.created', 'Created')}:</strong> {data.created}</p>
+              <p><strong>{t('materials.updated', 'Updated')}:</strong> {data.updated}</p>
               <Divider />
-              <p>
-                <strong>Errors ({data.errors.length}):</strong>
-              </p>
+              <p><strong>{t('materials.errors', 'Errors')} ({data.errors.length}):</strong></p>
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                 <ul style={{ margin: 0, paddingLeft: '20px' }}>
                   {data.errors.map((e, i) => (
-                    <li key={i} style={{ color: '#ff4d4f' }}>
-                      {e}
-                    </li>
+                    <li key={i} style={{ color: '#ff4d4f' }}>{e}</li>
                   ))}
                 </ul>
               </div>
@@ -177,7 +220,7 @@ export default function MaterialsPage() {
       setImportModalOpen(false);
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.message || 'Import failed');
+      message.error(err.response?.data?.message || t('materials.import_failed', 'Import failed'));
     },
   });
 
@@ -211,27 +254,36 @@ export default function MaterialsPage() {
     setEditModalOpen(true);
   };
 
+  const openMaterialDetail = (material: Material) => {
+    setSelectedMaterial(material);
+    setDetailDrawerOpen(true);
+  };
+
+  const handleBarcodeFound = (material: Material) => {
+    openMaterialDetail(material);
+  };
+
   const columns: ColumnsType<Material> = [
     {
-      title: 'Code',
+      title: t('materials.code', 'Code'),
       dataIndex: 'code',
       key: 'code',
       width: 120,
       render: (code: string) => <Text code>{code}</Text>,
     },
     {
-      title: 'Name',
+      title: t('materials.name', 'Name'),
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record: Material) => (
-        <div>
+        <a onClick={() => openMaterialDetail(record)}>
           <div>{name}</div>
           {record.name_ar && <Text type="secondary">{record.name_ar}</Text>}
-        </div>
+        </a>
       ),
     },
     {
-      title: 'Category',
+      title: t('materials.category', 'Category'),
       dataIndex: 'category',
       key: 'category',
       width: 120,
@@ -240,72 +292,63 @@ export default function MaterialsPage() {
       ),
     },
     {
-      title: 'Unit',
+      title: t('materials.unit', 'Unit'),
       dataIndex: 'unit',
       key: 'unit',
       width: 80,
     },
     {
-      title: 'Stock',
+      title: t('materials.stock', 'Stock'),
       key: 'stock',
-      width: 140,
+      width: 160,
       render: (_: any, record: Material) => (
-        <div>
-          <div>
-            <Text strong style={{ color: record.is_low_stock ? '#ff4d4f' : undefined }}>
-              {record.current_stock}
-            </Text>
-            <Text type="secondary"> / {record.min_stock} min</Text>
-          </div>
-          {record.is_low_stock && (
-            <Tag color="error" icon={<WarningOutlined />}>
-              Low Stock
-            </Tag>
-          )}
-          {record.stock_months !== null && (
-            <Text type="secondary" style={{ fontSize: '12px' }}>
-              ~{record.stock_months?.toFixed(1)} months
-            </Text>
-          )}
-        </div>
+        <StockLevelGauge
+          currentStock={record.current_stock}
+          minStock={record.min_stock}
+          unit={record.unit}
+          size="small"
+          showLabels={false}
+        />
       ),
     },
     {
-      title: 'Monthly Usage',
+      title: t('materials.monthly_usage', 'Monthly Usage'),
       dataIndex: 'monthly_consumption',
       key: 'monthly_consumption',
       width: 120,
       render: (val: number, record: Material) =>
         val > 0 ? (
-          <Text>
-            {val.toFixed(1)} {record.unit}/mo
-          </Text>
+          <Text>{val.toFixed(1)} {record.unit}/mo</Text>
         ) : (
           <Text type="secondary">-</Text>
         ),
     },
     {
-      title: 'Status',
+      title: t('common.status', 'Status'),
       dataIndex: 'is_active',
       key: 'is_active',
       width: 100,
-      render: (isActive: boolean) =>
-        isActive ? (
-          <Tag color="success" icon={<CheckCircleOutlined />}>
-            Active
-          </Tag>
-        ) : (
-          <Tag color="default">Inactive</Tag>
-        ),
+      render: (isActive: boolean, record: Material) => (
+        <Space direction="vertical" size={0}>
+          {isActive ? (
+            <Tag color="success" icon={<CheckCircleOutlined />}>{t('common.active', 'Active')}</Tag>
+          ) : (
+            <Tag color="default">{t('common.inactive', 'Inactive')}</Tag>
+          )}
+          {record.is_low_stock && (
+            <Tag color="error" icon={<WarningOutlined />}>{t('materials.low_stock', 'Low Stock')}</Tag>
+          )}
+        </Space>
+      ),
     },
     {
-      title: 'Actions',
+      title: t('common.actions', 'Actions'),
       key: 'actions',
-      width: 100,
+      width: 120,
       render: (_: any, record: Material) => (
         <Space>
           <Button type="link" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
-            Edit
+            {t('common.edit', 'Edit')}
           </Button>
         </Space>
       ),
@@ -318,23 +361,23 @@ export default function MaterialsPage() {
         <Col span={12}>
           <Form.Item
             name="code"
-            label="Code"
-            rules={[{ required: true, message: 'Code is required' }]}
+            label={t('materials.code', 'Code')}
+            rules={[{ required: true, message: t('materials.code_required', 'Code is required') }]}
           >
             <Input placeholder="MAT-001" disabled={isEdit} />
           </Form.Item>
         </Col>
         <Col span={12}>
-          <Form.Item name="unit" label="Unit" rules={[{ required: true }]}>
-            <Select placeholder="Select unit">
-              <Select.Option value="pcs">Pieces</Select.Option>
-              <Select.Option value="liters">Liters</Select.Option>
-              <Select.Option value="kg">Kilograms</Select.Option>
-              <Select.Option value="meters">Meters</Select.Option>
-              <Select.Option value="sets">Sets</Select.Option>
-              <Select.Option value="pairs">Pairs</Select.Option>
-              <Select.Option value="rolls">Rolls</Select.Option>
-              <Select.Option value="boxes">Boxes</Select.Option>
+          <Form.Item name="unit" label={t('materials.unit', 'Unit')} rules={[{ required: true }]}>
+            <Select placeholder={t('materials.select_unit', 'Select unit')}>
+              <Select.Option value="pcs">{t('materials.unit_pcs', 'Pieces')}</Select.Option>
+              <Select.Option value="liters">{t('materials.unit_liters', 'Liters')}</Select.Option>
+              <Select.Option value="kg">{t('materials.unit_kg', 'Kilograms')}</Select.Option>
+              <Select.Option value="meters">{t('materials.unit_meters', 'Meters')}</Select.Option>
+              <Select.Option value="sets">{t('materials.unit_sets', 'Sets')}</Select.Option>
+              <Select.Option value="pairs">{t('materials.unit_pairs', 'Pairs')}</Select.Option>
+              <Select.Option value="rolls">{t('materials.unit_rolls', 'Rolls')}</Select.Option>
+              <Select.Option value="boxes">{t('materials.unit_boxes', 'Boxes')}</Select.Option>
             </Select>
           </Form.Item>
         </Col>
@@ -343,14 +386,14 @@ export default function MaterialsPage() {
         <Col span={12}>
           <Form.Item
             name="name"
-            label="Name (English)"
-            rules={[{ required: true, message: 'Name is required' }]}
+            label={t('materials.name_en', 'Name (English)')}
+            rules={[{ required: true, message: t('materials.name_required', 'Name is required') }]}
           >
             <Input placeholder="Hydraulic Oil" />
           </Form.Item>
         </Col>
         <Col span={12}>
-          <Form.Item name="name_ar" label="Name (Arabic)">
+          <Form.Item name="name_ar" label={t('materials.name_ar', 'Name (Arabic)')}>
             <Input placeholder="زيت هيدروليكي" dir="rtl" />
           </Form.Item>
         </Col>
@@ -359,10 +402,10 @@ export default function MaterialsPage() {
         <Col span={12}>
           <Form.Item
             name="category"
-            label="Category"
-            rules={[{ required: true, message: 'Category is required' }]}
+            label={t('materials.category', 'Category')}
+            rules={[{ required: true, message: t('materials.category_required', 'Category is required') }]}
           >
-            <Select placeholder="Select category">
+            <Select placeholder={t('materials.select_category', 'Select category')}>
               {CATEGORIES.map((cat) => (
                 <Select.Option key={cat} value={cat}>
                   <Tag color={categoryColorMap[cat]}>{cat.toUpperCase()}</Tag>
@@ -372,23 +415,175 @@ export default function MaterialsPage() {
           </Form.Item>
         </Col>
         <Col span={6}>
-          <Form.Item name="current_stock" label="Current Stock" initialValue={0}>
+          <Form.Item name="current_stock" label={t('materials.current_stock', 'Current Stock')} initialValue={0}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Col>
         <Col span={6}>
-          <Form.Item name="min_stock" label="Min Stock" initialValue={0}>
+          <Form.Item name="min_stock" label={t('materials.min_stock', 'Min Stock')} initialValue={0}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Col>
       </Row>
       {isEdit && (
-        <Form.Item name="is_active" label="Active" valuePropName="checked">
+        <Form.Item name="is_active" label={t('common.active', 'Active')} valuePropName="checked">
           <Switch />
         </Form.Item>
       )}
     </Form>
   );
+
+  // Tab items
+  const tabItems = [
+    {
+      key: 'inventory',
+      label: (
+        <span>
+          <SearchOutlined /> {t('materials.inventory', 'Inventory')}
+        </span>
+      ),
+      children: (
+        <div>
+          {/* Filters */}
+          <Row gutter={16} style={{ marginBottom: 16 }}>
+            <Col span={8}>
+              <Input
+                placeholder={t('materials.search_placeholder', 'Search by code or name...')}
+                prefix={<SearchOutlined />}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                allowClear
+              />
+            </Col>
+            <Col span={6}>
+              <Select
+                placeholder={t('materials.filter_category', 'Filter by category')}
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+                allowClear
+                style={{ width: '100%' }}
+              >
+                {CATEGORIES.map((cat) => (
+                  <Select.Option key={cat} value={cat}>
+                    <Tag color={categoryColorMap[cat]}>{cat.toUpperCase()}</Tag>
+                  </Select.Option>
+                ))}
+              </Select>
+            </Col>
+            <Col span={5}>
+              <Space>
+                <Switch
+                  checked={showLowStock}
+                  onChange={setShowLowStock}
+                  checkedChildren={t('materials.low_stock_only', 'Low Stock Only')}
+                  unCheckedChildren={t('materials.all_stock', 'All Stock')}
+                />
+              </Space>
+            </Col>
+            <Col span={5}>
+              <Space>
+                <Switch
+                  checked={showInactive}
+                  onChange={setShowInactive}
+                  checkedChildren={t('materials.show_inactive', 'Show Inactive')}
+                  unCheckedChildren={t('materials.active_only', 'Active Only')}
+                />
+              </Space>
+            </Col>
+          </Row>
+
+          {/* Table */}
+          <Table
+            dataSource={materials}
+            columns={columns}
+            rowKey="id"
+            loading={isLoading}
+            pagination={{ pageSize: 15, showSizeChanger: true, showTotal: (t) => `${t} materials` }}
+            rowClassName={(record) => (record.is_low_stock ? 'low-stock-row' : '')}
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'analytics',
+      label: (
+        <span>
+          <LineChartOutlined /> {t('materials.analytics', 'Analytics')}
+        </span>
+      ),
+      children: (
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}>
+            <ConsumptionChart />
+          </Col>
+          <Col xs={24} lg={12}>
+            <CategoryBreakdownChart
+              onCategoryClick={(cat) => {
+                setCategoryFilter(cat);
+                setActiveTab('inventory');
+              }}
+            />
+          </Col>
+          <Col xs={24}>
+            <ABCAnalysisChart showDetails />
+          </Col>
+        </Row>
+      ),
+    },
+    {
+      key: 'alerts',
+      label: (
+        <span>
+          <Badge count={alertsCount} size="small" offset={[8, 0]}>
+            <BellOutlined /> {t('materials.alerts', 'Alerts')}
+          </Badge>
+        </span>
+      ),
+      children: (
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}>
+            <ExpiryAlertCard
+              days={30}
+              onViewAll={() => {}}
+            />
+          </Col>
+          <Col xs={24} lg={12}>
+            <ReservationList showActions />
+          </Col>
+        </Row>
+      ),
+    },
+    {
+      key: 'settings',
+      label: (
+        <span>
+          <SettingOutlined /> {t('materials.settings', 'Settings')}
+        </span>
+      ),
+      children: (
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={12}>
+            <Card title={t('materials.locations', 'Storage Locations')} size="small">
+              <Text type="secondary">{t('materials.manage_locations_desc', 'Manage warehouse and storage locations')}</Text>
+              {/* Location management would go here */}
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card title={t('materials.vendors', 'Vendors')} size="small">
+              <Text type="secondary">{t('materials.manage_vendors_desc', 'Manage material vendors and suppliers')}</Text>
+              {/* Vendor management would go here */}
+            </Card>
+          </Col>
+          <Col xs={24}>
+            <Card title={t('materials.reorder_settings', 'Reorder Settings')} size="small">
+              <Text type="secondary">{t('materials.reorder_settings_desc', 'Configure automatic reorder points and alerts')}</Text>
+              {/* Reorder settings would go here */}
+            </Card>
+          </Col>
+        </Row>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -396,134 +591,135 @@ export default function MaterialsPage() {
         <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
           <Col>
             <Title level={3} style={{ margin: 0 }}>
-              Materials Management
+              {t('materials.title', 'Materials Management')}
             </Title>
           </Col>
           <Col>
             <Space>
+              <Button icon={<ScanOutlined />} onClick={() => setBarcodeScannerOpen(true)}>
+                {t('materials.scan', 'Scan')}
+              </Button>
+              <Button icon={<AuditOutlined />} onClick={() => setInventoryCountOpen(true)}>
+                {t('materials.inventory_count', 'Count')}
+              </Button>
               <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['materials'] })}>
-                Refresh
+                {t('common.refresh', 'Refresh')}
               </Button>
               <Button icon={<UploadOutlined />} onClick={() => setImportModalOpen(true)}>
-                Import Excel
+                {t('materials.import_excel', 'Import Excel')}
               </Button>
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-                Add Material
+                {t('materials.add_material', 'Add Material')}
               </Button>
             </Space>
           </Col>
         </Row>
 
-        {/* Stats */}
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic title="Total Materials" value={materials.length} />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="Low Stock Items"
-                value={lowStockCount}
-                valueStyle={{ color: lowStockCount > 0 ? '#ff4d4f' : '#52c41a' }}
-                prefix={lowStockCount > 0 ? <WarningOutlined /> : <CheckCircleOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="Active Materials"
-                value={materials.filter((m) => m.is_active).length}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card size="small">
-              <Statistic title="Categories" value={new Set(materials.map((m) => m.category)).size} />
-            </Card>
-          </Col>
-        </Row>
+        {/* Dashboard KPIs */}
+        <MaterialDashboard
+          onQuickConsume={() => setQuickConsumeOpen(true)}
+          onQuickRestock={() => setQuickRestockOpen(true)}
+          onViewLowStock={() => {
+            setShowLowStock(true);
+            setActiveTab('inventory');
+          }}
+          onViewExpiring={() => setActiveTab('alerts')}
+        />
 
-        {/* Low stock alert */}
+        {/* Low stock alert banner */}
         {lowStockCount > 0 && (
           <Alert
-            message={`${lowStockCount} material${lowStockCount > 1 ? 's' : ''} below minimum stock level`}
+            message={`${lowStockCount} ${t('materials.below_min_stock', 'material(s) below minimum stock level')}`}
             type="warning"
             showIcon
             icon={<WarningOutlined />}
             action={
               <Button size="small" type="link" onClick={() => setShowLowStock(true)}>
-                View Low Stock
+                {t('materials.view_low_stock', 'View Low Stock')}
               </Button>
             }
             style={{ marginBottom: 16 }}
           />
         )}
 
-        {/* Filters */}
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={8}>
-            <Input
-              placeholder="Search by code or name..."
-              prefix={<SearchOutlined />}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              allowClear
-            />
-          </Col>
-          <Col span={6}>
-            <Select
-              placeholder="Filter by category"
-              value={categoryFilter}
-              onChange={setCategoryFilter}
-              allowClear
-              style={{ width: '100%' }}
-            >
-              {CATEGORIES.map((cat) => (
-                <Select.Option key={cat} value={cat}>
-                  <Tag color={categoryColorMap[cat]}>{cat.toUpperCase()}</Tag>
-                </Select.Option>
-              ))}
-            </Select>
-          </Col>
-          <Col span={5}>
-            <Space>
-              <Switch
-                checked={showLowStock}
-                onChange={setShowLowStock}
-                checkedChildren="Low Stock Only"
-                unCheckedChildren="All Stock"
-              />
-            </Space>
-          </Col>
-          <Col span={5}>
-            <Space>
-              <Switch
-                checked={showInactive}
-                onChange={setShowInactive}
-                checkedChildren="Show Inactive"
-                unCheckedChildren="Active Only"
-              />
-            </Space>
-          </Col>
-        </Row>
-
-        {/* Table */}
-        <Table
-          dataSource={materials}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          pagination={{ pageSize: 15, showSizeChanger: true, showTotal: (t) => `${t} materials` }}
-          rowClassName={(record) => (record.is_low_stock ? 'low-stock-row' : '')}
+        {/* Tabs */}
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={tabItems}
         />
       </Card>
 
+      {/* Floating Action Buttons */}
+      <FloatButton.Group shape="circle" style={{ right: 24 }}>
+        <FloatButton
+          icon={<RobotOutlined />}
+          tooltip={t('materials.ai_insights', 'AI Insights')}
+          onClick={() => setAiSidebarOpen(true)}
+        />
+        <FloatButton
+          icon={<MinusOutlined />}
+          tooltip={t('materials.quick_consume', 'Quick Consume')}
+          onClick={() => setQuickConsumeOpen(true)}
+          style={{ backgroundColor: '#ff4d4f' }}
+        />
+        <FloatButton
+          icon={<PlusOutlined />}
+          tooltip={t('materials.quick_restock', 'Quick Restock')}
+          type="primary"
+          onClick={() => setQuickRestockOpen(true)}
+        />
+      </FloatButton.Group>
+
+      {/* AI Insights Sidebar */}
+      <Drawer
+        title={
+          <Space>
+            <RobotOutlined style={{ color: '#722ed1' }} />
+            {t('materials.ai_insights', 'AI Insights')}
+          </Space>
+        }
+        placement="right"
+        width={400}
+        onClose={() => setAiSidebarOpen(false)}
+        open={aiSidebarOpen}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <MaterialInsightsPanel />
+          <CostOptimizationPanel />
+        </Space>
+      </Drawer>
+
+      {/* Material Detail Drawer */}
+      <Drawer
+        title={selectedMaterial?.name || t('materials.details', 'Material Details')}
+        placement="right"
+        width={500}
+        onClose={() => {
+          setDetailDrawerOpen(false);
+          setSelectedMaterial(null);
+        }}
+        open={detailDrawerOpen}
+      >
+        {selectedMaterial && (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Card size="small">
+              <StockLevelGauge
+                currentStock={selectedMaterial.current_stock}
+                minStock={selectedMaterial.min_stock}
+                unit={selectedMaterial.unit}
+              />
+            </Card>
+            <StockHistoryTimeline materialId={selectedMaterial.id} />
+            <BatchList materialId={selectedMaterial.id} />
+            <AIReorderCard materialId={selectedMaterial.id} materialName={selectedMaterial.name} />
+          </Space>
+        )}
+      </Drawer>
+
       {/* Create Modal */}
       <Modal
-        title="Add New Material"
+        title={t('materials.add_new_material', 'Add New Material')}
         open={createModalOpen}
         onCancel={() => {
           setCreateModalOpen(false);
@@ -538,7 +734,7 @@ export default function MaterialsPage() {
 
       {/* Edit Modal */}
       <Modal
-        title="Edit Material"
+        title={t('materials.edit_material', 'Edit Material')}
         open={editModalOpen}
         onCancel={() => {
           setEditModalOpen(false);
@@ -554,47 +750,33 @@ export default function MaterialsPage() {
 
       {/* Import Modal */}
       <Modal
-        title="Import Materials from Excel"
+        title={t('materials.import_from_excel', 'Import Materials from Excel')}
         open={importModalOpen}
         onCancel={() => setImportModalOpen(false)}
         footer={null}
         width={600}
       >
-        <p>Upload an Excel file with your materials/parts master data.</p>
+        <p>{t('materials.import_desc', 'Upload an Excel file with your materials/parts master data.')}</p>
 
         <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f9f9f9' }}>
-          <Text strong>Required columns:</Text>
+          <Text strong>{t('materials.required_columns', 'Required columns')}:</Text>
           <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-            <li>
-              <code>code</code> - Unique material code
-            </li>
-            <li>
-              <code>name</code> - Material name (English)
-            </li>
-            <li>
-              <code>category</code> - Category (filter, lubricant, hydraulic, etc.)
-            </li>
-            <li>
-              <code>unit</code> - Unit of measure (pcs, liters, kg, etc.)
-            </li>
+            <li><code>code</code> - {t('materials.unique_code', 'Unique material code')}</li>
+            <li><code>name</code> - {t('materials.name_english', 'Material name (English)')}</li>
+            <li><code>category</code> - {t('materials.category_hint', 'Category (filter, lubricant, hydraulic, etc.)')}</li>
+            <li><code>unit</code> - {t('materials.unit_hint', 'Unit of measure (pcs, liters, kg, etc.)')}</li>
           </ul>
 
-          <Text strong>Optional columns:</Text>
+          <Text strong>{t('materials.optional_columns', 'Optional columns')}:</Text>
           <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
-            <li>
-              <code>name_ar</code> - Arabic name
-            </li>
-            <li>
-              <code>current_stock</code> - Current quantity in stock
-            </li>
-            <li>
-              <code>min_stock</code> - Minimum stock level (for low stock alerts)
-            </li>
+            <li><code>name_ar</code> - {t('materials.arabic_name', 'Arabic name')}</li>
+            <li><code>current_stock</code> - {t('materials.current_quantity', 'Current quantity in stock')}</li>
+            <li><code>min_stock</code> - {t('materials.min_stock_hint', 'Minimum stock level (for low stock alerts)')}</li>
           </ul>
         </Card>
 
         <Alert
-          message="Existing materials will be updated by matching the code column"
+          message={t('materials.import_update_hint', 'Existing materials will be updated by matching the code column')}
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -611,10 +793,37 @@ export default function MaterialsPage() {
             type="primary"
             size="large"
           >
-            Select Excel File
+            {t('materials.select_excel_file', 'Select Excel File')}
           </Button>
         </Upload>
       </Modal>
+
+      {/* Quick Consume Modal */}
+      <QuickConsumeModal
+        open={quickConsumeOpen}
+        onClose={() => setQuickConsumeOpen(false)}
+        material={selectedMaterial || undefined}
+      />
+
+      {/* Quick Restock Modal */}
+      <QuickRestockModal
+        open={quickRestockOpen}
+        onClose={() => setQuickRestockOpen(false)}
+        material={selectedMaterial || undefined}
+      />
+
+      {/* Inventory Count Modal */}
+      <InventoryCountModal
+        open={inventoryCountOpen}
+        onClose={() => setInventoryCountOpen(false)}
+      />
+
+      {/* Barcode Scanner */}
+      <BarcodeScanner
+        open={barcodeScannerOpen}
+        onClose={() => setBarcodeScannerOpen(false)}
+        onMaterialFound={handleBarcodeFound}
+      />
 
       <style>{`
         .low-stock-row {
