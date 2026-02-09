@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Card, Tag, Button, Space, Input, Select, Empty, Spin, Badge, Popconfirm, Tabs } from 'antd';
+import { Card, Tag, Button, Space, Input, Select, Empty, Spin, Badge, Popconfirm, Tabs, Tooltip } from 'antd';
 import {
   PlusOutlined,
   UploadOutlined,
@@ -10,6 +10,8 @@ import {
   EyeOutlined,
   ClockCircleOutlined,
   WarningOutlined,
+  LeftOutlined,
+  RightOutlined,
 } from '@ant-design/icons';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -63,8 +65,8 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
   const isOverdue = job.overdue_value && job.overdue_value > 0;
   const priority = job.priority || 'normal';
 
-  // Get equipment name
-  const equipmentName = job.equipment?.serial_number || job.equipment?.name || 'Unknown Equipment';
+  // Get equipment name only (not serial number)
+  const equipmentName = job.equipment?.name || 'Unknown Equipment';
 
   // Get description
   const description = job.description || job.defect?.description || '';
@@ -93,9 +95,9 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
         }}
         bodyStyle={{ padding: '10px 12px' }}
       >
-        {/* Equipment Name */}
+        {/* Equipment Name - Bold */}
         <div style={{
-          fontWeight: 600,
+          fontWeight: 700,
           fontSize: 13,
           marginBottom: 4,
           overflow: 'hidden',
@@ -119,6 +121,18 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
           </div>
         )}
 
+        {/* Overdue - Bold Red (shown prominently if overdue) */}
+        {isOverdue && (
+          <div style={{
+            fontWeight: 700,
+            fontSize: 12,
+            color: '#ff4d4f',
+            marginBottom: 6,
+          }}>
+            <WarningOutlined /> {job.overdue_value}{job.overdue_unit === 'hours' ? 'h' : 'd'} overdue
+          </div>
+        )}
+
         {/* Tags Row */}
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Priority Tag */}
@@ -133,13 +147,6 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
           {cycleLabel && (
             <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
               {cycleLabel}
-            </Tag>
-          )}
-
-          {/* Overdue Tag */}
-          {isOverdue && (
-            <Tag color="error" style={{ fontSize: 10, margin: 0 }}>
-              <WarningOutlined /> {job.overdue_value}{job.overdue_unit === 'hours' ? 'h' : 'd'} overdue
             </Tag>
           )}
         </div>
@@ -166,6 +173,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   onJobClick,
   onClearPool,
 }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'prm' | 'defect' | 'ins'>('prm');
   const [prmSubTab, setPrmSubTab] = useState<'hourly' | 'calendar'>('hourly');
   const [equipmentFilter, setEquipmentFilter] = useState<string>('');
@@ -313,7 +321,8 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
         position: 'fixed',
         top: 0,
         right: 0,
-        width: '30%',
+        width: isCollapsed ? '40px' : '18%',
+        minWidth: isCollapsed ? '40px' : '280px',
         height: '100vh',
         backgroundColor: '#fff',
         boxShadow: '-2px 0 8px rgba(0,0,0,0.15)',
@@ -321,175 +330,221 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        transition: 'width 0.3s ease',
       }}
     >
-      {/* Header */}
-      <div style={{
-        padding: '16px',
-        borderBottom: '1px solid #f0f0f0',
-        backgroundColor: '#fafafa'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 18 }}>📦</span>
-            <span style={{ fontWeight: 600, fontSize: 16 }}>Jobs Pool</span>
-            <Badge count={totalCount} style={{ backgroundColor: '#1890ff' }} />
-          </div>
-          <Space size={4}>
-            <Button size="small" type="primary" icon={<UploadOutlined />} onClick={onImportSAP}>
-              Import
-            </Button>
-            <Button size="small" icon={<PlusOutlined />} onClick={onAddJob}>
-              Add
-            </Button>
-            {totalCount > 0 && onClearPool && (
-              <Popconfirm
-                title="Clear all jobs from pool?"
-                description="This will remove all SAP orders from the pool."
-                onConfirm={onClearPool}
-                okText="Clear"
-                cancelText="Cancel"
-                okButtonProps={{ danger: true }}
-              >
-                <Button size="small" danger icon={<DeleteOutlined />} />
-              </Popconfirm>
-            )}
-          </Space>
+      {/* Collapse Toggle Button */}
+      <Tooltip title={isCollapsed ? 'Open Jobs Pool' : 'Close Jobs Pool'} placement="left">
+        <div
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: '50%',
+            transform: 'translateY(-50%) translateX(-50%)',
+            width: 24,
+            height: 48,
+            backgroundColor: '#1890ff',
+            borderRadius: '4px 0 0 4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '-2px 0 4px rgba(0,0,0,0.15)',
+            zIndex: 1001,
+          }}
+        >
+          {isCollapsed ? <LeftOutlined style={{ color: '#fff', fontSize: 12 }} /> : <RightOutlined style={{ color: '#fff', fontSize: 12 }} />}
         </div>
+      </Tooltip>
 
-        {/* Filters */}
-        <Space direction="vertical" style={{ width: '100%' }} size={8}>
-          {/* Equipment Filter */}
-          <Select
-            placeholder="Filter by equipment..."
-            allowClear
-            showSearch
-            style={{ width: '100%' }}
-            size="small"
-            value={equipmentFilter || undefined}
-            onChange={(v) => setEquipmentFilter(v || '')}
-            filterOption={(input, option) =>
-              (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
-            }
-            options={equipmentList.map(eq => ({ value: eq.id.toString(), label: eq.name }))}
-          />
+      {/* Collapsed State - Show badge only */}
+      {isCollapsed ? (
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            padding: '16px 8px',
+          }}
+        >
+          <span style={{ fontSize: 20 }}>📦</span>
+          <Badge count={totalCount} style={{ backgroundColor: '#1890ff' }} />
+        </div>
+      ) : (
+        <>
+          {/* Header */}
+          <div style={{
+            padding: '12px',
+            borderBottom: '1px solid #f0f0f0',
+            backgroundColor: '#fafafa'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 16 }}>📦</span>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>Jobs Pool</span>
+                <Badge count={totalCount} style={{ backgroundColor: '#1890ff' }} />
+              </div>
+              <Space size={4}>
+                <Button size="small" type="primary" icon={<UploadOutlined />} onClick={onImportSAP}>
+                  Import
+                </Button>
+                <Button size="small" icon={<PlusOutlined />} onClick={onAddJob}>
+                  Add
+                </Button>
+                {totalCount > 0 && onClearPool && (
+                  <Popconfirm
+                    title="Clear all jobs from pool?"
+                    description="This will remove all SAP orders from the pool."
+                    onConfirm={onClearPool}
+                    okText="Clear"
+                    cancelText="Cancel"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                )}
+              </Space>
+            </div>
 
-          {/* Priority Filter */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            {['all', 'urgent', 'high', 'normal'].map(p => (
-              <Button
-                key={p}
+            {/* Filters */}
+            <Space direction="vertical" style={{ width: '100%' }} size={6}>
+              {/* Equipment Filter */}
+              <Select
+                placeholder="Filter by equipment..."
+                allowClear
+                showSearch
+                style={{ width: '100%' }}
                 size="small"
-                type={priorityFilter === p ? 'primary' : 'default'}
-                danger={p === 'urgent' && priorityFilter === p}
-                onClick={() => setPriorityFilter(p)}
-                style={{ flex: 1, fontSize: 11 }}
-              >
-                {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
-              </Button>
-            ))}
+                value={equipmentFilter || undefined}
+                onChange={(v) => setEquipmentFilter(v || '')}
+                filterOption={(input, option) =>
+                  (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
+                }
+                options={equipmentList.map(eq => ({ value: eq.id.toString(), label: eq.name }))}
+              />
+
+              {/* Priority Filter */}
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['all', 'urgent', 'high', 'normal'].map(p => (
+                  <Button
+                    key={p}
+                    size="small"
+                    type={priorityFilter === p ? 'primary' : 'default'}
+                    danger={p === 'urgent' && priorityFilter === p}
+                    onClick={() => setPriorityFilter(p)}
+                    style={{ flex: 1, fontSize: 10 }}
+                  >
+                    {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
+                  </Button>
+                ))}
+              </div>
+            </Space>
           </div>
-        </Space>
-      </div>
 
-      {/* Tabs */}
-      <Tabs
-        activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as 'prm' | 'defect' | 'ins')}
-        size="small"
-        style={{ padding: '0 16px' }}
-        items={[
-          {
-            key: 'prm',
-            label: (
-              <span>
-                <ToolOutlined /> PRM <Badge count={prmCount} size="small" style={{ marginLeft: 4 }} />
-              </span>
-            ),
-          },
-          {
-            key: 'defect',
-            label: (
-              <span>
-                <BugOutlined /> Defect <Badge count={defectCount} size="small" style={{ marginLeft: 4 }} />
-              </span>
-            ),
-          },
-          {
-            key: 'ins',
-            label: (
-              <span>
-                <EyeOutlined /> INS <Badge count={insCount} size="small" style={{ marginLeft: 4 }} />
-              </span>
-            ),
-          },
-        ]}
-      />
-
-      {/* PRM Sub-tabs */}
-      {activeTab === 'prm' && (
-        <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0' }}>
-          <Space size={4}>
-            <Button
-              size="small"
-              type={prmSubTab === 'hourly' ? 'primary' : 'default'}
-              onClick={() => setPrmSubTab('hourly')}
-              icon={<ClockCircleOutlined />}
-            >
-              Hourly
-            </Button>
-            <Button
-              size="small"
-              type={prmSubTab === 'calendar' ? 'primary' : 'default'}
-              onClick={() => setPrmSubTab('calendar')}
-            >
-              Calendar
-            </Button>
-          </Space>
-          <span style={{ fontSize: 11, color: '#8c8c8c', marginLeft: 12 }}>
-            {prmSubTab === 'hourly' ? '(4000h → 250h)' : '(3-weeks → yearly)'}
-          </span>
-        </div>
-      )}
-
-      {/* Jobs List */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
-        {isLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        ) : currentJobs.length === 0 ? (
-          <Empty
-            description={
-              equipmentFilter || priorityFilter !== 'all'
-                ? "No jobs match filters"
-                : `No ${activeTab.toUpperCase()} jobs available`
-            }
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          {/* Tabs */}
+          <Tabs
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as 'prm' | 'defect' | 'ins')}
+            size="small"
+            style={{ padding: '0 12px' }}
+            items={[
+              {
+                key: 'prm',
+                label: (
+                  <span>
+                    <ToolOutlined /> PRM <Badge count={prmCount} size="small" style={{ marginLeft: 4 }} />
+                  </span>
+                ),
+              },
+              {
+                key: 'defect',
+                label: (
+                  <span>
+                    <BugOutlined /> Defect <Badge count={defectCount} size="small" style={{ marginLeft: 4 }} />
+                  </span>
+                ),
+              },
+              {
+                key: 'ins',
+                label: (
+                  <span>
+                    <EyeOutlined /> INS <Badge count={insCount} size="small" style={{ marginLeft: 4 }} />
+                  </span>
+                ),
+              },
+            ]}
           />
-        ) : (
-          currentJobs.map((job: any, index: number) => (
-            <DraggableJobItem
-              key={`${currentJobType}-${job.id || index}`}
-              job={job}
-              jobType={currentJobType}
-              onClick={() => onJobClick?.(job, currentJobType)}
-            />
-          ))
-        )}
-      </div>
 
-      {/* Footer hint */}
-      <div style={{
-        padding: '12px 16px',
-        borderTop: '1px solid #f0f0f0',
-        backgroundColor: '#fafafa',
-        fontSize: 12,
-        color: '#8c8c8c',
-        textAlign: 'center'
-      }}>
-        👆 Drag jobs to calendar to schedule
-      </div>
+          {/* PRM Sub-tabs */}
+          {activeTab === 'prm' && (
+            <div style={{ padding: '6px 12px', borderBottom: '1px solid #f0f0f0' }}>
+              <Space size={4}>
+                <Button
+                  size="small"
+                  type={prmSubTab === 'hourly' ? 'primary' : 'default'}
+                  onClick={() => setPrmSubTab('hourly')}
+                  icon={<ClockCircleOutlined />}
+                >
+                  Hourly
+                </Button>
+                <Button
+                  size="small"
+                  type={prmSubTab === 'calendar' ? 'primary' : 'default'}
+                  onClick={() => setPrmSubTab('calendar')}
+                >
+                  Calendar
+                </Button>
+              </Space>
+              <span style={{ fontSize: 10, color: '#8c8c8c', marginLeft: 8 }}>
+                {prmSubTab === 'hourly' ? '(4000h → 250h)' : '(3-weeks → yearly)'}
+              </span>
+            </div>
+          )}
+
+          {/* Jobs List */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+            {isLoading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}>
+                <Spin />
+              </div>
+            ) : currentJobs.length === 0 ? (
+              <Empty
+                description={
+                  equipmentFilter || priorityFilter !== 'all'
+                    ? "No jobs match filters"
+                    : `No ${activeTab.toUpperCase()} jobs available`
+                }
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            ) : (
+              currentJobs.map((job: any, index: number) => (
+                <DraggableJobItem
+                  key={`${currentJobType}-${job.id || index}`}
+                  job={job}
+                  jobType={currentJobType}
+                  onClick={() => onJobClick?.(job, currentJobType)}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Footer hint */}
+          <div style={{
+            padding: '10px 12px',
+            borderTop: '1px solid #f0f0f0',
+            backgroundColor: '#fafafa',
+            fontSize: 11,
+            color: '#8c8c8c',
+            textAlign: 'center'
+          }}>
+            👆 Drag jobs to calendar to schedule
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -68,7 +68,8 @@
       "Bash(head:*)",
       "Bash(docker compose ps:*)",
       "Bash(docker-compose ps:*)",
-      "Bash(docker:*)"
+      "Bash(docker:*)",
+      "Bash(tail:*)"
     ]
   }
 }
