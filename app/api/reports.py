@@ -136,3 +136,168 @@ def capacity_report():
             'utilization_rate': available / total if total > 0 else 0,
         }
     }), 200
+
+
+@bp.route('/work-plan-stats', methods=['GET'])
+@jwt_required()
+def work_plan_stats():
+    """
+    Get work plan statistics for dashboard widget.
+    Returns current week's plan status, job counts, overdue counts, and team workload.
+    """
+    from app.models import WorkPlan, WorkPlanJob, WorkPlanDay, SAPWorkOrder, Leave
+    from datetime import date, timedelta
+
+    user = get_current_user()
+
+    # Get current week start (Monday)
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=6)
+
+    # Get current week's plan
+    plan = WorkPlan.query.filter_by(week_start=week_start).first()
+
+    if not plan:
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'has_plan': False,
+                'week_start': week_start.isoformat(),
+                'week_end': week_end.isoformat(),
+                'plan_status': None,
+                'total_jobs': 0,
+                'jobs_in_pool': 0,
+                'scheduled_jobs': 0,
+                'completed_jobs': 0,
+                'in_progress_jobs': 0,
+                'overdue_jobs': 0,
+                'critical_jobs': 0,
+                'today_jobs': [],
+                'team_workload': [],
+                'jobs_by_type': {'pm': 0, 'defect': 0, 'inspection': 0},
+                'jobs_by_day': []
+            }
+        }), 200
+
+    # Count jobs in pool (SAP orders pending)
+    jobs_in_pool = SAPWorkOrder.query.filter_by(
+        work_plan_id=plan.id,
+        status='pending'
+    ).count()
+
+    # Get all scheduled jobs
+    all_jobs = []
+    for day in plan.days:
+        for job in day.jobs:
+            all_jobs.append(job)
+
+    total_jobs = len(all_jobs)
+
+    # Count by status using tracking table
+    completed_jobs = 0
+    in_progress_jobs = 0
+    for job in all_jobs:
+        if job.tracking:
+            if job.tracking.status == 'completed':
+                completed_jobs += 1
+            elif job.tracking.status in ['in_progress', 'paused']:
+                in_progress_jobs += 1
+
+    # Count overdue and critical jobs
+    overdue_jobs = 0
+    critical_jobs = 0
+    for job in all_jobs:
+        if job.overdue_value and job.overdue_value > 0:
+            overdue_jobs += 1
+            # Critical: >100 hours or >7 days overdue
+            if job.overdue_unit == 'hours' and job.overdue_value > 100:
+                critical_jobs += 1
+            elif job.overdue_unit == 'days' and job.overdue_value > 7:
+                critical_jobs += 1
+
+    # Jobs by type
+    jobs_by_type = {'pm': 0, 'defect': 0, 'inspection': 0}
+    for job in all_jobs:
+        if job.job_type in jobs_by_type:
+            jobs_by_type[job.job_type] += 1
+
+    # Jobs by day
+    jobs_by_day = []
+    for day in sorted(plan.days, key=lambda d: d.date):
+        day_jobs = len(day.jobs)
+        jobs_by_day.append({
+            'date': day.date.isoformat(),
+            'day_name': day.date.strftime('%a'),
+            'count': day_jobs,
+            'is_today': day.date == today
+        })
+
+    # Today's jobs for quick view
+    today_jobs = []
+    today_day = next((d for d in plan.days if d.date == today), None)
+    if today_day:
+        for job in today_day.jobs[:5]:  # Limit to 5 for widget
+            today_jobs.append({
+                'id': job.id,
+                'job_type': job.job_type,
+                'equipment_name': job.equipment.name if job.equipment else 'N/A',
+                'equipment_serial': job.equipment.serial_number if job.equipment else None,
+                'estimated_hours': job.estimated_hours,
+                'priority': job.computed_priority or job.priority,
+                'status': job.tracking.status if job.tracking else 'pending',
+                'team_count': len(job.assignments)
+            })
+
+    # Team workload (hours per user this week)
+    team_workload = []
+    user_hours = {}
+    for job in all_jobs:
+        for assignment in job.assignments:
+            uid = assignment.user_id
+            if uid not in user_hours:
+                user_hours[uid] = {
+                    'user_id': uid,
+                    'name': assignment.user.full_name if assignment.user else f'User {uid}',
+                    'hours': 0,
+                    'job_count': 0,
+                    'on_leave': False
+                }
+            user_hours[uid]['hours'] += job.estimated_hours
+            user_hours[uid]['job_count'] += 1
+
+    # Check who's on leave this week
+    leaves = Leave.query.filter(
+        Leave.status == 'approved',
+        Leave.date_from <= week_end,
+        Leave.date_to >= week_start
+    ).all()
+    leave_user_ids = set(l.user_id for l in leaves)
+
+    for uid in user_hours:
+        if uid in leave_user_ids:
+            user_hours[uid]['on_leave'] = True
+
+    team_workload = sorted(user_hours.values(), key=lambda x: x['hours'], reverse=True)[:10]
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'has_plan': True,
+            'plan_id': plan.id,
+            'plan_status': plan.status,
+            'week_start': week_start.isoformat(),
+            'week_end': week_end.isoformat(),
+            'total_jobs': total_jobs,
+            'jobs_in_pool': jobs_in_pool,
+            'scheduled_jobs': total_jobs,
+            'completed_jobs': completed_jobs,
+            'in_progress_jobs': in_progress_jobs,
+            'overdue_jobs': overdue_jobs,
+            'critical_jobs': critical_jobs,
+            'today_jobs': today_jobs,
+            'team_workload': team_workload,
+            'jobs_by_type': jobs_by_type,
+            'jobs_by_day': jobs_by_day
+        }
+    }), 200

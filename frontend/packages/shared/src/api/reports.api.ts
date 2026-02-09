@@ -40,6 +40,51 @@ export interface CapacityData {
   [key: string]: unknown;
 }
 
+export interface TodayJob {
+  id: number;
+  job_type: 'pm' | 'defect' | 'inspection';
+  equipment_name: string;
+  equipment_serial: string | null;
+  estimated_hours: number;
+  priority: string;
+  status: string;
+  team_count: number;
+}
+
+export interface TeamWorkload {
+  user_id: number;
+  name: string;
+  hours: number;
+  job_count: number;
+  on_leave: boolean;
+}
+
+export interface JobsByDay {
+  date: string;
+  day_name: string;
+  count: number;
+  is_today: boolean;
+}
+
+export interface WorkPlanStats {
+  has_plan: boolean;
+  plan_id?: number;
+  plan_status: 'draft' | 'published' | null;
+  week_start: string;
+  week_end: string;
+  total_jobs: number;
+  jobs_in_pool: number;
+  scheduled_jobs: number;
+  completed_jobs: number;
+  in_progress_jobs: number;
+  overdue_jobs: number;
+  critical_jobs: number;
+  today_jobs: TodayJob[];
+  team_workload: TeamWorkload[];
+  jobs_by_type: { pm: number; defect: number; inspection: number };
+  jobs_by_day: JobsByDay[];
+}
+
 export const reportsApi = {
   getDashboard() {
     return getApiClient().get<ApiResponse<DashboardData>>('/api/reports/dashboard');
@@ -59,5 +104,9 @@ export const reportsApi = {
 
   getCapacity() {
     return getApiClient().get<ApiResponse<CapacityData>>('/api/reports/capacity');
+  },
+
+  getWorkPlanStats() {
+    return getApiClient().get<ApiResponse<WorkPlanStats>>('/api/reports/work-plan-stats');
   },
 };

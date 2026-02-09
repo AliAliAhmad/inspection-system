@@ -71,6 +71,10 @@ export type {
   PauseAnalytics,
   DefectAnalytics,
   CapacityData,
+  WorkPlanStats,
+  TodayJob,
+  TeamWorkload,
+  JobsByDay,
 } from './reports.api';
 export { filesApi } from './files.api';
 export type { FileListParams } from './files.api';
