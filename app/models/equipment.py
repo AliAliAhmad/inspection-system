@@ -52,6 +52,12 @@ class Equipment(db.Model):
     # Tracking
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
+    # Cost and risk tracking for dashboard
+    hourly_cost = db.Column(db.Numeric(10, 2), nullable=True)  # Cost per hour when stopped
+    criticality_level = db.Column(db.String(20), nullable=True)  # 'low', 'medium', 'high', 'critical'
+    last_risk_score = db.Column(db.Numeric(5, 2), nullable=True)  # 0-100 risk score
+    risk_score_updated_at = db.Column(db.DateTime, nullable=True)  # When risk was last calculated
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -72,6 +78,10 @@ class Equipment(db.Model):
         db.CheckConstraint(
             "home_berth IN ('east', 'west', 'both') OR home_berth IS NULL",
             name='check_valid_home_berth'
+        ),
+        db.CheckConstraint(
+            "criticality_level IN ('low', 'medium', 'high', 'critical') OR criticality_level IS NULL",
+            name='check_valid_criticality_level'
         ),
     )
 
@@ -111,7 +121,12 @@ class Equipment(db.Model):
             'model_number': self.model_number,
             'installation_date': self.installation_date.isoformat() if self.installation_date else None,
             'created_by_id': self.created_by_id,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            # Cost and risk tracking
+            'hourly_cost': float(self.hourly_cost) if self.hourly_cost else None,
+            'criticality_level': self.criticality_level,
+            'last_risk_score': float(self.last_risk_score) if self.last_risk_score else None,
+            'risk_score_updated_at': self.risk_score_updated_at.isoformat() if self.risk_score_updated_at else None
         }
 
     @staticmethod

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card,
   Row,
@@ -18,6 +18,11 @@ import {
   message,
   Typography,
   Divider,
+  Tooltip,
+  Checkbox,
+  Slider,
+  Collapse,
+  Badge,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -25,14 +30,30 @@ import {
   StopOutlined,
   ToolOutlined,
   ClockCircleOutlined,
+  SearchOutlined,
+  CloseCircleOutlined,
+  FilterOutlined,
+  SaveOutlined,
+  ReloadOutlined,
+  WarningOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { equipmentApi } from '@inspection/shared';
+import { equipmentApi, RiskLevel } from '@inspection/shared';
 import { useAuth } from '../providers/AuthProvider';
+import {
+  EquipmentKPICard,
+  EquipmentAlertsDrawer,
+  EquipmentTrendChart,
+  EquipmentQuickActions,
+  EquipmentBulkActionsBar,
+  HealthScoreTag,
+} from '../components/equipment';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+const { Panel } = Collapse;
 
 interface EquipmentCard {
   id: number;
@@ -41,6 +62,11 @@ interface EquipmentCard {
   status: string;
   status_color: 'green' | 'yellow' | 'red';
   days_stopped: number | null;
+  health_score?: number;
+  last_inspection_date?: string;
+  next_maintenance_date?: string;
+  has_anomaly?: boolean;
+  risk_level?: RiskLevel;
 }
 
 interface EquipmentGroup {
@@ -87,6 +113,22 @@ interface EquipmentDetails {
   status_sources: { type: string; id: number; message: string; date: string }[];
 }
 
+interface FilterState {
+  status_color?: string;
+  berth?: string;
+  risk_level?: RiskLevel;
+  days_stopped_min?: number;
+  days_stopped_max?: number;
+  last_inspection?: 'today' | 'week' | 'month' | 'overdue';
+  search?: string;
+}
+
+interface FilterPreset {
+  id: string;
+  name: string;
+  filters: FilterState;
+}
+
 const statusColorMap: Record<string, string> = {
   active: 'green',
   under_maintenance: 'orange',
@@ -103,28 +145,81 @@ const statusLabelMap: Record<string, string> = {
   out_of_service: 'Out of Service',
 };
 
+const riskLevelColors: Record<RiskLevel, string> = {
+  low: '#52c41a',
+  medium: '#faad14',
+  high: '#fa8c16',
+  critical: '#ff4d4f',
+};
+
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function EquipmentDashboardPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
-  const [berthFilter, setBerthFilter] = useState<string | undefined>(undefined);
+  // Filters state
+  const [filters, setFilters] = useState<FilterState>({});
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
+  const [filterPresets, setFilterPresets] = useState<FilterPreset[]>(() => {
+    const saved = localStorage.getItem('equipment-filter-presets');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [savePresetModalOpen, setSavePresetModalOpen] = useState(false);
+  const [presetName, setPresetName] = useState('');
+
+  // Selection state
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<number[]>([]);
   const [selectedEquipmentId, setSelectedEquipmentId] = useState<number | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+
+  // UI state
+  const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const [form] = Form.useForm();
 
   const canEdit = user?.role === 'admin' || user?.role === 'engineer';
 
+  // Update search in filters when debounced value changes
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, search: debouncedSearch || undefined }));
+  }, [debouncedSearch]);
+
+  // Save filter presets to localStorage
+  useEffect(() => {
+    localStorage.setItem('equipment-filter-presets', JSON.stringify(filterPresets));
+  }, [filterPresets]);
+
+  // Fetch KPIs
+  const { data: kpis, isLoading: kpisLoading } = useQuery({
+    queryKey: ['equipment-kpis'],
+    queryFn: async () => {
+      const res = await equipmentApi.getKPIs();
+      return res.data?.data;
+    },
+  });
+
   // Fetch dashboard data
   const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
-    queryKey: ['equipment-dashboard', statusFilter, berthFilter],
+    queryKey: ['equipment-dashboard', filters.status_color, filters.berth],
     queryFn: async () => {
       const params: Record<string, string> = {};
-      if (statusFilter) params.status_color = statusFilter;
-      if (berthFilter) params.berth = berthFilter;
+      if (filters.status_color) params.status_color = filters.status_color;
+      if (filters.berth) params.berth = filters.berth;
       const res = await equipmentApi.getDashboard(params);
       return res.data?.data as DashboardData;
     },
@@ -161,6 +256,7 @@ export default function EquipmentDashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['equipment-dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['equipment-details', selectedEquipmentId] });
       queryClient.invalidateQueries({ queryKey: ['equipment-status-history', selectedEquipmentId] });
+      queryClient.invalidateQueries({ queryKey: ['equipment-kpis'] });
       setEditMode(false);
       form.resetFields();
     },
@@ -170,10 +266,79 @@ export default function EquipmentDashboardPage() {
     },
   });
 
+  // Filter equipment based on search and advanced filters
+  const filteredGroups = useMemo(() => {
+    if (!dashboardData?.groups) return [];
+
+    return dashboardData.groups
+      .map((group) => ({
+        ...group,
+        equipment: group.equipment.filter((eq) => {
+          // Search filter
+          if (filters.search) {
+            const searchLower = filters.search.toLowerCase();
+            const matchesSearch =
+              eq.name.toLowerCase().includes(searchLower) ||
+              (eq.name_ar && eq.name_ar.includes(filters.search));
+            if (!matchesSearch) return false;
+          }
+
+          // Risk level filter
+          if (filters.risk_level && eq.risk_level !== filters.risk_level) {
+            return false;
+          }
+
+          // Days stopped range filter
+          if (filters.days_stopped_min !== undefined || filters.days_stopped_max !== undefined) {
+            const days = eq.days_stopped ?? 0;
+            if (filters.days_stopped_min !== undefined && days < filters.days_stopped_min) {
+              return false;
+            }
+            if (filters.days_stopped_max !== undefined && days > filters.days_stopped_max) {
+              return false;
+            }
+          }
+
+          // Last inspection filter
+          if (filters.last_inspection && eq.last_inspection_date) {
+            const lastInspection = new Date(eq.last_inspection_date);
+            const now = new Date();
+            const daysDiff = Math.floor((now.getTime() - lastInspection.getTime()) / (1000 * 60 * 60 * 24));
+
+            switch (filters.last_inspection) {
+              case 'today':
+                if (daysDiff > 0) return false;
+                break;
+              case 'week':
+                if (daysDiff > 7) return false;
+                break;
+              case 'month':
+                if (daysDiff > 30) return false;
+                break;
+              case 'overdue':
+                if (daysDiff <= 30) return false;
+                break;
+            }
+          }
+
+          return true;
+        }),
+      }))
+      .filter((group) => group.equipment.length > 0);
+  }, [dashboardData?.groups, filters]);
+
   const handleCardClick = (equipmentId: number) => {
     setSelectedEquipmentId(equipmentId);
     setDetailModalOpen(true);
     setEditMode(false);
+  };
+
+  const handleCardSelect = (equipmentId: number, selected: boolean) => {
+    if (selected) {
+      setSelectedEquipmentIds((prev) => [...prev, equipmentId]);
+    } else {
+      setSelectedEquipmentIds((prev) => prev.filter((id) => id !== equipmentId));
+    }
   };
 
   const handleCloseModal = () => {
@@ -189,6 +354,40 @@ export default function EquipmentDashboardPage() {
     });
   };
 
+  const handleSavePreset = () => {
+    if (!presetName.trim()) {
+      message.warning(t('equipment.presetNameRequired', 'Please enter a preset name'));
+      return;
+    }
+    const newPreset: FilterPreset = {
+      id: Date.now().toString(),
+      name: presetName.trim(),
+      filters: { ...filters },
+    };
+    setFilterPresets((prev) => [...prev, newPreset]);
+    setSavePresetModalOpen(false);
+    setPresetName('');
+    message.success(t('equipment.presetSaved', 'Filter preset saved'));
+  };
+
+  const handleLoadPreset = (preset: FilterPreset) => {
+    setFilters(preset.filters);
+    setSearchInput(preset.filters.search || '');
+    message.success(t('equipment.presetLoaded', 'Filter preset loaded'));
+  };
+
+  const handleDeletePreset = (presetId: string) => {
+    setFilterPresets((prev) => prev.filter((p) => p.id !== presetId));
+    message.success(t('equipment.presetDeleted', 'Filter preset deleted'));
+  };
+
+  const clearAllFilters = () => {
+    setFilters({});
+    setSearchInput('');
+  };
+
+  const hasActiveFilters = Object.values(filters).some((v) => v !== undefined && v !== '');
+
   const getStatusIcon = (color: string) => {
     switch (color) {
       case 'green':
@@ -202,16 +401,45 @@ export default function EquipmentDashboardPage() {
     }
   };
 
-  const getCardStyle = (color: string) => {
+  const getCardStyle = (color: string, hasAnomaly?: boolean) => {
     const styles: Record<string, React.CSSProperties> = {
       green: { borderLeft: '4px solid #52c41a', background: '#f6ffed' },
       yellow: { borderLeft: '4px solid #faad14', background: '#fffbe6' },
       red: { borderLeft: '4px solid #ff4d4f', background: '#fff2f0' },
     };
-    return styles[color] || {};
+    const baseStyle = styles[color] || {};
+    if (hasAnomaly) {
+      return {
+        ...baseStyle,
+        boxShadow: '0 0 0 2px #ff4d4f40',
+        animation: 'pulse 2s infinite',
+      };
+    }
+    return baseStyle;
   };
 
-  if (dashboardLoading) {
+  const formatDaysSince = (dateString?: string) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const now = new Date();
+    const days = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (days === 0) return t('equipment.today', 'Today');
+    if (days === 1) return t('equipment.yesterday', 'Yesterday');
+    return `${days} ${t('equipment.daysAgo', 'days ago')}`;
+  };
+
+  const formatDaysUntil = (dateString?: string) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const now = new Date();
+    const days = Math.floor((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (days < 0) return <Text type="danger">{t('equipment.overdue', 'Overdue')}</Text>;
+    if (days === 0) return <Text type="warning">{t('equipment.today', 'Today')}</Text>;
+    if (days === 1) return t('equipment.tomorrow', 'Tomorrow');
+    return `${days} ${t('equipment.daysRemaining', 'days')}`;
+  };
+
+  if (dashboardLoading && !dashboardData) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
         <Spin size="large" />
@@ -220,92 +448,299 @@ export default function EquipmentDashboardPage() {
   }
 
   const summary = dashboardData?.summary || { green: 0, yellow: 0, red: 0 };
-  const groups = dashboardData?.groups || [];
 
   return (
     <div style={{ padding: 24 }}>
-      <Title level={3}>{t('equipment.dashboard', 'Equipment Dashboard')}</Title>
+      {/* Header with Search */}
+      <Row gutter={16} align="middle" style={{ marginBottom: 24 }}>
+        <Col flex="auto">
+          <Title level={3} style={{ margin: 0 }}>
+            {t('equipment.dashboard', 'Equipment Dashboard')}
+          </Title>
+        </Col>
+        <Col flex="400px">
+          <Input
+            placeholder={t('equipment.searchPlaceholder', 'Search by name, serial, type, location...')}
+            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+            suffix={
+              searchInput ? (
+                <CloseCircleOutlined
+                  style={{ color: '#bfbfbf', cursor: 'pointer' }}
+                  onClick={() => setSearchInput('')}
+                />
+              ) : null
+            }
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            allowClear={false}
+            size="large"
+          />
+        </Col>
+      </Row>
 
-      {/* Summary Cards */}
+      {/* KPI Summary Cards */}
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col xs={12} sm={6}>
+          <EquipmentKPICard
+            title={t('equipment.uptime', 'Uptime')}
+            value={kpis?.uptime_percentage?.toFixed(1) || '0'}
+            suffix="%"
+            icon="uptime"
+            color="green"
+            trend={kpis?.uptime_trend ? `${kpis.uptime_trend > 0 ? '+' : ''}${kpis.uptime_trend.toFixed(1)}%` : undefined}
+            trendDirection={kpis?.uptime_trend && kpis.uptime_trend > 0 ? 'up' : kpis?.uptime_trend && kpis.uptime_trend < 0 ? 'down' : undefined}
+            loading={kpisLoading}
+            tooltip={t('equipment.uptimeTooltip', 'Percentage of equipment currently active')}
+          />
+        </Col>
+        <Col xs={12} sm={6}>
+          <EquipmentKPICard
+            title={t('equipment.avgDowntime', 'Avg Downtime')}
+            value={kpis?.avg_downtime_hours?.toFixed(1) || '0'}
+            suffix="h"
+            icon="downtime"
+            color="blue"
+            loading={kpisLoading}
+            tooltip={t('equipment.downtimeTooltip', 'Average downtime hours for stopped equipment')}
+          />
+        </Col>
+        <Col xs={12} sm={6}>
+          <EquipmentKPICard
+            title={t('equipment.atRisk', 'At Risk')}
+            value={kpis?.at_risk_count || 0}
+            icon="risk"
+            color="orange"
+            loading={kpisLoading}
+            tooltip={t('equipment.atRiskTooltip', 'Equipment with high risk scores')}
+          />
+        </Col>
+        <Col xs={12} sm={6}>
+          <EquipmentKPICard
+            title={t('equipment.alerts', 'Alerts')}
+            value={kpis?.active_alerts_count || 0}
+            icon="alerts"
+            color="red"
+            loading={kpisLoading}
+            onClick={() => setAlertsDrawerOpen(true)}
+            tooltip={t('equipment.alertsTooltip', 'Click to view active alerts')}
+          />
+        </Col>
+      </Row>
+
+      {/* Status Summary Cards */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col xs={8}>
           <Card
             hoverable
-            onClick={() => setStatusFilter(statusFilter === 'green' ? undefined : 'green')}
+            onClick={() => setFilters((prev) => ({ ...prev, status_color: prev.status_color === 'green' ? undefined : 'green' }))}
             style={{
-              background: statusFilter === 'green' ? '#52c41a' : '#f6ffed',
+              background: filters.status_color === 'green' ? '#52c41a' : '#f6ffed',
               cursor: 'pointer',
             }}
           >
             <Statistic
-              title={<span style={{ color: statusFilter === 'green' ? '#fff' : '#52c41a' }}>{t('equipment.active', 'Active')}</span>}
+              title={<span style={{ color: filters.status_color === 'green' ? '#fff' : '#52c41a' }}>{t('equipment.active', 'Active')}</span>}
               value={summary.green}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: statusFilter === 'green' ? '#fff' : '#52c41a' }}
+              valueStyle={{ color: filters.status_color === 'green' ? '#fff' : '#52c41a' }}
             />
           </Card>
         </Col>
         <Col xs={8}>
           <Card
             hoverable
-            onClick={() => setStatusFilter(statusFilter === 'yellow' ? undefined : 'yellow')}
+            onClick={() => setFilters((prev) => ({ ...prev, status_color: prev.status_color === 'yellow' ? undefined : 'yellow' }))}
             style={{
-              background: statusFilter === 'yellow' ? '#faad14' : '#fffbe6',
+              background: filters.status_color === 'yellow' ? '#faad14' : '#fffbe6',
               cursor: 'pointer',
             }}
           >
             <Statistic
-              title={<span style={{ color: statusFilter === 'yellow' ? '#fff' : '#faad14' }}>{t('equipment.maintenance', 'Maintenance')}</span>}
+              title={<span style={{ color: filters.status_color === 'yellow' ? '#fff' : '#faad14' }}>{t('equipment.maintenance', 'Maintenance')}</span>}
               value={summary.yellow}
               prefix={<ToolOutlined />}
-              valueStyle={{ color: statusFilter === 'yellow' ? '#fff' : '#faad14' }}
+              valueStyle={{ color: filters.status_color === 'yellow' ? '#fff' : '#faad14' }}
             />
           </Card>
         </Col>
         <Col xs={8}>
           <Card
             hoverable
-            onClick={() => setStatusFilter(statusFilter === 'red' ? undefined : 'red')}
+            onClick={() => setFilters((prev) => ({ ...prev, status_color: prev.status_color === 'red' ? undefined : 'red' }))}
             style={{
-              background: statusFilter === 'red' ? '#ff4d4f' : '#fff2f0',
+              background: filters.status_color === 'red' ? '#ff4d4f' : '#fff2f0',
               cursor: 'pointer',
             }}
           >
             <Statistic
-              title={<span style={{ color: statusFilter === 'red' ? '#fff' : '#ff4d4f' }}>{t('equipment.stopped', 'Stopped')}</span>}
+              title={<span style={{ color: filters.status_color === 'red' ? '#fff' : '#ff4d4f' }}>{t('equipment.stopped', 'Stopped')}</span>}
               value={summary.red}
               prefix={<StopOutlined />}
-              valueStyle={{ color: statusFilter === 'red' ? '#fff' : '#ff4d4f' }}
+              valueStyle={{ color: filters.status_color === 'red' ? '#fff' : '#ff4d4f' }}
             />
           </Card>
         </Col>
       </Row>
 
+      {/* Trend Chart */}
+      <EquipmentTrendChart defaultPeriod="7d" collapsible defaultCollapsed={false} />
+
       {/* Filters */}
-      <Space style={{ marginBottom: 16 }}>
-        <Select
-          placeholder={t('equipment.filterByBerth', 'Filter by Berth')}
-          allowClear
-          style={{ width: 150 }}
-          value={berthFilter}
-          onChange={(v) => setBerthFilter(v)}
-        >
-          <Select.Option value="east">{t('equipment.east', 'East')}</Select.Option>
-          <Select.Option value="west">{t('equipment.west', 'West')}</Select.Option>
-          <Select.Option value="both">{t('equipment.both', 'Both')}</Select.Option>
-        </Select>
-        {(statusFilter || berthFilter) && (
-          <Button onClick={() => { setStatusFilter(undefined); setBerthFilter(undefined); }}>
-            {t('common.clearFilters', 'Clear Filters')}
-          </Button>
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Row gutter={16} align="middle">
+          <Col>
+            <Select
+              placeholder={t('equipment.filterByBerth', 'Filter by Berth')}
+              allowClear
+              style={{ width: 150 }}
+              value={filters.berth}
+              onChange={(v) => setFilters((prev) => ({ ...prev, berth: v }))}
+            >
+              <Select.Option value="east">{t('equipment.east', 'East')}</Select.Option>
+              <Select.Option value="west">{t('equipment.west', 'West')}</Select.Option>
+              <Select.Option value="both">{t('equipment.both', 'Both')}</Select.Option>
+            </Select>
+          </Col>
+          <Col>
+            <Button
+              icon={<FilterOutlined />}
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              type={showAdvancedFilters ? 'primary' : 'default'}
+            >
+              {t('equipment.advancedFilters', 'Advanced Filters')}
+            </Button>
+          </Col>
+          {hasActiveFilters && (
+            <Col>
+              <Button icon={<ReloadOutlined />} onClick={clearAllFilters}>
+                {t('common.clearFilters', 'Clear Filters')}
+              </Button>
+            </Col>
+          )}
+          <Col flex="auto" />
+          <Col>
+            <Space>
+              {filterPresets.length > 0 && (
+                <Select
+                  placeholder={t('equipment.loadPreset', 'Load Preset')}
+                  style={{ width: 150 }}
+                  allowClear
+                  onSelect={(value) => {
+                    const preset = filterPresets.find((p) => p.id === value);
+                    if (preset) handleLoadPreset(preset);
+                  }}
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <Divider style={{ margin: '8px 0' }} />
+                      {filterPresets.map((preset) => (
+                        <div key={preset.id} style={{ padding: '4px 12px', display: 'flex', justifyContent: 'space-between' }}>
+                          <Text ellipsis style={{ maxWidth: 100 }}>{preset.name}</Text>
+                          <Button
+                            type="text"
+                            danger
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePreset(preset.id);
+                            }}
+                          >
+                            {t('common.delete', 'Delete')}
+                          </Button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                >
+                  {filterPresets.map((preset) => (
+                    <Select.Option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              )}
+              {hasActiveFilters && (
+                <Button icon={<SaveOutlined />} onClick={() => setSavePresetModalOpen(true)}>
+                  {t('equipment.savePreset', 'Save Preset')}
+                </Button>
+              )}
+            </Space>
+          </Col>
+        </Row>
+
+        {/* Advanced Filters Panel */}
+        {showAdvancedFilters && (
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+            <Row gutter={24}>
+              <Col xs={24} sm={8}>
+                <Text type="secondary">{t('equipment.riskLevel', 'Risk Level')}</Text>
+                <Select
+                  placeholder={t('equipment.selectRiskLevel', 'Select Risk Level')}
+                  allowClear
+                  style={{ width: '100%', marginTop: 8 }}
+                  value={filters.risk_level}
+                  onChange={(v) => setFilters((prev) => ({ ...prev, risk_level: v }))}
+                >
+                  <Select.Option value="low">
+                    <Tag color="green">{t('equipment.low', 'Low')}</Tag>
+                  </Select.Option>
+                  <Select.Option value="medium">
+                    <Tag color="gold">{t('equipment.medium', 'Medium')}</Tag>
+                  </Select.Option>
+                  <Select.Option value="high">
+                    <Tag color="orange">{t('equipment.high', 'High')}</Tag>
+                  </Select.Option>
+                  <Select.Option value="critical">
+                    <Tag color="red">{t('equipment.critical', 'Critical')}</Tag>
+                  </Select.Option>
+                </Select>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Text type="secondary">{t('equipment.daysStopped', 'Days Stopped Range')}</Text>
+                <Slider
+                  range
+                  min={0}
+                  max={90}
+                  defaultValue={[0, 90]}
+                  value={[filters.days_stopped_min ?? 0, filters.days_stopped_max ?? 90]}
+                  onChange={([min, max]) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      days_stopped_min: min === 0 ? undefined : min,
+                      days_stopped_max: max === 90 ? undefined : max,
+                    }))
+                  }
+                  marks={{ 0: '0', 30: '30', 60: '60', 90: '90+' }}
+                  style={{ marginTop: 8 }}
+                />
+              </Col>
+              <Col xs={24} sm={8}>
+                <Text type="secondary">{t('equipment.lastInspection', 'Last Inspection')}</Text>
+                <Select
+                  placeholder={t('equipment.selectPeriod', 'Select Period')}
+                  allowClear
+                  style={{ width: '100%', marginTop: 8 }}
+                  value={filters.last_inspection}
+                  onChange={(v) => setFilters((prev) => ({ ...prev, last_inspection: v }))}
+                >
+                  <Select.Option value="today">{t('equipment.inspectedToday', 'Inspected Today')}</Select.Option>
+                  <Select.Option value="week">{t('equipment.thisWeek', 'This Week')}</Select.Option>
+                  <Select.Option value="month">{t('equipment.thisMonth', 'This Month')}</Select.Option>
+                  <Select.Option value="overdue">
+                    <Text type="danger">{t('equipment.overdueInspection', 'Overdue (>30 days)')}</Text>
+                  </Select.Option>
+                </Select>
+              </Col>
+            </Row>
+          </div>
         )}
-      </Space>
+      </Card>
 
       {/* Equipment Groups */}
-      {groups.length === 0 ? (
+      {filteredGroups.length === 0 ? (
         <Empty description={t('equipment.noEquipment', 'No equipment found')} />
       ) : (
-        groups.map((group, idx) => (
+        filteredGroups.map((group, idx) => (
           <Card
             key={idx}
             title={`${group.equipment_type} - ${group.berth ? group.berth.charAt(0).toUpperCase() + group.berth.slice(1) : 'Unassigned'}`}
@@ -313,28 +748,147 @@ export default function EquipmentDashboardPage() {
             size="small"
           >
             <Row gutter={[12, 12]}>
-              {group.equipment.map((eq) => (
-                <Col key={eq.id} xs={12} sm={8} md={6} lg={4}>
-                  <Card
-                    hoverable
-                    size="small"
-                    style={{ ...getCardStyle(eq.status_color), textAlign: 'center' }}
-                    onClick={() => handleCardClick(eq.id)}
-                  >
-                    {getStatusIcon(eq.status_color)}
-                    <div style={{ marginTop: 8, fontWeight: 600 }}>{eq.name}</div>
-                    {eq.days_stopped !== null && eq.days_stopped > 0 && (
-                      <Tag color="red" style={{ marginTop: 4 }}>
-                        <ClockCircleOutlined /> {eq.days_stopped} {t('equipment.days', 'days')}
-                      </Tag>
-                    )}
-                  </Card>
-                </Col>
-              ))}
+              {group.equipment.map((eq) => {
+                const isSelected = selectedEquipmentIds.includes(eq.id);
+                return (
+                  <Col key={eq.id} xs={12} sm={8} md={6} lg={4}>
+                    <Card
+                      hoverable
+                      size="small"
+                      style={{
+                        ...getCardStyle(eq.status_color, eq.has_anomaly),
+                        textAlign: 'center',
+                        border: isSelected ? '2px solid #1890ff' : undefined,
+                      }}
+                      onClick={() => handleCardClick(eq.id)}
+                    >
+                      {/* Selection checkbox */}
+                      <div
+                        style={{ position: 'absolute', top: 4, left: 4 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={(e) => handleCardSelect(eq.id, e.target.checked)}
+                        />
+                      </div>
+
+                      {/* Anomaly indicator */}
+                      {eq.has_anomaly && (
+                        <Tooltip title={t('equipment.anomalyDetected', 'Anomaly Detected')}>
+                          <WarningOutlined
+                            style={{
+                              position: 'absolute',
+                              top: 4,
+                              right: 4,
+                              color: '#ff4d4f',
+                              fontSize: 16,
+                            }}
+                          />
+                        </Tooltip>
+                      )}
+
+                      {/* Status icon */}
+                      {getStatusIcon(eq.status_color)}
+
+                      {/* Equipment name */}
+                      <div style={{ marginTop: 8, fontWeight: 600, fontSize: 13 }}>{eq.name}</div>
+
+                      {/* Health score badge */}
+                      {eq.health_score !== undefined && (
+                        <div style={{ marginTop: 4 }}>
+                          <HealthScoreTag score={eq.health_score} />
+                        </div>
+                      )}
+
+                      {/* Risk level */}
+                      {eq.risk_level && (
+                        <Tag
+                          color={riskLevelColors[eq.risk_level]}
+                          style={{ marginTop: 4, fontSize: 10 }}
+                        >
+                          {eq.risk_level.toUpperCase()}
+                        </Tag>
+                      )}
+
+                      {/* Days stopped */}
+                      {eq.days_stopped !== null && eq.days_stopped > 0 && (
+                        <Tag color="red" style={{ marginTop: 4 }}>
+                          <ClockCircleOutlined /> {eq.days_stopped} {t('equipment.days', 'days')}
+                        </Tag>
+                      )}
+
+                      {/* Last inspection */}
+                      {eq.last_inspection_date && (
+                        <div style={{ marginTop: 4, fontSize: 10, color: '#8c8c8c' }}>
+                          <CalendarOutlined /> {formatDaysSince(eq.last_inspection_date)}
+                        </div>
+                      )}
+
+                      {/* Next maintenance */}
+                      {eq.next_maintenance_date && (
+                        <div style={{ marginTop: 2, fontSize: 10, color: '#8c8c8c' }}>
+                          <ToolOutlined /> {formatDaysUntil(eq.next_maintenance_date)}
+                        </div>
+                      )}
+
+                      {/* Quick actions */}
+                      <div style={{ marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+                        <EquipmentQuickActions
+                          equipmentId={eq.id}
+                          equipmentName={eq.name}
+                          currentStatus={eq.status}
+                          compact
+                          onViewDetails={() => handleCardClick(eq.id)}
+                          onInspect={() => {
+                            message.info(t('equipment.startInspection', 'Starting inspection...'));
+                            // Navigate to inspection page
+                          }}
+                        />
+                      </div>
+                    </Card>
+                  </Col>
+                );
+              })}
             </Row>
           </Card>
         ))
       )}
+
+      {/* Bulk Actions Bar */}
+      <EquipmentBulkActionsBar
+        selectedIds={selectedEquipmentIds}
+        onClear={() => setSelectedEquipmentIds([])}
+      />
+
+      {/* Alerts Drawer */}
+      <EquipmentAlertsDrawer
+        open={alertsDrawerOpen}
+        onClose={() => setAlertsDrawerOpen(false)}
+        onViewEquipment={(equipmentId) => {
+          setAlertsDrawerOpen(false);
+          handleCardClick(equipmentId);
+        }}
+      />
+
+      {/* Save Preset Modal */}
+      <Modal
+        title={t('equipment.saveFilterPreset', 'Save Filter Preset')}
+        open={savePresetModalOpen}
+        onCancel={() => {
+          setSavePresetModalOpen(false);
+          setPresetName('');
+        }}
+        onOk={handleSavePreset}
+        okText={t('common.save', 'Save')}
+      >
+        <Input
+          placeholder={t('equipment.presetNamePlaceholder', 'Enter preset name...')}
+          value={presetName}
+          onChange={(e) => setPresetName(e.target.value)}
+          style={{ marginTop: 16 }}
+        />
+      </Modal>
 
       {/* Detail Modal */}
       <Modal
@@ -501,6 +1055,15 @@ export default function EquipmentDashboardPage() {
           <Empty />
         )}
       </Modal>
+
+      {/* CSS for pulse animation */}
+      <style>{`
+        @keyframes pulse {
+          0% { box-shadow: 0 0 0 2px #ff4d4f40; }
+          50% { box-shadow: 0 0 0 4px #ff4d4f20; }
+          100% { box-shadow: 0 0 0 2px #ff4d4f40; }
+        }
+      `}</style>
     </div>
   );
 }

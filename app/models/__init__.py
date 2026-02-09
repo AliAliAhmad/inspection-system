@@ -76,6 +76,11 @@ from app.models.work_plan_daily_review import WorkPlanDailyReview
 from app.models.work_plan_carry_over import WorkPlanCarryOver
 from app.models.work_plan_performance import WorkPlanPerformance
 
+# Equipment Advanced Features
+from app.models.equipment_watch import EquipmentWatch
+from app.models.equipment_note import EquipmentNote
+from app.models.equipment_certification import EquipmentCertification
+
 __all__ = [
     'User',
     'Equipment',
@@ -131,4 +136,8 @@ __all__ = [
     'WorkPlanDailyReview',
     'WorkPlanCarryOver',
     'WorkPlanPerformance',
+    # Equipment Advanced Features
+    'EquipmentWatch',
+    'EquipmentNote',
+    'EquipmentCertification',
 ]
