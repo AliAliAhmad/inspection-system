@@ -162,4 +162,15 @@ export const workPlansApi = {
   clearPool(weekStart: string) {
     return getApiClient().post<{ status: string; deleted: number }>(`/api/work-plans/clear-pool/${weekStart}`);
   },
+
+  // Auto-schedule jobs from pool to calendar
+  autoSchedule(planId: number, options?: { include_weekends?: boolean; max_hours_per_day?: number; berth?: string }) {
+    return getApiClient().post<{
+      status: string;
+      message: string;
+      scheduled: number;
+      skipped: number;
+      total_in_pool: number;
+    }>(`/api/work-plans/${planId}/auto-schedule`, options);
+  },
 };

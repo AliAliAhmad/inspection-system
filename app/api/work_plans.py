@@ -1552,6 +1552,214 @@ def download_day_pdf(plan_id, day_date):
 
 # ==================== EMAIL SETTINGS ====================
 
+@bp.route('/<int:plan_id>/auto-schedule', methods=['POST'])
+@jwt_required()
+def auto_schedule(plan_id):
+    """
+    Auto-schedule jobs from the pool to the calendar.
+
+    Algorithm:
+    1. Get all pending SAP orders from pool
+    2. Sort by: critical first, then overdue, then priority (urgent > high > normal > low)
+    3. Distribute across days, balancing hours (target max 8h/day per berth)
+    4. Skip weekends unless forced
+
+    Request body (optional):
+        {
+            "include_weekends": false,
+            "max_hours_per_day": 8,
+            "berth": "east" | "west" | "both"  // optional filter
+        }
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot auto-schedule on a published work plan")
+
+    data = request.get_json() or {}
+    include_weekends = data.get('include_weekends', False)
+    max_hours_per_day = data.get('max_hours_per_day', 8)
+    berth_filter = data.get('berth')
+
+    # Get pending SAP orders
+    sap_query = SAPWorkOrder.query.filter_by(work_plan_id=plan.id, status='pending')
+    if berth_filter and berth_filter != 'both':
+        sap_query = sap_query.filter(
+            db.or_(SAPWorkOrder.berth == berth_filter, SAPWorkOrder.berth == 'both', SAPWorkOrder.berth == None)
+        )
+
+    pending_orders = sap_query.all()
+
+    if not pending_orders:
+        return jsonify({
+            'status': 'success',
+            'message': 'No jobs to schedule',
+            'scheduled': 0
+        }), 200
+
+    # Define priority scoring
+    def get_priority_score(order):
+        score = 0
+        # Critical overdue gets highest priority
+        if order.overdue_value and order.overdue_value > 0:
+            if order.overdue_unit == 'hours' and order.overdue_value > 100:
+                score += 1000  # Critical
+            elif order.overdue_unit == 'days' and order.overdue_value > 7:
+                score += 1000  # Critical
+            else:
+                score += 500  # Overdue but not critical
+
+        # Priority levels
+        priority_scores = {'urgent': 400, 'high': 300, 'normal': 200, 'low': 100}
+        score += priority_scores.get(order.priority, 200)
+
+        # Earlier required date = higher priority
+        if order.required_date:
+            days_until = (order.required_date - datetime.utcnow().date()).days
+            if days_until < 0:
+                score += 200  # Past due
+            elif days_until < 3:
+                score += 100  # Due soon
+
+        return score
+
+    # Sort orders by priority (highest first)
+    pending_orders.sort(key=get_priority_score, reverse=True)
+
+    # Get available days (sorted by date)
+    available_days = []
+    for day in sorted(plan.days, key=lambda d: d.date):
+        # Skip weekends unless included
+        if not include_weekends and day.date.weekday() >= 5:
+            continue
+        available_days.append(day)
+
+    if not available_days:
+        raise ValidationError("No available days for scheduling (weekends excluded)")
+
+    # Track hours per day per berth
+    hours_per_day = {day.id: {'east': 0, 'west': 0, 'both': 0} for day in available_days}
+
+    # Calculate existing hours
+    for day in available_days:
+        for job in day.jobs:
+            job_berth = job.berth or 'both'
+            hours_per_day[day.id][job_berth] += job.estimated_hours
+
+    scheduled_count = 0
+    skipped_count = 0
+
+    # Schedule each order
+    for order in pending_orders:
+        order_berth = order.berth or 'both'
+        order_hours = order.estimated_hours or 4
+
+        # Find best day (least loaded that can fit this job)
+        best_day = None
+        best_day_hours = float('inf')
+
+        for day in available_days:
+            # Calculate total hours for the relevant berth(s)
+            if order_berth == 'both':
+                current_hours = max(hours_per_day[day.id]['east'], hours_per_day[day.id]['west'], hours_per_day[day.id]['both'])
+            else:
+                current_hours = hours_per_day[day.id][order_berth] + hours_per_day[day.id]['both']
+
+            # Check if we can fit this job
+            if current_hours + order_hours <= max_hours_per_day:
+                if current_hours < best_day_hours:
+                    best_day = day
+                    best_day_hours = current_hours
+
+        # If no day fits within max hours, find the least loaded day anyway
+        if not best_day:
+            for day in available_days:
+                if order_berth == 'both':
+                    current_hours = max(hours_per_day[day.id]['east'], hours_per_day[day.id]['west'], hours_per_day[day.id]['both'])
+                else:
+                    current_hours = hours_per_day[day.id][order_berth] + hours_per_day[day.id]['both']
+
+                if current_hours < best_day_hours:
+                    best_day = day
+                    best_day_hours = current_hours
+
+        if not best_day:
+            skipped_count += 1
+            continue
+
+        # Find PM template if applicable
+        pm_template_id = None
+        if order.job_type == 'pm' and order.cycle_id:
+            equipment = db.session.get(Equipment, order.equipment_id)
+            if equipment:
+                pm_template = PMTemplate.find_for_job(equipment.equipment_type, order.cycle_id)
+                if pm_template:
+                    pm_template_id = pm_template.id
+
+        # Get next position
+        max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
+            work_plan_day_id=best_day.id
+        ).scalar() or 0
+
+        # Create the job
+        job = WorkPlanJob(
+            work_plan_day_id=best_day.id,
+            job_type=order.job_type,
+            berth=order.berth,
+            equipment_id=order.equipment_id,
+            sap_order_number=order.order_number,
+            sap_order_type=order.order_type,
+            description=order.description,
+            cycle_id=order.cycle_id,
+            pm_template_id=pm_template_id,
+            overdue_value=order.overdue_value,
+            overdue_unit=order.overdue_unit,
+            maintenance_base=order.maintenance_base,
+            planned_date=order.planned_date or order.required_date,
+            estimated_hours=order_hours,
+            position=max_position + 1,
+            priority=order.priority,
+            notes=order.notes
+        )
+
+        db.session.add(job)
+        db.session.flush()
+
+        # Auto-add materials from PM template
+        if pm_template_id:
+            pm_template = db.session.get(PMTemplate, pm_template_id)
+            if pm_template:
+                for tm in pm_template.materials:
+                    wpm = WorkPlanMaterial(
+                        work_plan_job_id=job.id,
+                        material_id=tm.material_id,
+                        quantity=tm.quantity
+                    )
+                    db.session.add(wpm)
+
+        # Mark SAP order as scheduled
+        order.status = 'scheduled'
+
+        # Update hours tracking
+        hours_per_day[best_day.id][order_berth] += order_hours
+
+        scheduled_count += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Auto-scheduled {scheduled_count} jobs',
+        'scheduled': scheduled_count,
+        'skipped': skipped_count,
+        'total_in_pool': len(pending_orders)
+    }), 200
+
+
 @bp.route('/email/test', methods=['POST'])
 @jwt_required()
 def test_email():

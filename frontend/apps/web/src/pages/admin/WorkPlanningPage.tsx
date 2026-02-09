@@ -290,6 +290,25 @@ export default function WorkPlanningPage() {
     },
   });
 
+  // Auto-schedule mutation
+  const autoScheduleMutation = useMutation({
+    mutationFn: (options?: { include_weekends?: boolean; max_hours_per_day?: number; berth?: string }) =>
+      workPlansApi.autoSchedule(currentPlan!.id, options),
+    onSuccess: (response) => {
+      const data = response.data;
+      if (data.scheduled > 0) {
+        message.success(`🚀 Auto-scheduled ${data.scheduled} jobs! ${data.skipped > 0 ? `(${data.skipped} skipped)` : ''}`);
+      } else {
+        message.info('No jobs were scheduled. Pool may be empty.');
+      }
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Auto-schedule failed');
+    },
+  });
+
   // Fetch equipment list for Add Job form
   const { data: equipmentData } = useQuery({
     queryKey: ['equipment-list'],
@@ -496,6 +515,36 @@ export default function WorkPlanningPage() {
                   />
                 )}
                 <ViewToggle value={viewMode} onChange={setViewMode} />
+                {/* Auto-Schedule Button - Prominent */}
+                {currentPlan && isDraft && (
+                  <Button
+                    type="primary"
+                    style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderColor: '#667eea' }}
+                    onClick={() => {
+                      Modal.confirm({
+                        title: '🚀 Auto-Schedule Jobs',
+                        content: (
+                          <div>
+                            <p>This will automatically distribute all jobs from the pool to the calendar based on:</p>
+                            <ul>
+                              <li>🔥 Critical jobs first (overdue {'>'} 100h or {'>'} 7 days)</li>
+                              <li>⚠️ Then overdue jobs</li>
+                              <li>📊 Then by priority (urgent → high → normal → low)</li>
+                              <li>⚖️ Balanced across days (max ~8h/day per berth)</li>
+                            </ul>
+                            <p style={{ marginTop: 12, color: '#8c8c8c' }}>Weekends will be skipped.</p>
+                          </div>
+                        ),
+                        okText: '🚀 Auto-Schedule',
+                        cancelText: 'Cancel',
+                        onOk: () => autoScheduleMutation.mutate({ include_weekends: false, max_hours_per_day: 8 }),
+                      });
+                    }}
+                    loading={autoScheduleMutation.isPending}
+                  >
+                    🚀 Auto-Schedule
+                  </Button>
+                )}
                 <Dropdown
                   menu={{
                     items: [
@@ -511,6 +560,21 @@ export default function WorkPlanningPage() {
                         onClick: () => {
                           window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank');
                         },
+                      },
+                      { type: 'divider' },
+                      {
+                        key: 'auto-schedule-weekends',
+                        label: '🗓️ Auto-Schedule (Include Weekends)',
+                        onClick: () => {
+                          if (currentPlan) {
+                            Modal.confirm({
+                              title: '🗓️ Auto-Schedule Including Weekends',
+                              content: 'This will schedule jobs on Saturday and Sunday as well.',
+                              onOk: () => autoScheduleMutation.mutate({ include_weekends: true, max_hours_per_day: 8 }),
+                            });
+                          }
+                        },
+                        disabled: !currentPlan || !isDraft,
                       },
                       { type: 'divider' },
                       {
