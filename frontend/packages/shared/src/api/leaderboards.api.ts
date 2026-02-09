@@ -9,10 +9,13 @@ export interface LeaderboardParams {
 export interface LeaderboardEntry {
   user_id: number;
   full_name: string;
-  employee_id: string;
+  employee_id?: string;
+  role_id?: string;
   role: string;
   total_points: number;
+  points?: number;
   rank: number;
+  specialization?: string;
 }
 
 export const leaderboardsApi = {

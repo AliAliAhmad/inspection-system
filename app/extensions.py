@@ -17,6 +17,28 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
+# SocketIO instance (initialized in app factory)
+socketio = None
+
+
+def init_socketio(app):
+    """Initialize Flask-SocketIO for WebSocket support."""
+    global socketio
+    try:
+        from flask_socketio import SocketIO
+        socketio = SocketIO(
+            app,
+            cors_allowed_origins="*",
+            async_mode='threading',
+            logger=False,
+            engineio_logger=False
+        )
+        logger.info("Flask-SocketIO initialized successfully")
+        return socketio
+    except ImportError:
+        logger.warning("Flask-SocketIO not installed, WebSocket features disabled")
+        return None
+
 
 def safe_commit():
     """Commit the current DB session with rollback on failure.

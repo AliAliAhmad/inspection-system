@@ -6,7 +6,7 @@ Creates and configures the Flask app with all extensions.
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from app.config import config
-from app.extensions import db, migrate, jwt, limiter
+from app.extensions import db, migrate, jwt, limiter, init_socketio
 from datetime import datetime
 import os
 import logging
@@ -143,6 +143,18 @@ def create_app(config_name='development'):
 
     # Work Plan Tracking & Performance
     app.register_blueprint(work_plan_tracking.bp, url_prefix='/api/work-plan-tracking')
+
+    # Initialize Flask-SocketIO for WebSocket support
+    socketio = init_socketio(app)
+    if socketio:
+        try:
+            from app.api.notifications_ws import register_socketio_handlers
+            register_socketio_handlers(socketio)
+            app.logger.info("WebSocket handlers registered for notifications")
+        except ImportError as e:
+            app.logger.warning(f"Could not register WebSocket handlers: {e}")
+        except Exception as e:
+            app.logger.error(f"Error registering WebSocket handlers: {e}")
 
     # Initialize background scheduler (not in testing)
     if config_name != 'testing':

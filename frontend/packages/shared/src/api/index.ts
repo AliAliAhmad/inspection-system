@@ -21,7 +21,17 @@ export type { CreateSchedulePayload } from './schedules.api';
 export { ratingsApi } from './ratings.api';
 export type { RateInspectionPayload } from './ratings.api';
 export { notificationsApi } from './notifications.api';
-export type { NotificationListParams } from './notifications.api';
+export type {
+  NotificationListParams,
+  SnoozePayload,
+  SchedulePayload,
+  UpdatePreferencePayload,
+  CreateRulePayload,
+  UpdateRulePayload,
+  DoNotDisturbPayload,
+  AnalyticsParams,
+  SearchParams,
+} from './notifications.api';
 export { specialistJobsApi } from './specialist-jobs.api';
 export type {
   SpecialistJobListParams,

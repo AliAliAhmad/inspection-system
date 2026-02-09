@@ -28,14 +28,18 @@ import {
   ControlOutlined,
   InboxOutlined,
   UnorderedListOutlined,
+  ThunderboltOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
-import { Badge, Dropdown, Avatar, Space, Button } from 'antd';
-import { useQuery } from '@tanstack/react-query';
+import { Dropdown, Avatar, Space } from 'antd';
 import { useAuth } from '../providers/AuthProvider';
 import { useLanguage } from '../providers/LanguageProvider';
 import { useTranslation } from 'react-i18next';
-import { notificationsApi } from '@inspection/shared';
 import { useNotificationAlerts } from '../hooks/useNotificationAlerts';
+import { useNotificationDrawer } from '../hooks/useNotificationDrawer';
+import NotificationBadge from '../components/notifications/NotificationBadge';
+import NotificationDrawer from '../components/notifications/NotificationDrawer';
+import NotificationPreferencesModal from '../components/notifications/NotificationPreferencesModal';
 
 function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] {
   // Admin and engineer have Work Planning page, others get My Work Plan
@@ -74,6 +78,8 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/reports', name: t('nav.reports'), icon: <BarChartOutlined /> },
     { path: '/admin/daily-review', name: 'Daily Review', icon: <CheckCircleOutlined /> },
     { path: '/admin/performance', name: 'Performance', icon: <BarChartOutlined /> },
+    { path: '/admin/notification-rules', name: t('nav.notification_rules'), icon: <ThunderboltOutlined /> },
+    { path: '/admin/notification-analytics', name: t('nav.notification_analytics'), icon: <LineChartOutlined /> },
   ];
 
   const inspectorItems: MenuDataItem[] = [
@@ -121,16 +127,21 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
 
   useNotificationAlerts({ user, navigate });
 
-  const { data: unreadData } = useQuery({
-    queryKey: ['notifications', 'unread-count'],
-    queryFn: () => notificationsApi.list({ unread_only: true, per_page: 1 }),
-    refetchInterval: 30_000,
-    enabled: !!user,
+  // Use the notification drawer hook
+  const {
+    isOpen: drawerOpen,
+    open: openDrawer,
+    close: closeDrawer,
+    unreadCount,
+    priorityCounts,
+  } = useNotificationDrawer({
+    userRole: user?.role,
+    pollInterval: 30000,
   });
-  const unreadCount = (unreadData?.data as any)?.pagination?.total ?? 0;
 
   if (!user) return null;
 
@@ -156,15 +167,15 @@ export default function MainLayout() {
         <div onClick={() => item.path && navigate(item.path)}>{dom}</div>
       )}
       actionsRender={() => [
-        <div
+        <NotificationBadge
           key="notifications"
-          onClick={() => navigate('/notifications')}
-          style={{ cursor: 'pointer', padding: '4px 8px', display: 'inline-flex', alignItems: 'center' }}
+          count={unreadCount}
+          priorityCounts={priorityCounts as any}
+          hasCritical={(priorityCounts?.critical || 0) > 0}
+          onClick={openDrawer}
         >
-          <Badge count={unreadCount} size="small">
-            <BellOutlined style={{ fontSize: 20 }} />
-          </Badge>
-        </div>,
+          <BellOutlined style={{ fontSize: 20, color: '#666' }} />
+        </NotificationBadge>,
         <Dropdown
           key="user"
           menu={{
@@ -184,6 +195,20 @@ export default function MainLayout() {
       ]}
     >
       <Outlet />
+
+      {/* Notification Drawer */}
+      <NotificationDrawer
+        open={drawerOpen}
+        onClose={closeDrawer}
+        onOpenPreferences={() => setPreferencesOpen(true)}
+        userRole={user?.role}
+      />
+
+      {/* Notification Preferences Modal */}
+      <NotificationPreferencesModal
+        open={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+      />
     </ProLayout>
   );
 }

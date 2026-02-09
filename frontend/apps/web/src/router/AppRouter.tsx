@@ -37,6 +37,8 @@ const PMTemplatesPage = lazy(() => import('../pages/admin/PMTemplatesPage'));
 const CyclesPage = lazy(() => import('../pages/admin/CyclesPage'));
 const DailyReviewPage = lazy(() => import('../pages/admin/DailyReviewPage'));
 const PerformanceReportPage = lazy(() => import('../pages/admin/PerformanceReportPage'));
+const NotificationRulesPage = lazy(() => import('../pages/admin/NotificationRulesPage'));
+const NotificationAnalyticsPage = lazy(() => import('../pages/admin/NotificationAnalyticsPage'));
 
 // Inspector pages
 const MyAssignmentsPage = lazy(() => import('../pages/inspector/MyAssignmentsPage'));
@@ -122,6 +124,8 @@ export default function AppRouter() {
             <Route path="daily-review" element={<RoleGuard roles={['admin', 'engineer']}><DailyReviewPage /></RoleGuard>} />
             <Route path="performance" element={<RoleGuard roles={['admin', 'engineer']}><PerformanceReportPage /></RoleGuard>} />
             <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pauses" replace />} />
+            <Route path="notification-rules" element={<RoleGuard roles={['admin']}><NotificationRulesPage /></RoleGuard>} />
+            <Route path="notification-analytics" element={<RoleGuard roles={['admin']}><NotificationAnalyticsPage /></RoleGuard>} />
           </Route>
 
           {/* Inspector routes */}

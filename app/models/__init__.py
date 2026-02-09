@@ -11,8 +11,17 @@ from app.models.inspection import Inspection, InspectionAnswer
 from app.models.defect import Defect
 from app.models.defect_occurrence import DefectOccurrence
 from app.models.schedule import InspectionSchedule, InspectionRoutine, WeeklyCompletion
-from app.models.notification import Notification
 from app.models.rating import InspectionRating
+
+# Notification System (must import NotificationGroup before Notification due to FK)
+from app.models.notification_group import NotificationGroup
+from app.models.notification import Notification
+from app.models.notification_preference import NotificationPreference
+from app.models.notification_schedule import NotificationSchedule
+from app.models.notification_escalation import NotificationEscalation
+from app.models.notification_rule import NotificationRule
+from app.models.notification_analytics import NotificationAnalytics
+from app.models.notification_template import NotificationTemplate
 
 # Specialist & Engineer jobs
 from app.models.specialist_job import SpecialistJob
@@ -93,8 +102,16 @@ __all__ = [
     'InspectionSchedule',
     'InspectionRoutine',
     'WeeklyCompletion',
-    'Notification',
     'InspectionRating',
+    # Notification System
+    'Notification',
+    'NotificationGroup',
+    'NotificationPreference',
+    'NotificationSchedule',
+    'NotificationEscalation',
+    'NotificationRule',
+    'NotificationAnalytics',
+    'NotificationTemplate',
     'SpecialistJob',
     'EngineerJob',
     'QualityReview',
