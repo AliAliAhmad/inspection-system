@@ -67,6 +67,15 @@ from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.work_plan_material import WorkPlanMaterial
 from app.models.sap_work_order import SAPWorkOrder
 
+# Work Plan Tracking & Performance
+from app.models.work_plan_job_tracking import WorkPlanJobTracking
+from app.models.work_plan_job_log import WorkPlanJobLog
+from app.models.work_plan_pause_request import WorkPlanPauseRequest
+from app.models.work_plan_job_rating import WorkPlanJobRating
+from app.models.work_plan_daily_review import WorkPlanDailyReview
+from app.models.work_plan_carry_over import WorkPlanCarryOver
+from app.models.work_plan_performance import WorkPlanPerformance
+
 __all__ = [
     'User',
     'Equipment',
@@ -114,4 +123,12 @@ __all__ = [
     'WorkPlanAssignment',
     'WorkPlanMaterial',
     'SAPWorkOrder',
+    # Work Plan Tracking & Performance
+    'WorkPlanJobTracking',
+    'WorkPlanJobLog',
+    'WorkPlanPauseRequest',
+    'WorkPlanJobRating',
+    'WorkPlanDailyReview',
+    'WorkPlanCarryOver',
+    'WorkPlanPerformance',
 ]

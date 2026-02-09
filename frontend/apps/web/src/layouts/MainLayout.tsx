@@ -72,6 +72,8 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/defects', name: t('nav.defects'), icon: <BugOutlined /> },
     { path: '/admin/backlog', name: t('nav.backlog'), icon: <WarningOutlined /> },
     { path: '/admin/reports', name: t('nav.reports'), icon: <BarChartOutlined /> },
+    { path: '/admin/daily-review', name: 'Daily Review', icon: <CheckCircleOutlined /> },
+    { path: '/admin/performance', name: 'Performance', icon: <BarChartOutlined /> },
   ];
 
   const inspectorItems: MenuDataItem[] = [
@@ -91,6 +93,8 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/engineer/team-assignment', name: t('nav.team_assignment'), icon: <TeamOutlined /> },
     { path: '/engineer/pause-approvals', name: t('nav.pause_approvals'), icon: <PauseCircleOutlined /> },
     { path: '/admin/defects', name: t('nav.defects'), icon: <BugOutlined /> },
+    { path: '/admin/daily-review', name: 'Daily Review', icon: <CheckCircleOutlined /> },
+    { path: '/admin/performance', name: 'Performance', icon: <BarChartOutlined /> },
   ];
 
   const qeItems: MenuDataItem[] = [

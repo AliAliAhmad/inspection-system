@@ -33,6 +33,11 @@ import WorkPlanOverviewScreen from '../screens/admin/WorkPlanOverviewScreen';
 import WorkPlanJobDetailScreen from '../screens/admin/WorkPlanJobDetailScreen';
 import UnassignedJobsScreen from '../screens/admin/UnassignedJobsScreen';
 
+// Work Plan Tracking & Performance screens
+import JobExecutionScreen from '../screens/shared/JobExecutionScreen';
+import WorkerPerformanceScreen from '../screens/shared/WorkerPerformanceScreen';
+import DailyReviewScreen from '../screens/engineer/DailyReviewScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
@@ -62,6 +67,10 @@ export type RootStackParamList = {
   WorkPlanOverview: undefined;
   WorkPlanJobDetail: { jobId: number; planId: number; dayId: number };
   UnassignedJobs: { planId: number };
+  // Work Plan Tracking & Performance
+  JobExecution: { jobId: number };
+  WorkerPerformance: undefined;
+  DailyReview: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -97,6 +106,10 @@ export default function RootNavigator() {
       <Stack.Screen name="WorkPlanOverview" component={WorkPlanOverviewScreen} options={{ headerShown: true, title: 'Work Planning' }} />
       <Stack.Screen name="WorkPlanJobDetail" component={WorkPlanJobDetailScreen} options={{ headerShown: true, title: 'Job Details' }} />
       <Stack.Screen name="UnassignedJobs" component={UnassignedJobsScreen} options={{ headerShown: true, title: 'Unassigned Jobs' }} />
+      {/* Work Plan Tracking & Performance */}
+      <Stack.Screen name="JobExecution" component={JobExecutionScreen} options={{ headerShown: true, title: 'Job Execution' }} />
+      <Stack.Screen name="WorkerPerformance" component={WorkerPerformanceScreen} options={{ headerShown: true, title: 'My Performance' }} />
+      <Stack.Screen name="DailyReview" component={DailyReviewScreen} options={{ headerShown: true, title: 'Daily Review' }} />
     </Stack.Navigator>
   );
 }
