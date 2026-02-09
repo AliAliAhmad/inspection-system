@@ -56,6 +56,9 @@ export interface ChecklistItem {
   id: number;
   template_id: number;
   item_code: string | null;
+  // Assembly/Part grouping for hierarchical checklists
+  assembly: string | null;
+  part: string | null;
   question_text: string;
   question_text_en: string;
   question_text_ar: string | null;
@@ -66,6 +69,13 @@ export interface ChecklistItem {
   action: string | null;
   action_en: string | null;
   action_ar: string | null;
+  // Expected result and action if fail - for inspector guidance
+  expected_result: string | null;
+  expected_result_en: string | null;
+  expected_result_ar: string | null;
+  action_if_fail: string | null;
+  action_if_fail_en: string | null;
+  action_if_fail_ar: string | null;
   numeric_rule: 'less_than' | 'greater_than' | 'between' | null;
   min_value: number | null;
   max_value: number | null;

@@ -67,6 +67,7 @@ class ChecklistItem(db.Model):
     """
     Individual question/item in a checklist template.
     Each item belongs to a category (mechanical/electrical) for inspector specialization.
+    Items can be grouped by assembly and part for hierarchical checklists.
     """
     __tablename__ = 'checklist_items'
 
@@ -75,6 +76,10 @@ class ChecklistItem(db.Model):
 
     # Auto-generated item code: [Function 2 letters]-[Assembly 2 letters]-00X
     item_code = db.Column(db.String(20), nullable=True)
+
+    # Assembly/Part grouping - allows multiple assemblies per template
+    assembly = db.Column(db.String(200), nullable=True, index=True)
+    part = db.Column(db.String(200), nullable=True)
 
     question_text = db.Column(db.Text, nullable=False)
     question_text_ar = db.Column(db.Text, nullable=True)
@@ -92,6 +97,12 @@ class ChecklistItem(db.Model):
     # Action/guide for inspector
     action = db.Column(db.Text, nullable=True)
     action_ar = db.Column(db.Text, nullable=True)
+
+    # Expected result and action if fail - for inspector guidance
+    expected_result = db.Column(db.String(200), nullable=True)
+    expected_result_ar = db.Column(db.String(200), nullable=True)
+    action_if_fail = db.Column(db.Text, nullable=True)
+    action_if_fail_ar = db.Column(db.Text, nullable=True)
 
     # Numeric validation rules (for answer_type='numeric')
     numeric_rule = db.Column(db.String(20), nullable=True)  # 'less_than', 'greater_than', 'between'
@@ -119,6 +130,8 @@ class ChecklistItem(db.Model):
             'id': self.id,
             'template_id': self.template_id,
             'item_code': self.item_code,
+            'assembly': self.assembly,
+            'part': self.part,
             'question_text': self.question_text_ar if language == 'ar' and self.question_text_ar else self.question_text,
             'question_text_en': self.question_text,
             'question_text_ar': self.question_text_ar,
@@ -130,6 +143,12 @@ class ChecklistItem(db.Model):
             'action': self.action_ar if language == 'ar' and self.action_ar else self.action,
             'action_en': self.action,
             'action_ar': self.action_ar,
+            'expected_result': self.expected_result_ar if language == 'ar' and self.expected_result_ar else self.expected_result,
+            'expected_result_en': self.expected_result,
+            'expected_result_ar': self.expected_result_ar,
+            'action_if_fail': self.action_if_fail_ar if language == 'ar' and self.action_if_fail_ar else self.action_if_fail,
+            'action_if_fail_en': self.action_if_fail,
+            'action_if_fail_ar': self.action_if_fail_ar,
             'numeric_rule': self.numeric_rule,
             'min_value': self.min_value,
             'max_value': self.max_value

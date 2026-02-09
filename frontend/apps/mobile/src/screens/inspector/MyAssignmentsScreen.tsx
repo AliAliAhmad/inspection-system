@@ -79,7 +79,8 @@ export default function MyAssignmentsScreen() {
       if (thisInspectorDone || assignment.status === 'completed') {
         navigation.navigate('Assessment', { id: assignment.id });
       } else {
-        navigation.navigate('InspectionChecklist', { id: assignment.id });
+        // Default to wizard mode (step-by-step) for better quality
+        navigation.navigate('InspectionWizard', { id: assignment.id });
       }
     },
     [navigation, user],

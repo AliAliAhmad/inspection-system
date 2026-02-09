@@ -4,6 +4,7 @@ import MainTabNavigator from './MainTabNavigator';
 
 // Detail screens that push on top of tabs
 import InspectionChecklistScreen from '../screens/inspector/InspectionChecklistScreen';
+import InspectionWizardScreen from '../screens/inspector/InspectionWizardScreen';
 import AssessmentScreen from '../screens/inspector/AssessmentScreen';
 import SpecialistJobDetailScreen from '../screens/specialist/SpecialistJobDetailScreen';
 import EngineerJobDetailScreen from '../screens/engineer/EngineerJobDetailScreen';
@@ -41,6 +42,7 @@ import DailyReviewScreen from '../screens/engineer/DailyReviewScreen';
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
+  InspectionWizard: { id: number };
   Assessment: { id: number };
   SpecialistJobDetail: { jobId: number };
   EngineerJobDetail: { jobId: number };
@@ -80,6 +82,7 @@ export default function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabNavigator} />
       <Stack.Screen name="InspectionChecklist" component={InspectionChecklistScreen} options={{ headerShown: true, title: 'Inspection' }} />
+      <Stack.Screen name="InspectionWizard" component={InspectionWizardScreen} options={{ headerShown: false, title: 'Inspection Wizard' }} />
       <Stack.Screen name="Assessment" component={AssessmentScreen} options={{ headerShown: true, title: 'Assessment' }} />
       <Stack.Screen name="SpecialistJobDetail" component={SpecialistJobDetailScreen} options={{ headerShown: true, title: 'Job Detail' }} />
       <Stack.Screen name="EngineerJobDetail" component={EngineerJobDetailScreen} options={{ headerShown: true, title: 'Job Detail' }} />
