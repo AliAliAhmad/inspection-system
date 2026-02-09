@@ -6,4 +6,5 @@ export { CalendarView } from './CalendarView';
 export { ViewToggle } from './ViewToggle';
 export { JobsPool } from './JobsPool';
 export { EmployeePool } from './EmployeePool';
+export { AnalyticsView } from './AnalyticsView';
 export type { ViewMode } from './ViewToggle';

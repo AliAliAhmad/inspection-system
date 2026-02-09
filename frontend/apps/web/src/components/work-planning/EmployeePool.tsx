@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
-import { Avatar, Tooltip, Spin, Badge } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Avatar, Tooltip, Spin, Badge, Progress, Tag } from 'antd';
+import { ReloadOutlined, WarningOutlined } from '@ant-design/icons';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { usersApi, rosterApi } from '@inspection/shared';
+import { usersApi, rosterApi, leavesApi } from '@inspection/shared';
 
 // Role config
 const ROLE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
@@ -138,9 +138,10 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
     const ids = new Set<number>();
     if (rosterData?.users) {
       rosterData.users.forEach((u: any) => {
-        const days = u.days || [];
-        const hasLeave = days.some((d: any) => d.status === 'leave' || d.status === 'sick');
-        if (hasLeave) ids.add(u.user_id);
+        // Check if user has any leave status in their entries
+        const entries = u.entries || {};
+        const hasLeave = Object.values(entries).some(status => status === 'leave');
+        if (hasLeave || u.is_on_leave) ids.add(u.id);
       });
     }
     return ids;
@@ -200,6 +201,48 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
     return { available, total: all.length };
   };
 
+  // Calculate totals
+  const totalUsers = useMemo(() => {
+    let total = 0;
+    let available = 0;
+    let onLeave = 0;
+    Object.values(groupedUsers).forEach(specs => {
+      Object.values(specs).forEach((users: any[]) => {
+        total += users.length;
+        users.forEach(u => {
+          if (leaveUserIds.has(u.id)) {
+            onLeave++;
+          } else {
+            available++;
+          }
+        });
+      });
+    });
+    return { total, available, onLeave };
+  }, [groupedUsers, leaveUserIds]);
+
+  // Calculate total assigned hours
+  const totalAssignedHours = useMemo(() => {
+    let total = 0;
+    userHoursMap.forEach(hours => total += hours);
+    return total;
+  }, [userHoursMap]);
+
+  // Get users on leave for display
+  const usersOnLeave = useMemo(() => {
+    const users: any[] = [];
+    Object.values(groupedUsers).forEach(specs => {
+      Object.values(specs).forEach((specUsers: any[]) => {
+        specUsers.forEach(u => {
+          if (leaveUserIds.has(u.id)) {
+            users.push(u);
+          }
+        });
+      });
+    });
+    return users;
+  }, [groupedUsers, leaveUserIds]);
+
   return (
     <div
       style={{
@@ -210,11 +253,27 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
         marginTop: 12,
       }}
     >
-      {/* Header */}
+      {/* Header with Summary */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 500, color: '#595959' }}>
-          👥 Team Pool <span style={{ fontWeight: 400, color: '#8c8c8c' }}>- Drag to assign</span>
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: '#595959' }}>
+            👥 Team Pool <span style={{ fontWeight: 400, color: '#8c8c8c' }}>- Drag to assign</span>
+          </span>
+          {/* Quick Stats */}
+          <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
+            <Tooltip title="Available team members">
+              <Tag color="green">✅ {totalUsers.available} available</Tag>
+            </Tooltip>
+            {totalUsers.onLeave > 0 && (
+              <Tooltip title="Team members on leave this week">
+                <Tag color="orange">🏖️ {totalUsers.onLeave} on leave</Tag>
+              </Tooltip>
+            )}
+            <Tooltip title="Total hours assigned this week">
+              <Tag color="blue">⏱️ {totalAssignedHours}h assigned</Tag>
+            </Tooltip>
+          </div>
+        </div>
         <Tooltip title="Refresh">
           <ReloadOutlined
             onClick={handleRefresh}
@@ -222,6 +281,26 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
           />
         </Tooltip>
       </div>
+
+      {/* On Leave Warning */}
+      {usersOnLeave.length > 0 && (
+        <div style={{
+          background: '#fff7e6',
+          border: '1px solid #ffd591',
+          borderRadius: 6,
+          padding: '6px 10px',
+          marginBottom: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 11,
+        }}>
+          <WarningOutlined style={{ color: '#fa8c16' }} />
+          <span style={{ color: '#ad6800' }}>
+            <strong>On leave this week:</strong> {usersOnLeave.map(u => u.full_name?.split(' ')[0]).join(', ')}
+          </span>
+        </div>
+      )}
 
       {isLoading ? (
         <div style={{ textAlign: 'center', padding: 20 }}><Spin size="small" /></div>

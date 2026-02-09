@@ -1760,6 +1760,125 @@ def auto_schedule(plan_id):
     }), 200
 
 
+@bp.route('/<int:plan_id>/copy-from-week', methods=['POST'])
+@jwt_required()
+def copy_from_previous_week(plan_id):
+    """
+    Copy jobs from a previous week to the current plan.
+
+    This copies the job structure (equipment, estimated hours, berth, etc.)
+    but NOT the SAP order numbers (those are unique per week).
+    Teams are also copied so they can be quickly adjusted.
+
+    Request body:
+        {
+            "source_week_start": "YYYY-MM-DD"  // Required: the week to copy from
+        }
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot modify a published work plan")
+
+    data = request.get_json() or {}
+    source_week_start = data.get('source_week_start')
+
+    if not source_week_start:
+        raise ValidationError("source_week_start is required")
+
+    try:
+        source_date = datetime.strptime(source_week_start, '%Y-%m-%d').date()
+    except ValueError:
+        raise ValidationError("Invalid date format. Use YYYY-MM-DD")
+
+    # Get the source plan
+    source_plan = WorkPlan.query.filter_by(week_start=source_date).first()
+    if not source_plan:
+        raise NotFoundError(f"No work plan found for week {source_week_start}")
+
+    # Map source days to target days by day of week
+    source_days_by_weekday = {day.date.weekday(): day for day in source_plan.days}
+    target_days_by_weekday = {day.date.weekday(): day for day in plan.days}
+
+    copied_count = 0
+    skipped_count = 0
+
+    for weekday, source_day in source_days_by_weekday.items():
+        target_day = target_days_by_weekday.get(weekday)
+        if not target_day:
+            continue
+
+        for source_job in source_day.jobs:
+            try:
+                # Get next position
+                max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
+                    work_plan_day_id=target_day.id
+                ).scalar() or 0
+
+                # Create new job (without SAP order number)
+                new_job = WorkPlanJob(
+                    work_plan_day_id=target_day.id,
+                    job_type=source_job.job_type,
+                    berth=source_job.berth,
+                    equipment_id=source_job.equipment_id,
+                    # Don't copy SAP order - each week has unique orders
+                    sap_order_number=None,
+                    sap_order_type=source_job.sap_order_type,
+                    description=source_job.description,
+                    cycle_id=source_job.cycle_id,
+                    pm_template_id=source_job.pm_template_id,
+                    # Don't copy overdue - it's specific to the original order
+                    overdue_value=None,
+                    overdue_unit=None,
+                    maintenance_base=source_job.maintenance_base,
+                    planned_date=None,  # Will be set when linked to SAP order
+                    estimated_hours=source_job.estimated_hours,
+                    position=max_position + 1,
+                    priority=source_job.priority,
+                    notes=f"Copied from {source_date.isoformat()}"
+                )
+                db.session.add(new_job)
+                db.session.flush()
+
+                # Copy team assignments
+                for source_assignment in source_job.assignments:
+                    new_assignment = WorkPlanAssignment(
+                        work_plan_job_id=new_job.id,
+                        user_id=source_assignment.user_id,
+                        is_lead=source_assignment.is_lead
+                    )
+                    db.session.add(new_assignment)
+
+                # Copy materials
+                for source_material in source_job.materials:
+                    new_material = WorkPlanMaterial(
+                        work_plan_job_id=new_job.id,
+                        material_id=source_material.material_id,
+                        quantity=source_material.quantity
+                    )
+                    db.session.add(new_material)
+
+                copied_count += 1
+
+            except Exception as e:
+                skipped_count += 1
+                continue
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Copied {copied_count} jobs from {source_week_start}',
+        'copied': copied_count,
+        'skipped': skipped_count,
+        'source_week': source_week_start
+    }), 200
+
+
 @bp.route('/email/test', methods=['POST'])
 @jwt_required()
 def test_email():

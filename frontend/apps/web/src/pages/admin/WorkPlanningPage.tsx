@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   Card,
   Button,
@@ -20,6 +20,9 @@ import {
   Select,
   Radio,
   Spin,
+  Alert,
+  Checkbox,
+  Popconfirm,
 } from 'antd';
 import {
   PlusOutlined,
@@ -33,6 +36,13 @@ import {
   DownloadOutlined,
   SettingOutlined,
   TeamOutlined,
+  WarningOutlined,
+  ExclamationCircleOutlined,
+  DeleteOutlined,
+  SwapOutlined,
+  CheckSquareOutlined,
+  CloseOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import {
   DndContext,
@@ -49,7 +59,7 @@ import {
 } from '@dnd-kit/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, equipmentApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority } from '@inspection/shared';
+import { workPlansApi, equipmentApi, rosterApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -59,6 +69,7 @@ import {
   JobsPool,
   EmployeePool,
   TimelineJobBlock,
+  AnalyticsView,
   type ViewMode
 } from '../../components/work-planning';
 import VoiceTextArea from '../../components/VoiceTextArea';
@@ -113,6 +124,9 @@ export default function WorkPlanningPage() {
   const [selectedJob, setSelectedJob] = useState<WorkPlanJob | null>(null);
   const [pendingAssignment, setPendingAssignment] = useState<{ job: WorkPlanJob; user: any } | null>(null);
   const [activeItem, setActiveItem] = useState<{ type: string; data: any } | null>(null);
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
+  const [bulkMoveModalOpen, setBulkMoveModalOpen] = useState(false);
+  const [copyWeekModalOpen, setCopyWeekModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
 
@@ -316,6 +330,89 @@ export default function WorkPlanningPage() {
   });
   const equipmentList = ((equipmentData as any)?.equipment || (equipmentData as any)?.data || []).filter((eq: any) => eq.is_active !== false);
 
+  // Fetch roster for leave status
+  const { data: rosterData } = useQuery({
+    queryKey: ['roster', weekStartStr],
+    queryFn: async () => {
+      const response = await rosterApi.getWeek(weekStartStr);
+      return response.data.data;
+    },
+    enabled: !!weekStartStr,
+  });
+
+  // Get users on leave for the week
+  const leaveUserIds = useMemo(() => {
+    const ids = new Set<number>();
+    if (rosterData?.users) {
+      rosterData.users.forEach((u) => {
+        // Check if user has any leave status in their entries
+        const entries = u.entries || {};
+        const hasLeave = Object.values(entries).some(status => status === 'leave');
+        if (hasLeave || u.is_on_leave) ids.add(u.id);
+      });
+    }
+    return ids;
+  }, [rosterData]);
+
+  // Helper to check if user is on leave for a specific day
+  const isUserOnLeaveForDay = useCallback((userId: number, dayDate: string): boolean => {
+    if (!rosterData?.users) return false;
+    const userRoster = rosterData.users.find((u) => u.id === userId);
+    if (!userRoster) return false;
+    const entries = userRoster.entries || {};
+    const dayStatus = entries[dayDate];
+    return dayStatus === 'leave';
+  }, [rosterData]);
+
+  // Calculate total hours for a day
+  const getDayTotalHours = useCallback((day: WorkPlanDay): number => {
+    const allJobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
+    return allJobs.reduce((sum, job) => sum + (job.estimated_hours || 0), 0);
+  }, []);
+
+  // Get conflict warnings for pending assignment
+  const assignmentWarnings = useMemo(() => {
+    const warnings: { type: 'error' | 'warning'; message: string }[] = [];
+    if (!pendingAssignment || !currentPlan) return warnings;
+
+    const { job, user } = pendingAssignment;
+
+    // Find the day for this job
+    const day = currentPlan.days?.find(d =>
+      [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])].some(j => j.id === job.id)
+    );
+
+    // Check if user is on leave
+    if (day && isUserOnLeaveForDay(user.id, day.date)) {
+      warnings.push({
+        type: 'error',
+        message: `⚠️ ${user.full_name?.split(' ')[0]} is on leave on ${dayjs(day.date).format('ddd, MMM D')}!`,
+      });
+    }
+
+    // Check day capacity (>10 hours warning)
+    if (day) {
+      const totalHours = getDayTotalHours(day);
+      if (totalHours > 10) {
+        warnings.push({
+          type: 'warning',
+          message: `📊 This day has ${totalHours}h scheduled (high workload)`,
+        });
+      }
+    }
+
+    // Check if user is already assigned to this job
+    const existingAssignment = (job.assignments || []).find((a: any) => a.user_id === user.id);
+    if (existingAssignment) {
+      warnings.push({
+        type: 'error',
+        message: `${user.full_name?.split(' ')[0]} is already assigned to this job`,
+      });
+    }
+
+    return warnings;
+  }, [pendingAssignment, currentPlan, isUserOnLeaveForDay, getDayTotalHours]);
+
   // Manual add job mutation
   const manualAddJobMutation = useMutation({
     mutationFn: (values: {
@@ -348,6 +445,96 @@ export default function WorkPlanningPage() {
       message.error(err.response?.data?.message || 'Failed to add job');
     },
   });
+
+  // Bulk delete jobs mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (jobIds: number[]) => {
+      if (!currentPlan) throw new Error('No plan');
+      // Delete jobs one by one (API doesn't have bulk delete yet)
+      await Promise.all(jobIds.map(jobId => workPlansApi.removeJob(currentPlan.id, jobId)));
+    },
+    onSuccess: () => {
+      message.success(`🗑️ Deleted ${selectedJobIds.size} jobs`);
+      setSelectedJobIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to delete jobs');
+    },
+  });
+
+  // Bulk move jobs mutation
+  const bulkMoveMutation = useMutation({
+    mutationFn: async ({ jobIds, targetDayId }: { jobIds: number[]; targetDayId: number }) => {
+      if (!currentPlan) throw new Error('No plan');
+      // Move jobs one by one
+      await Promise.all(jobIds.map(jobId => workPlansApi.moveJob(currentPlan.id, jobId, { target_day_id: targetDayId })));
+    },
+    onSuccess: () => {
+      message.success(`📦 Moved ${selectedJobIds.size} jobs`);
+      setSelectedJobIds(new Set());
+      setBulkMoveModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to move jobs');
+    },
+  });
+
+  // Copy from previous week mutation
+  const copyFromWeekMutation = useMutation({
+    mutationFn: (sourceWeekStart: string) => workPlansApi.copyFromWeek(currentPlan!.id, sourceWeekStart),
+    onSuccess: (response) => {
+      const data = response.data;
+      message.success(`📋 Copied ${data.copied} jobs from previous week!`);
+      setCopyWeekModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to copy jobs');
+    },
+  });
+
+  // Get all jobs from current plan
+  const allJobs = useMemo(() => {
+    if (!currentPlan?.days) return [];
+    const jobs: WorkPlanJob[] = [];
+    currentPlan.days.forEach(day => {
+      jobs.push(...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || []));
+    });
+    return jobs;
+  }, [currentPlan]);
+
+  // Toggle job selection
+  const toggleJobSelection = useCallback((jobId: number) => {
+    setSelectedJobIds(prev => {
+      const next = new Set(prev);
+      if (next.has(jobId)) {
+        next.delete(jobId);
+      } else {
+        next.add(jobId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Select all jobs for current berth
+  const selectAllJobs = useCallback(() => {
+    const jobIds = new Set<number>();
+    currentPlan?.days?.forEach(day => {
+      const jobs = berth === 'east'
+        ? [...(day.jobs_east || []), ...(day.jobs_both || [])]
+        : [...(day.jobs_west || []), ...(day.jobs_both || [])];
+      jobs.forEach(j => jobIds.add(j.id));
+    });
+    setSelectedJobIds(jobIds);
+  }, [currentPlan, berth]);
+
+  // Clear selection
+  const clearSelection = useCallback(() => {
+    setSelectedJobIds(new Set());
+  }, []);
 
   // Drag handlers
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -563,6 +750,12 @@ export default function WorkPlanningPage() {
                       },
                       { type: 'divider' },
                       {
+                        key: 'copy-from-week',
+                        label: '📋 Copy from Previous Week',
+                        onClick: () => setCopyWeekModalOpen(true),
+                        disabled: !currentPlan || !isDraft,
+                      },
+                      {
                         key: 'auto-schedule-weekends',
                         label: '🗓️ Auto-Schedule (Include Weekends)',
                         onClick: () => {
@@ -659,46 +852,114 @@ export default function WorkPlanningPage() {
           ]}
         />
 
-        {/* Jobs Pool - Fixed Right Sidebar */}
-        <JobsPool
-          berth={berth}
-          planId={currentPlan?.id}
-          days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
-          onAddJob={() => setAddJobModalOpen(true)}
-          onJobClick={(job, type) => {
-            setSelectedJob({
-              ...job,
-              job_type: type as JobType,
-            } as any);
-            setJobDetailsModalOpen(true);
-          }}
-          onImportSAP={() => setImportModalOpen(true)}
-          onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
-          onQuickSchedule={(job, jobType, dayId) => {
-            if (!currentPlan || !isDraft) return;
-            if (jobType === 'sap' && job.id) {
-              scheduleSAPMutation.mutate({
-                planId: currentPlan.id,
-                sapOrderId: job.id,
-                dayId: dayId,
-              });
-            } else {
-              addJobMutation.mutate({
-                planId: currentPlan.id,
-                dayId: dayId,
-                jobType: jobType as JobType,
-                berth: berth as Berth,
-                equipmentId: job.equipment?.id,
-                defectId: job.defect?.id,
-                inspectionAssignmentId: job.assignment?.id,
-                estimatedHours: job.estimated_hours || 4,
-              });
-            }
-          }}
-        />
+        {/* Bulk Actions Toolbar */}
+        {selectedJobIds.size > 0 && isDraft && (
+          <Card
+            size="small"
+            bodyStyle={{ padding: '8px 16px' }}
+            style={{
+              marginBottom: 8,
+              background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%)',
+              border: '1px solid #91d5ff',
+            }}
+          >
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Space>
+                  <CheckSquareOutlined style={{ color: '#1890ff' }} />
+                  <Text strong style={{ color: '#1890ff' }}>
+                    {selectedJobIds.size} job{selectedJobIds.size > 1 ? 's' : ''} selected
+                  </Text>
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={selectAllJobs}
+                    style={{ padding: 0 }}
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<CloseOutlined />}
+                    onClick={clearSelection}
+                    style={{ padding: 0 }}
+                  >
+                    Clear
+                  </Button>
+                </Space>
+              </Col>
+              <Col>
+                <Space>
+                  <Button
+                    icon={<SwapOutlined />}
+                    onClick={() => setBulkMoveModalOpen(true)}
+                  >
+                    📦 Move to Day
+                  </Button>
+                  <Popconfirm
+                    title={`Delete ${selectedJobIds.size} job${selectedJobIds.size > 1 ? 's' : ''}?`}
+                    description="This action cannot be undone."
+                    onConfirm={() => bulkDeleteMutation.mutate(Array.from(selectedJobIds))}
+                    okText="Delete"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button
+                      icon={<DeleteOutlined />}
+                      danger
+                      loading={bulkDeleteMutation.isPending}
+                    >
+                      🗑️ Delete
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              </Col>
+            </Row>
+          </Card>
+        )}
 
-        {/* Main Content Area - Calendar (with right margin for sidebar) */}
-        <div style={{ flex: 1, overflow: 'auto', marginRight: '20%' }}>
+        {/* Jobs Pool - Fixed Right Sidebar (hidden in analytics mode) */}
+        {viewMode !== 'analytics' && (
+          <JobsPool
+            berth={berth}
+            planId={currentPlan?.id}
+            days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
+            onAddJob={() => setAddJobModalOpen(true)}
+            onJobClick={(job, type) => {
+              setSelectedJob({
+                ...job,
+                job_type: type as JobType,
+              } as any);
+              setJobDetailsModalOpen(true);
+            }}
+            onImportSAP={() => setImportModalOpen(true)}
+            onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
+            onQuickSchedule={(job, jobType, dayId) => {
+              if (!currentPlan || !isDraft) return;
+              if (jobType === 'sap' && job.id) {
+                scheduleSAPMutation.mutate({
+                  planId: currentPlan.id,
+                  sapOrderId: job.id,
+                  dayId: dayId,
+                });
+              } else {
+                addJobMutation.mutate({
+                  planId: currentPlan.id,
+                  dayId: dayId,
+                  jobType: jobType as JobType,
+                  berth: berth as Berth,
+                  equipmentId: job.equipment?.id,
+                  defectId: job.defect?.id,
+                  inspectionAssignmentId: job.assignment?.id,
+                  estimatedHours: job.estimated_hours || 4,
+                });
+              }
+            }}
+          />
+        )}
+
+        {/* Main Content Area - Calendar (with right margin for sidebar, full width for analytics) */}
+        <div style={{ flex: 1, overflow: 'auto', marginRight: viewMode === 'analytics' ? 0 : '20%' }}>
             {isLoading ? (
               <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spin size="large" />
@@ -714,7 +975,12 @@ export default function WorkPlanningPage() {
                 </div>
               </Card>
             ) : currentPlan ? (
-              viewMode === 'timeline' ? (
+              viewMode === 'analytics' ? (
+                <AnalyticsView
+                  plan={currentPlan}
+                  weekStart={weekStartStr}
+                />
+              ) : viewMode === 'timeline' ? (
                 <TimelineView
                   plan={{
                     ...currentPlan,
@@ -792,6 +1058,19 @@ export default function WorkPlanningPage() {
                                       onClick={() => handleJobClick(job)}
                                       compact
                                       showTeam
+                                      selectable={isDraft}
+                                      selected={selectedJobIds.has(job.id)}
+                                      onSelect={(jobId, sel) => {
+                                        if (sel) {
+                                          setSelectedJobIds(prev => new Set([...prev, jobId]));
+                                        } else {
+                                          setSelectedJobIds(prev => {
+                                            const next = new Set(prev);
+                                            next.delete(jobId);
+                                            return next;
+                                          });
+                                        }
+                                      }}
                                     />
                                   ))}
                                 </div>
@@ -816,13 +1095,15 @@ export default function WorkPlanningPage() {
             )}
           </div>
 
-        {/* Bottom: Employee Pool (with right margin for sidebar) */}
-        <div style={{ marginTop: 8, marginRight: '20%' }}>
-          <EmployeePool
-            weekStart={weekStartStr}
-            jobs={currentPlan?.days?.flatMap(d => [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])]) || []}
-          />
-        </div>
+        {/* Bottom: Employee Pool (with right margin for sidebar, hidden in analytics mode) */}
+        {viewMode !== 'analytics' && (
+          <div style={{ marginTop: 8, marginRight: '20%' }}>
+            <EmployeePool
+              weekStart={weekStartStr}
+              jobs={currentPlan?.days?.flatMap(d => [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])]) || []}
+            />
+          </div>
+        )}
       </div>
 
       {/* Drag Overlay */}
@@ -899,21 +1180,43 @@ export default function WorkPlanningPage() {
 
       {/* Assign Role Modal (Lead/Member) */}
       <Modal
-        title="Assign Team Role"
+        title={
+          <Space>
+            <TeamOutlined />
+            <span>Assign Team Role</span>
+          </Space>
+        }
         open={assignModalOpen}
         onCancel={() => {
           setAssignModalOpen(false);
           setPendingAssignment(null);
         }}
         footer={null}
-        width={400}
+        width={450}
       >
         {pendingAssignment && (
           <div style={{ textAlign: 'center' }}>
-            <p>
+            <p style={{ fontSize: 15 }}>
               Assign <strong>{pendingAssignment.user.full_name}</strong> to{' '}
               <strong>{pendingAssignment.job.equipment?.serial_number || 'this job'}</strong>
             </p>
+
+            {/* Conflict Warnings */}
+            {assignmentWarnings.length > 0 && (
+              <div style={{ marginBottom: 16, textAlign: 'left' }}>
+                {assignmentWarnings.map((warning, idx) => (
+                  <Alert
+                    key={idx}
+                    message={warning.message}
+                    type={warning.type}
+                    showIcon
+                    icon={warning.type === 'error' ? <ExclamationCircleOutlined /> : <WarningOutlined />}
+                    style={{ marginBottom: 8 }}
+                  />
+                ))}
+              </div>
+            )}
+
             <Divider />
             <Space size="large">
               <Button
@@ -921,6 +1224,7 @@ export default function WorkPlanningPage() {
                 size="large"
                 onClick={() => handleAssign(true)}
                 loading={assignMutation.isPending}
+                disabled={assignmentWarnings.some(w => w.type === 'error' && w.message.includes('already assigned'))}
               >
                 👑 As Lead
               </Button>
@@ -928,6 +1232,7 @@ export default function WorkPlanningPage() {
                 size="large"
                 onClick={() => handleAssign(false)}
                 loading={assignMutation.isPending}
+                disabled={assignmentWarnings.some(w => w.type === 'error' && w.message.includes('already assigned'))}
               >
                 👤 As Member
               </Button>
@@ -936,8 +1241,117 @@ export default function WorkPlanningPage() {
             <Text type="secondary" style={{ fontSize: 12 }}>
               Lead: Responsible for the job | Member: Part of the team
             </Text>
+            {assignmentWarnings.some(w => w.type === 'error' && !w.message.includes('already assigned')) && (
+              <div style={{ marginTop: 8 }}>
+                <Text type="warning" style={{ fontSize: 11 }}>
+                  ⚠️ You can still assign despite warnings
+                </Text>
+              </div>
+            )}
           </div>
         )}
+      </Modal>
+
+      {/* Bulk Move Modal */}
+      <Modal
+        title={
+          <Space>
+            <SwapOutlined />
+            <span>Move {selectedJobIds.size} Job{selectedJobIds.size > 1 ? 's' : ''} to Day</span>
+          </Space>
+        }
+        open={bulkMoveModalOpen}
+        onCancel={() => setBulkMoveModalOpen(false)}
+        footer={null}
+        width={400}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text type="secondary">
+            Select the target day to move all selected jobs:
+          </Text>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+          {currentPlan?.days?.map(day => (
+            <Button
+              key={day.id}
+              block
+              onClick={() => {
+                bulkMoveMutation.mutate({
+                  jobIds: Array.from(selectedJobIds),
+                  targetDayId: day.id,
+                });
+              }}
+              loading={bulkMoveMutation.isPending}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                height: 'auto',
+                padding: '12px 8px',
+              }}
+            >
+              <span style={{ fontWeight: 600, fontSize: 14 }}>
+                {dayjs(day.date).format('ddd')}
+              </span>
+              <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+                {dayjs(day.date).format('MMM D')}
+              </span>
+            </Button>
+          ))}
+        </div>
+      </Modal>
+
+      {/* Copy from Previous Week Modal */}
+      <Modal
+        title={
+          <Space>
+            <CopyOutlined />
+            <span>Copy from Previous Week</span>
+          </Space>
+        }
+        open={copyWeekModalOpen}
+        onCancel={() => setCopyWeekModalOpen(false)}
+        footer={null}
+        width={400}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Alert
+            message="Copy job structure from a previous week"
+            description="This copies equipment assignments, teams, and materials. SAP order numbers are NOT copied (they are unique per week)."
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+          <Text type="secondary">Select a week to copy from:</Text>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: 8 }}>
+          {/* Last 4 weeks */}
+          {[1, 2, 3, 4].map(weeksAgo => {
+            const weekStart = currentWeekStart.subtract(weeksAgo, 'week');
+            const weekStartStr = weekStart.format('YYYY-MM-DD');
+            return (
+              <Button
+                key={weeksAgo}
+                block
+                onClick={() => copyFromWeekMutation.mutate(weekStartStr)}
+                loading={copyFromWeekMutation.isPending}
+                style={{ textAlign: 'left', height: 'auto', padding: '10px 16px' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 500 }}>
+                      {weekStart.format('MMM D')} - {weekStart.add(6, 'day').format('MMM D, YYYY')}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#8c8c8c' }}>
+                      {weeksAgo === 1 ? 'Last week' : `${weeksAgo} weeks ago`}
+                    </div>
+                  </div>
+                  <CopyOutlined style={{ color: '#1890ff' }} />
+                </div>
+              </Button>
+            );
+          })}
+        </div>
       </Modal>
 
       {/* Job Details Modal */}

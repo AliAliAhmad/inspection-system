@@ -173,4 +173,15 @@ export const workPlansApi = {
       total_in_pool: number;
     }>(`/api/work-plans/${planId}/auto-schedule`, options);
   },
+
+  // Copy jobs from a previous week
+  copyFromWeek(planId: number, sourceWeekStart: string) {
+    return getApiClient().post<{
+      status: string;
+      message: string;
+      copied: number;
+      skipped: number;
+      source_week: string;
+    }>(`/api/work-plans/${planId}/copy-from-week`, { source_week_start: sourceWeekStart });
+  },
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tooltip, Tag, Badge } from 'antd';
+import { Tooltip, Tag, Badge, Checkbox } from 'antd';
 import { UserOutlined, ToolOutlined, WarningOutlined } from '@ant-design/icons';
 import { useDroppable } from '@dnd-kit/core';
 import type { WorkPlanJob, ComputedPriority } from '@inspection/shared';
@@ -33,6 +33,9 @@ interface TimelineJobBlockProps {
   compact?: boolean;
   droppable?: boolean; // Enable dropping employees on this job
   showTeam?: boolean; // Show team avatars
+  selectable?: boolean; // Enable selection checkbox
+  selected?: boolean; // Is this job selected
+  onSelect?: (jobId: number, selected: boolean) => void; // Selection handler
 }
 
 export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
@@ -42,6 +45,9 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
   compact = false,
   droppable = true,
   showTeam = false,
+  selectable = false,
+  selected = false,
+  onSelect,
 }) => {
   const { t } = useTranslation();
 
@@ -61,21 +67,39 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
   const leadUser = job.assignments?.find(a => a.is_lead)?.user;
 
   const containerStyle: React.CSSProperties = {
-    backgroundColor: isOver ? '#d9f7be' : style.bg,
-    borderLeft: `4px solid ${isOver ? '#52c41a' : style.border}`,
+    backgroundColor: selected ? '#e6f7ff' : isOver ? '#d9f7be' : style.bg,
+    borderLeft: `4px solid ${selected ? '#1890ff' : isOver ? '#52c41a' : style.border}`,
     borderRadius: '6px',
     padding: compact ? '6px 8px' : '8px 12px',
     cursor: onClick ? 'pointer' : 'default',
     opacity: isDragging ? 0.5 : 1,
-    boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : isOver ? '0 0 0 2px #52c41a' : '0 1px 4px rgba(0,0,0,0.08)',
+    boxShadow: selected ? '0 0 0 2px #1890ff40' : isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : isOver ? '0 0 0 2px #52c41a' : '0 1px 4px rgba(0,0,0,0.08)',
     transition: 'box-shadow 0.2s, opacity 0.2s, background-color 0.2s',
     marginBottom: '4px',
+    position: 'relative',
   };
 
   const content = (
     <div ref={setNodeRef} style={containerStyle} onClick={onClick}>
+      {/* Selection Checkbox */}
+      {selectable && (
+        <div
+          style={{
+            position: 'absolute',
+            top: compact ? 4 : 6,
+            right: compact ? 4 : 6,
+            zIndex: 1,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={selected}
+            onChange={(e) => onSelect?.(job.id, e.target.checked)}
+          />
+        </div>
+      )}
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: compact ? '2px' : '4px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: compact ? '2px' : '4px', paddingRight: selectable ? 24 : 0 }}>
         <span style={{ fontSize: compact ? '14px' : '16px' }}>{JOB_TYPE_EMOJI[job.job_type]}</span>
         {isOverdue && <span style={{ fontSize: compact ? '12px' : '14px' }}>⚠️</span>}
         <span style={{
