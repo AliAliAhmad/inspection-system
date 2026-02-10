@@ -21,7 +21,7 @@ const SPECIALIST_COLUMNS: KanbanColumn[] = [
   { id: 'completed', title: 'Completed', color: '#52c41a' },
 ];
 
-export function KanbanBoard({ jobs, onJobClick, onStatusChange, loading }: SpecialistKanbanBoardProps) {
+export function SpecialistKanbanBoard({ jobs, onJobClick, onStatusChange, loading }: SpecialistKanbanBoardProps) {
   const handleStatusChange = async (jobId: number, newStatus: string) => {
     if (onStatusChange) {
       await onStatusChange(jobId, newStatus as JobStatus);
@@ -40,4 +40,4 @@ export function KanbanBoard({ jobs, onJobClick, onStatusChange, loading }: Speci
   );
 }
 
-export default KanbanBoard;
+export default SpecialistKanbanBoard;

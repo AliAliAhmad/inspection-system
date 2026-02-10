@@ -8,16 +8,12 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { ApprovalType } from './ApprovalCard';
+import type { ApprovalCounts } from '@inspection/shared';
 
 const { Title } = Typography;
 
-export interface ApprovalCounts {
-  leave: number;
-  pause: number;
-  bonus: number;
-  takeover: number;
-  total: number;
-}
+// Re-export for convenience
+export type { ApprovalCounts } from '@inspection/shared';
 
 export interface ApprovalStatsProps {
   counts: ApprovalCounts;
