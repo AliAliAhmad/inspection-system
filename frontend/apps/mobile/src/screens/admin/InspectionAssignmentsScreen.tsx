@@ -15,7 +15,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { inspectionAssignmentsApi, rosterApi } from '@inspection/shared';
-import type { AssignTeamPayload } from '@inspection/shared';
+import type { AssignTeamPayload, AssignmentStats, InspectorSuggestion } from '@inspection/shared';
 
 const STATUS_COLORS: Record<string, string> = {
   unassigned: '#757575',
@@ -75,15 +75,27 @@ function Badge({ label, color }: { label: string; color: string }) {
   );
 }
 
+function StatCard({ label, value, color = '#1976D2' }: { label: string; value: number | string; color?: string }) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function AssignmentCard({
   assignment,
   onAssign,
+  onAISuggest,
 }: {
   assignment: AssignmentItem;
   onAssign: (a: AssignmentItem) => void;
+  onAISuggest: (a: AssignmentItem) => void;
 }) {
   const statusColor = STATUS_COLORS[assignment.status] ?? '#757575';
   const isCompleted = assignment.status === 'completed';
+  const isUnassigned = assignment.status === 'unassigned';
 
   return (
     <View style={styles.card}>
@@ -110,11 +122,6 @@ function AssignmentCard({
       </View>
 
       <View style={styles.cardInfoRow}>
-        <Text style={styles.cardLabel}>Serial: </Text>
-        <Text style={styles.cardValue}>{assignment.equipment?.serial_number || '-'}</Text>
-      </View>
-
-      <View style={styles.cardInfoRow}>
         <Text style={styles.cardLabel}>Berth: </Text>
         <Text style={styles.cardValue}>{assignment.berth || assignment.equipment?.berth || '-'}</Text>
       </View>
@@ -138,15 +145,54 @@ function AssignmentCard({
         </View>
       </View>
 
-      <TouchableOpacity
-        style={[styles.assignButton, isCompleted && styles.assignButtonDisabled]}
-        onPress={() => onAssign(assignment)}
-        disabled={isCompleted}
-      >
-        <Text style={[styles.assignButtonText, isCompleted && styles.assignButtonTextDisabled]}>
-          {assignment.mechanical_inspector_id ? 'Reassign Team' : 'Assign Team'}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.cardActions}>
+        <TouchableOpacity
+          style={[styles.assignButton, isCompleted && styles.assignButtonDisabled]}
+          onPress={() => onAssign(assignment)}
+          disabled={isCompleted}
+        >
+          <Text style={[styles.assignButtonText, isCompleted && styles.assignButtonTextDisabled]}>
+            {assignment.mechanical_inspector_id ? 'Reassign' : 'Assign'}
+          </Text>
+        </TouchableOpacity>
+
+        {isUnassigned && (
+          <TouchableOpacity
+            style={styles.aiButton}
+            onPress={() => onAISuggest(assignment)}
+          >
+            <Text style={styles.aiButtonText}>🤖 AI</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function SuggestionCard({ suggestion, type }: { suggestion: InspectorSuggestion | null; type: string }) {
+  if (!suggestion) {
+    return (
+      <View style={styles.suggestionCard}>
+        <Text style={styles.suggestionType}>{type}</Text>
+        <Text style={styles.suggestionEmpty}>No inspector available</Text>
+      </View>
+    );
+  }
+
+  const scoreColor = suggestion.match_score >= 80 ? '#4CAF50' : suggestion.match_score >= 60 ? '#FF9800' : '#E53935';
+
+  return (
+    <View style={styles.suggestionCard}>
+      <View style={styles.suggestionHeader}>
+        <Text style={styles.suggestionType}>{type}</Text>
+        <View style={[styles.scoreBox, { backgroundColor: scoreColor }]}>
+          <Text style={styles.scoreText}>{suggestion.match_score}%</Text>
+        </View>
+      </View>
+      <Text style={styles.suggestionName}>{suggestion.name}</Text>
+      <Text style={styles.suggestionDetail}>
+        {suggestion.active_assignments} active • {suggestion.factors.workload} workload
+      </Text>
     </View>
   );
 }
@@ -164,6 +210,14 @@ export default function InspectionAssignmentsScreen() {
   const [selectedMechInspector, setSelectedMechInspector] = useState<InspectorOption | null>(null);
   const [selectedElecInspector, setSelectedElecInspector] = useState<InspectorOption | null>(null);
   const [targetDateStr, setTargetDateStr] = useState(new Date().toISOString().split('T')[0]);
+  const [aiSuggestModalVisible, setAiSuggestModalVisible] = useState(false);
+
+  // Fetch stats
+  const statsQuery = useQuery({
+    queryKey: ['inspection-assignments', 'stats'],
+    queryFn: () => inspectionAssignmentsApi.getStats().then((r) => (r.data as any)?.data as AssignmentStats),
+    staleTime: 60000,
+  });
 
   const listsQuery = useQuery({
     queryKey: ['inspection-assignments'],
@@ -171,6 +225,13 @@ export default function InspectionAssignmentsScreen() {
       inspectionAssignmentsApi.getLists({ page, per_page: 100 }).then((r) => {
         return (r.data as any);
       }),
+  });
+
+  // AI Suggestion query
+  const aiSuggestQuery = useQuery({
+    queryKey: ['inspection-assignments', 'ai-suggest', selectedAssignment?.id],
+    queryFn: () => inspectionAssignmentsApi.getAISuggestion(selectedAssignment!.id).then((r) => (r.data as any)?.data),
+    enabled: aiSuggestModalVisible && !!selectedAssignment,
   });
 
   // Flatten all assignments from all lists
@@ -232,6 +293,7 @@ export default function InspectionAssignmentsScreen() {
           : t('assignments.assignSuccess', 'Team assigned successfully');
       queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
       setAssignModalVisible(false);
+      setAiSuggestModalVisible(false);
       setSelectedAssignment(null);
       setSelectedMechInspector(null);
       setSelectedElecInspector(null);
@@ -245,9 +307,27 @@ export default function InspectionAssignmentsScreen() {
     },
   });
 
+  // Bulk auto-assign mutation
+  const bulkAssignMutation = useMutation({
+    mutationFn: (assignmentIds: number[]) =>
+      inspectionAssignmentsApi.bulkAssign({ assignment_ids: assignmentIds, auto_assign: true }),
+    onSuccess: (res) => {
+      const summary = (res.data as any)?.summary;
+      Alert.alert(
+        t('common.success', 'Success'),
+        `Auto-assigned ${summary?.successful || 0} of ${summary?.total || 0} assignments`
+      );
+      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
+    },
+    onError: (err: any) => {
+      Alert.alert(t('common.error', 'Error'), err?.response?.data?.message || 'Bulk assign failed');
+    },
+  });
+
   const handleRefresh = useCallback(() => {
     listsQuery.refetch();
-  }, [listsQuery]);
+    statsQuery.refetch();
+  }, [listsQuery, statsQuery]);
 
   const handleGenerate = () => {
     if (!targetDateStr) {
@@ -264,6 +344,11 @@ export default function InspectionAssignmentsScreen() {
     setAssignModalVisible(true);
   };
 
+  const handleAISuggestPress = (assignment: AssignmentItem) => {
+    setSelectedAssignment(assignment);
+    setAiSuggestModalVisible(true);
+  };
+
   const handleAssignSubmit = () => {
     if (!selectedAssignment) return;
     if (!selectedMechInspector || !selectedElecInspector) {
@@ -277,6 +362,40 @@ export default function InspectionAssignmentsScreen() {
         electrical_inspector_id: selectedElecInspector.id,
       },
     });
+  };
+
+  const handleApplyAISuggestion = () => {
+    if (!selectedAssignment || !aiSuggestQuery.data?.recommended) return;
+    const { mechanical, electrical } = aiSuggestQuery.data.recommended;
+    if (!mechanical || !electrical) {
+      Alert.alert(t('common.error', 'Error'), 'AI could not find both inspectors');
+      return;
+    }
+    assignMutation.mutate({
+      id: selectedAssignment.id,
+      payload: {
+        mechanical_inspector_id: mechanical.id,
+        electrical_inspector_id: electrical.id,
+      },
+    });
+  };
+
+  const handleBulkAutoAssign = () => {
+    const unassignedIds = allAssignments
+      .filter((a) => a.status === 'unassigned')
+      .map((a) => a.id);
+    if (unassignedIds.length === 0) {
+      Alert.alert('Info', 'No unassigned items to auto-assign');
+      return;
+    }
+    Alert.alert(
+      'Auto-Assign All',
+      `This will auto-assign ${unassignedIds.length} unassigned items using AI. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, Auto-Assign', onPress: () => bulkAssignMutation.mutate(unassignedIds) },
+      ]
+    );
   };
 
   const openInspectorPicker = (type: 'mech' | 'elec') => {
@@ -298,7 +417,6 @@ export default function InspectionAssignmentsScreen() {
   const availableUsers: any[] = availData?.available ?? [];
   const onLeaveUsers: any[] = availData?.on_leave ?? [];
 
-  // Mechanical: inspectors + specialists covering for inspectors
   const mechAvailable: InspectorOption[] = availableUsers
     .filter(
       (u: any) =>
@@ -313,7 +431,6 @@ export default function InspectionAssignmentsScreen() {
 
   const allMechOptions = [...mechAvailable, ...mechOnLeave];
 
-  // Electrical: inspectors + specialists covering for inspectors
   const elecAvailable: InspectorOption[] = availableUsers
     .filter(
       (u: any) =>
@@ -329,6 +446,9 @@ export default function InspectionAssignmentsScreen() {
   const allElecOptions = [...elecAvailable, ...elecOnLeave];
 
   const currentPickerOptions = inspectorPickerType === 'mech' ? allMechOptions : allElecOptions;
+
+  const stats = statsQuery.data;
+  const unassignedCount = allAssignments.filter((a) => a.status === 'unassigned').length;
 
   if (listsQuery.isLoading && page === 1) {
     return (
@@ -347,10 +467,42 @@ export default function InspectionAssignmentsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Stats Row */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsRow}>
+        <StatCard label="Today" value={stats?.today?.total || 0} />
+        <StatCard label="Unassigned" value={stats?.today?.unassigned || 0} color={stats?.today?.unassigned ? '#FF9800' : '#4CAF50'} />
+        <StatCard label="Completed" value={stats?.today?.completed || 0} color="#4CAF50" />
+        <StatCard label="Overdue" value={stats?.overdue_count || 0} color={stats?.overdue_count ? '#E53935' : '#4CAF50'} />
+        <StatCard label="Week %" value={`${stats?.completion_rate || 0}%`} />
+      </ScrollView>
+
+      {/* Bulk Action Button */}
+      {unassignedCount > 0 && (
+        <TouchableOpacity
+          style={styles.bulkButton}
+          onPress={handleBulkAutoAssign}
+          disabled={bulkAssignMutation.isPending}
+        >
+          {bulkAssignMutation.isPending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.bulkButtonText}>
+              🤖 Auto-Assign All ({unassignedCount})
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
+
       <FlatList
         data={allAssignments}
         keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => <AssignmentCard assignment={item} onAssign={handleAssignPress} />}
+        renderItem={({ item }) => (
+          <AssignmentCard
+            assignment={item}
+            onAssign={handleAssignPress}
+            onAISuggest={handleAISuggestPress}
+          />
+        )}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={listsQuery.isRefetching} onRefresh={handleRefresh} />
@@ -423,11 +575,6 @@ export default function InspectionAssignmentsScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-
-            <Text style={styles.noteText}>
-              This will generate an inspection list for {targetDateStr || 'the selected date'}{' '}
-              {selectedShift} shift based on the configured schedule.
-            </Text>
           </ScrollView>
         </View>
       </Modal>
@@ -461,17 +608,10 @@ export default function InspectionAssignmentsScreen() {
                   {selectedAssignment.equipment?.name || `Equipment #${selectedAssignment.equipment_id}`}
                 </Text>
                 <Text style={styles.equipmentInfoDetail}>
-                  Type: {selectedAssignment.equipment?.equipment_type || '-'}
+                  {selectedAssignment.equipment?.equipment_type || '-'} • Berth: {selectedAssignment.berth || '-'}
                 </Text>
                 <Text style={styles.equipmentInfoDetail}>
-                  Serial: {selectedAssignment.equipment?.serial_number || '-'}
-                </Text>
-                <Text style={styles.equipmentInfoDetail}>
-                  Berth: {selectedAssignment.berth || selectedAssignment.equipment?.berth || '-'}
-                </Text>
-                <Text style={styles.equipmentInfoDetail}>
-                  Date: {selectedAssignment.list_target_date} | Shift:{' '}
-                  {selectedAssignment.list_shift?.toUpperCase()}
+                  {selectedAssignment.list_target_date} • {selectedAssignment.list_shift?.toUpperCase()} Shift
                 </Text>
               </View>
             )}
@@ -522,13 +662,81 @@ export default function InspectionAssignmentsScreen() {
                   </Text>
                   <Text style={styles.chevron}>▼</Text>
                 </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
 
-                {(allMechOptions.length === 0 || allElecOptions.length === 0) && (
-                  <Text style={styles.warningText}>
-                    Note: Some inspectors may not be available for this shift. Check the roster.
-                  </Text>
+      {/* AI Suggestion Modal */}
+      <Modal visible={aiSuggestModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => { setAiSuggestModalVisible(false); setSelectedAssignment(null); }}>
+              <Text style={styles.modalCancel}>{t('common.cancel', 'Cancel')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>🤖 AI Suggestion</Text>
+            <View style={{ width: 50 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {selectedAssignment && (
+              <View style={styles.equipmentInfo}>
+                <Text style={styles.equipmentInfoTitle}>
+                  {selectedAssignment.equipment?.name || `Equipment #${selectedAssignment.equipment_id}`}
+                </Text>
+                <Text style={styles.equipmentInfoDetail}>
+                  {selectedAssignment.list_target_date} • {selectedAssignment.list_shift?.toUpperCase()} Shift
+                </Text>
+              </View>
+            )}
+
+            {aiSuggestQuery.isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#9C27B0" />
+                <Text style={styles.loadingText}>Analyzing workload and availability...</Text>
+              </View>
+            ) : aiSuggestQuery.data ? (
+              <>
+                <Text style={styles.sectionTitle}>Recommended Team</Text>
+                <SuggestionCard
+                  suggestion={aiSuggestQuery.data.recommended?.mechanical}
+                  type="Mechanical"
+                />
+                <SuggestionCard
+                  suggestion={aiSuggestQuery.data.recommended?.electrical}
+                  type="Electrical"
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.applyButton,
+                    (!aiSuggestQuery.data.recommended?.mechanical || !aiSuggestQuery.data.recommended?.electrical) && styles.applyButtonDisabled,
+                  ]}
+                  onPress={handleApplyAISuggestion}
+                  disabled={!aiSuggestQuery.data.recommended?.mechanical || !aiSuggestQuery.data.recommended?.electrical || assignMutation.isPending}
+                >
+                  {assignMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.applyButtonText}>⚡ Apply Recommendation</Text>
+                  )}
+                </TouchableOpacity>
+
+                {(aiSuggestQuery.data.suggestions?.mechanical?.length > 1 || aiSuggestQuery.data.suggestions?.electrical?.length > 1) && (
+                  <>
+                    <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Other Options</Text>
+                    {aiSuggestQuery.data.suggestions?.mechanical?.slice(1, 4).map((s: InspectorSuggestion) => (
+                      <View key={s.id} style={styles.otherOption}>
+                        <Text style={styles.otherOptionName}>{s.name}</Text>
+                        <Text style={styles.otherOptionScore}>{s.match_score}%</Text>
+                      </View>
+                    ))}
+                  </>
                 )}
               </>
+            ) : (
+              <Text style={styles.errorText}>Failed to get AI suggestions</Text>
             )}
           </ScrollView>
         </View>
@@ -611,7 +819,32 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
+  statsRow: { paddingHorizontal: 12, paddingVertical: 8, maxHeight: 80 },
+  statCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 4,
+    minWidth: 80,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statValue: { fontSize: 20, fontWeight: 'bold' },
+  statLabel: { fontSize: 11, color: '#757575', marginTop: 2 },
+  bulkButton: {
+    backgroundColor: '#9C27B0',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  bulkButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  listContent: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 32 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -645,8 +878,9 @@ const styles = StyleSheet.create({
   inspectorRow: { flexDirection: 'row', marginBottom: 4 },
   inspectorLabel: { fontSize: 13, color: '#757575', width: 50 },
   inspectorValue: { fontSize: 13, color: '#424242', fontWeight: '500', flex: 1 },
+  cardActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   assignButton: {
-    marginTop: 12,
+    flex: 1,
     backgroundColor: '#1976D2',
     paddingVertical: 10,
     borderRadius: 8,
@@ -655,6 +889,14 @@ const styles = StyleSheet.create({
   assignButtonDisabled: { backgroundColor: '#BDBDBD' },
   assignButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   assignButtonTextDisabled: { color: '#757575' },
+  aiButton: {
+    backgroundColor: '#9C27B0',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  aiButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 11, fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
   emptyContainer: { paddingTop: 60, alignItems: 'center' },
@@ -698,17 +940,16 @@ const styles = StyleSheet.create({
   shiftButtonActiveNight: { backgroundColor: '#3F51B5', borderColor: '#3F51B5' },
   shiftButtonText: { fontSize: 14, fontWeight: '600', color: '#616161' },
   shiftButtonTextActive: { color: '#fff' },
-  noteText: { fontSize: 14, color: '#616161', marginTop: 16, lineHeight: 20 },
   equipmentInfo: {
     backgroundColor: '#E3F2FD',
     padding: 14,
     borderRadius: 10,
     marginBottom: 8,
   },
-  equipmentInfoTitle: { fontSize: 16, fontWeight: '700', color: '#1976D2', marginBottom: 6 },
-  equipmentInfoDetail: { fontSize: 13, color: '#424242', marginBottom: 2 },
-  loadingContainer: { alignItems: 'center', paddingVertical: 24 },
-  loadingText: { fontSize: 14, color: '#757575', marginTop: 8 },
+  equipmentInfoTitle: { fontSize: 16, fontWeight: '700', color: '#1976D2', marginBottom: 4 },
+  equipmentInfoDetail: { fontSize: 13, color: '#424242' },
+  loadingContainer: { alignItems: 'center', paddingVertical: 40 },
+  loadingText: { fontSize: 14, color: '#757575', marginTop: 12 },
   inspectorPickerButton: {
     backgroundColor: '#fff',
     paddingVertical: 14,
@@ -723,12 +964,42 @@ const styles = StyleSheet.create({
   inspectorPickerText: { fontSize: 15, color: '#212121', flex: 1 },
   placeholderText: { color: '#999' },
   chevron: { fontSize: 12, color: '#757575', marginLeft: 8 },
-  warningText: {
-    fontSize: 13,
-    color: '#FF9800',
-    marginTop: 16,
-    fontStyle: 'italic',
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#212121', marginBottom: 12, marginTop: 8 },
+  suggestionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
+  suggestionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  suggestionType: { fontSize: 12, fontWeight: '600', color: '#757575', textTransform: 'uppercase' },
+  suggestionEmpty: { fontSize: 14, color: '#999', fontStyle: 'italic' },
+  suggestionName: { fontSize: 16, fontWeight: '600', color: '#212121' },
+  suggestionDetail: { fontSize: 13, color: '#757575', marginTop: 4 },
+  scoreBox: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  scoreText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  applyButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  applyButtonDisabled: { backgroundColor: '#BDBDBD' },
+  applyButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  otherOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  otherOptionName: { fontSize: 14, color: '#424242' },
+  otherOptionScore: { fontSize: 14, fontWeight: '600', color: '#757575' },
+  errorText: { fontSize: 14, color: '#E53935', textAlign: 'center', padding: 20 },
   pickerModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

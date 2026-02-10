@@ -26,6 +26,7 @@ import type {
   InspectionStatus,
   InspectionAnswer,
   ReviewPayload,
+  InspectionStats,
 } from '@inspection/shared';
 import InspectionFindingDisplay from '../../components/InspectionFindingDisplay';
 
@@ -54,6 +55,15 @@ function Badge({ label, color }: { label: string; color: string }) {
   );
 }
 
+function StatCard({ label, value, color = '#1976D2' }: { label: string; value: number | string; color?: string }) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function InspectionCard({
   inspection,
   onPress,
@@ -67,6 +77,15 @@ function InspectionCard({
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString() + ' ' + new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Calculate duration
+  const getDuration = () => {
+    if (!inspection.started_at || !inspection.submitted_at) return null;
+    const start = new Date(inspection.started_at).getTime();
+    const end = new Date(inspection.submitted_at).getTime();
+    const minutes = Math.round((end - start) / 60000);
+    return `${minutes} min`;
   };
 
   return (
@@ -90,8 +109,8 @@ function InspectionCard({
 
       <View style={styles.cardFooter}>
         <Text style={styles.dateText}>Started: {formatDate(inspection.started_at)}</Text>
-        {inspection.submitted_at && (
-          <Text style={styles.dateText}>Submitted: {formatDate(inspection.submitted_at)}</Text>
+        {getDuration() && (
+          <Text style={styles.durationText}>⏱ {getDuration()}</Text>
         )}
       </View>
     </TouchableOpacity>
@@ -119,12 +138,29 @@ export default function AllInspectionsScreen() {
   const [aiReportModalVisible, setAiReportModalVisible] = useState(false);
   const [aiReportContent, setAiReportContent] = useState<string | null>(null);
 
+  // AI Insights state
+  const [insightsModalVisible, setInsightsModalVisible] = useState(false);
+
   const filters: FilterOption[] = [
     { label: t('inspections.all', 'All'), value: null },
     { label: t('inspections.draft', 'Draft'), value: 'draft' },
     { label: t('inspections.submitted', 'Submitted'), value: 'submitted' },
     { label: t('inspections.reviewed', 'Reviewed'), value: 'reviewed' },
   ];
+
+  // Stats query
+  const statsQuery = useQuery({
+    queryKey: ['inspections-stats'],
+    queryFn: () => inspectionsApi.getStats().then((r) => (r.data as any)?.data as InspectionStats),
+    staleTime: 60000,
+  });
+
+  // AI Insights query
+  const insightsQuery = useQuery({
+    queryKey: ['inspections-ai-insights'],
+    queryFn: () => inspectionsApi.getAIInsights().then((r) => (r.data as any)?.data),
+    enabled: insightsModalVisible,
+  });
 
   const inspectionsQuery = useQuery({
     queryKey: ['all-inspections', activeFilter, page],
@@ -155,6 +191,7 @@ export default function AllInspectionsScreen() {
         t('inspections.reviewSuccess', 'Inspection reviewed successfully')
       );
       queryClient.invalidateQueries({ queryKey: ['all-inspections'] });
+      queryClient.invalidateQueries({ queryKey: ['inspections-stats'] });
       queryClient.invalidateQueries({ queryKey: ['inspection-detail', selectedInspectionId] });
       setReviewModalVisible(false);
       setReviewResult(null);
@@ -172,6 +209,7 @@ export default function AllInspectionsScreen() {
   const inspections: Inspection[] = responseData?.data ?? [];
   const pagination = responseData?.pagination ?? null;
   const hasNextPage = pagination?.has_next ?? false;
+  const stats = statsQuery.data;
 
   const handleFilterChange = useCallback((value: InspectionStatus | null) => {
     setActiveFilter(value);
@@ -181,7 +219,8 @@ export default function AllInspectionsScreen() {
   const handleRefresh = useCallback(() => {
     setPage(1);
     inspectionsQuery.refetch();
-  }, [inspectionsQuery]);
+    statsQuery.refetch();
+  }, [inspectionsQuery, statsQuery]);
 
   const handleLoadMore = useCallback(() => {
     if (hasNextPage && !inspectionsQuery.isFetching) {
@@ -213,7 +252,6 @@ export default function AllInspectionsScreen() {
     if (!selectedInspectionId) return;
     setDownloadingPdf(true);
     try {
-      // Open the PDF report URL directly in the browser
       const baseUrl = getApiClient().defaults.baseURL;
       const reportUrl = `${baseUrl}/api/inspections/${selectedInspectionId}/report`;
       await Linking.openURL(reportUrl);
@@ -247,7 +285,6 @@ export default function AllInspectionsScreen() {
         })),
       };
 
-      // Get report in both languages
       const [enResult, arResult] = await Promise.all([
         aiApi.generateReport(inspectionData, 'en'),
         aiApi.generateReport(inspectionData, 'ar'),
@@ -290,10 +327,25 @@ export default function AllInspectionsScreen() {
 
   const canReview = detailQuery.data?.status === 'submitted';
   const canDownload = detailQuery.data && detailQuery.data.status !== 'draft';
+  const insights = insightsQuery.data;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{t('nav.inspections', 'All Inspections')}</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>{t('nav.inspections', 'All Inspections')}</Text>
+        <TouchableOpacity style={styles.insightsButton} onPress={() => setInsightsModalVisible(true)}>
+          <Text style={styles.insightsButtonText}>🤖 AI</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Stats Row */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsRow}>
+        <StatCard label="Today" value={stats?.today?.total || 0} />
+        <StatCard label="Submitted" value={stats?.today?.submitted || 0} color="#FF9800" />
+        <StatCard label="Pending" value={stats?.pending_review || 0} color={stats?.pending_review ? '#E53935' : '#4CAF50'} />
+        <StatCard label="Pass Rate" value={`${(stats?.pass_rate || 0).toFixed(0)}%`} color="#4CAF50" />
+        <StatCard label="Avg Time" value={`${stats?.avg_completion_minutes || 0}m`} color="#9C27B0" />
+      </ScrollView>
 
       {/* Filter Chips */}
       <ScrollView
@@ -426,7 +478,7 @@ export default function AllInspectionsScreen() {
                       {generatingAiReport ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Text style={styles.actionButtonText}>AI Report</Text>
+                        <Text style={styles.actionButtonText}>🤖 AI</Text>
                       )}
                     </TouchableOpacity>
 
@@ -557,6 +609,95 @@ export default function AllInspectionsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* AI Insights Modal */}
+      <Modal visible={insightsModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setInsightsModalVisible(false)}>
+              <Text style={styles.modalClose}>{t('common.close', 'Close')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>🤖 AI Insights</Text>
+            <View style={{ width: 50 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {insightsQuery.isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#9C27B0" />
+                <Text style={styles.loadingText}>Analyzing inspection data...</Text>
+              </View>
+            ) : insights ? (
+              <>
+                {/* Trend Summary */}
+                <View style={styles.insightCard}>
+                  <Text style={styles.insightTitle}>Trend Summary</Text>
+                  <View style={styles.trendRow}>
+                    <Text style={[styles.trendIcon, { color: insights.trend_summary?.direction === 'up' ? '#4CAF50' : '#E53935' }]}>
+                      {insights.trend_summary?.direction === 'up' ? '📈' : '📉'}
+                    </Text>
+                    <View>
+                      <Text style={styles.trendValue}>{(insights.trend_summary?.change || 0).toFixed(1)}%</Text>
+                      <Text style={styles.trendLabel}>
+                        {insights.trend_summary?.direction === 'up' ? 'Pass rate improving' : 'Pass rate declining'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* At Risk Equipment */}
+                {insights.at_risk_equipment?.length > 0 && (
+                  <View style={styles.insightCard}>
+                    <Text style={styles.insightTitle}>⚠️ At-Risk Equipment</Text>
+                    {insights.at_risk_equipment.slice(0, 5).map((eq: any) => (
+                      <View key={eq.id} style={styles.riskItem}>
+                        <Text style={styles.riskName}>{eq.name}</Text>
+                        <Text style={[styles.riskRate, { color: eq.failure_rate > 50 ? '#E53935' : '#FF9800' }]}>
+                          {eq.failure_rate.toFixed(0)}% fail
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Recommendations */}
+                {insights.recommendations?.length > 0 && (
+                  <View style={styles.insightCard}>
+                    <Text style={styles.insightTitle}>💡 Recommendations</Text>
+                    {insights.recommendations.slice(0, 3).map((rec: any, idx: number) => (
+                      <View key={idx} style={styles.recItem}>
+                        <View style={[styles.recPriority, { backgroundColor: rec.priority === 'high' ? '#E53935' : rec.priority === 'medium' ? '#FF9800' : '#1976D2' }]}>
+                          <Text style={styles.recPriorityText}>{rec.priority.toUpperCase()}</Text>
+                        </View>
+                        <View style={styles.recContent}>
+                          <Text style={styles.recTitle}>{rec.title}</Text>
+                          <Text style={styles.recDesc}>{rec.description}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Top Performers */}
+                {stats?.top_performers?.length > 0 && (
+                  <View style={styles.insightCard}>
+                    <Text style={styles.insightTitle}>🏆 Top Performers</Text>
+                    {stats.top_performers.slice(0, 5).map((p: any, idx: number) => (
+                      <View key={p.id} style={styles.performerRow}>
+                        <Text style={styles.performerRank}>{idx + 1}.</Text>
+                        <Text style={styles.performerName}>{p.name}</Text>
+                        <Text style={styles.performerStats}>{p.completed} • {p.pass_rate.toFixed(0)}%</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            ) : (
+              <Text style={styles.errorText}>Failed to load insights</Text>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -564,7 +705,26 @@ export default function AllInspectionsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#212121', padding: 16, paddingBottom: 8 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 8 },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#212121' },
+  insightsButton: { backgroundColor: '#9C27B0', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  insightsButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  statsRow: { paddingHorizontal: 12, paddingVertical: 8, maxHeight: 80 },
+  statCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 4,
+    minWidth: 80,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statValue: { fontSize: 20, fontWeight: 'bold' },
+  statLabel: { fontSize: 11, color: '#757575', marginTop: 2 },
   filterScroll: { maxHeight: 48, paddingBottom: 4 },
   filterRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
@@ -573,14 +733,15 @@ const styles = StyleSheet.create({
   filterChipText: { fontSize: 13, fontWeight: '600' },
   filterChipTextActive: { color: '#fff' },
   filterChipTextInactive: { color: '#616161' },
-  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
+  listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   cardId: { fontSize: 14, fontWeight: '600', color: '#757575' },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#212121', marginBottom: 2 },
   cardSubtitle: { fontSize: 13, color: '#757575', marginBottom: 8 },
-  cardFooter: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  dateText: { fontSize: 12, color: '#757575', marginBottom: 2 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  dateText: { fontSize: 12, color: '#757575' },
+  durationText: { fontSize: 12, color: '#9C27B0', fontWeight: '600' },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 11, fontWeight: '600', color: '#fff' },
@@ -628,4 +789,26 @@ const styles = StyleSheet.create({
   aiReportActions: { flexDirection: 'row', gap: 10, padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e0e0e0' },
   shareButton: { flex: 1, paddingVertical: 14, borderRadius: 8, backgroundColor: '#4CAF50', alignItems: 'center' },
   shareButtonText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  loadingContainer: { alignItems: 'center', paddingVertical: 40 },
+  loadingText: { fontSize: 14, color: '#757575', marginTop: 12 },
+  insightCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12 },
+  insightTitle: { fontSize: 16, fontWeight: '600', color: '#212121', marginBottom: 12 },
+  trendRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  trendIcon: { fontSize: 32 },
+  trendValue: { fontSize: 24, fontWeight: 'bold', color: '#212121' },
+  trendLabel: { fontSize: 13, color: '#757575' },
+  riskItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  riskName: { fontSize: 14, color: '#424242', flex: 1 },
+  riskRate: { fontSize: 14, fontWeight: '600' },
+  recItem: { flexDirection: 'row', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  recPriority: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, alignSelf: 'flex-start' },
+  recPriorityText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  recContent: { flex: 1 },
+  recTitle: { fontSize: 14, fontWeight: '600', color: '#212121', marginBottom: 2 },
+  recDesc: { fontSize: 12, color: '#757575' },
+  performerRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  performerRank: { fontSize: 14, fontWeight: '600', color: '#757575', width: 24 },
+  performerName: { fontSize: 14, color: '#424242', flex: 1 },
+  performerStats: { fontSize: 12, color: '#757575' },
+  errorText: { fontSize: 14, color: '#E53935', textAlign: 'center', padding: 20 },
 });
