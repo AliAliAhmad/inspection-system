@@ -80,6 +80,8 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/performance', name: 'Performance', icon: <BarChartOutlined /> },
     { path: '/admin/notification-rules', name: t('nav.notification_rules'), icon: <ThunderboltOutlined /> },
     { path: '/admin/notification-analytics', name: t('nav.notification_analytics'), icon: <LineChartOutlined /> },
+    { path: '/admin/leave-settings', name: t('nav.leave_settings'), icon: <SettingOutlined /> },
+    { path: '/admin/work-plan-settings', name: t('nav.work_plan_settings'), icon: <SettingOutlined /> },
   ];
 
   const inspectorItems: MenuDataItem[] = [

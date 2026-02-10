@@ -26,3 +26,6 @@ export { NaturalLanguageLeaveInput } from './NaturalLanguageLeaveInput';
 // Impact & Cancellation
 export { LeaveImpactModal } from './LeaveImpactModal';
 export { CancellationRequestModal } from './CancellationRequestModal';
+
+// Admin Management - Holidays
+export { default as HolidaysManager } from './HolidaysManager';

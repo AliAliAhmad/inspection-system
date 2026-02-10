@@ -17,3 +17,8 @@ export { JobTemplateManager } from './JobTemplateManager';
 export { WorkPlanAIPanel } from './WorkPlanAIPanel';
 export { ConflictResolutionPanel } from './ConflictResolutionPanel';
 export { LivePlanStatus } from './LivePlanStatus';
+
+// Admin Settings Components
+export { CapacityConfigManager } from './CapacityConfigManager';
+export { WorkerSkillsManager } from './WorkerSkillsManager';
+export { EquipmentRestrictionsManager } from './EquipmentRestrictionsManager';

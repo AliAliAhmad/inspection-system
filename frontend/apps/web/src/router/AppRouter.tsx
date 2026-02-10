@@ -35,6 +35,8 @@ const WorkPlanDayPage = lazy(() => import('../pages/admin/WorkPlanDayPage'));
 const MaterialsPage = lazy(() => import('../pages/admin/MaterialsPage'));
 const PMTemplatesPage = lazy(() => import('../pages/admin/PMTemplatesPage'));
 const CyclesPage = lazy(() => import('../pages/admin/CyclesPage'));
+const LeaveSettingsPage = lazy(() => import('../pages/admin/LeaveSettingsPage'));
+const WorkPlanSettingsPage = lazy(() => import('../pages/admin/WorkPlanSettingsPage'));
 const DailyReviewPage = lazy(() => import('../pages/admin/DailyReviewPage'));
 const PerformanceReportPage = lazy(() => import('../pages/admin/PerformanceReportPage'));
 const NotificationRulesPage = lazy(() => import('../pages/admin/NotificationRulesPage'));
@@ -121,6 +123,8 @@ export default function AppRouter() {
             <Route path="materials" element={<RoleGuard roles={['admin', 'engineer']}><MaterialsPage /></RoleGuard>} />
             <Route path="pm-templates" element={<RoleGuard roles={['admin', 'engineer']}><PMTemplatesPage /></RoleGuard>} />
             <Route path="cycles" element={<RoleGuard roles={['admin']}><CyclesPage /></RoleGuard>} />
+            <Route path="leave-settings" element={<RoleGuard roles={['admin']}><LeaveSettingsPage /></RoleGuard>} />
+            <Route path="work-plan-settings" element={<RoleGuard roles={['admin']}><WorkPlanSettingsPage /></RoleGuard>} />
             <Route path="daily-review" element={<RoleGuard roles={['admin', 'engineer']}><DailyReviewPage /></RoleGuard>} />
             <Route path="performance" element={<RoleGuard roles={['admin', 'engineer']}><PerformanceReportPage /></RoleGuard>} />
             <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pauses" replace />} />

@@ -250,6 +250,10 @@ export const workPlansApi = {
     return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/templates/${templateId}`);
   },
 
+  cloneTemplate(templateId: number, payload: { new_name: string }) {
+    return getApiClient().post<ApiResponse<JobTemplate>>(`/api/work-plans/templates/${templateId}/clone`, payload);
+  },
+
   // Template Materials
   addTemplateMaterial(templateId: number, payload: { material_id: number; quantity: number; is_optional?: boolean }) {
     return getApiClient().post<ApiResponse<JobTemplate>>(`/api/work-plans/templates/${templateId}/materials`, payload);
@@ -349,6 +353,10 @@ export const workPlansApi = {
 
   addWorkerSkill(userId: number, payload: AddSkillPayload) {
     return getApiClient().post<ApiResponse<WorkerSkill>>(`/api/work-plans/workers/${userId}/skills`, payload);
+  },
+
+  createWorkerSkill(payload: AddSkillPayload & { user_id: number }) {
+    return getApiClient().post<ApiResponse<WorkerSkill>>(`/api/work-plans/workers/${payload.user_id}/skills`, payload);
   },
 
   updateWorkerSkill(skillId: number, payload: Partial<AddSkillPayload> & { is_verified?: boolean }) {
