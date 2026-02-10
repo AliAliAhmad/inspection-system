@@ -72,8 +72,8 @@ export function CompOffList({ userId, showAllUsers = false, compact = false }: C
     },
   });
 
-  const compOffs: CompensatoryLeave[] = data?.data?.comp_offs || [];
-  const pagination = data?.data?.pagination;
+  const compOffs: CompensatoryLeave[] = data?.data || [];
+  const pagination = data?.pagination;
 
   // Mutations
   const approveMutation = useMutation({
@@ -198,7 +198,7 @@ export function CompOffList({ userId, showAllUsers = false, compact = false }: C
           '-'
         ),
     },
-    ...(record => record.used_in_leave_id ? [{
+    {
       title: t('leaves.usedIn', 'Used In'),
       key: 'used_in',
       width: 100,
@@ -217,7 +217,7 @@ export function CompOffList({ userId, showAllUsers = false, compact = false }: C
         ) : (
           '-'
         ),
-    }] : []),
+    },
     ...(isAdmin && showAllUsers
       ? [
           {

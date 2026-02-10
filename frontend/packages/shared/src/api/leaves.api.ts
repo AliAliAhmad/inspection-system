@@ -455,6 +455,10 @@ export const leavesApi = {
     return getApiClient().get<ApiResponse<LeaveBurnoutRisk[]>>('/api/leaves/ai/burnout-risks', { params });
   },
 
+  getBurnoutRisk(userId: number) {
+    return getApiClient().get<ApiResponse<{ risk: LeaveBurnoutRisk }>>(`/api/leaves/ai/burnout-risk/${userId}`);
+  },
+
   getPatternAnalysis(userId: number) {
     return getApiClient().get<ApiResponse<LeavePatternAnalysis>>(
       `/api/leaves/ai/patterns/${userId}`,

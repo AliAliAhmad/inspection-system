@@ -1005,7 +1005,7 @@ export default function WorkPlanningPage() {
                 <GanttChartView
                   jobs={allJobs}
                   weekStart={weekStartStr}
-                  onJobClick={handleJobClick}
+                  onJobClick={(job) => handleJobClick(job as WorkPlanJob)}
                 />
               ) : viewMode === 'timeline' ? (
                 <TimelineView
@@ -1701,7 +1701,6 @@ export default function WorkPlanningPage() {
         {currentPlan && (
           <WorkPlanAIPanel
             planId={currentPlan.id}
-            weekStart={weekStartStr}
           />
         )}
       </Drawer>

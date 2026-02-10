@@ -6,6 +6,7 @@ import {
   Button,
   List,
   Tooltip,
+  Spin,
 } from 'antd';
 import {
   WarningOutlined,
@@ -16,12 +17,14 @@ import {
   ArrowRightOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { LeaveBurnoutRisk } from '@inspection/shared';
+import { useQuery } from '@tanstack/react-query';
+import { leavesApi, LeaveBurnoutRisk } from '@inspection/shared';
 
 const { Text, Paragraph } = Typography;
 
 interface LeaveBurnoutAlertProps {
-  risk: LeaveBurnoutRisk;
+  risk?: LeaveBurnoutRisk;
+  userId?: number;
   onRequestLeave?: () => void;
   compact?: boolean;
 }
@@ -54,11 +57,38 @@ const RISK_LEVEL_CONFIG = {
 };
 
 export function LeaveBurnoutAlert({
-  risk,
+  risk: riskProp,
+  userId,
   onRequestLeave,
   compact = false,
 }: LeaveBurnoutAlertProps) {
   const { t } = useTranslation();
+
+  // Fetch burnout risk if userId is provided and risk is not passed
+  const { data: fetchedRiskData, isLoading } = useQuery({
+    queryKey: ['leaves', 'burnout-risk', userId],
+    queryFn: () => leavesApi.getBurnoutRisk(userId!).then(r => r.data),
+    enabled: !riskProp && !!userId,
+  });
+
+  const risk: LeaveBurnoutRisk = riskProp || fetchedRiskData?.data?.risk || {
+    user_id: userId || 0,
+    user_name: '',
+    risk_level: 'low' as const,
+    factors: [] as string[],
+    recommendation: '',
+    days_since_last_leave: undefined,
+  };
+
+  // Show loading state if fetching
+  if (!riskProp && userId && isLoading) {
+    return compact ? null : (
+      <div style={{ textAlign: 'center', padding: 16 }}>
+        <Spin size="small" />
+      </div>
+    );
+  }
+
   const config = RISK_LEVEL_CONFIG[risk.risk_level];
 
   if (compact) {

@@ -264,7 +264,7 @@ export const JobTemplateManager: React.FC = () => {
       }
     >
       <Table
-        dataSource={templates?.data?.data || []}
+        dataSource={templates?.data?.templates || []}
         columns={columns}
         rowKey="id"
         loading={isLoading}

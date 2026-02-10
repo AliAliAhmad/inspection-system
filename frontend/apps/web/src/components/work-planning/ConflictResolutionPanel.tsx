@@ -100,12 +100,12 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
   const detectMutation = useMutation({
     mutationFn: () => workPlansApi.detectConflicts(planId),
     onSuccess: (result) => {
-      message.info(t('workPlan.conflictsDetected', { count: result?.data?.length || 0 }));
+      message.info(t('workPlan.conflictsDetected', { count: result?.data?.conflicts?.length || 0 }));
       queryClient.invalidateQueries({ queryKey: ['plan-conflicts', planId] });
     },
   });
 
-  const conflictList: SchedulingConflict[] = conflicts?.data || [];
+  const conflictList: SchedulingConflict[] = conflicts?.data?.conflicts || [];
 
   const filteredConflicts = conflictList.filter((c) => {
     if (filter === 'all') return !c.is_resolved && !c.is_ignored;

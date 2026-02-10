@@ -68,7 +68,7 @@ export const WorkerSkillsManager: React.FC = () => {
 
   const { data: users } = useQuery({
     queryKey: ['users-list'],
-    queryFn: () => usersApi.listUsers(),
+    queryFn: () => usersApi.list(),
   });
 
   const createMutation = useMutation({
@@ -257,8 +257,8 @@ export const WorkerSkillsManager: React.FC = () => {
     },
   ];
 
-  const skillList = skills?.data?.data || skills?.data || [];
-  const userList = users?.data?.data || users?.data || [];
+  const skillList = skills?.data?.skills || [];
+  const userList = (users?.data as any)?.data || [];
 
   return (
     <Card
@@ -286,7 +286,7 @@ export const WorkerSkillsManager: React.FC = () => {
       }
     >
       <Table
-        dataSource={skillList}
+        dataSource={skillList as any[]}
         columns={columns}
         rowKey="id"
         loading={isLoading}

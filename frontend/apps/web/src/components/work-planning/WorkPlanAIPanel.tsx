@@ -66,7 +66,7 @@ export const WorkPlanAIPanel: React.FC<WorkPlanAIPanelProps> = ({
   const autoScheduleMutation = useMutation({
     mutationFn: (options: any) => workPlansApi.autoScheduleEnhanced(planId, options),
     onSuccess: (result) => {
-      message.success(t('workPlan.autoScheduleComplete', { count: result?.data?.scheduled?.length || 0 }));
+      message.success(t('workPlan.autoScheduleComplete', { count: result?.data?.scheduled || 0 }));
       queryClient.invalidateQueries({ queryKey: ['work-plan', planId] });
       onRefresh?.();
       setAutoScheduleModalOpen(false);
@@ -74,7 +74,7 @@ export const WorkPlanAIPanel: React.FC<WorkPlanAIPanelProps> = ({
   });
 
   const balanceWorkloadMutation = useMutation({
-    mutationFn: () => workPlansApi.balanceWorkload(planId),
+    mutationFn: () => workPlansApi.autoScheduleEnhanced(planId, { balance_berths: true }),
     onSuccess: () => {
       message.success(t('workPlan.workloadBalanced'));
       queryClient.invalidateQueries({ queryKey: ['work-plan', planId] });
@@ -82,9 +82,9 @@ export const WorkPlanAIPanel: React.FC<WorkPlanAIPanelProps> = ({
     },
   });
 
-  const status = liveStatus?.data;
-  const bottleneckList = bottlenecks?.data || [];
-  const completionData = completion?.data;
+  const status = liveStatus?.data?.summary;
+  const bottleneckList = bottlenecks?.data?.bottlenecks || [];
+  const completionData = completion?.data?.prediction;
 
   const handleAutoSchedule = async () => {
     const values = await form.validateFields();

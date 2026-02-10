@@ -30,7 +30,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../providers/AuthProvider';
-import { leavesApi, usersApi, Leave, LeaveStatus, LeaveType } from '@inspection/shared';
+import { leavesApi, usersApi, Leave, LeaveStatus, LegacyLeaveType } from '@inspection/shared';
 import { formatDate } from '@inspection/shared';
 import dayjs from 'dayjs';
 import VoiceTextArea from '../../components/VoiceTextArea';
@@ -51,7 +51,7 @@ const statusColors: Record<LeaveStatus, string> = {
   rejected: 'red',
 };
 
-const leaveTypes: LeaveType[] = ['sick', 'annual', 'emergency', 'training', 'other'];
+const leaveTypes: LegacyLeaveType[] = ['sick', 'annual', 'emergency', 'training', 'other'];
 
 export default function LeavesPage() {
   const { t } = useTranslation();
@@ -148,7 +148,7 @@ export default function LeavesPage() {
     {
       title: t('leave.type'),
       dataIndex: 'leave_type',
-      render: (type: LeaveType) => <Tag>{t(`leave.${type}`)}</Tag>,
+      render: (type: LegacyLeaveType) => <Tag>{t(`leave.${type}`)}</Tag>,
     },
     {
       title: t('leave.date_from'),

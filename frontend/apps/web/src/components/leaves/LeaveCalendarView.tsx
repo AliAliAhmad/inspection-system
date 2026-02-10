@@ -79,7 +79,7 @@ export function LeaveCalendarView({ teamId, onDayClick }: LeaveCalendarViewProps
       }).then((r) => r.data),
   });
 
-  const calendarEntries: TeamCalendarEntry[] = calendarData?.data?.entries || [];
+  const calendarEntries: TeamCalendarEntry[] = calendarData?.data || [];
   const entriesMap = useMemo(() => {
     const map = new Map<string, TeamCalendarEntry>();
     calendarEntries.forEach((entry) => {

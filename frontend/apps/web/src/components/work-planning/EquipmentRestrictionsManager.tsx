@@ -74,7 +74,7 @@ export const EquipmentRestrictionsManager: React.FC = () => {
 
   const { data: equipment } = useQuery({
     queryKey: ['equipment-list'],
-    queryFn: () => equipmentApi.listEquipment(),
+    queryFn: () => equipmentApi.list(),
   });
 
   const createMutation = useMutation({
@@ -274,8 +274,8 @@ export const EquipmentRestrictionsManager: React.FC = () => {
     },
   ];
 
-  const restrictionList = restrictions?.data?.data || restrictions?.data || [];
-  const equipmentList = equipment?.data?.data || equipment?.data || [];
+  const restrictionList = restrictions?.data?.restrictions || [];
+  const equipmentList = (equipment?.data as any)?.data || [];
 
   return (
     <Card
@@ -306,7 +306,7 @@ export const EquipmentRestrictionsManager: React.FC = () => {
       }
     >
       <Table
-        dataSource={restrictionList}
+        dataSource={restrictionList as any[]}
         columns={columns}
         rowKey="id"
         loading={isLoading}

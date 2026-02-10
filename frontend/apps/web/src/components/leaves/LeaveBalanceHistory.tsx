@@ -34,12 +34,13 @@ import {
   LeaveBalanceHistory as BalanceHistoryType,
   BalanceHistoryParams,
 } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
 
 interface LeaveBalanceHistoryProps {
-  userId: number;
+  userId?: number;
 }
 
 type ChangeType = 'accrual' | 'used' | 'adjustment' | 'carry_over' | 'expired' | 'encashment';
@@ -86,22 +87,26 @@ const CHANGE_TYPE_CONFIG: Record<
   },
 };
 
-export function LeaveBalanceHistory({ userId }: LeaveBalanceHistoryProps) {
+export function LeaveBalanceHistory({ userId: userIdProp }: LeaveBalanceHistoryProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [filters, setFilters] = useState<BalanceHistoryParams>({});
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null]>([null, null]);
+
+  const userId = userIdProp ?? user?.id;
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['leaves', 'balance-history', userId, filters],
     queryFn: () =>
-      leavesApi.getBalanceHistory(userId, {
+      leavesApi.getBalanceHistory(userId!, {
         ...filters,
         date_from: dateRange[0]?.format('YYYY-MM-DD'),
         date_to: dateRange[1]?.format('YYYY-MM-DD'),
       }).then((r) => r.data),
+    enabled: !!userId,
   });
 
-  const historyItems: BalanceHistoryType[] = data?.data?.history || [];
+  const historyItems: BalanceHistoryType[] = data?.data || [];
 
   // Fetch leave types for filter
   const { data: leaveTypesData } = useQuery({
@@ -109,7 +114,7 @@ export function LeaveBalanceHistory({ userId }: LeaveBalanceHistoryProps) {
     queryFn: () => leavesApi.listLeaveTypes({ is_active: true }).then((r) => r.data),
   });
 
-  const leaveTypes = leaveTypesData?.data?.types || [];
+  const leaveTypes = leaveTypesData?.data || [];
 
   const handleDateRangeChange = (dates: [Dayjs | null, Dayjs | null] | null) => {
     if (dates) {

@@ -73,7 +73,7 @@ export function LeaveBlackoutManager({
     queryFn: () => leavesApi.listBlackouts().then((r) => r.data),
   });
 
-  const blackouts: LeaveBlackout[] = data?.data?.blackouts || [];
+  const blackouts: LeaveBlackout[] = data?.data || [];
 
   // Fetch users for exception selector
   const { data: usersData } = useQuery({

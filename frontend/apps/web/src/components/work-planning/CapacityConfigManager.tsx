@@ -221,7 +221,7 @@ export const CapacityConfigManager: React.FC = () => {
     },
   ];
 
-  const configList = configs?.data?.data || configs?.data || [];
+  const configList = configs?.data?.configs || [];
 
   return (
     <Card
@@ -233,7 +233,7 @@ export const CapacityConfigManager: React.FC = () => {
       }
     >
       <Table
-        dataSource={configList}
+        dataSource={configList as any[]}
         columns={columns}
         rowKey="id"
         loading={isLoading}

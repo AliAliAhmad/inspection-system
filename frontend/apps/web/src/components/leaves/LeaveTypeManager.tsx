@@ -73,7 +73,7 @@ export function LeaveTypeManager({ onTypeCreated, onTypeUpdated }: LeaveTypeMana
     queryFn: () => leavesApi.listLeaveTypes().then((r) => r.data),
   });
 
-  const leaveTypes: LeaveType[] = data?.data?.types || [];
+  const leaveTypes: LeaveType[] = data?.data || [];
 
   // Mutations
   const createMutation = useMutation({

@@ -25,7 +25,7 @@ import {
   checklistsApi,
   type ChecklistTemplate,
   type ChecklistItem,
-  type CreateTemplatePayload,
+  type ChecklistCreateTemplatePayload as CreateTemplatePayload,
   type CreateChecklistItemPayload,
   type UpdateChecklistItemPayload,
 } from '@inspection/shared';

@@ -11,6 +11,7 @@ import {
   message,
   Row,
   Col,
+  Spin,
 } from 'antd';
 import {
   CloseCircleOutlined,
@@ -20,7 +21,7 @@ import {
   CheckCircleOutlined,
   SwapOutlined,
 } from '@ant-design/icons';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { leavesApi, Leave, LeaveCancellationPayload } from '@inspection/shared';
@@ -31,19 +32,30 @@ const { TextArea } = Input;
 interface CancellationRequestModalProps {
   open: boolean;
   onClose: () => void;
-  leave: Leave | null;
+  leave?: Leave | null;
+  leaveId?: number;
   onSuccess?: () => void;
 }
 
 export function CancellationRequestModal({
   open,
   onClose,
-  leave,
+  leave: leaveProp,
+  leaveId,
   onSuccess,
 }: CancellationRequestModalProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
+
+  // Fetch leave data if leaveId is provided
+  const { data: fetchedLeaveData, isLoading } = useQuery({
+    queryKey: ['leaves', 'detail', leaveId],
+    queryFn: () => leavesApi.get(leaveId!).then(r => r.data),
+    enabled: !leaveProp && !!leaveId && open,
+  });
+
+  const leave = leaveProp || fetchedLeaveData?.data || null;
 
   // Calculate if the leave has started
   const leaveStatus = useMemo(() => {
@@ -143,6 +155,16 @@ export function CancellationRequestModal({
     form.resetFields();
     onClose();
   };
+
+  if (!leaveProp && leaveId && isLoading) {
+    return (
+      <Modal open={open} onCancel={onClose} footer={null}>
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <Spin size="large" />
+        </div>
+      </Modal>
+    );
+  }
 
   if (!leave) return null;
 

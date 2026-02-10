@@ -10,26 +10,30 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { WorkPlanJob } from '@inspection/shared';
 
-interface Job {
+// Flexible Job type that works with WorkPlanJob
+interface GanttJob {
   id: number;
-  name: string;
+  name?: string;
   equipment_name?: string;
-  start_time?: string;
-  end_time?: string;
-  estimated_hours: number;
-  priority: string;
+  equipment?: { serial_number?: string; name?: string } | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  estimated_hours?: number;
   status?: string;
-  berth?: string;
+  berth?: string | null;
+  priority: string;
   assigned_users?: Array<{ id: number; full_name: string }>;
+  assignments?: Array<{ id: number; user?: { id: number; full_name: string } | null }>;
   dependencies?: Array<{ depends_on_job_id: number }>;
 }
 
 interface GanttChartViewProps {
-  jobs: Job[];
+  jobs: GanttJob[] | WorkPlanJob[];
   weekStart: string;
   loading?: boolean;
-  onJobClick?: (job: Job) => void;
+  onJobClick?: (job: GanttJob | WorkPlanJob) => void;
   onJobMove?: (jobId: number, newDate: string, newStartTime: string) => void;
 }
 
@@ -86,14 +90,31 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
     });
   }, [jobs, viewMode, selectedDay, weekDays]);
 
-  const getJobPosition = (job: Job, index: number) => {
-    const startHour = job.start_time
-      ? parseInt(job.start_time.split(':')[0])
+  const getJobPosition = (job: GanttJob | WorkPlanJob, index: number) => {
+    const startTimeStr = job.start_time;
+    const startHour = startTimeStr
+      ? parseInt(startTimeStr.split(':')[0])
       : START_HOUR + index;
     const duration = job.estimated_hours || 2;
     const left = (startHour - START_HOUR) * HOUR_WIDTH * zoomLevel;
     const width = duration * HOUR_WIDTH * zoomLevel;
     return { left, width };
+  };
+
+  const getJobName = (job: GanttJob | WorkPlanJob): string => {
+    const jobAny = job as any;
+    return jobAny.equipment_name || jobAny.name || job.equipment?.serial_number || job.equipment?.name || `Job #${job.id}`;
+  };
+
+  const getJobAssignees = (job: GanttJob | WorkPlanJob): Array<{ id: number; full_name: string }> => {
+    const jobAny = job as any;
+    if (jobAny.assigned_users) return jobAny.assigned_users;
+    if (jobAny.assignments) {
+      return jobAny.assignments
+        .filter((a: any) => a.user)
+        .map((a: any) => ({ id: a.user.id, full_name: a.user.full_name }));
+    }
+    return [];
   };
 
   const handlePrevDay = () => {
@@ -197,6 +218,9 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
           {currentDayJobs.map((job, index) => {
             const { left, width } = getJobPosition(job, index);
             const color = priorityColors[job.priority] || priorityColors.normal;
+            const jobName = getJobName(job);
+            const assignees = getJobAssignees(job);
+            const hours_display = job.estimated_hours || 0;
 
             return (
               <div
@@ -219,8 +243,8 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  <Tooltip title={job.equipment_name || job.name}>
-                    <span style={{ fontSize: 13 }}>{job.equipment_name || job.name}</span>
+                  <Tooltip title={jobName}>
+                    <span style={{ fontSize: 13 }}>{jobName}</span>
                   </Tooltip>
                 </div>
 
@@ -243,10 +267,10 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
                   <Tooltip
                     title={
                       <div>
-                        <div>{job.equipment_name || job.name}</div>
-                        <div>{job.estimated_hours}h - {job.priority}</div>
-                        {job.assigned_users?.map((u) => (
-                          <Tag key={u.id} >{u.full_name}</Tag>
+                        <div>{jobName}</div>
+                        <div>{hours_display}h - {job.priority}</div>
+                        {assignees.map((u) => (
+                          <Tag key={u.id}>{u.full_name}</Tag>
                         ))}
                       </div>
                     }
@@ -273,10 +297,10 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
                         boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                       }}
                     >
-                      {job.dependencies && job.dependencies.length > 0 && (
+                      {(job as GanttJob).dependencies && (job as GanttJob).dependencies!.length > 0 && (
                         <ExclamationCircleOutlined style={{ marginRight: 4 }} />
                       )}
-                      {width > 80 && (job.equipment_name || job.name)}
+                      {width > 80 && jobName}
                     </div>
                   </Tooltip>
                 </div>

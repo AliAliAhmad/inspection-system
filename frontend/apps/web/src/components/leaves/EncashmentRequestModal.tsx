@@ -21,27 +21,31 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { leavesApi, RequestEncashmentPayload, LeaveType, LeaveBalance } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 
 const { Text, Title } = Typography;
 
 interface EncashmentRequestModalProps {
   open: boolean;
   onClose: () => void;
-  userId: number;
+  userId?: number;
   onSuccess?: () => void;
 }
 
 export function EncashmentRequestModal({
   open,
   onClose,
-  userId,
+  userId: userIdProp,
   onSuccess,
 }: EncashmentRequestModalProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [selectedTypeId, setSelectedTypeId] = useState<number | undefined>();
   const [daysToEncash, setDaysToEncash] = useState<number>(0);
+
+  const userId = userIdProp ?? user?.id;
 
   // Fetch leave types
   const { data: typesData, isLoading: typesLoading } = useQuery({
@@ -50,15 +54,15 @@ export function EncashmentRequestModal({
     enabled: open,
   });
 
-  const leaveTypes: LeaveType[] = (typesData?.data?.types || []).filter(
+  const leaveTypes: LeaveType[] = (typesData?.data || []).filter(
     (type) => type.code === 'ANNUAL' || type.is_paid
   );
 
   // Fetch user's leave balance
   const { data: balanceData, isLoading: balanceLoading } = useQuery({
     queryKey: ['leaves', 'balance', userId],
-    queryFn: () => leavesApi.getLeaveBalance(userId).then((r) => r.data),
-    enabled: open,
+    queryFn: () => leavesApi.getLeaveBalance(userId!).then((r) => r.data),
+    enabled: open && !!userId,
   });
 
   const balance: LeaveBalance | null = balanceData?.data?.balance || null;
@@ -87,7 +91,7 @@ export function EncashmentRequestModal({
   }, [selectedTypeBalance]);
 
   const requestMutation = useMutation({
-    mutationFn: (payload: RequestEncashmentPayload) => leavesApi.requestEncashment(userId, payload),
+    mutationFn: (payload: RequestEncashmentPayload) => userId ? leavesApi.requestEncashmentForUser(userId, payload) : leavesApi.requestEncashment(payload),
     onSuccess: () => {
       message.success(t('leaves.encashmentRequested', 'Encashment request submitted successfully'));
       queryClient.invalidateQueries({ queryKey: ['encashments'] });

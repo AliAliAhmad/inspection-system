@@ -57,7 +57,7 @@ function BalanceProgressItem({
   balance: LeaveBalanceDetail;
   compact?: boolean;
   onHistoryClick?: () => void;
-  t: (key: string, fallback?: string) => string;
+  t: any;
 }) {
   const config = LEAVE_TYPE_CONFIG[type] || {
     icon: <CalendarOutlined />,

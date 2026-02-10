@@ -62,21 +62,23 @@ export function LeaveImpactModal({
   // Fetch impact analysis
   const { data, isLoading } = useQuery({
     queryKey: ['leaves', 'impact', leaveId, dateFrom, dateTo, userId],
-    queryFn: () => {
+    queryFn: async () => {
       if (leaveId) {
-        return leavesApi.getLeaveImpact(leaveId).then((r) => r.data);
+        const response = await leavesApi.analyzeLeaveImpact(leaveId);
+        return response.data;
       }
       // For new leave request preview
-      return leavesApi.previewLeaveImpact({
+      const response = await leavesApi.previewLeaveImpact({
         user_id: userId!,
         date_from: dateFrom!,
         date_to: dateTo!,
-      }).then((r) => r.data);
+      });
+      return response.data;
     },
     enabled: open && (!!leaveId || (!!dateFrom && !!dateTo && !!userId)),
   });
 
-  const impact: LeaveImpactAnalysis | null = data?.data?.impact || null;
+  const impact: LeaveImpactAnalysis | null = data?.data || null;
 
   const totalAffectedJobs = impact?.affected_jobs.length || 0;
   const highRiskJobs = impact?.affected_jobs.filter((j) => j.risk === 'high' || j.risk === 'critical').length || 0;

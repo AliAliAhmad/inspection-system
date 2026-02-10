@@ -73,7 +73,7 @@ export default function LeaveSettingsPage() {
           {t('leaves.compensatory', 'Comp-Off')}
         </span>
       ),
-      children: <CompOffList showAdminActions />,
+      children: <CompOffList showAllUsers />,
     },
     {
       key: 'encashment',
@@ -83,7 +83,7 @@ export default function LeaveSettingsPage() {
           {t('leaves.encashment', 'Encashment')}
         </span>
       ),
-      children: <EncashmentList showAdminActions />,
+      children: <EncashmentList showAllUsers />,
     },
   ];
 

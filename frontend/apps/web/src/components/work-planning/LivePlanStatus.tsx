@@ -25,7 +25,7 @@ export const LivePlanStatus: React.FC<LivePlanStatusProps> = ({ planId, compact 
     refetchInterval: 30000, // Auto-refresh every 30 seconds
   });
 
-  const status = data?.data;
+  const status = data?.data?.summary;
 
   const getCompletionColor = (rate: number) => {
     if (rate >= 90) return '#52c41a';

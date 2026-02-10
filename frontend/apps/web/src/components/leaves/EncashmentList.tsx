@@ -75,8 +75,8 @@ export function EncashmentList({
     },
   });
 
-  const encashments: LeaveEncashment[] = data?.data?.encashments || [];
-  const pagination = data?.data?.pagination;
+  const encashments: LeaveEncashment[] = data?.data || [];
+  const pagination = data?.pagination;
 
   // Mutations
   const approveMutation = useMutation({
@@ -204,7 +204,7 @@ export function EncashmentList({
         );
       },
     },
-    ...(record => record.paid_at ? [{
+    {
       title: t('leaves.paidAt', 'Paid On'),
       dataIndex: 'paid_at',
       key: 'paid_at',
@@ -217,7 +217,7 @@ export function EncashmentList({
         ) : (
           '-'
         ),
-    }] : []),
+    },
     ...(isAdmin && showAllUsers
       ? [
           {
