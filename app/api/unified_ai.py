@@ -4,14 +4,24 @@ Provides AI-powered features for Approvals, Quality Reviews, and Inspection Rout
 Uses the unified AI services with no code duplication.
 """
 
-from flask import Blueprint, request, jsonify, g
-from app.utils.auth import login_required, admin_required
-from app.utils.response import success_response, error_response
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
+from app.utils.decorators import admin_required
 from app.services import (
     ApprovalAIService,
     QualityReviewAIService,
     InspectionRoutineAIService,
 )
+
+
+def success_response(data, status_code=200):
+    """Return a success JSON response."""
+    return jsonify({'success': True, 'data': data}), status_code
+
+
+def error_response(message, status_code=400):
+    """Return an error JSON response."""
+    return jsonify({'success': False, 'error': message}), status_code
 
 bp = Blueprint('unified_ai', __name__)
 
@@ -21,7 +31,7 @@ bp = Blueprint('unified_ai', __name__)
 # ============================================================================
 
 @bp.route('/approvals/<approval_type>/<int:entity_id>/risk', methods=['GET'])
-@login_required
+@jwt_required()
 def get_approval_risk(approval_type: str, entity_id: int):
     """
     Get risk score for an approval request.
@@ -56,7 +66,7 @@ def get_approval_risk(approval_type: str, entity_id: int):
 
 
 @bp.route('/approvals/<approval_type>/<int:entity_id>/auto-approve-check', methods=['GET'])
-@login_required
+@jwt_required()
 def check_auto_approval(approval_type: str, entity_id: int):
     """
     Check if an approval can be auto-approved.
@@ -93,7 +103,7 @@ def check_auto_approval(approval_type: str, entity_id: int):
 
 
 @bp.route('/approvals/<approval_type>/<int:entity_id>/anomalies', methods=['GET'])
-@login_required
+@jwt_required()
 def get_approval_anomalies(approval_type: str, entity_id: int):
     """
     Detect anomalies in approval patterns.
@@ -127,7 +137,7 @@ def get_approval_anomalies(approval_type: str, entity_id: int):
 
 
 @bp.route('/approvals/<approval_type>/<int:entity_id>/predictions', methods=['GET'])
-@login_required
+@jwt_required()
 def get_approval_predictions(approval_type: str, entity_id: int):
     """
     Get predictions for an approval request.
@@ -159,7 +169,7 @@ def get_approval_predictions(approval_type: str, entity_id: int):
 
 
 @bp.route('/approvals/<approval_type>/<int:entity_id>/recommendations', methods=['GET'])
-@login_required
+@jwt_required()
 def get_approval_recommendations(approval_type: str, entity_id: int):
     """
     Get AI recommendations for an approval decision.
@@ -187,7 +197,7 @@ def get_approval_recommendations(approval_type: str, entity_id: int):
 
 
 @bp.route('/approvals/<approval_type>/<int:entity_id>/analysis', methods=['GET'])
-@login_required
+@jwt_required()
 def get_approval_full_analysis(approval_type: str, entity_id: int):
     """
     Get comprehensive AI analysis for an approval.
@@ -213,7 +223,7 @@ def get_approval_full_analysis(approval_type: str, entity_id: int):
 # ============================================================================
 
 @bp.route('/quality-reviews/<int:review_id>/risk', methods=['GET'])
-@login_required
+@jwt_required()
 def get_quality_review_risk(review_id: int):
     """
     Get risk score for a quality review.
@@ -245,7 +255,7 @@ def get_quality_review_risk(review_id: int):
 
 
 @bp.route('/quality-reviews/<int:review_id>/auto-approve-check', methods=['GET'])
-@login_required
+@jwt_required()
 def check_quality_review_auto_approval(review_id: int):
     """
     Check if a quality review can be auto-approved.
@@ -275,7 +285,7 @@ def check_quality_review_auto_approval(review_id: int):
 
 
 @bp.route('/quality-reviews/<int:review_id>/predictions', methods=['GET'])
-@login_required
+@jwt_required()
 def get_quality_review_predictions(review_id: int):
     """
     Get predictions for a quality review.
@@ -303,7 +313,7 @@ def get_quality_review_predictions(review_id: int):
 
 
 @bp.route('/quality-reviews/<int:review_id>/trends', methods=['GET'])
-@login_required
+@jwt_required()
 def get_quality_review_trends(review_id: int):
     """
     Get trend analysis for quality reviews.
@@ -340,7 +350,7 @@ def get_quality_review_trends(review_id: int):
 
 
 @bp.route('/quality-reviews/<int:review_id>/analysis', methods=['GET'])
-@login_required
+@jwt_required()
 def get_quality_review_full_analysis(review_id: int):
     """
     Get comprehensive AI analysis for a quality review.
@@ -361,7 +371,7 @@ def get_quality_review_full_analysis(review_id: int):
 # ============================================================================
 
 @bp.route('/inspection-routines/<int:routine_id>/compliance-risk', methods=['GET'])
-@login_required
+@jwt_required()
 def get_routine_compliance_risk(routine_id: int):
     """
     Get compliance risk for an inspection routine.
@@ -394,7 +404,7 @@ def get_routine_compliance_risk(routine_id: int):
 
 
 @bp.route('/inspection-routines/<int:routine_id>/predict-completion', methods=['GET'])
-@login_required
+@jwt_required()
 def predict_routine_completion(routine_id: int):
     """
     Predict completion rate for an inspection routine.
@@ -427,7 +437,7 @@ def predict_routine_completion(routine_id: int):
 
 
 @bp.route('/inspection-routines/<int:routine_id>/analysis', methods=['GET'])
-@login_required
+@jwt_required()
 def get_routine_full_analysis(routine_id: int):
     """
     Get comprehensive AI analysis for an inspection routine.
@@ -448,7 +458,7 @@ def get_routine_full_analysis(routine_id: int):
 # ============================================================================
 
 @bp.route('/approvals/bulk-evaluate', methods=['POST'])
-@login_required
+@jwt_required()
 @admin_required()
 def bulk_evaluate_approvals():
     """
@@ -531,7 +541,7 @@ def bulk_evaluate_approvals():
 
 
 @bp.route('/quality-reviews/bulk-evaluate', methods=['POST'])
-@login_required
+@jwt_required()
 @admin_required()
 def bulk_evaluate_quality_reviews():
     """
@@ -593,7 +603,7 @@ def bulk_evaluate_quality_reviews():
 # ============================================================================
 
 @bp.route('/dashboard/stats', methods=['GET'])
-@login_required
+@jwt_required()
 @admin_required()
 def get_ai_dashboard_stats():
     """
