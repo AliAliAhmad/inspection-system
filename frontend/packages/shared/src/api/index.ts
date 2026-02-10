@@ -140,6 +140,9 @@ export type {
   EquipmentSchedule,
   UpcomingEntry,
   UpcomingData,
+  RoutineShiftType,
+  RoutineDayOfWeek,
+  RoutineFrequencyType,
 } from './inspection-routines.api';
 export { rosterApi } from './roster.api';
 export { voiceApi } from './voice.api';
@@ -208,3 +211,18 @@ export type {
 export { pmTemplatesApi } from './pm-templates.api';
 export type { TemplatesListParams, FindTemplateParams } from './pm-templates.api';
 export { workPlanTrackingApi } from './work-plan-tracking.api';
+export { approvalsApi } from './approvals.api';
+export type {
+  ApprovalType,
+  ApprovalStatus,
+  ApprovalUser,
+  ApprovalDetails,
+  UnifiedApproval,
+  ApprovalCounts,
+  ApprovalListResponse,
+  ApprovalListParams,
+  BulkApprovalItem,
+  BulkApprovalPayload,
+  BulkApprovalResult,
+  BulkApprovalResponse,
+} from './approvals.api';

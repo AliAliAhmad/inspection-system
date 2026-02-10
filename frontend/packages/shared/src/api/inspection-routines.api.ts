@@ -1,12 +1,19 @@
 import { getApiClient } from './client';
 import { ApiResponse } from '../types';
 
+export type RoutineShiftType = 'morning' | 'afternoon' | 'night';
+export type RoutineDayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+export type RoutineFrequencyType = 'daily' | 'weekly' | 'monthly';
+
 export interface InspectionRoutine {
   id: number;
   name: string;
   name_ar: string | null;
   asset_types: string[];
   template_id: number;
+  shift: RoutineShiftType | null;
+  days_of_week: RoutineDayOfWeek[] | null;
+  frequency: RoutineFrequencyType;
   is_active: boolean;
   created_at: string;
 }
@@ -16,6 +23,9 @@ export interface CreateRoutinePayload {
   name_ar?: string;
   asset_types: string[];
   template_id: number;
+  shift?: RoutineShiftType | null;
+  days_of_week?: RoutineDayOfWeek[] | null;
+  frequency?: RoutineFrequencyType;
 }
 
 export interface UploadScheduleResult {

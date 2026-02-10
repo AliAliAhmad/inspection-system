@@ -24,7 +24,7 @@ const AllInspectionsPage = lazy(() => import('../pages/admin/AllInspectionsPage'
 const AllSpecialistJobsPage = lazy(() => import('../pages/admin/AllSpecialistJobsPage'));
 const AllEngineerJobsPage = lazy(() => import('../pages/admin/AllEngineerJobsPage'));
 const QualityReviewsAdminPage = lazy(() => import('../pages/admin/QualityReviewsAdminPage'));
-const ApprovalsPage = lazy(() => import('../pages/admin/ApprovalsPage'));
+const UnifiedApprovalsPage = lazy(() => import('../pages/admin/UnifiedApprovalsPage'));
 const ReportsPage = lazy(() => import('../pages/admin/ReportsPage'));
 const InspectionRoutinesPage = lazy(() => import('../pages/admin/InspectionRoutinesPage'));
 const DefectsPage = lazy(() => import('../pages/admin/DefectsPage'));
@@ -108,9 +108,9 @@ export default function AppRouter() {
             <Route path="specialist-jobs" element={<RoleGuard roles={['admin']}><AllSpecialistJobsPage /></RoleGuard>} />
             <Route path="engineer-jobs" element={<RoleGuard roles={['admin']}><AllEngineerJobsPage /></RoleGuard>} />
             <Route path="quality-reviews" element={<RoleGuard roles={['admin']}><QualityReviewsAdminPage /></RoleGuard>} />
-            <Route path="approvals" element={<RoleGuard roles={['admin']}><ApprovalsPage /></RoleGuard>} />
+            <Route path="approvals" element={<RoleGuard roles={['admin']}><UnifiedApprovalsPage /></RoleGuard>} />
             {/* Redirects from old approval routes */}
-            <Route path="leave-approvals" element={<Navigate to="/admin/approvals?tab=leaves" replace />} />
+            <Route path="leave-approvals" element={<Navigate to="/admin/approvals?tab=leave" replace />} />
             <Route path="bonus-approvals" element={<Navigate to="/admin/approvals?tab=bonus" replace />} />
             <Route path="reports" element={<RoleGuard roles={['admin']}><ReportsPage /></RoleGuard>} />
             <Route path="routines" element={<RoleGuard roles={['admin']}><InspectionRoutinesPage /></RoleGuard>} />
@@ -127,7 +127,7 @@ export default function AppRouter() {
             <Route path="work-plan-settings" element={<RoleGuard roles={['admin']}><WorkPlanSettingsPage /></RoleGuard>} />
             <Route path="daily-review" element={<RoleGuard roles={['admin', 'engineer']}><DailyReviewPage /></RoleGuard>} />
             <Route path="performance" element={<RoleGuard roles={['admin', 'engineer']}><PerformanceReportPage /></RoleGuard>} />
-            <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pauses" replace />} />
+            <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pause" replace />} />
             <Route path="notification-rules" element={<RoleGuard roles={['admin']}><NotificationRulesPage /></RoleGuard>} />
             <Route path="notification-analytics" element={<RoleGuard roles={['admin']}><NotificationAnalyticsPage /></RoleGuard>} />
           </Route>

@@ -203,7 +203,7 @@ def deny_bonus_request(bonus_id):
     if not bonus.is_qe_request or bonus.request_status != 'pending':
         raise ValidationError("Not a pending QE request")
 
-    bonus.request_status = 'denied'
+    bonus.request_status = 'rejected'
     safe_commit()
 
     from app.services.notification_service import NotificationService

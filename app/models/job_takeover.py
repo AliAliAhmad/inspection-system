@@ -30,7 +30,7 @@ class JobTakeover(db.Model):
     reason = db.Column(db.Text, nullable=True)
 
     # Approval
-    status = db.Column(db.String(20), default='pending')  # pending, approved, denied, completed
+    status = db.Column(db.String(20), default='pending')  # pending, approved, rejected, completed
     approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
 
@@ -54,7 +54,7 @@ class JobTakeover(db.Model):
             name='check_valid_takeover_job_type'
         ),
         db.CheckConstraint(
-            "status IN ('pending', 'approved', 'denied', 'completed')",
+            "status IN ('pending', 'approved', 'rejected', 'completed')",
             name='check_valid_takeover_status'
         ),
     )

@@ -13,6 +13,11 @@ from app.utils.decorators import admin_required
 bp = Blueprint('inspection_routines', __name__)
 
 
+VALID_SHIFTS = {'morning', 'afternoon', 'night'}
+VALID_FREQUENCIES = {'daily', 'weekly', 'monthly'}
+VALID_DAYS = {'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'}
+
+
 def _validate_routine_data(data, partial=False):
     """Validate routine request data. If partial=True, only validate fields that are present."""
     if not partial:
@@ -30,6 +35,21 @@ def _validate_routine_data(data, partial=False):
         template = db.session.get(ChecklistTemplate, data['template_id'])
         if not template:
             raise ValidationError(f"ChecklistTemplate with ID {data['template_id']} not found")
+
+    if 'shift' in data and data['shift'] is not None:
+        if data['shift'] not in VALID_SHIFTS:
+            raise ValidationError(f"shift must be one of: {', '.join(VALID_SHIFTS)}")
+
+    if 'frequency' in data and data['frequency'] is not None:
+        if data['frequency'] not in VALID_FREQUENCIES:
+            raise ValidationError(f"frequency must be one of: {', '.join(VALID_FREQUENCIES)}")
+
+    if 'days_of_week' in data and data['days_of_week'] is not None:
+        if not isinstance(data['days_of_week'], list):
+            raise ValidationError("days_of_week must be a list")
+        for day in data['days_of_week']:
+            if day not in VALID_DAYS:
+                raise ValidationError(f"Invalid day: {day}. Must be one of: {', '.join(VALID_DAYS)}")
 
 
 @bp.route('', methods=['GET'])
@@ -65,8 +85,9 @@ def create_routine():
             "name": "Daily Pump Inspection",
             "name_ar": "...",
             "asset_types": ["Centrifugal Pump", "Screw Pump"],
-            "shift": "day",
-            "days_of_week": [0, 1, 2, 3, 4],
+            "shift": "morning",  // 'morning', 'afternoon', 'night', or null
+            "frequency": "weekly",  // 'daily', 'weekly', 'monthly'
+            "days_of_week": ["monday", "wednesday", "friday"],
             "template_id": 1
         }
 
@@ -89,6 +110,9 @@ def create_routine():
         name_ar=data.get('name_ar'),
         asset_types=data['asset_types'],
         template_id=data['template_id'],
+        shift=data.get('shift'),
+        frequency=data.get('frequency', 'weekly'),
+        days_of_week=data.get('days_of_week'),
         is_active=data.get('is_active', True),
         created_by_id=int(current_user_id)
     )
@@ -114,8 +138,9 @@ def update_routine(routine_id):
             "name": "Updated name",
             "name_ar": "...",
             "asset_types": ["Centrifugal Pump"],
-            "shift": "night",
-            "days_of_week": [0, 1, 2],
+            "shift": "night",  // 'morning', 'afternoon', 'night', or null
+            "frequency": "weekly",  // 'daily', 'weekly', 'monthly'
+            "days_of_week": ["monday", "wednesday"],
             "template_id": 2,
             "is_active": false
         }
@@ -144,6 +169,12 @@ def update_routine(routine_id):
         routine.asset_types = data['asset_types']
     if 'template_id' in data:
         routine.template_id = data['template_id']
+    if 'shift' in data:
+        routine.shift = data['shift']
+    if 'frequency' in data:
+        routine.frequency = data['frequency']
+    if 'days_of_week' in data:
+        routine.days_of_week = data['days_of_week']
     if 'is_active' in data:
         routine.is_active = data['is_active']
 

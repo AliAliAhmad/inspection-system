@@ -30,7 +30,7 @@ class PauseLog(db.Model):
     reason_details = db.Column(db.Text, nullable=False)  # min 20 chars (50 for 'other')
 
     # Approval
-    status = db.Column(db.String(20), default='pending')  # pending, approved, denied
+    status = db.Column(db.String(20), default='pending')  # pending, approved, rejected
     approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
     denial_reason = db.Column(db.Text, nullable=True)
@@ -55,7 +55,7 @@ class PauseLog(db.Model):
             name='check_valid_pause_reason'
         ),
         db.CheckConstraint(
-            "status IN ('pending', 'approved', 'denied')",
+            "status IN ('pending', 'approved', 'rejected')",
             name='check_valid_pause_status'
         ),
     )

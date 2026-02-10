@@ -136,7 +136,7 @@ class PauseService:
         if pause.status != 'pending':
             raise ValidationError("Pause request is not pending")
 
-        pause.status = 'denied'
+        pause.status = 'rejected'
         pause.approved_by = denied_by
         pause.approved_at = datetime.utcnow()
         db.session.commit()

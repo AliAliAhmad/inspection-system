@@ -81,7 +81,8 @@ def create_app(config_name='development'):
         inspection_assignments, assessments, defect_assessments,
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
         files, sync, inspection_routines, roster, voice, ai,
-        work_plans, materials, cycles, pm_templates, work_plan_tracking
+        work_plans, materials, cycles, pm_templates, work_plan_tracking,
+        approvals
     )
 
     # Core
@@ -143,6 +144,9 @@ def create_app(config_name='development'):
 
     # Work Plan Tracking & Performance
     app.register_blueprint(work_plan_tracking.bp, url_prefix='/api/work-plan-tracking')
+
+    # Unified Approvals
+    app.register_blueprint(approvals.bp, url_prefix='/api/approvals')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)

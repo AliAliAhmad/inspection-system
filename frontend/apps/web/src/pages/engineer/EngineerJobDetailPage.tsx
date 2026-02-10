@@ -366,7 +366,7 @@ export default function EngineerJobDetailPage() {
               color:
                 pause.status === 'approved'
                   ? 'green'
-                  : pause.status === 'denied'
+                  : pause.status === 'rejected'
                     ? 'red'
                     : 'blue',
               children: (
@@ -384,7 +384,7 @@ export default function EngineerJobDetailPage() {
                       color={
                         pause.status === 'approved'
                           ? 'success'
-                          : pause.status === 'denied'
+                          : pause.status === 'rejected'
                             ? 'error'
                             : 'processing'
                       }

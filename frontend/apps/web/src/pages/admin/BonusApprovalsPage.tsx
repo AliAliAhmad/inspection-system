@@ -86,7 +86,7 @@ export default function BonusApprovalsPage() {
   const requestStatusColor: Record<string, string> = {
     pending: 'processing',
     approved: 'success',
-    denied: 'error',
+    rejected: 'error',
   };
 
   const pendingColumns: ColumnsType<BonusStar> = [

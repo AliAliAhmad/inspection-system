@@ -1,5 +1,8 @@
 export { StatCard } from './StatCard';
 
+export { StatsHeader, StatIcons } from './StatsHeader';
+export type { StatsHeaderProps, StatItem } from './StatsHeader';
+
 // Generalized Job Components (used by specialist-jobs, engineer-jobs, etc.)
 export { SmartTimer } from './SmartTimer';
 export type { SmartTimerProps, PauseReason, TimerJobType } from './SmartTimer';

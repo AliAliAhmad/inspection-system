@@ -73,7 +73,7 @@ export default function BonusRequestsScreen() {
     switch (status) {
       case 'pending': return '#FF9800';
       case 'approved': return '#4CAF50';
-      case 'denied': return '#F44336';
+      case 'rejected': return '#F44336';
       default: return '#757575';
     }
   };

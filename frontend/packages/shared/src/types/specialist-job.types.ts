@@ -67,7 +67,7 @@ export interface PauseLog {
   approved_at: string | null;
   resumed_at: string | null;
   duration_minutes: number | null;
-  status: 'pending' | 'approved' | 'denied';
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 export interface JobTakeover {
@@ -75,7 +75,7 @@ export interface JobTakeover {
   job_type: string;
   job_id: number;
   requested_by: number;
-  status: 'pending' | 'approved' | 'denied';
+  status: 'pending' | 'approved' | 'rejected';
   approved_by: number | null;
   reason: string | null;
   queue_position: number;

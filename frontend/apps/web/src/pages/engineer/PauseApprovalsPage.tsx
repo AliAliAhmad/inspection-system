@@ -8,7 +8,7 @@ import { specialistJobsApi, PauseLog, formatDateTime } from '@inspection/shared'
 const PAUSE_STATUS_COLOR: Record<string, string> = {
   pending: 'orange',
   approved: 'green',
-  denied: 'red',
+  rejected: 'red',
 };
 
 const REASON_CATEGORY_COLOR: Record<string, string> = {

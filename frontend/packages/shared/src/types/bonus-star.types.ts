@@ -7,7 +7,7 @@ export interface BonusStar {
   related_job_type: string | null;
   related_job_id: number | null;
   is_qe_request: boolean;
-  request_status: 'pending' | 'approved' | 'denied' | null;
+  request_status: 'pending' | 'approved' | 'rejected' | null;
   awarded_at: string;
 }
 

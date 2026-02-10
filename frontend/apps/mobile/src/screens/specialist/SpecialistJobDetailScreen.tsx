@@ -61,7 +61,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
 const PAUSE_STATUS_COLORS: Record<string, string> = {
   pending: '#FF9800',
   approved: '#4CAF50',
-  denied: '#F44336',
+  rejected: '#F44336',
 };
 
 const PAUSE_CATEGORIES: PauseCategory[] = [

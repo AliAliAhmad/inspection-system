@@ -32,7 +32,7 @@ class BonusStar(db.Model):
     # If requested by QE
     is_qe_request = db.Column(db.Boolean, default=False)
     qe_requester_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    request_status = db.Column(db.String(20), nullable=True)  # pending, approved, denied, modified
+    request_status = db.Column(db.String(20), nullable=True)  # pending, approved, rejected, modified
     admin_modified_amount = db.Column(db.Integer, nullable=True)
 
     awarded_at = db.Column(db.DateTime, default=datetime.utcnow)

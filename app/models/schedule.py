@@ -62,10 +62,14 @@ class InspectionRoutine(db.Model):
     # Asset types this routine applies to (JSON array)
     asset_types = db.Column(db.JSON, nullable=False)  # e.g. ["Centrifugal Pump", "Screw Pump"]
 
-    # Shift (optional – determined by Excel schedule)
+    # Shift: 'morning', 'afternoon', 'night', or null for any shift
     shift = db.Column(db.String(20), nullable=True)
 
-    # Frequency: days of week (optional – determined by Excel schedule)
+    # Frequency: 'daily', 'weekly', 'monthly'
+    frequency = db.Column(db.String(20), nullable=True, default='weekly')
+
+    # Days of week for weekly frequency (JSON array)
+    # e.g. ["monday", "wednesday", "friday"]
     days_of_week = db.Column(db.JSON, nullable=True)
 
     # Template to use
@@ -86,6 +90,9 @@ class InspectionRoutine(db.Model):
             'name': self.name,
             'name_ar': self.name_ar,
             'asset_types': self.asset_types,
+            'shift': self.shift,
+            'frequency': self.frequency or 'weekly',
+            'days_of_week': self.days_of_week or [],
             'template_id': self.template_id,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None

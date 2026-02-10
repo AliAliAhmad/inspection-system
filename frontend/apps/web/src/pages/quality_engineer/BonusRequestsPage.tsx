@@ -28,7 +28,7 @@ import VoiceTextArea from '../../components/VoiceTextArea';
 const STATUS_COLOR: Record<string, string> = {
   pending: 'orange',
   approved: 'green',
-  denied: 'red',
+  rejected: 'red',
 };
 
 export default function BonusRequestsPage() {

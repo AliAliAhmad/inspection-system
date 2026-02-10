@@ -189,7 +189,7 @@ class TakeoverService:
             JobTakeover.status == 'pending'
         ).all()
         for req in other_requests:
-            req.status = 'denied'
+            req.status = 'rejected'
             req.approved_by = admin_id
             req.approved_at = datetime.utcnow()
 
@@ -218,7 +218,7 @@ class TakeoverService:
         if takeover.status != 'pending':
             raise ValidationError("Takeover request is not pending")
 
-        takeover.status = 'denied'
+        takeover.status = 'rejected'
         takeover.approved_by = admin_id
         takeover.approved_at = datetime.utcnow()
         db.session.commit()
