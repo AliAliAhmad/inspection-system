@@ -1,23 +1,30 @@
 """
 Work Planning endpoints.
 Handles weekly work plans, jobs, assignments, and materials.
+Enhanced with job templates, dependencies, capacity config, skills, conflicts, and AI features.
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.models import (
     WorkPlan, WorkPlanDay, WorkPlanJob, WorkPlanAssignment, WorkPlanMaterial,
     Material, MaterialKit, MaterialKitItem, User, Equipment, Defect,
     InspectionAssignment, Notification, MaintenanceCycle, PMTemplate, PMTemplateMaterial,
-    SAPWorkOrder
+    SAPWorkOrder,
+    # Enhanced Work Planning models
+    JobTemplate, JobTemplateMaterial, JobTemplateChecklist, JobDependency,
+    CapacityConfig, WorkerSkill, EquipmentRestriction, WorkPlanVersion,
+    SchedulingConflict, JobChecklistResponse
 )
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
-from app.utils.decorators import get_current_user
+from app.utils.decorators import get_current_user, admin_required as admin_decorator
 from app.services.notification_service import NotificationService
-from datetime import datetime, timedelta
+from app.services.work_plan_ai_service import WorkPlanAIService
+from datetime import datetime, timedelta, date
 import pandas as pd
 from io import BytesIO
+import json
 
 bp = Blueprint('work_plans', __name__)
 
@@ -28,6 +35,91 @@ def engineer_or_admin_required():
     if user.role not in ['admin', 'engineer', 'quality_engineer']:
         raise ForbiddenError("Only engineers and admins can access this resource")
     return user
+
+
+def admin_required():
+    """Check if user is admin."""
+    user = get_current_user()
+    if user.role != 'admin':
+        raise ForbiddenError("Only admins can access this resource")
+    return user
+
+
+# AI Service instance
+ai_service = WorkPlanAIService()
+
+
+def create_plan_version(plan, change_type, change_summary, user_id):
+    """Create a version snapshot of the plan."""
+    # Get next version number
+    max_version = db.session.query(db.func.max(WorkPlanVersion.version_number)).filter_by(
+        work_plan_id=plan.id
+    ).scalar() or 0
+
+    # Create snapshot
+    snapshot = {
+        'days': []
+    }
+    for day in plan.days:
+        day_snapshot = {
+            'id': day.id,
+            'date': day.date.isoformat(),
+            'jobs': []
+        }
+        for job in day.jobs:
+            job_snapshot = {
+                'id': job.id,
+                'job_type': job.job_type,
+                'equipment_id': job.equipment_id,
+                'berth': job.berth,
+                'estimated_hours': job.estimated_hours,
+                'priority': job.priority,
+                'assignments': [{'user_id': a.user_id, 'is_lead': a.is_lead} for a in job.assignments]
+            }
+            day_snapshot['jobs'].append(job_snapshot)
+        snapshot['days'].append(day_snapshot)
+
+    version = WorkPlanVersion(
+        work_plan_id=plan.id,
+        version_number=max_version + 1,
+        snapshot_data=snapshot,
+        change_type=change_type,
+        change_summary=change_summary,
+        created_by_id=user_id
+    )
+    db.session.add(version)
+    return version
+
+
+def detect_conflicts_for_plan(plan):
+    """Detect scheduling conflicts for a plan."""
+    conflicts = []
+
+    # Track hours per worker per day
+    worker_day_hours = {}
+
+    for day in plan.days:
+        for job in day.jobs:
+            for assignment in job.assignments:
+                key = (day.id, assignment.user_id)
+                if key not in worker_day_hours:
+                    worker_day_hours[key] = 0
+                worker_day_hours[key] += job.estimated_hours or 0
+
+    # Check capacity conflicts
+    for (day_id, user_id), hours in worker_day_hours.items():
+        if hours > 10:  # More than 10 hours in a day
+            day = db.session.get(WorkPlanDay, day_id)
+            user = db.session.get(User, user_id)
+            conflicts.append({
+                'type': 'capacity',
+                'severity': 'warning' if hours <= 12 else 'error',
+                'description': f'{user.full_name if user else "Worker"} has {hours:.1f}h scheduled on {day.date if day else "unknown"}',
+                'affected_user_ids': [user_id],
+                'affected_day_id': day_id
+            })
+
+    return conflicts
 
 
 # ==================== DIAGNOSTIC ====================
@@ -1923,3 +2015,2385 @@ def get_email_recipients():
         'status': 'success',
         'recipients': recipients
     }), 200
+
+
+# ==================== JOB TEMPLATES ====================
+
+@bp.route('/templates', methods=['GET'])
+@jwt_required()
+def list_job_templates():
+    """
+    List job templates with optional filtering.
+
+    Query params:
+        - job_type: Filter by job type (pm, defect, inspection)
+        - equipment_type: Filter by equipment type
+        - active_only: Only active templates (default true)
+    """
+    user = get_current_user()
+    language = user.language or 'en'
+
+    job_type = request.args.get('job_type')
+    equipment_type = request.args.get('equipment_type')
+    active_only = request.args.get('active_only', 'true').lower() == 'true'
+
+    query = JobTemplate.query
+
+    if job_type:
+        query = query.filter(JobTemplate.job_type == job_type)
+
+    if equipment_type:
+        query = query.filter(JobTemplate.equipment_type == equipment_type)
+
+    if active_only:
+        query = query.filter(JobTemplate.is_active == True)
+
+    templates = query.order_by(JobTemplate.name).all()
+
+    return jsonify({
+        'status': 'success',
+        'templates': [t.to_dict(language, include_materials=False, include_checklist=False) for t in templates],
+        'count': len(templates)
+    }), 200
+
+
+@bp.route('/templates', methods=['POST'])
+@jwt_required()
+def create_job_template():
+    """
+    Create a new job template.
+
+    Request body:
+        {
+            "name": "250 Hours PM",
+            "name_ar": "صيانة 250 ساعة",
+            "job_type": "pm",
+            "equipment_id": null,
+            "equipment_type": "RTG",
+            "berth": "both",
+            "estimated_hours": 4.0,
+            "priority": "normal",
+            "description": "Regular 250h maintenance",
+            "recurrence_type": "weekly",
+            "recurrence_day": 1,
+            "default_team_size": 2,
+            "required_certifications": ["electrical"]
+        }
+    """
+    user = engineer_or_admin_required()
+    data = request.get_json()
+
+    if not data:
+        raise ValidationError("Request body is required")
+
+    if not data.get('name'):
+        raise ValidationError("name is required")
+    if not data.get('job_type'):
+        raise ValidationError("job_type is required")
+    if data.get('estimated_hours') is None:
+        raise ValidationError("estimated_hours is required")
+
+    template = JobTemplate(
+        name=data['name'],
+        name_ar=data.get('name_ar'),
+        job_type=data['job_type'],
+        equipment_id=data.get('equipment_id'),
+        equipment_type=data.get('equipment_type'),
+        berth=data.get('berth'),
+        estimated_hours=float(data['estimated_hours']),
+        priority=data.get('priority', 'normal'),
+        description=data.get('description'),
+        description_ar=data.get('description_ar'),
+        recurrence_type=data.get('recurrence_type'),
+        recurrence_day=data.get('recurrence_day'),
+        default_team_size=data.get('default_team_size', 1),
+        required_certifications=data.get('required_certifications'),
+        is_active=True,
+        created_by_id=user.id
+    )
+
+    db.session.add(template)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Job template created',
+        'template': template.to_dict(user.language or 'en')
+    }), 201
+
+
+@bp.route('/templates/<int:id>', methods=['GET'])
+@jwt_required()
+def get_job_template(id):
+    """Get a job template with materials and checklist."""
+    user = get_current_user()
+    language = user.language or 'en'
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    return jsonify({
+        'status': 'success',
+        'template': template.to_dict(language, include_materials=True, include_checklist=True)
+    }), 200
+
+
+@bp.route('/templates/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_job_template(id):
+    """Update a job template."""
+    user = engineer_or_admin_required()
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body is required")
+
+    # Update fields
+    if 'name' in data:
+        template.name = data['name']
+    if 'name_ar' in data:
+        template.name_ar = data['name_ar']
+    if 'job_type' in data:
+        template.job_type = data['job_type']
+    if 'equipment_id' in data:
+        template.equipment_id = data['equipment_id']
+    if 'equipment_type' in data:
+        template.equipment_type = data['equipment_type']
+    if 'berth' in data:
+        template.berth = data['berth']
+    if 'estimated_hours' in data:
+        template.estimated_hours = float(data['estimated_hours'])
+    if 'priority' in data:
+        template.priority = data['priority']
+    if 'description' in data:
+        template.description = data['description']
+    if 'description_ar' in data:
+        template.description_ar = data['description_ar']
+    if 'recurrence_type' in data:
+        template.recurrence_type = data['recurrence_type']
+    if 'recurrence_day' in data:
+        template.recurrence_day = data['recurrence_day']
+    if 'default_team_size' in data:
+        template.default_team_size = data['default_team_size']
+    if 'required_certifications' in data:
+        template.required_certifications = data['required_certifications']
+    if 'is_active' in data:
+        template.is_active = data['is_active']
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Job template updated',
+        'template': template.to_dict(user.language or 'en')
+    }), 200
+
+
+@bp.route('/templates/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_job_template(id):
+    """Delete a job template."""
+    user = engineer_or_admin_required()
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    db.session.delete(template)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Job template deleted'
+    }), 200
+
+
+@bp.route('/templates/<int:id>/materials', methods=['POST'])
+@jwt_required()
+def add_template_material(id):
+    """
+    Add a material to a template.
+
+    Request body:
+        {
+            "material_id": 1,
+            "quantity": 2.0,
+            "is_optional": false
+        }
+    """
+    user = engineer_or_admin_required()
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    data = request.get_json()
+    if not data or not data.get('material_id'):
+        raise ValidationError("material_id is required")
+
+    material = db.session.get(Material, data['material_id'])
+    if not material:
+        raise NotFoundError("Material not found")
+
+    # Check if already exists
+    existing = JobTemplateMaterial.query.filter_by(
+        template_id=id,
+        material_id=data['material_id']
+    ).first()
+
+    if existing:
+        existing.quantity = data.get('quantity', existing.quantity)
+        existing.is_optional = data.get('is_optional', existing.is_optional)
+    else:
+        tm = JobTemplateMaterial(
+            template_id=id,
+            material_id=data['material_id'],
+            quantity=data.get('quantity', 1),
+            is_optional=data.get('is_optional', False)
+        )
+        db.session.add(tm)
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Material added to template',
+        'template': template.to_dict(user.language or 'en')
+    }), 201
+
+
+@bp.route('/templates/<int:id>/materials/<int:mat_id>', methods=['DELETE'])
+@jwt_required()
+def remove_template_material(id, mat_id):
+    """Remove a material from a template."""
+    user = engineer_or_admin_required()
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    tm = db.session.get(JobTemplateMaterial, mat_id)
+    if not tm or tm.template_id != id:
+        raise NotFoundError("Material not found in this template")
+
+    db.session.delete(tm)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Material removed from template'
+    }), 200
+
+
+@bp.route('/templates/<int:id>/checklist', methods=['POST'])
+@jwt_required()
+def add_template_checklist_item(id):
+    """
+    Add a checklist item to a template.
+
+    Request body:
+        {
+            "item_code": "CHK-001",
+            "question": "Check oil level",
+            "question_ar": "فحص مستوى الزيت",
+            "answer_type": "pass_fail",
+            "is_required": true,
+            "order_index": 1,
+            "fail_action": "Report to supervisor"
+        }
+    """
+    user = engineer_or_admin_required()
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    data = request.get_json()
+    if not data or not data.get('question'):
+        raise ValidationError("question is required")
+
+    # Get next order index if not provided
+    if data.get('order_index') is None:
+        max_order = db.session.query(db.func.max(JobTemplateChecklist.order_index)).filter_by(
+            template_id=id
+        ).scalar() or 0
+        order_index = max_order + 1
+    else:
+        order_index = data['order_index']
+
+    item = JobTemplateChecklist(
+        template_id=id,
+        item_code=data.get('item_code'),
+        question=data['question'],
+        question_ar=data.get('question_ar'),
+        answer_type=data.get('answer_type', 'pass_fail'),
+        is_required=data.get('is_required', True),
+        order_index=order_index,
+        fail_action=data.get('fail_action'),
+        fail_action_ar=data.get('fail_action_ar')
+    )
+
+    db.session.add(item)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Checklist item added',
+        'item': item.to_dict(user.language or 'en')
+    }), 201
+
+
+@bp.route('/templates/<int:id>/checklist/<int:item_id>', methods=['PUT'])
+@jwt_required()
+def update_template_checklist_item(id, item_id):
+    """Update a checklist item."""
+    user = engineer_or_admin_required()
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    item = db.session.get(JobTemplateChecklist, item_id)
+    if not item or item.template_id != id:
+        raise NotFoundError("Checklist item not found in this template")
+
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body is required")
+
+    if 'item_code' in data:
+        item.item_code = data['item_code']
+    if 'question' in data:
+        item.question = data['question']
+    if 'question_ar' in data:
+        item.question_ar = data['question_ar']
+    if 'answer_type' in data:
+        item.answer_type = data['answer_type']
+    if 'is_required' in data:
+        item.is_required = data['is_required']
+    if 'order_index' in data:
+        item.order_index = data['order_index']
+    if 'fail_action' in data:
+        item.fail_action = data['fail_action']
+    if 'fail_action_ar' in data:
+        item.fail_action_ar = data['fail_action_ar']
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Checklist item updated',
+        'item': item.to_dict(user.language or 'en')
+    }), 200
+
+
+@bp.route('/templates/<int:id>/checklist/<int:item_id>', methods=['DELETE'])
+@jwt_required()
+def delete_template_checklist_item(id, item_id):
+    """Delete a checklist item."""
+    user = engineer_or_admin_required()
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    item = db.session.get(JobTemplateChecklist, item_id)
+    if not item or item.template_id != id:
+        raise NotFoundError("Checklist item not found in this template")
+
+    db.session.delete(item)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Checklist item deleted'
+    }), 200
+
+
+@bp.route('/templates/<int:id>/clone', methods=['POST'])
+@jwt_required()
+def clone_job_template(id):
+    """
+    Clone a job template.
+
+    Request body:
+        {
+            "new_name": "250 Hours PM - Copy",
+            "new_name_ar": "صيانة 250 ساعة - نسخة"
+        }
+    """
+    user = engineer_or_admin_required()
+
+    template = db.session.get(JobTemplate, id)
+    if not template:
+        raise NotFoundError("Job template not found")
+
+    data = request.get_json() or {}
+
+    new_template = JobTemplate(
+        name=data.get('new_name', f"{template.name} (Copy)"),
+        name_ar=data.get('new_name_ar', f"{template.name_ar} (نسخة)" if template.name_ar else None),
+        job_type=template.job_type,
+        equipment_id=template.equipment_id,
+        equipment_type=template.equipment_type,
+        berth=template.berth,
+        estimated_hours=template.estimated_hours,
+        priority=template.priority,
+        description=template.description,
+        description_ar=template.description_ar,
+        recurrence_type=template.recurrence_type,
+        recurrence_day=template.recurrence_day,
+        default_team_size=template.default_team_size,
+        required_certifications=template.required_certifications,
+        is_active=True,
+        created_by_id=user.id
+    )
+
+    db.session.add(new_template)
+    db.session.flush()
+
+    # Clone materials
+    for mat in template.materials:
+        new_mat = JobTemplateMaterial(
+            template_id=new_template.id,
+            material_id=mat.material_id,
+            quantity=mat.quantity,
+            is_optional=mat.is_optional
+        )
+        db.session.add(new_mat)
+
+    # Clone checklist items
+    for item in template.checklist_items:
+        new_item = JobTemplateChecklist(
+            template_id=new_template.id,
+            item_code=item.item_code,
+            question=item.question,
+            question_ar=item.question_ar,
+            answer_type=item.answer_type,
+            is_required=item.is_required,
+            order_index=item.order_index,
+            fail_action=item.fail_action,
+            fail_action_ar=item.fail_action_ar
+        )
+        db.session.add(new_item)
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Template cloned',
+        'template': new_template.to_dict(user.language or 'en')
+    }), 201
+
+
+# ==================== JOB DEPENDENCIES ====================
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/dependencies', methods=['GET'])
+@jwt_required()
+def get_job_dependencies(plan_id, job_id):
+    """Get dependencies for a job."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    # Get jobs this job depends on
+    dependencies = JobDependency.query.filter_by(job_id=job_id).all()
+
+    # Get jobs that depend on this job
+    dependents = JobDependency.query.filter_by(depends_on_job_id=job_id).all()
+
+    return jsonify({
+        'status': 'success',
+        'job_id': job_id,
+        'depends_on': [d.to_dict() for d in dependencies],
+        'required_by': [d.to_dict() for d in dependents]
+    }), 200
+
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/dependencies', methods=['POST'])
+@jwt_required()
+def add_job_dependency(plan_id, job_id):
+    """
+    Add a dependency to a job.
+
+    Request body:
+        {
+            "depends_on_job_id": 123,
+            "dependency_type": "finish_to_start",
+            "lag_minutes": 30
+        }
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    data = request.get_json()
+    if not data or not data.get('depends_on_job_id'):
+        raise ValidationError("depends_on_job_id is required")
+
+    depends_on_job = db.session.get(WorkPlanJob, data['depends_on_job_id'])
+    if not depends_on_job or depends_on_job.day.work_plan_id != plan_id:
+        raise NotFoundError("Dependency job not found in this plan")
+
+    if job_id == data['depends_on_job_id']:
+        raise ValidationError("A job cannot depend on itself")
+
+    # Check for circular dependency
+    existing_reverse = JobDependency.query.filter_by(
+        job_id=data['depends_on_job_id'],
+        depends_on_job_id=job_id
+    ).first()
+    if existing_reverse:
+        raise ValidationError("Circular dependency detected")
+
+    # Check if already exists
+    existing = JobDependency.query.filter_by(
+        job_id=job_id,
+        depends_on_job_id=data['depends_on_job_id']
+    ).first()
+    if existing:
+        raise ValidationError("Dependency already exists")
+
+    dependency = JobDependency(
+        job_id=job_id,
+        depends_on_job_id=data['depends_on_job_id'],
+        dependency_type=data.get('dependency_type', 'finish_to_start'),
+        lag_minutes=data.get('lag_minutes', 0)
+    )
+
+    db.session.add(dependency)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Dependency added',
+        'dependency': dependency.to_dict()
+    }), 201
+
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/dependencies/<int:dep_id>', methods=['DELETE'])
+@jwt_required()
+def remove_job_dependency(plan_id, job_id, dep_id):
+    """Remove a dependency from a job."""
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    dependency = db.session.get(JobDependency, dep_id)
+    if not dependency or dependency.job_id != job_id:
+        raise NotFoundError("Dependency not found")
+
+    db.session.delete(dependency)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Dependency removed'
+    }), 200
+
+
+# ==================== JOB SPLITTING ====================
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/split', methods=['POST'])
+@jwt_required()
+def split_job(plan_id, job_id):
+    """
+    Split a job across multiple days.
+
+    Request body:
+        {
+            "parts": [
+                {"day_id": 1, "hours": 4},
+                {"day_id": 2, "hours": 4}
+            ]
+        }
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot split jobs in a published work plan")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    data = request.get_json()
+    if not data or not data.get('parts'):
+        raise ValidationError("parts array is required")
+
+    parts = data['parts']
+    if len(parts) < 2:
+        raise ValidationError("At least 2 parts required for splitting")
+
+    # Validate total hours
+    total_hours = sum(p.get('hours', 0) for p in parts)
+
+    # Create new jobs for parts (keep original for first part)
+    new_jobs = []
+    for i, part in enumerate(parts):
+        day = db.session.get(WorkPlanDay, part['day_id'])
+        if not day or day.work_plan_id != plan_id:
+            raise NotFoundError(f"Day {part['day_id']} not found in this plan")
+
+        if i == 0:
+            # Update original job
+            job.work_plan_day_id = day.id
+            job.estimated_hours = part['hours']
+            job.notes = f"Part 1 of {len(parts)} - {job.notes or ''}"
+            new_jobs.append(job)
+        else:
+            # Create new job for this part
+            max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
+                work_plan_day_id=day.id
+            ).scalar() or 0
+
+            new_job = WorkPlanJob(
+                work_plan_day_id=day.id,
+                job_type=job.job_type,
+                berth=job.berth,
+                equipment_id=job.equipment_id,
+                sap_order_number=f"{job.sap_order_number}-P{i+1}" if job.sap_order_number else None,
+                sap_order_type=job.sap_order_type,
+                description=job.description,
+                cycle_id=job.cycle_id,
+                pm_template_id=job.pm_template_id,
+                estimated_hours=part['hours'],
+                position=max_position + 1,
+                priority=job.priority,
+                notes=f"Part {i+1} of {len(parts)} - Split from job {job_id}"
+            )
+            db.session.add(new_job)
+            db.session.flush()
+
+            # Copy assignments
+            for assignment in job.assignments:
+                new_assignment = WorkPlanAssignment(
+                    work_plan_job_id=new_job.id,
+                    user_id=assignment.user_id,
+                    is_lead=assignment.is_lead
+                )
+                db.session.add(new_assignment)
+
+            new_jobs.append(new_job)
+
+    # Create version
+    create_plan_version(plan, 'updated', f'Split job {job_id} into {len(parts)} parts', user.id)
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Job split into {len(parts)} parts',
+        'jobs': [j.to_dict(user.language or 'en') for j in new_jobs]
+    }), 200
+
+
+# ==================== CAPACITY CONFIG ====================
+
+@bp.route('/capacity-config', methods=['GET'])
+@jwt_required()
+def list_capacity_configs():
+    """List capacity configurations."""
+    user = get_current_user()
+
+    configs = CapacityConfig.query.filter_by(is_active=True).all()
+
+    return jsonify({
+        'status': 'success',
+        'configs': [c.to_dict() for c in configs],
+        'count': len(configs)
+    }), 200
+
+
+@bp.route('/capacity-config', methods=['POST'])
+@jwt_required()
+def create_capacity_config():
+    """
+    Create a capacity configuration.
+
+    Request body:
+        {
+            "name": "Standard Day Shift",
+            "role": "specialist",
+            "shift": "day",
+            "max_hours_per_day": 8,
+            "max_jobs_per_day": 5,
+            "min_rest_hours": 12,
+            "overtime_threshold_hours": 8,
+            "max_overtime_hours": 4,
+            "break_duration_minutes": 60,
+            "concurrent_jobs_allowed": 1
+        }
+    """
+    user = admin_required()
+    data = request.get_json()
+
+    if not data or not data.get('name'):
+        raise ValidationError("name is required")
+
+    config = CapacityConfig(
+        name=data['name'],
+        role=data.get('role'),
+        shift=data.get('shift'),
+        max_hours_per_day=data.get('max_hours_per_day', 8),
+        max_jobs_per_day=data.get('max_jobs_per_day', 5),
+        min_rest_hours=data.get('min_rest_hours', 12),
+        overtime_threshold_hours=data.get('overtime_threshold_hours', 8),
+        max_overtime_hours=data.get('max_overtime_hours', 4),
+        break_duration_minutes=data.get('break_duration_minutes', 60),
+        concurrent_jobs_allowed=data.get('concurrent_jobs_allowed', 1),
+        is_active=True
+    )
+
+    db.session.add(config)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Capacity config created',
+        'config': config.to_dict()
+    }), 201
+
+
+@bp.route('/capacity-config/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_capacity_config(id):
+    """Update a capacity configuration."""
+    user = admin_required()
+
+    config = db.session.get(CapacityConfig, id)
+    if not config:
+        raise NotFoundError("Capacity config not found")
+
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body is required")
+
+    if 'name' in data:
+        config.name = data['name']
+    if 'role' in data:
+        config.role = data['role']
+    if 'shift' in data:
+        config.shift = data['shift']
+    if 'max_hours_per_day' in data:
+        config.max_hours_per_day = data['max_hours_per_day']
+    if 'max_jobs_per_day' in data:
+        config.max_jobs_per_day = data['max_jobs_per_day']
+    if 'min_rest_hours' in data:
+        config.min_rest_hours = data['min_rest_hours']
+    if 'overtime_threshold_hours' in data:
+        config.overtime_threshold_hours = data['overtime_threshold_hours']
+    if 'max_overtime_hours' in data:
+        config.max_overtime_hours = data['max_overtime_hours']
+    if 'break_duration_minutes' in data:
+        config.break_duration_minutes = data['break_duration_minutes']
+    if 'concurrent_jobs_allowed' in data:
+        config.concurrent_jobs_allowed = data['concurrent_jobs_allowed']
+    if 'is_active' in data:
+        config.is_active = data['is_active']
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Capacity config updated',
+        'config': config.to_dict()
+    }), 200
+
+
+@bp.route('/capacity-config/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_capacity_config(id):
+    """Delete a capacity configuration."""
+    user = admin_required()
+
+    config = db.session.get(CapacityConfig, id)
+    if not config:
+        raise NotFoundError("Capacity config not found")
+
+    db.session.delete(config)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Capacity config deleted'
+    }), 200
+
+
+# ==================== WORKER SKILLS ====================
+
+@bp.route('/skills', methods=['GET'])
+@jwt_required()
+def list_skills():
+    """List all distinct skill names in the system."""
+    user = get_current_user()
+
+    skills = db.session.query(WorkerSkill.skill_name).distinct().all()
+
+    return jsonify({
+        'status': 'success',
+        'skills': [s[0] for s in skills]
+    }), 200
+
+
+@bp.route('/skills/users/<int:user_id>', methods=['GET'])
+@jwt_required()
+def get_user_skills(user_id):
+    """Get skills for a user."""
+    user = get_current_user()
+
+    target_user = db.session.get(User, user_id)
+    if not target_user:
+        raise NotFoundError("User not found")
+
+    skills = WorkerSkill.query.filter_by(user_id=user_id).all()
+
+    return jsonify({
+        'status': 'success',
+        'user_id': user_id,
+        'skills': [s.to_dict() for s in skills]
+    }), 200
+
+
+@bp.route('/skills/users/<int:user_id>', methods=['POST'])
+@jwt_required()
+def add_user_skill(user_id):
+    """
+    Add a skill to a user.
+
+    Request body:
+        {
+            "skill_name": "Electrical",
+            "skill_level": 4,
+            "certification_name": "Electrical Safety Certificate",
+            "certification_number": "ESC-2024-001",
+            "issued_date": "2024-01-15",
+            "expiry_date": "2026-01-15",
+            "issuing_authority": "Safety Authority",
+            "document_file_id": 123
+        }
+    """
+    user = engineer_or_admin_required()
+
+    target_user = db.session.get(User, user_id)
+    if not target_user:
+        raise NotFoundError("User not found")
+
+    data = request.get_json()
+    if not data or not data.get('skill_name'):
+        raise ValidationError("skill_name is required")
+
+    # Check if already exists
+    existing = WorkerSkill.query.filter_by(
+        user_id=user_id,
+        skill_name=data['skill_name']
+    ).first()
+
+    if existing:
+        raise ValidationError(f"User already has skill '{data['skill_name']}'")
+
+    skill = WorkerSkill(
+        user_id=user_id,
+        skill_name=data['skill_name'],
+        skill_level=data.get('skill_level', 1),
+        certification_name=data.get('certification_name'),
+        certification_number=data.get('certification_number'),
+        issued_date=datetime.strptime(data['issued_date'], '%Y-%m-%d').date() if data.get('issued_date') else None,
+        expiry_date=datetime.strptime(data['expiry_date'], '%Y-%m-%d').date() if data.get('expiry_date') else None,
+        issuing_authority=data.get('issuing_authority'),
+        document_file_id=data.get('document_file_id'),
+        is_verified=False
+    )
+
+    db.session.add(skill)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Skill added',
+        'skill': skill.to_dict()
+    }), 201
+
+
+@bp.route('/skills/<int:skill_id>', methods=['PUT'])
+@jwt_required()
+def update_skill(skill_id):
+    """Update a skill."""
+    user = engineer_or_admin_required()
+
+    skill = db.session.get(WorkerSkill, skill_id)
+    if not skill:
+        raise NotFoundError("Skill not found")
+
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body is required")
+
+    if 'skill_name' in data:
+        skill.skill_name = data['skill_name']
+    if 'skill_level' in data:
+        skill.skill_level = data['skill_level']
+    if 'certification_name' in data:
+        skill.certification_name = data['certification_name']
+    if 'certification_number' in data:
+        skill.certification_number = data['certification_number']
+    if 'issued_date' in data:
+        skill.issued_date = datetime.strptime(data['issued_date'], '%Y-%m-%d').date() if data['issued_date'] else None
+    if 'expiry_date' in data:
+        skill.expiry_date = datetime.strptime(data['expiry_date'], '%Y-%m-%d').date() if data['expiry_date'] else None
+    if 'issuing_authority' in data:
+        skill.issuing_authority = data['issuing_authority']
+    if 'document_file_id' in data:
+        skill.document_file_id = data['document_file_id']
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Skill updated',
+        'skill': skill.to_dict()
+    }), 200
+
+
+@bp.route('/skills/<int:skill_id>', methods=['DELETE'])
+@jwt_required()
+def delete_skill(skill_id):
+    """Delete a skill."""
+    user = engineer_or_admin_required()
+
+    skill = db.session.get(WorkerSkill, skill_id)
+    if not skill:
+        raise NotFoundError("Skill not found")
+
+    db.session.delete(skill)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Skill deleted'
+    }), 200
+
+
+@bp.route('/skills/<int:skill_id>/verify', methods=['POST'])
+@jwt_required()
+def verify_skill(skill_id):
+    """Verify a skill/certification."""
+    user = admin_required()
+
+    skill = db.session.get(WorkerSkill, skill_id)
+    if not skill:
+        raise NotFoundError("Skill not found")
+
+    skill.is_verified = True
+    skill.verified_by_id = user.id
+    skill.verified_at = datetime.utcnow()
+
+    db.session.commit()
+
+    # Notify the user
+    NotificationService.create_notification(
+        user_id=skill.user_id,
+        type='skill_verified',
+        title='Skill Verified',
+        message=f'Your skill "{skill.skill_name}" has been verified.',
+        related_type='skill',
+        related_id=skill.id
+    )
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Skill verified',
+        'skill': skill.to_dict()
+    }), 200
+
+
+# ==================== EQUIPMENT RESTRICTIONS ====================
+
+@bp.route('/equipment-restrictions', methods=['GET'])
+@jwt_required()
+def list_equipment_restrictions():
+    """
+    List equipment restrictions.
+
+    Query params:
+        - equipment_id: Filter by equipment
+        - active_only: Only active restrictions (default true)
+    """
+    user = get_current_user()
+
+    equipment_id = request.args.get('equipment_id', type=int)
+    active_only = request.args.get('active_only', 'true').lower() == 'true'
+
+    query = EquipmentRestriction.query
+
+    if equipment_id:
+        query = query.filter(EquipmentRestriction.equipment_id == equipment_id)
+
+    if active_only:
+        query = query.filter(EquipmentRestriction.is_active == True)
+
+    restrictions = query.all()
+
+    return jsonify({
+        'status': 'success',
+        'restrictions': [r.to_dict() for r in restrictions],
+        'count': len(restrictions)
+    }), 200
+
+
+@bp.route('/equipment-restrictions', methods=['POST'])
+@jwt_required()
+def add_equipment_restriction():
+    """
+    Add an equipment restriction.
+
+    Request body:
+        {
+            "equipment_id": 1,
+            "restriction_type": "blackout",
+            "value": {"reason": "scheduled maintenance"},
+            "reason": "Major overhaul scheduled",
+            "start_date": "2026-02-15",
+            "end_date": "2026-02-20",
+            "is_permanent": false
+        }
+    """
+    user = engineer_or_admin_required()
+    data = request.get_json()
+
+    if not data or not data.get('equipment_id'):
+        raise ValidationError("equipment_id is required")
+    if not data.get('restriction_type'):
+        raise ValidationError("restriction_type is required")
+
+    equipment = db.session.get(Equipment, data['equipment_id'])
+    if not equipment:
+        raise NotFoundError("Equipment not found")
+
+    restriction = EquipmentRestriction(
+        equipment_id=data['equipment_id'],
+        restriction_type=data['restriction_type'],
+        value=data.get('value'),
+        reason=data.get('reason'),
+        start_date=datetime.strptime(data['start_date'], '%Y-%m-%d').date() if data.get('start_date') else None,
+        end_date=datetime.strptime(data['end_date'], '%Y-%m-%d').date() if data.get('end_date') else None,
+        is_permanent=data.get('is_permanent', False),
+        is_active=True,
+        created_by_id=user.id
+    )
+
+    db.session.add(restriction)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Restriction added',
+        'restriction': restriction.to_dict()
+    }), 201
+
+
+@bp.route('/equipment-restrictions/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_equipment_restriction(id):
+    """Update an equipment restriction."""
+    user = engineer_or_admin_required()
+
+    restriction = db.session.get(EquipmentRestriction, id)
+    if not restriction:
+        raise NotFoundError("Restriction not found")
+
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body is required")
+
+    if 'restriction_type' in data:
+        restriction.restriction_type = data['restriction_type']
+    if 'value' in data:
+        restriction.value = data['value']
+    if 'reason' in data:
+        restriction.reason = data['reason']
+    if 'start_date' in data:
+        restriction.start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date() if data['start_date'] else None
+    if 'end_date' in data:
+        restriction.end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').date() if data['end_date'] else None
+    if 'is_permanent' in data:
+        restriction.is_permanent = data['is_permanent']
+    if 'is_active' in data:
+        restriction.is_active = data['is_active']
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Restriction updated',
+        'restriction': restriction.to_dict()
+    }), 200
+
+
+@bp.route('/equipment-restrictions/<int:id>', methods=['DELETE'])
+@jwt_required()
+def delete_equipment_restriction(id):
+    """Delete an equipment restriction."""
+    user = engineer_or_admin_required()
+
+    restriction = db.session.get(EquipmentRestriction, id)
+    if not restriction:
+        raise NotFoundError("Restriction not found")
+
+    db.session.delete(restriction)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Restriction deleted'
+    }), 200
+
+
+# ==================== PLAN VERSIONS ====================
+
+@bp.route('/<int:plan_id>/versions', methods=['GET'])
+@jwt_required()
+def get_plan_versions(plan_id):
+    """Get version history for a plan."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    versions = WorkPlanVersion.query.filter_by(work_plan_id=plan_id).order_by(
+        WorkPlanVersion.version_number.desc()
+    ).all()
+
+    return jsonify({
+        'status': 'success',
+        'plan_id': plan_id,
+        'versions': [v.to_dict(include_snapshot=False) for v in versions],
+        'count': len(versions)
+    }), 200
+
+
+@bp.route('/<int:plan_id>/versions/<int:version>', methods=['GET'])
+@jwt_required()
+def get_plan_version(plan_id, version):
+    """Get a specific version snapshot."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    version_record = WorkPlanVersion.query.filter_by(
+        work_plan_id=plan_id,
+        version_number=version
+    ).first()
+
+    if not version_record:
+        raise NotFoundError("Version not found")
+
+    return jsonify({
+        'status': 'success',
+        'version': version_record.to_dict(include_snapshot=True)
+    }), 200
+
+
+@bp.route('/<int:plan_id>/versions/<int:version>/restore', methods=['POST'])
+@jwt_required()
+def restore_plan_version(plan_id, version):
+    """Restore a plan to a specific version."""
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot restore a published work plan")
+
+    version_record = WorkPlanVersion.query.filter_by(
+        work_plan_id=plan_id,
+        version_number=version
+    ).first()
+
+    if not version_record:
+        raise NotFoundError("Version not found")
+
+    # Create a new version before restoring (backup current state)
+    create_plan_version(plan, 'updated', f'Before restoring to version {version}', user.id)
+
+    # Clear current jobs and assignments
+    for day in plan.days:
+        for job in day.jobs:
+            db.session.delete(job)
+
+    db.session.flush()
+
+    # Restore from snapshot
+    snapshot = version_record.snapshot_data
+    day_map = {d['id']: d for d in snapshot.get('days', [])}
+
+    for day in plan.days:
+        snapshot_day = day_map.get(day.id, {})
+        for job_data in snapshot_day.get('jobs', []):
+            job = WorkPlanJob(
+                work_plan_day_id=day.id,
+                job_type=job_data.get('job_type'),
+                equipment_id=job_data.get('equipment_id'),
+                berth=job_data.get('berth'),
+                estimated_hours=job_data.get('estimated_hours'),
+                priority=job_data.get('priority', 'normal')
+            )
+            db.session.add(job)
+            db.session.flush()
+
+            for assignment_data in job_data.get('assignments', []):
+                assignment = WorkPlanAssignment(
+                    work_plan_job_id=job.id,
+                    user_id=assignment_data.get('user_id'),
+                    is_lead=assignment_data.get('is_lead', False)
+                )
+                db.session.add(assignment)
+
+    # Create version for restore
+    create_plan_version(plan, 'updated', f'Restored from version {version}', user.id)
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Plan restored to version {version}',
+        'work_plan': plan.to_dict(user.language or 'en', include_days=True)
+    }), 200
+
+
+# ==================== JOB CHECKLISTS ====================
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/checklist', methods=['GET'])
+@jwt_required()
+def get_job_checklist(plan_id, job_id):
+    """Get checklist for a job (from template)."""
+    user = get_current_user()
+    language = user.language or 'en'
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    # Get checklist items from job template if linked
+    checklist_items = []
+    if job.template_id:
+        template = db.session.get(JobTemplate, job.template_id)
+        if template:
+            checklist_items = [item.to_dict(language) for item in template.checklist_items]
+
+    # Get existing responses
+    responses = JobChecklistResponse.query.filter_by(work_plan_job_id=job_id).all()
+    response_map = {r.checklist_item_id: r.to_dict() for r in responses}
+
+    # Merge items with responses
+    for item in checklist_items:
+        item['response'] = response_map.get(item['id'])
+
+    return jsonify({
+        'status': 'success',
+        'job_id': job_id,
+        'checklist_items': checklist_items,
+        'responses': [r.to_dict() for r in responses],
+        'total_items': len(checklist_items),
+        'answered_items': len(responses)
+    }), 200
+
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/checklist/<int:item_id>/respond', methods=['POST'])
+@jwt_required()
+def respond_to_checklist_item(plan_id, job_id, item_id):
+    """
+    Submit a response to a checklist item.
+
+    Request body:
+        {
+            "answer_value": "pass",
+            "notes": "All good",
+            "photo_file_id": 123
+        }
+    """
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    checklist_item = db.session.get(JobTemplateChecklist, item_id)
+    if not checklist_item:
+        raise NotFoundError("Checklist item not found")
+
+    data = request.get_json()
+    if not data or data.get('answer_value') is None:
+        raise ValidationError("answer_value is required")
+
+    # Check if response already exists
+    existing = JobChecklistResponse.query.filter_by(
+        work_plan_job_id=job_id,
+        checklist_item_id=item_id
+    ).first()
+
+    answer_value = str(data['answer_value'])
+
+    # Determine pass/fail status
+    is_passed = None
+    if checklist_item.answer_type in ('pass_fail', 'yes_no'):
+        is_passed = answer_value.lower() in ('pass', 'yes', 'true', '1')
+
+    if existing:
+        existing.answer_value = answer_value
+        existing.is_passed = is_passed
+        existing.notes = data.get('notes', existing.notes)
+        existing.photo_file_id = data.get('photo_file_id', existing.photo_file_id)
+        existing.answered_by_id = user.id
+        existing.answered_at = datetime.utcnow()
+        response = existing
+    else:
+        response = JobChecklistResponse(
+            work_plan_job_id=job_id,
+            checklist_item_id=item_id,
+            question=checklist_item.question,
+            answer_type=checklist_item.answer_type,
+            answer_value=answer_value,
+            is_passed=is_passed,
+            notes=data.get('notes'),
+            photo_file_id=data.get('photo_file_id'),
+            answered_by_id=user.id,
+            answered_at=datetime.utcnow()
+        )
+        db.session.add(response)
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Response recorded',
+        'response': response.to_dict()
+    }), 200
+
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/checklist/complete', methods=['POST'])
+@jwt_required()
+def complete_job_checklist(plan_id, job_id):
+    """Mark checklist as complete (validates all required items answered)."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    # Get required checklist items
+    required_items = []
+    if job.template_id:
+        template = db.session.get(JobTemplate, job.template_id)
+        if template:
+            required_items = [item for item in template.checklist_items if item.is_required]
+
+    # Get existing responses
+    responses = JobChecklistResponse.query.filter_by(work_plan_job_id=job_id).all()
+    answered_item_ids = {r.checklist_item_id for r in responses}
+
+    # Check if all required items are answered
+    missing_items = [item for item in required_items if item.id not in answered_item_ids]
+
+    if missing_items:
+        return jsonify({
+            'status': 'error',
+            'message': f'{len(missing_items)} required items not answered',
+            'missing_items': [{'id': item.id, 'question': item.question} for item in missing_items],
+            'is_complete': False
+        }), 400
+
+    # Check for any failed items
+    failed_responses = [r for r in responses if r.is_passed == False]
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Checklist complete',
+        'is_complete': True,
+        'total_items': len(required_items),
+        'answered_items': len(responses),
+        'passed_items': len([r for r in responses if r.is_passed == True]),
+        'failed_items': len(failed_responses),
+        'failed_details': [{'item_id': r.checklist_item_id, 'question': r.question, 'notes': r.notes} for r in failed_responses]
+    }), 200
+
+
+# ==================== CONFLICTS ====================
+
+@bp.route('/<int:plan_id>/conflicts', methods=['GET'])
+@jwt_required()
+def get_plan_conflicts(plan_id):
+    """Get scheduling conflicts for a plan."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    conflicts = SchedulingConflict.query.filter_by(work_plan_id=plan_id).order_by(
+        SchedulingConflict.severity.desc(),
+        SchedulingConflict.created_at.desc()
+    ).all()
+
+    # Categorize
+    blocking = [c for c in conflicts if c.is_blocking]
+    warnings = [c for c in conflicts if not c.is_resolved and not c.is_ignored and c.severity == 'warning']
+    resolved = [c for c in conflicts if c.is_resolved or c.is_ignored]
+
+    return jsonify({
+        'status': 'success',
+        'plan_id': plan_id,
+        'conflicts': [c.to_dict() for c in conflicts],
+        'summary': {
+            'total': len(conflicts),
+            'blocking': len(blocking),
+            'warnings': len(warnings),
+            'resolved': len(resolved)
+        }
+    }), 200
+
+
+@bp.route('/<int:plan_id>/conflicts/<int:conflict_id>/resolve', methods=['POST'])
+@jwt_required()
+def resolve_conflict(plan_id, conflict_id):
+    """
+    Mark a conflict as resolved.
+
+    Request body:
+        {
+            "resolution": "Reassigned worker to different day"
+        }
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    conflict = db.session.get(SchedulingConflict, conflict_id)
+    if not conflict or conflict.work_plan_id != plan_id:
+        raise NotFoundError("Conflict not found in this plan")
+
+    data = request.get_json() or {}
+
+    conflict.resolution = data.get('resolution', 'Resolved manually')
+    conflict.resolved_at = datetime.utcnow()
+    conflict.resolved_by_id = user.id
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Conflict resolved',
+        'conflict': conflict.to_dict()
+    }), 200
+
+
+@bp.route('/<int:plan_id>/conflicts/<int:conflict_id>/ignore', methods=['POST'])
+@jwt_required()
+def ignore_conflict(plan_id, conflict_id):
+    """Ignore a conflict (acknowledge but not fix)."""
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    conflict = db.session.get(SchedulingConflict, conflict_id)
+    if not conflict or conflict.work_plan_id != plan_id:
+        raise NotFoundError("Conflict not found in this plan")
+
+    conflict.is_ignored = True
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Conflict ignored',
+        'conflict': conflict.to_dict()
+    }), 200
+
+
+@bp.route('/<int:plan_id>/validate', methods=['POST'])
+@jwt_required()
+def validate_plan(plan_id):
+    """Validate plan (detect all conflicts)."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    # Detect conflicts
+    detected = detect_conflicts_for_plan(plan)
+
+    # Clear old unresolved conflicts and add new ones
+    SchedulingConflict.query.filter_by(
+        work_plan_id=plan_id
+    ).filter(
+        SchedulingConflict.resolved_at == None,
+        SchedulingConflict.is_ignored == False
+    ).delete()
+
+    warnings = []
+    errors = []
+
+    for conflict_data in detected:
+        conflict = SchedulingConflict(
+            work_plan_id=plan_id,
+            conflict_type=conflict_data['type'],
+            severity=conflict_data['severity'],
+            description=conflict_data['description'],
+            affected_job_ids=conflict_data.get('affected_job_ids'),
+            affected_user_ids=conflict_data.get('affected_user_ids')
+        )
+        db.session.add(conflict)
+
+        if conflict_data['severity'] == 'error':
+            errors.append(conflict_data)
+        else:
+            warnings.append(conflict_data)
+
+    db.session.commit()
+
+    valid = len(errors) == 0
+
+    return jsonify({
+        'status': 'success',
+        'valid': valid,
+        'conflicts': errors,
+        'warnings': warnings,
+        'summary': {
+            'errors': len(errors),
+            'warnings': len(warnings)
+        }
+    }), 200
+
+
+# ==================== AI FEATURES ====================
+
+@bp.route('/ai/auto-schedule/<int:plan_id>', methods=['POST'])
+@jwt_required()
+def ai_auto_schedule(plan_id):
+    """
+    AI auto-schedule jobs.
+
+    Request body:
+        {
+            "options": {
+                "priority_weight": 0.5,
+                "balance_berths": true,
+                "consider_skills": true,
+                "minimize_travel": true
+            }
+        }
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot auto-schedule a published plan")
+
+    data = request.get_json() or {}
+    options = data.get('options', {})
+
+    result = ai_service.auto_schedule_jobs(plan_id, options)
+
+    # Apply the scheduled assignments if requested
+    if data.get('apply', True) and result.get('scheduled'):
+        for assignment_data in result['scheduled']:
+            assignment = WorkPlanAssignment(
+                work_plan_job_id=assignment_data['job_id'],
+                user_id=assignment_data['user_id'],
+                is_lead=True  # First assignment is lead
+            )
+            db.session.add(assignment)
+
+        create_plan_version(plan, 'updated', f'AI auto-scheduled {len(result["scheduled"])} jobs', user.id)
+        db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        **result
+    }), 200
+
+
+@bp.route('/ai/suggest-team/<int:job_id>', methods=['GET'])
+@jwt_required()
+def ai_suggest_team(job_id):
+    """AI suggest optimal team for a job."""
+    user = get_current_user()
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job:
+        raise NotFoundError("Job not found")
+
+    suggestions = ai_service.suggest_optimal_team(job_id)
+
+    return jsonify({
+        'status': 'success',
+        'job_id': job_id,
+        'suggestions': suggestions
+    }), 200
+
+
+@bp.route('/ai/optimize-sequence', methods=['POST'])
+@jwt_required()
+def ai_optimize_sequence():
+    """
+    Optimize job sequence for a worker.
+
+    Request body:
+        {
+            "day_id": 1,
+            "user_id": 5
+        }
+    """
+    user = get_current_user()
+
+    data = request.get_json()
+    if not data or not data.get('day_id') or not data.get('user_id'):
+        raise ValidationError("day_id and user_id are required")
+
+    optimized = ai_service.optimize_job_sequence(data['day_id'], data['user_id'])
+
+    return jsonify({
+        'status': 'success',
+        'optimized_sequence': optimized
+    }), 200
+
+
+@bp.route('/ai/balance-workload/<int:plan_id>', methods=['POST'])
+@jwt_required()
+def ai_balance_workload(plan_id):
+    """Rebalance workload across workers."""
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    result = ai_service.balance_workload(plan_id)
+
+    return jsonify({
+        'status': 'success',
+        **result
+    }), 200
+
+
+@bp.route('/ai/predict-duration', methods=['POST'])
+@jwt_required()
+def ai_predict_duration():
+    """
+    Predict job duration.
+
+    Request body:
+        {
+            "job_type": "pm",
+            "equipment_id": 1,
+            "team_size": 2
+        }
+    """
+    user = get_current_user()
+
+    data = request.get_json()
+    if not data:
+        raise ValidationError("Request body is required")
+
+    prediction = ai_service.predict_job_duration(data)
+
+    return jsonify({
+        'status': 'success',
+        **prediction
+    }), 200
+
+
+@bp.route('/ai/predict-delay/<int:job_id>', methods=['GET'])
+@jwt_required()
+def ai_predict_delay(job_id):
+    """Predict delay risk for a job."""
+    user = get_current_user()
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job:
+        raise NotFoundError("Job not found")
+
+    prediction = ai_service.predict_delay_risk(job_id)
+
+    return jsonify({
+        'status': 'success',
+        **prediction
+    }), 200
+
+
+@bp.route('/ai/predict-completion/<int:plan_id>', methods=['GET'])
+@jwt_required()
+def ai_predict_completion(plan_id):
+    """Predict plan completion rate."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    prediction = ai_service.predict_completion_rate(plan_id)
+
+    return jsonify({
+        'status': 'success',
+        **prediction
+    }), 200
+
+
+@bp.route('/ai/forecast-workload', methods=['GET'])
+@jwt_required()
+def ai_forecast_workload():
+    """
+    Forecast upcoming workload.
+
+    Query params:
+        - weeks_ahead: Number of weeks to forecast (default 4)
+    """
+    user = get_current_user()
+
+    weeks_ahead = request.args.get('weeks_ahead', 4, type=int)
+    weeks_ahead = min(weeks_ahead, 12)  # Max 12 weeks
+
+    forecasts = ai_service.forecast_workload(weeks_ahead)
+
+    return jsonify({
+        'status': 'success',
+        'forecasts': forecasts,
+        'weeks_ahead': weeks_ahead
+    }), 200
+
+
+@bp.route('/ai/detect-anomalies/<int:plan_id>', methods=['GET'])
+@jwt_required()
+def ai_detect_anomalies(plan_id):
+    """Detect schedule anomalies."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    anomalies = ai_service.detect_schedule_anomalies(plan_id)
+
+    return jsonify({
+        'status': 'success',
+        'plan_id': plan_id,
+        'anomalies': anomalies,
+        'count': len(anomalies)
+    }), 200
+
+
+@bp.route('/ai/bottlenecks/<int:plan_id>', methods=['GET'])
+@jwt_required()
+def ai_identify_bottlenecks(plan_id):
+    """Identify scheduling bottlenecks."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    bottlenecks = ai_service.identify_bottlenecks(plan_id)
+
+    return jsonify({
+        'status': 'success',
+        'plan_id': plan_id,
+        'bottlenecks': bottlenecks,
+        'count': len(bottlenecks)
+    }), 200
+
+
+@bp.route('/ai/critical-path/<int:plan_id>', methods=['GET'])
+@jwt_required()
+def ai_critical_path(plan_id):
+    """Calculate critical path."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    result = ai_service.calculate_critical_path(plan_id)
+
+    return jsonify({
+        'status': 'success',
+        **result
+    }), 200
+
+
+@bp.route('/ai/live-status/<int:plan_id>', methods=['GET'])
+@jwt_required()
+def ai_live_status(plan_id):
+    """Real-time plan status summary."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    status = ai_service.get_live_status_summary(plan_id)
+
+    return jsonify({
+        'status': 'success',
+        **status
+    }), 200
+
+
+@bp.route('/ai/skill-gaps', methods=['GET'])
+@jwt_required()
+def ai_skill_gaps():
+    """Get skill gap analysis."""
+    user = get_current_user()
+
+    gaps = ai_service.get_skill_gap_analysis()
+
+    return jsonify({
+        'status': 'success',
+        'skill_gaps': gaps,
+        'count': len(gaps)
+    }), 200
+
+
+@bp.route('/ai/efficiency-score', methods=['GET'])
+@jwt_required()
+def ai_efficiency_score():
+    """
+    Get efficiency score.
+
+    Query params:
+        - plan_id: For plan efficiency
+        - user_id: For worker efficiency
+    """
+    user = get_current_user()
+
+    plan_id = request.args.get('plan_id', type=int)
+    user_id = request.args.get('user_id', type=int)
+
+    if not plan_id and not user_id:
+        raise ValidationError("Either plan_id or user_id is required")
+
+    score = ai_service.calculate_efficiency_score(plan_id=plan_id, user_id=user_id)
+
+    return jsonify({
+        'status': 'success',
+        **score
+    }), 200
+
+
+@bp.route('/ai/natural-query', methods=['POST'])
+@jwt_required()
+def ai_natural_query():
+    """
+    Natural language planning query.
+
+    Request body:
+        {
+            "query": "Schedule pump maintenance for Monday"
+        }
+    """
+    user = get_current_user()
+
+    data = request.get_json()
+    if not data or not data.get('query'):
+        raise ValidationError("query is required")
+
+    # Use OpenAI to interpret and respond
+    try:
+        result = ai_service.openai_service.analyze_report_text(
+            f"Work planning query: {data['query']}\n\nInterpret this as a scheduling request and provide structured JSON response with: action, parameters, and suggested_steps."
+        )
+
+        return jsonify({
+            'status': 'success',
+            'query': data['query'],
+            'interpretation': result,
+            'suggestions': [
+                "Based on your query, I recommend reviewing available jobs in the pool.",
+                "Check worker availability for the requested day.",
+                "Consider existing assignments to avoid conflicts."
+            ]
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'success',
+            'query': data['query'],
+            'interpretation': "Query received. Please use specific scheduling endpoints for actions.",
+            'error_details': str(e)
+        }), 200
+
+
+@bp.route('/ai/simulate', methods=['POST'])
+@jwt_required()
+def ai_simulate():
+    """
+    Simulate a scheduling scenario.
+
+    Request body:
+        {
+            "plan_id": 1,
+            "scenario": {
+                "type": "worker_absence",
+                "params": {"user_id": 5}
+            }
+        }
+    """
+    user = get_current_user()
+
+    data = request.get_json()
+    if not data or not data.get('plan_id') or not data.get('scenario'):
+        raise ValidationError("plan_id and scenario are required")
+
+    plan = db.session.get(WorkPlan, data['plan_id'])
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    scenario = data['scenario']
+    scenario_type = scenario.get('type')
+    params = scenario.get('params', {})
+
+    # Simulate based on scenario type
+    if scenario_type == 'worker_absence':
+        result = ai_service.real_time_reschedule({
+            'event_type': 'absence',
+            'affected_user_id': params.get('user_id'),
+            'details': 'Simulated absence'
+        })
+    elif scenario_type == 'job_delay':
+        result = ai_service.real_time_reschedule({
+            'event_type': 'delay',
+            'affected_job_id': params.get('job_id'),
+            'details': 'Simulated delay'
+        })
+    else:
+        result = {'message': 'Unknown scenario type', 'adjustments': [], 'notifications': []}
+
+    return jsonify({
+        'status': 'success',
+        'scenario': scenario,
+        'simulation_result': result
+    }), 200
+
+
+@bp.route('/ai/compare/<int:plan_a>/<int:plan_b>', methods=['GET'])
+@jwt_required()
+def ai_compare_plans(plan_a, plan_b):
+    """Compare two plans."""
+    user = get_current_user()
+
+    plan_a_obj = db.session.get(WorkPlan, plan_a)
+    plan_b_obj = db.session.get(WorkPlan, plan_b)
+
+    if not plan_a_obj or not plan_b_obj:
+        raise NotFoundError("One or both plans not found")
+
+    # Calculate metrics for both plans
+    def get_plan_metrics(plan):
+        total_jobs = sum(len(day.jobs) for day in plan.days)
+        total_hours = sum(sum(job.estimated_hours or 0 for job in day.jobs) for day in plan.days)
+        assigned_jobs = sum(1 for day in plan.days for job in day.jobs if job.assignments)
+        unique_workers = len(set(
+            a.user_id for day in plan.days for job in day.jobs for a in job.assignments
+        ))
+
+        return {
+            'plan_id': plan.id,
+            'week_start': plan.week_start.isoformat(),
+            'status': plan.status,
+            'total_jobs': total_jobs,
+            'total_hours': round(total_hours, 1),
+            'assigned_jobs': assigned_jobs,
+            'assignment_rate': round(assigned_jobs / total_jobs * 100, 1) if total_jobs > 0 else 0,
+            'unique_workers': unique_workers
+        }
+
+    metrics_a = get_plan_metrics(plan_a_obj)
+    metrics_b = get_plan_metrics(plan_b_obj)
+
+    # Calculate differences
+    differences = {
+        'jobs_diff': metrics_b['total_jobs'] - metrics_a['total_jobs'],
+        'hours_diff': round(metrics_b['total_hours'] - metrics_a['total_hours'], 1),
+        'assignment_rate_diff': round(metrics_b['assignment_rate'] - metrics_a['assignment_rate'], 1),
+        'workers_diff': metrics_b['unique_workers'] - metrics_a['unique_workers']
+    }
+
+    return jsonify({
+        'status': 'success',
+        'plan_a': metrics_a,
+        'plan_b': metrics_b,
+        'differences': differences
+    }), 200
+
+
+@bp.route('/ai/safety-check/<int:plan_id>', methods=['GET'])
+@jwt_required()
+def ai_safety_check(plan_id):
+    """Check safety compliance for a plan."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    issues = []
+    warnings = []
+
+    # Check for required certifications
+    for day in plan.days:
+        for job in day.jobs:
+            if job.template_id:
+                template = db.session.get(JobTemplate, job.template_id)
+                if template and template.required_certifications:
+                    for assignment in job.assignments:
+                        user_skills = WorkerSkill.query.filter_by(user_id=assignment.user_id).all()
+                        skill_names = {s.skill_name.lower() for s in user_skills if s.is_verified and not s.is_expired}
+
+                        for cert in template.required_certifications:
+                            if cert.lower() not in skill_names:
+                                issues.append({
+                                    'type': 'missing_certification',
+                                    'severity': 'error',
+                                    'job_id': job.id,
+                                    'user_id': assignment.user_id,
+                                    'certification': cert,
+                                    'description': f'Worker lacks required certification: {cert}'
+                                })
+
+    # Check for expired certifications
+    for day in plan.days:
+        for job in day.jobs:
+            for assignment in job.assignments:
+                expired_skills = WorkerSkill.query.filter_by(user_id=assignment.user_id).all()
+                for skill in expired_skills:
+                    if skill.is_expired:
+                        warnings.append({
+                            'type': 'expired_certification',
+                            'severity': 'warning',
+                            'job_id': job.id,
+                            'user_id': assignment.user_id,
+                            'skill': skill.skill_name,
+                            'expired_date': skill.expiry_date.isoformat() if skill.expiry_date else None
+                        })
+
+    compliant = len(issues) == 0
+
+    return jsonify({
+        'status': 'success',
+        'plan_id': plan_id,
+        'compliant': compliant,
+        'issues': issues,
+        'warnings': warnings,
+        'summary': {
+            'issues_count': len(issues),
+            'warnings_count': len(warnings)
+        }
+    }), 200
+
+
+@bp.route('/ai/sla-check/<int:plan_id>', methods=['GET'])
+@jwt_required()
+def ai_sla_check(plan_id):
+    """Check SLA compliance for a plan."""
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    violations = []
+    at_risk = []
+
+    for day in plan.days:
+        for job in day.jobs:
+            # Check overdue jobs
+            if job.overdue_value and job.overdue_value > 0:
+                violations.append({
+                    'type': 'overdue',
+                    'job_id': job.id,
+                    'equipment': job.equipment.name if job.equipment else 'N/A',
+                    'overdue_by': f"{job.overdue_value} {job.overdue_unit}",
+                    'scheduled_for': day.date.isoformat()
+                })
+
+            # Check high priority jobs scheduled late in week
+            if job.priority in ('urgent', 'high') and day.date.weekday() >= 3:
+                at_risk.append({
+                    'type': 'late_week_priority',
+                    'job_id': job.id,
+                    'priority': job.priority,
+                    'scheduled_for': day.date.isoformat(),
+                    'recommendation': 'Consider moving to earlier in the week'
+                })
+
+    compliant = len(violations) == 0
+
+    return jsonify({
+        'status': 'success',
+        'plan_id': plan_id,
+        'compliant': compliant,
+        'violations': violations,
+        'at_risk': at_risk,
+        'summary': {
+            'violations_count': len(violations),
+            'at_risk_count': len(at_risk)
+        }
+    }), 200
+
+
+@bp.route('/ai/transcribe-handover', methods=['POST'])
+@jwt_required()
+def ai_transcribe_handover():
+    """
+    Transcribe voice handover (placeholder for audio transcription).
+
+    Request body:
+        {
+            "audio_file_id": 123
+        }
+    """
+    user = get_current_user()
+
+    data = request.get_json()
+    if not data or not data.get('audio_file_id'):
+        raise ValidationError("audio_file_id is required")
+
+    # This would integrate with a speech-to-text service
+    # For now, return a placeholder response
+
+    return jsonify({
+        'status': 'success',
+        'audio_file_id': data['audio_file_id'],
+        'transcription': {
+            'text': 'Voice transcription feature requires integration with speech-to-text service.',
+            'confidence': 0.0,
+            'language': 'en'
+        },
+        'message': 'Transcription service not yet configured'
+    }), 200
+
+
+# ==================== REPORTS ====================
+
+@bp.route('/reports/performance', methods=['GET'])
+@jwt_required()
+def report_performance():
+    """
+    Get performance report.
+
+    Query params:
+        - period: weekly, monthly, quarterly (default monthly)
+        - user_id: Specific user (optional)
+    """
+    user = get_current_user()
+
+    period = request.args.get('period', 'monthly')
+    user_id = request.args.get('user_id', type=int)
+
+    result = ai_service.analyze_historical_performance(period)
+
+    # Filter by user if specified
+    if user_id and result.get('top_performers'):
+        result['top_performers'] = [p for p in result['top_performers'] if p.get('user_id') == user_id]
+
+    return jsonify({
+        'status': 'success',
+        'report': result
+    }), 200
+
+
+@bp.route('/reports/completion', methods=['GET'])
+@jwt_required()
+def report_completion():
+    """
+    Get completion report.
+
+    Query params:
+        - from: Start date (YYYY-MM-DD)
+        - to: End date (YYYY-MM-DD)
+    """
+    user = get_current_user()
+
+    from_date_str = request.args.get('from')
+    to_date_str = request.args.get('to')
+
+    if from_date_str:
+        from_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+    else:
+        from_date = date.today() - timedelta(days=30)
+
+    if to_date_str:
+        to_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+    else:
+        to_date = date.today()
+
+    # Get plans in date range
+    plans = WorkPlan.query.filter(
+        WorkPlan.week_start >= from_date,
+        WorkPlan.week_end <= to_date
+    ).all()
+
+    report_data = []
+    for plan in plans:
+        total_jobs = sum(len(day.jobs) for day in plan.days)
+        completed_jobs = sum(
+            1 for day in plan.days for job in day.jobs
+            if hasattr(job, 'tracking') and job.tracking and job.tracking.status == 'completed'
+        )
+        completion_rate = (completed_jobs / total_jobs * 100) if total_jobs > 0 else 0
+
+        report_data.append({
+            'plan_id': plan.id,
+            'week_start': plan.week_start.isoformat(),
+            'week_end': plan.week_end.isoformat(),
+            'total_jobs': total_jobs,
+            'completed_jobs': completed_jobs,
+            'completion_rate': round(completion_rate, 1)
+        })
+
+    overall_total = sum(r['total_jobs'] for r in report_data)
+    overall_completed = sum(r['completed_jobs'] for r in report_data)
+    overall_rate = (overall_completed / overall_total * 100) if overall_total > 0 else 0
+
+    return jsonify({
+        'status': 'success',
+        'period': {
+            'from': from_date.isoformat(),
+            'to': to_date.isoformat()
+        },
+        'plans': report_data,
+        'overall': {
+            'total_jobs': overall_total,
+            'completed_jobs': overall_completed,
+            'completion_rate': round(overall_rate, 1)
+        }
+    }), 200
+
+
+@bp.route('/reports/time-accuracy', methods=['GET'])
+@jwt_required()
+def report_time_accuracy():
+    """Get time estimation accuracy report."""
+    user = get_current_user()
+
+    issues = ai_service.detect_time_estimation_issues()
+
+    return jsonify({
+        'status': 'success',
+        'estimation_issues': issues,
+        'recommendations': [
+            'Review and adjust time estimates for job types with high error rates',
+            'Consider equipment-specific adjustments',
+            'Train planners on accurate estimation techniques'
+        ]
+    }), 200
+
+
+@bp.route('/reports/export/<int:plan_id>', methods=['GET'])
+@jwt_required()
+def export_plan_report(plan_id):
+    """
+    Export plan to Excel/CSV.
+
+    Query params:
+        - format: xlsx or csv (default xlsx)
+    """
+    user = get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    export_format = request.args.get('format', 'xlsx')
+    language = user.language or 'en'
+
+    # Build data for export
+    rows = []
+    for day in plan.days:
+        for job in day.jobs:
+            workers = ', '.join([a.user.full_name for a in job.assignments if a.user])
+            materials_list = ', '.join([f"{m.material.name} ({m.quantity})" for m in job.materials if m.material])
+
+            rows.append({
+                'Day': day.date.strftime('%A'),
+                'Date': day.date.isoformat(),
+                'Job Type': job.job_type,
+                'Equipment': job.equipment.name if job.equipment else '',
+                'Berth': job.berth or '',
+                'Description': job.description or '',
+                'SAP Order': job.sap_order_number or '',
+                'Estimated Hours': job.estimated_hours or 0,
+                'Priority': job.priority,
+                'Workers': workers,
+                'Materials': materials_list
+            })
+
+    df = pd.DataFrame(rows)
+
+    output = BytesIO()
+
+    if export_format == 'csv':
+        df.to_csv(output, index=False)
+        mimetype = 'text/csv'
+        filename = f'work_plan_{plan.week_start}_export.csv'
+    else:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Work Plan', index=False)
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        filename = f'work_plan_{plan.week_start}_export.xlsx'
+
+    output.seek(0)
+
+    return Response(
+        output.getvalue(),
+        mimetype=mimetype,
+        headers={
+            'Content-Disposition': f'attachment; filename={filename}'
+        }
+    )

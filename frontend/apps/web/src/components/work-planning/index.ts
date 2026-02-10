@@ -1,3 +1,4 @@
+// Existing components
 export { TimelineJobBlock } from './TimelineJobBlock';
 export { DraggableJobCard } from './DraggableJobCard';
 export { TimelineDay } from './TimelineDay';
@@ -8,3 +9,11 @@ export { JobsPool } from './JobsPool';
 export { EmployeePool } from './EmployeePool';
 export { AnalyticsView } from './AnalyticsView';
 export type { ViewMode } from './ViewToggle';
+
+// New enhanced components
+export { GanttChartView } from './GanttChartView';
+export { ResourceHeatmap } from './ResourceHeatmap';
+export { JobTemplateManager } from './JobTemplateManager';
+export { WorkPlanAIPanel } from './WorkPlanAIPanel';
+export { ConflictResolutionPanel } from './ConflictResolutionPanel';
+export { LivePlanStatus } from './LivePlanStatus';

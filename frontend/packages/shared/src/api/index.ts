@@ -8,7 +8,7 @@ export type { EquipmentListParams } from './equipment.api';
 export { checklistsApi } from './checklists.api';
 export type {
   ChecklistListParams,
-  CreateTemplatePayload,
+  CreateTemplatePayload as ChecklistCreateTemplatePayload,
   CreateChecklistItemPayload,
   UpdateChecklistItemPayload,
 } from './checklists.api';
@@ -64,7 +64,6 @@ export type {
 } from './quality-reviews.api';
 export { leavesApi } from './leaves.api';
 export type {
-  LeaveListParams,
   LeaveApprovePayload,
   LeaveRejectPayload,
   CapacityInfo,
@@ -138,7 +137,7 @@ export type {
   CountItemsResponse,
   ABCAnalysisResponse,
   InsightsResponse,
-  AnomaliesResponse,
+  AnomaliesResponse as MaterialAnomaliesResponse,
   CostOptimizationResponse,
   DeadStockResponse,
   NaturalLanguageSearchResponse,

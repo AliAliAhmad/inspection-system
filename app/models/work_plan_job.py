@@ -45,6 +45,9 @@ class WorkPlanJob(db.Model):
     cycle_id = db.Column(db.Integer, db.ForeignKey('maintenance_cycles.id'))
     pm_template_id = db.Column(db.Integer, db.ForeignKey('pm_templates.id'))
 
+    # Job Template reference (for template-based jobs)
+    template_id = db.Column(db.Integer, db.ForeignKey('job_templates.id'))
+
     # Overdue tracking
     overdue_value = db.Column(db.Float)  # Number of hours or days overdue
     overdue_unit = db.Column(db.String(10))  # hours, days
@@ -59,6 +62,10 @@ class WorkPlanJob(db.Model):
     start_time = db.Column(db.Time)
     end_time = db.Column(db.Time)
 
+    # Actual time tracking
+    actual_start_time = db.Column(db.Time)
+    actual_end_time = db.Column(db.Time)
+
     # Time estimate (required when adding job)
     estimated_hours = db.Column(db.Float, nullable=False)
 
@@ -67,6 +74,21 @@ class WorkPlanJob(db.Model):
 
     # Priority
     priority = db.Column(db.String(20), default='normal')  # low, normal, high, urgent
+
+    # Checklist requirements
+    checklist_required = db.Column(db.Boolean, default=False)
+    checklist_completed = db.Column(db.Boolean, default=False)
+
+    # Photo requirements
+    completion_photo_required = db.Column(db.Boolean, default=False)
+
+    # Weather sensitivity
+    weather_sensitive = db.Column(db.Boolean, default=False)
+
+    # Job splitting
+    is_split = db.Column(db.Boolean, default=False)
+    split_from_id = db.Column(db.Integer, db.ForeignKey('work_plan_jobs.id'))
+    split_part = db.Column(db.Integer)  # 1, 2, 3 for split parts
 
     # Notes
     notes = db.Column(db.Text)
@@ -82,6 +104,8 @@ class WorkPlanJob(db.Model):
     inspection_assignment = db.relationship('InspectionAssignment')
     cycle = db.relationship('MaintenanceCycle')
     pm_template = db.relationship('PMTemplate')
+    template = db.relationship('JobTemplate')
+    split_from = db.relationship('WorkPlanJob', remote_side='WorkPlanJob.id', backref='split_jobs')
     assignments = db.relationship('WorkPlanAssignment', back_populates='job', cascade='all, delete-orphan')
     materials = db.relationship('WorkPlanMaterial', back_populates='job', cascade='all, delete-orphan')
 
@@ -157,6 +181,10 @@ class WorkPlanJob(db.Model):
                 'computed_priority': self.computed_priority,
                 'estimated_hours': self.estimated_hours,
                 'priority': self.priority,
+                'checklist_required': self.checklist_required,
+                'checklist_completed': self.checklist_completed,
+                'is_split': self.is_split,
+                'split_part': self.split_part,
                 'assigned_users_count': len(self.assignments),
             }
 
@@ -178,6 +206,8 @@ class WorkPlanJob(db.Model):
             'cycle': self.cycle.to_dict(language) if self.cycle else None,
             'pm_template_id': self.pm_template_id,
             'pm_template': self.pm_template.to_dict(language, include_items=False) if self.pm_template else None,
+            'template_id': self.template_id,
+            'template': self.template.to_dict(language, include_materials=False, include_checklist=False) if self.template else None,
             'overdue_value': self.overdue_value,
             'overdue_unit': self.overdue_unit,
             'computed_priority': self.computed_priority,
@@ -185,9 +215,18 @@ class WorkPlanJob(db.Model):
             'planned_date': self.planned_date.isoformat() if self.planned_date else None,
             'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
             'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
+            'actual_start_time': self.actual_start_time.strftime('%H:%M') if self.actual_start_time else None,
+            'actual_end_time': self.actual_end_time.strftime('%H:%M') if self.actual_end_time else None,
             'estimated_hours': self.estimated_hours,
             'position': self.position,
             'priority': self.priority,
+            'checklist_required': self.checklist_required,
+            'checklist_completed': self.checklist_completed,
+            'completion_photo_required': self.completion_photo_required,
+            'weather_sensitive': self.weather_sensitive,
+            'is_split': self.is_split,
+            'split_from_id': self.split_from_id,
+            'split_part': self.split_part,
             'notes': self.notes,
             'assignments': [a.to_dict() for a in self.assignments],
             'materials': [m.to_dict(language) for m in self.materials],

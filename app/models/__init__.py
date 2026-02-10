@@ -36,8 +36,16 @@ from app.models.final_assessment import FinalAssessment
 from app.models.inspection_list import InspectionList
 from app.models.inspection_assignment import InspectionAssignment
 
-# Leave & Coverage
+# Leave Management System (Enhanced)
+from app.models.leave_type import LeaveType
+from app.models.leave_policy import LeavePolicy
+from app.models.leave_calendar import LeaveCalendar
+from app.models.leave_blackout import LeaveBlackout
 from app.models.leave import Leave
+from app.models.leave_balance_history import LeaveBalanceHistory
+from app.models.leave_approval_level import LeaveApprovalLevel
+from app.models.compensatory_leave import CompensatoryLeave
+from app.models.leave_encashment import LeaveEncashment
 
 # Roster
 from app.models.roster import RosterEntry
@@ -79,6 +87,18 @@ from app.models.work_plan_job import WorkPlanJob
 from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.work_plan_material import WorkPlanMaterial
 from app.models.sap_work_order import SAPWorkOrder
+
+# Enhanced Work Planning (must be after WorkPlanJob due to FK)
+from app.models.job_template import JobTemplate
+from app.models.job_template_material import JobTemplateMaterial
+from app.models.job_template_checklist import JobTemplateChecklist
+from app.models.job_dependency import JobDependency
+from app.models.job_checklist_response import JobChecklistResponse
+from app.models.capacity_config import CapacityConfig
+from app.models.worker_skill import WorkerSkill
+from app.models.equipment_restriction import EquipmentRestriction
+from app.models.work_plan_version import WorkPlanVersion
+from app.models.scheduling_conflict import SchedulingConflict
 
 # Materials Enhancement - Advanced Models (after Material due to FK)
 from app.models.material_batch import MaterialBatch
@@ -141,7 +161,16 @@ __all__ = [
     'FinalAssessment',
     'InspectionList',
     'InspectionAssignment',
+    # Leave Management System
+    'LeaveType',
+    'LeavePolicy',
+    'LeaveCalendar',
+    'LeaveBlackout',
     'Leave',
+    'LeaveBalanceHistory',
+    'LeaveApprovalLevel',
+    'CompensatoryLeave',
+    'LeaveEncashment',
     'RosterEntry',
     'PauseLog',
     'JobTakeover',
@@ -186,6 +215,17 @@ __all__ = [
     'WorkPlanDailyReview',
     'WorkPlanCarryOver',
     'WorkPlanPerformance',
+    # Enhanced Work Planning
+    'JobTemplate',
+    'JobTemplateMaterial',
+    'JobTemplateChecklist',
+    'JobDependency',
+    'JobChecklistResponse',
+    'CapacityConfig',
+    'WorkerSkill',
+    'EquipmentRestriction',
+    'WorkPlanVersion',
+    'SchedulingConflict',
     # Equipment Advanced Features
     'EquipmentWatch',
     'EquipmentNote',

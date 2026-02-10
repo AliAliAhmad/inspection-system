@@ -14,6 +14,49 @@ import {
   AddMaterialPayload,
   MoveJobPayload,
   MoveJobResponse,
+  // Enhanced Work Planning Types
+  JobTemplate,
+  JobDependency,
+  CapacityConfig,
+  WorkerSkill,
+  EquipmentRestriction,
+  WorkPlanVersion,
+  JobChecklistResponse,
+  SchedulingConflict,
+  // Payloads
+  CreateTemplatePayload,
+  UpdateTemplatePayload,
+  AddDependencyPayload,
+  SplitJobPayload,
+  AddSkillPayload,
+  SubmitChecklistResponsePayload,
+  AutoScheduleOptions,
+  SimulateScenarioPayload,
+  CreateCapacityConfigPayload,
+  UpdateCapacityConfigPayload,
+  CreateEquipmentRestrictionPayload,
+  UpdateEquipmentRestrictionPayload,
+  ResolveConflictPayload,
+  // Response Types
+  TemplatesListResponse,
+  CapacityConfigsListResponse,
+  WorkerSkillsListResponse,
+  EquipmentRestrictionsListResponse,
+  WorkPlanVersionsListResponse,
+  ConflictsListResponse,
+  ChecklistResponsesListResponse,
+  TeamSuggestionsResponse,
+  DurationPredictionResponse,
+  DelayRiskResponse,
+  CompletionPredictionResponse,
+  WorkloadForecastResponse,
+  AnomaliesResponse,
+  BottlenecksResponse,
+  LiveStatusResponse,
+  SkillGapsResponse,
+  EfficiencyScoreResponse,
+  PlanValidationResponse,
+  SimulationResponse,
 } from '../types/work-plan.types';
 
 export interface WorkPlanListParams {
@@ -183,5 +226,362 @@ export const workPlansApi = {
       skipped: number;
       source_week: string;
     }>(`/api/work-plans/${planId}/copy-from-week`, { source_week_start: sourceWeekStart });
+  },
+
+  // ==================== JOB TEMPLATES ====================
+
+  listTemplates(params?: { job_type?: string; equipment_type?: string; is_active?: boolean }) {
+    return getApiClient().get<TemplatesListResponse>('/api/work-plans/templates', { params });
+  },
+
+  getTemplate(templateId: number) {
+    return getApiClient().get<ApiResponse<JobTemplate>>(`/api/work-plans/templates/${templateId}`);
+  },
+
+  createTemplate(payload: CreateTemplatePayload) {
+    return getApiClient().post<ApiResponse<JobTemplate>>('/api/work-plans/templates', payload);
+  },
+
+  updateTemplate(templateId: number, payload: UpdateTemplatePayload) {
+    return getApiClient().put<ApiResponse<JobTemplate>>(`/api/work-plans/templates/${templateId}`, payload);
+  },
+
+  deleteTemplate(templateId: number) {
+    return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/templates/${templateId}`);
+  },
+
+  // Template Materials
+  addTemplateMaterial(templateId: number, payload: { material_id: number; quantity: number; is_optional?: boolean }) {
+    return getApiClient().post<ApiResponse<JobTemplate>>(`/api/work-plans/templates/${templateId}/materials`, payload);
+  },
+
+  removeTemplateMaterial(templateId: number, materialId: number) {
+    return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/templates/${templateId}/materials/${materialId}`);
+  },
+
+  // Template Checklist Items
+  addTemplateChecklistItem(templateId: number, payload: {
+    question: string;
+    question_ar?: string;
+    answer_type?: string;
+    is_required?: boolean;
+    order_index?: number;
+    fail_action?: string;
+  }) {
+    return getApiClient().post<ApiResponse<JobTemplate>>(`/api/work-plans/templates/${templateId}/checklist`, payload);
+  },
+
+  updateTemplateChecklistItem(templateId: number, itemId: number, payload: {
+    question?: string;
+    question_ar?: string;
+    answer_type?: string;
+    is_required?: boolean;
+    order_index?: number;
+    fail_action?: string;
+  }) {
+    return getApiClient().put<ApiResponse<JobTemplate>>(`/api/work-plans/templates/${templateId}/checklist/${itemId}`, payload);
+  },
+
+  removeTemplateChecklistItem(templateId: number, itemId: number) {
+    return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/templates/${templateId}/checklist/${itemId}`);
+  },
+
+  // Create job from template
+  createJobFromTemplate(planId: number, payload: { template_id: number; day_id: number; equipment_id?: number }) {
+    return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/from-template`, payload);
+  },
+
+  // ==================== JOB DEPENDENCIES ====================
+
+  listJobDependencies(planId: number, jobId: number) {
+    return getApiClient().get<{ status: string; dependencies: JobDependency[] }>(`/api/work-plans/${planId}/jobs/${jobId}/dependencies`);
+  },
+
+  addJobDependency(planId: number, jobId: number, payload: AddDependencyPayload) {
+    return getApiClient().post<ApiResponse<JobDependency>>(`/api/work-plans/${planId}/jobs/${jobId}/dependencies`, payload);
+  },
+
+  removeJobDependency(planId: number, jobId: number, dependencyId: number) {
+    return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/${planId}/jobs/${jobId}/dependencies/${dependencyId}`);
+  },
+
+  // ==================== JOB SPLITTING ====================
+
+  splitJob(planId: number, jobId: number, payload: SplitJobPayload) {
+    return getApiClient().post<ApiResponse<WorkPlanJob[]>>(`/api/work-plans/${planId}/jobs/${jobId}/split`, payload);
+  },
+
+  mergeSplitJobs(planId: number, jobId: number, payload: { merge_job_ids: number[] }) {
+    return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/${jobId}/merge`, payload);
+  },
+
+  // ==================== CAPACITY CONFIGURATION ====================
+
+  listCapacityConfigs(params?: { role?: string; shift?: string; is_active?: boolean }) {
+    return getApiClient().get<CapacityConfigsListResponse>('/api/work-plans/capacity-configs', { params });
+  },
+
+  getCapacityConfig(configId: number) {
+    return getApiClient().get<ApiResponse<CapacityConfig>>(`/api/work-plans/capacity-configs/${configId}`);
+  },
+
+  createCapacityConfig(payload: CreateCapacityConfigPayload) {
+    return getApiClient().post<ApiResponse<CapacityConfig>>('/api/work-plans/capacity-configs', payload);
+  },
+
+  updateCapacityConfig(configId: number, payload: UpdateCapacityConfigPayload) {
+    return getApiClient().put<ApiResponse<CapacityConfig>>(`/api/work-plans/capacity-configs/${configId}`, payload);
+  },
+
+  deleteCapacityConfig(configId: number) {
+    return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/capacity-configs/${configId}`);
+  },
+
+  // ==================== WORKER SKILLS ====================
+
+  listWorkerSkills(params?: { user_id?: number; skill_name?: string; is_verified?: boolean; expiring_soon?: boolean }) {
+    return getApiClient().get<WorkerSkillsListResponse>('/api/work-plans/worker-skills', { params });
+  },
+
+  getWorkerSkill(skillId: number) {
+    return getApiClient().get<ApiResponse<WorkerSkill>>(`/api/work-plans/worker-skills/${skillId}`);
+  },
+
+  addWorkerSkill(userId: number, payload: AddSkillPayload) {
+    return getApiClient().post<ApiResponse<WorkerSkill>>(`/api/work-plans/workers/${userId}/skills`, payload);
+  },
+
+  updateWorkerSkill(skillId: number, payload: Partial<AddSkillPayload> & { is_verified?: boolean }) {
+    return getApiClient().put<ApiResponse<WorkerSkill>>(`/api/work-plans/worker-skills/${skillId}`, payload);
+  },
+
+  deleteWorkerSkill(skillId: number) {
+    return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/worker-skills/${skillId}`);
+  },
+
+  verifyWorkerSkill(skillId: number) {
+    return getApiClient().post<ApiResponse<WorkerSkill>>(`/api/work-plans/worker-skills/${skillId}/verify`);
+  },
+
+  getWorkerSkillsByUser(userId: number) {
+    return getApiClient().get<WorkerSkillsListResponse>(`/api/work-plans/workers/${userId}/skills`);
+  },
+
+  // ==================== EQUIPMENT RESTRICTIONS ====================
+
+  listEquipmentRestrictions(params?: { equipment_id?: number; restriction_type?: string; is_active?: boolean }) {
+    return getApiClient().get<EquipmentRestrictionsListResponse>('/api/work-plans/equipment-restrictions', { params });
+  },
+
+  getEquipmentRestriction(restrictionId: number) {
+    return getApiClient().get<ApiResponse<EquipmentRestriction>>(`/api/work-plans/equipment-restrictions/${restrictionId}`);
+  },
+
+  createEquipmentRestriction(payload: CreateEquipmentRestrictionPayload) {
+    return getApiClient().post<ApiResponse<EquipmentRestriction>>('/api/work-plans/equipment-restrictions', payload);
+  },
+
+  updateEquipmentRestriction(restrictionId: number, payload: UpdateEquipmentRestrictionPayload) {
+    return getApiClient().put<ApiResponse<EquipmentRestriction>>(`/api/work-plans/equipment-restrictions/${restrictionId}`, payload);
+  },
+
+  deleteEquipmentRestriction(restrictionId: number) {
+    return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/equipment-restrictions/${restrictionId}`);
+  },
+
+  getEquipmentRestrictionsByEquipment(equipmentId: number) {
+    return getApiClient().get<EquipmentRestrictionsListResponse>(`/api/work-plans/equipment/${equipmentId}/restrictions`);
+  },
+
+  // ==================== WORK PLAN VERSIONS ====================
+
+  listPlanVersions(planId: number) {
+    return getApiClient().get<WorkPlanVersionsListResponse>(`/api/work-plans/${planId}/versions`);
+  },
+
+  getPlanVersion(planId: number, versionId: number) {
+    return getApiClient().get<ApiResponse<WorkPlanVersion>>(`/api/work-plans/${planId}/versions/${versionId}`);
+  },
+
+  restorePlanVersion(planId: number, versionId: number) {
+    return getApiClient().post<ApiResponse<WorkPlan>>(`/api/work-plans/${planId}/versions/${versionId}/restore`);
+  },
+
+  comparePlanVersions(planId: number, version1Id: number, version2Id: number) {
+    return getApiClient().get<ApiResponse<{ changes: any[] }>>(`/api/work-plans/${planId}/versions/compare`, {
+      params: { version1: version1Id, version2: version2Id }
+    });
+  },
+
+  // ==================== JOB CHECKLISTS ====================
+
+  getJobChecklist(planId: number, jobId: number) {
+    return getApiClient().get<ChecklistResponsesListResponse>(`/api/work-plans/${planId}/jobs/${jobId}/checklist`);
+  },
+
+  submitChecklistResponse(planId: number, jobId: number, itemId: number, payload: SubmitChecklistResponsePayload) {
+    return getApiClient().post<ApiResponse<JobChecklistResponse>>(`/api/work-plans/${planId}/jobs/${jobId}/checklist/${itemId}`, payload);
+  },
+
+  updateChecklistResponse(planId: number, jobId: number, responseId: number, payload: Partial<SubmitChecklistResponsePayload>) {
+    return getApiClient().put<ApiResponse<JobChecklistResponse>>(`/api/work-plans/${planId}/jobs/${jobId}/checklist/${responseId}`, payload);
+  },
+
+  completeJobChecklist(planId: number, jobId: number) {
+    return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/${jobId}/checklist/complete`);
+  },
+
+  // ==================== SCHEDULING CONFLICTS ====================
+
+  listConflicts(planId: number, params?: { conflict_type?: string; severity?: string; is_resolved?: boolean }) {
+    return getApiClient().get<ConflictsListResponse>(`/api/work-plans/${planId}/conflicts`, { params });
+  },
+
+  getConflict(planId: number, conflictId: number) {
+    return getApiClient().get<ApiResponse<SchedulingConflict>>(`/api/work-plans/${planId}/conflicts/${conflictId}`);
+  },
+
+  resolveConflict(planId: number, conflictId: number, payload: ResolveConflictPayload) {
+    return getApiClient().post<ApiResponse<SchedulingConflict>>(`/api/work-plans/${planId}/conflicts/${conflictId}/resolve`, payload);
+  },
+
+  ignoreConflict(planId: number, conflictId: number) {
+    return getApiClient().post<ApiResponse<SchedulingConflict>>(`/api/work-plans/${planId}/conflicts/${conflictId}/ignore`);
+  },
+
+  detectConflicts(planId: number) {
+    return getApiClient().post<ConflictsListResponse>(`/api/work-plans/${planId}/conflicts/detect`);
+  },
+
+  // ==================== AI / PREDICTION ENDPOINTS ====================
+
+  // Team Suggestions
+  getTeamSuggestions(planId: number, jobId: number) {
+    return getApiClient().get<TeamSuggestionsResponse>(`/api/work-plans/${planId}/jobs/${jobId}/suggest-team`);
+  },
+
+  // Duration Prediction
+  predictJobDuration(planId: number, jobId: number) {
+    return getApiClient().get<DurationPredictionResponse>(`/api/work-plans/${planId}/jobs/${jobId}/predict-duration`);
+  },
+
+  // Delay Risk
+  predictDelayRisk(planId: number, jobId: number) {
+    return getApiClient().get<DelayRiskResponse>(`/api/work-plans/${planId}/jobs/${jobId}/delay-risk`);
+  },
+
+  // Completion Prediction
+  predictCompletion(planId: number) {
+    return getApiClient().get<CompletionPredictionResponse>(`/api/work-plans/${planId}/predict-completion`);
+  },
+
+  // Workload Forecast
+  forecastWorkload(params?: { weeks_ahead?: number }) {
+    return getApiClient().get<WorkloadForecastResponse>('/api/work-plans/forecast-workload', { params });
+  },
+
+  // Anomaly Detection
+  detectAnomalies(planId: number) {
+    return getApiClient().get<AnomaliesResponse>(`/api/work-plans/${planId}/detect-anomalies`);
+  },
+
+  // Bottleneck Analysis
+  analyzeBottlenecks(planId: number) {
+    return getApiClient().get<BottlenecksResponse>(`/api/work-plans/${planId}/bottlenecks`);
+  },
+
+  // Live Status Summary
+  getLiveStatus(planId: number) {
+    return getApiClient().get<LiveStatusResponse>(`/api/work-plans/${planId}/live-status`);
+  },
+
+  // Skill Gap Analysis
+  analyzeSkillGaps(params?: { date_range_start?: string; date_range_end?: string }) {
+    return getApiClient().get<SkillGapsResponse>('/api/work-plans/skill-gaps', { params });
+  },
+
+  // Efficiency Score
+  getEfficiencyScore(planId: number) {
+    return getApiClient().get<EfficiencyScoreResponse>(`/api/work-plans/${planId}/efficiency-score`);
+  },
+
+  // Plan Validation
+  validatePlan(planId: number) {
+    return getApiClient().get<PlanValidationResponse>(`/api/work-plans/${planId}/validate`);
+  },
+
+  // Scenario Simulation
+  simulateScenario(payload: SimulateScenarioPayload) {
+    return getApiClient().post<SimulationResponse>('/api/work-plans/simulate', payload);
+  },
+
+  // ==================== ENHANCED AUTO-SCHEDULING ====================
+
+  autoScheduleEnhanced(planId: number, options?: AutoScheduleOptions) {
+    return getApiClient().post<{
+      status: string;
+      message: string;
+      scheduled: number;
+      skipped: number;
+      conflicts: SchedulingConflict[];
+    }>(`/api/work-plans/${planId}/auto-schedule-enhanced`, options);
+  },
+
+  // ==================== JOB TIME TRACKING ====================
+
+  startJob(planId: number, jobId: number) {
+    return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/${jobId}/start`);
+  },
+
+  completeJob(planId: number, jobId: number, payload?: { notes?: string; photo_file_id?: number }) {
+    return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/${jobId}/complete`, payload);
+  },
+
+  pauseJob(planId: number, jobId: number, payload?: { reason?: string }) {
+    return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/${jobId}/pause`, payload);
+  },
+
+  resumeJob(planId: number, jobId: number) {
+    return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/${jobId}/resume`);
+  },
+
+  // ==================== BULK OPERATIONS ====================
+
+  bulkAssignUsers(planId: number, payload: { job_ids: number[]; user_ids: number[] }) {
+    return getApiClient().post<ApiResponse<{ updated: number }>>(`/api/work-plans/${planId}/jobs/bulk-assign`, payload);
+  },
+
+  bulkMoveJobs(planId: number, payload: { job_ids: number[]; target_day_id: number }) {
+    return getApiClient().post<ApiResponse<{ moved: number }>>(`/api/work-plans/${planId}/jobs/bulk-move`, payload);
+  },
+
+  bulkUpdatePriority(planId: number, payload: { job_ids: number[]; priority: string }) {
+    return getApiClient().post<ApiResponse<{ updated: number }>>(`/api/work-plans/${planId}/jobs/bulk-priority`, payload);
+  },
+
+  bulkDeleteJobs(planId: number, payload: { job_ids: number[] }) {
+    return getApiClient().post<ApiResponse<{ deleted: number }>>(`/api/work-plans/${planId}/jobs/bulk-delete`, payload);
+  },
+
+  // ==================== REPORTS & EXPORTS ====================
+
+  exportPlanToExcel(planId: number) {
+    return getApiClient().get<Blob>(`/api/work-plans/${planId}/export/excel`, { responseType: 'blob' });
+  },
+
+  getResourceUtilizationReport(planId: number) {
+    return getApiClient().get<ApiResponse<{
+      by_worker: Array<{ user_id: number; name: string; hours: number; jobs: number; utilization: number }>;
+      by_equipment: Array<{ equipment_id: number; name: string; hours: number; jobs: number }>;
+      by_day: Array<{ date: string; total_hours: number; total_jobs: number }>;
+    }>>(`/api/work-plans/${planId}/reports/resource-utilization`);
+  },
+
+  getHistoricalAnalysis(params?: { from_date?: string; to_date?: string; group_by?: string }) {
+    return getApiClient().get<ApiResponse<{
+      completion_rates: Array<{ period: string; rate: number }>;
+      average_duration: Array<{ job_type: string; avg_hours: number }>;
+      delay_frequency: Array<{ reason: string; count: number }>;
+    }>>('/api/work-plans/reports/historical-analysis', { params });
   },
 };

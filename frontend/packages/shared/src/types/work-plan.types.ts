@@ -180,6 +180,20 @@ export interface WorkPlanJob {
   related_defects?: Defect[];
   related_defects_count?: number;
   created_at: string;
+  // Extended fields for enhanced work planning
+  template_id?: number;
+  template?: JobTemplate;
+  checklist_required: boolean;
+  checklist_completed: boolean;
+  completion_photo_required: boolean;
+  weather_sensitive: boolean;
+  is_split: boolean;
+  split_from_id?: number;
+  split_part?: number;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  dependencies?: JobDependency[];
+  checklist_responses?: JobChecklistResponse[];
 }
 
 export interface WorkPlanDay {
@@ -431,4 +445,492 @@ export interface AvailableJobsResponse {
   defect_jobs: AvailableDefectJob[];
   inspection_jobs: AvailableInspectionJob[];
   sap_orders: SAPWorkOrder[];
+}
+
+// ==================== JOB TEMPLATES ====================
+
+export interface JobTemplate {
+  id: number;
+  name: string;
+  name_ar?: string;
+  job_type: 'pm' | 'defect' | 'inspection';
+  equipment_id?: number;
+  equipment?: { id: number; name: string; serial_number: string };
+  equipment_type?: string;
+  berth?: 'east' | 'west' | 'both';
+  estimated_hours: number;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  description?: string;
+  description_ar?: string;
+  recurrence_type?: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  recurrence_day?: number;
+  default_team_size: number;
+  required_certifications?: string[];
+  is_active: boolean;
+  created_by_id?: number;
+  materials?: JobTemplateMaterial[];
+  checklist_items?: JobTemplateChecklist[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobTemplateMaterial {
+  id: number;
+  template_id: number;
+  material_id: number;
+  material?: { id: number; name: string; code: string };
+  quantity: number;
+  is_optional: boolean;
+}
+
+export interface JobTemplateChecklist {
+  id: number;
+  template_id: number;
+  item_code?: string;
+  question: string;
+  question_ar?: string;
+  answer_type: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
+  is_required: boolean;
+  order_index: number;
+  fail_action?: string;
+  fail_action_ar?: string;
+}
+
+// ==================== JOB DEPENDENCIES ====================
+
+export interface JobDependency {
+  id: number;
+  job_id: number;
+  depends_on_job_id: number;
+  depends_on_job?: WorkPlanJob;
+  dependency_type: 'finish_to_start' | 'start_to_start';
+  lag_minutes: number;
+  created_at: string;
+}
+
+// ==================== CAPACITY CONFIG ====================
+
+export interface CapacityConfig {
+  id: number;
+  name: string;
+  role?: string;
+  shift?: 'day' | 'night';
+  max_hours_per_day: number;
+  max_jobs_per_day: number;
+  min_rest_hours: number;
+  overtime_threshold_hours: number;
+  max_overtime_hours: number;
+  break_duration_minutes: number;
+  break_after_hours: number;
+  concurrent_jobs_allowed: number;
+  is_active: boolean;
+}
+
+// ==================== WORKER SKILLS ====================
+
+export interface WorkerSkill {
+  id: number;
+  user_id: number;
+  user?: { id: number; full_name: string };
+  skill_name: string;
+  skill_level: 1 | 2 | 3 | 4 | 5;
+  certification_name?: string;
+  certification_number?: string;
+  issued_date?: string;
+  expiry_date?: string;
+  issuing_authority?: string;
+  document_file_id?: number;
+  is_verified: boolean;
+  verified_by_id?: number;
+  verified_at?: string;
+  is_expired?: boolean;
+  days_until_expiry?: number;
+}
+
+// ==================== EQUIPMENT RESTRICTIONS ====================
+
+export interface EquipmentRestriction {
+  id: number;
+  equipment_id: number;
+  equipment?: { id: number; name: string };
+  restriction_type: 'blackout' | 'crew_size' | 'skill_required' | 'shift_only';
+  value: any;
+  reason?: string;
+  start_date?: string;
+  end_date?: string;
+  is_permanent: boolean;
+  is_active: boolean;
+  is_currently_active?: boolean;
+  created_by_id?: number;
+}
+
+// ==================== WORK PLAN VERSIONS ====================
+
+export interface WorkPlanVersion {
+  id: number;
+  work_plan_id: number;
+  version_number: number;
+  snapshot_data: any;
+  change_summary?: string;
+  change_type: 'created' | 'jobs_added' | 'jobs_moved' | 'jobs_removed' | 'published' | 'updated';
+  created_by_id?: number;
+  created_by?: { id: number; full_name: string };
+  created_at: string;
+}
+
+// ==================== JOB CHECKLIST RESPONSES ====================
+
+export interface JobChecklistResponse {
+  id: number;
+  work_plan_job_id: number;
+  checklist_item_id?: number;
+  question: string;
+  answer_type: string;
+  answer_value?: string;
+  is_passed?: boolean;
+  notes?: string;
+  photo_file_id?: number;
+  answered_by_id?: number;
+  answered_by?: { id: number; full_name: string };
+  answered_at: string;
+}
+
+// ==================== SCHEDULING CONFLICTS ====================
+
+export interface SchedulingConflict {
+  id: number;
+  work_plan_id: number;
+  conflict_type: 'capacity' | 'overlap' | 'skill' | 'equipment' | 'dependency';
+  severity: 'info' | 'warning' | 'error';
+  description: string;
+  affected_job_ids?: number[];
+  affected_user_ids?: number[];
+  resolution?: string;
+  resolved_at?: string;
+  resolved_by_id?: number;
+  is_ignored: boolean;
+  is_resolved?: boolean;
+  is_blocking?: boolean;
+  created_at: string;
+}
+
+// ==================== AI PREDICTIONS & SUGGESTIONS ====================
+
+export interface TeamSuggestion {
+  user_id: number;
+  user_name: string;
+  score: number;
+  reasons: string[];
+  past_performance_on_similar?: number;
+}
+
+export interface JobDurationPrediction {
+  estimated_hours: number;
+  confidence: number;
+  range: { min: number; max: number };
+  factors: string[];
+}
+
+export interface DelayRiskPrediction {
+  risk_level: 'low' | 'medium' | 'high';
+  probability: number;
+  factors: string[];
+  mitigation_suggestions: string[];
+}
+
+export interface CompletionPrediction {
+  predicted_rate: number;
+  confidence: number;
+  at_risk_jobs: Array<{ job_id: number; reason: string }>;
+  recommendations: string[];
+}
+
+export interface WorkloadForecast {
+  week_start: string;
+  predicted_jobs: number;
+  predicted_hours: number;
+  confidence: number;
+}
+
+export interface ScheduleAnomaly {
+  type: string;
+  description: string;
+  severity: 'info' | 'warning' | 'error';
+  affected_items: any[];
+  suggestion?: string;
+}
+
+export interface SchedulingBottleneck {
+  type: string;
+  description: string;
+  impact: string;
+  affected_jobs: number[];
+  solution?: string;
+}
+
+export interface LiveStatusSummary {
+  completion_rate: number;
+  on_track_jobs: number;
+  delayed_jobs: number;
+  at_risk_jobs: number;
+  estimated_completion_time?: string;
+  recommendations: string[];
+}
+
+export interface SkillGap {
+  skill: string;
+  current_workers: number;
+  needed_workers: number;
+  training_priority: 'low' | 'medium' | 'high';
+}
+
+export interface EfficiencyScore {
+  score: number;
+  breakdown: Record<string, number>;
+  comparison_to_avg: number;
+  suggestions: string[];
+}
+
+export interface PlanValidation {
+  valid: boolean;
+  errors: SchedulingConflict[];
+  warnings: SchedulingConflict[];
+}
+
+// ==================== ENHANCED PAYLOADS ====================
+
+export interface CreateTemplatePayload {
+  name: string;
+  name_ar?: string;
+  job_type: 'pm' | 'defect' | 'inspection';
+  equipment_id?: number;
+  equipment_type?: string;
+  berth?: string;
+  estimated_hours: number;
+  priority?: string;
+  description?: string;
+  recurrence_type?: string;
+  recurrence_day?: number;
+  default_team_size?: number;
+  required_certifications?: string[];
+}
+
+export interface UpdateTemplatePayload {
+  name?: string;
+  name_ar?: string;
+  job_type?: 'pm' | 'defect' | 'inspection';
+  equipment_id?: number;
+  equipment_type?: string;
+  berth?: string;
+  estimated_hours?: number;
+  priority?: string;
+  description?: string;
+  recurrence_type?: string;
+  recurrence_day?: number;
+  default_team_size?: number;
+  required_certifications?: string[];
+  is_active?: boolean;
+}
+
+export interface AddDependencyPayload {
+  depends_on_job_id: number;
+  dependency_type?: string;
+  lag_minutes?: number;
+}
+
+export interface SplitJobPayload {
+  parts: Array<{ day_id: number; hours: number }>;
+}
+
+export interface AddSkillPayload {
+  skill_name: string;
+  skill_level?: number;
+  certification_name?: string;
+  certification_number?: string;
+  issued_date?: string;
+  expiry_date?: string;
+  issuing_authority?: string;
+  document_file_id?: number;
+}
+
+export interface SubmitChecklistResponsePayload {
+  answer_value: string;
+  notes?: string;
+  photo_file_id?: number;
+}
+
+export interface AutoScheduleOptions {
+  priority_weight?: number;
+  balance_berths?: boolean;
+  consider_skills?: boolean;
+  minimize_travel?: boolean;
+}
+
+export interface SimulateScenarioPayload {
+  plan_id: number;
+  scenario: {
+    type: 'remove_worker' | 'add_job' | 'delay';
+    params: any;
+  };
+}
+
+export interface CreateCapacityConfigPayload {
+  name: string;
+  role?: string;
+  shift?: 'day' | 'night';
+  max_hours_per_day?: number;
+  max_jobs_per_day?: number;
+  min_rest_hours?: number;
+  overtime_threshold_hours?: number;
+  max_overtime_hours?: number;
+  break_duration_minutes?: number;
+  break_after_hours?: number;
+  concurrent_jobs_allowed?: number;
+}
+
+export interface UpdateCapacityConfigPayload {
+  name?: string;
+  role?: string;
+  shift?: 'day' | 'night';
+  max_hours_per_day?: number;
+  max_jobs_per_day?: number;
+  min_rest_hours?: number;
+  overtime_threshold_hours?: number;
+  max_overtime_hours?: number;
+  break_duration_minutes?: number;
+  break_after_hours?: number;
+  concurrent_jobs_allowed?: number;
+  is_active?: boolean;
+}
+
+export interface CreateEquipmentRestrictionPayload {
+  equipment_id: number;
+  restriction_type: 'blackout' | 'crew_size' | 'skill_required' | 'shift_only';
+  value: any;
+  reason?: string;
+  start_date?: string;
+  end_date?: string;
+  is_permanent?: boolean;
+}
+
+export interface UpdateEquipmentRestrictionPayload {
+  restriction_type?: 'blackout' | 'crew_size' | 'skill_required' | 'shift_only';
+  value?: any;
+  reason?: string;
+  start_date?: string;
+  end_date?: string;
+  is_permanent?: boolean;
+  is_active?: boolean;
+}
+
+export interface ResolveConflictPayload {
+  resolution: string;
+}
+
+// ==================== API RESPONSE TYPES ====================
+
+export interface TemplatesListResponse {
+  status: string;
+  templates: JobTemplate[];
+  count: number;
+}
+
+export interface CapacityConfigsListResponse {
+  status: string;
+  configs: CapacityConfig[];
+  count: number;
+}
+
+export interface WorkerSkillsListResponse {
+  status: string;
+  skills: WorkerSkill[];
+  count: number;
+}
+
+export interface EquipmentRestrictionsListResponse {
+  status: string;
+  restrictions: EquipmentRestriction[];
+  count: number;
+}
+
+export interface WorkPlanVersionsListResponse {
+  status: string;
+  versions: WorkPlanVersion[];
+  count: number;
+}
+
+export interface ConflictsListResponse {
+  status: string;
+  conflicts: SchedulingConflict[];
+  count: number;
+}
+
+export interface ChecklistResponsesListResponse {
+  status: string;
+  responses: JobChecklistResponse[];
+  count: number;
+}
+
+export interface TeamSuggestionsResponse {
+  status: string;
+  suggestions: TeamSuggestion[];
+}
+
+export interface DurationPredictionResponse {
+  status: string;
+  prediction: JobDurationPrediction;
+}
+
+export interface DelayRiskResponse {
+  status: string;
+  prediction: DelayRiskPrediction;
+}
+
+export interface CompletionPredictionResponse {
+  status: string;
+  prediction: CompletionPrediction;
+}
+
+export interface WorkloadForecastResponse {
+  status: string;
+  forecast: WorkloadForecast[];
+}
+
+export interface AnomaliesResponse {
+  status: string;
+  anomalies: ScheduleAnomaly[];
+}
+
+export interface BottlenecksResponse {
+  status: string;
+  bottlenecks: SchedulingBottleneck[];
+}
+
+export interface LiveStatusResponse {
+  status: string;
+  summary: LiveStatusSummary;
+}
+
+export interface SkillGapsResponse {
+  status: string;
+  gaps: SkillGap[];
+}
+
+export interface EfficiencyScoreResponse {
+  status: string;
+  efficiency: EfficiencyScore;
+}
+
+export interface PlanValidationResponse {
+  status: string;
+  validation: PlanValidation;
+}
+
+export interface SimulationResponse {
+  status: string;
+  result: {
+    impact: string;
+    affected_jobs: number[];
+    recommendations: string[];
+  };
 }
