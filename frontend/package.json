@@ -6,5 +6,8 @@
     "mobile:start": "pnpm --filter @inspection/mobile start",
     "shared:build": "pnpm --filter @inspection/shared build",
     "typecheck": "pnpm -r typecheck"
+  },
+  "dependencies": {
+    "recharts": "^3.7.0"
   }
 }
