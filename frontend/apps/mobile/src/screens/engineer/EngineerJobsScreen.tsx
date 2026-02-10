@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +16,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { engineerJobsApi } from '@inspection/shared';
 import type { EngineerJob } from '@inspection/shared';
+import { JobStatsRow } from '../../components/shared/JobStatsCard';
 
 type Filter = 'all' | 'active' | 'completed';
 
@@ -32,12 +34,20 @@ export default function EngineerJobsScreen() {
 
   const jobs: EngineerJob[] = (data?.data as any)?.items ?? (data?.data as any)?.data ?? [];
 
+  // Calculate stats from jobs
+  const stats = {
+    total: jobs.length,
+    completed: jobs.filter(j => j.status === 'completed' || j.status === 'qc_approved').length,
+    inProgress: jobs.filter(j => j.status === 'in_progress').length,
+    assigned: jobs.filter(j => j.status === 'assigned').length,
+  };
+
   const filteredJobs = jobs.filter((job) => {
     if (activeFilter === 'all') return true;
     if (activeFilter === 'active')
       return ['assigned', 'in_progress', 'planned'].includes(job.status);
     if (activeFilter === 'completed')
-      return ['completed', 'reviewed'].includes(job.status);
+      return ['completed', 'reviewed', 'qc_approved'].includes(job.status);
     return true;
   });
 
@@ -46,8 +56,20 @@ export default function EngineerJobsScreen() {
       case 'assigned': return '#FF9800';
       case 'in_progress': return '#2196F3';
       case 'completed': return '#4CAF50';
-      case 'reviewed': return '#9C27B0';
+      case 'qc_approved': return '#9C27B0';
+      case 'paused': return '#FF5722';
       default: return '#757575';
+    }
+  };
+
+  const getStatusEmoji = (status: string) => {
+    switch (status) {
+      case 'assigned': return '📋';
+      case 'in_progress': return '🔧';
+      case 'completed': return '✅';
+      case 'qc_approved': return '🏆';
+      case 'paused': return '⏸️';
+      default: return '📌';
     }
   };
 
@@ -73,7 +95,10 @@ export default function EngineerJobsScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+        <View style={styles.cardTitleRow}>
+          <Text style={styles.statusEmoji}>{getStatusEmoji(item.status)}</Text>
+          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+        </View>
         <View style={[styles.badge, { backgroundColor: getStatusColor(item.status) }]}>
           <Text style={styles.badgeText}>{t(`status.${item.status}`, item.status)}</Text>
         </View>
@@ -92,9 +117,12 @@ export default function EngineerJobsScreen() {
         )}
       </View>
       {(item.planned_time_days || item.planned_time_hours) && (
-        <Text style={styles.plannedTime}>
-          {t('jobs.planned_time', 'Planned')}: {item.planned_time_days ? `${item.planned_time_days}d ` : ''}{item.planned_time_hours ? `${item.planned_time_hours}h` : ''}
-        </Text>
+        <View style={styles.timeRow}>
+          <Text style={styles.timeIcon}>⏱️</Text>
+          <Text style={styles.plannedTime}>
+            {t('jobs.planned_time', 'Planned')}: {item.planned_time_days ? `${item.planned_time_days}d ` : ''}{item.planned_time_hours ? `${item.planned_time_hours}h` : ''}
+          </Text>
+        </View>
       )}
     </TouchableOpacity>
   ), [navigation, t]);
@@ -110,6 +138,13 @@ export default function EngineerJobsScreen() {
       </Text>
     </TouchableOpacity>
   );
+
+  const statsData = [
+    { value: stats.total, label: t('jobs.total', 'Total'), icon: '📊', color: '#1976D2' },
+    { value: stats.completed, label: t('jobs.completed', 'Completed'), icon: '✅', color: '#4CAF50' },
+    { value: stats.inProgress, label: t('jobs.in_progress', 'In Progress'), icon: '🔧', color: '#FF9800' },
+    { value: stats.assigned, label: t('jobs.assigned', 'Assigned'), icon: '📋', color: '#9C27B0' },
+  ];
 
   if (isLoading) {
     return (
@@ -127,8 +162,13 @@ export default function EngineerJobsScreen() {
           style={styles.createButton}
           onPress={() => navigation.navigate('CreateJob')}
         >
-          <Text style={styles.createButtonText}>+ {t('nav.create_job', 'Create Job')}</Text>
+          <Text style={styles.createButtonText}>+ {t('nav.create_job', 'Create')}</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Stats Row */}
+      <View style={styles.statsContainer}>
+        <JobStatsRow stats={statsData} variant="compact" />
       </View>
 
       <View style={styles.filterRow}>
@@ -145,6 +185,7 @@ export default function EngineerJobsScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>📭</Text>
             <Text style={styles.emptyTitle}>{t('common.no_data', 'No jobs found')}</Text>
             <Text style={styles.emptySubtitle}>
               {t('common.no_jobs_message', 'No jobs match the current filter.')}
@@ -175,6 +216,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   createButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  statsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -208,20 +253,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: '#212121', flex: 1, marginRight: 8 },
-  jobId: { fontSize: 13, color: '#757575', marginBottom: 8 },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  statusEmoji: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  cardTitle: { fontSize: 16, fontWeight: '600', color: '#212121', flex: 1 },
+  jobId: { fontSize: 13, color: '#757575', marginBottom: 8, marginLeft: 24 },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  cardTags: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  cardTags: { flexDirection: 'row', gap: 8, marginBottom: 8, marginLeft: 24 },
   tagBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   tagText: { fontSize: 12, fontWeight: '500' },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 24,
+  },
+  timeIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
   plannedTime: { fontSize: 13, color: '#757575' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyState: { alignItems: 'center', padding: 32 },
+  emptyEmoji: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: '#424242', marginBottom: 8 },
   emptySubtitle: { fontSize: 14, color: '#757575', textAlign: 'center' },
 });
