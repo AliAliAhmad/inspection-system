@@ -1,6 +1,13 @@
 import { useState } from 'react';
-import { Card, Table, Tag, Button, Space, Typography, Alert, Tabs } from 'antd';
-import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
+import { Card, Table, Tag, Button, Space, Typography, Alert, Tabs, Segmented, Row, Col, Drawer } from 'antd';
+import {
+  PlusOutlined,
+  EyeOutlined,
+  AppstoreOutlined,
+  UnorderedListOutlined,
+  LineChartOutlined,
+  RobotOutlined,
+} from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +18,12 @@ import {
   EngineerJob,
   formatDateTime,
 } from '@inspection/shared';
+import {
+  EngineerStatsHeader,
+  EngineerKanbanBoard,
+  EngineerPerformanceChart,
+  AIInsightsWidget,
+} from '../../components/engineer-jobs';
 
 const STATUS_COLOR: Record<string, string> = {
   assigned: 'blue',
@@ -27,15 +40,19 @@ const JOB_TYPE_COLOR: Record<string, string> = {
   special_task: 'geekblue',
 };
 
+type ViewMode = 'list' | 'kanban';
+
 export default function EngineerJobsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [showInsights, setShowInsights] = useState(false);
   const pageSize = 10;
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['engineer-jobs', statusFilter, page, user?.id],
     queryFn: () =>
       engineerJobsApi
@@ -43,7 +60,7 @@ export default function EngineerJobsPage() {
           status: statusFilter === 'all' ? undefined : statusFilter,
           engineer_id: user?.id,
           page,
-          per_page: pageSize,
+          per_page: viewMode === 'kanban' ? 100 : pageSize,
         })
         .then((r) => r.data),
   });
@@ -131,19 +148,40 @@ export default function EngineerJobsPage() {
 
   return (
     <div>
+      {/* Stats Header */}
+      <EngineerStatsHeader engineerId={user?.id} period="week" />
+
+      {/* Page Header */}
       <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
           {t('nav.my_jobs', 'My Jobs')}
         </Typography.Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/engineer/jobs/create')}
-        >
-          {t('nav.create_job', 'Create Job')}
-        </Button>
+        <Space>
+          <Button
+            icon={<RobotOutlined />}
+            onClick={() => setShowInsights(true)}
+          >
+            {t('jobs.ai_insights', 'AI Insights')}
+          </Button>
+          <Segmented
+            value={viewMode}
+            onChange={(value) => setViewMode(value as ViewMode)}
+            options={[
+              { label: <UnorderedListOutlined />, value: 'list' },
+              { label: <AppstoreOutlined />, value: 'kanban' },
+            ]}
+          />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/engineer/jobs/create')}
+          >
+            {t('nav.create_job', 'Create Job')}
+          </Button>
+        </Space>
       </Space>
 
+      {/* Status Tabs */}
       <Tabs
         activeKey={statusFilter}
         onChange={(key) => {
@@ -152,31 +190,64 @@ export default function EngineerJobsPage() {
         }}
         items={[
           { key: 'all', label: t('common.all', 'All') },
-          { key: 'in_progress', label: t('status.active', 'Active') },
+          { key: 'assigned', label: t('status.assigned', 'Assigned') },
+          { key: 'in_progress', label: t('status.in_progress', 'In Progress') },
+          { key: 'paused', label: t('status.paused', 'Paused') },
           { key: 'completed', label: t('status.completed', 'Completed') },
         ]}
       />
 
-      <Card>
-        <Table<EngineerJob>
-          rowKey="id"
-          columns={columns}
-          dataSource={jobs}
+      {/* View Content */}
+      {viewMode === 'list' ? (
+        <Card>
+          <Table<EngineerJob>
+            rowKey="id"
+            columns={columns}
+            dataSource={jobs}
+            loading={isLoading}
+            locale={{ emptyText: t('common.noData', 'No data') }}
+            onRow={(record) => ({
+              onClick: () => navigate(`/engineer/jobs/${record.id}`),
+              style: { cursor: 'pointer' },
+            })}
+            pagination={{
+              current: pagination?.page ?? page,
+              pageSize: pagination?.per_page ?? pageSize,
+              total: pagination?.total ?? 0,
+              showSizeChanger: false,
+              onChange: (p) => setPage(p),
+            }}
+          />
+        </Card>
+      ) : (
+        <EngineerKanbanBoard
+          jobs={jobs}
           loading={isLoading}
-          locale={{ emptyText: t('common.noData', 'No data') }}
-          onRow={(record) => ({
-            onClick: () => navigate(`/engineer/jobs/${record.id}`),
-            style: { cursor: 'pointer' },
-          })}
-          pagination={{
-            current: pagination?.page ?? page,
-            pageSize: pagination?.per_page ?? pageSize,
-            total: pagination?.total ?? 0,
-            showSizeChanger: false,
-            onChange: (p) => setPage(p),
-          }}
+          onRefresh={() => refetch()}
         />
-      </Card>
+      )}
+
+      {/* Performance Chart */}
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col span={24}>
+          <EngineerPerformanceChart engineerId={user?.id} />
+        </Col>
+      </Row>
+
+      {/* AI Insights Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <RobotOutlined />
+            {t('jobs.ai_insights', 'AI Insights')}
+          </Space>
+        }
+        open={showInsights}
+        onClose={() => setShowInsights(false)}
+        width={400}
+      >
+        <AIInsightsWidget engineerId={user?.id} />
+      </Drawer>
     </div>
   );
 }

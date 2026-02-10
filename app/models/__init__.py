@@ -26,6 +26,8 @@ from app.models.notification_template import NotificationTemplate
 # Specialist & Engineer jobs
 from app.models.specialist_job import SpecialistJob
 from app.models.engineer_job import EngineerJob
+from app.models.engineer_job_voice_note import EngineerJobVoiceNote
+from app.models.engineer_job_location import EngineerJobLocation
 
 # Quality & Assessment
 from app.models.quality_review import QualityReview
@@ -158,6 +160,8 @@ __all__ = [
     'NotificationTemplate',
     'SpecialistJob',
     'EngineerJob',
+    'EngineerJobVoiceNote',
+    'EngineerJobLocation',
     'QualityReview',
     'DefectAssessment',
     'FinalAssessment',

@@ -37,3 +37,34 @@ export interface CreateEngineerJobPayload {
   category?: 'major' | 'minor';
   major_reason?: string;
 }
+
+export interface EngineerJobStats {
+  total_jobs: number;
+  completed_jobs: number;
+  in_progress_jobs: number;
+  paused_jobs: number;
+  avg_completion_time_hours: number;
+  on_time_rate: number;
+  efficiency_score: number;
+  streak_days: number;
+  points_earned: number;
+  trend: {
+    jobs_change: number;
+    efficiency_change: number;
+  };
+}
+
+export interface EngineerPerformance {
+  daily_completions: Array<{ date: string; count: number }>;
+  category_breakdown: Array<{ category: string; count: number; avg_time: number }>;
+  quality_score: number;
+}
+
+export interface EngineerAIInsight {
+  type: 'tip' | 'warning' | 'achievement';
+  title: string;
+  description: string;
+  priority: number;
+  action?: string;
+  actionUrl?: string;
+}

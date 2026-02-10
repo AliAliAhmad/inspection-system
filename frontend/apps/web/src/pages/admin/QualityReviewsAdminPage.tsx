@@ -11,8 +11,18 @@ import {
   message,
   Typography,
   Tabs,
+  Row,
+  Col,
+  Space,
+  Drawer,
+  Segmented,
 } from 'antd';
-import { CheckCircleOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  LineChartOutlined,
+  FileTextOutlined,
+  FieldTimeOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
@@ -24,12 +34,20 @@ import {
 } from '@inspection/shared';
 import dayjs from 'dayjs';
 import VoiceTextArea from '../../components/VoiceTextArea';
+import {
+  QCStatsHeader,
+  SLAProgressCard,
+  QualityTrendsChart,
+  TemplateResponsesPanel,
+} from '../../components/quality-reviews';
 
 const statusColorMap: Record<ReviewStatus, string> = {
   pending: 'processing',
   approved: 'success',
   rejected: 'error',
 };
+
+type ActivePanel = 'sla' | 'trends' | 'templates' | null;
 
 export default function QualityReviewsAdminPage() {
   const { t } = useTranslation();
@@ -40,6 +58,8 @@ export default function QualityReviewsAdminPage() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [validateOpen, setValidateOpen] = useState(false);
   const [selectedReview, setSelectedReview] = useState<QualityReview | null>(null);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
+  const [period, setPeriod] = useState<'week' | 'month' | 'year'>('week');
 
   const [validateForm] = Form.useForm();
 
@@ -70,6 +90,11 @@ export default function QualityReviewsAdminPage() {
     setSelectedReview(record);
     validateForm.resetFields();
     setValidateOpen(true);
+  };
+
+  const handleSelectTemplate = (template: { response_text: string }) => {
+    validateForm.setFieldValue('admin_validation_notes', template.response_text);
+    setActivePanel(null);
   };
 
   const columns: ColumnsType<QualityReview> = [
@@ -146,30 +171,99 @@ export default function QualityReviewsAdminPage() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4}>{t('nav.qualityReviews', 'Quality Reviews')}</Typography.Title>}>
-      <Tabs
-        activeKey={statusFilter || 'all'}
-        onChange={(key) => { setStatusFilter(key === 'all' ? undefined : key); setPage(1); }}
-        items={tabItems}
-      />
+    <div>
+      {/* Stats Header */}
+      <QCStatsHeader period={period} />
 
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={reviews}
-        loading={isLoading}
-        locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
-        pagination={{
-          current: pagination?.page || page,
-          pageSize: pagination?.per_page || perPage,
-          total: pagination?.total || 0,
-          showSizeChanger: true,
-          showTotal: (total) => t('common.totalItems', 'Total: {{total}} items', { total }),
-          onChange: (p, ps) => { setPage(p); setPerPage(ps); },
-        }}
-        scroll={{ x: 1200 }}
-      />
+      {/* Page Header */}
+      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {t('nav.qualityReviews', 'Quality Reviews')}
+        </Typography.Title>
+        <Space>
+          <Segmented
+            value={period}
+            onChange={(value) => setPeriod(value as 'week' | 'month' | 'year')}
+            options={[
+              { label: t('common.week', 'Week'), value: 'week' },
+              { label: t('common.month', 'Month'), value: 'month' },
+              { label: t('common.year', 'Year'), value: 'year' },
+            ]}
+          />
+          <Button
+            icon={<FieldTimeOutlined />}
+            onClick={() => setActivePanel(activePanel === 'sla' ? null : 'sla')}
+            type={activePanel === 'sla' ? 'primary' : 'default'}
+          >
+            {t('qc.sla', 'SLA')}
+          </Button>
+          <Button
+            icon={<LineChartOutlined />}
+            onClick={() => setActivePanel(activePanel === 'trends' ? null : 'trends')}
+            type={activePanel === 'trends' ? 'primary' : 'default'}
+          >
+            {t('qc.trends', 'Trends')}
+          </Button>
+          <Button
+            icon={<FileTextOutlined />}
+            onClick={() => setActivePanel(activePanel === 'templates' ? null : 'templates')}
+            type={activePanel === 'templates' ? 'primary' : 'default'}
+          >
+            {t('qc.templates', 'Templates')}
+          </Button>
+        </Space>
+      </Space>
 
+      {/* Expandable Panels */}
+      {activePanel === 'sla' && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col span={24}>
+            <SLAProgressCard period={period} />
+          </Col>
+        </Row>
+      )}
+
+      {activePanel === 'trends' && (
+        <div style={{ marginBottom: 24 }}>
+          <QualityTrendsChart period={period} />
+        </div>
+      )}
+
+      {activePanel === 'templates' && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col span={24}>
+            <TemplateResponsesPanel />
+          </Col>
+        </Row>
+      )}
+
+      {/* Main Table */}
+      <Card>
+        <Tabs
+          activeKey={statusFilter || 'all'}
+          onChange={(key) => { setStatusFilter(key === 'all' ? undefined : key); setPage(1); }}
+          items={tabItems}
+        />
+
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={reviews}
+          loading={isLoading}
+          locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
+          pagination={{
+            current: pagination?.page || page,
+            pageSize: pagination?.per_page || perPage,
+            total: pagination?.total || 0,
+            showSizeChanger: true,
+            showTotal: (total) => t('common.totalItems', 'Total: {{total}} items', { total }),
+            onChange: (p, ps) => { setPage(p); setPerPage(ps); },
+          }}
+          scroll={{ x: 1200 }}
+        />
+      </Card>
+
+      {/* Validate Modal */}
       <Modal
         title={t('qualityReviews.validateReview', 'Validate Quality Review')}
         open={validateOpen}
@@ -177,6 +271,7 @@ export default function QualityReviewsAdminPage() {
         onOk={() => validateForm.submit()}
         confirmLoading={validateMutation.isPending}
         destroyOnClose
+        width={600}
       >
         {selectedReview && (
           <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
@@ -206,12 +301,37 @@ export default function QualityReviewsAdminPage() {
           </Form.Item>
           <Form.Item
             name="admin_validation_notes"
-            label={t('qualityReviews.validationNotes', 'Notes')}
+            label={
+              <Space>
+                {t('qualityReviews.validationNotes', 'Notes')}
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  onClick={() => setActivePanel('templates')}
+                >
+                  {t('qc.use_template', 'Use Template')}
+                </Button>
+              </Space>
+            }
           >
             <VoiceTextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+
+      {/* Templates Drawer for Modal Use */}
+      <Drawer
+        title={t('qc.select_template', 'Select Template')}
+        open={validateOpen && activePanel === 'templates'}
+        onClose={() => setActivePanel(null)}
+        width={400}
+      >
+        <TemplateResponsesPanel
+          selectable
+          onSelectTemplate={handleSelectTemplate}
+        />
+      </Drawer>
+    </div>
   );
 }

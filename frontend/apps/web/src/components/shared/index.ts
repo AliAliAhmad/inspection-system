@@ -1,5 +1,18 @@
 export { StatCard } from './StatCard';
 
+// Generalized Job Components (used by specialist-jobs, engineer-jobs, etc.)
+export { SmartTimer } from './SmartTimer';
+export type { SmartTimerProps, PauseReason, TimerJobType } from './SmartTimer';
+
+export { KanbanBoard } from './KanbanBoard';
+export type { KanbanBoardProps, KanbanColumn, KanbanJob } from './KanbanBoard';
+
+export { PhotoCapture } from './PhotoCapture';
+export type { PhotoCaptureProps, PhotoCaptureType, EntityType } from './PhotoCapture';
+
+export { PartsPrediction } from './PartsPrediction';
+export type { PartsPredictionProps, PartPrediction, PartsPredictionResponse, PredictionEntityType } from './PartsPrediction';
+
 export { ActivityFeed } from './ActivityFeed';
 export type { ActivityItem } from './ActivityFeed';
 

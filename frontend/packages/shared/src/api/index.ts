@@ -68,6 +68,9 @@ export type {
   EngineerJobListParams,
   EngineerPlannedTimePayload,
   EngineerCompletePayload,
+  EngineerStatsParams,
+  VoiceNoteResponse,
+  LocationUpdateResponse,
 } from './engineer-jobs.api';
 export { inspectionAssignmentsApi } from './inspection-assignments.api';
 export type {
@@ -101,6 +104,9 @@ export type {
   ApprovePayload,
   RejectPayload,
   ValidatePayload,
+  QualityReviewStatsParams,
+  CreateTemplatePayload as QualityReviewCreateTemplatePayload,
+  AIAnalysisResult,
 } from './quality-reviews.api';
 export { leavesApi } from './leaves.api';
 export type {
