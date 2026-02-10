@@ -23,6 +23,7 @@ import {
   Alert,
   Checkbox,
   Popconfirm,
+  Drawer,
 } from 'antd';
 import {
   PlusOutlined,
@@ -43,6 +44,8 @@ import {
   CheckSquareOutlined,
   CloseOutlined,
   CopyOutlined,
+  BulbOutlined,
+  AlertOutlined,
 } from '@ant-design/icons';
 import {
   DndContext,
@@ -70,6 +73,10 @@ import {
   EmployeePool,
   TimelineJobBlock,
   AnalyticsView,
+  GanttChartView,
+  ResourceHeatmap,
+  WorkPlanAIPanel,
+  ConflictResolutionPanel,
   type ViewMode
 } from '../../components/work-planning';
 import VoiceTextArea from '../../components/VoiceTextArea';
@@ -127,6 +134,8 @@ export default function WorkPlanningPage() {
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
   const [bulkMoveModalOpen, setBulkMoveModalOpen] = useState(false);
   const [copyWeekModalOpen, setCopyWeekModalOpen] = useState(false);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [conflictPanelOpen, setConflictPanelOpen] = useState(false);
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
 
@@ -702,6 +711,18 @@ export default function WorkPlanningPage() {
                   />
                 )}
                 <ViewToggle value={viewMode} onChange={setViewMode} />
+                <Button
+                  icon={<BulbOutlined />}
+                  onClick={() => setAiDrawerOpen(true)}
+                >
+                  AI Insights
+                </Button>
+                <Button
+                  icon={<AlertOutlined />}
+                  onClick={() => setConflictPanelOpen(true)}
+                >
+                  Conflicts
+                </Button>
                 {/* Auto-Schedule Button - Prominent */}
                 {currentPlan && isDraft && (
                   <Button
@@ -979,6 +1000,12 @@ export default function WorkPlanningPage() {
                 <AnalyticsView
                   plan={currentPlan}
                   weekStart={weekStartStr}
+                />
+              ) : viewMode === 'gantt' ? (
+                <GanttChartView
+                  jobs={allJobs}
+                  weekStart={weekStartStr}
+                  onJobClick={handleJobClick}
                 />
               ) : viewMode === 'timeline' ? (
                 <TimelineView
@@ -1658,6 +1685,45 @@ export default function WorkPlanningPage() {
           </Text>
         )}
       </Modal>
+
+      {/* AI Insights Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <BulbOutlined />
+            <span>AI Work Plan Insights</span>
+          </Space>
+        }
+        open={aiDrawerOpen}
+        onClose={() => setAiDrawerOpen(false)}
+        width={500}
+      >
+        {currentPlan && (
+          <WorkPlanAIPanel
+            planId={currentPlan.id}
+            weekStart={weekStartStr}
+          />
+        )}
+      </Drawer>
+
+      {/* Conflict Resolution Panel */}
+      <Drawer
+        title={
+          <Space>
+            <AlertOutlined />
+            <span>Scheduling Conflicts</span>
+          </Space>
+        }
+        open={conflictPanelOpen}
+        onClose={() => setConflictPanelOpen(false)}
+        width={600}
+      >
+        {currentPlan && (
+          <ConflictResolutionPanel
+            planId={currentPlan.id}
+          />
+        )}
+      </Drawer>
     </DndContext>
   );
 }

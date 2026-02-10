@@ -1,9 +1,9 @@
 import React from 'react';
 import { Segmented } from 'antd';
-import { BarChartOutlined, CalendarOutlined, PieChartOutlined } from '@ant-design/icons';
+import { BarChartOutlined, CalendarOutlined, PieChartOutlined, ProjectOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
-export type ViewMode = 'timeline' | 'calendar' | 'analytics';
+export type ViewMode = 'timeline' | 'calendar' | 'gantt' | 'analytics';
 
 interface ViewToggleProps {
   value: ViewMode;
@@ -37,7 +37,15 @@ export const ViewToggle: React.FC<ViewToggleProps> = ({ value, onChange }) => {
         {
           label: (
             <span>
-              <PieChartOutlined /> 📊 Analytics
+              <ProjectOutlined /> Gantt
+            </span>
+          ),
+          value: 'gantt',
+        },
+        {
+          label: (
+            <span>
+              <PieChartOutlined /> Analytics
             </span>
           ),
           value: 'analytics',

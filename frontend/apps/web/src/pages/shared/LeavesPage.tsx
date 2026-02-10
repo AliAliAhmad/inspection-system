@@ -16,8 +16,17 @@ import {
   Row,
   Col,
   Alert,
+  Tabs,
+  Drawer,
 } from 'antd';
-import { PlusOutlined, CalendarOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  CalendarOutlined,
+  HistoryOutlined,
+  TeamOutlined,
+  BulbOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../providers/AuthProvider';
@@ -25,6 +34,16 @@ import { leavesApi, usersApi, Leave, LeaveStatus, LeaveType } from '@inspection/
 import { formatDate } from '@inspection/shared';
 import dayjs from 'dayjs';
 import VoiceTextArea from '../../components/VoiceTextArea';
+import {
+  LeaveCalendarView,
+  LeaveBalanceHistory,
+  LeaveAIInsightsPanel,
+  LeaveBurnoutAlert,
+  CompOffRequestModal,
+  EncashmentRequestModal,
+  LeaveImpactModal,
+  CancellationRequestModal,
+} from '../../components/leaves';
 
 const statusColors: Record<LeaveStatus, string> = {
   pending: 'orange',
@@ -38,10 +57,19 @@ export default function LeavesPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('my-leaves');
   const [modalOpen, setModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<LeaveStatus | undefined>();
   const [page, setPage] = useState(1);
   const [form] = Form.useForm();
+
+  // Feature modals
+  const [compOffModalOpen, setCompOffModalOpen] = useState(false);
+  const [encashmentModalOpen, setEncashmentModalOpen] = useState(false);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [impactModalOpen, setImpactModalOpen] = useState(false);
+  const [cancellationModalOpen, setCancellationModalOpen] = useState(false);
+  const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['leaves', page, statusFilter],
@@ -88,6 +116,16 @@ export default function LeavesPage() {
       scope: values.scope,
       coverage_user_id: values.coverage_user_id,
     });
+  };
+
+  const handleCancelLeave = (leaveId: number) => {
+    setSelectedLeaveId(leaveId);
+    setCancellationModalOpen(true);
+  };
+
+  const handleViewImpact = (leaveId: number) => {
+    setSelectedLeaveId(leaveId);
+    setImpactModalOpen(true);
   };
 
   const isAdmin = user?.role === 'admin';
@@ -139,16 +177,27 @@ export default function LeavesPage() {
       render: (u: any) => u ? u.full_name : '-',
     },
     {
-      title: t('leave.scope', 'Scope'),
-      dataIndex: 'scope',
-      key: 'scope',
-      render: (s: string) => s === 'major_only' ? 'Major Only' : 'Full',
-    },
-    {
       title: t('common.status'),
       dataIndex: 'status',
       render: (status: LeaveStatus) => (
         <Tag color={statusColors[status]}>{t(`status.${status}`)}</Tag>
+      ),
+    },
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      width: 120,
+      render: (_: any, record: Leave) => (
+        <Space size="small">
+          <Button size="small" onClick={() => handleViewImpact(record.id)}>
+            {t('leaves.impact', 'Impact')}
+          </Button>
+          {record.status === 'pending' && (
+            <Button size="small" danger onClick={() => handleCancelLeave(record.id)}>
+              {t('common.cancel')}
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];
@@ -156,101 +205,162 @@ export default function LeavesPage() {
   const leaves = data?.data ?? [];
   const pagination = data?.pagination;
 
+  const tabItems = [
+    {
+      key: 'my-leaves',
+      label: (
+        <span>
+          <CalendarOutlined />
+          {t('leaves.myLeaves', 'My Leaves')}
+        </span>
+      ),
+      children: (
+        <>
+          {/* Balance Summary */}
+          <Card style={{ marginBottom: 16 }}>
+            <Row gutter={32}>
+              <Col>
+                <Statistic
+                  title={t('leaves.totalBalance', 'Total Balance')}
+                  value={totalBalance}
+                  suffix={t('leaves.daysUnit', 'days')}
+                />
+              </Col>
+              <Col>
+                <Statistic
+                  title={t('leaves.used', 'Used')}
+                  value={usedDays}
+                  suffix={t('leaves.daysUnit', 'days')}
+                  valueStyle={usedDays > 0 ? { color: '#faad14' } : undefined}
+                />
+              </Col>
+              <Col>
+                <Statistic
+                  title={t('leaves.remaining', 'Remaining')}
+                  value={remaining}
+                  suffix={t('leaves.daysUnit', 'days')}
+                  valueStyle={remaining === 0 ? { color: '#ff4d4f' } : { color: '#52c41a' }}
+                />
+              </Col>
+              <Col>
+                <Statistic
+                  title={t('leaves.employeeId', 'Employee ID')}
+                  value={user?.employee_id ?? '-'}
+                  valueStyle={{ fontSize: 16 }}
+                />
+              </Col>
+            </Row>
+            {remaining === 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                message={t('leaves.noBalanceRemaining', 'No leave balance remaining')}
+                style={{ marginTop: 12 }}
+              />
+            )}
+
+            {/* Burnout Alert */}
+            <div style={{ marginTop: 16 }}>
+              <LeaveBurnoutAlert userId={user?.id} />
+            </div>
+          </Card>
+
+          {/* Leaves Table */}
+          <Card
+            title={
+              <Space>
+                <CalendarOutlined />
+                <span>{t('nav.leaves')}</span>
+              </Space>
+            }
+            extra={
+              <Space>
+                <Select
+                  placeholder="Filter by status"
+                  allowClear
+                  style={{ width: 150 }}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={[
+                    { value: 'pending', label: t('status.pending') },
+                    { value: 'approved', label: t('status.approved') },
+                    { value: 'rejected', label: t('status.rejected') },
+                  ]}
+                />
+                <Button onClick={() => setCompOffModalOpen(true)}>
+                  {t('leaves.requestCompOff', 'Request Comp-Off')}
+                </Button>
+                <Button onClick={() => setEncashmentModalOpen(true)}>
+                  {t('leaves.requestEncashment', 'Encashment')}
+                </Button>
+                {canRequestLeave && (
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)} disabled={remaining === 0}>
+                    {t('leave.request')}
+                  </Button>
+                )}
+              </Space>
+            }
+          >
+            <Table
+              columns={columns}
+              dataSource={leaves}
+              loading={isLoading}
+              rowKey="id"
+              pagination={pagination ? {
+                current: pagination.page,
+                total: pagination.total,
+                pageSize: pagination.per_page,
+                onChange: setPage,
+              } : false}
+            />
+          </Card>
+        </>
+      ),
+    },
+    {
+      key: 'team-calendar',
+      label: (
+        <span>
+          <TeamOutlined />
+          {t('leaves.teamCalendar', 'Team Calendar')}
+        </span>
+      ),
+      children: <LeaveCalendarView />,
+    },
+    {
+      key: 'balance-history',
+      label: (
+        <span>
+          <HistoryOutlined />
+          {t('leaves.balanceHistory', 'Balance History')}
+        </span>
+      ),
+      children: <LeaveBalanceHistory userId={user?.id} />,
+    },
+  ];
+
   return (
     <>
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={32}>
-          <Col>
-            <Statistic
-              title={t('leaves.totalBalance', 'Total Balance')}
-              value={totalBalance}
-              suffix={t('leaves.daysUnit', 'days')}
-            />
-          </Col>
-          <Col>
-            <Statistic
-              title={t('leaves.used', 'Used')}
-              value={usedDays}
-              suffix={t('leaves.daysUnit', 'days')}
-              valueStyle={usedDays > 0 ? { color: '#faad14' } : undefined}
-            />
-          </Col>
-          <Col>
-            <Statistic
-              title={t('leaves.remaining', 'Remaining')}
-              value={remaining}
-              suffix={t('leaves.daysUnit', 'days')}
-              valueStyle={remaining === 0 ? { color: '#ff4d4f' } : { color: '#52c41a' }}
-            />
-          </Col>
-          <Col>
-            <Statistic
-              title={t('leaves.employeeId', 'Employee ID')}
-              value={user?.employee_id ?? '-'}
-              valueStyle={{ fontSize: 16 }}
-            />
-          </Col>
-          <Col>
-            <Statistic
-              title={t('leaves.role', 'Role')}
-              value={user?.role ?? '-'}
-              valueStyle={{ fontSize: 16 }}
-            />
-          </Col>
-        </Row>
-        {remaining === 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            message={t('leaves.noBalanceRemaining', 'No leave balance remaining')}
-            style={{ marginTop: 12 }}
-          />
-        )}
-      </Card>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {t('nav.leaves')}
+        </Typography.Title>
+        <Button
+          icon={<BulbOutlined />}
+          onClick={() => setAiDrawerOpen(true)}
+        >
+          {t('leaves.aiInsights', 'AI Insights')}
+        </Button>
+      </div>
 
-      <Card
-        title={
-          <Space>
-            <CalendarOutlined />
-            <span>{t('nav.leaves')}</span>
-          </Space>
-        }
-        extra={
-          <Space>
-            <Select
-              placeholder="Filter by status"
-              allowClear
-              style={{ width: 150 }}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              options={[
-                { value: 'pending', label: t('status.pending') },
-                { value: 'approved', label: t('status.approved') },
-                { value: 'rejected', label: t('status.rejected') },
-              ]}
-            />
-            {canRequestLeave && (
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)} disabled={remaining === 0}>
-                {t('leave.request')}
-              </Button>
-            )}
-          </Space>
-        }
-      >
-        <Table
-          columns={columns}
-          dataSource={leaves}
-          loading={isLoading}
-          rowKey="id"
-          pagination={pagination ? {
-            current: pagination.page,
-            total: pagination.total,
-            pageSize: pagination.per_page,
-            onChange: setPage,
-          } : false}
-        />
-      </Card>
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={tabItems}
+        size="large"
+      />
 
+      {/* Request Leave Modal */}
       <Modal
         title={t('leave.request')}
         open={modalOpen}
@@ -327,6 +437,39 @@ export default function LeavesPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Feature Modals */}
+      <CompOffRequestModal
+        open={compOffModalOpen}
+        onClose={() => setCompOffModalOpen(false)}
+      />
+
+      <EncashmentRequestModal
+        open={encashmentModalOpen}
+        onClose={() => setEncashmentModalOpen(false)}
+      />
+
+      <LeaveImpactModal
+        open={impactModalOpen}
+        onClose={() => setImpactModalOpen(false)}
+        leaveId={selectedLeaveId ?? undefined}
+      />
+
+      <CancellationRequestModal
+        open={cancellationModalOpen}
+        onClose={() => setCancellationModalOpen(false)}
+        leaveId={selectedLeaveId ?? undefined}
+      />
+
+      {/* AI Insights Drawer */}
+      <Drawer
+        title={t('leaves.aiInsights', 'AI Insights')}
+        open={aiDrawerOpen}
+        onClose={() => setAiDrawerOpen(false)}
+        width={480}
+      >
+        <LeaveAIInsightsPanel userId={user?.id} />
+      </Drawer>
     </>
   );
 }

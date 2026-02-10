@@ -447,7 +447,22 @@
     "encashment": "Encashment",
     "addHoliday": "Add Holiday",
     "editHoliday": "Edit Holiday",
-    "holidayType": "Holiday Type"
+    "holidayType": "Holiday Type",
+    "myLeaves": "My Leaves",
+    "teamCalendar": "Team Calendar",
+    "balanceHistory": "Balance History",
+    "aiInsights": "AI Insights",
+    "requestCompOff": "Request Comp-Off",
+    "requestEncashment": "Encashment",
+    "impact": "Impact",
+    "totalBalance": "Total Balance",
+    "used": "Used",
+    "remaining": "Remaining",
+    "daysUnit": "days",
+    "employeeId": "Employee ID",
+    "role": "Role",
+    "noBalanceRemaining": "No leave balance remaining",
+    "coverage": "Coverage"
   },
   "holidays": {
     "public": "Public Holiday",
