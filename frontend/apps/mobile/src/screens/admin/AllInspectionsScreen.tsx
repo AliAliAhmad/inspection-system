@@ -679,7 +679,7 @@ export default function AllInspectionsScreen() {
                 )}
 
                 {/* Top Performers */}
-                {stats?.top_performers?.length > 0 && (
+                {stats?.top_performers && stats.top_performers.length > 0 && (
                   <View style={styles.insightCard}>
                     <Text style={styles.insightTitle}>🏆 Top Performers</Text>
                     {stats.top_performers.slice(0, 5).map((p: any, idx: number) => (
