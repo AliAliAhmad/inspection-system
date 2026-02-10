@@ -322,3 +322,173 @@ def download_cycles_template():
             'Content-Disposition': 'attachment; filename=maintenance_cycles_import.xlsx'
         }
     )
+
+
+@bp.route('/<int:cycle_id>/analytics', methods=['GET'])
+@jwt_required()
+def get_cycle_analytics(cycle_id):
+    """
+    Get analytics for a maintenance cycle.
+    Returns usage stats, linked items counts, effectiveness metrics.
+    """
+    cycle = db.session.get(MaintenanceCycle, cycle_id)
+    if not cycle:
+        raise NotFoundError("Maintenance cycle not found")
+
+    user = get_current_user()
+    language = user.language or 'en'
+
+    # Get linked PM templates
+    from app.models import PMTemplate, WorkPlanJob
+    templates = PMTemplate.query.filter_by(cycle_id=cycle_id).all()
+    template_count = len(templates)
+
+    # Get linked work plan jobs
+    jobs = WorkPlanJob.query.filter_by(cycle_id=cycle_id).all()
+    job_count = len(jobs)
+    completed_jobs = [j for j in jobs if j.status == 'completed']
+
+    # Calculate average completion time
+    avg_completion_hours = None
+    if completed_jobs:
+        total_hours = sum(j.actual_hours or j.planned_hours or 0 for j in completed_jobs)
+        avg_completion_hours = round(total_hours / len(completed_jobs), 1) if completed_jobs else None
+
+    # Get linked equipment (through jobs)
+    equipment_ids = set(j.equipment_id for j in jobs if j.equipment_id)
+    equipment_count = len(equipment_ids)
+
+    # Calculate effectiveness rate (completed vs total)
+    effectiveness_rate = round((len(completed_jobs) / len(jobs)) * 100, 1) if jobs else None
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'cycle': cycle.to_dict(language),
+            'linked_templates': template_count,
+            'linked_jobs': job_count,
+            'linked_equipment': equipment_count,
+            'completed_jobs': len(completed_jobs),
+            'avg_completion_hours': avg_completion_hours,
+            'effectiveness_rate': effectiveness_rate,
+            'times_used': job_count,
+        }
+    }), 200
+
+
+@bp.route('/<int:cycle_id>/impact', methods=['GET'])
+@jwt_required()
+def get_cycle_impact(cycle_id):
+    """
+    Get impact analysis for a cycle before edit/delete.
+    Shows what will be affected by changes.
+    """
+    cycle = db.session.get(MaintenanceCycle, cycle_id)
+    if not cycle:
+        raise NotFoundError("Maintenance cycle not found")
+
+    user = get_current_user()
+    language = user.language or 'en'
+
+    # Get linked items
+    from app.models import PMTemplate, WorkPlanJob
+
+    templates = PMTemplate.query.filter_by(cycle_id=cycle_id).all()
+    jobs = WorkPlanJob.query.filter_by(cycle_id=cycle_id).all()
+
+    # Get unique equipment
+    equipment_ids = set(j.equipment_id for j in jobs if j.equipment_id)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'cycle': cycle.to_dict(language),
+            'impact': {
+                'templates': {
+                    'count': len(templates),
+                    'items': [{'id': t.id, 'name': t.name} for t in templates[:10]]
+                },
+                'jobs': {
+                    'count': len(jobs),
+                    'pending': len([j for j in jobs if j.status in ('pending', 'assigned')])
+                },
+                'equipment': {
+                    'count': len(equipment_ids)
+                }
+            },
+            'can_delete': len(templates) == 0 and len(jobs) == 0,
+            'is_system': cycle.is_system
+        }
+    }), 200
+
+
+@bp.route('/<int:cycle_id>/linked', methods=['GET'])
+@jwt_required()
+def get_cycle_linked_items(cycle_id):
+    """
+    Get all items linked to a cycle with pagination.
+    Query params: type (templates, jobs, equipment), page, per_page
+    """
+    cycle = db.session.get(MaintenanceCycle, cycle_id)
+    if not cycle:
+        raise NotFoundError("Maintenance cycle not found")
+
+    user = get_current_user()
+    language = user.language or 'en'
+
+    item_type = request.args.get('type', 'templates')
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    from app.models import PMTemplate, WorkPlanJob, Equipment
+
+    if item_type == 'templates':
+        query = PMTemplate.query.filter_by(cycle_id=cycle_id)
+        total = query.count()
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+        data = [{'id': t.id, 'name': t.name, 'equipment_type': t.equipment_type, 'is_active': t.is_active} for t in items]
+
+    elif item_type == 'jobs':
+        query = WorkPlanJob.query.filter_by(cycle_id=cycle_id)
+        total = query.count()
+        items = query.order_by(WorkPlanJob.id.desc()).offset((page - 1) * per_page).limit(per_page).all()
+        data = [{
+            'id': j.id,
+            'title': j.title,
+            'status': j.status,
+            'equipment_serial': j.equipment_serial
+        } for j in items]
+
+    elif item_type == 'equipment':
+        # Get equipment IDs from jobs
+        job_equipment_ids = db.session.query(WorkPlanJob.equipment_id).filter(
+            WorkPlanJob.cycle_id == cycle_id,
+            WorkPlanJob.equipment_id.isnot(None)
+        ).distinct().all()
+        equipment_ids = [e[0] for e in job_equipment_ids]
+
+        total = len(equipment_ids)
+        paginated_ids = equipment_ids[(page - 1) * per_page:page * per_page]
+
+        if paginated_ids:
+            items = Equipment.query.filter(Equipment.id.in_(paginated_ids)).all()
+            data = [{'id': e.id, 'name': e.name, 'serial_number': e.serial_number, 'status': e.status} for e in items]
+        else:
+            data = []
+    else:
+        data = []
+        total = 0
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'type': item_type,
+            'items': data,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': (total + per_page - 1) // per_page
+            }
+        }
+    }), 200

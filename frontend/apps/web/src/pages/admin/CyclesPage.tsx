@@ -18,6 +18,14 @@ import {
   Popconfirm,
   Tooltip,
   Switch,
+  Drawer,
+  Statistic,
+  Progress,
+  Divider,
+  List,
+  Badge,
+  Alert,
+  Spin,
 } from 'antd';
 import {
   PlusOutlined,
@@ -27,11 +35,25 @@ import {
   ClockCircleOutlined,
   CalendarOutlined,
   LockOutlined,
+  BarChartOutlined,
+  LinkOutlined,
+  FileTextOutlined,
+  ToolOutlined,
+  RocketOutlined,
+  WarningOutlined,
+  CheckCircleOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
-import { cyclesApi, type MaintenanceCycle, type CreateCyclePayload } from '@inspection/shared';
+import {
+  cyclesApi,
+  type MaintenanceCycle,
+  type CreateCyclePayload,
+  type CycleAnalyticsData,
+  type CycleImpactData,
+} from '@inspection/shared';
 
 const { Title, Text } = Typography;
 
@@ -49,6 +71,10 @@ export default function CyclesPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<MaintenanceCycle | null>(null);
+  const [analyticsDrawerOpen, setAnalyticsDrawerOpen] = useState(false);
+  const [analyticsCycleId, setAnalyticsCycleId] = useState<number | null>(null);
+  const [impactModalOpen, setImpactModalOpen] = useState(false);
+  const [pendingDeleteCycle, setPendingDeleteCycle] = useState<MaintenanceCycle | null>(null);
 
   const [form] = Form.useForm();
 
@@ -59,6 +85,27 @@ export default function CyclesPage() {
   });
 
   const cycles = cyclesData?.data?.data?.cycles || [];
+
+  // Fetch analytics for selected cycle
+  const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
+    queryKey: ['cycles', 'analytics', analyticsCycleId],
+    queryFn: () => analyticsCycleId ? cyclesApi.getAnalytics(analyticsCycleId).then(r => r.data.data) : null,
+    enabled: !!analyticsCycleId && analyticsDrawerOpen,
+  });
+
+  // Fetch impact for cycle pending delete
+  const { data: impactData, isLoading: impactLoading } = useQuery({
+    queryKey: ['cycles', 'impact', pendingDeleteCycle?.id],
+    queryFn: () => pendingDeleteCycle ? cyclesApi.getImpact(pendingDeleteCycle.id).then(r => r.data.data) : null,
+    enabled: !!pendingDeleteCycle && impactModalOpen,
+  });
+
+  // Fetch linked items for analytics drawer
+  const { data: linkedItemsData, isLoading: linkedItemsLoading } = useQuery({
+    queryKey: ['cycles', 'linked', analyticsCycleId],
+    queryFn: () => analyticsCycleId ? cyclesApi.getLinkedItems(analyticsCycleId, { per_page: 10 }).then(r => r.data.data) : null,
+    enabled: !!analyticsCycleId && analyticsDrawerOpen,
+  });
   const runningHoursCycles = cycles.filter((c) => c.cycle_type === 'running_hours');
   const calendarCycles = cycles.filter((c) => c.cycle_type === 'calendar');
 
@@ -146,15 +193,40 @@ export default function CyclesPage() {
     setEditModalOpen(true);
   };
 
+  const openAnalyticsDrawer = (cycleId: number) => {
+    setAnalyticsCycleId(cycleId);
+    setAnalyticsDrawerOpen(true);
+  };
+
+  const openImpactModal = (cycle: MaintenanceCycle) => {
+    setPendingDeleteCycle(cycle);
+    setImpactModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (pendingDeleteCycle) {
+      deleteMutation.mutate(pendingDeleteCycle.id);
+      setImpactModalOpen(false);
+      setPendingDeleteCycle(null);
+    }
+  };
+
+  const getEffectivenessColor = (score: number | null) => {
+    if (score === null) return '#d9d9d9';
+    if (score >= 80) return '#52c41a';
+    if (score >= 60) return '#faad14';
+    return '#ff4d4f';
+  };
+
   const runningHoursColumns: ColumnsType<MaintenanceCycle> = [
     {
-      title: 'Name',
+      title: t('cycles.name', 'Name'),
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record: MaintenanceCycle) => (
         <Space>
           {record.is_system && (
-            <Tooltip title="System cycle (cannot be deleted)">
+            <Tooltip title={t('cycles.systemCycle', 'System cycle (cannot be deleted)')}>
               <LockOutlined style={{ color: '#8c8c8c' }} />
             </Tooltip>
           )}
@@ -164,7 +236,7 @@ export default function CyclesPage() {
       ),
     },
     {
-      title: 'Hours',
+      title: t('cycles.hours', 'Hours'),
       dataIndex: 'hours_value',
       key: 'hours_value',
       width: 120,
@@ -175,38 +247,61 @@ export default function CyclesPage() {
       ),
     },
     {
-      title: 'Display Label',
-      dataIndex: 'display_label',
-      key: 'display_label',
-      width: 150,
+      title: t('cycles.linkedItems', 'Linked'),
+      key: 'linked',
+      width: 100,
+      render: (_: any, record: MaintenanceCycle) => (
+        <Tooltip title={t('cycles.viewLinkedItems', 'View linked items')}>
+          <Badge
+            count={record.linked_templates_count ?? 0}
+            style={{ backgroundColor: record.linked_templates_count ? '#1890ff' : '#d9d9d9' }}
+            showZero
+          >
+            <Button
+              type="text"
+              size="small"
+              icon={<LinkOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                openAnalyticsDrawer(record.id);
+              }}
+            />
+          </Badge>
+        </Tooltip>
+      ),
     },
     {
-      title: 'Status',
+      title: t('cycles.status', 'Status'),
       dataIndex: 'is_active',
       key: 'is_active',
       width: 100,
-      render: (isActive: boolean) => (isActive ? <Tag color="success">Active</Tag> : <Tag>Inactive</Tag>),
+      render: (isActive: boolean) => (isActive ? <Tag color="success">{t('common.active', 'Active')}</Tag> : <Tag>{t('common.inactive', 'Inactive')}</Tag>),
     },
     {
-      title: 'Actions',
+      title: t('common.actions', 'Actions'),
       key: 'actions',
-      width: 150,
+      width: 200,
       render: (_: any, record: MaintenanceCycle) => (
         <Space>
+          <Tooltip title={t('cycles.analytics', 'Analytics')}>
+            <Button
+              type="text"
+              icon={<BarChartOutlined />}
+              onClick={() => openAnalyticsDrawer(record.id)}
+            />
+          </Tooltip>
           <Button type="link" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
-            Edit
+            {t('common.edit', 'Edit')}
           </Button>
           {!record.is_system && (
-            <Popconfirm
-              title="Delete this cycle?"
-              description="Templates using this cycle will need to be updated."
-              onConfirm={() => deleteMutation.mutate(record.id)}
-              okButtonProps={{ loading: deleteMutation.isPending }}
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => openImpactModal(record)}
             >
-              <Button type="link" danger icon={<DeleteOutlined />}>
-                Delete
-              </Button>
-            </Popconfirm>
+              {t('common.delete', 'Delete')}
+            </Button>
           )}
         </Space>
       ),
@@ -215,13 +310,13 @@ export default function CyclesPage() {
 
   const calendarColumns: ColumnsType<MaintenanceCycle> = [
     {
-      title: 'Name',
+      title: t('cycles.name', 'Name'),
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record: MaintenanceCycle) => (
         <Space>
           {record.is_system && (
-            <Tooltip title="System cycle (cannot be deleted)">
+            <Tooltip title={t('cycles.systemCycle', 'System cycle (cannot be deleted)')}>
               <LockOutlined style={{ color: '#8c8c8c' }} />
             </Tooltip>
           )}
@@ -231,7 +326,7 @@ export default function CyclesPage() {
       ),
     },
     {
-      title: 'Interval',
+      title: t('cycles.interval', 'Interval'),
       key: 'interval',
       width: 150,
       render: (_: any, record: MaintenanceCycle) => (
@@ -241,38 +336,61 @@ export default function CyclesPage() {
       ),
     },
     {
-      title: 'Display Label',
-      dataIndex: 'display_label',
-      key: 'display_label',
-      width: 150,
+      title: t('cycles.linkedItems', 'Linked'),
+      key: 'linked',
+      width: 100,
+      render: (_: any, record: MaintenanceCycle) => (
+        <Tooltip title={t('cycles.viewLinkedItems', 'View linked items')}>
+          <Badge
+            count={record.linked_templates_count ?? 0}
+            style={{ backgroundColor: record.linked_templates_count ? '#1890ff' : '#d9d9d9' }}
+            showZero
+          >
+            <Button
+              type="text"
+              size="small"
+              icon={<LinkOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                openAnalyticsDrawer(record.id);
+              }}
+            />
+          </Badge>
+        </Tooltip>
+      ),
     },
     {
-      title: 'Status',
+      title: t('cycles.status', 'Status'),
       dataIndex: 'is_active',
       key: 'is_active',
       width: 100,
-      render: (isActive: boolean) => (isActive ? <Tag color="success">Active</Tag> : <Tag>Inactive</Tag>),
+      render: (isActive: boolean) => (isActive ? <Tag color="success">{t('common.active', 'Active')}</Tag> : <Tag>{t('common.inactive', 'Inactive')}</Tag>),
     },
     {
-      title: 'Actions',
+      title: t('common.actions', 'Actions'),
       key: 'actions',
-      width: 150,
+      width: 200,
       render: (_: any, record: MaintenanceCycle) => (
         <Space>
+          <Tooltip title={t('cycles.analytics', 'Analytics')}>
+            <Button
+              type="text"
+              icon={<BarChartOutlined />}
+              onClick={() => openAnalyticsDrawer(record.id)}
+            />
+          </Tooltip>
           <Button type="link" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
-            Edit
+            {t('common.edit', 'Edit')}
           </Button>
           {!record.is_system && (
-            <Popconfirm
-              title="Delete this cycle?"
-              description="Templates using this cycle will need to be updated."
-              onConfirm={() => deleteMutation.mutate(record.id)}
-              okButtonProps={{ loading: deleteMutation.isPending }}
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => openImpactModal(record)}
             >
-              <Button type="link" danger icon={<DeleteOutlined />}>
-                Delete
-              </Button>
-            </Popconfirm>
+              {t('common.delete', 'Delete')}
+            </Button>
           )}
         </Space>
       ),
@@ -451,6 +569,229 @@ export default function CyclesPage() {
         <Form form={form} layout="vertical" onFinish={handleUpdate}>
           {editingCycle?.cycle_type === 'running_hours' ? <RunningHoursForm isEdit /> : <CalendarForm isEdit />}
         </Form>
+      </Modal>
+
+      {/* Analytics Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <BarChartOutlined />
+            {t('cycles.analytics', 'Cycle Analytics')}
+          </Space>
+        }
+        open={analyticsDrawerOpen}
+        onClose={() => {
+          setAnalyticsDrawerOpen(false);
+          setAnalyticsCycleId(null);
+        }}
+        width={500}
+      >
+        {analyticsLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin size="large" />
+          </div>
+        ) : analyticsData ? (
+          <Space direction="vertical" style={{ width: '100%' }} size="large">
+            {/* Cycle Info */}
+            <Card size="small">
+              <Text strong style={{ fontSize: 16 }}>{analyticsData.cycle_name}</Text>
+              <br />
+              <Tag color={analyticsData.cycle_type === 'running_hours' ? 'orange' : 'green'}>
+                {analyticsData.cycle_type === 'running_hours' ? (
+                  <><ClockCircleOutlined /> {t('cycles.runningHours', 'Running Hours')}</>
+                ) : (
+                  <><CalendarOutlined /> {t('cycles.calendarBased', 'Calendar Based')}</>
+                )}
+              </Tag>
+            </Card>
+
+            {/* Key Stats */}
+            <Row gutter={16}>
+              <Col span={8}>
+                <Statistic
+                  title={t('cycles.linkedTemplates', 'Templates')}
+                  value={analyticsData.linked_templates}
+                  prefix={<FileTextOutlined />}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title={t('cycles.linkedJobs', 'Jobs')}
+                  value={analyticsData.linked_jobs}
+                  prefix={<ToolOutlined />}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title={t('cycles.linkedEquipment', 'Equipment')}
+                  value={analyticsData.linked_equipment}
+                  prefix={<RocketOutlined />}
+                />
+              </Col>
+            </Row>
+
+            {/* Effectiveness Score */}
+            <Card size="small" title={t('cycles.effectiveness', 'Effectiveness Score')}>
+              <Progress
+                percent={analyticsData.effectiveness_score ?? 0}
+                strokeColor={getEffectivenessColor(analyticsData.effectiveness_score)}
+                format={(pct) => `${pct}%`}
+              />
+              <Row gutter={16} style={{ marginTop: 16 }}>
+                <Col span={12}>
+                  <Statistic
+                    title={t('cycles.jobsCompleted', 'Completed')}
+                    value={analyticsData.jobs_completed}
+                    valueStyle={{ color: '#52c41a' }}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title={t('cycles.jobsPending', 'Pending')}
+                    value={analyticsData.jobs_pending}
+                    valueStyle={{ color: '#faad14' }}
+                  />
+                </Col>
+              </Row>
+              {analyticsData.avg_completion_time_hours && (
+                <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                  {t('cycles.avgCompletionTime', 'Avg completion time')}: {analyticsData.avg_completion_time_hours.toFixed(1)}h
+                </Text>
+              )}
+            </Card>
+
+            {/* Linked Items */}
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <LinkOutlined />
+                  {t('cycles.linkedItems', 'Linked Items')}
+                  <Badge count={analyticsData.total_linked_items} style={{ backgroundColor: '#1890ff' }} />
+                </Space>
+              }
+            >
+              {linkedItemsLoading ? (
+                <Spin size="small" />
+              ) : linkedItemsData?.items?.length ? (
+                <List
+                  size="small"
+                  dataSource={linkedItemsData.items}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <Space>
+                        {item.type === 'template' && <FileTextOutlined style={{ color: '#1890ff' }} />}
+                        {item.type === 'job' && <ToolOutlined style={{ color: '#faad14' }} />}
+                        {item.type === 'equipment' && <RocketOutlined style={{ color: '#52c41a' }} />}
+                        <Text>{item.name}</Text>
+                        <Tag>{item.type}</Tag>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ) : (
+                <Text type="secondary">{t('cycles.noLinkedItems', 'No linked items')}</Text>
+              )}
+            </Card>
+          </Space>
+        ) : (
+          <Text type="secondary">{t('cycles.noAnalyticsData', 'No analytics data available')}</Text>
+        )}
+      </Drawer>
+
+      {/* Impact Analysis Modal */}
+      <Modal
+        title={
+          <Space>
+            <WarningOutlined style={{ color: '#faad14' }} />
+            {t('cycles.impactAnalysis', 'Impact Analysis')}
+          </Space>
+        }
+        open={impactModalOpen}
+        onCancel={() => {
+          setImpactModalOpen(false);
+          setPendingDeleteCycle(null);
+        }}
+        onOk={confirmDelete}
+        okText={t('common.delete', 'Delete')}
+        okButtonProps={{
+          danger: true,
+          loading: deleteMutation.isPending,
+          disabled: impactLoading || !!(impactData && !impactData.can_delete),
+        }}
+        width={500}
+      >
+        {impactLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        ) : impactData ? (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Text strong>{t('cycles.deleteCycle', 'Delete cycle')}: {impactData.cycle_name}</Text>
+
+            {!impactData.can_delete && (
+              <Alert
+                type="error"
+                showIcon
+                message={t('cycles.cannotDelete', 'Cannot Delete')}
+                description={t('cycles.cycleInUse', 'This cycle has active jobs and cannot be deleted.')}
+              />
+            )}
+
+            <Card size="small" title={t('cycles.affectedItems', 'Affected Items')}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Space direction="vertical" size={4}>
+                    <Text type="secondary"><FileTextOutlined /> {t('cycles.templates', 'Templates')}</Text>
+                    <Text strong>{impactData.affected_items.templates}</Text>
+                  </Space>
+                </Col>
+                <Col span={12}>
+                  <Space direction="vertical" size={4}>
+                    <Text type="secondary"><ToolOutlined /> {t('cycles.activeJobs', 'Active Jobs')}</Text>
+                    <Text strong style={{ color: impactData.affected_items.active_jobs > 0 ? '#ff4d4f' : undefined }}>
+                      {impactData.affected_items.active_jobs}
+                    </Text>
+                  </Space>
+                </Col>
+              </Row>
+              <Row gutter={16} style={{ marginTop: 12 }}>
+                <Col span={12}>
+                  <Space direction="vertical" size={4}>
+                    <Text type="secondary"><CheckCircleOutlined /> {t('cycles.completedJobs', 'Completed')}</Text>
+                    <Text strong>{impactData.affected_items.completed_jobs}</Text>
+                  </Space>
+                </Col>
+                <Col span={12}>
+                  <Space direction="vertical" size={4}>
+                    <Text type="secondary"><RocketOutlined /> {t('cycles.equipment', 'Equipment')}</Text>
+                    <Text strong>{impactData.affected_items.equipment}</Text>
+                  </Space>
+                </Col>
+              </Row>
+            </Card>
+
+            {impactData.deletion_warnings.length > 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                icon={<InfoCircleOutlined />}
+                message={t('cycles.warnings', 'Warnings')}
+                description={
+                  <ul style={{ margin: 0, paddingLeft: 16 }}>
+                    {impactData.deletion_warnings.map((warning, idx) => (
+                      <li key={idx}>{warning}</li>
+                    ))}
+                  </ul>
+                }
+              />
+            )}
+
+            <Text type="secondary">
+              <InfoCircleOutlined /> {impactData.recommended_action}
+            </Text>
+          </Space>
+        ) : null}
       </Modal>
     </div>
   );

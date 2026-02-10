@@ -27,6 +27,10 @@ export interface MaintenanceCycle {
   is_system: boolean;
   sort_order: number;
   created_at: string;
+  // Analytics fields (optional, populated when requested)
+  linked_templates_count?: number;
+  linked_jobs_count?: number;
+  linked_equipment_count?: number;
 }
 
 // ==================== PM TEMPLATES ====================

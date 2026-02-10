@@ -103,6 +103,11 @@ export type {
   RosterWeekData,
   DayAvailabilityData,
   UploadRosterResult,
+  CoverageScoreData,
+  WorkloadData,
+  WorkloadUser,
+  CoverageSuggestion,
+  CoverageSuggestionData,
 } from './roster.api';
 export { aiApi } from './ai.api';
 export type {
@@ -143,7 +148,13 @@ export type {
   NaturalLanguageSearchResponse,
 } from './materials.api';
 export { cyclesApi } from './cycles.api';
-export type { CyclesListParams } from './cycles.api';
+export type {
+  CyclesListParams,
+  CycleAnalyticsData,
+  CycleImpactData,
+  LinkedItemsData,
+  LinkedItem,
+} from './cycles.api';
 export { pmTemplatesApi } from './pm-templates.api';
 export type { TemplatesListParams, FindTemplateParams } from './pm-templates.api';
 export { workPlanTrackingApi } from './work-plan-tracking.api';

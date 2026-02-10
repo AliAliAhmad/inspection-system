@@ -539,3 +539,425 @@ def download_roster_template():
             'Content-Disposition': 'attachment; filename=roster_template.xlsx'
         }
     )
+
+
+@bp.route('/coverage-score', methods=['GET'])
+@jwt_required()
+def get_coverage_score():
+    """
+    Get coverage score for a week.
+    Calculates team coverage based on skills, roles, and availability.
+
+    Query params:
+        - date: Start date of week (default: today)
+
+    Returns coverage score, gaps, and recommendations.
+    """
+    user = get_current_user()
+    if user.role not in ('admin', 'engineer'):
+        return jsonify({'status': 'error', 'message': 'Admin or engineer access required'}), 403
+
+    date_str = request.args.get('date')
+    if date_str:
+        try:
+            start_date = date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({'status': 'error', 'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    else:
+        start_date = date.today()
+
+    end_date = start_date + timedelta(days=7)
+
+    # Get all active users
+    all_users = User.query.filter(User.is_active == True).all()
+
+    # Get roster entries for the week
+    roster_entries = RosterEntry.query.filter(
+        RosterEntry.date >= start_date,
+        RosterEntry.date < end_date
+    ).all()
+
+    # Get approved leaves
+    leaves = Leave.query.filter(
+        Leave.status == 'approved',
+        Leave.date_from < end_date,
+        Leave.date_to >= start_date
+    ).all()
+
+    # Build availability map
+    leave_map = {}
+    for leave in leaves:
+        if leave.user_id not in leave_map:
+            leave_map[leave.user_id] = set()
+        ld = max(leave.date_from, start_date)
+        while ld <= min(leave.date_to, end_date - timedelta(days=1)):
+            leave_map[leave.user_id].add(ld.isoformat())
+            ld += timedelta(days=1)
+
+    # Roster map
+    roster_map = {}
+    for entry in roster_entries:
+        if entry.user_id not in roster_map:
+            roster_map[entry.user_id] = {}
+        roster_map[entry.user_id][entry.date.isoformat()] = entry.shift
+
+    # Calculate coverage per day
+    dates = []
+    d = start_date
+    while d < end_date:
+        dates.append(d)
+        d += timedelta(days=1)
+
+    daily_coverage = []
+    gaps = []
+    total_score = 0
+
+    # Define minimum requirements per shift
+    min_requirements = {
+        'inspector': 2,
+        'specialist': 1,
+        'engineer': 1
+    }
+
+    for day in dates:
+        day_str = day.isoformat()
+        available = {'inspector': 0, 'specialist': 0, 'engineer': 0, 'total': 0}
+        on_leave = 0
+
+        for u in all_users:
+            # Check if on leave
+            if u.id in leave_map and day_str in leave_map[u.id]:
+                on_leave += 1
+                continue
+
+            # Check roster
+            roster_shift = roster_map.get(u.id, {}).get(day_str)
+            if roster_shift in ('day', 'night'):
+                if u.role in available:
+                    available[u.role] += 1
+                available['total'] += 1
+
+        # Calculate day score
+        day_score = 100
+        day_gaps = []
+
+        for role, min_count in min_requirements.items():
+            if available.get(role, 0) < min_count:
+                shortage = min_count - available.get(role, 0)
+                day_score -= shortage * 15
+                day_gaps.append({
+                    'role': role,
+                    'required': min_count,
+                    'available': available.get(role, 0),
+                    'shortage': shortage
+                })
+
+        day_score = max(0, day_score)
+        total_score += day_score
+
+        daily_coverage.append({
+            'date': day_str,
+            'day_name': day.strftime('%A'),
+            'available': available,
+            'on_leave': on_leave,
+            'score': day_score,
+            'gaps': day_gaps
+        })
+
+        if day_gaps:
+            gaps.append({
+                'date': day_str,
+                'day_name': day.strftime('%A'),
+                'gaps': day_gaps
+            })
+
+    avg_score = round(total_score / len(dates), 1) if dates else 0
+
+    # Generate recommendations
+    recommendations = []
+    if gaps:
+        recommendations.append({
+            'type': 'warning',
+            'message': f'{len(gaps)} days have coverage gaps this week'
+        })
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'week_start': start_date.isoformat(),
+            'week_end': end_date.isoformat(),
+            'coverage_score': avg_score,
+            'daily_coverage': daily_coverage,
+            'gaps': gaps,
+            'recommendations': recommendations,
+            'summary': {
+                'total_users': len(all_users),
+                'days_with_gaps': len(gaps),
+                'understaffed_days': len([d for d in daily_coverage if d['score'] < 70])
+            }
+        }
+    }), 200
+
+
+@bp.route('/workload', methods=['GET'])
+@jwt_required()
+def get_workload():
+    """
+    Get workload distribution for the team.
+    Shows hours per person for the specified period.
+
+    Query params:
+        - date: Start date (default: start of current week)
+        - period: 'week' or 'month' (default: week)
+    """
+    user = get_current_user()
+    if user.role not in ('admin', 'engineer'):
+        return jsonify({'status': 'error', 'message': 'Admin or engineer access required'}), 403
+
+    date_str = request.args.get('date')
+    period = request.args.get('period', 'week')
+
+    if date_str:
+        try:
+            start_date = date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({'status': 'error', 'message': 'Invalid date format'}), 400
+    else:
+        # Start of current week (Sunday)
+        today = date.today()
+        start_date = today - timedelta(days=today.weekday() + 1)
+
+    if period == 'month':
+        end_date = start_date + timedelta(days=30)
+    else:
+        end_date = start_date + timedelta(days=7)
+
+    # Get work plan jobs for the period
+    from app.models import WorkPlanJob, WorkPlanDay, WorkPlan
+
+    # Get jobs with assignments
+    jobs = db.session.query(WorkPlanJob).join(
+        WorkPlanDay, WorkPlanJob.day_id == WorkPlanDay.id
+    ).join(
+        WorkPlan, WorkPlanDay.plan_id == WorkPlan.id
+    ).filter(
+        WorkPlanDay.date >= start_date,
+        WorkPlanDay.date < end_date
+    ).all()
+
+    # Calculate workload per user
+    user_workload = {}
+
+    for job in jobs:
+        # Get assigned users
+        assigned_ids = []
+        if job.lead_id:
+            assigned_ids.append(job.lead_id)
+        if job.team_member_ids:
+            assigned_ids.extend(job.team_member_ids)
+
+        hours = job.actual_hours or job.planned_hours or 0
+
+        for uid in assigned_ids:
+            if uid not in user_workload:
+                user_workload[uid] = {
+                    'scheduled_hours': 0,
+                    'job_count': 0,
+                    'overtime_hours': 0
+                }
+            user_workload[uid]['scheduled_hours'] += hours
+            user_workload[uid]['job_count'] += 1
+
+    # Get user details
+    user_ids = list(user_workload.keys())
+    if user_ids:
+        users = User.query.filter(User.id.in_(user_ids)).all()
+        user_map = {u.id: u for u in users}
+    else:
+        user_map = {}
+
+    # Calculate overtime (> 40h/week or 8h/day * days)
+    standard_hours = 40 if period == 'week' else 160
+
+    workload_data = []
+    for uid, data in user_workload.items():
+        u = user_map.get(uid)
+        if not u:
+            continue
+
+        overtime = max(0, data['scheduled_hours'] - standard_hours)
+        status = 'balanced'
+        if data['scheduled_hours'] > standard_hours * 1.1:
+            status = 'overloaded'
+        elif data['scheduled_hours'] < standard_hours * 0.5:
+            status = 'underutilized'
+
+        workload_data.append({
+            'user_id': uid,
+            'full_name': u.full_name,
+            'role': u.role,
+            'specialization': u.specialization,
+            'scheduled_hours': round(data['scheduled_hours'], 1),
+            'job_count': data['job_count'],
+            'overtime_hours': round(overtime, 1),
+            'status': status,
+            'utilization': round((data['scheduled_hours'] / standard_hours) * 100, 1)
+        })
+
+    # Sort by scheduled hours descending
+    workload_data.sort(key=lambda x: x['scheduled_hours'], reverse=True)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'period': period,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'standard_hours': standard_hours,
+            'workload': workload_data,
+            'summary': {
+                'total_users': len(workload_data),
+                'overloaded': len([w for w in workload_data if w['status'] == 'overloaded']),
+                'underutilized': len([w for w in workload_data if w['status'] == 'underutilized']),
+                'balanced': len([w for w in workload_data if w['status'] == 'balanced']),
+                'total_scheduled_hours': sum(w['scheduled_hours'] for w in workload_data),
+                'total_overtime_hours': sum(w['overtime_hours'] for w in workload_data)
+            }
+        }
+    }), 200
+
+
+@bp.route('/ai/suggest-coverage', methods=['POST'])
+@jwt_required()
+def suggest_coverage():
+    """
+    AI-powered coverage suggestion.
+    Finds the best coverage match based on skills, workload, and availability.
+
+    Request body:
+        {
+            "user_id": 123,
+            "date_from": "2026-02-10",
+            "date_to": "2026-02-12"
+        }
+    """
+    user = get_current_user()
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'status': 'error', 'message': 'Request body is required'}), 400
+
+    user_id = data.get('user_id')
+    date_from_str = data.get('date_from')
+    date_to_str = data.get('date_to')
+
+    if not all([user_id, date_from_str, date_to_str]):
+        return jsonify({'status': 'error', 'message': 'user_id, date_from, date_to are required'}), 400
+
+    try:
+        date_from = date.fromisoformat(date_from_str)
+        date_to = date.fromisoformat(date_to_str)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid date format'}), 400
+
+    # Get the user requesting leave
+    leave_user = db.session.get(User, user_id)
+    if not leave_user:
+        return jsonify({'status': 'error', 'message': 'User not found'}), 404
+
+    # Get potential coverage candidates
+    # Same specialization, opposite role (inspector <-> specialist), or same role
+    candidates = User.query.filter(
+        User.is_active == True,
+        User.id != user_id
+    ).all()
+
+    # Filter by role compatibility
+    compatible_candidates = []
+    for c in candidates:
+        score = 0
+
+        # Same specialization is a bonus
+        if c.specialization == leave_user.specialization:
+            score += 30
+
+        # Role compatibility
+        if leave_user.role == 'inspector' and c.role == 'specialist':
+            score += 20
+        elif leave_user.role == 'specialist' and c.role == 'inspector':
+            score += 20
+        elif c.role == leave_user.role:
+            score += 25
+
+        # Check availability during leave period
+        leaves = Leave.query.filter(
+            Leave.user_id == c.id,
+            Leave.status == 'approved',
+            Leave.date_from <= date_to,
+            Leave.date_to >= date_from
+        ).count()
+
+        if leaves > 0:
+            continue  # Skip if already on leave
+
+        # Check roster availability
+        roster_entries = RosterEntry.query.filter(
+            RosterEntry.user_id == c.id,
+            RosterEntry.date >= date_from,
+            RosterEntry.date <= date_to
+        ).all()
+
+        working_days = len([e for e in roster_entries if e.shift in ('day', 'night')])
+        off_days = len([e for e in roster_entries if e.shift == 'off'])
+
+        # Penalize if many off days
+        if off_days > 0:
+            score -= off_days * 5
+
+        # Bonus for working days
+        score += working_days * 5
+
+        if score > 0:
+            compatible_candidates.append({
+                'user': c,
+                'score': score,
+                'working_days': working_days,
+                'off_days': off_days
+            })
+
+    # Sort by score
+    compatible_candidates.sort(key=lambda x: x['score'], reverse=True)
+
+    suggestions = []
+    for i, candidate in enumerate(compatible_candidates[:5]):
+        c = candidate['user']
+        suggestions.append({
+            'rank': i + 1,
+            'user_id': c.id,
+            'full_name': c.full_name,
+            'role': c.role,
+            'specialization': c.specialization,
+            'match_score': candidate['score'],
+            'working_days': candidate['working_days'],
+            'off_days': candidate['off_days'],
+            'is_best_match': i == 0
+        })
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'requesting_user': {
+                'id': leave_user.id,
+                'full_name': leave_user.full_name,
+                'role': leave_user.role,
+                'specialization': leave_user.specialization
+            },
+            'leave_period': {
+                'from': date_from_str,
+                'to': date_to_str,
+                'days': (date_to - date_from).days + 1
+            },
+            'suggestions': suggestions,
+            'total_candidates': len(compatible_candidates)
+        }
+    }), 200

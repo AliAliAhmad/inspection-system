@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Card,
   Table,
@@ -18,12 +18,36 @@ import {
   Alert,
   Statistic,
   Divider,
+  Row,
+  Col,
+  Progress,
+  List,
+  Avatar,
+  Tooltip,
+  Spin,
 } from 'antd';
-import { UploadOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
+import {
+  UploadOutlined,
+  LeftOutlined,
+  RightOutlined,
+  TeamOutlined,
+  BulbOutlined,
+  UserOutlined,
+  CheckCircleOutlined,
+  StarOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { rosterApi, leavesApi, usersApi, type RosterWeekUser, type LeaveRequestPayload } from '@inspection/shared';
+import {
+  rosterApi,
+  leavesApi,
+  usersApi,
+  type RosterWeekUser,
+  type LeaveRequestPayload,
+  type CoverageSuggestion,
+} from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
+import { CoverageScoreCard, WorkloadBar, getWorkloadStatus } from '../../components/shared';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -103,6 +127,33 @@ export default function TeamRosterPage() {
   });
   const allActiveUsers: any[] = (activeUsersRaw?.data as any)?.data ?? [];
 
+  // Fetch coverage score data
+  const { data: coverageData, isLoading: coverageLoading } = useQuery({
+    queryKey: ['roster', 'coverage-score', baseDate],
+    queryFn: () => rosterApi.getCoverageScore(baseDate).then((r) => r.data.data),
+  });
+
+  // Fetch workload data
+  const { data: workloadData, isLoading: workloadLoading } = useQuery({
+    queryKey: ['roster', 'workload', baseDate],
+    queryFn: () => rosterApi.getWorkload(baseDate, 'week').then((r) => r.data.data),
+  });
+
+  // AI coverage suggestions state
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [aiSuggestionsDateRange, setAiSuggestionsDateRange] = useState<[string, string] | null>(null);
+
+  // Fetch AI coverage suggestions
+  const { data: aiSuggestionsData, isLoading: aiSuggestionsLoading, refetch: refetchAiSuggestions } = useQuery({
+    queryKey: ['roster', 'ai-suggestions', selectedUserId, aiSuggestionsDateRange],
+    queryFn: () => {
+      if (!selectedUserId || !aiSuggestionsDateRange) return null;
+      return rosterApi.suggestCoverage(selectedUserId, aiSuggestionsDateRange[0], aiSuggestionsDateRange[1])
+        .then((r) => r.data.data);
+    },
+    enabled: !!selectedUserId && !!aiSuggestionsDateRange && showAISuggestions,
+  });
+
   // Upload mutation
   const uploadMutation = useMutation({
     mutationFn: (file: File) => rosterApi.upload(file),
@@ -161,6 +212,34 @@ export default function TeamRosterPage() {
   );
 
   const dates = weekData?.dates ?? [];
+
+  // Create workload map for quick lookup
+  const workloadMap = useMemo(() => {
+    const map = new Map<number, { hours: number; status: 'balanced' | 'overloaded' | 'underutilized'; utilization: number }>();
+    if (workloadData?.workload) {
+      workloadData.workload.forEach((w) => {
+        map.set(w.user_id, {
+          hours: w.scheduled_hours,
+          status: w.status,
+          utilization: w.utilization,
+        });
+      });
+    }
+    return map;
+  }, [workloadData]);
+
+  // Transform coverage data for CoverageScoreCard
+  const coverageGaps = useMemo(() => {
+    if (!coverageData?.gaps) return [];
+    return coverageData.gaps.flatMap((g) =>
+      g.gaps.map((gap) => ({
+        role: gap.role,
+        required: gap.required,
+        available: gap.available,
+        shortage: gap.shortage,
+      }))
+    );
+  }, [coverageData]);
 
   // Calculate date range for display
   const rangeStart = dates.length > 0 ? dayjs(dates[0]) : dayjs().add(weekOffset * 7, 'day');
@@ -281,6 +360,22 @@ export default function TeamRosterPage() {
         );
       },
     },
+    {
+      title: t('roster.workload', 'Workload'),
+      key: 'workload',
+      width: 120,
+      render: (_: unknown, record: RosterWeekUser) => {
+        const workload = workloadMap.get(record.id);
+        if (!workload) return <Text type="secondary">-</Text>;
+        return (
+          <WorkloadBar
+            scheduledHours={workload.hours}
+            standardHours={workloadData?.standard_hours ?? 40}
+            size="small"
+          />
+        );
+      },
+    },
     ...dates.map((date) => ({
       title: (
         <div style={{ textAlign: 'center' }}>
@@ -322,6 +417,55 @@ export default function TeamRosterPage() {
         </Space>
       }
     >
+      {/* Coverage Score Section */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} lg={12}>
+          {coverageLoading ? (
+            <Card size="small"><Spin size="small" /></Card>
+          ) : (
+            <CoverageScoreCard
+              score={coverageData?.coverage_score ?? 0}
+              gaps={coverageGaps}
+              onLeaveCount={coverageData?.summary?.total_users ? sortedUsers.filter(u => u.is_on_leave).length : 0}
+              understaffedDays={coverageData?.summary?.understaffed_days ?? 0}
+            />
+          )}
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card size="small" title={<Space><TeamOutlined />{t('roster.workloadSummary', 'Workload Summary')}</Space>}>
+            {workloadLoading ? (
+              <Spin size="small" />
+            ) : workloadData?.summary ? (
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Statistic
+                    title={t('roster.balanced', 'Balanced')}
+                    value={workloadData.summary.balanced}
+                    valueStyle={{ color: '#52c41a' }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title={t('roster.overloaded', 'Overloaded')}
+                    value={workloadData.summary.overloaded}
+                    valueStyle={{ color: '#ff4d4f' }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title={t('roster.underutilized', 'Underutilized')}
+                    value={workloadData.summary.underutilized}
+                    valueStyle={{ color: '#faad14' }}
+                  />
+                </Col>
+              </Row>
+            ) : (
+              <Text type="secondary">{t('common.noData', 'No data')}</Text>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
       {/* Date navigation */}
       <Space style={{ marginBottom: 16, display: 'flex', justifyContent: 'center' }}>
         <Button icon={<LeftOutlined />} onClick={() => setWeekOffset((o) => o - 1)}>
@@ -463,7 +607,33 @@ export default function TeamRosterPage() {
 
                   <Form.Item
                     name="coverage_user_id"
-                    label={t('leaves.coverageEmployee', 'Coverage Employee')}
+                    label={
+                      <Space>
+                        {t('leaves.coverageEmployee', 'Coverage Employee')}
+                        <Tooltip title={t('leaves.getAISuggestions', 'Get AI suggestions based on workload and skills')}>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<BulbOutlined />}
+                            onClick={() => {
+                              const dateRange = leaveForm.getFieldValue('date_range');
+                              if (dateRange && dateRange[0] && dateRange[1]) {
+                                setAiSuggestionsDateRange([
+                                  dateRange[0].format('YYYY-MM-DD'),
+                                  dateRange[1].format('YYYY-MM-DD'),
+                                ]);
+                                setShowAISuggestions(true);
+                              } else {
+                                message.info(t('leaves.selectDateFirst', 'Please select date range first'));
+                              }
+                            }}
+                            style={{ padding: 0, height: 'auto' }}
+                          >
+                            {t('leaves.aiSuggest', 'AI Suggest')}
+                          </Button>
+                        </Tooltip>
+                      </Space>
+                    }
                     rules={[{ required: true, message: t('leaves.coverageRequired', 'Coverage employee is required') }]}
                   >
                     <Select
@@ -476,6 +646,96 @@ export default function TeamRosterPage() {
                       }))}
                     />
                   </Form.Item>
+
+                  {/* AI Coverage Suggestions */}
+                  {showAISuggestions && (
+                    <Card
+                      size="small"
+                      title={
+                        <Space>
+                          <BulbOutlined style={{ color: '#1890ff' }} />
+                          {t('leaves.aiSuggestions', 'AI Coverage Suggestions')}
+                        </Space>
+                      }
+                      extra={
+                        <Button type="text" size="small" onClick={() => setShowAISuggestions(false)}>
+                          {t('common.close', 'Close')}
+                        </Button>
+                      }
+                      style={{ marginBottom: 16, backgroundColor: '#f0f5ff' }}
+                    >
+                      {aiSuggestionsLoading ? (
+                        <div style={{ textAlign: 'center', padding: 16 }}>
+                          <Spin size="small" />
+                          <Text type="secondary" style={{ marginLeft: 8 }}>
+                            {t('leaves.analyzingWorkload', 'Analyzing team workload...')}
+                          </Text>
+                        </div>
+                      ) : aiSuggestionsData?.suggestions?.length ? (
+                        <List
+                          size="small"
+                          dataSource={aiSuggestionsData.suggestions.slice(0, 3)}
+                          renderItem={(suggestion: CoverageSuggestion) => (
+                            <List.Item
+                              style={{
+                                cursor: 'pointer',
+                                backgroundColor: suggestion.is_best_match ? '#e6f7ff' : undefined,
+                                borderRadius: 4,
+                                padding: '8px 12px',
+                              }}
+                              onClick={() => {
+                                leaveForm.setFieldValue('coverage_user_id', suggestion.user_id);
+                                setShowAISuggestions(false);
+                              }}
+                            >
+                              <List.Item.Meta
+                                avatar={
+                                  <Avatar
+                                    icon={<UserOutlined />}
+                                    style={{
+                                      backgroundColor: suggestion.is_best_match ? '#1890ff' : '#d9d9d9',
+                                    }}
+                                  />
+                                }
+                                title={
+                                  <Space>
+                                    <Text strong>{suggestion.full_name}</Text>
+                                    {suggestion.is_best_match && (
+                                      <Tag color="blue" icon={<StarOutlined />}>
+                                        {t('leaves.bestMatch', 'Best Match')}
+                                      </Tag>
+                                    )}
+                                  </Space>
+                                }
+                                description={
+                                  <Space size={4}>
+                                    <Tag>{suggestion.role}</Tag>
+                                    {suggestion.specialization && <Tag>{suggestion.specialization}</Tag>}
+                                    <Text type="secondary" style={{ fontSize: 11 }}>
+                                      {t('leaves.matchScore', 'Match')}: {suggestion.match_score}%
+                                    </Text>
+                                  </Space>
+                                }
+                              />
+                              <div style={{ textAlign: 'right' }}>
+                                <Text type="secondary" style={{ fontSize: 11 }}>
+                                  {t('leaves.workingDays', 'Working')}: {suggestion.working_days}
+                                </Text>
+                                <br />
+                                <Text type="secondary" style={{ fontSize: 11 }}>
+                                  {t('leaves.offDays', 'Off')}: {suggestion.off_days}
+                                </Text>
+                              </div>
+                            </List.Item>
+                          )}
+                        />
+                      ) : (
+                        <Text type="secondary">
+                          {t('leaves.noSuggestions', 'No suitable coverage found')}
+                        </Text>
+                      )}
+                    </Card>
+                  )}
 
                   <Form.Item
                     name="scope"

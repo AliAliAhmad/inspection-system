@@ -2813,3 +2813,207 @@ def get_failure_patterns_by_type(equipment_type):
         raise NotFoundError(result['error'])
 
     return jsonify({'status': 'success', 'data': result}), 200
+
+
+@bp.route('/health-summary', methods=['GET'])
+@jwt_required()
+def get_health_summary():
+    """
+    Get aggregated health summary for all equipment.
+    Returns fleet-wide health metrics, risk distribution, and alerts.
+    """
+    from app.services.equipment_ai_service import EquipmentAIService
+
+    # Get all active equipment
+    equipment_list = Equipment.query.filter_by(is_scrapped=False).all()
+
+    # Status distribution
+    status_counts = {
+        'active': 0,
+        'under_maintenance': 0,
+        'out_of_service': 0,
+        'stopped': 0,
+        'paused': 0
+    }
+
+    # Risk distribution
+    risk_counts = {
+        'low': 0,
+        'medium': 0,
+        'high': 0,
+        'critical': 0
+    }
+
+    # Health scores
+    health_scores = []
+    equipment_with_issues = []
+
+    for eq in equipment_list:
+        # Count by status
+        if eq.status in status_counts:
+            status_counts[eq.status] += 1
+
+        # Try to get AI risk score
+        try:
+            risk_result = EquipmentAIService.calculate_risk_score(eq.id)
+            if risk_result and 'risk_score' in risk_result:
+                score = risk_result['risk_score']
+                health_scores.append(100 - score)  # Convert risk to health
+
+                # Categorize risk
+                if score >= 75:
+                    risk_counts['critical'] += 1
+                    equipment_with_issues.append({
+                        'id': eq.id,
+                        'name': eq.name,
+                        'status': eq.status,
+                        'risk_score': score,
+                        'risk_level': 'critical'
+                    })
+                elif score >= 50:
+                    risk_counts['high'] += 1
+                    equipment_with_issues.append({
+                        'id': eq.id,
+                        'name': eq.name,
+                        'status': eq.status,
+                        'risk_score': score,
+                        'risk_level': 'high'
+                    })
+                elif score >= 25:
+                    risk_counts['medium'] += 1
+                else:
+                    risk_counts['low'] += 1
+        except Exception:
+            # If AI service fails, categorize by status
+            if eq.status in ('stopped', 'out_of_service'):
+                risk_counts['critical'] += 1
+            elif eq.status == 'under_maintenance':
+                risk_counts['medium'] += 1
+            else:
+                risk_counts['low'] += 1
+
+    # Calculate average health score
+    avg_health = round(sum(health_scores) / len(health_scores), 1) if health_scores else 0
+
+    # Get expiring certifications count
+    from datetime import datetime, timedelta
+    thirty_days_from_now = datetime.utcnow() + timedelta(days=30)
+
+    try:
+        from app.models import EquipmentCertification
+        expiring_certs = EquipmentCertification.query.filter(
+            EquipmentCertification.expiry_date <= thirty_days_from_now,
+            EquipmentCertification.expiry_date >= datetime.utcnow()
+        ).count()
+    except Exception:
+        expiring_certs = 0
+
+    # Sort issues by risk score
+    equipment_with_issues.sort(key=lambda x: x['risk_score'], reverse=True)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'summary': {
+                'total_equipment': len(equipment_list),
+                'average_health_score': avg_health,
+                'expiring_certifications': expiring_certs
+            },
+            'status_distribution': status_counts,
+            'risk_distribution': risk_counts,
+            'high_risk_equipment': equipment_with_issues[:10],
+            'health_trend': {
+                'current': avg_health,
+                'trend': 'stable'  # Could be calculated from historical data
+            }
+        }
+    }), 200
+
+
+@bp.route('/batch-status', methods=['POST'])
+@jwt_required()
+@admin_required()
+def batch_update_status():
+    """
+    Bulk update status for multiple equipment.
+
+    Request body:
+        {
+            "equipment_ids": [1, 2, 3],
+            "new_status": "under_maintenance",
+            "reason": "Scheduled maintenance"
+        }
+    """
+    user = get_current_user()
+    data = request.get_json()
+
+    if not data:
+        raise ValidationError("Request body is required")
+
+    equipment_ids = data.get('equipment_ids', [])
+    new_status = data.get('new_status')
+    reason = data.get('reason', 'Bulk status update')
+
+    if not equipment_ids:
+        raise ValidationError("equipment_ids is required")
+
+    if not new_status:
+        raise ValidationError("new_status is required")
+
+    valid_statuses = ['active', 'under_maintenance', 'out_of_service', 'stopped', 'paused']
+    if new_status not in valid_statuses:
+        raise ValidationError(f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+
+    updated = []
+    errors = []
+
+    for eq_id in equipment_ids:
+        equipment = db.session.get(Equipment, eq_id)
+        if not equipment:
+            errors.append({'id': eq_id, 'error': 'Equipment not found'})
+            continue
+
+        old_status = equipment.status
+        equipment.status = new_status
+
+        # Update stopped_at timestamp
+        if new_status in ('stopped', 'out_of_service') and old_status not in ('stopped', 'out_of_service'):
+            equipment.stopped_at = datetime.utcnow()
+        elif new_status == 'active' and old_status in ('stopped', 'out_of_service'):
+            equipment.stopped_at = None
+
+        # Log status change
+        log = EquipmentStatusLog(
+            equipment_id=eq_id,
+            old_status=old_status,
+            new_status=new_status,
+            changed_by_id=user.id,
+            reason=reason
+        )
+        db.session.add(log)
+
+        updated.append({
+            'id': eq_id,
+            'name': equipment.name,
+            'old_status': old_status,
+            'new_status': new_status
+        })
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        raise ValidationError(f"Database error: {str(e)}")
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'updated': updated,
+            'errors': errors,
+            'summary': {
+                'total_requested': len(equipment_ids),
+                'successful': len(updated),
+                'failed': len(errors)
+            }
+        }
+    }), 200

@@ -17,6 +17,11 @@ import {
   DatePicker,
   Upload,
   Alert,
+  Drawer,
+  Divider,
+  Spin,
+  List,
+  Tooltip,
 } from 'antd';
 import {
   PlusOutlined,
@@ -26,6 +31,10 @@ import {
   UploadOutlined,
   DownloadOutlined,
   HistoryOutlined,
+  RobotOutlined,
+  EyeOutlined,
+  ThunderboltOutlined,
+  BulbOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +48,12 @@ import {
   type ImportResult,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+import {
+  FleetHealthCards,
+  HealthScoreBadge,
+  RiskIndicator,
+  scoreToRiskLevel,
+} from '../../components/shared';
 
 const STATUSES: EquipmentStatus[] = ['active', 'under_maintenance', 'out_of_service', 'stopped', 'paused'];
 
@@ -71,8 +86,18 @@ export default function EquipmentPage() {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [importFile, setImportFile] = useState<File | null>(null);
 
+  // AI Insights states
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState<number | null>(null);
+
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
+
+  // Fetch health summary for fleet cards
+  const { data: healthData, isLoading: healthLoading } = useQuery({
+    queryKey: ['equipment-health-summary'],
+    queryFn: () => equipmentApi.getHealthSummary(),
+  });
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['equipment', page, perPage, search, statusFilter, typeFilter],
@@ -149,6 +174,24 @@ export default function EquipmentPage() {
     queryFn: () => equipmentApi.getImportHistory(),
     enabled: importHistoryModalOpen,
   });
+
+  // AI Insights queries - only fetch when drawer is open
+  const { data: aiSummary, isLoading: aiSummaryLoading } = useQuery({
+    queryKey: ['equipment-ai-summary', selectedEquipmentId],
+    queryFn: () => equipmentApi.getAISummary(selectedEquipmentId!),
+    enabled: !!selectedEquipmentId && aiDrawerOpen,
+  });
+
+  const { data: aiRecommendations, isLoading: aiRecsLoading } = useQuery({
+    queryKey: ['equipment-ai-recommendations', selectedEquipmentId],
+    queryFn: () => equipmentApi.getAIRecommendations(selectedEquipmentId!),
+    enabled: !!selectedEquipmentId && aiDrawerOpen,
+  });
+
+  const openAIInsights = (record: Equipment) => {
+    setSelectedEquipmentId(record.id);
+    setAiDrawerOpen(true);
+  };
 
   const handleDownloadTemplate = async () => {
     try {
@@ -228,13 +271,47 @@ export default function EquipmentPage() {
         <Tag color={statusColorMap[status]}>{status.replace(/_/g, ' ').toUpperCase()}</Tag>
       ),
     },
-    { title: t('equipment.manufacturer', 'Manufacturer'), dataIndex: 'manufacturer', key: 'manufacturer', render: (v: string | null) => v || '-' },
+    {
+      title: t('equipmentAI.healthScore', 'Health'),
+      key: 'health',
+      width: 100,
+      render: (_: unknown, record: Equipment) => {
+        // Calculate health from status (simplified - real would use AI endpoint)
+        const healthScore = record.status === 'active' ? 85 :
+          record.status === 'under_maintenance' ? 60 :
+          record.status === 'paused' ? 50 :
+          record.status === 'stopped' ? 30 : 20;
+        return <HealthScoreBadge score={healthScore} size="small" showTrend={false} />;
+      },
+    },
+    {
+      title: t('equipmentAI.riskLevel', 'Risk'),
+      key: 'risk',
+      width: 100,
+      render: (_: unknown, record: Equipment) => {
+        // Calculate risk from status (simplified)
+        const riskScore = record.status === 'active' ? 15 :
+          record.status === 'under_maintenance' ? 40 :
+          record.status === 'paused' ? 50 :
+          record.status === 'stopped' ? 70 : 85;
+        return <RiskIndicator level={scoreToRiskLevel(riskScore)} size="small" />;
+      },
+    },
     {
       title: t('common.actions', 'Actions'),
       key: 'actions',
+      width: 180,
       render: (_: unknown, record: Equipment) => (
-        <Space>
-          <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+        <Space size={4}>
+          <Tooltip title={t('equipmentAI.viewInsights', 'View AI Insights')}>
+            <Button
+              type="text"
+              size="small"
+              icon={<RobotOutlined style={{ color: '#1890ff' }} />}
+              onClick={() => openAIInsights(record)}
+            />
+          </Tooltip>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
             {t('common.edit', 'Edit')}
           </Button>
           <Popconfirm
@@ -243,7 +320,7 @@ export default function EquipmentPage() {
             okText={t('common.yes', 'Yes')}
             cancelText={t('common.no', 'No')}
           >
-            <Button type="link" danger icon={<DeleteOutlined />}>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               {t('common.delete', 'Delete')}
             </Button>
           </Popconfirm>
@@ -297,6 +374,16 @@ export default function EquipmentPage() {
     </>
   );
 
+  const healthSummaryRaw = healthData?.data?.data;
+  // Transform to FleetHealthData format
+  const healthSummary = healthSummaryRaw ? {
+    total_equipment: healthSummaryRaw.summary?.total_equipment ?? 0,
+    average_health_score: healthSummaryRaw.summary?.average_health_score ?? 0,
+    expiring_certifications: healthSummaryRaw.summary?.expiring_certifications ?? 0,
+    status_distribution: healthSummaryRaw.status_distribution ?? { active: 0, under_maintenance: 0, out_of_service: 0, stopped: 0, paused: 0 },
+    risk_distribution: healthSummaryRaw.risk_distribution ?? { low: 0, medium: 0, high: 0, critical: 0 },
+  } : undefined;
+
   return (
     <Card
       title={<Typography.Title level={4}>{t('nav.equipment', 'Equipment Management')}</Typography.Title>}
@@ -317,6 +404,22 @@ export default function EquipmentPage() {
         </Space>
       }
     >
+      {/* Fleet Health Summary Cards */}
+      <div style={{ marginBottom: 24 }}>
+        <FleetHealthCards
+          data={healthSummary}
+          loading={healthLoading}
+          onCardClick={(type) => {
+            // Filter table based on card clicked
+            if (type === 'active') setStatusFilter('active');
+            else if (type === 'maintenance') setStatusFilter('under_maintenance');
+            else if (type === 'critical') setStatusFilter('stopped');
+            else setStatusFilter(undefined);
+            setPage(1);
+          }}
+        />
+      </div>
+
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}>
           <Input
@@ -520,6 +623,138 @@ export default function EquipmentPage() {
           pagination={{ pageSize: 10 }}
         />
       </Modal>
+
+      {/* AI Insights Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <RobotOutlined style={{ color: '#1890ff' }} />
+            {t('equipmentAI.aiInsights', 'AI Insights')}
+          </Space>
+        }
+        open={aiDrawerOpen}
+        onClose={() => {
+          setAiDrawerOpen(false);
+          setSelectedEquipmentId(null);
+        }}
+        width={500}
+      >
+        {aiSummaryLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin size="large" />
+            <Typography.Text style={{ display: 'block', marginTop: 16 }}>
+              {t('ai.generating', 'Generating insights...')}
+            </Typography.Text>
+          </div>
+        ) : aiSummary?.data?.data ? (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            {/* Health & Risk Summary */}
+            <Card size="small" title={t('equipmentAI.fleetSummary', 'Equipment Summary')}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Typography.Text type="secondary">{t('equipmentAI.healthScore', 'Health Score')}</Typography.Text>
+                  <div style={{ marginTop: 8 }}>
+                    <HealthScoreBadge
+                      score={aiSummary.data.data.health_score || 0}
+                      size="large"
+                      showLabel
+                    />
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <Typography.Text type="secondary">{t('equipmentAI.riskScore', 'Risk Score')}</Typography.Text>
+                  <div style={{ marginTop: 8 }}>
+                    <RiskIndicator
+                      level={scoreToRiskLevel(aiSummary.data.data.risk_score || 0)}
+                      score={aiSummary.data.data.risk_score}
+                      showScore
+                    />
+                  </div>
+                </Col>
+              </Row>
+            </Card>
+
+            {/* Predictions */}
+            {aiSummary.data.data.failure_prediction && (
+              <Card size="small" title={<><ThunderboltOutlined /> {t('equipmentAI.predictions', 'Predictions')}</>}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <div>
+                    <Typography.Text type="secondary">
+                      {t('equipmentAI.failureIn', 'Potential failure in')}:
+                    </Typography.Text>
+                    <Typography.Text strong style={{ marginLeft: 8 }}>
+                      {aiSummary.data.data.failure_prediction['30_day_probability']}% {t('equipmentAI.daysFromNow', 'in 30 days')}
+                    </Typography.Text>
+                  </div>
+                  {aiSummary.data.data.failure_prediction.recommended_maintenance && (
+                    <div>
+                      <Typography.Text type="secondary">
+                        {t('equipmentAI.nextPM', 'Recommended maintenance')}:
+                      </Typography.Text>
+                      <Typography.Text strong style={{ marginLeft: 8 }}>
+                        {aiSummary.data.data.failure_prediction.recommended_maintenance}
+                      </Typography.Text>
+                    </div>
+                  )}
+                </Space>
+              </Card>
+            )}
+
+            {/* Recommendations */}
+            <Card
+              size="small"
+              title={<><BulbOutlined /> {t('equipmentAI.recommendations', 'Recommendations')}</>}
+              loading={aiRecsLoading}
+            >
+              {aiRecommendations?.data?.data && aiRecommendations.data.data.length > 0 ? (
+                <List
+                  size="small"
+                  dataSource={aiRecommendations.data.data.slice(0, 5)}
+                  renderItem={(rec: any) => (
+                    <List.Item>
+                      <Space>
+                        <Tag
+                          color={
+                            rec.priority === 'critical' ? 'red' :
+                            rec.priority === 'high' ? 'volcano' :
+                            rec.priority === 'medium' ? 'orange' : 'blue'
+                          }
+                        >
+                          {rec.priority}
+                        </Tag>
+                        <Typography.Text>{rec.message}</Typography.Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              ) : (
+                <Typography.Text type="secondary">
+                  {t('equipmentAI.noAnomalies', 'No recommendations at this time')}
+                </Typography.Text>
+              )}
+            </Card>
+
+            {/* Quick Actions */}
+            <Card size="small" title={t('equipmentAI.quickActions', 'Quick Actions')}>
+              <Space wrap>
+                <Button icon={<EyeOutlined />} onClick={() => {
+                  setAiDrawerOpen(false);
+                  // Navigate to equipment details if available
+                }}>
+                  {t('equipmentAI.viewHistory', 'View History')}
+                </Button>
+                <Button type="primary" icon={<ThunderboltOutlined />}>
+                  {t('equipmentAI.startPM', 'Start PM')}
+                </Button>
+              </Space>
+            </Card>
+          </Space>
+        ) : (
+          <Typography.Text type="secondary">
+            {t('ai.noInsights', 'No insights available')}
+          </Typography.Text>
+        )}
+      </Drawer>
     </Card>
   );
 }

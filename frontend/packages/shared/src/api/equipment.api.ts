@@ -317,7 +317,71 @@ export const equipmentApi = {
   generateReport(equipmentId: number) {
     return getApiClient().get(`/api/equipment/${equipmentId}/report`, { responseType: 'blob' });
   },
+
+  /** Get aggregated health summary for all equipment */
+  getHealthSummary() {
+    return getApiClient().get<ApiResponse<HealthSummary>>('/api/equipment/health-summary');
+  },
+
+  /** Batch update status for multiple equipment */
+  batchUpdateStatus(equipmentIds: number[], newStatus: string, reason: string) {
+    return getApiClient().post<ApiResponse<BatchStatusResult>>('/api/equipment/batch-status', {
+      equipment_ids: equipmentIds,
+      new_status: newStatus,
+      reason,
+    });
+  },
 };
+
+export interface HealthSummary {
+  summary: {
+    total_equipment: number;
+    average_health_score: number;
+    expiring_certifications: number;
+  };
+  status_distribution: {
+    active: number;
+    under_maintenance: number;
+    out_of_service: number;
+    stopped: number;
+    paused: number;
+  };
+  risk_distribution: {
+    low: number;
+    medium: number;
+    high: number;
+    critical: number;
+  };
+  high_risk_equipment: Array<{
+    id: number;
+    name: string;
+    status: string;
+    risk_score: number;
+    risk_level: string;
+  }>;
+  health_trend: {
+    current: number;
+    trend: 'improving' | 'stable' | 'declining';
+  };
+}
+
+export interface BatchStatusResult {
+  updated: Array<{
+    id: number;
+    name: string;
+    old_status: string;
+    new_status: string;
+  }>;
+  errors: Array<{
+    id: number;
+    error: string;
+  }>;
+  summary: {
+    total_requested: number;
+    successful: number;
+    failed: number;
+  };
+}
 
 // ============================================
 // AI TYPES
