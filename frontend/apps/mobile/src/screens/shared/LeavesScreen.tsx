@@ -16,13 +16,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../providers/AuthProvider';
 import { leavesApi } from '@inspection/shared';
-import type { Leave, LeaveStatus, LeaveType } from '@inspection/shared';
+import type { Leave, LeaveStatus } from '@inspection/shared';
+
+// Leave type codes as strings
+type LeaveTypeCode = 'sick' | 'annual' | 'emergency' | 'training' | 'other';
 
 const LEAVE_STATUS_FILTERS: Array<LeaveStatus | 'all'> = ['all', 'pending', 'approved', 'rejected'];
 
-const LEAVE_TYPES: LeaveType[] = ['sick', 'annual', 'emergency', 'training', 'other'];
+const LEAVE_TYPES: LeaveTypeCode[] = ['sick', 'annual', 'emergency', 'training', 'other'];
 
-const LEAVE_TYPE_COLORS: Record<LeaveType, string> = {
+const LEAVE_TYPE_COLORS: Record<LeaveTypeCode, string> = {
   sick: '#E53935',
   annual: '#1976D2',
   emergency: '#FF9800',
@@ -47,7 +50,7 @@ export default function LeavesScreen() {
   const [modalVisible, setModalVisible] = useState(false);
 
   // Form state
-  const [formLeaveType, setFormLeaveType] = useState<LeaveType>('annual');
+  const [formLeaveType, setFormLeaveType] = useState<LeaveTypeCode>('annual');
   const [formDateFrom, setFormDateFrom] = useState('');
   const [formDateTo, setFormDateTo] = useState('');
   const [formReason, setFormReason] = useState('');
@@ -62,7 +65,7 @@ export default function LeavesScreen() {
   const leaves: Leave[] = (data?.data as any)?.items ?? (data?.data as any)?.data ?? (data?.data as any) ?? [];
 
   const requestMutation = useMutation({
-    mutationFn: (payload: { leave_type: LeaveType; date_from: string; date_to: string; reason: string; scope?: 'major_only' | 'full'; coverage_user_id?: number }) =>
+    mutationFn: (payload: { leave_type: LeaveTypeCode; date_from: string; date_to: string; reason: string; scope?: 'major_only' | 'full'; coverage_user_id?: number }) =>
       leavesApi.request(payload as any),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leaves'] });
@@ -119,7 +122,7 @@ export default function LeavesScreen() {
   );
 
   const renderLeaveCard = useCallback(({ item }: { item: Leave }) => {
-    const typeColor = LEAVE_TYPE_COLORS[item.leave_type as LeaveType] ?? '#757575';
+    const typeColor = LEAVE_TYPE_COLORS[item.leave_type as LeaveTypeCode] ?? '#757575';
     const statusColor = STATUS_COLORS[item.status] ?? '#757575';
 
     return (

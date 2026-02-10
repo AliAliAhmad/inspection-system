@@ -54,6 +54,7 @@ import {
   type CycleAnalyticsData,
   type CycleImpactData,
 } from '@inspection/shared';
+import { CycleOptimizerPanel } from '../../components/work-planning';
 
 const { Title, Text } = Typography;
 
@@ -472,6 +473,12 @@ export default function CyclesPage() {
 
   return (
     <div>
+      {/* AI-Powered Cycle Optimizer */}
+      <CycleOptimizerPanel
+        collapsible={false}
+        onViewCycle={(cycleId) => openAnalyticsDrawer(cycleId)}
+      />
+
       <Card>
         <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
           <Col>

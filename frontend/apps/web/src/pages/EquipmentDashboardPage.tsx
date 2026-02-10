@@ -37,6 +37,7 @@ import {
   ReloadOutlined,
   WarningOutlined,
   CalendarOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +50,8 @@ import {
   EquipmentQuickActions,
   EquipmentBulkActionsBar,
   HealthScoreTag,
+  EquipmentAnomaliesPanel,
+  NaturalLanguageSearch,
 } from '../components/equipment';
 
 const { Title, Text } = Typography;
@@ -189,6 +192,7 @@ export default function EquipmentDashboardPage() {
   // UI state
   const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showAISearch, setShowAISearch] = useState(false);
 
   const [form] = Form.useForm();
 
@@ -458,6 +462,17 @@ export default function EquipmentDashboardPage() {
             {t('equipment.dashboard', 'Equipment Dashboard')}
           </Title>
         </Col>
+        <Col>
+          <Tooltip title={t('equipment.aiSearch', 'AI-Powered Natural Language Search')}>
+            <Button
+              icon={<RobotOutlined />}
+              type={showAISearch ? 'primary' : 'default'}
+              onClick={() => setShowAISearch(!showAISearch)}
+            >
+              {t('equipment.aiSearch', 'AI Search')}
+            </Button>
+          </Tooltip>
+        </Col>
         <Col flex="400px">
           <Input
             placeholder={t('equipment.searchPlaceholder', 'Search by name, serial, type, location...')}
@@ -477,6 +492,19 @@ export default function EquipmentDashboardPage() {
           />
         </Col>
       </Row>
+
+      {/* AI Natural Language Search Panel */}
+      {showAISearch && (
+        <div style={{ marginBottom: 24 }}>
+          <NaturalLanguageSearch
+            onSelect={(equipment) => {
+              handleCardClick(equipment.id);
+              setShowAISearch(false);
+            }}
+            showResults
+          />
+        </div>
+      )}
 
       {/* KPI Summary Cards */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
@@ -584,6 +612,13 @@ export default function EquipmentDashboardPage() {
 
       {/* Trend Chart */}
       <EquipmentTrendChart defaultPeriod="7d" collapsible defaultCollapsed={false} />
+
+      {/* AI Anomaly Detection Panel */}
+      <EquipmentAnomaliesPanel
+        collapsible
+        defaultCollapsed={false}
+        onViewEquipment={(equipmentId) => handleCardClick(equipmentId)}
+      />
 
       {/* Filters */}
       <Card size="small" style={{ marginBottom: 16 }}>

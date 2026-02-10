@@ -35,6 +35,14 @@ import {
   UserOutlined,
   CheckCircleOutlined,
   StarOutlined,
+  SwapOutlined,
+  WarningOutlined,
+  CloseCircleOutlined,
+  ExclamationCircleOutlined,
+  StopOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +53,10 @@ import {
   type RosterWeekUser,
   type LeaveRequestPayload,
   type CoverageSuggestion,
+  type ShiftSwapRequest,
+  type FatigueAlert,
+  type LeaveBlackout,
+  type CreateBlackoutPayload,
 } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
 import { CoverageScoreCard, WorkloadBar, getWorkloadStatus } from '../../components/shared';
@@ -105,6 +117,7 @@ export default function TeamRosterPage() {
   const [addDaysForm] = Form.useForm();
 
   const baseDate = dayjs().add(weekOffset * 7, 'day').format('YYYY-MM-DD');
+  const isAdmin = currentUser?.role === 'admin';
 
   // Fetch week data
   const { data: weekData, isLoading } = useQuery({
@@ -152,6 +165,114 @@ export default function TeamRosterPage() {
         .then((r) => r.data.data);
     },
     enabled: !!selectedUserId && !!aiSuggestionsDateRange && showAISuggestions,
+  });
+
+  // Shift Swap state
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [swapForm] = Form.useForm();
+
+  // Blackout Periods state
+  const [blackoutDrawerOpen, setBlackoutDrawerOpen] = useState(false);
+  const [blackoutForm] = Form.useForm();
+  const [editingBlackout, setEditingBlackout] = useState<LeaveBlackout | null>(null);
+
+  // Fetch pending swap requests (for admin)
+  const { data: swapRequestsData, refetch: refetchSwapRequests } = useQuery({
+    queryKey: ['roster', 'swap-requests', 'pending'],
+    queryFn: () => rosterApi.listSwapRequests({ status: 'pending' }).then((r) => r.data.data),
+    enabled: isAdmin,
+  });
+
+  // Fetch fatigue alerts
+  const { data: fatigueAlertsData } = useQuery({
+    queryKey: ['roster', 'fatigue-alerts', baseDate],
+    queryFn: () => rosterApi.getFatigueAlerts(baseDate).then((r) => r.data.data),
+  });
+
+  // Fetch blackout periods
+  const { data: blackoutsData, refetch: refetchBlackouts } = useQuery({
+    queryKey: ['leaves', 'blackouts'],
+    queryFn: () => leavesApi.listBlackouts({ is_active: true }).then((r) => r.data.data ?? []),
+  });
+
+  // Blackout mutations
+  const createBlackoutMutation = useMutation({
+    mutationFn: (payload: CreateBlackoutPayload) => leavesApi.createBlackout(payload),
+    onSuccess: () => {
+      message.success(t('roster.blackoutCreated', 'Blackout period created'));
+      blackoutForm.resetFields();
+      setEditingBlackout(null);
+      refetchBlackouts();
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Failed to create blackout');
+    },
+  });
+
+  const updateBlackoutMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<CreateBlackoutPayload & { is_active: boolean }> }) =>
+      leavesApi.updateBlackout(id, payload),
+    onSuccess: () => {
+      message.success(t('roster.blackoutUpdated', 'Blackout period updated'));
+      blackoutForm.resetFields();
+      setEditingBlackout(null);
+      refetchBlackouts();
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Failed to update blackout');
+    },
+  });
+
+  const deleteBlackoutMutation = useMutation({
+    mutationFn: (id: number) => leavesApi.deleteBlackout(id),
+    onSuccess: () => {
+      message.success(t('roster.blackoutDeleted', 'Blackout period deleted'));
+      refetchBlackouts();
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Failed to delete blackout');
+    },
+  });
+
+  // Swap request mutations
+  const createSwapMutation = useMutation({
+    mutationFn: (payload: { target_user_id: number; requester_date: string; target_date: string; reason?: string }) =>
+      rosterApi.createSwapRequest(payload),
+    onSuccess: () => {
+      message.success(t('roster.swapRequested', 'Swap request submitted'));
+      swapForm.resetFields();
+      setSwapModalOpen(false);
+      refetchSwapRequests();
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Failed to create swap request');
+    },
+  });
+
+  const respondSwapMutation = useMutation({
+    mutationFn: ({ id, response }: { id: number; response: 'accepted' | 'declined' }) =>
+      rosterApi.respondToSwapRequest(id, response),
+    onSuccess: () => {
+      message.success('Response submitted');
+      refetchSwapRequests();
+    },
+  });
+
+  const approveSwapMutation = useMutation({
+    mutationFn: (id: number) => rosterApi.approveSwapRequest(id),
+    onSuccess: () => {
+      message.success(t('roster.swapApproved', 'Swap approved'));
+      refetchSwapRequests();
+      queryClient.invalidateQueries({ queryKey: ['roster'] });
+    },
+  });
+
+  const rejectSwapMutation = useMutation({
+    mutationFn: (id: number) => rosterApi.rejectSwapRequest(id),
+    onSuccess: () => {
+      message.success(t('roster.swapRejected', 'Swap rejected'));
+      refetchSwapRequests();
+    },
   });
 
   // Upload mutation
@@ -390,7 +511,6 @@ export default function TeamRosterPage() {
     })),
   ];
 
-  const isAdmin = currentUser?.role === 'admin';
   const remaining = balanceData?.remaining ?? 0;
 
   return (
@@ -402,6 +522,17 @@ export default function TeamRosterPage() {
       }
       extra={
         <Space>
+          <Button icon={<SwapOutlined />} onClick={() => setSwapModalOpen(true)}>
+            {t('roster.requestSwap', 'Request Swap')}
+          </Button>
+          {isAdmin && (
+            <Button icon={<StopOutlined />} onClick={() => setBlackoutDrawerOpen(true)}>
+              {t('roster.blackouts', 'Blackouts')}
+              {blackoutsData && blackoutsData.length > 0 && (
+                <Tag color="red" style={{ marginLeft: 4 }}>{blackoutsData.length}</Tag>
+              )}
+            </Button>
+          )}
           <Upload
             accept=".xlsx,.xls"
             showUploadList={false}
@@ -848,6 +979,350 @@ export default function TeamRosterPage() {
           </>
         )}
       </Modal>
+
+      {/* Shift Swap Modal */}
+      <Modal
+        title={<Space><SwapOutlined />{t('roster.requestSwap', 'Request Shift Swap')}</Space>}
+        open={swapModalOpen}
+        onCancel={() => {
+          setSwapModalOpen(false);
+          swapForm.resetFields();
+        }}
+        onOk={() => swapForm.submit()}
+        confirmLoading={createSwapMutation.isPending}
+      >
+        <Form
+          form={swapForm}
+          layout="vertical"
+          onFinish={(values) => {
+            createSwapMutation.mutate({
+              target_user_id: values.target_user_id,
+              requester_date: values.requester_date.format('YYYY-MM-DD'),
+              target_date: values.target_date.format('YYYY-MM-DD'),
+              reason: values.reason,
+            });
+          }}
+        >
+          <Form.Item
+            name="target_user_id"
+            label={t('roster.swapWith', 'Swap With')}
+            rules={[{ required: true }]}
+          >
+            <Select
+              placeholder={t('roster.selectUser', 'Select user')}
+              showSearch
+              optionFilterProp="label"
+              options={allActiveUsers
+                .filter((u: any) => u.id !== currentUser?.id)
+                .map((u: any) => ({
+                  value: u.id,
+                  label: `${u.full_name} (${u.role})`,
+                }))}
+            />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="requester_date"
+                label={t('roster.yourDate', 'Your Date')}
+                rules={[{ required: true }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="target_date"
+                label={t('roster.theirDate', 'Their Date')}
+                rules={[{ required: true }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="reason" label={t('roster.swapReason', 'Reason')}>
+            <TextArea rows={2} placeholder={t('roster.swapReasonPlaceholder', 'Why do you need this swap?')} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Pending Swaps Drawer (Admin) */}
+      {isAdmin && swapRequestsData && swapRequestsData.length > 0 && (
+        <Card
+          size="small"
+          title={<Space><SwapOutlined />{t('roster.pendingSwaps', 'Pending Swaps')} <Tag color="orange">{swapRequestsData.length}</Tag></Space>}
+          style={{ position: 'fixed', bottom: 20, right: 20, width: 400, maxHeight: 300, overflow: 'auto', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+          extra={<Button type="text" size="small" onClick={() => refetchSwapRequests()}>Refresh</Button>}
+        >
+          <List
+            size="small"
+            dataSource={swapRequestsData}
+            renderItem={(swap: ShiftSwapRequest) => (
+              <List.Item
+                actions={[
+                  swap.target_response === 'accepted' ? (
+                    <Button
+                      type="primary"
+                      size="small"
+                      onClick={() => approveSwapMutation.mutate(swap.id)}
+                      loading={approveSwapMutation.isPending}
+                    >
+                      Approve
+                    </Button>
+                  ) : (
+                    <Tag color="orange">Awaiting response</Tag>
+                  ),
+                  <Button
+                    type="text"
+                    danger
+                    size="small"
+                    onClick={() => rejectSwapMutation.mutate(swap.id)}
+                    loading={rejectSwapMutation.isPending}
+                  >
+                    Reject
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  title={`${swap.requester.full_name} ↔ ${swap.target_user.full_name}`}
+                  description={
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      {dayjs(swap.requester_date).format('DD MMM')} ({swap.requester_shift}) ↔{' '}
+                      {dayjs(swap.target_date).format('DD MMM')} ({swap.target_shift})
+                    </Text>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      )}
+
+      {/* Fatigue Alerts Floating Card */}
+      {fatigueAlertsData && fatigueAlertsData.total_alerts > 0 && (
+        <Card
+          size="small"
+          title={<Space><WarningOutlined style={{ color: '#ff4d4f' }} />{t('roster.fatigueAlert', 'Fatigue Alerts')} <Tag color="red">{fatigueAlertsData.total_alerts}</Tag></Space>}
+          style={{ position: 'fixed', bottom: 20, left: 20, width: 350, maxHeight: 250, overflow: 'auto', zIndex: 100, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+        >
+          <List
+            size="small"
+            dataSource={fatigueAlertsData.alerts}
+            renderItem={(alert: FatigueAlert) => (
+              <List.Item>
+                <List.Item.Meta
+                  avatar={<Avatar style={{ backgroundColor: alert.severity === 'high' ? '#ff4d4f' : '#faad14' }}><ExclamationCircleOutlined /></Avatar>}
+                  title={alert.full_name}
+                  description={
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      {alert.consecutive_shifts} {t('roster.consecutiveShifts', 'consecutive shifts')}
+                    </Text>
+                  }
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      )}
+
+      {/* Blackout Periods Drawer */}
+      <Drawer
+        title={<Space><StopOutlined />{t('roster.blackoutPeriods', 'Blackout Periods')}</Space>}
+        open={blackoutDrawerOpen}
+        onClose={() => {
+          setBlackoutDrawerOpen(false);
+          setEditingBlackout(null);
+          blackoutForm.resetFields();
+        }}
+        width={550}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {/* Blackout list */}
+          <Typography.Title level={5}>
+            {t('roster.activeBlackouts', 'Active Blackout Periods')}
+          </Typography.Title>
+          {blackoutsData && blackoutsData.length > 0 ? (
+            <List
+              size="small"
+              bordered
+              dataSource={blackoutsData}
+              renderItem={(blackout: LeaveBlackout) => (
+                <List.Item
+                  actions={[
+                    <Button
+                      key="edit"
+                      type="text"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setEditingBlackout(blackout);
+                        blackoutForm.setFieldsValue({
+                          name: blackout.name,
+                          name_ar: blackout.name_ar,
+                          date_range: [dayjs(blackout.date_from), dayjs(blackout.date_to)],
+                          reason: blackout.reason,
+                          applies_to_roles: blackout.applies_to_roles,
+                        });
+                      }}
+                    />,
+                    <Button
+                      key="delete"
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      loading={deleteBlackoutMutation.isPending}
+                      onClick={() => {
+                        Modal.confirm({
+                          title: t('roster.confirmDeleteBlackout', 'Delete blackout period?'),
+                          content: t('roster.deleteBlackoutWarning', 'This will remove the blackout period.'),
+                          okText: t('common.delete', 'Delete'),
+                          okType: 'danger',
+                          onOk: () => deleteBlackoutMutation.mutate(blackout.id),
+                        });
+                      }}
+                    />,
+                  ]}
+                >
+                  <List.Item.Meta
+                    avatar={<Avatar style={{ backgroundColor: '#ff4d4f' }}><StopOutlined /></Avatar>}
+                    title={
+                      <Space>
+                        <Text strong>{blackout.name}</Text>
+                        {blackout.applies_to_roles && blackout.applies_to_roles.length > 0 && (
+                          <Tag color="orange">{blackout.applies_to_roles.join(', ')}</Tag>
+                        )}
+                      </Space>
+                    }
+                    description={
+                      <Space direction="vertical" size={0}>
+                        <Text type="secondary">
+                          {dayjs(blackout.date_from).format('DD MMM YYYY')} - {dayjs(blackout.date_to).format('DD MMM YYYY')}
+                        </Text>
+                        {blackout.reason && (
+                          <Text type="secondary" style={{ fontSize: 11 }}>
+                            {blackout.reason}
+                          </Text>
+                        )}
+                      </Space>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          ) : (
+            <Alert
+              type="info"
+              showIcon
+              message={t('roster.noBlackouts', 'No active blackout periods')}
+            />
+          )}
+
+          <Divider />
+
+          {/* Create/Edit blackout form */}
+          <Typography.Title level={5}>
+            {editingBlackout
+              ? t('roster.editBlackout', 'Edit Blackout Period')
+              : t('roster.createBlackout', 'Create Blackout Period')
+            }
+          </Typography.Title>
+          <Form
+            form={blackoutForm}
+            layout="vertical"
+            onFinish={(values) => {
+              const payload: CreateBlackoutPayload = {
+                name: values.name,
+                name_ar: values.name_ar,
+                date_from: values.date_range[0].format('YYYY-MM-DD'),
+                date_to: values.date_range[1].format('YYYY-MM-DD'),
+                reason: values.reason,
+                applies_to_roles: values.applies_to_roles,
+              };
+              if (editingBlackout) {
+                updateBlackoutMutation.mutate({ id: editingBlackout.id, payload });
+              } else {
+                createBlackoutMutation.mutate(payload);
+              }
+            }}
+          >
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="name"
+                  label={t('roster.blackoutName', 'Name')}
+                  rules={[{ required: true, message: t('roster.nameRequired', 'Name is required') }]}
+                >
+                  <Input placeholder={t('roster.blackoutNamePlaceholder', 'e.g., Ramadan, Year End')} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="name_ar"
+                  label={t('roster.blackoutNameAr', 'Name (Arabic)')}
+                >
+                  <Input placeholder={t('roster.blackoutNameArPlaceholder', 'الاسم بالعربية')} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              name="date_range"
+              label={t('roster.blackoutDateRange', 'Date Range')}
+              rules={[{ required: true, message: t('roster.dateRangeRequired', 'Date range is required') }]}
+            >
+              <RangePicker style={{ width: '100%' }} />
+            </Form.Item>
+
+            <Form.Item
+              name="applies_to_roles"
+              label={t('roster.appliesToRoles', 'Applies to Roles (leave empty for all)')}
+            >
+              <Select
+                mode="multiple"
+                placeholder={t('roster.selectRoles', 'Select roles')}
+                options={[
+                  { value: 'inspector', label: t('roles.inspector', 'Inspector') },
+                  { value: 'specialist', label: t('roles.specialist', 'Specialist') },
+                  { value: 'engineer', label: t('roles.engineer', 'Engineer') },
+                  { value: 'quality_engineer', label: t('roles.qualityEngineer', 'Quality Engineer') },
+                ]}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="reason"
+              label={t('roster.blackoutReason', 'Reason')}
+            >
+              <TextArea rows={2} placeholder={t('roster.blackoutReasonPlaceholder', 'Why is leave blocked during this period?')} />
+            </Form.Item>
+
+            <Form.Item>
+              <Space>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  icon={editingBlackout ? <EditOutlined /> : <PlusOutlined />}
+                  loading={createBlackoutMutation.isPending || updateBlackoutMutation.isPending}
+                >
+                  {editingBlackout
+                    ? t('roster.updateBlackout', 'Update Blackout')
+                    : t('roster.addBlackout', 'Add Blackout')
+                  }
+                </Button>
+                {editingBlackout && (
+                  <Button
+                    onClick={() => {
+                      setEditingBlackout(null);
+                      blackoutForm.resetFields();
+                    }}
+                  >
+                    {t('common.cancel', 'Cancel')}
+                  </Button>
+                )}
+              </Space>
+            </Form.Item>
+          </Form>
+        </Space>
+      </Drawer>
     </Card>
   );
 }

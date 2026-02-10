@@ -9,7 +9,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.extensions import db
 from app.utils.decorators import get_current_user, admin_required
-from app.models import User, Leave, RosterEntry
+from app.models import User, Leave, RosterEntry, ShiftSwapRequest
 
 logger = logging.getLogger(__name__)
 
@@ -959,5 +959,349 @@ def suggest_coverage():
             },
             'suggestions': suggestions,
             'total_candidates': len(compatible_candidates)
+        }
+    }), 200
+
+
+# ==================== SHIFT SWAP REQUESTS ====================
+
+@bp.route('/swap-requests', methods=['POST'])
+@jwt_required()
+def create_swap_request():
+    """
+    Create a shift swap request.
+    Body: {
+        target_user_id: number,
+        requester_date: 'YYYY-MM-DD',
+        target_date: 'YYYY-MM-DD',
+        reason: string (optional)
+    }
+    """
+    user = get_current_user()
+    data = request.get_json() or {}
+
+    target_user_id = data.get('target_user_id')
+    requester_date_str = data.get('requester_date')
+    target_date_str = data.get('target_date')
+    reason = data.get('reason', '')
+
+    if not target_user_id or not requester_date_str or not target_date_str:
+        return jsonify({'status': 'error', 'message': 'target_user_id, requester_date, and target_date are required'}), 400
+
+    try:
+        requester_date = datetime.strptime(requester_date_str, '%Y-%m-%d').date()
+        target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid date format. Use YYYY-MM-DD'}), 400
+
+    # Check target user exists
+    target_user = db.session.get(User, target_user_id)
+    if not target_user:
+        return jsonify({'status': 'error', 'message': 'Target user not found'}), 404
+
+    # Get requester's shift on requester_date
+    requester_entry = RosterEntry.query.filter_by(user_id=user.id, date=requester_date).first()
+    requester_shift = requester_entry.shift if requester_entry else 'off'
+
+    # Get target user's shift on target_date
+    target_entry = RosterEntry.query.filter_by(user_id=target_user_id, date=target_date).first()
+    target_shift = target_entry.shift if target_entry else 'off'
+
+    # Check if there's already a pending request
+    existing = ShiftSwapRequest.query.filter(
+        ShiftSwapRequest.requester_id == user.id,
+        ShiftSwapRequest.target_user_id == target_user_id,
+        ShiftSwapRequest.requester_date == requester_date,
+        ShiftSwapRequest.status == 'pending'
+    ).first()
+
+    if existing:
+        return jsonify({'status': 'error', 'message': 'A pending swap request already exists'}), 400
+
+    swap_request = ShiftSwapRequest(
+        requester_id=user.id,
+        requester_date=requester_date,
+        requester_shift=requester_shift,
+        target_user_id=target_user_id,
+        target_date=target_date,
+        target_shift=target_shift,
+        reason=reason,
+        status='pending'
+    )
+
+    db.session.add(swap_request)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Swap request created',
+        'data': swap_request.to_dict()
+    }), 201
+
+
+@bp.route('/swap-requests', methods=['GET'])
+@jwt_required()
+def list_swap_requests():
+    """
+    List shift swap requests.
+    Query params:
+        status: pending, approved, rejected (optional)
+        my_requests: true/false - only my outgoing requests
+        for_me: true/false - only requests targeting me
+    """
+    user = get_current_user()
+    status = request.args.get('status')
+    my_requests = request.args.get('my_requests', 'false').lower() == 'true'
+    for_me = request.args.get('for_me', 'false').lower() == 'true'
+
+    query = ShiftSwapRequest.query
+
+    if status:
+        query = query.filter(ShiftSwapRequest.status == status)
+
+    if my_requests:
+        query = query.filter(ShiftSwapRequest.requester_id == user.id)
+    elif for_me:
+        query = query.filter(ShiftSwapRequest.target_user_id == user.id)
+    elif user.role != 'admin':
+        # Non-admins see only their own requests (made or received)
+        query = query.filter(
+            db.or_(
+                ShiftSwapRequest.requester_id == user.id,
+                ShiftSwapRequest.target_user_id == user.id
+            )
+        )
+
+    query = query.order_by(ShiftSwapRequest.created_at.desc())
+    requests = query.limit(50).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': [r.to_dict() for r in requests]
+    }), 200
+
+
+@bp.route('/swap-requests/<int:request_id>/respond', methods=['POST'])
+@jwt_required()
+def respond_to_swap_request(request_id):
+    """
+    Target user responds to swap request (accept/decline).
+    Body: { response: 'accepted' | 'declined' }
+    """
+    user = get_current_user()
+    data = request.get_json() or {}
+
+    swap_req = db.session.get(ShiftSwapRequest, request_id)
+    if not swap_req:
+        return jsonify({'status': 'error', 'message': 'Swap request not found'}), 404
+
+    if swap_req.target_user_id != user.id:
+        return jsonify({'status': 'error', 'message': 'Not authorized to respond to this request'}), 403
+
+    if swap_req.status != 'pending':
+        return jsonify({'status': 'error', 'message': 'Request is no longer pending'}), 400
+
+    response = data.get('response')
+    if response not in ('accepted', 'declined'):
+        return jsonify({'status': 'error', 'message': 'response must be "accepted" or "declined"'}), 400
+
+    swap_req.target_response = response
+    swap_req.target_response_at = datetime.utcnow()
+
+    if response == 'declined':
+        swap_req.status = 'rejected'
+        swap_req.rejection_reason = 'Declined by target user'
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Swap request {response}',
+        'data': swap_req.to_dict()
+    }), 200
+
+
+@bp.route('/swap-requests/<int:request_id>/approve', methods=['POST'])
+@jwt_required()
+@admin_required()
+def approve_swap_request(request_id):
+    """
+    Admin approves a swap request and applies the swap.
+    """
+    user = get_current_user()
+
+    swap_req = db.session.get(ShiftSwapRequest, request_id)
+    if not swap_req:
+        return jsonify({'status': 'error', 'message': 'Swap request not found'}), 404
+
+    if swap_req.status != 'pending':
+        return jsonify({'status': 'error', 'message': 'Request is not pending'}), 400
+
+    if swap_req.target_response != 'accepted':
+        return jsonify({'status': 'error', 'message': 'Target user has not accepted the swap'}), 400
+
+    # Apply the swap - update roster entries
+    # Requester gets target's shift on target_date
+    # Target gets requester's shift on requester_date
+
+    # Update requester's entry on requester_date to target's shift
+    req_entry = RosterEntry.query.filter_by(
+        user_id=swap_req.requester_id,
+        date=swap_req.requester_date
+    ).first()
+    if req_entry:
+        req_entry.shift = swap_req.target_shift
+    else:
+        req_entry = RosterEntry(
+            user_id=swap_req.requester_id,
+            date=swap_req.requester_date,
+            shift=swap_req.target_shift
+        )
+        db.session.add(req_entry)
+
+    # Update target's entry on target_date to requester's shift
+    tgt_entry = RosterEntry.query.filter_by(
+        user_id=swap_req.target_user_id,
+        date=swap_req.target_date
+    ).first()
+    if tgt_entry:
+        tgt_entry.shift = swap_req.requester_shift
+    else:
+        tgt_entry = RosterEntry(
+            user_id=swap_req.target_user_id,
+            date=swap_req.target_date,
+            shift=swap_req.requester_shift
+        )
+        db.session.add(tgt_entry)
+
+    swap_req.status = 'approved'
+    swap_req.approved_by_id = user.id
+    swap_req.approved_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Swap approved and applied',
+        'data': swap_req.to_dict()
+    }), 200
+
+
+@bp.route('/swap-requests/<int:request_id>/reject', methods=['POST'])
+@jwt_required()
+@admin_required()
+def reject_swap_request(request_id):
+    """
+    Admin rejects a swap request.
+    Body: { reason: string (optional) }
+    """
+    user = get_current_user()
+    data = request.get_json() or {}
+
+    swap_req = db.session.get(ShiftSwapRequest, request_id)
+    if not swap_req:
+        return jsonify({'status': 'error', 'message': 'Swap request not found'}), 404
+
+    if swap_req.status != 'pending':
+        return jsonify({'status': 'error', 'message': 'Request is not pending'}), 400
+
+    swap_req.status = 'rejected'
+    swap_req.approved_by_id = user.id
+    swap_req.approved_at = datetime.utcnow()
+    swap_req.rejection_reason = data.get('reason', 'Rejected by admin')
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Swap request rejected',
+        'data': swap_req.to_dict()
+    }), 200
+
+
+@bp.route('/swap-requests/<int:request_id>', methods=['DELETE'])
+@jwt_required()
+def cancel_swap_request(request_id):
+    """
+    Cancel a swap request (only by requester, only if pending).
+    """
+    user = get_current_user()
+
+    swap_req = db.session.get(ShiftSwapRequest, request_id)
+    if not swap_req:
+        return jsonify({'status': 'error', 'message': 'Swap request not found'}), 404
+
+    if swap_req.requester_id != user.id and user.role != 'admin':
+        return jsonify({'status': 'error', 'message': 'Not authorized'}), 403
+
+    if swap_req.status != 'pending':
+        return jsonify({'status': 'error', 'message': 'Can only cancel pending requests'}), 400
+
+    swap_req.status = 'cancelled'
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Swap request cancelled'
+    }), 200
+
+
+# ==================== FATIGUE ALERTS ====================
+
+@bp.route('/fatigue-alerts', methods=['GET'])
+@jwt_required()
+def get_fatigue_alerts():
+    """
+    Get users with fatigue alerts (consecutive shifts).
+    Query params:
+        date: YYYY-MM-DD (optional, defaults to today)
+        threshold: number of consecutive shifts to trigger alert (default: 5)
+    """
+    date_str = request.args.get('date')
+    threshold = int(request.args.get('threshold', 5))
+
+    if date_str:
+        try:
+            check_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'status': 'error', 'message': 'Invalid date format'}), 400
+    else:
+        check_date = date.today()
+
+    # Look back from check_date to find consecutive working days
+    alerts = []
+    users = User.query.filter(User.is_active == True, User.role.in_(['inspector', 'specialist', 'engineer'])).all()
+
+    for user in users:
+        consecutive = 0
+        current_date = check_date
+
+        # Count consecutive working days
+        for _ in range(14):  # Check up to 14 days back
+            entry = RosterEntry.query.filter_by(user_id=user.id, date=current_date).first()
+            if entry and entry.shift in ('day', 'night'):
+                consecutive += 1
+                current_date = current_date - timedelta(days=1)
+            else:
+                break
+
+        if consecutive >= threshold:
+            alerts.append({
+                'user_id': user.id,
+                'full_name': user.full_name,
+                'role': user.role,
+                'specialization': user.specialization,
+                'consecutive_shifts': consecutive,
+                'severity': 'high' if consecutive >= threshold + 2 else 'medium',
+                'suggestion': f'Consider giving rest after {consecutive} consecutive shifts'
+            })
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'date': check_date.isoformat(),
+            'threshold': threshold,
+            'alerts': alerts,
+            'total_alerts': len(alerts)
         }
     }), 200

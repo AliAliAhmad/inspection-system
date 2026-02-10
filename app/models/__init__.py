@@ -49,6 +49,7 @@ from app.models.leave_encashment import LeaveEncashment
 
 # Roster
 from app.models.roster import RosterEntry
+from app.models.shift_swap_request import ShiftSwapRequest
 
 # Timer & Takeover
 from app.models.pause_log import PauseLog
@@ -172,6 +173,7 @@ __all__ = [
     'CompensatoryLeave',
     'LeaveEncashment',
     'RosterEntry',
+    'ShiftSwapRequest',
     'PauseLog',
     'JobTakeover',
     'BonusStar',

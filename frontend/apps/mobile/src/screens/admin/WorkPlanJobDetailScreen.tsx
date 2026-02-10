@@ -91,7 +91,7 @@ export default function WorkPlanJobDetailScreen() {
   // Mark urgent mutation
   const updatePriorityMutation = useMutation({
     mutationFn: (priority: string) =>
-      workPlansApi.updateJob(planId, jobId, { priority }),
+      workPlansApi.updateJob(planId, jobId, { priority: priority as any }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
       Alert.alert('Success', 'Priority updated');
@@ -242,17 +242,17 @@ export default function WorkPlanJobDetailScreen() {
                 </Text>
               </View>
               <View style={styles.memberActions}>
-                {assignment.user?.phone && (
+                {(assignment.user as any)?.phone && (
                   <>
                     <TouchableOpacity
                       style={styles.actionButton}
-                      onPress={() => handleCall(assignment.user!.phone!)}
+                      onPress={() => handleCall((assignment.user as any).phone)}
                     >
                       <Text style={styles.actionIcon}>📞</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.actionButton}
-                      onPress={() => handleMessage(assignment.user!.phone!)}
+                      onPress={() => handleMessage((assignment.user as any).phone)}
                     >
                       <Text style={styles.actionIcon}>💬</Text>
                     </TouchableOpacity>

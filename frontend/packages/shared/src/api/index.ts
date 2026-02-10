@@ -108,6 +108,10 @@ export type {
   WorkloadUser,
   CoverageSuggestion,
   CoverageSuggestionData,
+  ShiftSwapRequest,
+  CreateSwapRequestPayload,
+  FatigueAlert,
+  FatigueAlertsData,
 } from './roster.api';
 export { aiApi } from './ai.api';
 export type {

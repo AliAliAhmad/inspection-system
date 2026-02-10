@@ -80,6 +80,55 @@ export const rosterApi = {
       { user_id: userId, date_from: dateFrom, date_to: dateTo },
     );
   },
+
+  // Shift Swap APIs
+  createSwapRequest(payload: CreateSwapRequestPayload) {
+    return getApiClient().post<ApiResponse<ShiftSwapRequest>>(
+      '/api/roster/swap-requests',
+      payload,
+    );
+  },
+
+  listSwapRequests(params?: { status?: string; my_requests?: boolean; for_me?: boolean }) {
+    return getApiClient().get<ApiResponse<ShiftSwapRequest[]>>(
+      '/api/roster/swap-requests',
+      { params },
+    );
+  },
+
+  respondToSwapRequest(requestId: number, response: 'accepted' | 'declined') {
+    return getApiClient().post<ApiResponse<ShiftSwapRequest>>(
+      `/api/roster/swap-requests/${requestId}/respond`,
+      { response },
+    );
+  },
+
+  approveSwapRequest(requestId: number) {
+    return getApiClient().post<ApiResponse<ShiftSwapRequest>>(
+      `/api/roster/swap-requests/${requestId}/approve`,
+    );
+  },
+
+  rejectSwapRequest(requestId: number, reason?: string) {
+    return getApiClient().post<ApiResponse<ShiftSwapRequest>>(
+      `/api/roster/swap-requests/${requestId}/reject`,
+      { reason },
+    );
+  },
+
+  cancelSwapRequest(requestId: number) {
+    return getApiClient().delete<ApiResponse<void>>(
+      `/api/roster/swap-requests/${requestId}`,
+    );
+  },
+
+  // Fatigue Alerts
+  getFatigueAlerts(date?: string, threshold?: number) {
+    return getApiClient().get<ApiResponse<FatigueAlertsData>>(
+      '/api/roster/fatigue-alerts',
+      { params: { date, threshold } },
+    );
+  },
 };
 
 export interface CoverageGapDetail {
@@ -166,4 +215,47 @@ export interface CoverageSuggestionData {
   };
   suggestions: CoverageSuggestion[];
   total_candidates: number;
+}
+
+// Shift Swap Types
+export interface ShiftSwapRequest {
+  id: number;
+  requester: { id: number; full_name: string; role: string };
+  requester_date: string;
+  requester_shift: string;
+  target_user: { id: number; full_name: string; role: string };
+  target_date: string;
+  target_shift: string;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  target_response: 'accepted' | 'declined' | null;
+  target_response_at: string | null;
+  approved_by: { id: number; full_name: string } | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
+export interface CreateSwapRequestPayload {
+  target_user_id: number;
+  requester_date: string;
+  target_date: string;
+  reason?: string;
+}
+
+export interface FatigueAlert {
+  user_id: number;
+  full_name: string;
+  role: string;
+  specialization: string | null;
+  consecutive_shifts: number;
+  severity: 'medium' | 'high';
+  suggestion: string;
+}
+
+export interface FatigueAlertsData {
+  date: string;
+  threshold: number;
+  alerts: FatigueAlert[];
+  total_alerts: number;
 }

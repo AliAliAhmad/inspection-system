@@ -22,3 +22,6 @@ export { LivePlanStatus } from './LivePlanStatus';
 export { CapacityConfigManager } from './CapacityConfigManager';
 export { WorkerSkillsManager } from './WorkerSkillsManager';
 export { EquipmentRestrictionsManager } from './EquipmentRestrictionsManager';
+
+// Cycle Optimization
+export { default as CycleOptimizerPanel } from './CycleOptimizerPanel';

@@ -167,10 +167,10 @@ export default function WorkPlanOverviewScreen() {
               <Text style={styles.teamText}>
                 {leadUser ? `👑 ${leadUser.full_name?.split(' ')[0]}` : `👥 ${teamCount} assigned`}
               </Text>
-              {leadUser?.phone && (
+              {(leadUser as any)?.phone && (
                 <TouchableOpacity
                   style={styles.callButton}
-                  onPress={() => handleCallTeam(leadUser.phone!)}
+                  onPress={() => handleCallTeam((leadUser as any).phone)}
                 >
                   <Text style={styles.callButtonText}>📞</Text>
                 </TouchableOpacity>

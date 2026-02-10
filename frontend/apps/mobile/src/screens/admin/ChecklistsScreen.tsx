@@ -16,7 +16,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { checklistsApi } from '@inspection/shared';
-import type { ChecklistTemplate, ChecklistItem, CreateTemplatePayload, CreateChecklistItemPayload } from '@inspection/shared';
+import type { ChecklistTemplate, ChecklistItem, ChecklistCreateTemplatePayload, CreateChecklistItemPayload } from '@inspection/shared';
 
 const ANSWER_TYPES = [
   { value: 'pass_fail', label: 'Pass / Fail' },
@@ -121,7 +121,7 @@ export default function ChecklistsScreen() {
   const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
 
   // Form states
-  const [templateForm, setTemplateForm] = useState<Partial<CreateTemplatePayload>>({ is_active: true });
+  const [templateForm, setTemplateForm] = useState<Partial<ChecklistCreateTemplatePayload>>({ is_active: true });
   const [itemForm, setItemForm] = useState<Partial<CreateChecklistItemPayload>>({ critical_failure: false });
 
   const checklistsQuery = useQuery({
@@ -130,7 +130,7 @@ export default function ChecklistsScreen() {
   });
 
   const createTemplateMutation = useMutation({
-    mutationFn: (payload: CreateTemplatePayload) => checklistsApi.createTemplate(payload),
+    mutationFn: (payload: ChecklistCreateTemplatePayload) => checklistsApi.createTemplate(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['checklists'] });
       setTemplateModalVisible(false);
@@ -232,7 +232,7 @@ export default function ChecklistsScreen() {
       Alert.alert(t('common.error', 'Error'), t('checklists.requiredFields', 'Please fill all required fields'));
       return;
     }
-    createTemplateMutation.mutate(templateForm as CreateTemplatePayload);
+    createTemplateMutation.mutate(templateForm as ChecklistCreateTemplatePayload);
   };
 
   const handleSaveItem = () => {

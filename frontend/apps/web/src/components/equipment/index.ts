@@ -14,6 +14,7 @@ export { EquipmentQuickActions, EquipmentBulkActionsBar } from './EquipmentQuick
 export { default as EquipmentAIInsights } from './EquipmentAIInsights';
 export { default as EquipmentAssistant } from './EquipmentAssistant';
 export { default as NaturalLanguageSearch } from './NaturalLanguageSearch';
+export { default as EquipmentAnomaliesPanel } from './EquipmentAnomaliesPanel';
 
 // Advanced Features Components
 export { EquipmentCostCard } from './EquipmentCostCard';

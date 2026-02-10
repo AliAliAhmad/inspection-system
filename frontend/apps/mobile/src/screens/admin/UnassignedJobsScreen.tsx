@@ -45,7 +45,7 @@ export default function UnassignedJobsScreen() {
     queryFn: () => workPlansApi.get(planId),
   });
 
-  const workPlan = planData?.data?.work_plan;
+  const workPlan = (planData?.data as any)?.data ?? (planData?.data as any)?.work_plan;
 
   // Get all unassigned jobs
   const unassignedJobs = useMemo(() => {
