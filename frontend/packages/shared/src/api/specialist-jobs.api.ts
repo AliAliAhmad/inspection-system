@@ -28,6 +28,124 @@ export interface IncompletePayload {
   notes?: string;
 }
 
+export interface SpecialistJobStats {
+  by_status: Record<string, number>;
+  today: {
+    assigned: number;
+    completed: number;
+    in_progress: number;
+  };
+  active: {
+    total: number;
+    assigned: number;
+    in_progress: number;
+    paused: number;
+  };
+  incomplete: {
+    total: number;
+    unacknowledged: number;
+  };
+  week: {
+    completed: number;
+    total: number;
+  };
+  month: {
+    completed: number;
+  };
+  averages: {
+    completion_time_hours: number;
+    time_rating: number;
+    qc_rating: number;
+    cleaning_rating: number;
+  };
+  pending_qc: number;
+  overdue_count: number;
+  by_category: Record<string, number>;
+  top_performers: Array<{
+    id: number;
+    name: string;
+    completed: number;
+    avg_rating: number;
+  }>;
+  specialist_workload: Array<{
+    id: number;
+    name: string;
+    active_jobs: number;
+  }>;
+  daily_trend: Array<{
+    date: string;
+    day_name: string;
+    created: number;
+    completed: number;
+  }>;
+}
+
+export interface MySpecialistStats {
+  today: {
+    pending_time: number;
+    assigned: number;
+    in_progress: number;
+    completed: number;
+    paused: number;
+  };
+  week: {
+    completed: number;
+    total: number;
+  };
+  month: {
+    completed: number;
+    total: number;
+  };
+  averages: {
+    completion_time_hours: number;
+    time_rating: number;
+    qc_rating: number;
+    cleaning_rating: number;
+  };
+  total_points: number;
+  incomplete_count: number;
+  daily_trend: Array<{
+    date: string;
+    day_name: string;
+    completed: number;
+  }>;
+}
+
+export interface AITimeEstimate {
+  estimated_hours: number;
+  confidence: 'low' | 'medium' | 'high';
+  range: {
+    min: number;
+    max: number;
+  };
+  based_on: {
+    sample_size: number;
+    category: string | null;
+    equipment_type: string | null;
+  };
+  suggestions: Array<{
+    hours: number;
+    label: string;
+  }>;
+}
+
+export interface PartsPrediction {
+  part_name: string;
+  frequency_percent: number;
+  confidence: 'low' | 'medium' | 'high';
+  used_in_jobs: number;
+}
+
+export interface AIPartsPredictionResponse {
+  predictions: PartsPrediction[];
+  based_on: {
+    sample_size: number;
+    category: string | null;
+    equipment_type: string | null;
+  };
+  note: string;
+}
+
 export const specialistJobsApi = {
   list(params?: SpecialistJobListParams) {
     return getApiClient().get<PaginatedResponse<SpecialistJob>>('/api/jobs', { params });
@@ -152,5 +270,31 @@ export const specialistJobsApi = {
 
   getActiveJobs() {
     return getApiClient().get<ApiResponse<SpecialistJob[]>>('/api/jobs/active');
+  },
+
+  // Stats endpoint for admin dashboard
+  getStats() {
+    return getApiClient().get<ApiResponse<SpecialistJobStats>>('/api/jobs/stats');
+  },
+
+  // Personal stats for specialist
+  getMyStats() {
+    return getApiClient().get<ApiResponse<MySpecialistStats>>('/api/jobs/my-stats');
+  },
+
+  // AI-powered time estimation
+  getAITimeEstimate(jobId?: number, defectId?: number) {
+    return getApiClient().post<ApiResponse<AITimeEstimate>>('/api/jobs/ai-estimate-time', {
+      job_id: jobId,
+      defect_id: defectId,
+    });
+  },
+
+  // AI-powered parts prediction
+  getAIPredictParts(jobId?: number, defectId?: number) {
+    return getApiClient().post<ApiResponse<AIPartsPredictionResponse>>('/api/jobs/ai-predict-parts', {
+      job_id: jobId,
+      defect_id: defectId,
+    });
   },
 };

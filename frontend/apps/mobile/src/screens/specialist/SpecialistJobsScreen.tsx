@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   TextInput,
   Modal,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +21,10 @@ import type { RootStackParamList } from '../../navigation/RootNavigator';
 import {
   specialistJobsApi,
   SpecialistJob,
+  MySpecialistStats,
+  AITimeEstimate,
 } from '@inspection/shared';
+import { StatCard } from '../../components/shared/StatCard';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -50,6 +54,19 @@ export default function SpecialistJobsScreen() {
   const [plannedTimeModalVisible, setPlannedTimeModalVisible] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [plannedHoursInput, setPlannedHoursInput] = useState('');
+  const [aiEstimate, setAiEstimate] = useState<AITimeEstimate | null>(null);
+  const [loadingEstimate, setLoadingEstimate] = useState(false);
+
+  // Personal stats query
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    refetch: refetchStats,
+  } = useQuery({
+    queryKey: ['specialist-jobs', 'my-stats'],
+    queryFn: () => specialistJobsApi.getMyStats().then((res) => res.data?.data),
+    refetchInterval: 60000,
+  });
 
   const {
     data: allJobs,
@@ -99,39 +116,35 @@ export default function SpecialistJobsScreen() {
     },
   });
 
+  const fetchAIEstimate = useCallback(async (jobId: number) => {
+    setLoadingEstimate(true);
+    setAiEstimate(null);
+    try {
+      const res = await specialistJobsApi.getAITimeEstimate(jobId);
+      if (res.data?.data) {
+        setAiEstimate(res.data.data);
+        setPlannedHoursInput(String(res.data.data.estimated_hours));
+      }
+    } catch {
+      // AI estimate is optional
+    } finally {
+      setLoadingEstimate(false);
+    }
+  }, []);
+
   const handleCardPress = useCallback(
     (job: SpecialistJob) => {
       if (!job.has_planned_time) {
-        if (Platform.OS === 'ios') {
-          Alert.prompt(
-            t('jobs.enter_planned_time'),
-            `${job.job_id}`,
-            [
-              { text: t('common.cancel'), style: 'cancel' },
-              {
-                text: t('common.save'),
-                onPress: (value?: string) => {
-                  const hours = parseFloat(value ?? '');
-                  if (!isNaN(hours) && hours > 0) {
-                    enterPlannedTimeMutation.mutate({ jobId: job.id, hours });
-                  }
-                },
-              },
-            ],
-            'plain-text',
-            '',
-            'numeric',
-          );
-        } else {
-          setSelectedJobId(job.id);
-          setPlannedHoursInput('');
-          setPlannedTimeModalVisible(true);
-        }
+        setSelectedJobId(job.id);
+        setPlannedHoursInput('');
+        setAiEstimate(null);
+        setPlannedTimeModalVisible(true);
+        fetchAIEstimate(job.id);
       } else {
         navigation.navigate('SpecialistJobDetail', { jobId: job.id });
       }
     },
-    [navigation, t, enterPlannedTimeMutation],
+    [navigation, fetchAIEstimate],
   );
 
   const handleSubmitPlannedTime = useCallback(() => {
@@ -262,8 +275,81 @@ export default function SpecialistJobsScreen() {
     );
   }
 
+  const renderStatsSection = () => {
+    if (statsLoading) {
+      return (
+        <View style={styles.statsLoading}>
+          <ActivityIndicator size="small" color="#1976D2" />
+        </View>
+      );
+    }
+
+    if (!stats) return null;
+
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.statsContainer}
+        contentContainerStyle={styles.statsContent}
+      >
+        <StatCard
+          label={t('jobs.pending_time', 'Need Time')}
+          value={stats.today.pending_time}
+          color="#FF9800"
+          icon="⏱️"
+          size="small"
+        />
+        <StatCard
+          label={t('status.in_progress', 'In Progress')}
+          value={stats.today.in_progress}
+          color="#2196F3"
+          icon="🔧"
+          size="small"
+        />
+        <StatCard
+          label={t('jobs.today_completed', 'Today')}
+          value={stats.today.completed}
+          color="#4CAF50"
+          icon="✅"
+          size="small"
+        />
+        <StatCard
+          label={t('jobs.week_completed', 'This Week')}
+          value={stats.week.completed}
+          subtitle={`/ ${stats.week.total}`}
+          color="#9C27B0"
+          icon="📊"
+          size="small"
+        />
+        <StatCard
+          label={t('jobs.month_completed', 'This Month')}
+          value={stats.month.completed}
+          color="#00897B"
+          icon="🏆"
+          size="small"
+        />
+        <StatCard
+          label={t('jobs.total_points', 'Points')}
+          value={stats.total_points}
+          color="#E91E63"
+          icon="⭐"
+          size="small"
+        />
+        <StatCard
+          label={t('jobs.avg_time', 'Avg Time')}
+          value={`${stats.averages.completion_time_hours}h`}
+          color="#607D8B"
+          icon="⌛"
+          size="small"
+        />
+      </ScrollView>
+    );
+  };
+
   return (
     <View style={styles.container}>
+      {renderStatsSection()}
       {renderFilterTabs()}
       <FlatList
         data={filteredJobs}
@@ -274,11 +360,17 @@ export default function SpecialistJobsScreen() {
           filteredJobs.length === 0 ? styles.emptyList : styles.listContent
         }
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={() => {
+              refetch();
+              refetchStats();
+            }}
+          />
         }
       />
 
-      {/* Planned Time Modal for Android */}
+      {/* Planned Time Modal */}
       <Modal
         visible={plannedTimeModalVisible}
         transparent
@@ -288,13 +380,77 @@ export default function SpecialistJobsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{t('jobs.enter_planned_time')}</Text>
+
+            {/* AI Estimation Section */}
+            {loadingEstimate ? (
+              <View style={styles.aiLoadingContainer}>
+                <ActivityIndicator size="small" color="#1976D2" />
+                <Text style={styles.aiLoadingText}>
+                  {t('jobs.ai_estimating', 'AI analyzing...')}
+                </Text>
+              </View>
+            ) : aiEstimate ? (
+              <View style={styles.aiContainer}>
+                <View style={styles.aiHeader}>
+                  <Text style={styles.aiIcon}>🤖</Text>
+                  <Text style={styles.aiTitle}>{t('jobs.ai_suggestion', 'AI Suggestion')}</Text>
+                  <View style={[
+                    styles.confidenceBadge,
+                    {
+                      backgroundColor:
+                        aiEstimate.confidence === 'high' ? '#E8F5E9' :
+                        aiEstimate.confidence === 'medium' ? '#FFF3E0' : '#F5F5F5'
+                    }
+                  ]}>
+                    <Text style={[
+                      styles.confidenceText,
+                      {
+                        color:
+                          aiEstimate.confidence === 'high' ? '#2E7D32' :
+                          aiEstimate.confidence === 'medium' ? '#E65100' : '#757575'
+                      }
+                    ]}>
+                      {aiEstimate.confidence}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.aiRange}>
+                  {t('jobs.ai_range', 'Range')}: {aiEstimate.range.min}h - {aiEstimate.range.max}h
+                </Text>
+                <View style={styles.aiSuggestionsRow}>
+                  {aiEstimate.suggestions.map((s) => (
+                    <TouchableOpacity
+                      key={s.label}
+                      style={[
+                        styles.aiSuggestionBtn,
+                        plannedHoursInput === String(s.hours) && styles.aiSuggestionBtnActive
+                      ]}
+                      onPress={() => setPlannedHoursInput(String(s.hours))}
+                    >
+                      <Text style={[
+                        styles.aiSuggestionText,
+                        plannedHoursInput === String(s.hours) && styles.aiSuggestionTextActive
+                      ]}>
+                        {s.hours}h
+                      </Text>
+                      <Text style={[
+                        styles.aiSuggestionLabel,
+                        plannedHoursInput === String(s.hours) && styles.aiSuggestionTextActive
+                      ]}>
+                        {s.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
             <TextInput
               style={styles.modalInput}
               value={plannedHoursInput}
               onChangeText={setPlannedHoursInput}
               keyboardType="numeric"
               placeholder="0.0"
-              autoFocus
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -302,6 +458,7 @@ export default function SpecialistJobsScreen() {
                 onPress={() => {
                   setPlannedTimeModalVisible(false);
                   setSelectedJobId(null);
+                  setAiEstimate(null);
                 }}
               >
                 <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
@@ -317,7 +474,7 @@ export default function SpecialistJobsScreen() {
                 {enterPlannedTimeMutation.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.modalSaveText}>{t('common.save')}</Text>
+                  <Text style={styles.modalSaveText}>{t('jobs.start', 'Start')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -338,6 +495,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+  },
+  statsLoading: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  statsContainer: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  statsContent: {
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    gap: 8,
   },
   filterRow: {
     flexDirection: 'row',
@@ -527,5 +698,87 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  // AI Estimation styles
+  aiLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  aiLoadingText: {
+    fontSize: 13,
+    color: '#1976D2',
+  },
+  aiContainer: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  aiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 6,
+  },
+  aiIcon: {
+    fontSize: 16,
+  },
+  aiTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1976D2',
+    flex: 1,
+  },
+  confidenceBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  confidenceText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  aiRange: {
+    fontSize: 12,
+    color: '#616161',
+    marginBottom: 10,
+  },
+  aiSuggestionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  aiSuggestionBtn: {
+    flex: 1,
+    backgroundColor: '#fff',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#BBDEFB',
+  },
+  aiSuggestionBtnActive: {
+    backgroundColor: '#1976D2',
+    borderColor: '#1976D2',
+  },
+  aiSuggestionText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1976D2',
+  },
+  aiSuggestionTextActive: {
+    color: '#fff',
+  },
+  aiSuggestionLabel: {
+    fontSize: 10,
+    color: '#757575',
+    marginTop: 2,
   },
 });

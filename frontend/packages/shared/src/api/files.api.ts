@@ -33,6 +33,13 @@ export const filesApi = {
     });
   },
 
+  // For React Native where FormData is pre-created with file object
+  uploadFormData(formData: FormData) {
+    return getApiClient().post<ApiResponse<FileRecord>>('/api/files/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
   download(fileId: number) {
     return getApiClient().get<Blob>(`/api/files/${fileId}/download`, {
       responseType: 'blob',

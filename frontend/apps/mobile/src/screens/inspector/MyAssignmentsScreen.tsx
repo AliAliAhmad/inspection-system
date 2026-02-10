@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +18,9 @@ import { useAuth } from '../../providers/AuthProvider';
 import {
   inspectionAssignmentsApi,
   InspectionAssignment,
+  MyAssignmentStats,
 } from '@inspection/shared';
+import { StatCard } from '../../components/shared/StatCard';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -50,6 +53,17 @@ export default function MyAssignmentsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
+
+  // Personal stats query
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    refetch: refetchStats,
+  } = useQuery({
+    queryKey: ['my-assignments', 'stats'],
+    queryFn: () => inspectionAssignmentsApi.getMyStats().then((res) => res.data?.data),
+    refetchInterval: 60000,
+  });
 
   const {
     data,
@@ -220,8 +234,83 @@ export default function MyAssignmentsScreen() {
     );
   }
 
+  const renderStatsSection = () => {
+    if (statsLoading) {
+      return (
+        <View style={styles.statsLoading}>
+          <ActivityIndicator size="small" color="#1976D2" />
+        </View>
+      );
+    }
+
+    if (!stats) return null;
+
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.statsContainer}
+        contentContainerStyle={styles.statsContent}
+      >
+        <StatCard
+          label={t('inspections.today_total', 'Today Total')}
+          value={stats.today.total}
+          color="#2196F3"
+          icon="📋"
+          size="small"
+        />
+        <StatCard
+          label={t('status.assigned', 'Assigned')}
+          value={stats.today.assigned}
+          color="#FF9800"
+          icon="⏳"
+          size="small"
+        />
+        <StatCard
+          label={t('status.in_progress', 'In Progress')}
+          value={stats.today.in_progress}
+          color="#9C27B0"
+          icon="🔧"
+          size="small"
+        />
+        <StatCard
+          label={t('inspections.today_completed', 'Completed')}
+          value={stats.today.completed}
+          color="#4CAF50"
+          icon="✅"
+          size="small"
+        />
+        <StatCard
+          label={t('inspections.week_completed', 'This Week')}
+          value={stats.week.completed}
+          subtitle={`/ ${stats.week.total}`}
+          color="#00897B"
+          icon="📊"
+          size="small"
+        />
+        <StatCard
+          label={t('inspections.month_completed', 'This Month')}
+          value={stats.month.completed}
+          color="#3F51B5"
+          icon="🏆"
+          size="small"
+        />
+        {stats.backlog_count > 0 && (
+          <StatCard
+            label={t('inspections.backlog', 'Backlog')}
+            value={stats.backlog_count}
+            color="#E53935"
+            icon="⚠️"
+            size="small"
+          />
+        )}
+      </ScrollView>
+    );
+  };
+
   return (
     <View style={styles.container}>
+      {renderStatsSection()}
       {renderFilterChips()}
       <FlatList
         data={assignments}
@@ -230,7 +319,13 @@ export default function MyAssignmentsScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={assignments.length === 0 ? styles.emptyList : styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={() => {
+              refetch();
+              refetchStats();
+            }}
+          />
         }
       />
     </View>
@@ -247,6 +342,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+  },
+  statsLoading: {
+    padding: 16,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  statsContainer: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  statsContent: {
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    gap: 8,
   },
   filterRow: {
     flexDirection: 'row',

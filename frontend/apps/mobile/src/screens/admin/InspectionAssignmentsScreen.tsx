@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { inspectionAssignmentsApi, rosterApi } from '@inspection/shared';
 import type { AssignTeamPayload, AssignmentStats, InspectorSuggestion } from '@inspection/shared';
+import { SmartBatchView, TemplateList, WorkloadBalancer } from '../../components/inspection-assignments';
 
 const STATUS_COLORS: Record<string, string> = {
   unassigned: '#757575',
@@ -197,6 +198,8 @@ function SuggestionCard({ suggestion, type }: { suggestion: InspectorSuggestion 
   );
 }
 
+type TabType = 'assignments' | 'batching' | 'templates' | 'balancer';
+
 export default function InspectionAssignmentsScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -211,6 +214,11 @@ export default function InspectionAssignmentsScreen() {
   const [selectedElecInspector, setSelectedElecInspector] = useState<InspectorOption | null>(null);
   const [targetDateStr, setTargetDateStr] = useState(new Date().toISOString().split('T')[0]);
   const [aiSuggestModalVisible, setAiSuggestModalVisible] = useState(false);
+
+  // Phase 4: Tab navigation and selection
+  const [activeTab, setActiveTab] = useState<TabType>('assignments');
+  const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<number[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
 
   // Fetch stats
   const statsQuery = useQuery({
@@ -458,6 +466,16 @@ export default function InspectionAssignmentsScreen() {
     );
   }
 
+  // Get first list ID for Phase 4 operations
+  const currentListId = rawLists[0]?.id;
+
+  // Toggle selection for batch operations
+  const toggleSelection = (id: number) => {
+    setSelectedAssignmentIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -467,54 +485,160 @@ export default function InspectionAssignmentsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Stats Row */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsRow}>
-        <StatCard label="Today" value={stats?.today?.total || 0} />
-        <StatCard label="Unassigned" value={stats?.today?.unassigned || 0} color={stats?.today?.unassigned ? '#FF9800' : '#4CAF50'} />
-        <StatCard label="Completed" value={stats?.today?.completed || 0} color="#4CAF50" />
-        <StatCard label="Overdue" value={stats?.overdue_count || 0} color={stats?.overdue_count ? '#E53935' : '#4CAF50'} />
-        <StatCard label="Week %" value={`${stats?.completion_rate || 0}%`} />
+      {/* Phase 4: Tab Bar */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'assignments' && styles.tabItemActive]}
+          onPress={() => setActiveTab('assignments')}
+        >
+          <Text style={[styles.tabText, activeTab === 'assignments' && styles.tabTextActive]}>📋 Assignments</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'batching' && styles.tabItemActive]}
+          onPress={() => { setActiveTab('batching'); setSelectionMode(true); }}
+        >
+          <Text style={[styles.tabText, activeTab === 'batching' && styles.tabTextActive]}>📍 Batching</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'templates' && styles.tabItemActive]}
+          onPress={() => setActiveTab('templates')}
+        >
+          <Text style={[styles.tabText, activeTab === 'templates' && styles.tabTextActive]}>📑 Templates</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabItem, activeTab === 'balancer' && styles.tabItemActive]}
+          onPress={() => setActiveTab('balancer')}
+        >
+          <Text style={[styles.tabText, activeTab === 'balancer' && styles.tabTextActive]}>⚖️ Balancer</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* Bulk Action Button */}
-      {unassignedCount > 0 && (
-        <TouchableOpacity
-          style={styles.bulkButton}
-          onPress={handleBulkAutoAssign}
-          disabled={bulkAssignMutation.isPending}
-        >
-          {bulkAssignMutation.isPending ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.bulkButtonText}>
-              🤖 Auto-Assign All ({unassignedCount})
-            </Text>
-          )}
-        </TouchableOpacity>
+      {/* Phase 4: Smart Batching View */}
+      {activeTab === 'batching' && (
+        <SmartBatchView
+          selectedIds={selectedAssignmentIds}
+          onClose={() => {
+            setActiveTab('assignments');
+            setSelectionMode(false);
+            setSelectedAssignmentIds([]);
+          }}
+        />
       )}
 
-      <FlatList
-        data={allAssignments}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <AssignmentCard
-            assignment={item}
-            onAssign={handleAssignPress}
-            onAISuggest={handleAISuggestPress}
+      {/* Phase 4: Templates View */}
+      {activeTab === 'templates' && (
+        <TemplateList
+          currentListId={currentListId}
+          targetListId={currentListId}
+          onTemplateApplied={() => listsQuery.refetch()}
+          onClose={() => setActiveTab('assignments')}
+        />
+      )}
+
+      {/* Phase 4: Workload Balancer View */}
+      {activeTab === 'balancer' && (
+        <WorkloadBalancer
+          listId={currentListId}
+          onBalanceApplied={() => listsQuery.refetch()}
+          onClose={() => setActiveTab('assignments')}
+        />
+      )}
+
+      {/* Main Assignments View */}
+      {activeTab === 'assignments' && (
+        <>
+          {/* Stats Row */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsRow}>
+            <StatCard label="Today" value={stats?.today?.total || 0} />
+            <StatCard label="Unassigned" value={stats?.today?.unassigned || 0} color={stats?.today?.unassigned ? '#FF9800' : '#4CAF50'} />
+            <StatCard label="Completed" value={stats?.today?.completed || 0} color="#4CAF50" />
+            <StatCard label="Overdue" value={stats?.overdue_count || 0} color={stats?.overdue_count ? '#E53935' : '#4CAF50'} />
+            <StatCard label="Week %" value={`${stats?.completion_rate || 0}%`} />
+          </ScrollView>
+
+          {/* Selection Mode Bar */}
+          {selectionMode && (
+            <View style={styles.selectionBar}>
+              <Text style={styles.selectionText}>
+                {selectedAssignmentIds.length} selected for batching
+              </Text>
+              <TouchableOpacity
+                style={styles.selectionDoneButton}
+                onPress={() => setActiveTab('batching')}
+              >
+                <Text style={styles.selectionDoneText}>Analyze →</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Bulk Action Button */}
+          {unassignedCount > 0 && !selectionMode && (
+            <TouchableOpacity
+              style={styles.bulkButton}
+              onPress={handleBulkAutoAssign}
+              disabled={bulkAssignMutation.isPending}
+            >
+              {bulkAssignMutation.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.bulkButtonText}>
+                  🤖 Auto-Assign All ({unassignedCount})
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          <FlatList
+            data={allAssignments}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onLongPress={() => {
+                  setSelectionMode(true);
+                  toggleSelection(item.id);
+                }}
+                onPress={() => {
+                  if (selectionMode) {
+                    toggleSelection(item.id);
+                  }
+                }}
+                style={[
+                  selectionMode && selectedAssignmentIds.includes(item.id) && styles.selectedCard,
+                ]}
+              >
+                {selectionMode && (
+                  <View style={styles.checkboxContainer}>
+                    <View style={[
+                      styles.checkbox,
+                      selectedAssignmentIds.includes(item.id) && styles.checkboxChecked,
+                    ]}>
+                      {selectedAssignmentIds.includes(item.id) && (
+                        <Text style={styles.checkmark}>✓</Text>
+                      )}
+                    </View>
+                  </View>
+                )}
+                <AssignmentCard
+                  assignment={item}
+                  onAssign={handleAssignPress}
+                  onAISuggest={handleAISuggestPress}
+                />
+              </TouchableOpacity>
+            )}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={listsQuery.isRefetching} onRefresh={handleRefresh} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {t('assignments.empty', 'No assignments. Click "Generate" to create a list.')}
+                </Text>
+              </View>
+            }
           />
-        )}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={listsQuery.isRefetching} onRefresh={handleRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {t('assignments.empty', 'No assignments. Click "Generate" to create a list.')}
-            </Text>
-          </View>
-        }
-      />
+        </>
+      )}
 
       {/* Generate Modal */}
       <Modal visible={generateModalVisible} animationType="slide" presentationStyle="pageSheet">
@@ -1038,5 +1162,90 @@ const styles = StyleSheet.create({
     color: '#757575',
     textAlign: 'center',
     padding: 24,
+  },
+  // Phase 4: Tab Bar Styles
+  tabBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    maxHeight: 50,
+  },
+  tabItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginHorizontal: 4,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  tabItemActive: {
+    backgroundColor: '#E3F2FD',
+  },
+  tabText: {
+    fontSize: 13,
+    color: '#757575',
+    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#1976D2',
+    fontWeight: '600',
+  },
+  // Selection Mode Styles
+  selectionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  selectionText: {
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '500',
+  },
+  selectionDoneButton: {
+    backgroundColor: '#1976D2',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  selectionDoneText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  selectedCard: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 4,
+  },
+  checkboxContainer: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#BDBDBD',
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    borderColor: '#1976D2',
+    backgroundColor: '#1976D2',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });

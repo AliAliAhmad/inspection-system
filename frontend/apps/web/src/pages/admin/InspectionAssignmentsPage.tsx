@@ -40,6 +40,9 @@ import {
   UserOutlined,
   BulbOutlined,
   ThunderboltOutlined,
+  ClusterOutlined,
+  FileOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +54,7 @@ import {
   type InspectorSuggestion,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+import { SmartBatchView, TemplateManager, WorkloadBalancer } from '../../components/inspection-assignments';
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -68,6 +72,12 @@ export default function InspectionAssignmentsPage() {
 
   // View mode: table or calendar
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
+
+  // Active tab for Phase 4 features
+  const [activeTab, setActiveTab] = useState<'assignments' | 'batching' | 'templates' | 'balancer'>('assignments');
+
+  // Selected list for Phase 4 operations
+  const [selectedListId, setSelectedListId] = useState<number | null>(null);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -491,7 +501,82 @@ export default function InspectionAssignmentsPage() {
         </Col>
       </Row>
 
-      {/* Main Card */}
+      {/* Tab Navigation for Phase 4 Features */}
+      <Card style={{ marginBottom: 16 }}>
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as typeof activeTab)}
+          items={[
+            {
+              key: 'assignments',
+              label: (
+                <span>
+                  <TableOutlined />
+                  {t('assignments.tab_assignments', 'Assignments')}
+                </span>
+              ),
+            },
+            {
+              key: 'batching',
+              label: (
+                <span>
+                  <ClusterOutlined />
+                  {t('assignments.tab_batching', 'Smart Batching')}
+                </span>
+              ),
+            },
+            {
+              key: 'templates',
+              label: (
+                <span>
+                  <FileOutlined />
+                  {t('assignments.tab_templates', 'Templates')}
+                </span>
+              ),
+            },
+            {
+              key: 'balancer',
+              label: (
+                <span>
+                  <SwapOutlined />
+                  {t('assignments.tab_balancer', 'Workload Balancer')}
+                </span>
+              ),
+            },
+          ]}
+        />
+      </Card>
+
+      {/* Smart Batching Tab */}
+      {activeTab === 'batching' && (
+        <SmartBatchView
+          selectedAssignments={allAssignments.filter((a) => selectedRowKeys.includes(a.id))}
+          onBatchApplied={() => {
+            refetch();
+            setSelectedRowKeys([]);
+          }}
+        />
+      )}
+
+      {/* Templates Tab */}
+      {activeTab === 'templates' && (
+        <TemplateManager
+          currentListId={selectedListId || rawLists[0]?.id}
+          targetListId={selectedListId || rawLists[0]?.id}
+          onTemplateApplied={() => refetch()}
+        />
+      )}
+
+      {/* Workload Balancer Tab */}
+      {activeTab === 'balancer' && (
+        <WorkloadBalancer
+          listId={selectedListId || rawLists[0]?.id}
+          onBalanceApplied={() => refetch()}
+        />
+      )}
+
+      {/* Main Card - Only show on assignments tab */}
+      {activeTab === 'assignments' && (
       <Card
         title={
           <Space>
@@ -687,6 +772,7 @@ export default function InspectionAssignmentsPage() {
           </div>
         )}
       </Card>
+      )}
 
       {/* Generate List Modal */}
       <Modal

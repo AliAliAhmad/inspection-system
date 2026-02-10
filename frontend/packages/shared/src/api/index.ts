@@ -57,6 +57,11 @@ export type {
   SpecialistJobListParams,
   CompleteJobPayload,
   PauseRequestPayload,
+  SpecialistJobStats,
+  MySpecialistStats,
+  AITimeEstimate,
+  PartsPrediction,
+  AIPartsPredictionResponse,
 } from './specialist-jobs.api';
 export { engineerJobsApi } from './engineer-jobs.api';
 export type {
@@ -71,12 +76,20 @@ export type {
   AssignTeamPayload,
   MyAssignmentsParams,
   AssignmentStats,
+  MyAssignmentStats,
   InspectorSuggestion,
   AISuggestionResponse,
   BulkAssignPayload,
   BulkAssignResult,
   CalendarDay,
   CalendarData,
+  SmartBatch,
+  SmartBatchResponse,
+  AssignmentTemplate,
+  AssignmentTemplateItem,
+  WorkloadDistribution,
+  WorkloadBalanceResult,
+  WorkloadPreviewResult,
 } from './inspection-assignments.api';
 export { assessmentsApi } from './assessments.api';
 export type { AssessmentListParams, VerdictPayload, AdminResolvePayload } from './assessments.api';

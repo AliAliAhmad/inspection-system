@@ -20,6 +20,31 @@ export interface AssignmentListParams extends PaginationParams {
   unassigned_only?: boolean;
 }
 
+// Personal stats types
+export interface MyAssignmentStats {
+  today: {
+    total: number;
+    assigned: number;
+    in_progress: number;
+    completed: number;
+  };
+  week: {
+    total: number;
+    completed: number;
+  };
+  month: {
+    total: number;
+    completed: number;
+  };
+  backlog_count: number;
+  daily_trend: Array<{
+    date: string;
+    day_name: string;
+    total: number;
+    completed: number;
+  }>;
+}
+
 // Stats types
 export interface AssignmentStats {
   by_status: Record<string, number>;
@@ -121,6 +146,73 @@ export interface CalendarData {
   days: CalendarDay[];
 }
 
+// Phase 4: Smart Batching types
+export interface SmartBatch {
+  batch_id: number;
+  location: string;
+  berth: string;
+  assignments: InspectionAssignment[];
+  count: number;
+  estimated_time_savings_min: number;
+  efficiency_score: number;
+  suggested_order: number[];
+}
+
+export interface SmartBatchResponse {
+  batches: SmartBatch[];
+  total_batches: number;
+  total_assignments: number;
+  total_time_savings_min: number;
+  recommendation: string;
+}
+
+// Phase 4: Template types
+export interface AssignmentTemplateItem {
+  id: number;
+  template_id: number;
+  equipment_id: number;
+  equipment_name: string | null;
+  berth: string | null;
+  mechanical_inspector_id: number | null;
+  mechanical_inspector_name: string | null;
+  electrical_inspector_id: number | null;
+  electrical_inspector_name: string | null;
+}
+
+export interface AssignmentTemplate {
+  id: number;
+  name: string;
+  description: string | null;
+  shift: string | null;
+  is_active: boolean;
+  created_by_id: number;
+  created_by_name: string | null;
+  created_at: string | null;
+  items_count: number;
+  items: AssignmentTemplateItem[];
+}
+
+// Phase 4: Workload Balancer types
+export interface WorkloadDistribution {
+  inspector_id: number;
+  name: string;
+  specialization?: string;
+  assigned_count?: number;
+  current_assignments?: number;
+  estimated_after_balance?: number;
+}
+
+export interface WorkloadBalanceResult {
+  assigned_count: number;
+  distribution: WorkloadDistribution[];
+}
+
+export interface WorkloadPreviewResult {
+  unassigned_count: number;
+  available_inspectors: number;
+  preview: WorkloadDistribution[];
+}
+
 export interface GenerateListPayload {
   target_date: string;
   shift: 'day' | 'night';
@@ -177,6 +269,12 @@ export const inspectionAssignmentsApi = {
     );
   },
 
+  getMyStats() {
+    return getApiClient().get<ApiResponse<MyAssignmentStats>>(
+      '/api/inspection-assignments/my-stats',
+    );
+  },
+
   completeAssignment(assignmentId: number) {
     return getApiClient().post<ApiResponse<InspectionAssignment>>(
       `/api/inspection-assignments/${assignmentId}/complete`,
@@ -217,6 +315,56 @@ export const inspectionAssignmentsApi = {
     return getApiClient().get<ApiResponse<CalendarData>>(
       '/api/inspection-assignments/calendar',
       { params: { week_start: weekStart, shift } },
+    );
+  },
+
+  // Phase 4: Smart Batching
+  smartBatch(assignmentIds: number[]) {
+    return getApiClient().post<ApiResponse<SmartBatchResponse>>(
+      '/api/inspection-assignments/smart-batch',
+      { assignment_ids: assignmentIds },
+    );
+  },
+
+  // Phase 4: Templates
+  getTemplates() {
+    return getApiClient().get<ApiResponse<AssignmentTemplate[]>>(
+      '/api/inspection-assignments/templates',
+    );
+  },
+
+  saveTemplate(name: string, sourceListId: number, description?: string) {
+    return getApiClient().post<ApiResponse<AssignmentTemplate>>(
+      '/api/inspection-assignments/templates',
+      { name, source_list_id: sourceListId, description },
+    );
+  },
+
+  applyTemplate(templateId: number, targetListId: number) {
+    return getApiClient().post<ApiResponse<{ applied_count: number; template_items: number }>>(
+      `/api/inspection-assignments/templates/${templateId}/apply`,
+      { target_list_id: targetListId },
+    );
+  },
+
+  deleteTemplate(templateId: number) {
+    return getApiClient().delete<ApiResponse>(
+      `/api/inspection-assignments/templates/${templateId}`,
+    );
+  },
+
+  // Phase 4: Workload Balancer
+  balanceWorkload(listId: number, includeRoster?: boolean) {
+    return getApiClient().post<ApiResponse<WorkloadBalanceResult>>(
+      '/api/inspection-assignments/workload-balance',
+      { list_id: listId, include_roster: includeRoster },
+    );
+  },
+
+  previewWorkloadBalance(listId: number) {
+    return getApiClient().post<ApiResponse<WorkloadPreviewResult>>(
+      '/api/inspection-assignments/workload-preview',
+      { list_id: listId },
     );
   },
 };

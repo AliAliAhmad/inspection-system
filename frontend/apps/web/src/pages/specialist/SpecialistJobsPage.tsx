@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Card,
   Typography,
@@ -8,28 +8,47 @@ import {
   Button,
   Modal,
   InputNumber,
-  Input,
   Upload,
   message,
   Space,
   Divider,
   Alert,
+  Row,
+  Col,
+  Spin,
+  Tooltip,
+  Badge,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { CameraOutlined, PictureOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import {
+  CameraOutlined,
+  PictureOutlined,
+  ExclamationCircleOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  TrophyOutlined,
+  StarOutlined,
+  RobotOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import {
   specialistJobsApi,
   filesApi,
   SpecialistJob,
   JobStatus,
+  MySpecialistStats,
+  AITimeEstimate,
 } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 import { CACHE_KEYS } from '../../utils/offline-storage';
+import { StatCard } from '../../components/shared/StatCard';
 
 function openCameraInput(accept: string, onFile: (file: File) => void) {
   const input = document.createElement('input');
@@ -78,6 +97,19 @@ export default function SpecialistJobsPage() {
   const [wrongFindingReason, setWrongFindingReason] = useState('');
   const [wrongFindingPhotoPath, setWrongFindingPhotoPath] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // AI Time Estimate state
+  const [aiEstimate, setAiEstimate] = useState<AITimeEstimate | null>(null);
+  const [loadingEstimate, setLoadingEstimate] = useState(false);
+
+  // Personal stats query
+  const statsQuery = useQuery({
+    queryKey: ['specialist-jobs', 'my-stats'],
+    queryFn: () => specialistJobsApi.getMyStats().then((res) => res.data?.data),
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  const stats: MySpecialistStats | undefined = statsQuery.data;
 
   // Pending tab: assigned jobs (not started yet)
   const pendingQuery = useOfflineQuery({
@@ -140,13 +172,29 @@ export default function SpecialistJobsPage() {
     },
   });
 
-  const openStartModal = useCallback((jobId: number) => {
+  const openStartModal = useCallback(async (jobId: number) => {
     setSelectedJobId(jobId);
     setPlannedHours(null);
     setShowWrongFinding(false);
     setWrongFindingReason('');
     setWrongFindingPhotoPath('');
+    setAiEstimate(null);
     setStartModalOpen(true);
+
+    // Fetch AI estimate
+    setLoadingEstimate(true);
+    try {
+      const res = await specialistJobsApi.getAITimeEstimate(jobId);
+      if (res.data?.data) {
+        setAiEstimate(res.data.data);
+        // Pre-fill with AI suggestion
+        setPlannedHours(res.data.data.estimated_hours);
+      }
+    } catch {
+      // AI estimate is optional, don't show error
+    } finally {
+      setLoadingEstimate(false);
+    }
   }, []);
 
   const closeStartModal = useCallback(() => {
@@ -156,6 +204,8 @@ export default function SpecialistJobsPage() {
     setShowWrongFinding(false);
     setWrongFindingReason('');
     setWrongFindingPhotoPath('');
+    setAiEstimate(null);
+    setLoadingEstimate(false);
   }, []);
 
   const handleStartJob = useCallback(() => {
@@ -336,24 +386,139 @@ export default function SpecialistJobsPage() {
     },
   ];
 
+  // Calculate week progress
+  const weekProgress = stats?.week?.total
+    ? Math.round((stats.week.completed / stats.week.total) * 100)
+    : 0;
+
   return (
-    <Card>
-      <Typography.Title level={4}>{t('nav.my_jobs')}</Typography.Title>
+    <div>
+      {/* Personal Stats Dashboard */}
+      <Card style={{ marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ marginBottom: 16 }}>
+          {t('nav.my_jobs')}
+        </Typography.Title>
 
-      <Tabs
-        activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as TabKey)}
-        items={tabItems}
-      />
+        {statsQuery.isLoading ? (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <Spin />
+          </div>
+        ) : stats ? (
+          <Row gutter={[16, 16]}>
+            {/* Today's Stats */}
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('jobs.pending_time', 'Need Time')}
+                value={stats.today.pending_time}
+                icon={<ClockCircleOutlined />}
+                tooltip={t('jobs.pending_time_tooltip', 'Jobs needing planned time entry')}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('status.assigned', 'Assigned')}
+                value={stats.today.assigned}
+                icon={<PlayCircleOutlined />}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('status.in_progress', 'In Progress')}
+                value={stats.today.in_progress}
+                icon={<ThunderboltOutlined />}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('jobs.today_completed', 'Today Completed')}
+                value={stats.today.completed}
+                icon={<CheckCircleOutlined />}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('status.paused', 'Paused')}
+                value={stats.today.paused}
+                icon={<PauseCircleOutlined />}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('jobs.week_completed', 'This Week')}
+                value={stats.week.completed}
+                suffix={`/ ${stats.week.total}`}
+                progress={weekProgress}
+                progressColor="#52c41a"
+              />
+            </Col>
 
-      <Table<SpecialistJob>
-        rowKey="id"
-        columns={getCurrentColumns()}
-        dataSource={data}
-        loading={loading}
-        locale={{ emptyText: t('common.noData') }}
-        pagination={{ pageSize: 10 }}
-      />
+            {/* Performance Stats */}
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('jobs.month_completed', 'This Month')}
+                value={stats.month.completed}
+                suffix={`/ ${stats.month.total}`}
+                icon={<TrophyOutlined />}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('jobs.avg_time', 'Avg Time')}
+                value={stats.averages.completion_time_hours}
+                suffix="h"
+                tooltip={t('jobs.avg_time_tooltip', 'Average completion time (last 30 days)')}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('jobs.time_rating', 'Time Rating')}
+                value={stats.averages.time_rating}
+                suffix="/ 5"
+                icon={<StarOutlined />}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('jobs.qc_rating', 'QC Rating')}
+                value={stats.averages.qc_rating}
+                suffix="/ 5"
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('jobs.total_points', 'Total Points')}
+                value={stats.total_points}
+                icon={<TrophyOutlined />}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={6} lg={4}>
+              <StatCard
+                title={t('status.incomplete', 'Incomplete')}
+                value={stats.incomplete_count}
+                tooltip={t('jobs.incomplete_tooltip', 'Jobs marked incomplete')}
+              />
+            </Col>
+          </Row>
+        ) : null}
+      </Card>
+
+      {/* Jobs List */}
+      <Card>
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as TabKey)}
+          items={tabItems}
+        />
+
+        <Table<SpecialistJob>
+          rowKey="id"
+          columns={getCurrentColumns()}
+          dataSource={data}
+          loading={loading}
+          locale={{ emptyText: t('common.noData') }}
+          pagination={{ pageSize: 10 }}
+        />
+      </Card>
 
       {/* Start Job Modal */}
       <Modal
@@ -364,6 +529,62 @@ export default function SpecialistJobsPage() {
         width={520}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {/* AI Time Estimation */}
+          {loadingEstimate ? (
+            <Alert
+              type="info"
+              icon={<RobotOutlined spin />}
+              message={t('jobs.ai_estimating', 'AI is analyzing similar jobs...')}
+              showIcon
+            />
+          ) : aiEstimate ? (
+            <Alert
+              type="info"
+              icon={<RobotOutlined />}
+              message={
+                <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                  <div>
+                    <Typography.Text strong>
+                      {t('jobs.ai_suggestion', 'AI Suggestion')}:{' '}
+                    </Typography.Text>
+                    <Typography.Text>
+                      {aiEstimate.estimated_hours}h{' '}
+                      <Tag color={
+                        aiEstimate.confidence === 'high' ? 'green' :
+                        aiEstimate.confidence === 'medium' ? 'orange' : 'default'
+                      }>
+                        {aiEstimate.confidence}
+                      </Tag>
+                    </Typography.Text>
+                  </div>
+                  <div>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('jobs.ai_range', 'Range')}: {aiEstimate.range.min}h - {aiEstimate.range.max}h
+                      {aiEstimate.based_on.sample_size > 0 && (
+                        <> | {t('jobs.based_on', 'Based on')} {aiEstimate.based_on.sample_size} {t('jobs.similar_jobs', 'similar jobs')}</>
+                      )}
+                    </Typography.Text>
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Space size={8} wrap>
+                      {aiEstimate.suggestions.map((s) => (
+                        <Button
+                          key={s.label}
+                          size="small"
+                          type={plannedHours === s.hours ? 'primary' : 'default'}
+                          onClick={() => setPlannedHours(s.hours)}
+                        >
+                          {s.hours}h ({s.label})
+                        </Button>
+                      ))}
+                    </Space>
+                  </div>
+                </Space>
+              }
+              showIcon
+            />
+          ) : null}
+
           {/* Planned Time Input */}
           <div>
             <Typography.Text strong>{t('jobs.planned_time')}</Typography.Text>
@@ -472,6 +693,6 @@ export default function SpecialistJobsPage() {
           )}
         </Space>
       </Modal>
-    </Card>
+    </div>
   );
 }

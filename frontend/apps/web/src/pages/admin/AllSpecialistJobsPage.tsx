@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Card,
   Table,
@@ -15,6 +15,13 @@ import {
   Tabs,
   Descriptions,
   Alert,
+  Row,
+  Col,
+  Drawer,
+  List,
+  Progress,
+  Tooltip,
+  Segmented,
 } from 'antd';
 import {
   PauseCircleOutlined,
@@ -22,6 +29,14 @@ import {
   TrophyOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
+  ClockCircleOutlined,
+  UserOutlined,
+  WarningOutlined,
+  ReloadOutlined,
+  TeamOutlined,
+  BarChartOutlined,
+  TableOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -32,8 +47,11 @@ import {
   type SpecialistJob,
   type JobStatus,
   type IncompleteReason,
+  type SpecialistJobStats,
 } from '@inspection/shared';
 import VoiceTextArea from '../../components/VoiceTextArea';
+import { StatCard } from '../../components/shared/StatCard';
+import { KanbanBoard } from '../../components/specialist-jobs';
 
 const incompleteReasonLabels: Record<IncompleteReason, string> = {
   no_spare_parts: 'No Spare Parts',
@@ -61,20 +79,32 @@ export default function AllSpecialistJobsPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
 
   const [pauseOpen, setPauseOpen] = useState(false);
   const [cleaningOpen, setCleaningOpen] = useState(false);
   const [bonusOpen, setBonusOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<SpecialistJob | null>(null);
+  const [workloadDrawerOpen, setWorkloadDrawerOpen] = useState(false);
+  const [performersDrawerOpen, setPerformersDrawerOpen] = useState(false);
 
   const [pauseForm] = Form.useForm();
   const [cleaningForm] = Form.useForm();
   const [bonusForm] = Form.useForm();
 
-  const { data, isLoading, isError } = useQuery({
+  // Fetch stats
+  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useQuery({
+    queryKey: ['specialist-jobs', 'stats'],
+    queryFn: () => specialistJobsApi.getStats().then((r) => r.data?.data as SpecialistJobStats),
+    staleTime: 60000,
+  });
+
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['specialist-jobs', page, perPage, statusFilter],
     queryFn: () => specialistJobsApi.list({ page, per_page: perPage, status: statusFilter }),
   });
+
+  const stats = statsData;
 
   const forcePauseMutation = useMutation({
     mutationFn: ({ jobId, reason }: { jobId: number; reason?: string }) =>
@@ -296,31 +326,189 @@ export default function AllSpecialistJobsPage() {
     { key: 'qc_approved', label: t('specialistJobs.qcApproved', 'QC Approved') },
   ];
 
-  return (
-    <Card title={<Typography.Title level={4}>{t('nav.specialistJobs', 'All Specialist Jobs')}</Typography.Title>}>
-      <Tabs
-        activeKey={statusFilter || 'all'}
-        onChange={(key) => { setStatusFilter(key === 'all' ? undefined : key); setPage(1); }}
-        items={tabItems}
-      />
+  const handleRefresh = () => {
+    refetch();
+    refetchStats();
+  };
 
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={jobs}
-        loading={isLoading}
-        expandable={expandable}
-        locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
-        pagination={{
-          current: pagination?.page || page,
-          pageSize: pagination?.per_page || perPage,
-          total: pagination?.total || 0,
-          showSizeChanger: true,
-          showTotal: (total) => t('common.totalItems', 'Total: {{total}} items', { total }),
-          onChange: (p, ps) => { setPage(p); setPerPage(ps); },
-        }}
-        scroll={{ x: 1400 }}
-      />
+  return (
+    <div style={{ padding: 0 }}>
+      {/* Stats Dashboard */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Active Jobs"
+            value={stats?.active?.total || 0}
+            icon={<ClockCircleOutlined />}
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Assigned"
+            value={stats?.active?.assigned || 0}
+            icon={<UserOutlined />}
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="In Progress"
+            value={stats?.active?.in_progress || 0}
+            icon={<ClockCircleOutlined />}
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Paused"
+            value={stats?.active?.paused || 0}
+            icon={<PauseCircleOutlined />}
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Incomplete"
+            value={stats?.incomplete?.unacknowledged || 0}
+            icon={<WarningOutlined />}
+            tooltip={`${stats?.incomplete?.total || 0} total, ${stats?.incomplete?.unacknowledged || 0} need acknowledgment`}
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Month Completed"
+            value={stats?.month?.completed || 0}
+            icon={<CheckCircleOutlined />}
+            loading={statsLoading}
+          />
+        </Col>
+      </Row>
+
+      {/* Second Stats Row */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Avg Time"
+            value={stats?.averages?.completion_time_hours || 0}
+            suffix="hrs"
+            icon={<ClockCircleOutlined />}
+            tooltip="Average completion time in hours"
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Avg Rating"
+            value={stats?.averages?.time_rating?.toFixed(1) || '0.0'}
+            suffix="/5"
+            icon={<StarOutlined />}
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Pending QC"
+            value={stats?.pending_qc || 0}
+            icon={<ExclamationCircleOutlined />}
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Overdue"
+            value={stats?.overdue_count || 0}
+            icon={<WarningOutlined />}
+            tooltip="Jobs in progress for more than 24 hours"
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Top Performers"
+            value={stats?.top_performers?.length || 0}
+            icon={<TrophyOutlined />}
+            onClick={() => setPerformersDrawerOpen(true)}
+            loading={statsLoading}
+          />
+        </Col>
+        <Col xs={12} sm={8} md={4}>
+          <StatCard
+            title="Workload"
+            value={stats?.specialist_workload?.length || 0}
+            suffix="active"
+            icon={<TeamOutlined />}
+            onClick={() => setWorkloadDrawerOpen(true)}
+            loading={statsLoading}
+          />
+        </Col>
+      </Row>
+
+      {/* Main Card */}
+      <Card
+        title={
+          <Space>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {t('nav.specialistJobs', 'All Specialist Jobs')}
+            </Typography.Title>
+            <Tag color="blue">{jobs.length} items</Tag>
+          </Space>
+        }
+        extra={
+          <Space>
+            <Segmented
+              value={viewMode}
+              onChange={(v) => setViewMode(v as 'table' | 'kanban')}
+              options={[
+                { value: 'table', icon: <TableOutlined />, label: 'Table' },
+                { value: 'kanban', icon: <AppstoreOutlined />, label: 'Kanban' },
+              ]}
+            />
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+              Refresh
+            </Button>
+          </Space>
+        }
+      >
+        {viewMode === 'table' && (
+          <>
+            <Tabs
+              activeKey={statusFilter || 'all'}
+              onChange={(key) => { setStatusFilter(key === 'all' ? undefined : key); setPage(1); }}
+              items={tabItems}
+            />
+
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={jobs}
+              loading={isLoading}
+              expandable={expandable}
+              locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
+              pagination={{
+                current: pagination?.page || page,
+                pageSize: pagination?.per_page || perPage,
+                total: pagination?.total || 0,
+                showSizeChanger: true,
+                showTotal: (total) => t('common.totalItems', 'Total: {{total}} items', { total }),
+                onChange: (p, ps) => { setPage(p); setPerPage(ps); },
+              }}
+              scroll={{ x: 1400 }}
+            />
+          </>
+        )}
+
+        {viewMode === 'kanban' && (
+          <KanbanBoard
+            jobs={jobs}
+            loading={isLoading}
+            onJobClick={(job) => {
+              setSelectedJob(job);
+              // Could open a detail drawer/modal here
+            }}
+          />
+        )}
 
       {/* Force Pause Modal */}
       <Modal
@@ -390,6 +578,78 @@ export default function AllSpecialistJobsPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+      </Card>
+
+      {/* Workload Drawer */}
+      <Drawer
+        title="Specialist Workload"
+        open={workloadDrawerOpen}
+        onClose={() => setWorkloadDrawerOpen(false)}
+        width={400}
+      >
+        <List
+          dataSource={stats?.specialist_workload || []}
+          renderItem={(item) => (
+            <List.Item>
+              <List.Item.Meta
+                avatar={<UserOutlined style={{ fontSize: 24, color: '#1890ff' }} />}
+                title={item.name}
+                description={`${item.active_jobs} active jobs`}
+              />
+              <Progress
+                type="circle"
+                percent={Math.min(100, item.active_jobs * 25)}
+                size={40}
+                status={item.active_jobs > 3 ? 'exception' : 'normal'}
+              />
+            </List.Item>
+          )}
+          locale={{ emptyText: 'No active specialists' }}
+        />
+      </Drawer>
+
+      {/* Top Performers Drawer */}
+      <Drawer
+        title="Top Performers This Month"
+        open={performersDrawerOpen}
+        onClose={() => setPerformersDrawerOpen(false)}
+        width={400}
+      >
+        <List
+          dataSource={stats?.top_performers || []}
+          renderItem={(item, index) => (
+            <List.Item>
+              <List.Item.Meta
+                avatar={
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      backgroundColor: index === 0 ? '#ffd700' : index === 1 ? '#c0c0c0' : index === 2 ? '#cd7f32' : '#e8e8e8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      color: index < 3 ? '#fff' : '#666',
+                    }}
+                  >
+                    {index + 1}
+                  </div>
+                }
+                title={item.name}
+                description={
+                  <Space>
+                    <span>{item.completed} completed</span>
+                    <Rate disabled value={item.avg_rating} count={5} style={{ fontSize: 12 }} />
+                  </Space>
+                }
+              />
+            </List.Item>
+          )}
+          locale={{ emptyText: 'No data this month' }}
+        />
+      </Drawer>
+    </div>
   );
 }

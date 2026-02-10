@@ -16,6 +16,11 @@ export interface SpecialistJob {
   job_id: string;
   defect_id: number;
   specialist_id: number;
+  specialist?: {
+    id: number;
+    full_name: string;
+    email?: string;
+  } | null;
   status: JobStatus;
   category: JobCategory | null;
   has_planned_time: boolean;

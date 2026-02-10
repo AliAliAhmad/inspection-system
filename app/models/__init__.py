@@ -35,6 +35,7 @@ from app.models.final_assessment import FinalAssessment
 # Inspection workflow
 from app.models.inspection_list import InspectionList
 from app.models.inspection_assignment import InspectionAssignment
+from app.models.assignment_template import AssignmentTemplate, AssignmentTemplateItem
 
 # Leave Management System (Enhanced)
 from app.models.leave_type import LeaveType
@@ -162,6 +163,8 @@ __all__ = [
     'FinalAssessment',
     'InspectionList',
     'InspectionAssignment',
+    'AssignmentTemplate',
+    'AssignmentTemplateItem',
     # Leave Management System
     'LeaveType',
     'LeavePolicy',

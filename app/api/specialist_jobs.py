@@ -7,14 +7,662 @@ pause/resume, incomplete completion, admin timer control, and cleaning.
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db, safe_commit
-from app.models import SpecialistJob, Defect, User, PauseLog
+from app.models import SpecialistJob, Defect, User, PauseLog, QualityReview
 from app.services.pause_service import PauseService
 from app.services.takeover_service import TakeoverService
 from app.utils.decorators import get_current_user, admin_required, role_required, get_language
 from app.utils.pagination import paginate
-from datetime import datetime
+from datetime import datetime, date, timedelta
+from sqlalchemy import func, and_, or_
 
 bp = Blueprint('specialist_jobs', __name__)
+
+
+# ============================================
+# STATS & ANALYTICS
+# ============================================
+
+@bp.route('/my-stats', methods=['GET'])
+@jwt_required()
+def get_my_stats():
+    """
+    Get personal stats for the current specialist.
+    Returns: today, week, month stats, averages, ratings.
+    """
+    user_id = get_jwt_identity()
+    today = date.today()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+
+    # Today's start/end
+    today_start = datetime.combine(today, datetime.min.time())
+    today_end = datetime.combine(today, datetime.max.time())
+
+    # Today's stats
+    today_pending = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.planned_time_hours.is_(None)
+    ).count()
+
+    today_assigned = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.status == 'assigned',
+        SpecialistJob.planned_time_hours.isnot(None)
+    ).count()
+
+    today_in_progress = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.status == 'in_progress'
+    ).count()
+
+    today_completed = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.completed_at >= today_start,
+        SpecialistJob.completed_at <= today_end,
+        SpecialistJob.status.in_(['completed', 'qc_approved'])
+    ).count()
+
+    today_paused = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.status == 'paused'
+    ).count()
+
+    # This week stats
+    week_start = today - timedelta(days=today.weekday())
+    week_completed = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.completed_at >= datetime.combine(week_start, datetime.min.time()),
+        SpecialistJob.status.in_(['completed', 'qc_approved'])
+    ).count()
+
+    week_total = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.created_at >= datetime.combine(week_start, datetime.min.time())
+    ).count()
+
+    # This month stats
+    month_start = today.replace(day=1)
+    month_completed = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.completed_at >= datetime.combine(month_start, datetime.min.time()),
+        SpecialistJob.status.in_(['completed', 'qc_approved'])
+    ).count()
+
+    month_total = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.created_at >= datetime.combine(month_start, datetime.min.time())
+    ).count()
+
+    # Average completion time (hours) - last 30 days
+    my_completed_jobs = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.completed_at >= datetime.combine(month_ago, datetime.min.time()),
+        SpecialistJob.actual_time_hours.isnot(None)
+    ).all()
+
+    avg_time = 0
+    if my_completed_jobs:
+        total_time = sum(j.actual_time_hours for j in my_completed_jobs if j.actual_time_hours)
+        avg_time = round(total_time / len(my_completed_jobs), 1) if my_completed_jobs else 0
+
+    # Average ratings
+    my_rated_jobs = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.time_rating.isnot(None)
+    ).all()
+
+    avg_time_rating = 0
+    avg_qc_rating = 0
+    avg_cleaning_rating = 0
+
+    if my_rated_jobs:
+        time_ratings = [j.time_rating for j in my_rated_jobs if j.time_rating is not None]
+        qc_ratings = [j.qc_rating for j in my_rated_jobs if j.qc_rating is not None]
+        cleaning_ratings = [j.cleaning_rating for j in my_rated_jobs if j.cleaning_rating is not None]
+
+        avg_time_rating = round(sum(time_ratings) / len(time_ratings), 1) if time_ratings else 0
+        avg_qc_rating = round(sum(qc_ratings) / len(qc_ratings), 1) if qc_ratings else 0
+        avg_cleaning_rating = round(sum(cleaning_ratings) / len(cleaning_ratings), 1) if cleaning_ratings else 0
+
+    # Total points earned
+    total_points = sum(
+        (j.time_rating or 0) + (j.qc_rating or 0) + (j.cleaning_rating or 0) + (j.admin_bonus or 0)
+        for j in my_rated_jobs
+    )
+
+    # Incomplete count
+    incomplete_count = SpecialistJob.query.filter(
+        SpecialistJob.specialist_id == int(user_id),
+        SpecialistJob.status == 'incomplete'
+    ).count()
+
+    # Daily trend (last 7 days)
+    daily_trend = []
+    for i in range(7):
+        d = today - timedelta(days=i)
+        d_start = datetime.combine(d, datetime.min.time())
+        d_end = datetime.combine(d, datetime.max.time())
+
+        day_completed = SpecialistJob.query.filter(
+            SpecialistJob.specialist_id == int(user_id),
+            SpecialistJob.completed_at >= d_start,
+            SpecialistJob.completed_at <= d_end
+        ).count()
+
+        daily_trend.append({
+            'date': d.isoformat(),
+            'day_name': d.strftime('%a'),
+            'completed': day_completed
+        })
+
+    daily_trend.reverse()
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'today': {
+                'pending_time': today_pending,
+                'assigned': today_assigned,
+                'in_progress': today_in_progress,
+                'completed': today_completed,
+                'paused': today_paused
+            },
+            'week': {
+                'completed': week_completed,
+                'total': week_total
+            },
+            'month': {
+                'completed': month_completed,
+                'total': month_total
+            },
+            'averages': {
+                'completion_time_hours': avg_time,
+                'time_rating': avg_time_rating,
+                'qc_rating': avg_qc_rating,
+                'cleaning_rating': avg_cleaning_rating
+            },
+            'total_points': total_points,
+            'incomplete_count': incomplete_count,
+            'daily_trend': daily_trend
+        }
+    }), 200
+
+
+@bp.route('/stats', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def get_specialist_job_stats():
+    """
+    Get comprehensive specialist job statistics for admin dashboard.
+    Returns counts by status, trends, performance metrics, top performers.
+    """
+    today = date.today()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+
+    # Overall counts by status
+    status_counts = db.session.query(
+        SpecialistJob.status,
+        func.count(SpecialistJob.id)
+    ).group_by(SpecialistJob.status).all()
+    by_status = {status: count for status, count in status_counts}
+
+    # Today's stats
+    today_start = datetime.combine(today, datetime.min.time())
+    today_end = datetime.combine(today, datetime.max.time())
+
+    today_assigned = SpecialistJob.query.filter(
+        SpecialistJob.created_at >= today_start,
+        SpecialistJob.created_at <= today_end
+    ).count()
+
+    today_completed = SpecialistJob.query.filter(
+        SpecialistJob.completed_at >= today_start,
+        SpecialistJob.completed_at <= today_end
+    ).count()
+
+    today_in_progress = SpecialistJob.query.filter(
+        SpecialistJob.status == 'in_progress'
+    ).count()
+
+    # Active counts (current state)
+    active_total = SpecialistJob.query.filter(
+        SpecialistJob.status.in_(['assigned', 'in_progress', 'paused'])
+    ).count()
+
+    assigned_count = by_status.get('assigned', 0)
+    in_progress_count = by_status.get('in_progress', 0)
+    paused_count = by_status.get('paused', 0)
+    incomplete_count = by_status.get('incomplete', 0)
+
+    # Incomplete needing acknowledgment
+    incomplete_unack = SpecialistJob.query.filter(
+        SpecialistJob.status == 'incomplete',
+        SpecialistJob.incomplete_acknowledged_by.is_(None)
+    ).count()
+
+    # This week stats
+    week_start = today - timedelta(days=today.weekday())
+    week_completed = SpecialistJob.query.filter(
+        SpecialistJob.completed_at >= datetime.combine(week_start, datetime.min.time()),
+        SpecialistJob.status.in_(['completed', 'qc_approved'])
+    ).count()
+
+    week_total = SpecialistJob.query.filter(
+        SpecialistJob.created_at >= datetime.combine(week_start, datetime.min.time())
+    ).count()
+
+    # This month stats
+    month_start = today.replace(day=1)
+    month_completed = SpecialistJob.query.filter(
+        SpecialistJob.completed_at >= datetime.combine(month_start, datetime.min.time()),
+        SpecialistJob.status.in_(['completed', 'qc_approved'])
+    ).count()
+
+    # Average completion time (hours) - last 30 days
+    completed_jobs = SpecialistJob.query.filter(
+        SpecialistJob.completed_at >= datetime.combine(month_ago, datetime.min.time()),
+        SpecialistJob.actual_time_hours.isnot(None)
+    ).all()
+
+    avg_time = 0
+    if completed_jobs:
+        total_time = sum(j.actual_time_hours for j in completed_jobs if j.actual_time_hours)
+        avg_time = round(total_time / len(completed_jobs), 1) if completed_jobs else 0
+
+    # Average ratings
+    rated_jobs = SpecialistJob.query.filter(
+        SpecialistJob.time_rating.isnot(None)
+    ).all()
+
+    avg_time_rating = 0
+    avg_qc_rating = 0
+    avg_cleaning_rating = 0
+
+    if rated_jobs:
+        time_ratings = [j.time_rating for j in rated_jobs if j.time_rating is not None]
+        qc_ratings = [j.qc_rating for j in rated_jobs if j.qc_rating is not None]
+        cleaning_ratings = [j.cleaning_rating for j in rated_jobs if j.cleaning_rating is not None]
+
+        avg_time_rating = round(sum(time_ratings) / len(time_ratings), 1) if time_ratings else 0
+        avg_qc_rating = round(sum(qc_ratings) / len(qc_ratings), 1) if qc_ratings else 0
+        avg_cleaning_rating = round(sum(cleaning_ratings) / len(cleaning_ratings), 1) if cleaning_ratings else 0
+
+    # Pending QC reviews
+    pending_qc = QualityReview.query.filter(
+        QualityReview.job_type == 'specialist',
+        QualityReview.status == 'pending'
+    ).count()
+
+    # By category breakdown
+    category_counts = db.session.query(
+        SpecialistJob.category,
+        func.count(SpecialistJob.id)
+    ).filter(
+        SpecialistJob.status.in_(['assigned', 'in_progress', 'paused'])
+    ).group_by(SpecialistJob.category).all()
+    by_category = {cat or 'unspecified': count for cat, count in category_counts}
+
+    # Top performers (specialists with most completed jobs this month)
+    top_performers = db.session.query(
+        User.id,
+        User.full_name,
+        func.count(SpecialistJob.id).label('completed_count'),
+        func.avg(SpecialistJob.time_rating).label('avg_rating')
+    ).join(SpecialistJob, SpecialistJob.specialist_id == User.id).filter(
+        SpecialistJob.completed_at >= datetime.combine(month_start, datetime.min.time()),
+        SpecialistJob.status.in_(['completed', 'qc_approved'])
+    ).group_by(User.id, User.full_name).order_by(
+        func.count(SpecialistJob.id).desc()
+    ).limit(5).all()
+
+    performers_list = [
+        {
+            'id': uid,
+            'name': name,
+            'completed': count,
+            'avg_rating': round(float(rating), 1) if rating else 0
+        }
+        for uid, name, count, rating in top_performers
+    ]
+
+    # Specialist workload (active jobs per specialist)
+    workload = db.session.query(
+        User.id,
+        User.full_name,
+        func.count(SpecialistJob.id).label('active_count')
+    ).join(SpecialistJob, SpecialistJob.specialist_id == User.id).filter(
+        SpecialistJob.status.in_(['assigned', 'in_progress', 'paused']),
+        User.is_active == True
+    ).group_by(User.id, User.full_name).order_by(
+        func.count(SpecialistJob.id).desc()
+    ).limit(10).all()
+
+    workload_list = [
+        {'id': uid, 'name': name, 'active_jobs': count}
+        for uid, name, count in workload
+    ]
+
+    # Daily trend (last 7 days)
+    daily_trend = []
+    for i in range(7):
+        d = today - timedelta(days=i)
+        d_start = datetime.combine(d, datetime.min.time())
+        d_end = datetime.combine(d, datetime.max.time())
+
+        day_created = SpecialistJob.query.filter(
+            SpecialistJob.created_at >= d_start,
+            SpecialistJob.created_at <= d_end
+        ).count()
+
+        day_completed = SpecialistJob.query.filter(
+            SpecialistJob.completed_at >= d_start,
+            SpecialistJob.completed_at <= d_end
+        ).count()
+
+        daily_trend.append({
+            'date': d.isoformat(),
+            'day_name': d.strftime('%a'),
+            'created': day_created,
+            'completed': day_completed
+        })
+
+    daily_trend.reverse()  # Oldest first
+
+    # Overdue jobs (started > 24h ago, not completed)
+    overdue_threshold = datetime.utcnow() - timedelta(hours=24)
+    overdue_count = SpecialistJob.query.filter(
+        SpecialistJob.started_at < overdue_threshold,
+        SpecialistJob.status.in_(['in_progress', 'paused'])
+    ).count()
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'by_status': by_status,
+            'today': {
+                'assigned': today_assigned,
+                'completed': today_completed,
+                'in_progress': today_in_progress
+            },
+            'active': {
+                'total': active_total,
+                'assigned': assigned_count,
+                'in_progress': in_progress_count,
+                'paused': paused_count
+            },
+            'incomplete': {
+                'total': incomplete_count,
+                'unacknowledged': incomplete_unack
+            },
+            'week': {
+                'completed': week_completed,
+                'total': week_total
+            },
+            'month': {
+                'completed': month_completed
+            },
+            'averages': {
+                'completion_time_hours': avg_time,
+                'time_rating': avg_time_rating,
+                'qc_rating': avg_qc_rating,
+                'cleaning_rating': avg_cleaning_rating
+            },
+            'pending_qc': pending_qc,
+            'overdue_count': overdue_count,
+            'by_category': by_category,
+            'top_performers': performers_list,
+            'specialist_workload': workload_list,
+            'daily_trend': daily_trend
+        }
+    }), 200
+
+
+# ============================================
+# AI-POWERED TIME ESTIMATION
+# ============================================
+
+@bp.route('/ai-estimate-time', methods=['POST'])
+@jwt_required()
+def ai_estimate_time():
+    """
+    AI-powered time estimation based on similar past jobs.
+    Uses defect type, equipment type, and category to find similar jobs.
+    """
+    data = request.get_json()
+    job_id = data.get('job_id')
+    defect_id = data.get('defect_id')
+
+    if not job_id and not defect_id:
+        return jsonify({
+            'status': 'error',
+            'message': 'job_id or defect_id is required'
+        }), 400
+
+    # Get job or defect info
+    job = None
+    defect = None
+
+    if job_id:
+        job = db.session.get(SpecialistJob, job_id)
+        if job and job.defect_id:
+            defect = job.defect
+    elif defect_id:
+        defect = db.session.get(Defect, defect_id)
+
+    if not defect:
+        return jsonify({
+            'status': 'error',
+            'message': 'Could not find defect information'
+        }), 404
+
+    # Find similar completed jobs
+    equipment = defect.inspection.equipment if defect.inspection else None
+    equipment_type = equipment.equipment_type if equipment else None
+    category = job.category if job else (defect.severity if defect.severity in ['major', 'minor'] else 'minor')
+
+    # Build similarity query
+    similar_query = SpecialistJob.query.filter(
+        SpecialistJob.status.in_(['completed', 'qc_approved']),
+        SpecialistJob.actual_time_hours.isnot(None),
+        SpecialistJob.actual_time_hours > 0
+    )
+
+    # Filter by category if available
+    if category:
+        similar_query = similar_query.filter(SpecialistJob.category == category)
+
+    # Filter by equipment type if available
+    if equipment_type:
+        similar_query = similar_query.join(
+            Defect, SpecialistJob.defect_id == Defect.id
+        ).join(
+            Defect.inspection
+        ).filter(
+            Defect.inspection.has(equipment=equipment)
+        )
+
+    similar_jobs = similar_query.order_by(
+        SpecialistJob.completed_at.desc()
+    ).limit(20).all()
+
+    if not similar_jobs:
+        # Fallback: get any completed jobs with same category
+        similar_jobs = SpecialistJob.query.filter(
+            SpecialistJob.status.in_(['completed', 'qc_approved']),
+            SpecialistJob.actual_time_hours.isnot(None),
+            SpecialistJob.category == category
+        ).limit(10).all()
+
+    if not similar_jobs:
+        # Default estimates by category
+        default_estimates = {
+            'major': 4.0,
+            'minor': 2.0
+        }
+        estimated_hours = default_estimates.get(category, 3.0)
+        confidence = 'low'
+        sample_size = 0
+    else:
+        # Calculate statistics
+        times = [j.actual_time_hours for j in similar_jobs]
+        estimated_hours = round(sum(times) / len(times), 1)
+        sample_size = len(times)
+
+        # Calculate confidence based on sample size and variance
+        if sample_size >= 10:
+            confidence = 'high'
+        elif sample_size >= 5:
+            confidence = 'medium'
+        else:
+            confidence = 'low'
+
+        # Adjust for variance
+        if sample_size > 1:
+            variance = sum((t - estimated_hours) ** 2 for t in times) / len(times)
+            std_dev = variance ** 0.5
+            if std_dev > estimated_hours * 0.5:
+                confidence = 'low' if confidence == 'medium' else confidence
+
+    # Get min/max range
+    min_time = min(times) if similar_jobs else estimated_hours * 0.5
+    max_time = max(times) if similar_jobs else estimated_hours * 1.5
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'estimated_hours': estimated_hours,
+            'confidence': confidence,
+            'range': {
+                'min': round(min_time, 1),
+                'max': round(max_time, 1)
+            },
+            'based_on': {
+                'sample_size': sample_size,
+                'category': category,
+                'equipment_type': equipment_type
+            },
+            'suggestions': [
+                {'hours': round(estimated_hours * 0.75, 1), 'label': 'Optimistic'},
+                {'hours': estimated_hours, 'label': 'Average'},
+                {'hours': round(estimated_hours * 1.25, 1), 'label': 'Conservative'}
+            ]
+        }
+    }), 200
+
+
+@bp.route('/ai-predict-parts', methods=['POST'])
+@jwt_required()
+def ai_predict_parts():
+    """
+    AI-powered parts prediction based on similar past jobs.
+    Analyzes what materials/parts were commonly used for similar repairs.
+    """
+    data = request.get_json()
+    job_id = data.get('job_id')
+    defect_id = data.get('defect_id')
+
+    if not job_id and not defect_id:
+        return jsonify({
+            'status': 'error',
+            'message': 'job_id or defect_id is required'
+        }), 400
+
+    # Get job or defect info
+    job = None
+    defect = None
+
+    if job_id:
+        job = db.session.get(SpecialistJob, job_id)
+        if job and job.defect_id:
+            defect = job.defect
+    elif defect_id:
+        defect = db.session.get(Defect, defect_id)
+
+    if not defect:
+        return jsonify({
+            'status': 'error',
+            'message': 'Could not find defect information'
+        }), 404
+
+    # Get equipment info
+    equipment = defect.inspection.equipment if defect.inspection else None
+    equipment_type = equipment.equipment_type if equipment else None
+    category = job.category if job else (defect.severity if defect.severity in ['major', 'minor'] else 'minor')
+
+    # Find similar completed jobs with work notes
+    similar_query = SpecialistJob.query.filter(
+        SpecialistJob.status.in_(['completed', 'qc_approved']),
+        SpecialistJob.work_notes.isnot(None),
+        SpecialistJob.work_notes != ''
+    )
+
+    if category:
+        similar_query = similar_query.filter(SpecialistJob.category == category)
+
+    similar_jobs = similar_query.order_by(
+        SpecialistJob.completed_at.desc()
+    ).limit(30).all()
+
+    # Extract common parts/materials from work notes using keyword analysis
+    parts_keywords = [
+        'filter', 'oil', 'gasket', 'bearing', 'seal', 'belt', 'pump', 'valve',
+        'hose', 'clamp', 'bolt', 'nut', 'washer', 'o-ring', 'lubricant',
+        'grease', 'coolant', 'fuse', 'relay', 'switch', 'sensor', 'motor',
+        'compressor', 'fan', 'blade', 'coupling', 'shaft', 'gear', 'chain',
+        'sprocket', 'brake', 'pad', 'cylinder', 'piston', 'ring', 'liner'
+    ]
+
+    parts_count = {}
+    for job_item in similar_jobs:
+        notes = (job_item.work_notes or '').lower()
+        for part in parts_keywords:
+            if part in notes:
+                parts_count[part] = parts_count.get(part, 0) + 1
+
+    # Sort by frequency and get top parts
+    sorted_parts = sorted(parts_count.items(), key=lambda x: x[1], reverse=True)
+
+    # Build predictions with confidence
+    predictions = []
+    total_jobs = len(similar_jobs)
+
+    for part, count in sorted_parts[:10]:
+        frequency = count / total_jobs if total_jobs > 0 else 0
+        confidence = 'high' if frequency > 0.5 else 'medium' if frequency > 0.25 else 'low'
+        predictions.append({
+            'part_name': part.title(),
+            'frequency_percent': round(frequency * 100, 0),
+            'confidence': confidence,
+            'used_in_jobs': count
+        })
+
+    # Default parts based on category if no data
+    if not predictions:
+        if category == 'major':
+            predictions = [
+                {'part_name': 'Gasket Set', 'frequency_percent': 80, 'confidence': 'medium', 'used_in_jobs': 0},
+                {'part_name': 'Seal Kit', 'frequency_percent': 70, 'confidence': 'medium', 'used_in_jobs': 0},
+                {'part_name': 'Lubricant', 'frequency_percent': 60, 'confidence': 'medium', 'used_in_jobs': 0},
+            ]
+        else:
+            predictions = [
+                {'part_name': 'Oil Filter', 'frequency_percent': 50, 'confidence': 'low', 'used_in_jobs': 0},
+                {'part_name': 'Lubricant', 'frequency_percent': 40, 'confidence': 'low', 'used_in_jobs': 0},
+            ]
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'predictions': predictions,
+            'based_on': {
+                'sample_size': total_jobs,
+                'category': category,
+                'equipment_type': equipment_type
+            },
+            'note': 'AI prediction based on similar past jobs. Verify with actual requirements.'
+        }
+    }), 200
 
 
 @bp.route('', methods=['GET'])
