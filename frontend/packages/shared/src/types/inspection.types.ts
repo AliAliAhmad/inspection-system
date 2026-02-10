@@ -47,6 +47,8 @@ export interface ChecklistTemplate {
   function: string | null;
   assembly: string | null;
   part: string | null;
+  equipment_type: string | null;
+  version: string;
   is_active: boolean;
   items: ChecklistItem[];
   created_at: string;

@@ -6,7 +6,7 @@ Includes team import, role swap, and template download features.
 import json
 import re
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
@@ -986,7 +986,7 @@ def export_users():
         'Annual Leave Balance': [u.annual_leave_balance or 24 for u in users],
         'Is Active': [u.is_active for u in users],
         'Created At': [u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '' for u in users],
-        'Last Login': [u.last_login_at.strftime('%Y-%m-%d %H:%M') if u.last_login_at else 'Never' for u in users],
+        'Last Update': [u.updated_at.strftime('%Y-%m-%d %H:%M') if u.updated_at else 'Never' for u in users],
     }
 
     df = pd.DataFrame(data)
@@ -1032,3 +1032,488 @@ def export_users():
         as_attachment=True,
         download_name=filename
     )
+
+
+# ============================================================
+# STATS & ANALYTICS ENDPOINTS
+# ============================================================
+
+@bp.route('/stats', methods=['GET'])
+@jwt_required()
+@admin_required()
+def get_users_stats():
+    """
+    Get comprehensive user statistics for dashboard.
+    Admin only.
+    """
+    from sqlalchemy import func
+    from app.models import Inspection, SpecialistJob, InspectionAssignment
+
+    # Basic counts
+    total_users = User.query.count()
+    active_users = User.query.filter_by(is_active=True).count()
+    inactive_users = total_users - active_users
+
+    # Count by role
+    role_counts = db.session.query(
+        User.role, func.count(User.id)
+    ).group_by(User.role).all()
+    by_role = {role: count for role, count in role_counts}
+
+    # Count by shift
+    shift_counts = db.session.query(
+        User.shift, func.count(User.id)
+    ).filter(User.is_active == True).group_by(User.shift).all()
+    by_shift = {shift or 'unassigned': count for shift, count in shift_counts}
+
+    # Count by specialization
+    spec_counts = db.session.query(
+        User.specialization, func.count(User.id)
+    ).filter(User.is_active == True).group_by(User.specialization).all()
+    by_specialization = {spec or 'none': count for spec, count in spec_counts}
+
+    # Users on leave today
+    today = date.today()
+    on_leave_count = Leave.query.filter(
+        Leave.status == 'approved',
+        Leave.date_from <= today,
+        Leave.date_to >= today
+    ).count()
+
+    # Recent activity (users who were updated last 7 days - proxy for activity)
+    from datetime import timedelta
+    week_ago = datetime.now() - timedelta(days=7)
+    active_last_week = User.query.filter(
+        User.updated_at >= week_ago,
+        User.is_active == True
+    ).count()
+
+    # Top performers (by points)
+    top_performers = User.query.filter(
+        User.is_active == True,
+        User.total_points > 0
+    ).order_by(User.total_points.desc()).limit(5).all()
+
+    # Workload summary - active assignments per role
+    workload = {}
+    try:
+        # Inspector workload
+        inspector_assignments = db.session.query(
+            User.id, User.full_name, func.count(InspectionAssignment.id)
+        ).join(
+            InspectionAssignment,
+            db.or_(
+                InspectionAssignment.mechanical_inspector_id == User.id,
+                InspectionAssignment.electrical_inspector_id == User.id
+            )
+        ).filter(
+            User.role == 'inspector',
+            User.is_active == True,
+            InspectionAssignment.status.in_(['assigned', 'in_progress'])
+        ).group_by(User.id, User.full_name).all()
+        workload['inspectors'] = [
+            {'id': id, 'name': name, 'active_tasks': count}
+            for id, name, count in inspector_assignments
+        ]
+
+        # Specialist workload
+        specialist_jobs = db.session.query(
+            User.id, User.full_name, func.count(SpecialistJob.id)
+        ).join(
+            SpecialistJob, SpecialistJob.specialist_id == User.id
+        ).filter(
+            User.role == 'specialist',
+            User.is_active == True,
+            SpecialistJob.status.in_(['assigned', 'in_progress'])
+        ).group_by(User.id, User.full_name).all()
+        workload['specialists'] = [
+            {'id': id, 'name': name, 'active_tasks': count}
+            for id, name, count in specialist_jobs
+        ]
+    except Exception:
+        workload = {'inspectors': [], 'specialists': []}
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'total': total_users,
+            'active': active_users,
+            'inactive': inactive_users,
+            'on_leave': on_leave_count,
+            'active_last_week': active_last_week,
+            'by_role': by_role,
+            'by_shift': by_shift,
+            'by_specialization': by_specialization,
+            'top_performers': [
+                {'id': u.id, 'name': u.full_name, 'role': u.role, 'points': u.total_points}
+                for u in top_performers
+            ],
+            'workload': workload
+        }
+    }), 200
+
+
+@bp.route('/workload', methods=['GET'])
+@jwt_required()
+@admin_required()
+def get_workload_analysis():
+    """
+    Get detailed workload analysis for all users.
+    Admin only.
+    """
+    from sqlalchemy import func
+    from app.models import Inspection, SpecialistJob, InspectionAssignment
+
+    users = User.query.filter_by(is_active=True).all()
+    workload_data = []
+
+    for user in users:
+        user_data = {
+            'id': user.id,
+            'full_name': user.full_name,
+            'role': user.role,
+            'shift': user.shift,
+            'specialization': user.specialization,
+            'active_tasks': 0,
+            'completed_today': 0,
+            'completed_week': 0,
+            'utilization': 0,
+            'status': 'available'
+        }
+
+        today = date.today()
+        week_ago = datetime.now() - timedelta(days=7)
+
+        try:
+            if user.role == 'inspector':
+                # Active assignments
+                active = InspectionAssignment.query.filter(
+                    db.or_(
+                        InspectionAssignment.mechanical_inspector_id == user.id,
+                        InspectionAssignment.electrical_inspector_id == user.id
+                    ),
+                    InspectionAssignment.status.in_(['assigned', 'in_progress'])
+                ).count()
+                user_data['active_tasks'] = active
+
+                # Completed today
+                completed_today = Inspection.query.filter(
+                    Inspection.inspector_id == user.id,
+                    Inspection.status == 'completed',
+                    func.date(Inspection.completed_at) == today
+                ).count()
+                user_data['completed_today'] = completed_today
+
+                # Completed this week
+                completed_week = Inspection.query.filter(
+                    Inspection.inspector_id == user.id,
+                    Inspection.status == 'completed',
+                    Inspection.completed_at >= week_ago
+                ).count()
+                user_data['completed_week'] = completed_week
+
+            elif user.role == 'specialist':
+                # Active jobs
+                active = SpecialistJob.query.filter(
+                    SpecialistJob.specialist_id == user.id,
+                    SpecialistJob.status.in_(['assigned', 'in_progress'])
+                ).count()
+                user_data['active_tasks'] = active
+
+                # Completed today
+                completed_today = SpecialistJob.query.filter(
+                    SpecialistJob.specialist_id == user.id,
+                    SpecialistJob.status == 'completed',
+                    func.date(SpecialistJob.completed_at) == today
+                ).count()
+                user_data['completed_today'] = completed_today
+
+                # Completed this week
+                completed_week = SpecialistJob.query.filter(
+                    SpecialistJob.specialist_id == user.id,
+                    SpecialistJob.status == 'completed',
+                    SpecialistJob.completed_at >= week_ago
+                ).count()
+                user_data['completed_week'] = completed_week
+
+            # Calculate utilization (target: 5 tasks per day)
+            daily_target = 5
+            user_data['utilization'] = min(100, int((user_data['active_tasks'] / daily_target) * 100))
+
+            # Determine status
+            if user_data['active_tasks'] == 0:
+                user_data['status'] = 'available'
+            elif user_data['active_tasks'] <= 3:
+                user_data['status'] = 'light'
+            elif user_data['active_tasks'] <= 6:
+                user_data['status'] = 'optimal'
+            else:
+                user_data['status'] = 'overloaded'
+
+        except Exception:
+            pass
+
+        workload_data.append(user_data)
+
+    # Sort by active tasks (descending)
+    workload_data.sort(key=lambda x: x['active_tasks'], reverse=True)
+
+    # Calculate team averages
+    total_active = sum(u['active_tasks'] for u in workload_data)
+    avg_utilization = sum(u['utilization'] for u in workload_data) / len(workload_data) if workload_data else 0
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'users': workload_data,
+            'summary': {
+                'total_active_tasks': total_active,
+                'average_utilization': round(avg_utilization, 1),
+                'available_count': len([u for u in workload_data if u['status'] == 'available']),
+                'overloaded_count': len([u for u in workload_data if u['status'] == 'overloaded'])
+            }
+        }
+    }), 200
+
+
+@bp.route('/ai-search', methods=['POST'])
+@jwt_required()
+@admin_required()
+def ai_search_users():
+    """
+    AI-powered natural language search for users.
+    Examples:
+    - "night shift mechanical inspectors"
+    - "specialists with high workload"
+    - "users who haven't logged in this week"
+    Admin only.
+    """
+    from sqlalchemy import func
+    from app.models import SpecialistJob, InspectionAssignment
+
+    data = request.get_json()
+    query_text = data.get('query', '').lower().strip()
+
+    if not query_text:
+        raise ValidationError("Search query is required")
+
+    # Parse the natural language query
+    filters = {
+        'role': None,
+        'shift': None,
+        'specialization': None,
+        'status': None,
+        'workload': None,
+        'activity': None
+    }
+
+    # Role detection
+    if 'admin' in query_text:
+        filters['role'] = 'admin'
+    elif 'inspector' in query_text:
+        filters['role'] = 'inspector'
+    elif 'specialist' in query_text:
+        filters['role'] = 'specialist'
+    elif 'engineer' in query_text and 'quality' not in query_text:
+        filters['role'] = 'engineer'
+    elif 'quality' in query_text or 'qe' in query_text:
+        filters['role'] = 'quality_engineer'
+    elif 'maintenance' in query_text:
+        filters['role'] = 'maintenance'
+
+    # Shift detection
+    if 'night' in query_text:
+        filters['shift'] = 'night'
+    elif 'day' in query_text:
+        filters['shift'] = 'day'
+
+    # Specialization detection
+    if 'mechanical' in query_text:
+        filters['specialization'] = 'mechanical'
+    elif 'electrical' in query_text:
+        filters['specialization'] = 'electrical'
+    elif 'hvac' in query_text:
+        filters['specialization'] = 'hvac'
+
+    # Status detection
+    if 'inactive' in query_text or 'disabled' in query_text:
+        filters['status'] = 'inactive'
+    elif 'active' in query_text:
+        filters['status'] = 'active'
+    elif 'leave' in query_text or 'vacation' in query_text:
+        filters['status'] = 'on_leave'
+
+    # Workload detection
+    if 'overload' in query_text or 'busy' in query_text or 'high workload' in query_text:
+        filters['workload'] = 'overloaded'
+    elif 'available' in query_text or 'free' in query_text or 'idle' in query_text:
+        filters['workload'] = 'available'
+
+    # Activity detection
+    if "haven't logged" in query_text or 'inactive' in query_text or 'not logged' in query_text:
+        filters['activity'] = 'inactive_login'
+    elif 'recent' in query_text or 'active today' in query_text:
+        filters['activity'] = 'recent_login'
+
+    # Build query
+    query = User.query
+
+    if filters['role']:
+        query = query.filter(User.role == filters['role'])
+    if filters['shift']:
+        query = query.filter(User.shift == filters['shift'])
+    if filters['specialization']:
+        query = query.filter(User.specialization == filters['specialization'])
+    if filters['status'] == 'inactive':
+        query = query.filter(User.is_active == False)
+    elif filters['status'] == 'active':
+        query = query.filter(User.is_active == True)
+    elif filters['status'] == 'on_leave':
+        today = date.today()
+        on_leave_ids = db.session.query(Leave.user_id).filter(
+            Leave.status == 'approved',
+            Leave.date_from <= today,
+            Leave.date_to >= today
+        ).subquery()
+        query = query.filter(User.id.in_(on_leave_ids))
+
+    if filters['activity'] == 'inactive_login':
+        week_ago = datetime.now() - timedelta(days=7)
+        query = query.filter(
+            db.or_(User.updated_at < week_ago, User.updated_at.is_(None))
+        )
+    elif filters['activity'] == 'recent_login':
+        today_start = datetime.now().replace(hour=0, minute=0, second=0)
+        query = query.filter(User.updated_at >= today_start)
+
+    users = query.order_by(User.full_name).limit(50).all()
+
+    # Post-filter by workload if needed
+    result_users = []
+    for user in users:
+        user_data = user.to_dict()
+        user_data['workload_status'] = 'unknown'
+
+        # Calculate workload for inspectors/specialists
+        try:
+            active_tasks = 0
+            if user.role == 'inspector':
+                active_tasks = InspectionAssignment.query.filter(
+                    db.or_(
+                        InspectionAssignment.mechanical_inspector_id == user.id,
+                        InspectionAssignment.electrical_inspector_id == user.id
+                    ),
+                    InspectionAssignment.status.in_(['assigned', 'in_progress'])
+                ).count()
+            elif user.role == 'specialist':
+                active_tasks = SpecialistJob.query.filter(
+                    SpecialistJob.specialist_id == user.id,
+                    SpecialistJob.status.in_(['assigned', 'in_progress'])
+                ).count()
+
+            user_data['active_tasks'] = active_tasks
+            if active_tasks == 0:
+                user_data['workload_status'] = 'available'
+            elif active_tasks <= 3:
+                user_data['workload_status'] = 'light'
+            elif active_tasks <= 6:
+                user_data['workload_status'] = 'optimal'
+            else:
+                user_data['workload_status'] = 'overloaded'
+        except Exception:
+            user_data['active_tasks'] = 0
+
+        # Apply workload filter
+        if filters['workload']:
+            if filters['workload'] == 'overloaded' and user_data['workload_status'] != 'overloaded':
+                continue
+            if filters['workload'] == 'available' and user_data['workload_status'] != 'available':
+                continue
+
+        result_users.append(user_data)
+
+    return jsonify({
+        'status': 'success',
+        'query': query_text,
+        'filters_applied': {k: v for k, v in filters.items() if v},
+        'count': len(result_users),
+        'data': result_users
+    }), 200
+
+
+@bp.route('/bulk-action', methods=['POST'])
+@jwt_required()
+@admin_required()
+def bulk_action():
+    """
+    Perform bulk actions on multiple users.
+    Admin only.
+
+    Request Body:
+        {
+            "user_ids": [1, 2, 3],
+            "action": "activate" | "deactivate" | "change_shift" | "change_role",
+            "value": "day" | "night" | "inspector" | etc.
+        }
+    """
+    data = request.get_json()
+
+    user_ids = data.get('user_ids', [])
+    action = data.get('action')
+    value = data.get('value')
+
+    if not user_ids:
+        raise ValidationError("No users selected")
+    if not action:
+        raise ValidationError("Action is required")
+
+    valid_actions = ['activate', 'deactivate', 'change_shift', 'change_role', 'change_specialization']
+    if action not in valid_actions:
+        raise ValidationError(f"Action must be one of: {', '.join(valid_actions)}")
+
+    users = User.query.filter(User.id.in_(user_ids)).all()
+    if not users:
+        raise NotFoundError("No users found with provided IDs")
+
+    updated_count = 0
+    errors = []
+
+    for user in users:
+        try:
+            if action == 'activate':
+                user.is_active = True
+                updated_count += 1
+            elif action == 'deactivate':
+                user.is_active = False
+                updated_count += 1
+            elif action == 'change_shift':
+                if value not in ['day', 'night']:
+                    errors.append(f"User {user.id}: Invalid shift value")
+                    continue
+                user.shift = value
+                updated_count += 1
+            elif action == 'change_role':
+                valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance']
+                if value not in valid_roles:
+                    errors.append(f"User {user.id}: Invalid role value")
+                    continue
+                user.role = value
+                updated_count += 1
+            elif action == 'change_specialization':
+                valid_specs = ['mechanical', 'electrical', 'hvac']
+                if value not in valid_specs:
+                    errors.append(f"User {user.id}: Invalid specialization value")
+                    continue
+                user.specialization = value
+                updated_count += 1
+        except Exception as e:
+            errors.append(f"User {user.id}: {str(e)}")
+
+    safe_commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'{updated_count} users updated successfully',
+        'updated_count': updated_count,
+        'errors': errors if errors else None
+    }), 200

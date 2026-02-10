@@ -2,7 +2,14 @@ export { initApiClient, getApiClient, getApiBaseUrl, setLanguage, apiClient } fr
 
 export { authApi } from './auth.api';
 export { usersApi } from './users.api';
-export type { UserListParams } from './users.api';
+export type {
+  UserListParams,
+  UserDashboardStats,
+  UserWorkload,
+  WorkloadAnalysis,
+  AISearchResult,
+  BulkActionPayload,
+} from './users.api';
 export { equipmentApi } from './equipment.api';
 export type { EquipmentListParams } from './equipment.api';
 export { checklistsApi } from './checklists.api';
@@ -11,6 +18,11 @@ export type {
   CreateTemplatePayload as ChecklistCreateTemplatePayload,
   CreateChecklistItemPayload,
   UpdateChecklistItemPayload,
+  ChecklistStats,
+  TemplateAnalytics,
+  AIGeneratePayload,
+  AISuggestion,
+  SearchResult as ChecklistSearchResult,
 } from './checklists.api';
 export { inspectionsApi } from './inspections.api';
 export type { InspectionListParams, StartInspectionPayload, ReviewPayload } from './inspections.api';
