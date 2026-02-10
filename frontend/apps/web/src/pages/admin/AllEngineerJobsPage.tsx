@@ -1,3 +1,4 @@
+// Enhanced Engineer Jobs Page with Stats, Kanban, Charts, AI Insights
 import { useState } from 'react';
 import {
   Card,
@@ -6,15 +7,33 @@ import {
   Rate,
   Typography,
   Tabs,
+  Space,
+  Button,
+  Segmented,
+  Row,
+  Col,
+  Drawer,
 } from 'antd';
+import {
+  AppstoreOutlined,
+  UnorderedListOutlined,
+  RobotOutlined,
+} from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import {
   engineerJobsApi,
   type EngineerJob,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+import {
+  EngineerStatsHeader,
+  EngineerKanbanBoard,
+  EngineerPerformanceChart,
+  AIInsightsWidget,
+} from '../../components/engineer-jobs';
 
 const statusColorMap: Record<string, string> = {
   assigned: 'default',
@@ -25,16 +44,25 @@ const statusColorMap: Record<string, string> = {
   qc_approved: 'cyan',
 };
 
+type ViewMode = 'list' | 'kanban';
+
 export default function AllEngineerJobsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [showInsights, setShowInsights] = useState(false);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['engineer-jobs', page, perPage, statusFilter],
-    queryFn: () => engineerJobsApi.list({ page, per_page: perPage, status: statusFilter }),
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['engineer-jobs', page, perPage, statusFilter, viewMode],
+    queryFn: () => engineerJobsApi.list({
+      page,
+      per_page: viewMode === 'kanban' ? 100 : perPage,
+      status: statusFilter
+    }),
   });
 
   const columns: ColumnsType<EngineerJob> = [
@@ -124,29 +152,93 @@ export default function AllEngineerJobsPage() {
   ];
 
   return (
-    <Card title={<Typography.Title level={4}>{t('nav.engineerJobs', 'All Engineer Jobs')}</Typography.Title>}>
+    <div>
+      {/* Stats Header */}
+      <EngineerStatsHeader period="week" />
+
+      {/* Page Header */}
+      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {t('nav.engineerJobs', 'All Engineer Jobs')}
+        </Typography.Title>
+        <Space>
+          <Button
+            icon={<RobotOutlined />}
+            onClick={() => setShowInsights(true)}
+          >
+            {t('jobs.ai_insights', 'AI Insights')}
+          </Button>
+          <Segmented
+            value={viewMode}
+            onChange={(value) => setViewMode(value as ViewMode)}
+            options={[
+              { label: <UnorderedListOutlined />, value: 'list' },
+              { label: <AppstoreOutlined />, value: 'kanban' },
+            ]}
+          />
+        </Space>
+      </Space>
+
+      {/* Status Tabs */}
       <Tabs
         activeKey={statusFilter || 'all'}
         onChange={(key) => { setStatusFilter(key === 'all' ? undefined : key); setPage(1); }}
         items={tabItems}
       />
 
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={jobs}
-        loading={isLoading}
-        locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
-        pagination={{
-          current: pagination?.page || page,
-          pageSize: pagination?.per_page || perPage,
-          total: pagination?.total || 0,
-          showSizeChanger: true,
-          showTotal: (total) => t('common.totalItems', 'Total: {{total}} items', { total }),
-          onChange: (p, ps) => { setPage(p); setPerPage(ps); },
-        }}
-        scroll={{ x: 1400 }}
-      />
-    </Card>
+      {/* View Content */}
+      {viewMode === 'list' ? (
+        <Card>
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={jobs}
+            loading={isLoading}
+            locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
+            onRow={(record) => ({
+              onClick: () => navigate(`/admin/engineer-jobs/${record.id}`),
+              style: { cursor: 'pointer' },
+            })}
+            pagination={{
+              current: pagination?.page || page,
+              pageSize: pagination?.per_page || perPage,
+              total: pagination?.total || 0,
+              showSizeChanger: true,
+              showTotal: (total) => t('common.totalItems', 'Total: {{total}} items', { total }),
+              onChange: (p, ps) => { setPage(p); setPerPage(ps); },
+            }}
+            scroll={{ x: 1400 }}
+          />
+        </Card>
+      ) : (
+        <EngineerKanbanBoard
+          jobs={jobs}
+          loading={isLoading}
+          onRefresh={() => refetch()}
+        />
+      )}
+
+      {/* Performance Chart */}
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col span={24}>
+          <EngineerPerformanceChart />
+        </Col>
+      </Row>
+
+      {/* AI Insights Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <RobotOutlined />
+            {t('jobs.ai_insights', 'AI Insights')}
+          </Space>
+        }
+        open={showInsights}
+        onClose={() => setShowInsights(false)}
+        width={400}
+      >
+        <AIInsightsWidget />
+      </Drawer>
+    </div>
   );
 }
