@@ -1,16 +1,206 @@
 """
 Inspection endpoints for the core workflow.
+Enhanced with stats, advanced filters, bulk actions, and AI insights.
 """
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.inspection_service import InspectionService
-from app.models import Inspection, InspectionAssignment, User
+from app.models import Inspection, InspectionAssignment, User, Equipment, Defect, InspectionAnswer
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
-from app.utils.decorators import get_current_user, admin_required, get_language
+from app.utils.decorators import get_current_user, admin_required, get_language, role_required
 from app.extensions import db
+from sqlalchemy import func, and_, or_
+from datetime import datetime, date, timedelta
 
 bp = Blueprint('inspections', __name__)
+
+
+# ============================================
+# STATS & ANALYTICS
+# ============================================
+
+@bp.route('/stats', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer', 'quality_engineer')
+def get_inspection_stats():
+    """
+    Get comprehensive inspection statistics for dashboard.
+    Returns counts by status, pass/fail rates, trends, and performance metrics.
+    """
+    today = date.today()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+
+    # Overall counts
+    total = Inspection.query.count()
+    by_status = {
+        'draft': Inspection.query.filter_by(status='draft').count(),
+        'submitted': Inspection.query.filter_by(status='submitted').count(),
+        'reviewed': Inspection.query.filter_by(status='reviewed').count()
+    }
+
+    # Results distribution
+    by_result = {
+        'pass': Inspection.query.filter_by(result='pass').count(),
+        'fail': Inspection.query.filter_by(result='fail').count(),
+        'incomplete': Inspection.query.filter_by(result='incomplete').count()
+    }
+
+    # Pass rate
+    completed = by_result['pass'] + by_result['fail']
+    pass_rate = round((by_result['pass'] / completed * 100), 1) if completed > 0 else 0
+
+    # Today's inspections
+    today_start = datetime.combine(today, datetime.min.time())
+    today_total = Inspection.query.filter(Inspection.started_at >= today_start).count()
+    today_submitted = Inspection.query.filter(
+        Inspection.submitted_at >= today_start
+    ).count()
+
+    # Week stats
+    week_start = datetime.combine(week_ago, datetime.min.time())
+    week_total = Inspection.query.filter(Inspection.started_at >= week_start).count()
+    week_submitted = Inspection.query.filter(Inspection.submitted_at >= week_start).count()
+    week_reviewed = Inspection.query.filter(Inspection.reviewed_at >= week_start).count()
+
+    # Pending review count
+    pending_review = Inspection.query.filter_by(status='submitted').count()
+
+    # Average completion time (from start to submit)
+    completed_inspections = Inspection.query.filter(
+        Inspection.submitted_at.isnot(None),
+        Inspection.started_at.isnot(None)
+    ).limit(100).all()
+
+    if completed_inspections:
+        total_minutes = sum(
+            (i.submitted_at - i.started_at).total_seconds() / 60
+            for i in completed_inspections
+        )
+        avg_completion_minutes = round(total_minutes / len(completed_inspections), 1)
+    else:
+        avg_completion_minutes = 0
+
+    # By equipment type
+    equipment_stats = db.session.query(
+        Equipment.equipment_type,
+        func.count(Inspection.id).label('total'),
+        func.sum(func.cast(Inspection.result == 'fail', db.Integer)).label('failed')
+    ).join(Inspection).filter(
+        Inspection.started_at >= week_start
+    ).group_by(Equipment.equipment_type).all()
+
+    by_equipment_type = [
+        {
+            'type': eq_type or 'Unknown',
+            'total': total,
+            'failed': failed or 0,
+            'fail_rate': round((failed or 0) / total * 100, 1) if total > 0 else 0
+        }
+        for eq_type, total, failed in equipment_stats
+    ]
+
+    # Top performers (inspectors with most completed inspections)
+    top_inspectors = db.session.query(
+        User.id, User.full_name,
+        func.count(Inspection.id).label('completed_count'),
+        func.avg(func.cast(Inspection.result == 'pass', db.Float)).label('pass_rate')
+    ).join(Inspection, Inspection.technician_id == User.id).filter(
+        Inspection.status == 'reviewed',
+        Inspection.reviewed_at >= week_start
+    ).group_by(User.id, User.full_name).order_by(
+        func.count(Inspection.id).desc()
+    ).limit(10).all()
+
+    top_performers = [
+        {
+            'id': id,
+            'name': name,
+            'completed': count,
+            'pass_rate': round((rate or 0) * 100, 1)
+        }
+        for id, name, count, rate in top_inspectors
+    ]
+
+    # Daily trend (last 7 days)
+    daily_trend = []
+    for i in range(7):
+        d = today - timedelta(days=i)
+        day_start = datetime.combine(d, datetime.min.time())
+        day_end = datetime.combine(d + timedelta(days=1), datetime.min.time())
+
+        day_total = Inspection.query.filter(
+            Inspection.started_at >= day_start,
+            Inspection.started_at < day_end
+        ).count()
+
+        day_submitted = Inspection.query.filter(
+            Inspection.submitted_at >= day_start,
+            Inspection.submitted_at < day_end
+        ).count()
+
+        day_passed = Inspection.query.filter(
+            Inspection.reviewed_at >= day_start,
+            Inspection.reviewed_at < day_end,
+            Inspection.result == 'pass'
+        ).count()
+
+        day_failed = Inspection.query.filter(
+            Inspection.reviewed_at >= day_start,
+            Inspection.reviewed_at < day_end,
+            Inspection.result == 'fail'
+        ).count()
+
+        daily_trend.append({
+            'date': d.isoformat(),
+            'started': day_total,
+            'submitted': day_submitted,
+            'passed': day_passed,
+            'failed': day_failed
+        })
+
+    # Defect correlation
+    defect_count = Defect.query.filter(
+        Defect.created_at >= week_start
+    ).count()
+
+    inspections_with_defects = db.session.query(
+        func.count(func.distinct(Defect.inspection_id))
+    ).filter(Defect.created_at >= week_start).scalar() or 0
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'total': total,
+            'by_status': by_status,
+            'by_result': by_result,
+            'pass_rate': pass_rate,
+            'today': {
+                'total': today_total,
+                'submitted': today_submitted
+            },
+            'week': {
+                'total': week_total,
+                'submitted': week_submitted,
+                'reviewed': week_reviewed
+            },
+            'pending_review': pending_review,
+            'avg_completion_minutes': avg_completion_minutes,
+            'by_equipment_type': by_equipment_type,
+            'top_performers': top_performers,
+            'daily_trend': daily_trend,
+            'defects': {
+                'total_this_week': defect_count,
+                'inspections_with_defects': inspections_with_defects
+            }
+        }
+    }), 200
+
+
+# ============================================
+# ENHANCED LIST WITH FILTERS & SEARCH
+# ============================================
 
 
 @bp.route('/start', methods=['POST'])
@@ -273,43 +463,108 @@ def review_inspection(inspection_id):
 @jwt_required()
 def list_inspections():
     """
-    List inspections. Filtered by role.
+    List inspections with advanced filtering and search.
     - Technicians see only their own
-    - Admins see all
-    
+    - Admins/Engineers see all
+
     Query Parameters:
         status: Filter by status (draft, submitted, reviewed)
+        result: Filter by result (pass, fail, incomplete)
         equipment_id: Filter by equipment
-    
-    Returns:
-        {
-            "status": "success",
-            "inspections": [...]
-        }
+        technician_id: Filter by technician
+        date_from: Start date (YYYY-MM-DD)
+        date_to: End date (YYYY-MM-DD)
+        search: Search by equipment name or inspection code
+        has_defects: Filter inspections with defects (true/false)
+        page: Page number (default 1)
+        per_page: Items per page (default 20)
+
+    Returns paginated results with metadata.
     """
     current_user = get_current_user()
-    
+
     query = Inspection.query
-    
+
     # Filter by role — inspectors/specialists see only their own
     if current_user.role in ('inspector', 'specialist', 'technician'):
         query = query.filter_by(technician_id=current_user.id)
-    
-    # Apply filters
+
+    # Status filter
     status = request.args.get('status')
     if status:
         query = query.filter_by(status=status)
-    
-    equipment_id = request.args.get('equipment_id')
+
+    # Result filter
+    result = request.args.get('result')
+    if result:
+        query = query.filter_by(result=result)
+
+    # Equipment filter
+    equipment_id = request.args.get('equipment_id', type=int)
     if equipment_id:
         query = query.filter_by(equipment_id=equipment_id)
-    
-    inspections = query.order_by(Inspection.created_at.desc()).all()
+
+    # Technician filter (admin only)
+    technician_id = request.args.get('technician_id', type=int)
+    if technician_id and current_user.role in ('admin', 'engineer', 'quality_engineer'):
+        query = query.filter_by(technician_id=technician_id)
+
+    # Date range filters
+    date_from = request.args.get('date_from')
+    if date_from:
+        start_date = datetime.combine(date.fromisoformat(date_from), datetime.min.time())
+        query = query.filter(Inspection.started_at >= start_date)
+
+    date_to = request.args.get('date_to')
+    if date_to:
+        end_date = datetime.combine(date.fromisoformat(date_to) + timedelta(days=1), datetime.min.time())
+        query = query.filter(Inspection.started_at < end_date)
+
+    # Search by equipment name or inspection code
+    search = request.args.get('search')
+    if search:
+        search_term = f'%{search}%'
+        query = query.outerjoin(Equipment).filter(
+            or_(
+                Inspection.inspection_code.ilike(search_term),
+                Equipment.name.ilike(search_term),
+                Equipment.serial_number.ilike(search_term)
+            )
+        )
+
+    # Has defects filter
+    has_defects = request.args.get('has_defects')
+    if has_defects == 'true':
+        defect_inspection_ids = db.session.query(Defect.inspection_id).distinct()
+        query = query.filter(Inspection.id.in_(defect_inspection_ids))
+    elif has_defects == 'false':
+        defect_inspection_ids = db.session.query(Defect.inspection_id).distinct()
+        query = query.filter(~Inspection.id.in_(defect_inspection_ids))
+
+    # Pagination
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    per_page = min(per_page, 100)  # Max 100 per page
+
+    # Get total before pagination
+    total = query.count()
+
+    # Apply ordering and pagination
+    inspections = query.order_by(Inspection.created_at.desc()).offset(
+        (page - 1) * per_page
+    ).limit(per_page).all()
+
     lang = get_language(current_user)
 
     return jsonify({
         'status': 'success',
-        'data': [inspection.to_dict(language=lang) for inspection in inspections]
+        'data': [inspection.to_dict(language=lang) for inspection in inspections],
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'pages': (total + per_page - 1) // per_page
+        }
     }), 200
 
 
@@ -793,4 +1048,430 @@ def delete_inspection(inspection_id):
     return jsonify({
         'status': 'success',
         'message': 'Inspection deleted'
+    }), 200
+
+
+# ============================================
+# BULK ACTIONS
+# ============================================
+
+@bp.route('/bulk-review', methods=['POST'])
+@jwt_required()
+@admin_required()
+def bulk_review():
+    """
+    Bulk review multiple inspections.
+
+    Request Body:
+        {
+            "inspection_ids": [1, 2, 3],
+            "result": "pass",  // pass, fail, incomplete
+            "notes": "Bulk reviewed - all passed quality checks"
+        }
+    """
+    data = request.get_json()
+    inspection_ids = data.get('inspection_ids', [])
+    result = data.get('result')
+    notes = data.get('notes', 'Bulk reviewed')
+
+    if not inspection_ids:
+        return jsonify({
+            'status': 'error',
+            'message': 'inspection_ids is required'
+        }), 400
+
+    if result not in ('pass', 'fail', 'incomplete'):
+        return jsonify({
+            'status': 'error',
+            'message': 'result must be pass, fail, or incomplete'
+        }), 400
+
+    current_user_id = get_jwt_identity()
+    results = {'success': [], 'errors': []}
+
+    for inspection_id in inspection_ids:
+        try:
+            inspection = db.session.get(Inspection, inspection_id)
+
+            if not inspection:
+                results['errors'].append({
+                    'inspection_id': inspection_id,
+                    'error': 'Inspection not found'
+                })
+                continue
+
+            if inspection.status != 'submitted':
+                results['errors'].append({
+                    'inspection_id': inspection_id,
+                    'error': f'Cannot review - status is {inspection.status}'
+                })
+                continue
+
+            # Review the inspection
+            inspection.status = 'reviewed'
+            inspection.result = result
+            inspection.notes = notes
+            inspection.reviewed_at = datetime.utcnow()
+            inspection.reviewer_id = int(current_user_id)
+
+            db.session.commit()
+
+            results['success'].append({
+                'inspection_id': inspection_id,
+                'result': result
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            results['errors'].append({
+                'inspection_id': inspection_id,
+                'error': str(e)
+            })
+
+    return jsonify({
+        'status': 'success',
+        'data': results,
+        'summary': {
+            'total': len(inspection_ids),
+            'successful': len(results['success']),
+            'failed': len(results['errors'])
+        }
+    }), 200
+
+
+@bp.route('/bulk-export', methods=['POST'])
+@jwt_required()
+@role_required('admin', 'engineer', 'quality_engineer')
+def bulk_export():
+    """
+    Export multiple inspection reports as a ZIP file.
+
+    Request Body:
+        {
+            "inspection_ids": [1, 2, 3]
+        }
+    """
+    import io
+    import zipfile
+    from flask import send_file
+    from app.services.pdf_report_service import generate_inspection_report
+
+    data = request.get_json()
+    inspection_ids = data.get('inspection_ids', [])
+
+    if not inspection_ids:
+        return jsonify({
+            'status': 'error',
+            'message': 'inspection_ids is required'
+        }), 400
+
+    current_user = get_current_user()
+    lang = get_language(current_user)
+
+    # Create ZIP in memory
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for inspection_id in inspection_ids[:50]:  # Limit to 50
+            try:
+                inspection = db.session.get(Inspection, inspection_id)
+                if not inspection or inspection.status == 'draft':
+                    continue
+
+                inspection_data = inspection.to_dict(include_answers=True, language=lang)
+                pdf_bytes = generate_inspection_report(inspection_data, language=lang)
+
+                code = inspection.inspection_code or f"INS-{inspection.id}"
+                filename = f"inspection_report_{code}.pdf"
+
+                zip_file.writestr(filename, pdf_bytes.getvalue())
+            except Exception:
+                continue
+
+    zip_buffer.seek(0)
+
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'inspection_reports_{date.today().isoformat()}.zip'
+    )
+
+
+# ============================================
+# AI INSIGHTS & ANALYTICS
+# ============================================
+
+@bp.route('/ai-insights', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer', 'quality_engineer')
+def get_ai_insights():
+    """
+    Get AI-powered insights from inspection data.
+    Analyzes patterns, anomalies, and provides recommendations.
+    """
+    today = date.today()
+    month_ago = today - timedelta(days=30)
+
+    # Get recent inspections with defects
+    recent_inspections = Inspection.query.filter(
+        Inspection.started_at >= datetime.combine(month_ago, datetime.min.time()),
+        Inspection.status == 'reviewed'
+    ).all()
+
+    # Equipment failure patterns
+    failure_by_equipment = db.session.query(
+        Equipment.id,
+        Equipment.name,
+        Equipment.equipment_type,
+        func.count(Inspection.id).label('total'),
+        func.sum(func.cast(Inspection.result == 'fail', db.Integer)).label('failed')
+    ).join(Inspection).filter(
+        Inspection.started_at >= datetime.combine(month_ago, datetime.min.time()),
+        Inspection.status == 'reviewed'
+    ).group_by(Equipment.id, Equipment.name, Equipment.equipment_type).having(
+        func.sum(func.cast(Inspection.result == 'fail', db.Integer)) > 0
+    ).order_by(
+        func.sum(func.cast(Inspection.result == 'fail', db.Integer)).desc()
+    ).limit(10).all()
+
+    at_risk_equipment = [
+        {
+            'id': eq_id,
+            'name': name,
+            'type': eq_type,
+            'total_inspections': total,
+            'failures': failed,
+            'failure_rate': round(failed / total * 100, 1) if total > 0 else 0,
+            'risk_level': 'high' if (failed / total * 100 if total > 0 else 0) > 30 else 'medium'
+        }
+        for eq_id, name, eq_type, total, failed in failure_by_equipment
+    ]
+
+    # Defect patterns by category
+    from app.models import ChecklistItem
+    defect_patterns = db.session.query(
+        ChecklistItem.category,
+        func.count(Defect.id).label('count')
+    ).join(Defect, Defect.checklist_item_id == ChecklistItem.id).filter(
+        Defect.created_at >= datetime.combine(month_ago, datetime.min.time())
+    ).group_by(ChecklistItem.category).all()
+
+    defect_by_category = {
+        cat or 'uncategorized': count
+        for cat, count in defect_patterns
+    }
+
+    # Weekly trend analysis
+    weekly_data = []
+    for week in range(4):
+        week_start = today - timedelta(days=7 * (week + 1))
+        week_end = today - timedelta(days=7 * week)
+
+        week_inspections = Inspection.query.filter(
+            Inspection.started_at >= datetime.combine(week_start, datetime.min.time()),
+            Inspection.started_at < datetime.combine(week_end, datetime.min.time()),
+            Inspection.status == 'reviewed'
+        ).all()
+
+        passed = sum(1 for i in week_inspections if i.result == 'pass')
+        failed = sum(1 for i in week_inspections if i.result == 'fail')
+        total = len(week_inspections)
+
+        weekly_data.append({
+            'week': f'Week {4 - week}',
+            'start': week_start.isoformat(),
+            'end': week_end.isoformat(),
+            'total': total,
+            'passed': passed,
+            'failed': failed,
+            'pass_rate': round(passed / total * 100, 1) if total > 0 else 0
+        })
+
+    # Trend direction
+    if len(weekly_data) >= 2:
+        current_rate = weekly_data[0]['pass_rate']
+        previous_rate = weekly_data[1]['pass_rate']
+        trend = 'improving' if current_rate > previous_rate else 'declining' if current_rate < previous_rate else 'stable'
+        trend_change = round(current_rate - previous_rate, 1)
+    else:
+        trend = 'stable'
+        trend_change = 0
+
+    # Inspector performance anomalies
+    inspector_stats = db.session.query(
+        User.id,
+        User.full_name,
+        func.count(Inspection.id).label('total'),
+        func.avg(func.cast(Inspection.result == 'pass', db.Float)).label('pass_rate')
+    ).join(Inspection, Inspection.technician_id == User.id).filter(
+        Inspection.started_at >= datetime.combine(month_ago, datetime.min.time()),
+        Inspection.status == 'reviewed'
+    ).group_by(User.id, User.full_name).having(
+        func.count(Inspection.id) >= 5
+    ).all()
+
+    # Calculate average pass rate
+    if inspector_stats:
+        avg_pass_rate = sum(r[3] or 0 for r in inspector_stats) / len(inspector_stats)
+    else:
+        avg_pass_rate = 0
+
+    # Find anomalies (significantly above or below average)
+    anomalies = []
+    for user_id, name, total, pass_rate in inspector_stats:
+        if pass_rate is None:
+            continue
+        deviation = (pass_rate - avg_pass_rate) * 100
+        if abs(deviation) > 15:  # More than 15% deviation
+            anomalies.append({
+                'inspector_id': user_id,
+                'inspector_name': name,
+                'inspections': total,
+                'pass_rate': round(pass_rate * 100, 1),
+                'deviation': round(deviation, 1),
+                'type': 'high_performer' if deviation > 0 else 'needs_attention'
+            })
+
+    # AI Recommendations
+    recommendations = []
+
+    # Equipment recommendations
+    for eq in at_risk_equipment[:3]:
+        if eq['failure_rate'] > 40:
+            recommendations.append({
+                'type': 'equipment',
+                'priority': 'high',
+                'title': f"High failure rate for {eq['name']}",
+                'description': f"{eq['name']} has a {eq['failure_rate']}% failure rate. Consider scheduling preventive maintenance.",
+                'action': 'Schedule maintenance'
+            })
+
+    # Trend recommendations
+    if trend == 'declining' and trend_change < -5:
+        recommendations.append({
+            'type': 'trend',
+            'priority': 'medium',
+            'title': 'Declining pass rate trend',
+            'description': f'Pass rate dropped by {abs(trend_change)}% compared to last week. Review recent failures for patterns.',
+            'action': 'Review failures'
+        })
+
+    # Inspector recommendations
+    for anomaly in anomalies:
+        if anomaly['type'] == 'needs_attention':
+            recommendations.append({
+                'type': 'inspector',
+                'priority': 'medium',
+                'title': f"Review needed: {anomaly['inspector_name']}",
+                'description': f"Pass rate of {anomaly['pass_rate']}% is below average. May need additional training or support.",
+                'action': 'Schedule review'
+            })
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'at_risk_equipment': at_risk_equipment,
+            'defect_by_category': defect_by_category,
+            'weekly_trend': weekly_data,
+            'trend_summary': {
+                'direction': trend,
+                'change': trend_change
+            },
+            'anomalies': anomalies,
+            'recommendations': recommendations,
+            'generated_at': datetime.utcnow().isoformat()
+        }
+    }), 200
+
+
+@bp.route('/search', methods=['GET'])
+@jwt_required()
+def search_inspections():
+    """
+    Natural language search for inspections.
+
+    Query params:
+        q: Search query (e.g., "failed pump inspections last week")
+    """
+    query_text = request.args.get('q', '').lower()
+
+    if not query_text:
+        return jsonify({
+            'status': 'error',
+            'message': 'Query parameter q is required'
+        }), 400
+
+    current_user = get_current_user()
+    lang = get_language(current_user)
+
+    # Parse natural language query
+    filters = {}
+
+    # Status keywords
+    if 'failed' in query_text or 'fail' in query_text:
+        filters['result'] = 'fail'
+    elif 'passed' in query_text or 'pass' in query_text:
+        filters['result'] = 'pass'
+
+    if 'submitted' in query_text:
+        filters['status'] = 'submitted'
+    elif 'reviewed' in query_text:
+        filters['status'] = 'reviewed'
+    elif 'draft' in query_text:
+        filters['status'] = 'draft'
+
+    # Time keywords
+    today = date.today()
+    if 'today' in query_text:
+        filters['date_from'] = today
+        filters['date_to'] = today
+    elif 'yesterday' in query_text:
+        filters['date_from'] = today - timedelta(days=1)
+        filters['date_to'] = today - timedelta(days=1)
+    elif 'last week' in query_text or 'this week' in query_text:
+        filters['date_from'] = today - timedelta(days=7)
+        filters['date_to'] = today
+    elif 'last month' in query_text or 'this month' in query_text:
+        filters['date_from'] = today - timedelta(days=30)
+        filters['date_to'] = today
+
+    # Equipment type keywords
+    equipment_types = ['pump', 'crane', 'generator', 'compressor', 'conveyor', 'motor', 'valve']
+    for eq_type in equipment_types:
+        if eq_type in query_text:
+            filters['equipment_type'] = eq_type
+            break
+
+    # Build query
+    query = Inspection.query
+
+    if current_user.role in ('inspector', 'specialist', 'technician'):
+        query = query.filter_by(technician_id=current_user.id)
+
+    if filters.get('result'):
+        query = query.filter_by(result=filters['result'])
+
+    if filters.get('status'):
+        query = query.filter_by(status=filters['status'])
+
+    if filters.get('date_from'):
+        query = query.filter(Inspection.started_at >= datetime.combine(filters['date_from'], datetime.min.time()))
+
+    if filters.get('date_to'):
+        query = query.filter(Inspection.started_at < datetime.combine(filters['date_to'] + timedelta(days=1), datetime.min.time()))
+
+    if filters.get('equipment_type'):
+        query = query.join(Equipment).filter(
+            Equipment.equipment_type.ilike(f"%{filters['equipment_type']}%")
+        )
+
+    inspections = query.order_by(Inspection.created_at.desc()).limit(50).all()
+
+    return jsonify({
+        'status': 'success',
+        'query': query_text,
+        'filters_applied': {k: str(v) for k, v in filters.items()},
+        'count': len(inspections),
+        'data': [i.to_dict(language=lang) for i in inspections]
     }), 200

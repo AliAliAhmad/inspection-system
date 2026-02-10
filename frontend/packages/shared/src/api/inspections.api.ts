@@ -10,8 +10,110 @@ import {
 
 export interface InspectionListParams extends PaginationParams {
   status?: string;
+  result?: string;
   technician_id?: number;
   equipment_id?: number;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  has_defects?: boolean;
+}
+
+// Stats types
+export interface InspectionStats {
+  total: number;
+  by_status: Record<string, number>;
+  by_result: Record<string, number>;
+  pass_rate: number;
+  today: {
+    total: number;
+    submitted: number;
+  };
+  week: {
+    total: number;
+    submitted: number;
+    reviewed: number;
+  };
+  pending_review: number;
+  avg_completion_minutes: number;
+  by_equipment_type: Array<{
+    type: string;
+    total: number;
+    failed: number;
+    fail_rate: number;
+  }>;
+  top_performers: Array<{
+    id: number;
+    name: string;
+    completed: number;
+    pass_rate: number;
+  }>;
+  daily_trend: Array<{
+    date: string;
+    started: number;
+    submitted: number;
+    passed: number;
+    failed: number;
+  }>;
+  defects: {
+    total_this_week: number;
+    inspections_with_defects: number;
+  };
+}
+
+// AI Insights types
+export interface AIInsights {
+  at_risk_equipment: Array<{
+    id: number;
+    name: string;
+    type: string;
+    total_inspections: number;
+    failures: number;
+    failure_rate: number;
+    risk_level: string;
+  }>;
+  defect_by_category: Record<string, number>;
+  weekly_trend: Array<{
+    week: string;
+    start: string;
+    end: string;
+    total: number;
+    passed: number;
+    failed: number;
+    pass_rate: number;
+  }>;
+  trend_summary: {
+    direction: string;
+    change: number;
+  };
+  anomalies: Array<{
+    inspector_id: number;
+    inspector_name: string;
+    inspections: number;
+    pass_rate: number;
+    deviation: number;
+    type: string;
+  }>;
+  recommendations: Array<{
+    type: string;
+    priority: string;
+    title: string;
+    description: string;
+    action: string;
+  }>;
+  generated_at: string;
+}
+
+// Bulk action types
+export interface BulkReviewPayload {
+  inspection_ids: number[];
+  result: 'pass' | 'fail' | 'incomplete';
+  notes?: string;
+}
+
+export interface BulkReviewResult {
+  success: Array<{ inspection_id: number; result: string }>;
+  errors: Array<{ inspection_id: number; error: string }>;
 }
 
 export interface StartInspectionPayload {
@@ -104,5 +206,42 @@ export const inspectionsApi = {
     return getApiClient().get(`/api/inspections/${id}/report`, {
       responseType: 'blob',
     });
+  },
+
+  // Stats & Analytics
+  getStats() {
+    return getApiClient().get<ApiResponse<InspectionStats>>(
+      '/api/inspections/stats',
+    );
+  },
+
+  // AI-powered insights
+  getAIInsights() {
+    return getApiClient().get<ApiResponse<AIInsights>>(
+      '/api/inspections/ai-insights',
+    );
+  },
+
+  // Bulk review
+  bulkReview(payload: BulkReviewPayload) {
+    return getApiClient().post<ApiResponse<BulkReviewResult> & { summary: { total: number; successful: number; failed: number } }>(
+      '/api/inspections/bulk-review',
+      payload,
+    );
+  },
+
+  // Bulk export
+  bulkExport(inspectionIds: number[]) {
+    return getApiClient().post('/api/inspections/bulk-export', { inspection_ids: inspectionIds }, {
+      responseType: 'blob',
+    });
+  },
+
+  // Natural language search
+  search(query: string) {
+    return getApiClient().get<ApiResponse<Inspection[]> & { query: string; filters_applied: Record<string, string>; count: number }>(
+      '/api/inspections/search',
+      { params: { q: query } },
+    );
   },
 };

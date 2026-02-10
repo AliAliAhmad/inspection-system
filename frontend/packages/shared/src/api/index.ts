@@ -25,7 +25,15 @@ export type {
   SearchResult as ChecklistSearchResult,
 } from './checklists.api';
 export { inspectionsApi } from './inspections.api';
-export type { InspectionListParams, StartInspectionPayload, ReviewPayload } from './inspections.api';
+export type {
+  InspectionListParams,
+  StartInspectionPayload,
+  ReviewPayload,
+  InspectionStats,
+  AIInsights,
+  BulkReviewPayload,
+  BulkReviewResult,
+} from './inspections.api';
 export { defectsApi } from './defects.api';
 export type { DefectListParams, AssignSpecialistPayload } from './defects.api';
 export { schedulesApi } from './schedules.api';
@@ -62,6 +70,13 @@ export type {
   GenerateListPayload,
   AssignTeamPayload,
   MyAssignmentsParams,
+  AssignmentStats,
+  InspectorSuggestion,
+  AISuggestionResponse,
+  BulkAssignPayload,
+  BulkAssignResult,
+  CalendarDay,
+  CalendarData,
 } from './inspection-assignments.api';
 export { assessmentsApi } from './assessments.api';
 export type { AssessmentListParams, VerdictPayload, AdminResolvePayload } from './assessments.api';

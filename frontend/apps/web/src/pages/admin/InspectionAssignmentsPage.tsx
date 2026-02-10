@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Card,
   Table,
@@ -12,32 +12,101 @@ import {
   message,
   Typography,
   Descriptions,
+  Row,
+  Col,
+  Statistic,
+  Progress,
+  Drawer,
+  Alert,
+  Checkbox,
+  Tooltip,
+  Badge,
+  Spin,
+  Tabs,
+  List,
+  Divider,
 } from 'antd';
-import { PlusOutlined, TeamOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  TeamOutlined,
+  ReloadOutlined,
+  FilterOutlined,
+  RobotOutlined,
+  CalendarOutlined,
+  TableOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  ExclamationCircleOutlined,
+  UserOutlined,
+  BulbOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   inspectionAssignmentsApi,
   rosterApi,
   type AssignTeamPayload,
+  type AssignmentStats,
+  type InspectorSuggestion,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+
+const { Text, Title } = Typography;
+const { RangePicker } = DatePicker;
 
 export default function InspectionAssignmentsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
+  // Modal states
   const [generateOpen, setGenerateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+  const [aiSuggestionOpen, setAiSuggestionOpen] = useState(false);
+  const [workloadDrawerOpen, setWorkloadDrawerOpen] = useState(false);
+
+  // View mode: table or calendar
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
+
+  // Filters
+  const [filters, setFilters] = useState({
+    dateRange: null as [dayjs.Dayjs, dayjs.Dayjs] | null,
+    shift: undefined as string | undefined,
+    status: undefined as string | undefined,
+    equipmentType: undefined as string | undefined,
+  });
+
+  // Bulk selection
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
 
   const [generateForm] = Form.useForm();
   const [assignForm] = Form.useForm();
 
+  // Fetch stats
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['inspection-assignments', 'stats'],
+    queryFn: () => inspectionAssignmentsApi.getStats().then((r) => r.data?.data),
+    staleTime: 60000,
+  });
+
   // Fetch all lists with their assignments
-  const { data, isLoading } = useQuery({
-    queryKey: ['inspection-assignments'],
-    queryFn: () => inspectionAssignmentsApi.getLists({}),
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['inspection-assignments', filters],
+    queryFn: () => inspectionAssignmentsApi.getLists({
+      date_from: filters.dateRange?.[0]?.format('YYYY-MM-DD'),
+      date_to: filters.dateRange?.[1]?.format('YYYY-MM-DD'),
+      shift: filters.shift as any,
+      status: filters.status,
+      equipment_type: filters.equipmentType,
+    }),
+  });
+
+  // Fetch calendar view
+  const { data: calendarData, isLoading: calendarLoading } = useQuery({
+    queryKey: ['inspection-assignments', 'calendar'],
+    queryFn: () => inspectionAssignmentsApi.getCalendarView().then((r) => r.data?.data),
+    enabled: viewMode === 'calendar',
   });
 
   // Fetch roster availability for the selected assignment's date + shift
@@ -50,6 +119,14 @@ export default function InspectionAssignmentsPage() {
     enabled: assignOpen && !!assignmentDate && !!assignmentShift,
   });
 
+  // AI Suggestion query
+  const { data: aiSuggestion, isLoading: aiSuggestionLoading, refetch: refetchAISuggestion } = useQuery({
+    queryKey: ['inspection-assignments', 'ai-suggest', selectedAssignment?.id],
+    queryFn: () => inspectionAssignmentsApi.getAISuggestion(selectedAssignment!.id).then((r) => r.data?.data),
+    enabled: aiSuggestionOpen && !!selectedAssignment,
+  });
+
+  // Mutations
   const generateMutation = useMutation({
     mutationFn: (payload: { target_date: string; shift: 'day' | 'night' }) =>
       inspectionAssignmentsApi.generateList(payload),
@@ -81,6 +158,7 @@ export default function InspectionAssignmentsPage() {
       message.success(msg);
       queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
       setAssignOpen(false);
+      setAiSuggestionOpen(false);
       setSelectedAssignment(null);
       assignForm.resetFields();
     },
@@ -89,30 +167,54 @@ export default function InspectionAssignmentsPage() {
     },
   });
 
+  const bulkAssignMutation = useMutation({
+    mutationFn: (assignmentIds: number[]) =>
+      inspectionAssignmentsApi.bulkAssign({ assignment_ids: assignmentIds, auto_assign: true }),
+    onSuccess: (res) => {
+      const summary = (res.data as any)?.summary;
+      message.success(`Auto-assigned ${summary?.successful || 0} of ${summary?.total || 0} assignments`);
+      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
+      setSelectedRowKeys([]);
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Bulk assign failed');
+    },
+  });
+
   // Flatten: extract all assignments from all lists
   const rawLists: any[] = data?.data?.data || (data?.data as any)?.data || [];
-  const allAssignments: any[] = [];
-  for (const list of rawLists) {
-    const assignments = list.assignments || [];
-    for (const a of assignments) {
-      allAssignments.push({
-        ...a,
-        list_target_date: list.target_date,
-        list_shift: list.shift,
-        list_status: list.status,
-      });
+  const allAssignments: any[] = useMemo(() => {
+    const result: any[] = [];
+    for (const list of rawLists) {
+      const assignments = list.assignments || [];
+      for (const a of assignments) {
+        result.push({
+          ...a,
+          list_target_date: list.target_date,
+          list_shift: list.shift,
+          list_status: list.status,
+        });
+      }
     }
-  }
+    // Sort by date descending
+    result.sort((a, b) => (b.list_target_date || '').localeCompare(a.list_target_date || ''));
+    return result;
+  }, [rawLists]);
 
-  // Sort by date descending
-  allAssignments.sort((a, b) => (b.list_target_date || '').localeCompare(a.list_target_date || ''));
+  // Get unique values for filters
+  const equipmentTypes = useMemo(() => {
+    const types = new Set<string>();
+    allAssignments.forEach((a) => {
+      if (a.equipment?.equipment_type) types.add(a.equipment.equipment_type);
+    });
+    return Array.from(types);
+  }, [allAssignments]);
 
-  // Build inspector lists from roster availability (only those on the right shift)
+  // Build inspector lists from roster availability
   const availData = (availabilityData?.data as any)?.data ?? availabilityData?.data;
   const availableUsers: any[] = availData?.available ?? [];
   const onLeaveUsers: any[] = availData?.on_leave ?? [];
 
-  // Filter available users: inspectors + specialists who are covering for an inspector
   const mechAvailable = availableUsers.filter(
     (u: any) => u.specialization === 'mechanical' && (u.role === 'inspector' || (u.role === 'specialist' && u.covering_for)),
   );
@@ -120,15 +222,12 @@ export default function InspectionAssignmentsPage() {
     (u: any) => u.specialization === 'electrical' && (u.role === 'inspector' || (u.role === 'specialist' && u.covering_for)),
   );
 
-  // On-leave inspectors to show as disabled (red)
   const mechOnLeave = onLeaveUsers.filter((u: any) => u.role === 'inspector' && u.specialization === 'mechanical');
   const elecOnLeave = onLeaveUsers.filter((u: any) => u.role === 'inspector' && u.specialization === 'electrical');
 
-  // Combine: available first, then on-leave (disabled)
   const mechOptions = [...mechAvailable, ...mechOnLeave];
   const elecOptions = [...elecAvailable, ...elecOnLeave];
 
-  // Set of cover user IDs
   const coverUserIds = new Set<number>();
   for (const u of availableUsers) {
     if (u.covering_for) coverUserIds.add(u.id);
@@ -183,11 +282,6 @@ export default function InspectionAssignmentsPage() {
       render: (_: unknown, record: any) => record.equipment?.equipment_type || '-',
     },
     {
-      title: t('assignments.serialNumber', 'Serial #'),
-      key: 'serial',
-      render: (_: unknown, record: any) => record.equipment?.serial_number || '-',
-    },
-    {
       title: t('assignments.berth', 'Berth'),
       key: 'berth',
       width: 80,
@@ -210,39 +304,57 @@ export default function InspectionAssignmentsPage() {
       ),
     },
     {
-      title: t('assignments.mechInspector', 'Mech Inspector'),
+      title: t('assignments.mechInspector', 'Mech'),
       key: 'mech',
+      width: 120,
+      ellipsis: true,
       render: (_: unknown, record: any) =>
         record.mechanical_inspector
-          ? `${record.mechanical_inspector.full_name}`
-          : <Typography.Text type="secondary">—</Typography.Text>,
+          ? record.mechanical_inspector.full_name
+          : <Text type="secondary">—</Text>,
     },
     {
-      title: t('assignments.elecInspector', 'Elec Inspector'),
+      title: t('assignments.elecInspector', 'Elec'),
       key: 'elec',
+      width: 120,
+      ellipsis: true,
       render: (_: unknown, record: any) =>
         record.electrical_inspector
-          ? `${record.electrical_inspector.full_name}`
-          : <Typography.Text type="secondary">—</Typography.Text>,
+          ? record.electrical_inspector.full_name
+          : <Text type="secondary">—</Text>,
     },
     {
       title: t('common.actions', 'Actions'),
       key: 'actions',
-      width: 130,
+      width: 180,
       render: (_: unknown, record: any) => (
-        <Button
-          type="primary"
-          size="small"
-          icon={<TeamOutlined />}
-          onClick={() => {
-            setSelectedAssignment(record);
-            assignForm.resetFields();
-            setAssignOpen(true);
-          }}
-          disabled={record.status === 'completed'}
-        >
-          {record.mechanical_inspector_id ? 'Reassign' : 'Assign'}
-        </Button>
+        <Space size="small">
+          <Button
+            type="primary"
+            size="small"
+            icon={<TeamOutlined />}
+            onClick={() => {
+              setSelectedAssignment(record);
+              assignForm.resetFields();
+              setAssignOpen(true);
+            }}
+            disabled={record.status === 'completed'}
+          >
+            {record.mechanical_inspector_id ? 'Reassign' : 'Assign'}
+          </Button>
+          {!record.mechanical_inspector_id && (
+            <Tooltip title="AI Suggest">
+              <Button
+                size="small"
+                icon={<RobotOutlined />}
+                onClick={() => {
+                  setSelectedAssignment(record);
+                  setAiSuggestionOpen(true);
+                }}
+              />
+            </Tooltip>
+          )}
+        </Space>
       ),
     },
   ];
@@ -265,30 +377,316 @@ export default function InspectionAssignmentsPage() {
     );
   };
 
-  return (
-    <Card
-      title={
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          {t('nav.assignments', 'Inspection Assignments')}
-        </Typography.Title>
-      }
-      extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateOpen(true)}>
-          {t('assignments.generate', 'Generate List')}
-        </Button>
-      }
-    >
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={allAssignments}
-        loading={isLoading}
-        pagination={{ pageSize: 20, showSizeChanger: true }}
-        scroll={{ x: 1200 }}
+  const renderSuggestionCard = (suggestion: InspectorSuggestion | null, type: 'mechanical' | 'electrical') => {
+    if (!suggestion) {
+      return (
+        <Card size="small" style={{ marginBottom: 8 }}>
+          <Text type="secondary">No {type} inspector available</Text>
+        </Card>
+      );
+    }
+
+    const scoreColor = suggestion.match_score >= 80 ? 'green' : suggestion.match_score >= 60 ? 'orange' : 'red';
+
+    return (
+      <Card
         size="small"
-        bordered
-        locale={{ emptyText: t('common.noData', 'No inspection assignments. Click "Generate List" to create one.') }}
-      />
+        style={{ marginBottom: 8 }}
+        extra={<Tag color={scoreColor}>{suggestion.match_score}% match</Tag>}
+      >
+        <Space direction="vertical" size={0}>
+          <Text strong>{suggestion.name}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {suggestion.active_assignments} active assignments
+          </Text>
+          <Space size={4} style={{ marginTop: 4 }}>
+            <Tag color={suggestion.factors.workload === 'low' ? 'green' : suggestion.factors.workload === 'medium' ? 'orange' : 'red'}>
+              {suggestion.factors.workload} workload
+            </Tag>
+            <Tag color={suggestion.factors.availability === 'available' ? 'green' : 'orange'}>
+              {suggestion.factors.availability}
+            </Tag>
+          </Space>
+        </Space>
+      </Card>
+    );
+  };
+
+  // Stats summary
+  const stats: AssignmentStats | undefined = statsData as any;
+
+  // Row selection for bulk actions
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (keys: React.Key[]) => setSelectedRowKeys(keys as number[]),
+    getCheckboxProps: (record: any) => ({
+      disabled: record.status !== 'unassigned',
+    }),
+  };
+
+  const unassignedCount = allAssignments.filter((a) => a.status === 'unassigned').length;
+
+  return (
+    <div style={{ padding: 0 }}>
+      {/* Stats Dashboard */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small">
+            <Statistic
+              title="Today Total"
+              value={stats?.today?.total || 0}
+              prefix={<CalendarOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small">
+            <Statistic
+              title="Unassigned"
+              value={stats?.today?.unassigned || 0}
+              valueStyle={{ color: (stats?.today?.unassigned || 0) > 0 ? '#faad14' : '#52c41a' }}
+              prefix={<ExclamationCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small">
+            <Statistic
+              title="Completed"
+              value={stats?.today?.completed || 0}
+              valueStyle={{ color: '#52c41a' }}
+              prefix={<CheckCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small">
+            <Statistic
+              title="Overdue"
+              value={stats?.overdue_count || 0}
+              valueStyle={{ color: (stats?.overdue_count || 0) > 0 ? '#ff4d4f' : '#52c41a' }}
+              prefix={<ClockCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small">
+            <Statistic
+              title="Week Completion"
+              value={stats?.completion_rate || 0}
+              suffix="%"
+              prefix={<Progress type="circle" percent={stats?.completion_rate || 0} size={20} showInfo={false} />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card size="small" hoverable onClick={() => setWorkloadDrawerOpen(true)}>
+            <Statistic
+              title="Inspector Workload"
+              value={stats?.inspector_workload?.length || 0}
+              suffix="active"
+              prefix={<UserOutlined />}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Main Card */}
+      <Card
+        title={
+          <Space>
+            <Title level={4} style={{ margin: 0 }}>
+              {t('nav.assignments', 'Inspection Assignments')}
+            </Title>
+            <Tag color="blue">{allAssignments.length} total</Tag>
+          </Space>
+        }
+        extra={
+          <Space>
+            <Button.Group>
+              <Button
+                icon={<TableOutlined />}
+                type={viewMode === 'table' ? 'primary' : 'default'}
+                onClick={() => setViewMode('table')}
+              />
+              <Button
+                icon={<CalendarOutlined />}
+                type={viewMode === 'calendar' ? 'primary' : 'default'}
+                onClick={() => setViewMode('calendar')}
+              />
+            </Button.Group>
+            <Button icon={<ReloadOutlined />} onClick={() => refetch()} />
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateOpen(true)}>
+              {t('assignments.generate', 'Generate List')}
+            </Button>
+          </Space>
+        }
+      >
+        {/* Filters Row */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} sm={12} md={6}>
+            <RangePicker
+              style={{ width: '100%' }}
+              value={filters.dateRange}
+              onChange={(dates) => setFilters({ ...filters, dateRange: dates as any })}
+              placeholder={['From', 'To']}
+            />
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Shift"
+              allowClear
+              value={filters.shift}
+              onChange={(v) => setFilters({ ...filters, shift: v })}
+            >
+              <Select.Option value="day">Day</Select.Option>
+              <Select.Option value="night">Night</Select.Option>
+            </Select>
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Status"
+              allowClear
+              value={filters.status}
+              onChange={(v) => setFilters({ ...filters, status: v })}
+            >
+              <Select.Option value="unassigned">Unassigned</Select.Option>
+              <Select.Option value="assigned">Assigned</Select.Option>
+              <Select.Option value="in_progress">In Progress</Select.Option>
+              <Select.Option value="completed">Completed</Select.Option>
+            </Select>
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Equipment Type"
+              allowClear
+              value={filters.equipmentType}
+              onChange={(v) => setFilters({ ...filters, equipmentType: v })}
+            >
+              {equipmentTypes.map((type) => (
+                <Select.Option key={type} value={type}>{type}</Select.Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={12} sm={6} md={6}>
+            <Button
+              onClick={() => setFilters({ dateRange: null, shift: undefined, status: undefined, equipmentType: undefined })}
+            >
+              Clear Filters
+            </Button>
+          </Col>
+        </Row>
+
+        {/* Bulk Actions Bar */}
+        {selectedRowKeys.length > 0 && (
+          <Alert
+            type="info"
+            style={{ marginBottom: 16 }}
+            message={
+              <Space>
+                <Text strong>{selectedRowKeys.length} assignments selected</Text>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  loading={bulkAssignMutation.isPending}
+                  onClick={() => bulkAssignMutation.mutate(selectedRowKeys)}
+                >
+                  Auto-Assign All
+                </Button>
+                <Button size="small" onClick={() => setSelectedRowKeys([])}>
+                  Clear Selection
+                </Button>
+              </Space>
+            }
+          />
+        )}
+
+        {/* Unassigned Alert */}
+        {unassignedCount > 0 && (
+          <Alert
+            type="warning"
+            style={{ marginBottom: 16 }}
+            message={`${unassignedCount} assignments need team assignment`}
+            action={
+              <Button
+                size="small"
+                icon={<ThunderboltOutlined />}
+                onClick={() => {
+                  const unassignedIds = allAssignments
+                    .filter((a) => a.status === 'unassigned')
+                    .map((a) => a.id);
+                  setSelectedRowKeys(unassignedIds);
+                }}
+              >
+                Select All Unassigned
+              </Button>
+            }
+          />
+        )}
+
+        {/* Table View */}
+        {viewMode === 'table' && (
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={allAssignments}
+            loading={isLoading}
+            rowSelection={rowSelection}
+            pagination={{ pageSize: 20, showSizeChanger: true }}
+            scroll={{ x: 1200 }}
+            size="small"
+            bordered
+            locale={{ emptyText: t('common.noData', 'No inspection assignments. Click "Generate List" to create one.') }}
+          />
+        )}
+
+        {/* Calendar View */}
+        {viewMode === 'calendar' && (
+          <div>
+            {calendarLoading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}>
+                <Spin size="large" />
+              </div>
+            ) : (
+              <Row gutter={[8, 8]}>
+                {calendarData?.days?.map((day: any) => (
+                  <Col key={day.date} xs={24} sm={12} md={8} lg={6} xl={3}>
+                    <Card
+                      size="small"
+                      title={
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{day.day_name}</div>
+                          <div style={{ fontSize: 12, color: '#888' }}>{dayjs(day.date).format('MMM D')}</div>
+                        </div>
+                      }
+                      extra={<Badge count={day.stats?.total || 0} showZero style={{ backgroundColor: '#1890ff' }} />}
+                    >
+                      <div style={{ marginBottom: 8 }}>
+                        <Tag color="gold">Day: {day.day?.length || 0}</Tag>
+                        <Tag color="geekblue">Night: {day.night?.length || 0}</Tag>
+                      </div>
+                      <Progress
+                        percent={day.stats?.total > 0 ? Math.round((day.stats?.completed || 0) / day.stats.total * 100) : 0}
+                        size="small"
+                        status={day.stats?.unassigned > 0 ? 'exception' : 'success'}
+                      />
+                      <div style={{ fontSize: 11, marginTop: 4 }}>
+                        {day.stats?.unassigned > 0 && (
+                          <Text type="warning">{day.stats.unassigned} unassigned</Text>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            )}
+          </div>
+        )}
+      </Card>
 
       {/* Generate List Modal */}
       <Modal
@@ -337,23 +735,23 @@ export default function InspectionAssignmentsPage() {
         onOk={() => assignForm.submit()}
         confirmLoading={assignMutation.isPending}
         destroyOnClose
+        width={600}
       >
         {selectedAssignment && (
-          <Descriptions size="small" column={1} bordered style={{ marginBottom: 16 }}>
-            <Descriptions.Item label="Equipment">
+          <Descriptions size="small" column={2} bordered style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="Equipment" span={2}>
               {selectedAssignment.equipment?.name || `ID: ${selectedAssignment.equipment_id}`}
             </Descriptions.Item>
             <Descriptions.Item label="Type">
               {selectedAssignment.equipment?.equipment_type || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="Serial #">
-              {selectedAssignment.equipment?.serial_number || '-'}
-            </Descriptions.Item>
             <Descriptions.Item label="Berth">
               {selectedAssignment.berth || selectedAssignment.equipment?.berth || '-'}
             </Descriptions.Item>
             <Descriptions.Item label="Shift">
-              {selectedAssignment.list_shift?.toUpperCase() || '-'}
+              <Tag color={selectedAssignment.list_shift === 'day' ? 'gold' : 'geekblue'}>
+                {selectedAssignment.list_shift?.toUpperCase() || '-'}
+              </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Date">
               {selectedAssignment.list_target_date ? dayjs(selectedAssignment.list_target_date).format('DD/MM/YYYY') : '-'}
@@ -395,6 +793,150 @@ export default function InspectionAssignmentsPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+
+      {/* AI Suggestion Modal */}
+      <Modal
+        title={
+          <Space>
+            <RobotOutlined />
+            AI Smart Assignment
+          </Space>
+        }
+        open={aiSuggestionOpen}
+        onCancel={() => { setAiSuggestionOpen(false); setSelectedAssignment(null); }}
+        footer={[
+          <Button key="cancel" onClick={() => setAiSuggestionOpen(false)}>
+            Cancel
+          </Button>,
+          <Button
+            key="apply"
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            disabled={!aiSuggestion?.recommended?.mechanical || !aiSuggestion?.recommended?.electrical}
+            onClick={() => {
+              if (selectedAssignment && aiSuggestion?.recommended) {
+                assignMutation.mutate({
+                  id: selectedAssignment.id,
+                  payload: {
+                    mechanical_inspector_id: aiSuggestion.recommended.mechanical!.id,
+                    electrical_inspector_id: aiSuggestion.recommended.electrical!.id,
+                  },
+                });
+              }
+            }}
+          >
+            Apply Recommendation
+          </Button>,
+        ]}
+        destroyOnClose
+      >
+        {aiSuggestionLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 16 }}>Analyzing workload and availability...</div>
+          </div>
+        ) : aiSuggestion ? (
+          <div>
+            <Alert
+              type="info"
+              message={`Assignment: ${aiSuggestion.assignment?.equipment || 'Unknown'}`}
+              description={`${aiSuggestion.context?.date} - ${aiSuggestion.context?.shift} shift`}
+              style={{ marginBottom: 16 }}
+            />
+
+            <Title level={5}>Recommended Team</Title>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Text type="secondary">Mechanical</Text>
+                {renderSuggestionCard(aiSuggestion.recommended?.mechanical || null, 'mechanical')}
+              </Col>
+              <Col span={12}>
+                <Text type="secondary">Electrical</Text>
+                {renderSuggestionCard(aiSuggestion.recommended?.electrical || null, 'electrical')}
+              </Col>
+            </Row>
+
+            <Divider />
+
+            <Title level={5}>Other Options</Title>
+            <Tabs
+              items={[
+                {
+                  key: 'mechanical',
+                  label: 'Mechanical',
+                  children: (
+                    <List
+                      size="small"
+                      dataSource={aiSuggestion.suggestions?.mechanical?.slice(1, 5) || []}
+                      renderItem={(item: InspectorSuggestion) => (
+                        <List.Item>
+                          <Space>
+                            <Tag color={item.match_score >= 70 ? 'green' : 'orange'}>{item.match_score}%</Tag>
+                            <Text>{item.name}</Text>
+                            <Text type="secondary">({item.active_assignments} active)</Text>
+                          </Space>
+                        </List.Item>
+                      )}
+                    />
+                  ),
+                },
+                {
+                  key: 'electrical',
+                  label: 'Electrical',
+                  children: (
+                    <List
+                      size="small"
+                      dataSource={aiSuggestion.suggestions?.electrical?.slice(1, 5) || []}
+                      renderItem={(item: InspectorSuggestion) => (
+                        <List.Item>
+                          <Space>
+                            <Tag color={item.match_score >= 70 ? 'green' : 'orange'}>{item.match_score}%</Tag>
+                            <Text>{item.name}</Text>
+                            <Text type="secondary">({item.active_assignments} active)</Text>
+                          </Space>
+                        </List.Item>
+                      )}
+                    />
+                  ),
+                },
+              ]}
+            />
+          </div>
+        ) : (
+          <Alert type="error" message="Failed to get AI suggestions" />
+        )}
+      </Modal>
+
+      {/* Workload Drawer */}
+      <Drawer
+        title="Inspector Workload"
+        open={workloadDrawerOpen}
+        onClose={() => setWorkloadDrawerOpen(false)}
+        width={400}
+      >
+        {statsLoading ? (
+          <Spin />
+        ) : (
+          <List
+            dataSource={stats?.inspector_workload || []}
+            renderItem={(item: any) => (
+              <List.Item>
+                <List.Item.Meta
+                  avatar={<UserOutlined style={{ fontSize: 24 }} />}
+                  title={item.name}
+                  description={`${item.active_assignments} active assignments`}
+                />
+                <Progress
+                  type="circle"
+                  percent={Math.min(100, item.active_assignments * 20)}
+                  size={40}
+                  status={item.active_assignments > 4 ? 'exception' : 'normal'}
+                />
+              </List.Item>
+            )}
+          />
+        )}
+      </Drawer>
+    </div>
   );
 }
