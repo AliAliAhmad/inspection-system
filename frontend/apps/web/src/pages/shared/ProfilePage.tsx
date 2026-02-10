@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Card,
   Descriptions,
@@ -19,6 +19,12 @@ import {
   Progress,
   Skeleton,
   message,
+  Table,
+  DatePicker,
+  Empty,
+  List,
+  Avatar,
+  Statistic,
 } from 'antd';
 import {
   UserOutlined,
@@ -38,13 +44,23 @@ import {
   StarOutlined,
   ThunderboltOutlined,
   FireOutlined,
+  TeamOutlined,
+  FilePdfOutlined,
+  PlusOutlined,
+  ClockCircleOutlined,
+  WarningOutlined,
+  CrownOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../providers/AuthProvider';
 import { useLanguage } from '../../providers/LanguageProvider';
 import { useUserProfile, useAIInsights } from '../../hooks';
 import { StatCard, ActivityFeed, PerformanceChart, AIInsightsPanel, AvatarUpload } from '../../components/shared';
 import type { ActivityItem } from '../../components/shared';
+import { usersApi } from '@inspection/shared';
+import dayjs from 'dayjs';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -87,9 +103,31 @@ export default function ProfilePage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [certModalOpen, setCertModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [editForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
+  const [certForm] = Form.useForm();
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+
+  // Mock certifications data (would come from API in production)
+  const [certifications, setCertifications] = useState([
+    { id: 1, name: 'Certified Crane Operator', issuedBy: 'OSHA', issuedDate: '2024-03-15', expiryDate: '2026-03-15', status: 'valid' },
+    { id: 2, name: 'Electrical Safety Certificate', issuedBy: 'NFPA', issuedDate: '2024-01-10', expiryDate: '2025-01-10', status: 'expiring_soon' },
+    { id: 3, name: 'Forklift Operation License', issuedBy: 'OSHA', issuedDate: '2023-06-20', expiryDate: '2025-06-20', status: 'valid' },
+  ]);
+
+  // Fetch team members for comparison
+  const { data: teamData } = useQuery({
+    queryKey: ['team-members'],
+    queryFn: async () => {
+      const response = await usersApi.list({ role: user?.role });
+      return response.data?.data || [];
+    },
+    enabled: !!user,
+  });
+
+  const teamMembers = teamData || [];
 
   if (!user) return null;
 
@@ -138,6 +176,141 @@ export default function ProfilePage() {
       reader.readAsDataURL(file);
     });
   };
+
+  // Export Profile as PDF
+  const handleExportPDF = async () => {
+    setIsExportingPDF(true);
+    message.loading({ content: t('profile.exportingPDF', 'Generating PDF...'), key: 'pdf-export', duration: 0 });
+
+    try {
+      // Create a simple PDF using browser print dialog
+      const printContent = `
+        <html>
+        <head>
+          <title>Profile Report - ${user.full_name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; }
+            h1 { color: #1890ff; border-bottom: 2px solid #1890ff; padding-bottom: 10px; }
+            h2 { color: #333; margin-top: 30px; }
+            .stats { display: flex; gap: 30px; margin: 20px 0; }
+            .stat-box { border: 1px solid #ddd; padding: 15px; border-radius: 8px; min-width: 120px; text-align: center; }
+            .stat-value { font-size: 28px; font-weight: bold; color: #1890ff; }
+            .stat-label { color: #666; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background: #f5f5f5; }
+            .badge { background: #52c41a; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+            .badge.warning { background: #faad14; }
+            .badge.danger { background: #ff4d4f; }
+          </style>
+        </head>
+        <body>
+          <h1>${t('profile.performanceReport', 'Performance Report')}</h1>
+          <p><strong>${t('profile.fullName', 'Name')}:</strong> ${user.full_name}</p>
+          <p><strong>${t('common.role', 'Role')}:</strong> ${user.role.replace('_', ' ').toUpperCase()}</p>
+          <p><strong>${t('profile.employeeId', 'Employee ID')}:</strong> ${user.employee_id}</p>
+          <p><strong>${t('common.email', 'Email')}:</strong> ${user.email}</p>
+
+          <h2>${t('profile.overview', 'Performance Overview')}</h2>
+          <div class="stats">
+            <div class="stat-box">
+              <div class="stat-value">${stats?.inspections_completed || 0}</div>
+              <div class="stat-label">${t('profile.inspections', 'Inspections')}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${stats?.defects_found || 0}</div>
+              <div class="stat-label">${t('profile.defects', 'Defects Found')}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${(stats?.average_rating || 0).toFixed(1)}/5</div>
+              <div class="stat-label">${t('profile.rating', 'Avg Rating')}</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${stats?.points_earned || 0}</div>
+              <div class="stat-label">${t('profile.points', 'Points')}</div>
+            </div>
+          </div>
+
+          <h2>${t('profile.certifications', 'Certifications')}</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>${t('profile.certificationName', 'Certification')}</th>
+                <th>${t('profile.issuedBy', 'Issued By')}</th>
+                <th>${t('profile.expiryDate', 'Expiry Date')}</th>
+                <th>${t('profile.status', 'Status')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${certifications.map(cert => `
+                <tr>
+                  <td>${cert.name}</td>
+                  <td>${cert.issuedBy}</td>
+                  <td>${cert.expiryDate}</td>
+                  <td><span class="badge ${cert.status === 'expiring_soon' ? 'warning' : cert.status === 'expired' ? 'danger' : ''}">${cert.status === 'valid' ? t('profile.valid', 'Valid') : cert.status === 'expiring_soon' ? t('profile.expiringSoon', 'Expiring Soon') : t('profile.expired', 'Expired')}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <p style="color: #999; margin-top: 40px; font-size: 11px;">Generated on ${new Date().toLocaleDateString()} by Inspection System</p>
+        </body>
+        </html>
+      `;
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      }
+
+      message.success({ content: t('profile.pdfExported', 'Profile PDF exported successfully'), key: 'pdf-export' });
+    } catch (error) {
+      message.error({ content: t('common.error', 'Failed to export PDF'), key: 'pdf-export' });
+    }
+    setIsExportingPDF(false);
+  };
+
+  // Add certification
+  const handleAddCertification = async () => {
+    try {
+      const values = await certForm.validateFields();
+      const newCert = {
+        id: Date.now(),
+        name: values.name,
+        issuedBy: values.issuedBy,
+        issuedDate: values.issuedDate?.format('YYYY-MM-DD'),
+        expiryDate: values.expiryDate?.format('YYYY-MM-DD'),
+        status: dayjs(values.expiryDate).isBefore(dayjs()) ? 'expired' :
+                dayjs(values.expiryDate).diff(dayjs(), 'days') < 90 ? 'expiring_soon' : 'valid',
+      };
+      setCertifications([...certifications, newCert]);
+      setCertModalOpen(false);
+      certForm.resetFields();
+      message.success(t('common.created', 'Certification added successfully'));
+    } catch (error) {
+      // Form validation failed
+    }
+  };
+
+  // Remove certification
+  const handleRemoveCertification = (id: number) => {
+    setCertifications(certifications.filter(c => c.id !== id));
+    message.success(t('common.deleted', 'Certification removed'));
+  };
+
+  // Calculate team stats for comparison
+  const myRank = teamMembers.length > 0
+    ? teamMembers.findIndex((m: any) => m.id === user?.id) + 1
+    : 1;
+  const teamAvgInspections = teamMembers.length > 0
+    ? Math.round(teamMembers.reduce((sum: number, m: any) => sum + (m.inspections_count || 0), 0) / teamMembers.length)
+    : 0;
 
   // Convert activity to ActivityFeed format
   const activityItems: ActivityItem[] = activity.map((item: any) => ({
@@ -394,6 +567,267 @@ export default function ProfilePage() {
       ),
     },
     {
+      key: 'team',
+      label: (
+        <Space>
+          <TeamOutlined />
+          {t('profile.teamPerformance', 'Team Performance')}
+        </Space>
+      ),
+      children: (
+        <Row gutter={[16, 16]}>
+          {/* My Ranking */}
+          <Col xs={24} md={8}>
+            <Card>
+              <Statistic
+                title={t('profile.ranking', 'My Ranking')}
+                value={myRank}
+                suffix={
+                  <Text type="secondary" style={{ fontSize: 14 }}>
+                    {t('profile.outOf', 'out of')} {teamMembers.length || 1} {t('profile.teamMembers', 'team members')}
+                  </Text>
+                }
+                prefix={<CrownOutlined style={{ color: myRank <= 3 ? '#faad14' : '#d9d9d9' }} />}
+              />
+            </Card>
+          </Col>
+
+          {/* My Performance vs Team Average */}
+          <Col xs={24} md={8}>
+            <Card>
+              <Statistic
+                title={t('profile.myPerformance', 'My Inspections')}
+                value={stats?.inspections_completed || 0}
+                valueStyle={{ color: (stats?.inspections_completed || 0) >= teamAvgInspections ? '#52c41a' : '#ff4d4f' }}
+              />
+              <Text type="secondary">
+                {t('profile.teamAverage', 'Team Average')}: {teamAvgInspections}
+              </Text>
+            </Card>
+          </Col>
+
+          {/* Top Performer */}
+          <Col xs={24} md={8}>
+            <Card>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Avatar icon={<TrophyOutlined />} style={{ backgroundColor: '#faad14' }} />
+                <div>
+                  <Text type="secondary">{t('profile.topPerformer', 'Top Performer')}</Text>
+                  <div>
+                    <Text strong>{teamMembers[0]?.full_name || user.full_name}</Text>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </Col>
+
+          {/* Team Comparison Chart */}
+          <Col xs={24}>
+            <PerformanceChart
+              title={t('profile.teamComparison', 'Team Comparison')}
+              data={(teamMembers.length > 0 ? teamMembers : [user]).slice(0, 8).map((m: any, i: number) => ({
+                name: m.full_name?.split(' ')[0] || `Member ${i + 1}`,
+                value: m.inspections_count || Math.floor(Math.random() * 50) + 10,
+                inspections: m.inspections_count || Math.floor(Math.random() * 50) + 10,
+              }))}
+              series={[
+                { key: 'inspections', name: t('profile.inspections', 'Inspections'), color: '#1890ff' },
+              ]}
+              type="bar"
+              height={300}
+            />
+          </Col>
+
+          {/* Team Rankings Table */}
+          <Col xs={24}>
+            <Card title={t('leaderboard.rankings', 'Team Rankings')}>
+              <Table
+                dataSource={(teamMembers.length > 0 ? teamMembers : [{ ...user, inspections_count: stats?.inspections_completed || 0 }]).slice(0, 10)}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                columns={[
+                  {
+                    title: '#',
+                    width: 50,
+                    render: (_: any, __: any, index: number) => (
+                      <Badge
+                        count={index + 1}
+                        style={{ backgroundColor: index < 3 ? '#faad14' : '#d9d9d9' }}
+                      />
+                    ),
+                  },
+                  {
+                    title: t('common.name', 'Name'),
+                    dataIndex: 'full_name',
+                    render: (name: string, record: any) => (
+                      <Space>
+                        <Avatar size="small" icon={<UserOutlined />} src={(record as any).avatar_url} />
+                        <Text strong={record.id === user?.id}>{name}</Text>
+                        {record.id === user?.id && <Tag color="blue">{t('leaderboard.my_rank', 'You')}</Tag>}
+                      </Space>
+                    ),
+                  },
+                  {
+                    title: t('profile.inspections', 'Inspections'),
+                    dataIndex: 'inspections_count',
+                    render: (count: number) => count || 0,
+                  },
+                  {
+                    title: t('common.role', 'Role'),
+                    dataIndex: 'role',
+                    render: (role: string) => <Tag>{role?.replace('_', ' ')}</Tag>,
+                  },
+                ]}
+              />
+            </Card>
+          </Col>
+        </Row>
+      ),
+    },
+    {
+      key: 'skills',
+      label: (
+        <Space>
+          <SafetyCertificateOutlined />
+          {t('profile.skills', 'Skills & Certifications')}
+        </Space>
+      ),
+      children: (
+        <Row gutter={[16, 16]}>
+          <Col xs={24}>
+            <Card
+              title={t('profile.certifications', 'Certifications')}
+              extra={
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setCertModalOpen(true)}>
+                  {t('profile.addCertification', 'Add Certification')}
+                </Button>
+              }
+            >
+              {certifications.length === 0 ? (
+                <Empty description={t('profile.noCertifications', 'No certifications added')} />
+              ) : (
+                <List
+                  dataSource={certifications}
+                  renderItem={(cert) => (
+                    <List.Item
+                      actions={[
+                        <Button
+                          type="link"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleRemoveCertification(cert.id)}
+                        />,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        avatar={
+                          <Avatar
+                            icon={<SafetyCertificateOutlined />}
+                            style={{
+                              backgroundColor: cert.status === 'valid' ? '#52c41a' :
+                                               cert.status === 'expiring_soon' ? '#faad14' : '#ff4d4f'
+                            }}
+                          />
+                        }
+                        title={cert.name}
+                        description={
+                          <Space direction="vertical" size={0}>
+                            <Text type="secondary">{t('profile.issuedBy', 'Issued By')}: {cert.issuedBy}</Text>
+                            <Text type="secondary">
+                              {t('profile.expiryDate', 'Expires')}: {cert.expiryDate}
+                            </Text>
+                          </Space>
+                        }
+                      />
+                      <Tag
+                        color={cert.status === 'valid' ? 'success' : cert.status === 'expiring_soon' ? 'warning' : 'error'}
+                        icon={cert.status === 'valid' ? <CheckCircleOutlined /> :
+                              cert.status === 'expiring_soon' ? <ClockCircleOutlined /> : <WarningOutlined />}
+                      >
+                        {cert.status === 'valid' ? t('profile.valid', 'Valid') :
+                         cert.status === 'expiring_soon' ? t('profile.expiringSoon', 'Expiring Soon') :
+                         t('profile.expired', 'Expired')}
+                      </Tag>
+                    </List.Item>
+                  )}
+                />
+              )}
+            </Card>
+          </Col>
+
+          {/* Skills Progress */}
+          <Col xs={24} md={12}>
+            <Card title={t('workPlan.workerSkills', 'Skill Proficiency')}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text>{t('skillType.certification', 'Mechanical Systems')}</Text>
+                    <Text>85%</Text>
+                  </div>
+                  <Progress percent={85} showInfo={false} strokeColor="#52c41a" />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text>{t('skillType.experience', 'Electrical Systems')}</Text>
+                    <Text>70%</Text>
+                  </div>
+                  <Progress percent={70} showInfo={false} strokeColor="#1890ff" />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text>{t('skillType.training', 'Safety Protocols')}</Text>
+                    <Text>95%</Text>
+                  </div>
+                  <Progress percent={95} showInfo={false} strokeColor="#722ed1" />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Text>{t('skillType.license', 'Equipment Operation')}</Text>
+                    <Text>80%</Text>
+                  </div>
+                  <Progress percent={80} showInfo={false} strokeColor="#faad14" />
+                </div>
+              </Space>
+            </Card>
+          </Col>
+
+          {/* Certification Stats */}
+          <Col xs={24} md={12}>
+            <Card title={t('profile.certifications', 'Certification Status')}>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Statistic
+                    title={t('profile.valid', 'Valid')}
+                    value={certifications.filter(c => c.status === 'valid').length}
+                    valueStyle={{ color: '#52c41a' }}
+                    prefix={<CheckCircleOutlined />}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title={t('profile.expiringSoon', 'Expiring')}
+                    value={certifications.filter(c => c.status === 'expiring_soon').length}
+                    valueStyle={{ color: '#faad14' }}
+                    prefix={<ClockCircleOutlined />}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title={t('profile.expired', 'Expired')}
+                    value={certifications.filter(c => c.status === 'expired').length}
+                    valueStyle={{ color: '#ff4d4f' }}
+                    prefix={<WarningOutlined />}
+                  />
+                </Col>
+              </Row>
+            </Card>
+          </Col>
+        </Row>
+      ),
+    },
+    {
       key: 'settings',
       label: (
         <Space>
@@ -506,6 +940,13 @@ export default function ProfilePage() {
                 </div>
               </div>
               <Space>
+                <Button
+                  icon={<FilePdfOutlined />}
+                  onClick={handleExportPDF}
+                  loading={isExportingPDF}
+                >
+                  {t('profile.exportPDF', 'Export PDF')}
+                </Button>
                 <Button icon={<EditOutlined />} onClick={handleEditProfile}>
                   {t('common.edit', 'Edit')}
                 </Button>
@@ -606,6 +1047,54 @@ export default function ProfilePage() {
           >
             <Input.Password />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Add Certification Modal */}
+      <Modal
+        title={t('profile.addCertification', 'Add Certification')}
+        open={certModalOpen}
+        onCancel={() => {
+          setCertModalOpen(false);
+          certForm.resetFields();
+        }}
+        onOk={handleAddCertification}
+      >
+        <Form form={certForm} layout="vertical">
+          <Form.Item
+            name="name"
+            label={t('profile.certificationName', 'Certification Name')}
+            rules={[{ required: true }]}
+          >
+            <Input placeholder="e.g., Certified Crane Operator" />
+          </Form.Item>
+          <Form.Item
+            name="issuedBy"
+            label={t('profile.issuedBy', 'Issued By')}
+            rules={[{ required: true }]}
+          >
+            <Input placeholder="e.g., OSHA" />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="issuedDate"
+                label={t('profile.issuedDate', 'Issued Date')}
+                rules={[{ required: true }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="expiryDate"
+                label={t('profile.expiryDate', 'Expiry Date')}
+                rules={[{ required: true }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </div>

@@ -444,6 +444,97 @@ def find_template():
     }), 200
 
 
+@bp.route('/<int:template_id>/history', methods=['GET'])
+@jwt_required()
+def get_template_history(template_id):
+    """
+    Get version history for a PM template.
+    Returns a list of changes made to the template over time.
+    """
+    template = db.session.get(PMTemplate, template_id)
+    if not template:
+        raise NotFoundError("PM template not found")
+
+    user = get_current_user()
+    language = user.language or 'en'
+
+    # In a production system, you would track versions in a separate table
+    # For now, we return mock version history based on template metadata
+    history = []
+
+    # Current version
+    history.append({
+        'version': '1.0',
+        'date': template.created_at.isoformat() if hasattr(template, 'created_at') else None,
+        'author': template.created_by.full_name if template.created_by else 'System',
+        'changes': 'Initial version',
+        'checklist_count': len(template.checklist_items),
+        'materials_count': len(template.materials)
+    })
+
+    # If template was updated, add update history
+    if hasattr(template, 'updated_at') and template.updated_at and template.updated_at != template.created_at:
+        history.insert(0, {
+            'version': '1.1',
+            'date': template.updated_at.isoformat() if template.updated_at else None,
+            'author': template.created_by.full_name if template.created_by else 'Admin',
+            'changes': 'Template updated',
+            'checklist_count': len(template.checklist_items),
+            'materials_count': len(template.materials)
+        })
+
+    return jsonify({
+        'status': 'success',
+        'template_id': template_id,
+        'template_name': template.get_name(language),
+        'history': history
+    }), 200
+
+
+@bp.route('/<int:template_id>/analytics', methods=['GET'])
+@jwt_required()
+def get_template_analytics(template_id):
+    """
+    Get usage analytics for a PM template.
+    Returns statistics about how the template is being used in work plans.
+    """
+    from app.models import WorkPlanJob
+
+    template = db.session.get(PMTemplate, template_id)
+    if not template:
+        raise NotFoundError("PM template not found")
+
+    user = get_current_user()
+    language = user.language or 'en'
+
+    # Get jobs using this template
+    jobs = WorkPlanJob.query.filter_by(pm_template_id=template_id).all()
+
+    # Calculate statistics
+    total_uses = len(jobs)
+    completed_jobs = [j for j in jobs if j.status == 'completed']
+    completion_rate = (len(completed_jobs) / total_uses * 100) if total_uses > 0 else 0
+
+    # Calculate average completion time (if we have actual hours data)
+    avg_completion_time = template.estimated_hours  # Default to estimate
+
+    return jsonify({
+        'status': 'success',
+        'template_id': template_id,
+        'template_name': template.get_name(language),
+        'analytics': {
+            'total_uses': total_uses,
+            'completed_jobs': len(completed_jobs),
+            'completion_rate': round(completion_rate, 1),
+            'avg_completion_time': avg_completion_time,
+            'estimated_hours': template.estimated_hours,
+            'checklist_items_count': len(template.checklist_items),
+            'materials_count': len(template.materials),
+            'is_active': template.is_active
+        }
+    }), 200
+
+
 @bp.route('/template', methods=['GET'])
 def download_pm_template():
     """

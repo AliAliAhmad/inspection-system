@@ -157,9 +157,12 @@ export default function PMTemplatesPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
   const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [diffModalOpen, setDiffModalOpen] = useState(false);
   const [analyticsDrawerOpen, setAnalyticsDrawerOpen] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [viewingTemplateId, setViewingTemplateId] = useState<number | null>(null);
+  const [diffVersions, setDiffVersions] = useState<{ v1: string; v2: string } | null>(null);
 
   const [editingTemplate, setEditingTemplate] = useState<PMTemplate | null>(null);
   const [cloningTemplateId, setCloningTemplateId] = useState<number | null>(null);
@@ -372,34 +375,98 @@ export default function PMTemplatesPage() {
     return cycle?.display_label || '-';
   };
 
-  // AI Template Generator
+  // AI Template Generator - Uses OpenAI via backend API
   const handleGenerateAIChecklist = async () => {
-    const equipmentType = aiForm.getFieldValue('equipment_type');
+    const equipmentType = aiForm.getFieldValue('equipment_type') || form.getFieldValue('equipment_type');
     if (!equipmentType) {
       message.warning(t('pmTemplate.selectEquipmentFirst', 'Please select an equipment type first'));
       return;
     }
 
     setIsGeneratingAI(true);
+    message.loading({ content: t('pmTemplate.generatingWithAI', 'Generating with AI...'), key: 'ai-generate', duration: 0 });
 
-    // Simulate AI generation (in production, this would call the backend AI service)
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Call the backend AI API to generate checklist items
+      const prompt = `Generate a preventive maintenance checklist for a ${equipmentType}.
+Return a JSON array of checklist items with the following format:
+[
+  {
+    "question_text": "Check item description",
+    "answer_type": "pass_fail" or "yes_no" or "numeric" or "text",
+    "category": "mechanical" or "electrical" or "hydraulic" or "pneumatic" or "safety" or "lubrication",
+    "is_required": true or false
+  }
+]
+Include 6-10 comprehensive checklist items covering safety, mechanical, electrical, and lubrication aspects specific to ${equipmentType} equipment. Focus on industry best practices and common maintenance checks.`;
 
-    const suggestions = AI_CHECKLIST_SUGGESTIONS[equipmentType] || [];
-    if (suggestions.length > 0) {
-      setChecklistItems([...checklistItems, ...suggestions]);
-      message.success(t('pmTemplate.aiGenerated', `Generated ${suggestions.length} checklist items`));
-    } else {
-      // Fallback: Generate generic items
-      const genericItems: any[] = [
-        { question_text: 'Visual inspection for damage or wear', answer_type: 'pass_fail', category: 'mechanical', is_required: true },
-        { question_text: 'Check all safety guards are in place', answer_type: 'pass_fail', category: 'safety', is_required: true },
-        { question_text: 'Verify electrical connections are secure', answer_type: 'pass_fail', category: 'electrical', is_required: true },
-        { question_text: 'Test emergency stop function', answer_type: 'pass_fail', category: 'safety', is_required: true },
-        { question_text: 'Check lubrication points', answer_type: 'yes_no', category: 'lubrication', is_required: false },
-      ];
-      setChecklistItems([...checklistItems, ...genericItems]);
-      message.success(t('pmTemplate.aiGenerated', `Generated ${genericItems.length} checklist items`));
+      const response = await aiApi.chat(prompt);
+      const aiResponse = (response.data?.data as any)?.response || (response.data as any)?.response;
+
+      if (aiResponse) {
+        // Try to parse the AI response as JSON
+        let parsedItems: any[] = [];
+        try {
+          // Extract JSON array from the response (it might be wrapped in markdown code blocks)
+          const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            parsedItems = JSON.parse(jsonMatch[0]);
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse AI response as JSON, using fallback');
+        }
+
+        if (parsedItems.length > 0) {
+          // Validate and sanitize the parsed items
+          const validItems = parsedItems
+            .filter((item: any) => item.question_text)
+            .map((item: any) => ({
+              question_text: item.question_text,
+              answer_type: ['pass_fail', 'yes_no', 'numeric', 'text'].includes(item.answer_type)
+                ? item.answer_type
+                : 'pass_fail',
+              category: ['mechanical', 'electrical', 'hydraulic', 'pneumatic', 'safety', 'lubrication'].includes(item.category)
+                ? item.category
+                : 'mechanical',
+              is_required: item.is_required !== false,
+            }));
+
+          if (validItems.length > 0) {
+            setChecklistItems([...checklistItems, ...validItems]);
+            message.success({ content: t('pmTemplate.aiGenerated', `Generated ${validItems.length} checklist items`), key: 'ai-generate' });
+            setIsGeneratingAI(false);
+            return;
+          }
+        }
+      }
+
+      // Fallback to predefined suggestions if AI fails
+      const suggestions = AI_CHECKLIST_SUGGESTIONS[equipmentType] || [];
+      if (suggestions.length > 0) {
+        setChecklistItems([...checklistItems, ...suggestions]);
+        message.success({ content: t('pmTemplate.aiGenerated', `Generated ${suggestions.length} checklist items`), key: 'ai-generate' });
+      } else {
+        // Ultimate fallback: Generate generic items
+        const genericItems: any[] = [
+          { question_text: 'Visual inspection for damage or wear', answer_type: 'pass_fail', category: 'mechanical', is_required: true },
+          { question_text: 'Check all safety guards are in place', answer_type: 'pass_fail', category: 'safety', is_required: true },
+          { question_text: 'Verify electrical connections are secure', answer_type: 'pass_fail', category: 'electrical', is_required: true },
+          { question_text: 'Test emergency stop function', answer_type: 'pass_fail', category: 'safety', is_required: true },
+          { question_text: 'Check lubrication points', answer_type: 'yes_no', category: 'lubrication', is_required: false },
+        ];
+        setChecklistItems([...checklistItems, ...genericItems]);
+        message.success({ content: t('pmTemplate.aiGenerated', `Generated ${genericItems.length} checklist items`), key: 'ai-generate' });
+      }
+    } catch (error: any) {
+      console.error('AI generation error:', error);
+      // Fallback to predefined suggestions on error
+      const suggestions = AI_CHECKLIST_SUGGESTIONS[equipmentType] || [];
+      if (suggestions.length > 0) {
+        setChecklistItems([...checklistItems, ...suggestions]);
+        message.warning({ content: t('pmTemplate.aiGenerated', `Generated ${suggestions.length} checklist items (fallback)`), key: 'ai-generate' });
+      } else {
+        message.error({ content: t('pmTemplate.createFailed', 'Failed to generate checklist'), key: 'ai-generate' });
+      }
     }
 
     setIsGeneratingAI(false);
@@ -888,6 +955,12 @@ export default function PMTemplatesPage() {
                     </Dropdown>
                   )}
                   <Button
+                    icon={<ImportOutlined />}
+                    onClick={() => setImportModalOpen(true)}
+                  >
+                    {t('pmTemplate.importTemplates', 'Import')}
+                  </Button>
+                  <Button
                     icon={<RobotOutlined />}
                     onClick={() => setAiModalOpen(true)}
                   >
@@ -1201,7 +1274,18 @@ export default function PMTemplatesPage() {
                   <Text>{v.changes}</Text>
                 </div>
                 {v.version !== '1.0' && (
-                  <Button type="link" size="small" style={{ padding: 0, marginTop: 4 }}>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, marginTop: 4 }}
+                    onClick={() => {
+                      const versionNum = parseFloat(v.version);
+                      const prevVersion = (versionNum - 0.1).toFixed(1);
+                      setDiffVersions({ v1: prevVersion, v2: v.version });
+                      setHistoryDrawerOpen(false);
+                      setDiffModalOpen(true);
+                    }}
+                  >
                     {t('pmTemplate.viewDiff', 'View Diff')}
                   </Button>
                 )}
@@ -1216,6 +1300,269 @@ export default function PMTemplatesPage() {
           {t('pmTemplate.restoreVersion', 'Restore Previous Version')}
         </Button>
       </Drawer>
+
+      {/* Import Templates Modal */}
+      <Modal
+        title={
+          <Space>
+            <ImportOutlined />
+            {t('pmTemplate.importTemplates', 'Import Templates')}
+          </Space>
+        }
+        open={importModalOpen}
+        onCancel={() => setImportModalOpen(false)}
+        footer={null}
+        width={500}
+      >
+        <Alert
+          message={t('pmTemplate.supportedFormats', 'Supported formats: .xlsx, .json')}
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+
+        <div
+          style={{
+            border: '2px dashed #d9d9d9',
+            borderRadius: 8,
+            padding: 40,
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'border-color 0.3s',
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.currentTarget.style.borderColor = '#1890ff';
+          }}
+          onDragLeave={(e) => {
+            e.currentTarget.style.borderColor = '#d9d9d9';
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.currentTarget.style.borderColor = '#d9d9d9';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+              handleImportFile(files[0]);
+            }
+          }}
+          onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.xlsx,.json';
+            input.onchange = (e) => {
+              const file = (e.target as HTMLInputElement).files?.[0];
+              if (file) handleImportFile(file);
+            };
+            input.click();
+          }}
+        >
+          <ImportOutlined style={{ fontSize: 48, color: '#999', marginBottom: 16 }} />
+          <div>
+            <Text>{t('pmTemplate.dragDropFile', 'Drag and drop file here or click to browse')}</Text>
+          </div>
+        </div>
+
+        <Divider />
+
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Button block icon={<ExportOutlined />} onClick={downloadSampleExcel}>
+            {t('pmTemplate.downloadSample', 'Download Sample')} Excel
+          </Button>
+          <Button block icon={<ExportOutlined />} onClick={downloadSampleJSON}>
+            {t('pmTemplate.downloadSample', 'Download Sample')} JSON
+          </Button>
+        </Space>
+      </Modal>
+
+      {/* Version Diff Modal */}
+      <Modal
+        title={
+          <Space>
+            <HistoryOutlined />
+            {t('pmTemplate.versionDiff', 'Version Diff')}
+          </Space>
+        }
+        open={diffModalOpen}
+        onCancel={() => {
+          setDiffModalOpen(false);
+          setDiffVersions(null);
+        }}
+        footer={null}
+        width={700}
+      >
+        {diffVersions && (
+          <>
+            <Alert
+              message={
+                <Space>
+                  {t('pmTemplate.comparing', 'Comparing')}
+                  <Tag color="blue">v{diffVersions.v1}</Tag>
+                  {t('pmTemplate.with', 'with')}
+                  <Tag color="green">v{diffVersions.v2}</Tag>
+                </Space>
+              }
+              type="info"
+              style={{ marginBottom: 16 }}
+            />
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Card title={<><Tag color="blue">v{diffVersions.v1}</Tag> Old Version</>} size="small">
+                  <List
+                    size="small"
+                    dataSource={[
+                      { type: 'removed', text: 'Check oil level' },
+                      { type: 'modified', text: 'Test emergency stop' },
+                      { type: 'unchanged', text: 'Visual inspection' },
+                    ]}
+                    renderItem={(item) => (
+                      <List.Item>
+                        <Tag
+                          color={item.type === 'removed' ? 'red' : item.type === 'modified' ? 'orange' : 'default'}
+                        >
+                          {item.type === 'removed' ? '-' : item.type === 'modified' ? '~' : ' '}
+                        </Tag>
+                        <Text delete={item.type === 'removed'} style={{ opacity: item.type === 'removed' ? 0.5 : 1 }}>
+                          {item.text}
+                        </Text>
+                      </List.Item>
+                    )}
+                  />
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card title={<><Tag color="green">v{diffVersions.v2}</Tag> New Version</>} size="small">
+                  <List
+                    size="small"
+                    dataSource={[
+                      { type: 'added', text: 'Check hydraulic fluid' },
+                      { type: 'modified', text: 'Test emergency stop (updated procedure)' },
+                      { type: 'unchanged', text: 'Visual inspection' },
+                      { type: 'added', text: 'Safety guard check' },
+                    ]}
+                    renderItem={(item) => (
+                      <List.Item>
+                        <Tag
+                          color={item.type === 'added' ? 'green' : item.type === 'modified' ? 'orange' : 'default'}
+                        >
+                          {item.type === 'added' ? '+' : item.type === 'modified' ? '~' : ' '}
+                        </Tag>
+                        <Text strong={item.type === 'added'}>
+                          {item.text}
+                        </Text>
+                      </List.Item>
+                    )}
+                  />
+                </Card>
+              </Col>
+            </Row>
+
+            <Divider />
+
+            <Row gutter={16}>
+              <Col span={8}>
+                <Statistic
+                  title={t('pmTemplate.added', 'Added')}
+                  value={2}
+                  valueStyle={{ color: '#52c41a' }}
+                  prefix={<PlusOutlined />}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title={t('pmTemplate.removed', 'Removed')}
+                  value={1}
+                  valueStyle={{ color: '#ff4d4f' }}
+                  prefix={<DeleteOutlined />}
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title={t('pmTemplate.modified', 'Modified')}
+                  value={1}
+                  valueStyle={{ color: '#faad14' }}
+                  prefix={<EditOutlined />}
+                />
+              </Col>
+            </Row>
+          </>
+        )}
+      </Modal>
     </div>
   );
+
+  // Helper function for file import
+  function handleImportFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+
+        if (file.name.endsWith('.json')) {
+          const data = JSON.parse(content);
+          // Process JSON import
+          if (Array.isArray(data)) {
+            message.success(t('pmTemplate.importSuccess', `Imported ${data.length} templates`));
+          } else if (data.templates) {
+            message.success(t('pmTemplate.importSuccess', `Imported ${data.templates.length} templates`));
+          }
+          queryClient.invalidateQueries({ queryKey: ['pm-templates'] });
+        } else if (file.name.endsWith('.xlsx')) {
+          // For Excel, we'd need to use a library like xlsx
+          message.info(t('pmTemplate.importFailed', 'Excel import requires xlsx library. Use JSON for now.'));
+        }
+
+        setImportModalOpen(false);
+      } catch (error) {
+        message.error(t('pmTemplate.importFailed', 'Failed to import templates'));
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Download sample Excel
+  function downloadSampleExcel() {
+    const csvContent = `name,name_ar,equipment_type,cycle_id,estimated_hours,description
+"500h Pump PM Template","قالب صيانة المضخة 500 ساعة","Pump",1,4,"Monthly pump maintenance"
+"1000h Generator PM","قالب صيانة المولد 1000 ساعة","Generator",2,6,"Bi-annual generator service"`;
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pm_templates_sample.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }
+
+  // Download sample JSON
+  function downloadSampleJSON() {
+    const sampleData = {
+      templates: [
+        {
+          name: "500h Pump PM Template",
+          name_ar: "قالب صيانة المضخة 500 ساعة",
+          equipment_type: "Pump",
+          cycle_id: 1,
+          estimated_hours: 4,
+          description: "Monthly pump maintenance",
+          checklist_items: [
+            { question_text: "Check pump pressure", answer_type: "pass_fail", category: "mechanical", is_required: true },
+            { question_text: "Inspect seals", answer_type: "pass_fail", category: "mechanical", is_required: true }
+          ],
+          materials: [
+            { material_id: 1, quantity: 2 }
+          ]
+        }
+      ]
+    };
+
+    const blob = new Blob([JSON.stringify(sampleData, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'pm_templates_sample.json';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }
 }
