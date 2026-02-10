@@ -226,3 +226,33 @@ export type {
   BulkApprovalResult,
   BulkApprovalResponse,
 } from './approvals.api';
+export { autoApprovalsApi } from './auto-approvals.api';
+export type {
+  AutoApprovalType,
+  ApprovalResult,
+  AutoApprovalEvaluateResponse,
+  AutoApproveResponse,
+  BulkEvaluateItem,
+  BulkEvaluateResponse,
+  BulkAutoApproveResponse,
+  AutoApprovalStats,
+  ApprovalTypeInfo,
+} from '../types/auto-approval.types';
+
+// Unified AI APIs (Approvals, Quality Reviews, Inspection Routines)
+export {
+  unifiedAIApi,
+  approvalAIApi,
+  qualityReviewAIApi,
+  inspectionRoutineAIApi,
+  aiDashboardApi,
+} from './unified-ai.api';
+export type {
+  ApprovalType as UnifiedApprovalType,
+  AutoApproveCheckResult,
+  BulkEvaluateItem as UnifiedBulkEvaluateItem,
+  BulkEvaluateResult,
+  BulkEvaluateResponse as UnifiedBulkEvaluateResponse,
+  QualityReviewBulkEvaluateResponse,
+  AIDashboardStats,
+} from './unified-ai.api';
