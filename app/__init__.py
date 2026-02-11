@@ -84,7 +84,7 @@ def create_app(config_name='development'):
         work_plans, materials, cycles, pm_templates, work_plan_tracking,
         approvals, auto_approvals, unified_ai,
         # AI-Enhanced Modules
-        defect_ai, overdue, daily_review_ai, performance
+        defect_ai, overdue, daily_review_ai, performance, schedule_ai
     )
 
     # Core
@@ -161,6 +161,7 @@ def create_app(config_name='development'):
     app.register_blueprint(overdue.bp, url_prefix='/api/overdue')
     app.register_blueprint(daily_review_ai.bp, url_prefix='/api/work-plan-tracking')
     app.register_blueprint(performance.bp, url_prefix='/api/performance')
+    app.register_blueprint(schedule_ai.bp, url_prefix='/api/schedule-ai')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)

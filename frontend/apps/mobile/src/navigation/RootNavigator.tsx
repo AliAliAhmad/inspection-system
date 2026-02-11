@@ -47,6 +47,12 @@ import GoalsScreen from '../screens/performance/GoalsScreen';
 import TrajectoryScreen from '../screens/performance/TrajectoryScreen';
 import SkillGapsScreen from '../screens/performance/SkillGapsScreen';
 
+// Schedule AI screens
+import ScheduleAIScreen from '../screens/schedules/ScheduleAIScreen';
+import EquipmentRiskListScreen from '../screens/schedules/EquipmentRiskListScreen';
+import RouteOptimizerScreen from '../screens/schedules/RouteOptimizerScreen';
+import InspectorStatsScreen from '../screens/schedules/InspectorStatsScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
@@ -88,6 +94,11 @@ export type RootStackParamList = {
   Goals: undefined;
   Trajectory: undefined;
   SkillGaps: undefined;
+  // Schedule AI
+  ScheduleAI: undefined;
+  EquipmentRisks: undefined;
+  RouteOptimizer: undefined;
+  InspectorStats: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -135,6 +146,11 @@ export default function RootNavigator() {
       <Stack.Screen name="Goals" component={GoalsScreen} options={{ headerShown: true, title: 'My Goals' }} />
       <Stack.Screen name="Trajectory" component={TrajectoryScreen} options={{ headerShown: true, title: 'Performance Trajectory' }} />
       <Stack.Screen name="SkillGaps" component={SkillGapsScreen} options={{ headerShown: true, title: 'Skill Gaps' }} />
+      {/* Schedule AI screens */}
+      <Stack.Screen name="ScheduleAI" component={ScheduleAIScreen} options={{ headerShown: true, title: 'Schedule AI' }} />
+      <Stack.Screen name="EquipmentRisks" component={EquipmentRiskListScreen} options={{ headerShown: true, title: 'Equipment Risk Analysis' }} />
+      <Stack.Screen name="RouteOptimizer" component={RouteOptimizerScreen} options={{ headerShown: true, title: 'Route Optimizer' }} />
+      <Stack.Screen name="InspectorStats" component={InspectorStatsScreen} options={{ headerShown: true, title: 'My Performance' }} />
     </Stack.Navigator>
   );
 }

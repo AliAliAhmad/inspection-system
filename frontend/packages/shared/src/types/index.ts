@@ -28,6 +28,7 @@ export * from './overdue.types';
 export * from './daily-review-ai.types';
 export * from './performance-ai.types';
 export * from './reports-ai.types';
+export * from './schedule-ai.types';
 // AI Base types - selectively export to avoid conflicts with existing types
 export type {
   Severity,

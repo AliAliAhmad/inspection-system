@@ -54,10 +54,209 @@ import {
   type InspectorSuggestion,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
-import { SmartBatchView, TemplateManager, WorkloadBalancer } from '../../components/inspection-assignments';
+import {
+  SmartBatchView,
+  TemplateManager,
+  WorkloadBalancer,
+  InspectorScoreboardCard,
+  TeamPerformanceDashboard,
+  FatigueAlerts,
+  RouteOptimizer,
+} from '../../components/inspection-assignments';
+import { scheduleAIApi } from '@inspection/shared';
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
+
+// SLA Monitor Component
+function SLAMonitorView() {
+  const { t } = useTranslation();
+
+  // Fetch SLA warnings
+  const { data: slaWarnings, isLoading: slaLoading } = useQuery({
+    queryKey: ['schedule-ai', 'sla-warnings', 14],
+    queryFn: async () => {
+      const response = await scheduleAIApi.getSLAWarnings(14);
+      return response;
+    },
+    staleTime: 60000,
+  });
+
+  // Fetch capacity forecast
+  const { data: capacityForecast, isLoading: capacityLoading } = useQuery({
+    queryKey: ['schedule-ai', 'capacity-forecast', 7],
+    queryFn: async () => {
+      const response = await scheduleAIApi.getCapacityForecast(7);
+      return response;
+    },
+    staleTime: 60000,
+  });
+
+  const warnings = slaWarnings || [];
+  const forecast = capacityForecast || [];
+
+  // Chart data for capacity forecast
+  const chartData = forecast.map((item) => ({
+    date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    required: item.required_inspections,
+    available: item.available_capacity,
+    utilization: item.utilization_rate,
+  }));
+
+  return (
+    <Row gutter={[16, 16]}>
+      {/* SLA Warnings Panel */}
+      <Col xs={24} lg={12}>
+        <Card
+          title={
+            <Space>
+              <ClockCircleOutlined />
+              <span>{t('scheduleAI.slaWarnings', 'SLA Warnings (14 Days)')}</span>
+            </Space>
+          }
+          extra={<Badge count={warnings.filter((w: any) => w.risk_level === 'critical').length} />}
+        >
+          {slaLoading ? (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Spin size="large" />
+            </div>
+          ) : warnings.length > 0 ? (
+            <List
+              size="small"
+              dataSource={warnings}
+              renderItem={(warning: any) => (
+                <List.Item>
+                  <List.Item.Meta
+                    avatar={
+                      <Badge
+                        status={
+                          warning.risk_level === 'critical'
+                            ? 'error'
+                            : warning.risk_level === 'high'
+                            ? 'warning'
+                            : 'processing'
+                        }
+                      />
+                    }
+                    title={
+                      <Space>
+                        <Text strong>{warning.equipment_name}</Text>
+                        <Tag
+                          color={
+                            warning.risk_level === 'critical'
+                              ? 'red'
+                              : warning.risk_level === 'high'
+                              ? 'orange'
+                              : 'blue'
+                          }
+                        >
+                          {warning.risk_level}
+                        </Tag>
+                      </Space>
+                    }
+                    description={
+                      <div>
+                        <Text type="secondary">
+                          SLA Due: {new Date(warning.sla_due_date).toLocaleDateString()} (
+                          {warning.days_until_due} days)
+                        </Text>
+                        <br />
+                        <Text type="secondary">{warning.recommended_action}</Text>
+                        {warning.assigned_inspector && (
+                          <>
+                            <br />
+                            <Text type="secondary">
+                              Assigned: {warning.assigned_inspector}
+                            </Text>
+                          </>
+                        )}
+                      </div>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          ) : (
+            <Alert
+              type="success"
+              message={t('scheduleAI.noSLAWarnings', 'All inspections within SLA')}
+              showIcon
+            />
+          )}
+        </Card>
+      </Col>
+
+      {/* Capacity Forecast Panel */}
+      <Col xs={24} lg={12}>
+        <Card
+          title={
+            <Space>
+              <BulbOutlined />
+              <span>{t('scheduleAI.capacityForecast', 'Capacity Forecast (7 Days)')}</span>
+            </Space>
+          }
+        >
+          {capacityLoading ? (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Spin size="large" />
+            </div>
+          ) : forecast.length > 0 ? (
+            <>
+              <List
+                size="small"
+                dataSource={forecast}
+                style={{ marginBottom: 16 }}
+                renderItem={(day: any) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      title={
+                        <Space>
+                          <Text strong>{new Date(day.date).toLocaleDateString()}</Text>
+                          {day.is_overloaded && (
+                            <Tag color="red" icon={<WarningOutlined />}>
+                              OVERLOADED
+                            </Tag>
+                          )}
+                        </Space>
+                      }
+                      description={
+                        <div>
+                          <Text type="secondary">
+                            Required: {day.required_inspections} | Available: {day.available_capacity} | Utilization: {day.utilization_rate.toFixed(0)}%
+                          </Text>
+                          <Progress
+                            percent={day.utilization_rate}
+                            status={day.is_overloaded ? 'exception' : 'normal'}
+                            size="small"
+                            style={{ marginTop: 4 }}
+                          />
+                          {day.recommendations?.length > 0 && (
+                            <div style={{ marginTop: 4 }}>
+                              {day.recommendations.map((rec: string, idx: number) => (
+                                <Tag key={idx} color="orange" style={{ marginTop: 4 }}>
+                                  {rec}
+                                </Tag>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            </>
+          ) : (
+            <Alert
+              type="info"
+              message={t('scheduleAI.noCapacityData', 'No capacity forecast data available')}
+            />
+          )}
+        </Card>
+      </Col>
+    </Row>
+  );
+}
 
 export default function InspectionAssignmentsPage() {
   const { t } = useTranslation();
@@ -73,8 +272,8 @@ export default function InspectionAssignmentsPage() {
   // View mode: table or calendar
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
 
-  // Active tab for Phase 4 features
-  const [activeTab, setActiveTab] = useState<'assignments' | 'batching' | 'templates' | 'balancer'>('assignments');
+  // Active tab for Phase 4 features + AI Intelligence
+  const [activeTab, setActiveTab] = useState<'assignments' | 'batching' | 'templates' | 'balancer' | 'ai' | 'sla'>('assignments');
 
   // Selected list for Phase 4 operations
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
@@ -543,6 +742,24 @@ export default function InspectionAssignmentsPage() {
                 </span>
               ),
             },
+            {
+              key: 'ai',
+              label: (
+                <span>
+                  <RobotOutlined />
+                  {t('assignments.tab_ai', 'AI Intelligence')}
+                </span>
+              ),
+            },
+            {
+              key: 'sla',
+              label: (
+                <span>
+                  <ClockCircleOutlined />
+                  {t('assignments.tab_sla', 'SLA Monitor')}
+                </span>
+              ),
+            },
           ]}
         />
       </Card>
@@ -573,6 +790,29 @@ export default function InspectionAssignmentsPage() {
           listId={selectedListId || rawLists[0]?.id}
           onBalanceApplied={() => refetch()}
         />
+      )}
+
+      {/* AI Intelligence Tab */}
+      {activeTab === 'ai' && (
+        <Row gutter={[16, 16]}>
+          <Col span={24}>
+            <TeamPerformanceDashboard />
+          </Col>
+          <Col xs={24} lg={12}>
+            <InspectorScoreboardCard />
+          </Col>
+          <Col xs={24} lg={12}>
+            <FatigueAlerts />
+          </Col>
+          <Col span={24}>
+            <RouteOptimizer />
+          </Col>
+        </Row>
+      )}
+
+      {/* SLA Monitor Tab */}
+      {activeTab === 'sla' && (
+        <SLAMonitorView />
       )}
 
       {/* Main Card - Only show on assignments tab */}

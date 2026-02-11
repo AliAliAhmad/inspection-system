@@ -263,3 +263,4 @@ export { overdueApi } from './overdue.api';
 export { dailyReviewAIApi } from './daily-review-ai.api';
 export { performanceApi } from './performance.api';
 export { reportsAIApi } from './reports-ai.api';
+export { scheduleAIApi } from './schedule-ai.api';

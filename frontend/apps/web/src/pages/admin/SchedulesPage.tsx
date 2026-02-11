@@ -11,6 +11,8 @@ import {
   Alert,
   message,
   Typography,
+  Tabs,
+  Space,
 } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,9 +20,19 @@ import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import {
   inspectionRoutinesApi,
+  scheduleAIApi,
   type EquipmentSchedule,
   type UpcomingEntry,
 } from '@inspection/shared';
+import {
+  ScheduleStatsCards,
+  AIScheduleInsights,
+  CoverageGapsPanel,
+  RiskIndicator,
+  ScheduleHeatmap,
+  HealthTrendChart,
+  CapacityGauge,
+} from '../../components/schedules';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -46,6 +58,7 @@ export default function SchedulesPage() {
     equipment_processed: number;
     errors: string[];
   } | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('1');
 
   // Equipment schedule grid
   const { data: schedules, isLoading: schedulesLoading } = useQuery({
@@ -61,6 +74,18 @@ export default function SchedulesPage() {
     queryKey: ['inspection-schedules', 'upcoming'],
     queryFn: () =>
       inspectionRoutinesApi.getUpcoming().then((r) => (r.data as any).data),
+  });
+
+  // Risk scores for equipment
+  const { data: riskScores } = useQuery({
+    queryKey: ['schedule-ai', 'risk-scores'],
+    queryFn: () => scheduleAIApi.getRiskScores(),
+  });
+
+  // Capacity forecast for gauge
+  const { data: capacityData } = useQuery({
+    queryKey: ['schedule-ai', 'capacity-forecast', 30],
+    queryFn: () => scheduleAIApi.getCapacityForecast(30),
   });
 
   const uploadMutation = useMutation({
@@ -91,8 +116,19 @@ export default function SchedulesPage() {
       dataIndex: 'equipment_name',
       key: 'equipment_name',
       fixed: 'left',
-      width: 180,
+      width: 220,
       sorter: (a, b) => a.equipment_name.localeCompare(b.equipment_name),
+      render: (_: unknown, record: EquipmentSchedule) => {
+        const riskScore = riskScores?.equipment_risk_scores?.find(
+          (r) => r.equipment_id === record.equipment_id
+        );
+        return (
+          <Space>
+            <span>{record.equipment_name}</span>
+            {riskScore && <RiskIndicator level={riskScore.risk_level} size="small" />}
+          </Space>
+        );
+      },
     },
     {
       title: t('equipment.type', 'Type'),
@@ -191,8 +227,28 @@ export default function SchedulesPage() {
   const todayBerths = groupByBerth(todayEntries);
   const tomorrowBerths = groupByBerth(tomorrowEntries);
 
+  // Calculate average capacity for gauge
+  const avgCapacity = capacityData && capacityData.length > 0
+    ? capacityData.reduce((sum, d) => sum + d.utilization_rate, 0) / capacityData.length
+    : 0;
+
   return (
     <div>
+      {/* AI Stats Cards */}
+      <div style={{ marginBottom: 16 }}>
+        <ScheduleStatsCards />
+      </div>
+
+      {/* AI Insights and Coverage Gaps */}
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col xs={24} lg={16}>
+          <AIScheduleInsights compact />
+        </Col>
+        <Col xs={24} lg={8}>
+          <CoverageGapsPanel compact />
+        </Col>
+      </Row>
+
       {/* Today & Tomorrow Inspections */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col xs={24} md={12}>
@@ -251,46 +307,85 @@ export default function SchedulesPage() {
         </Col>
       </Row>
 
-      {/* Equipment Schedule Grid */}
-      <Card
-        title={
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {t('nav.inspectionSchedule', 'Inspection Schedule')}
-          </Typography.Title>
-        }
-        extra={
-          <Upload
-            accept=".xlsx,.xls"
-            showUploadList={false}
-            beforeUpload={(file) => {
-              uploadMutation.mutate(file);
-              return false;
-            }}
-          >
-            <Button
-              icon={<UploadOutlined />}
-              loading={uploadMutation.isPending}
-              type="primary"
-            >
-              {t('schedules.importSchedule', 'Import Schedule')}
-            </Button>
-          </Upload>
-        }
-      >
-        <Table
-          rowKey="equipment_id"
-          columns={scheduleColumns}
-          dataSource={schedules || []}
-          loading={schedulesLoading}
-          locale={{
-            emptyText: t(
-              'schedules.noSchedule',
-              'No schedule imported yet. Click "Import Schedule" to upload an Excel file.',
-            ),
-          }}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
-          scroll={{ x: 900 }}
-          size="small"
+      {/* Tabbed Content */}
+      <Card>
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            {
+              key: '1',
+              label: t('schedules.ai.scheduleGrid', 'Schedule Grid'),
+              children: (
+                <div>
+                  <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Upload
+                      accept=".xlsx,.xls"
+                      showUploadList={false}
+                      beforeUpload={(file) => {
+                        uploadMutation.mutate(file);
+                        return false;
+                      }}
+                    >
+                      <Button
+                        icon={<UploadOutlined />}
+                        loading={uploadMutation.isPending}
+                        type="primary"
+                      >
+                        {t('schedules.importSchedule', 'Import Schedule')}
+                      </Button>
+                    </Upload>
+                  </div>
+                  <Table
+                    rowKey="equipment_id"
+                    columns={scheduleColumns}
+                    dataSource={schedules || []}
+                    loading={schedulesLoading}
+                    locale={{
+                      emptyText: t(
+                        'schedules.noSchedule',
+                        'No schedule imported yet. Click "Import Schedule" to upload an Excel file.',
+                      ),
+                    }}
+                    pagination={{ pageSize: 20, showSizeChanger: true }}
+                    scroll={{ x: 1000 }}
+                    size="small"
+                  />
+                </div>
+              ),
+            },
+            {
+              key: '2',
+              label: t('schedules.ai.heatmapView', 'Heatmap View'),
+              children: <ScheduleHeatmap />,
+            },
+            {
+              key: '3',
+              label: t('schedules.ai.aiAnalytics', 'AI Analytics'),
+              children: (
+                <div>
+                  <Row gutter={[16, 16]}>
+                    <Col xs={24}>
+                      <AIScheduleInsights />
+                    </Col>
+                    <Col xs={24} lg={16}>
+                      <HealthTrendChart />
+                    </Col>
+                    <Col xs={24} lg={8}>
+                      <CapacityGauge
+                        utilization={avgCapacity}
+                        title={t('schedules.ai.capacityUtilization', 'Capacity Utilization (30 Days)')}
+                        showRecommendations={true}
+                      />
+                    </Col>
+                    <Col xs={24}>
+                      <CoverageGapsPanel />
+                    </Col>
+                  </Row>
+                </div>
+              ),
+            },
+          ]}
         />
       </Card>
 

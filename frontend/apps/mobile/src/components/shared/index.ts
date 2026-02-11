@@ -28,3 +28,13 @@ export { DaysOverdueBadge } from '../DaysOverdueBadge';
 export type { DaysOverdueBadgeProps } from '../DaysOverdueBadge';
 
 export { default as AIRatingsSheet } from '../AIRatingsSheet';
+
+// Schedule AI components
+export { RiskBadge } from '../RiskBadge';
+export type { RiskBadgeProps } from '../RiskBadge';
+
+export { HealthTrendIcon } from '../HealthTrendIcon';
+export type { HealthTrendIconProps } from '../HealthTrendIcon';
+
+export { ScheduleAICard } from '../ScheduleAICard';
+export type { ScheduleAICardProps } from '../ScheduleAICard';
