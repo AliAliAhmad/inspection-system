@@ -66,6 +66,27 @@ def get_notifications():
     }), 200
 
 
+@bp.route('/unread-count', methods=['GET'])
+@jwt_required()
+def get_unread_count():
+    """
+    Get count of unread notifications for current user.
+
+    Returns:
+        {
+            "status": "success",
+            "count": 5
+        }
+    """
+    current_user_id = get_jwt_identity()
+    unread_count = NotificationService.get_unread_count(int(current_user_id))
+
+    return jsonify({
+        'status': 'success',
+        'count': unread_count
+    }), 200
+
+
 @bp.route('/<int:notification_id>/read', methods=['POST'])
 @jwt_required()
 def mark_notification_read(notification_id):
