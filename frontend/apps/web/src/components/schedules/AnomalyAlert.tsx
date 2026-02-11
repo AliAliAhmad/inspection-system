@@ -7,12 +7,12 @@ import {
   CloseCircleOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import type { ScheduleAnomaly } from '@inspection/shared';
+import type { ScheduleAIAnomaly } from '@inspection/shared';
 
 const { Text } = Typography;
 
 export interface AnomalyAlertProps {
-  anomaly: ScheduleAnomaly;
+  anomaly: ScheduleAIAnomaly;
   onDismiss?: () => void;
   onViewDetails?: () => void;
 }
@@ -36,7 +36,7 @@ const SEVERITY_CONFIG = {
   },
 };
 
-const ANOMALY_TYPE_LABELS = {
+const ANOMALY_TYPE_LABELS: Record<string, string> = {
   frequency_spike: 'Frequency Spike',
   quality_drop: 'Quality Drop',
   capacity_issue: 'Capacity Issue',
@@ -46,7 +46,7 @@ const ANOMALY_TYPE_LABELS = {
 export function AnomalyAlert({ anomaly, onDismiss, onViewDetails }: AnomalyAlertProps) {
   const { t } = useTranslation();
 
-  const config = SEVERITY_CONFIG[anomaly.severity];
+  const config = SEVERITY_CONFIG[anomaly.severity] || SEVERITY_CONFIG.low;
 
   const message = (
     <Space>

@@ -76,7 +76,9 @@
       "Bash(/Users/AliAliAhmad_1_2/Desktop/inspection_system/venv/bin/python:*)",
       "Bash(for:*)",
       "Bash(wc:*)",
-      "Bash(sort:*)"
+      "Bash(sort:*)",
+      "Bash(do echo '=== $\\(basename $f .output\\) ===' tail -20 $f)",
+      "Bash(test:*)"
     ]
   }
 }

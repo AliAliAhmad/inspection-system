@@ -45,7 +45,7 @@ export function RiskIndicator({ level, factors, tooltip, size = 'default' }: Ris
   const config = RISK_CONFIG[level];
 
   // Build tooltip content
-  let tooltipContent = tooltip;
+  let tooltipContent: React.ReactNode = tooltip;
   if (!tooltipContent && factors) {
     const factorEntries = Object.entries(factors)
       .filter(([_, value]) => value !== undefined && value > 0)
