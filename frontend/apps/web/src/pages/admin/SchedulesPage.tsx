@@ -57,6 +57,12 @@ export default function SchedulesPage() {
     created: number;
     equipment_processed: number;
     errors: string[];
+    summary?: {
+      day_shifts: number;
+      night_shifts: number;
+      total_active: number;
+    };
+    import_details?: any[];
   } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('1');
   const [debugData, setDebugData] = useState<any>(null);
@@ -97,6 +103,8 @@ export default function SchedulesPage() {
         created: result.created ?? 0,
         equipment_processed: result.equipment_processed ?? 0,
         errors: result.errors ?? [],
+        summary: result.summary,
+        import_details: result.import_details,
       });
       queryClient.invalidateQueries({ queryKey: ['inspection-schedules'] });
       message.success(
@@ -453,6 +461,21 @@ export default function SchedulesPage() {
               <strong>{uploadResult.equipment_processed}</strong>{' '}
               {t('schedules.equipment', 'equipment')}.
             </p>
+            {uploadResult.summary && (
+              <Alert
+                type="success"
+                showIcon
+                message={
+                  <div>
+                    <strong>Import Summary:</strong>{' '}
+                    <Tag color="gold">{uploadResult.summary.day_shifts} Day Shifts</Tag>
+                    <Tag color="purple">{uploadResult.summary.night_shifts} Night Shifts</Tag>
+                    <Tag>{uploadResult.summary.total_active} Total Active</Tag>
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+              />
+            )}
             {uploadResult.errors.length > 0 && (
               <Alert
                 type="warning"

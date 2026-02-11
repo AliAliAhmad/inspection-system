@@ -343,11 +343,16 @@ def upload_schedule():
                 continue
 
             shifts_to_create = []
-            # Day shift variations
-            if cell_value in ('D', 'DAY', '1', 'TRUE', 'YES', 'Y'):
+
+            # More lenient day shift detection
+            # Check if it starts with D, contains DAY, or is numeric 1
+            if (cell_value in ('D', 'DAY', '1', 'TRUE', 'YES', 'Y') or
+                cell_value.startswith('D') and len(cell_value) <= 3 or
+                'DAY' in cell_value):
                 shifts_to_create = ['day']
             # Night shift variations
-            elif cell_value in ('N', 'NIGHT', '2', 'FALSE', 'NO'):
+            elif (cell_value in ('N', 'NIGHT', '2', 'FALSE', 'NO') or
+                  cell_value.startswith('N') and len(cell_value) <= 5):
                 shifts_to_create = ['night']
             # Both shifts variations
             elif cell_value in ('D+N', 'DN', 'D/N', 'BOTH', 'DAY+NIGHT', '3', 'B'):
@@ -355,7 +360,7 @@ def upload_schedule():
             else:
                 errors.append(
                     f"Row {row_num}, {header[col_idx]}: unknown value '{cell_value}' "
-                    f"(expected D, N, D+N, or 1, 2, 3)"
+                    f"(raw: {repr(raw_value)}, type: {type(raw_value).__name__})"
                 )
                 continue
 
