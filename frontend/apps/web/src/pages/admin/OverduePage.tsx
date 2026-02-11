@@ -39,6 +39,7 @@ import {
   OverdueCalendar,
 } from '../../components/overdue';
 import type { OverdueItem, OverdueItemType, AgingBucket } from '../../components/overdue';
+import { overdueApi } from '@inspection/shared';
 
 const { Title } = Typography;
 
@@ -57,37 +58,22 @@ export default function OverduePage() {
   // Fetch overdue summary data
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
     queryKey: ['overdue', 'summary'],
-    queryFn: async () => {
-      // This would call the overdue API endpoint
-      return {
-        inspections: { count: 12, oldest_days: 15 },
-        defects: { count: 8, oldest_days: 22 },
-        reviews: { count: 5, oldest_days: 7 },
-        total: 25,
-      };
-    },
+    queryFn: () => overdueApi.getSummary().then(r => r.data?.data),
   });
 
   // Fetch aging buckets
   const { data: bucketsData } = useQuery({
-    queryKey: ['overdue', 'aging-buckets'],
-    queryFn: async () => {
-      return [
-        { label: '1-7 days', key: '1-7', min_days: 1, max_days: 7, count: 8, color: '#52c41a' },
-        { label: '8-14 days', key: '8-14', min_days: 8, max_days: 14, count: 5, color: '#fadb14' },
-        { label: '15-30 days', key: '15-30', min_days: 15, max_days: 30, count: 4, color: '#faad14' },
-        { label: '31-60 days', key: '31-60', min_days: 31, max_days: 60, count: 2, color: '#fa8c16' },
-        { label: '60+ days', key: '60+', min_days: 60, max_days: null, count: 1, color: '#ff4d4f' },
-      ] as AgingBucket[];
-    },
+    queryKey: ['overdue', 'aging-buckets', activeTab],
+    queryFn: () => overdueApi.getAgingBuckets(activeTab === 'all' ? undefined : activeTab).then(r => r.data?.data),
   });
 
-  // Fetch pattern count for badge
+  // Fetch patterns for badge count
   const { data: patternsData } = useQuery({
-    queryKey: ['overdue', 'patterns-count'],
-    queryFn: async () => {
-      return { count: 3 };
-    },
+    queryKey: ['overdue', 'ai-patterns'],
+    queryFn: () => overdueApi.getPatterns().then(r => {
+      const patterns = r.data?.data || [];
+      return { count: patterns.length, patterns };
+    }),
   });
 
   // Get type filter based on active tab
