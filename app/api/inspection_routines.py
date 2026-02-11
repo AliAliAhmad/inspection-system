@@ -465,6 +465,62 @@ def list_schedules():
     }), 200
 
 
+@bp.route('/schedules/debug', methods=['GET'])
+@jwt_required()
+@admin_required()
+def debug_schedules():
+    """
+    DEBUG: Show raw schedule data from database.
+    Returns all active schedules with shift information for debugging.
+    """
+    schedules = InspectionSchedule.query.filter_by(is_active=True)\
+        .order_by(InspectionSchedule.equipment_id, InspectionSchedule.day_of_week).all()
+
+    debug_data = []
+    for s in schedules:
+        equip = s.equipment
+        debug_data.append({
+            'id': s.id,
+            'equipment_id': s.equipment_id,
+            'equipment_name': equip.name if equip else 'Unknown',
+            'day_of_week': s.day_of_week,
+            'shift': s.shift,  # This is the critical field
+            'berth': s.berth,
+        })
+
+    # Count by shift
+    day_count = sum(1 for s in schedules if s.shift == 'day')
+    night_count = sum(1 for s in schedules if s.shift == 'night')
+    other_count = sum(1 for s in schedules if s.shift not in ['day', 'night'])
+
+    return jsonify({
+        'status': 'success',
+        'total_schedules': len(schedules),
+        'day_shifts': day_count,
+        'night_shifts': night_count,
+        'other_shifts': other_count,
+        'schedules': debug_data,
+    }), 200
+
+
+@bp.route('/schedules/clear-all', methods=['DELETE'])
+@jwt_required()
+@admin_required()
+def clear_all_schedules():
+    """
+    Clear all inspection schedules (for debugging).
+    Use this before importing a fresh schedule.
+    """
+    deleted_count = InspectionSchedule.query.delete()
+    safe_commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Deleted {deleted_count} schedule entries',
+        'deleted': deleted_count,
+    }), 200
+
+
 @bp.route('/schedules/upcoming', methods=['GET'])
 @jwt_required()
 @admin_required()
