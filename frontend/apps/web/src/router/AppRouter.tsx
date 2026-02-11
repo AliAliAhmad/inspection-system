@@ -38,7 +38,7 @@ const CyclesPage = lazy(() => import('../pages/admin/CyclesPage'));
 const LeaveSettingsPage = lazy(() => import('../pages/admin/LeaveSettingsPage'));
 const WorkPlanSettingsPage = lazy(() => import('../pages/admin/WorkPlanSettingsPage'));
 const DailyReviewPage = lazy(() => import('../pages/admin/DailyReviewPage'));
-const PerformanceReportPage = lazy(() => import('../pages/admin/PerformanceReportPage'));
+const PerformancePage = lazy(() => import('../pages/admin/PerformancePage'));
 const OverduePage = lazy(() => import('../pages/admin/OverduePage'));
 const NotificationRulesPage = lazy(() => import('../pages/admin/NotificationRulesPage'));
 const NotificationAnalyticsPage = lazy(() => import('../pages/admin/NotificationAnalyticsPage'));
@@ -127,7 +127,7 @@ export default function AppRouter() {
             <Route path="leave-settings" element={<RoleGuard roles={['admin']}><LeaveSettingsPage /></RoleGuard>} />
             <Route path="work-plan-settings" element={<RoleGuard roles={['admin']}><WorkPlanSettingsPage /></RoleGuard>} />
             <Route path="daily-review" element={<RoleGuard roles={['admin', 'engineer']}><DailyReviewPage /></RoleGuard>} />
-            <Route path="performance" element={<RoleGuard roles={['admin', 'engineer']}><PerformanceReportPage /></RoleGuard>} />
+            <Route path="performance" element={<RoleGuard roles={['admin', 'engineer']}><PerformancePage /></RoleGuard>} />
             <Route path="overdue" element={<RoleGuard roles={['admin', 'engineer']}><OverduePage /></RoleGuard>} />
             <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pause" replace />} />
             <Route path="notification-rules" element={<RoleGuard roles={['admin']}><NotificationRulesPage /></RoleGuard>} />
