@@ -274,10 +274,18 @@ def get_lists():
 @jwt_required()
 @role_required('admin', 'engineer')
 def generate_list():
-    """Generate inspection list for a date and shift."""
+    """Generate inspection list for a date and shift. Supports morning, afternoon, night, or legacy day shift."""
     data = request.get_json()
     target_date = date.fromisoformat(data['target_date'])
     shift = data['shift']
+
+    # Validate shift values
+    valid_shifts = ['morning', 'afternoon', 'night', 'day']  # 'day' for backward compatibility
+    if shift not in valid_shifts:
+        return jsonify({
+            'status': 'error',
+            'message': f'Invalid shift. Must be one of: {", ".join(valid_shifts)}'
+        }), 400
 
     il = InspectionListService.generate_daily_list(target_date, shift)
 

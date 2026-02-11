@@ -18,7 +18,7 @@ class InspectionList(db.Model):
 
     # Generation info
     generated_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    shift = db.Column(db.String(20), nullable=False)  # 'day' or 'night'
+    shift = db.Column(db.String(20), nullable=False)  # 'morning', 'afternoon', 'night', or legacy 'day'
     target_date = db.Column(db.Date, nullable=False)
 
     # Status

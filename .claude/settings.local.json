@@ -78,7 +78,8 @@
       "Bash(wc:*)",
       "Bash(sort:*)",
       "Bash(do echo '=== $\\(basename $f .output\\) ===' tail -20 $f)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(do echo '=== COMMIT: $commit ===')"
     ]
   }
 }

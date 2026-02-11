@@ -16,7 +16,7 @@ class InspectionSchedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
     day_of_week = db.Column(db.Integer, nullable=False)
-    shift = db.Column(db.String(20), nullable=True, default='day')  # 'day' or 'night'
+    shift = db.Column(db.String(20), nullable=True, default='morning')  # 'morning', 'afternoon', 'night', or legacy 'day'
     berth = db.Column(db.String(50), nullable=True)  # from Excel import
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

@@ -23,7 +23,7 @@ class InspectionListService:
 
         Args:
             target_date: Date for inspections
-            shift: 'day' or 'night'
+            shift: 'morning', 'afternoon', 'night', or legacy 'day'
 
         Returns:
             Created InspectionList with unassigned assignments

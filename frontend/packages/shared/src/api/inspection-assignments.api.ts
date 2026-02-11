@@ -8,7 +8,7 @@ import {
 } from '../types';
 
 export interface AssignmentListParams extends PaginationParams {
-  shift?: 'day' | 'night';
+  shift?: 'morning' | 'afternoon' | 'night' | 'day';
   target_date?: string;
   date?: string;
   date_from?: string;
@@ -215,7 +215,7 @@ export interface WorkloadPreviewResult {
 
 export interface GenerateListPayload {
   target_date: string;
-  shift: 'day' | 'night';
+  shift: 'morning' | 'afternoon' | 'night' | 'day';
 }
 
 export interface AssignTeamPayload {
