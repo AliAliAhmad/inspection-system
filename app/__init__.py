@@ -62,6 +62,17 @@ def create_app(config_name='development'):
          methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
          expose_headers=["Content-Type", "Authorization"])
 
+    # Handle OPTIONS requests for CORS preflight
+    @app.before_request
+    def handle_preflight():
+        if request.method == 'OPTIONS':
+            response = jsonify({'status': 'ok'})
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, Accept-Language'
+            response.headers['Access-Control-Max-Age'] = '3600'
+            return response, 200
+
     # CORS + Security headers for all responses
     @app.after_request
     def add_response_headers(response):
