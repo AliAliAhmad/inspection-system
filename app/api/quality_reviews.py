@@ -30,13 +30,12 @@ def get_qc_stats():
     Get quality review statistics for dashboard.
     Returns comprehensive QC metrics including approval rates, SLA compliance, and trends.
     """
-    try:
-        user = get_current_user()
-        today = date.today()
-        week_ago = today - timedelta(days=7)
-        month_ago = today - timedelta(days=30)
-        prev_month_start = today - timedelta(days=60)
-        prev_month_end = today - timedelta(days=31)
+    user = get_current_user()
+    today = date.today()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+    prev_month_start = today - timedelta(days=60)
+    prev_month_end = today - timedelta(days=31)
 
     # Base query - filter by QE if not admin
     base_query = QualityReview.query
@@ -161,14 +160,6 @@ def get_qc_stats():
             'weekly_breakdown': weekly_data
         }
     }), 200
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'status': 'error',
-            'message': 'Failed to get quality review stats',
-            'error': str(e)
-        }), 500
 
 
 @bp.route('/sla-report', methods=['GET'])
