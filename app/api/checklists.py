@@ -31,8 +31,8 @@ def generate_item_code(function_name, assembly_name, sequence_number):
 @jwt_required()
 @admin_required()
 def list_templates():
-    """List all checklist templates. Admin only."""
-    templates = ChecklistTemplate.query.all()
+    """List all active checklist templates. Admin only."""
+    templates = ChecklistTemplate.query.filter_by(is_active=True).all()
     lang = get_language()
     return jsonify({
         'status': 'success',
