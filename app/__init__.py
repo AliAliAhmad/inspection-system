@@ -62,12 +62,21 @@ def create_app(config_name='development'):
          methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
          expose_headers=["Content-Type", "Authorization"])
 
-    # Explicit CORS headers for all responses
+    # CORS + Security headers for all responses
     @app.after_request
-    def add_cors_headers(response):
+    def add_response_headers(response):
+        # CORS
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, Accept-Language'
+        # Security headers
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Permissions-Policy'] = 'camera=(), microphone=(self), geolocation=()'
+        # Remove server header
+        response.headers.pop('Server', None)
         return response
 
     # Import models to ensure they're registered
@@ -84,7 +93,9 @@ def create_app(config_name='development'):
         work_plans, materials, cycles, pm_templates, work_plan_tracking,
         approvals, auto_approvals, unified_ai,
         # AI-Enhanced Modules
-        defect_ai, overdue, daily_review_ai, performance, schedule_ai
+        defect_ai, overdue, daily_review_ai, performance, schedule_ai,
+        # Admin Audit
+        admin_activity
     )
 
     # Core
@@ -162,6 +173,9 @@ def create_app(config_name='development'):
     app.register_blueprint(daily_review_ai.bp, url_prefix='/api/work-plan-tracking')
     app.register_blueprint(performance.bp, url_prefix='/api/performance')
     app.register_blueprint(schedule_ai.bp, url_prefix='/api/schedule-ai')
+
+    # Admin Audit Trail
+    app.register_blueprint(admin_activity.bp, url_prefix='/api/admin-activity')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)

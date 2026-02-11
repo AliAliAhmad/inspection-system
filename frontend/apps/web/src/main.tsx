@@ -6,6 +6,7 @@ import App from './App';
 import { AuthProvider } from './providers/AuthProvider';
 import { LanguageProvider } from './providers/LanguageProvider';
 import { OfflineProvider } from './providers/OfflineProvider';
+import { ThemeProvider } from './providers/ThemeProvider';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -22,13 +23,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <LanguageProvider>
-          <OfflineProvider>
-            <AuthProvider>
-              <App />
-            </AuthProvider>
-          </OfflineProvider>
-        </LanguageProvider>
+        <ThemeProvider>
+          <LanguageProvider>
+            <OfflineProvider>
+              <AuthProvider>
+                <App />
+              </AuthProvider>
+            </OfflineProvider>
+          </LanguageProvider>
+        </ThemeProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

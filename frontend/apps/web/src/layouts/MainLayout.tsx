@@ -31,10 +31,13 @@ import {
   ThunderboltOutlined,
   LineChartOutlined,
   RiseOutlined,
+  BulbOutlined,
+  BulbFilled,
 } from '@ant-design/icons';
-import { Dropdown, Avatar, Space } from 'antd';
+import { Dropdown, Avatar, Space, Tooltip, Switch } from 'antd';
 import { useAuth } from '../providers/AuthProvider';
 import { useLanguage } from '../providers/LanguageProvider';
+import { useTheme } from '../providers/ThemeProvider';
 import { useTranslation } from 'react-i18next';
 import { useNotificationAlerts } from '../hooks/useNotificationAlerts';
 import { useNotificationDrawer } from '../hooks/useNotificationDrawer';
@@ -47,71 +50,70 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
   const hasWorkPlanning = role === 'admin' || role === 'engineer';
 
   const shared: MenuDataItem[] = [
-    { path: '/', name: t('nav.dashboard'), icon: <DashboardOutlined /> },
-    { path: '/equipment-dashboard', name: t('nav.equipment_dashboard'), icon: <ControlOutlined /> },
-    // Only show My Work Plan for non-admin/engineer users
-    ...(!hasWorkPlanning ? [{ path: '/my-work-plan', name: t('nav.my_work_plan'), icon: <ClockCircleOutlined /> }] : []),
-    { path: '/notifications', name: t('nav.notifications'), icon: <BellOutlined /> },
-    { path: '/leaderboard', name: t('nav.leaderboard'), icon: <TrophyOutlined /> },
-    { path: '/leaves', name: t('nav.leaves'), icon: <CalendarOutlined /> },
-    { path: '/profile', name: t('nav.profile'), icon: <UserOutlined /> },
+    { path: '/', name: `\ud83d\udcca ${t('nav.dashboard')}`, icon: <DashboardOutlined /> },
+    { path: '/equipment-dashboard', name: `\u2699\ufe0f ${t('nav.equipment_dashboard')}`, icon: <ControlOutlined /> },
+    ...(!hasWorkPlanning ? [{ path: '/my-work-plan', name: `\ud83d\udccb ${t('nav.my_work_plan')}`, icon: <ClockCircleOutlined /> }] : []),
+    { path: '/notifications', name: `\ud83d\udd14 ${t('nav.notifications')}`, icon: <BellOutlined /> },
+    { path: '/leaderboard', name: `\ud83c\udfc6 ${t('nav.leaderboard')}`, icon: <TrophyOutlined /> },
+    { path: '/leaves', name: `\ud83c\udfd6\ufe0f ${t('nav.leaves')}`, icon: <CalendarOutlined /> },
+    { path: '/profile', name: `\ud83d\udc64 ${t('nav.profile')}`, icon: <UserOutlined /> },
   ];
 
   const adminItems: MenuDataItem[] = [
-    { path: '/admin/work-planning', name: t('nav.work_planning'), icon: <ScheduleOutlined /> },
-    { path: '/admin/materials', name: t('nav.materials'), icon: <InboxOutlined /> },
-    { path: '/admin/pm-templates', name: t('nav.pm_templates'), icon: <UnorderedListOutlined /> },
-    { path: '/admin/cycles', name: t('nav.maintenance_cycles'), icon: <ClockCircleOutlined /> },
-    { path: '/admin/roster', name: t('nav.roster'), icon: <TeamOutlined /> },
-    { path: '/admin/users', name: t('nav.users'), icon: <TeamOutlined /> },
-    { path: '/admin/equipment', name: t('nav.equipment'), icon: <ToolOutlined /> },
-    { path: '/admin/checklists', name: t('nav.checklists'), icon: <CheckCircleOutlined /> },
-    { path: '/admin/schedules', name: t('nav.inspectionSchedule'), icon: <ScheduleOutlined /> },
-    { path: '/admin/assignments', name: t('nav.inspection_assignments'), icon: <AppstoreOutlined /> },
-    { path: '/admin/inspections', name: t('nav.all_inspections'), icon: <FileTextOutlined /> },
-    { path: '/admin/specialist-jobs', name: t('nav.specialist_jobs'), icon: <ExperimentOutlined /> },
-    { path: '/admin/engineer-jobs', name: t('nav.engineer_jobs'), icon: <SettingOutlined /> },
-    { path: '/admin/quality-reviews', name: t('nav.quality_reviews'), icon: <AuditOutlined /> },
-    { path: '/admin/approvals', name: t('nav.approvals'), icon: <SafetyCertificateOutlined /> },
-    { path: '/admin/routines', name: t('nav.routines'), icon: <SyncOutlined /> },
-    { path: '/admin/defects', name: t('nav.defects'), icon: <BugOutlined /> },
-    { path: '/admin/backlog', name: t('nav.backlog'), icon: <WarningOutlined /> },
-    { path: '/admin/reports', name: t('nav.reports'), icon: <BarChartOutlined /> },
-    { path: '/admin/daily-review', name: 'Daily Review', icon: <CheckCircleOutlined /> },
-    { path: '/admin/overdue', name: t('sidebar.overdue'), icon: <ClockCircleOutlined /> },
-    { path: '/admin/performance', name: t('sidebar.performance'), icon: <RiseOutlined /> },
-    { path: '/admin/notification-rules', name: t('nav.notification_rules'), icon: <ThunderboltOutlined /> },
-    { path: '/admin/notification-analytics', name: t('nav.notification_analytics'), icon: <LineChartOutlined /> },
-    { path: '/admin/leave-settings', name: t('nav.leave_settings'), icon: <SettingOutlined /> },
-    { path: '/admin/work-plan-settings', name: t('nav.work_plan_settings'), icon: <SettingOutlined /> },
+    { path: '/admin/work-planning', name: `\ud83d\udcc5 ${t('nav.work_planning')}`, icon: <ScheduleOutlined /> },
+    { path: '/admin/materials', name: `\ud83d\udce6 ${t('nav.materials')}`, icon: <InboxOutlined /> },
+    { path: '/admin/pm-templates', name: `\ud83d\udcdd ${t('nav.pm_templates')}`, icon: <UnorderedListOutlined /> },
+    { path: '/admin/cycles', name: `\ud83d\udd04 ${t('nav.maintenance_cycles')}`, icon: <ClockCircleOutlined /> },
+    { path: '/admin/roster', name: `\ud83d\udc65 ${t('nav.roster')}`, icon: <TeamOutlined /> },
+    { path: '/admin/users', name: `\ud83d\udc68\u200d\ud83d\udcbc ${t('nav.users')}`, icon: <TeamOutlined /> },
+    { path: '/admin/equipment', name: `\ud83d\udd27 ${t('nav.equipment')}`, icon: <ToolOutlined /> },
+    { path: '/admin/checklists', name: `\u2705 ${t('nav.checklists')}`, icon: <CheckCircleOutlined /> },
+    { path: '/admin/schedules', name: `\ud83d\udcc6 ${t('nav.inspectionSchedule')}`, icon: <ScheduleOutlined /> },
+    { path: '/admin/assignments', name: `\ud83d\udccc ${t('nav.inspection_assignments')}`, icon: <AppstoreOutlined /> },
+    { path: '/admin/inspections', name: `\ud83d\udd0d ${t('nav.all_inspections')}`, icon: <FileTextOutlined /> },
+    { path: '/admin/specialist-jobs', name: `\ud83e\udde0 ${t('nav.specialist_jobs')}`, icon: <ExperimentOutlined /> },
+    { path: '/admin/engineer-jobs', name: `\ud83d\udee0\ufe0f ${t('nav.engineer_jobs')}`, icon: <SettingOutlined /> },
+    { path: '/admin/quality-reviews', name: `\u2b50 ${t('nav.quality_reviews')}`, icon: <AuditOutlined /> },
+    { path: '/admin/approvals', name: `\u2714\ufe0f ${t('nav.approvals')}`, icon: <SafetyCertificateOutlined /> },
+    { path: '/admin/routines', name: `\ud83d\udd01 ${t('nav.routines')}`, icon: <SyncOutlined /> },
+    { path: '/admin/defects', name: `\ud83d\udc1b ${t('nav.defects')}`, icon: <BugOutlined /> },
+    { path: '/admin/backlog', name: `\u26a0\ufe0f ${t('nav.backlog')}`, icon: <WarningOutlined /> },
+    { path: '/admin/reports', name: `\ud83d\udcca ${t('nav.reports')}`, icon: <BarChartOutlined /> },
+    { path: '/admin/daily-review', name: '\ud83d\udcdd Daily Review', icon: <CheckCircleOutlined /> },
+    { path: '/admin/overdue', name: `\u23f0 ${t('sidebar.overdue')}`, icon: <ClockCircleOutlined /> },
+    { path: '/admin/performance', name: `\ud83d\udcc8 ${t('sidebar.performance')}`, icon: <RiseOutlined /> },
+    { path: '/admin/notification-rules', name: `\u26a1 ${t('nav.notification_rules')}`, icon: <ThunderboltOutlined /> },
+    { path: '/admin/notification-analytics', name: `\ud83d\udcc9 ${t('nav.notification_analytics')}`, icon: <LineChartOutlined /> },
+    { path: '/admin/leave-settings', name: `\u2699\ufe0f ${t('nav.leave_settings')}`, icon: <SettingOutlined /> },
+    { path: '/admin/work-plan-settings', name: `\u2699\ufe0f ${t('nav.work_plan_settings')}`, icon: <SettingOutlined /> },
   ];
 
   const inspectorItems: MenuDataItem[] = [
-    { path: '/inspector/assignments', name: t('nav.my_assignments'), icon: <FileTextOutlined /> },
+    { path: '/inspector/assignments', name: `\ud83d\udccb ${t('nav.my_assignments')}`, icon: <FileTextOutlined /> },
   ];
 
   const specialistItems: MenuDataItem[] = [
-    { path: '/specialist/jobs', name: t('nav.my_jobs'), icon: <ToolOutlined /> },
+    { path: '/specialist/jobs', name: `\ud83d\udd27 ${t('nav.my_jobs')}`, icon: <ToolOutlined /> },
   ];
 
   const engineerItems: MenuDataItem[] = [
-    { path: '/admin/work-planning', name: t('nav.work_planning'), icon: <ScheduleOutlined /> },
-    { path: '/admin/materials', name: t('nav.materials'), icon: <InboxOutlined /> },
-    { path: '/admin/pm-templates', name: t('nav.pm_templates'), icon: <UnorderedListOutlined /> },
-    { path: '/engineer/jobs', name: t('nav.my_jobs'), icon: <ToolOutlined /> },
-    { path: '/engineer/jobs/create', name: t('nav.create_job'), icon: <AppstoreOutlined /> },
-    { path: '/engineer/team-assignment', name: t('nav.team_assignment'), icon: <TeamOutlined /> },
-    { path: '/engineer/pause-approvals', name: t('nav.pause_approvals'), icon: <PauseCircleOutlined /> },
-    { path: '/admin/defects', name: t('nav.defects'), icon: <BugOutlined /> },
-    { path: '/admin/daily-review', name: 'Daily Review', icon: <CheckCircleOutlined /> },
-    { path: '/admin/overdue', name: t('sidebar.overdue'), icon: <ClockCircleOutlined /> },
-    { path: '/admin/performance', name: t('sidebar.performance'), icon: <RiseOutlined /> },
+    { path: '/admin/work-planning', name: `\ud83d\udcc5 ${t('nav.work_planning')}`, icon: <ScheduleOutlined /> },
+    { path: '/admin/materials', name: `\ud83d\udce6 ${t('nav.materials')}`, icon: <InboxOutlined /> },
+    { path: '/admin/pm-templates', name: `\ud83d\udcdd ${t('nav.pm_templates')}`, icon: <UnorderedListOutlined /> },
+    { path: '/engineer/jobs', name: `\ud83d\udd27 ${t('nav.my_jobs')}`, icon: <ToolOutlined /> },
+    { path: '/engineer/jobs/create', name: `\u2795 ${t('nav.create_job')}`, icon: <AppstoreOutlined /> },
+    { path: '/engineer/team-assignment', name: `\ud83d\udc65 ${t('nav.team_assignment')}`, icon: <TeamOutlined /> },
+    { path: '/engineer/pause-approvals', name: `\u23f8\ufe0f ${t('nav.pause_approvals')}`, icon: <PauseCircleOutlined /> },
+    { path: '/admin/defects', name: `\ud83d\udc1b ${t('nav.defects')}`, icon: <BugOutlined /> },
+    { path: '/admin/daily-review', name: '\ud83d\udcdd Daily Review', icon: <CheckCircleOutlined /> },
+    { path: '/admin/overdue', name: `\u23f0 ${t('sidebar.overdue')}`, icon: <ClockCircleOutlined /> },
+    { path: '/admin/performance', name: `\ud83d\udcc8 ${t('sidebar.performance')}`, icon: <RiseOutlined /> },
   ];
 
   const qeItems: MenuDataItem[] = [
-    { path: '/quality/reviews', name: t('nav.pending_reviews'), icon: <AuditOutlined /> },
-    { path: '/quality/overdue', name: t('nav.overdue_reviews'), icon: <AlertOutlined /> },
-    { path: '/quality/bonus-requests', name: t('nav.bonus_requests'), icon: <StarOutlined /> },
+    { path: '/quality/reviews', name: `\ud83d\udd0d ${t('nav.pending_reviews')}`, icon: <AuditOutlined /> },
+    { path: '/quality/overdue', name: `\u23f0 ${t('nav.overdue_reviews')}`, icon: <AlertOutlined /> },
+    { path: '/quality/bonus-requests', name: `\ud83c\udf1f ${t('nav.bonus_requests')}`, icon: <StarOutlined /> },
   ];
 
   const roleMenus: Record<string, MenuDataItem[]> = {
@@ -128,6 +130,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
 export default function MainLayout() {
   const { user, logout } = useAuth();
   const { language, setLanguage } = useLanguage();
+  const { isDark, toggleTheme } = useTheme();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -172,6 +175,15 @@ export default function MainLayout() {
         <div onClick={() => item.path && navigate(item.path)}>{dom}</div>
       )}
       actionsRender={() => [
+        <Tooltip key="theme" title={isDark ? 'Light Mode' : 'Dark Mode'}>
+          <Switch
+            checked={isDark}
+            onChange={toggleTheme}
+            checkedChildren={<BulbFilled />}
+            unCheckedChildren={<BulbOutlined />}
+            style={{ marginRight: 8 }}
+          />
+        </Tooltip>,
         <NotificationBadge
           key="notifications"
           count={unreadCount}
@@ -179,7 +191,7 @@ export default function MainLayout() {
           hasCritical={(priorityCounts?.critical || 0) > 0}
           onClick={openDrawer}
         >
-          <BellOutlined style={{ fontSize: 20, color: '#666' }} />
+          <BellOutlined style={{ fontSize: 20, color: isDark ? '#ccc' : '#666' }} />
         </NotificationBadge>,
         <Dropdown
           key="user"

@@ -137,6 +137,9 @@ from app.models.point_history import PointHistory
 from app.models.leaderboard_snapshot import LeaderboardSnapshot
 from app.models.performance_goal import PerformanceGoal
 
+# Admin Audit
+from app.models.admin_activity_log import AdminActivityLog
+
 __all__ = [
     'User',
     'Equipment',
@@ -250,4 +253,6 @@ __all__ = [
     'PointHistory',
     'LeaderboardSnapshot',
     'PerformanceGoal',
+    # Admin Audit
+    'AdminActivityLog',
 ]

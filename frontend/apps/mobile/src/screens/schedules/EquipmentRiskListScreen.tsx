@@ -23,7 +23,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { scheduleAIApi, type EquipmentRiskScore } from '@inspection/shared';
 import { Searchbar, Chip } from 'react-native-paper';
-import { RiskBadge, HealthTrendIcon } from '../components/shared';
+import { RiskBadge, HealthTrendIcon } from '../../components/shared';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
