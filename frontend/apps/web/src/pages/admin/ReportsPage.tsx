@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Card,
   Row,
@@ -10,6 +11,8 @@ import {
   Divider,
   Table,
   Tag,
+  Tabs,
+  Space,
 } from 'antd';
 import {
   TeamOutlined,
@@ -18,6 +21,13 @@ import {
   ClockCircleOutlined,
   UserOutlined,
   CheckCircleOutlined,
+  DashboardOutlined,
+  AlertOutlined,
+  LineChartOutlined,
+  QuestionCircleOutlined,
+  BulbOutlined,
+  BarChartOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -28,9 +38,17 @@ import {
   type DefectAnalytics,
   type CapacityData,
 } from '@inspection/shared';
+import {
+  ExecutiveSummaryCard,
+  AnomalyAlertsPanel,
+  ForecastChart,
+  NLQueryInterface,
+  InsightsFeed,
+} from '../../components/reports';
 
 export default function ReportsPage() {
   const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState('ai-summary');
 
   const { data: dashboardData, isLoading: dashboardLoading, isError: dashboardError } = useQuery({
     queryKey: ['reports', 'admin-dashboard'],
@@ -60,22 +78,18 @@ export default function ReportsPage() {
   const isLoading = dashboardLoading || defectLoading || pauseLoading || capacityLoading;
   const hasError = dashboardError || defectError || pauseError || capacityError;
 
-  if (hasError) {
-    return (
-      <Alert
-        type="error"
-        message={t('reports.error', 'Failed to load reports data')}
-        description={t('reports.errorDescription', 'Please try again later.')}
-        showIcon
-      />
-    );
-  }
-
-  return (
+  // Traditional Analytics Tab Content
+  const TraditionalAnalytics = () => (
     <Spin spinning={isLoading}>
-      <Typography.Title level={4} style={{ marginBottom: 24 }}>
-        {t('nav.reports', 'Reports & Analytics')}
-      </Typography.Title>
+      {hasError && (
+        <Alert
+          type="error"
+          message={t('reports.error', 'Failed to load reports data')}
+          description={t('reports.errorDescription', 'Please try again later.')}
+          showIcon
+          style={{ marginBottom: 24 }}
+        />
+      )}
 
       {/* Admin Dashboard Overview */}
       {dashboard && (
@@ -326,5 +340,90 @@ export default function ReportsPage() {
         )}
       </Row>
     </Spin>
+  );
+
+  const tabItems = [
+    {
+      key: 'ai-summary',
+      label: (
+        <Space>
+          <DashboardOutlined />
+          {t('reports.ai.executiveSummary', 'Executive Summary')}
+        </Space>
+      ),
+      children: <ExecutiveSummaryCard />,
+    },
+    {
+      key: 'ai-anomalies',
+      label: (
+        <Space>
+          <AlertOutlined />
+          {t('reports.ai.anomalyAlerts', 'Anomaly Alerts')}
+        </Space>
+      ),
+      children: <AnomalyAlertsPanel />,
+    },
+    {
+      key: 'ai-forecast',
+      label: (
+        <Space>
+          <LineChartOutlined />
+          {t('reports.ai.forecast', 'Forecast')}
+        </Space>
+      ),
+      children: <ForecastChart />,
+    },
+    {
+      key: 'ai-query',
+      label: (
+        <Space>
+          <QuestionCircleOutlined />
+          {t('reports.ai.nlQuery', 'Ask AI')}
+        </Space>
+      ),
+      children: <NLQueryInterface />,
+    },
+    {
+      key: 'ai-insights',
+      label: (
+        <Space>
+          <BulbOutlined />
+          {t('reports.ai.insights', 'Insights')}
+        </Space>
+      ),
+      children: <InsightsFeed />,
+    },
+    {
+      key: 'traditional',
+      label: (
+        <Space>
+          <BarChartOutlined />
+          {t('reports.traditional', 'Traditional Analytics')}
+        </Space>
+      ),
+      children: <TraditionalAnalytics />,
+    },
+  ];
+
+  return (
+    <div>
+      <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          {t('nav.reports', 'Reports & Analytics')}
+        </Typography.Title>
+        <Tag color="purple" icon={<RobotOutlined />}>
+          {t('reports.ai.powered', 'AI-Powered')}
+        </Tag>
+      </div>
+
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={tabItems}
+        type="card"
+        size="large"
+        style={{ marginBottom: 24 }}
+      />
+    </div>
   );
 }

@@ -67,4 +67,37 @@ export const performanceApi = {
   deleteGoal(goalId: number) {
     return getApiClient().delete<ApiResponse<{ success: boolean }>>(`/api/performance/goals/${goalId}`);
   },
+
+  // Summary endpoint
+  getSummary(userId: number) {
+    return getApiClient().get<ApiResponse<{
+      user_id: number;
+      trajectory: PerformanceTrajectory;
+      skill_gaps: PerformanceSkillGap[];
+      burnout_risk: BurnoutRisk;
+      goals: PerformanceGoal[];
+      coaching_tips: CoachingTip[];
+      insights: Array<{ id: string; type: string; title: string; description: string }>;
+    }>>(`/api/performance/summary/${userId}`);
+  },
+
+  // Intervention endpoints
+  suggestLeave(data: { user_id: number; days: number; reason?: string }) {
+    return getApiClient().post<ApiResponse<{
+      leave: { id: number; status: string; date_from: string; date_to: string };
+      burnout_risk: BurnoutRisk;
+      recommendation: { title: string; description: string };
+    }>>('/api/performance/interventions/leave', data);
+  },
+
+  reduceWorkload(data: { user_id: number; reduction_percentage: number; target_user_id?: number }) {
+    return getApiClient().post<ApiResponse<{
+      user_id: number;
+      user_name: string;
+      jobs_reassigned: Array<{ job_id: number; from_user_id: number; to_user_id: number; to_user_name: string }>;
+      reduction_percentage: number;
+      burnout_risk: BurnoutRisk;
+      recommendation: { title: string; description: string };
+    }>>('/api/performance/interventions/workload', data);
+  },
 };

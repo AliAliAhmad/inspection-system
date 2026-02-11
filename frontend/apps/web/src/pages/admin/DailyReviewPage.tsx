@@ -2,22 +2,27 @@
  * Daily Review Page (Web)
  * Engineer reviews jobs, rates workers, handles pauses, manages carry-overs.
  * Enhanced with AI-powered suggestions and worker feedback.
+ * Connected to real dailyReviewAIApi for bias detection, predictions, and time accuracy.
  */
 import React, { useState, useMemo } from 'react';
 import {
   Card, Row, Col, Button, Tag, Statistic, DatePicker, Select, Table, Modal,
   Rate, Input, Alert, Badge, Space, Typography, Tooltip, Progress, message,
-  Tabs, Drawer, Switch, Divider,
+  Tabs, Drawer, Switch, Divider, Spin,
 } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, PauseCircleOutlined,
   CarryOutOutlined, StarOutlined, SendOutlined, ExclamationCircleOutlined,
   RobotOutlined, UserOutlined, BulbOutlined, BarChartOutlined,
+  ClockCircleOutlined, WarningOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { workPlanTrackingApi } from '@inspection/shared';
+import { workPlanTrackingApi, dailyReviewAIApi } from '@inspection/shared';
 import type {
   ShiftType, WorkPlanDailyReview, WorkPlanJobRating,
+  RatingBiasResult,
+  IncompleteJobPrediction,
+  TimeAccuracyAnalysis,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
 
@@ -28,6 +33,7 @@ import {
   generateMockPredictions,
   RatingBiasAlert,
   detectRatingBias,
+  TimeAccuracyChart,
 } from '../../components/work-planning';
 
 const { Title, Text } = Typography;
@@ -65,13 +71,65 @@ export default function DailyReviewPage() {
   const review: WorkPlanDailyReview | undefined = data?.data?.review;
   const jobs: any[] = data?.data?.jobs || [];
 
-  // AI predictions for incomplete jobs
+  // Real AI: Predict incomplete jobs from backend
+  const { data: incompleteJobsData, isLoading: loadingPredictions } = useQuery({
+    queryKey: ['ai-predict-incomplete', selectedDate],
+    queryFn: async () => {
+      const response = await dailyReviewAIApi.predictIncomplete(selectedDate);
+      return response.data?.data || [];
+    },
+    enabled: aiAssistanceEnabled,
+  });
+
+  // Real AI: Check rating bias for current user
+  const { data: biasData, isLoading: loadingBias } = useQuery({
+    queryKey: ['ai-bias-check'],
+    queryFn: async () => {
+      // Get current user ID from review or fallback
+      const engineerId = review?.engineer_id;
+      if (!engineerId) return null;
+      const response = await dailyReviewAIApi.checkBias(engineerId, 30);
+      return response.data?.data || null;
+    },
+    enabled: aiAssistanceEnabled && !!review?.engineer_id,
+  });
+
+  // Real AI: Time accuracy analysis
+  const { data: timeAccuracyData, isLoading: loadingTimeAccuracy } = useQuery({
+    queryKey: ['ai-time-accuracy'],
+    queryFn: async () => {
+      const response = await dailyReviewAIApi.analyzeTimeAccuracy(30);
+      return response.data?.data || null;
+    },
+    enabled: aiAssistanceEnabled,
+  });
+
+  // Transform backend incomplete predictions to component format
   const incompleteJobPredictions = useMemo(() => {
     if (!aiAssistanceEnabled) return [];
+
+    // Use real API data if available, fallback to local generation
+    if (incompleteJobsData && incompleteJobsData.length > 0) {
+      return incompleteJobsData.map((pred: IncompleteJobPrediction) => ({
+        id: pred.job_id,
+        equipmentName: pred.job_title || 'Unknown',
+        jobType: 'pm' as const,
+        completionProbability: Math.round(pred.completion_probability * 100),
+        riskFactors: pred.risk_factors.map((rf: string) => ({
+          type: 'time' as const,
+          description: rf,
+          severity: 'medium' as const,
+        })),
+        recommendedAction: pred.recommended_action,
+        estimatedHours: 2,
+      }));
+    }
+
+    // Fallback to local mock generation
     return generateMockPredictions(
       jobs.filter(j => j.tracking?.status !== 'completed')
     );
-  }, [jobs, aiAssistanceEnabled]);
+  }, [jobs, aiAssistanceEnabled, incompleteJobsData]);
 
   // Get unique workers from jobs for feedback cards
   const workers = useMemo(() => {
@@ -551,6 +609,107 @@ export default function DailyReviewPage() {
               </div>
             ),
           },
+          // AI Analytics Tab - Real API data
+          ...(aiAssistanceEnabled ? [{
+            key: 'ai-analytics',
+            label: (
+              <Space>
+                <RobotOutlined />
+                AI Analytics
+                {(biasData?.bias_detected || (timeAccuracyData?.overall_accuracy && timeAccuracyData.overall_accuracy < 0.7)) && (
+                  <Badge dot style={{ backgroundColor: '#faad14' }} />
+                )}
+              </Space>
+            ),
+            children: (
+              <div>
+                {/* Rating Bias Alert */}
+                {loadingBias ? (
+                  <Card size="small" style={{ marginBottom: 16 }}>
+                    <div style={{ textAlign: 'center', padding: 20 }}>
+                      <Spin size="small" />
+                      <Text type="secondary" style={{ marginLeft: 8 }}>Analyzing rating patterns...</Text>
+                    </div>
+                  </Card>
+                ) : biasData && (
+                  <div style={{ marginBottom: 16 }}>
+                    {biasData.has_sufficient_data === false ? (
+                      <Alert
+                        message="Insufficient Data"
+                        description={biasData.message || 'Not enough ratings to analyze bias patterns.'}
+                        type="info"
+                        showIcon
+                      />
+                    ) : biasData.has_bias ? (
+                      <RatingBiasAlert
+                        engineerId={review?.engineer_id || 0}
+                        engineerName="Current Engineer"
+                        averageRating={biasData.average_rating || 0}
+                        peerAverageRating={3.5}
+                        totalRatingsGiven={biasData.sample_size || 0}
+                        biasDetected={biasData.has_bias || false}
+                        biasPatterns={(biasData.anomalies || []).map((a: any) => ({
+                          type: a.type === 'leniency_bias' ? 'lenient' : a.type === 'severity_bias' ? 'strict' : 'inconsistent',
+                          description: a.description,
+                          severity: a.severity as 'low' | 'medium' | 'high',
+                        }))}
+                        suggestedCalibration={(biasData.anomalies || [])[0]?.recommendation}
+                        compact={false}
+                      />
+                    ) : (
+                      <Alert
+                        message="No Rating Bias Detected"
+                        description={`Analysis of ${biasData.sample_size} ratings shows consistent rating patterns.`}
+                        type="success"
+                        showIcon
+                        icon={<CheckCircleOutlined />}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Time Accuracy Chart */}
+                {loadingTimeAccuracy ? (
+                  <Card size="small">
+                    <div style={{ textAlign: 'center', padding: 20 }}>
+                      <Spin size="small" />
+                      <Text type="secondary" style={{ marginLeft: 8 }}>Analyzing time estimation accuracy...</Text>
+                    </div>
+                  </Card>
+                ) : timeAccuracyData && timeAccuracyData.sample_size > 0 && (
+                  <TimeAccuracyChart
+                    overallAccuracy={Math.round((timeAccuracyData.overall_accuracy || 0) * 100)}
+                    underEstimatedCount={timeAccuracyData.common_overruns?.length || 0}
+                    overEstimatedCount={0}
+                    accurateCount={timeAccuracyData.sample_size - (timeAccuracyData.common_overruns?.length || 0)}
+                    byJobType={Object.entries(timeAccuracyData.by_job_type || {}).map(([type, data]: [string, any]) => ({
+                      type,
+                      label: type === 'pm' ? 'Preventive Maintenance' : type === 'defect' ? 'Defect Repairs' : 'Inspections',
+                      totalJobs: data.count || 0,
+                      avgEstimated: 0,
+                      avgActual: 0,
+                      accuracyPercent: Math.round((data.accuracy || 0) * 100),
+                      trend: 'accurate' as const,
+                    }))}
+                    periodLabel="Last 30 days"
+                  />
+                )}
+
+                {/* Incomplete Jobs Full View */}
+                {incompleteJobPredictions.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <IncompleteJobsWarning
+                      jobs={incompleteJobPredictions}
+                      compact={false}
+                      onTakeAction={(jobId, action) => {
+                        message.info(`Recommended action for job ${jobId}: ${action}`);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            ),
+          }] : []),
         ]}
       />
 

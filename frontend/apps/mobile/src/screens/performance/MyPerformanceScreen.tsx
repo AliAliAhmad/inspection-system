@@ -223,6 +223,31 @@ export default function MyPerformanceScreen() {
         </View>
       </View>
 
+      {/* Quick Actions */}
+      <View style={styles.quickActionsContainer}>
+        <TouchableOpacity
+          style={styles.quickActionButton}
+          onPress={() => navigation.navigate('Trajectory' as any)}
+        >
+          <Text style={styles.quickActionIcon}>📈</Text>
+          <Text style={styles.quickActionText}>Trajectory</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickActionButton}
+          onPress={() => navigation.navigate('SkillGaps' as any)}
+        >
+          <Text style={styles.quickActionIcon}>🎯</Text>
+          <Text style={styles.quickActionText}>Skill Gaps</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickActionButton}
+          onPress={() => navigation.navigate('Goals' as any)}
+        >
+          <Text style={styles.quickActionIcon}>🏆</Text>
+          <Text style={styles.quickActionText}>Goals</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Peer Rank Display */}
       {ranking.rank && (
         <View style={styles.rankCard}>
@@ -429,6 +454,28 @@ const styles = StyleSheet.create({
   streakIcon: { fontSize: 24 },
   streakValue: { fontSize: 24, fontWeight: '700', color: '#212121', marginTop: 4 },
   streakLabel: { fontSize: 12, color: '#757575', marginTop: 2 },
+
+  // Quick Actions
+  quickActionsContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  quickActionButton: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickActionIcon: { fontSize: 24, marginBottom: 6 },
+  quickActionText: { fontSize: 12, fontWeight: '600', color: '#424242' },
 
   // Rank Card
   rankCard: {

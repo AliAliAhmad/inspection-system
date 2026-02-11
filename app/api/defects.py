@@ -290,3 +290,391 @@ def assign_specialist(defect_id):
         'data': jobs_data,
         'related_defects_assigned': related_count,
     }), 201
+
+
+@bp.route('/<int:id>', methods=['GET'])
+@jwt_required()
+def get_defect(id):
+    """
+    Get a single defect with full details.
+
+    Returns:
+        {
+            "status": "success",
+            "data": {...}
+        }
+    """
+    current_user = get_current_user()
+    defect = Defect.query.get_or_404(id)
+    lang = get_language(current_user)
+
+    return jsonify({
+        'status': 'success',
+        'data': defect.to_dict(language=lang)
+    }), 200
+
+
+@bp.route('/<int:id>/escalate', methods=['POST'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def escalate_defect(id):
+    """
+    Escalate a defect.
+
+    Request Body:
+        {
+            "reason": "Critical production impact",
+            "level": 2  // optional: escalation level (1-5)
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Defect escalated",
+            "data": {...},
+            "escalation": {...}
+        }
+    """
+    from app.services.shared import EscalationEngine, EscalationLevel, defect_risk_scorer
+    from app.services.notification_service import NotificationService
+
+    defect = Defect.query.get_or_404(id)
+    data = request.get_json() or {}
+
+    if not data.get('reason'):
+        raise ValidationError("reason is required")
+
+    reason = data['reason']
+    level = data.get('level', 2)  # Default to MEDIUM
+
+    # Validate level
+    if not isinstance(level, int) or level < 1 or level > 5:
+        raise ValidationError("level must be an integer between 1 and 5")
+
+    # Map level to EscalationLevel
+    level_map = {
+        1: EscalationLevel.LOW,
+        2: EscalationLevel.MEDIUM,
+        3: EscalationLevel.HIGH,
+        4: EscalationLevel.CRITICAL,
+        5: EscalationLevel.EMERGENCY,
+    }
+    escalation_level = level_map[level]
+
+    # Update priority based on escalation level
+    priority_map = {
+        EscalationLevel.LOW: 'medium',
+        EscalationLevel.MEDIUM: 'high',
+        EscalationLevel.HIGH: 'high',
+        EscalationLevel.CRITICAL: 'urgent',
+        EscalationLevel.EMERGENCY: 'urgent',
+    }
+    new_priority = priority_map.get(escalation_level, defect.priority)
+
+    # Update defect priority if escalation warrants it
+    if new_priority and (defect.priority != 'urgent' or escalation_level.value >= 4):
+        defect.priority = new_priority
+
+    # Calculate risk score
+    days_open = (datetime.utcnow().date() - defect.created_at.date()).days if defect.created_at else 0
+    risk_context = {
+        'severity': defect.severity,
+        'days_old': days_open,
+        'occurrence_count': defect.occurrence_count or 1,
+        'sla_percentage': 50,  # Default, would be calculated from SLA tracker
+    }
+    risk_result = defect_risk_scorer.calculate(risk_context)
+
+    safe_commit()
+
+    # Create notification for admins and engineers
+    from app.models import User
+    admins_and_engineers = User.query.filter(
+        User.role.in_(['admin', 'engineer']),
+        User.is_active == True
+    ).all()
+
+    current_user_id = int(get_jwt_identity())
+    for user in admins_and_engineers:
+        if user.id != current_user_id:
+            NotificationService.create_notification(
+                user_id=user.id,
+                type='defect_escalated',
+                title='Defect Escalated',
+                message=f'Defect #{defect.id} has been escalated: {reason}',
+                related_type='defect',
+                related_id=defect.id,
+                priority='urgent' if level >= 4 else 'warning',
+            )
+
+    current_user = get_current_user()
+    lang = get_language(current_user)
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Defect escalated',
+        'data': defect.to_dict(language=lang),
+        'escalation': {
+            'level': escalation_level.name,
+            'level_value': escalation_level.value,
+            'reason': reason,
+            'new_priority': defect.priority,
+            'risk_score': risk_result.to_dict(),
+            'escalated_at': datetime.utcnow().isoformat(),
+        }
+    }), 200
+
+
+@bp.route('/<int:id>/sla', methods=['PUT'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def update_defect_sla(id):
+    """
+    Update SLA deadline for a defect.
+
+    Request Body:
+        {
+            "new_deadline": "2024-03-15",
+            "reason": "Extended due to parts availability"  // optional
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "message": "SLA deadline updated",
+            "data": {...},
+            "sla_change": {...}
+        }
+    """
+    from app.services.shared import SLATracker, SLAConfig
+
+    defect = Defect.query.get_or_404(id)
+    data = request.get_json() or {}
+
+    if not data.get('new_deadline'):
+        raise ValidationError("new_deadline is required")
+
+    # Parse the new deadline
+    try:
+        from datetime import date
+        if isinstance(data['new_deadline'], str):
+            new_deadline = datetime.strptime(data['new_deadline'], '%Y-%m-%d').date()
+        else:
+            new_deadline = data['new_deadline']
+    except ValueError:
+        raise ValidationError("new_deadline must be in YYYY-MM-DD format")
+
+    old_deadline = defect.due_date
+    reason = data.get('reason', 'SLA deadline updated')
+
+    # Update the due date
+    defect.due_date = new_deadline
+
+    # Calculate new SLA days from creation date
+    if defect.created_at:
+        new_sla_days = (new_deadline - defect.created_at.date()).days
+        defect.sla_days = new_sla_days
+
+    safe_commit()
+
+    # Get SLA status with new deadline
+    sla_tracker = SLATracker(SLAConfig.default_defect_config())
+    sla_status = sla_tracker.get_status(
+        created_at=defect.created_at,
+        severity=defect.severity,
+        completed_at=defect.resolved_at,
+    )
+
+    current_user = get_current_user()
+    lang = get_language(current_user)
+
+    return jsonify({
+        'status': 'success',
+        'message': 'SLA deadline updated',
+        'data': defect.to_dict(language=lang),
+        'sla_change': {
+            'old_deadline': old_deadline.isoformat() if old_deadline else None,
+            'new_deadline': new_deadline.isoformat(),
+            'reason': reason,
+            'updated_at': datetime.utcnow().isoformat(),
+            'sla_status': sla_status,
+        }
+    }), 200
+
+
+@bp.route('/<int:id>/status', methods=['PUT'])
+@jwt_required()
+def update_defect_status(id):
+    """
+    Update defect status with validation.
+
+    Request Body:
+        {
+            "status": "in_progress",
+            "notes": "Work started on the defect"  // optional
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Status updated",
+            "data": {...}
+        }
+    """
+    defect = Defect.query.get_or_404(id)
+    data = request.get_json() or {}
+
+    if not data.get('status'):
+        raise ValidationError("status is required")
+
+    new_status = data['status']
+    notes = data.get('notes')
+
+    # Valid statuses
+    valid_statuses = ['open', 'in_progress', 'resolved', 'closed', 'false_alarm']
+    if new_status not in valid_statuses:
+        raise ValidationError(f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+
+    # Define valid status transitions
+    valid_transitions = {
+        'open': ['in_progress', 'false_alarm'],
+        'in_progress': ['open', 'resolved', 'false_alarm'],
+        'resolved': ['closed', 'in_progress'],  # Can reopen if issues found
+        'closed': [],  # Closed is final (admins can force change if needed)
+        'false_alarm': ['open'],  # Can be reopened if mistake
+    }
+
+    current_user = get_current_user()
+
+    # Check if transition is valid (admins can override)
+    if current_user.role != 'admin':
+        allowed_transitions = valid_transitions.get(defect.status, [])
+        if new_status not in allowed_transitions and new_status != defect.status:
+            raise ValidationError(
+                f"Cannot transition from '{defect.status}' to '{new_status}'. "
+                f"Allowed transitions: {', '.join(allowed_transitions) or 'none'}"
+            )
+
+    old_status = defect.status
+    defect.status = new_status
+
+    # Set resolved_at timestamp if resolving
+    if new_status == 'resolved' and not defect.resolved_at:
+        defect.resolved_at = datetime.utcnow()
+
+    # Clear resolved_at if reopening
+    if new_status in ['open', 'in_progress'] and defect.resolved_at:
+        defect.resolved_at = None
+
+    # Store notes in resolution_notes if resolving
+    if new_status == 'resolved' and notes:
+        defect.resolution_notes = notes
+
+    safe_commit()
+
+    lang = get_language(current_user)
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Status updated from {old_status} to {new_status}',
+        'data': defect.to_dict(language=lang),
+        'transition': {
+            'old_status': old_status,
+            'new_status': new_status,
+            'notes': notes,
+            'updated_at': datetime.utcnow().isoformat(),
+        }
+    }), 200
+
+
+@bp.route('/<int:id>/assess', methods=['POST'])
+@jwt_required()
+@role_required('specialist', 'admin', 'engineer')
+def assess_defect(id):
+    """
+    Record specialist assessment of a defect.
+
+    Request Body:
+        {
+            "verdict": "confirmed",  // 'confirmed', 'rejected', or 'minor'
+            "notes": "Defect confirmed, requires immediate attention"  // optional
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Assessment recorded",
+            "data": {...}
+        }
+    """
+    defect = Defect.query.get_or_404(id)
+    data = request.get_json() or {}
+
+    if not data.get('verdict'):
+        raise ValidationError("verdict is required")
+
+    verdict = data['verdict']
+    notes = data.get('notes')
+
+    # Valid verdicts
+    valid_verdicts = ['confirmed', 'rejected', 'minor']
+    if verdict not in valid_verdicts:
+        raise ValidationError(f"Invalid verdict. Must be one of: {', '.join(valid_verdicts)}")
+
+    # Update assessment status
+    defect.assessment_status = verdict
+
+    # Adjust status and priority based on verdict
+    if verdict == 'rejected':
+        # Mark as false alarm if rejected
+        defect.status = 'false_alarm'
+        defect.resolution_notes = notes or 'Rejected during specialist assessment'
+    elif verdict == 'minor':
+        # Downgrade priority for minor issues
+        if defect.priority in ['urgent', 'high']:
+            defect.priority = 'medium'
+        elif defect.priority == 'medium':
+            defect.priority = 'low'
+    elif verdict == 'confirmed':
+        # Upgrade priority for confirmed issues if currently low
+        if defect.priority == 'low' and defect.severity in ['high', 'critical']:
+            defect.priority = 'medium'
+
+    safe_commit()
+
+    # Notify relevant users
+    from app.services.notification_service import NotificationService
+
+    # Notify the engineer/admin who assigned this
+    from app.models import User
+    admins = User.query.filter(
+        User.role.in_(['admin', 'engineer']),
+        User.is_active == True
+    ).all()
+
+    current_user = get_current_user()
+    for admin in admins:
+        if admin.id != current_user.id:
+            NotificationService.create_notification(
+                user_id=admin.id,
+                type='defect_assessed',
+                title=f'Defect Assessment: {verdict.title()}',
+                message=f'Defect #{defect.id} has been assessed as {verdict}' + (f': {notes}' if notes else ''),
+                related_type='defect',
+                related_id=defect.id,
+                priority='info' if verdict == 'minor' else 'warning',
+            )
+
+    lang = get_language(current_user)
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Assessment recorded: {verdict}',
+        'data': defect.to_dict(language=lang),
+        'assessment': {
+            'verdict': verdict,
+            'notes': notes,
+            'assessed_by': current_user.id,
+            'assessed_at': datetime.utcnow().isoformat(),
+        }
+    }), 200

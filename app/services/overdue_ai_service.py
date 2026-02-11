@@ -10,13 +10,15 @@ from enum import Enum
 import logging
 import statistics
 
+from app.extensions import db
 from app.services.ai_base_service import (
     AIServiceWrapper, RiskScorer, Predictor, RecommendationEngine,
     RiskFactor, RiskResult, RiskLevel, Prediction, PredictionResult,
     Recommendation, Priority, ScoringUtils
 )
 from app.services.shared import (
-    NotificationPatterns, EscalationEngine, EscalationRule, SLATracker, SLAConfig
+    NotificationPatterns, EscalationEngine, EscalationRule, SLATracker, SLAConfig,
+    overdue_risk_scorer, overdue_insight_generator
 )
 
 logger = logging.getLogger(__name__)
@@ -504,29 +506,574 @@ class OverdueAIService(AIServiceWrapper):
             'review': SLATracker(SLAConfig.default_review_config()),
         }
 
-    def predict_overdue_risk(self, assignment_id: int) -> Dict[str, Any]:
+    def get_summary(self) -> Dict[str, Any]:
         """
-        Predict the risk of an assignment becoming overdue.
-
-        Args:
-            assignment_id: ID of the assignment to analyze
+        Get summary of all overdue items across inspections, defects, and reviews.
 
         Returns:
-            Risk prediction result
+            Dict with counts and oldest days for each category
         """
-        risk_result = self.calculate_risk(assignment_id)
-        prediction_result = self.predict(assignment_id)
+        inspections = self.get_overdue_inspections()
+        defects = self.get_overdue_defects()
+        reviews = self.get_overdue_reviews()
 
-        # Combine results
+        # Calculate oldest days for each category
+        def get_oldest_days(items: List[Dict]) -> int:
+            if not items:
+                return 0
+            days_list = [item.get('days_overdue', 0) for item in items]
+            return max(days_list) if days_list else 0
+
         return {
-            'assignment_id': assignment_id,
-            'risk': risk_result,
-            'predictions': prediction_result,
-            'escalation': self._get_escalation_status(assignment_id),
+            'inspections': {
+                'count': len(inspections),
+                'oldest_days': get_oldest_days(inspections),
+                'items': inspections[:5]  # Top 5 most overdue
+            },
+            'defects': {
+                'count': len(defects),
+                'oldest_days': get_oldest_days(defects),
+                'items': defects[:5]
+            },
+            'reviews': {
+                'count': len(reviews),
+                'oldest_days': get_oldest_days(reviews),
+                'items': reviews[:5]
+            },
+            'total': len(inspections) + len(defects) + len(reviews),
+            'generated_at': datetime.utcnow().isoformat()
         }
 
+    def get_overdue_inspections(self) -> List[Dict[str, Any]]:
+        """
+        Get overdue inspection assignments from database.
+        Inspections are overdue when deadline has passed and status is not completed.
+
+        Returns:
+            List of overdue inspection dicts with details
+        """
+        from app.models import InspectionAssignment, User, Equipment
+
+        today = date.today()
+        now = datetime.utcnow()
+
+        # Query inspection assignments where deadline has passed and not completed
+        overdue_assignments = InspectionAssignment.query.filter(
+            InspectionAssignment.status.notin_(['completed', 'both_complete']),
+            db.or_(
+                InspectionAssignment.deadline < now,
+                db.and_(
+                    InspectionAssignment.deadline.is_(None),
+                    InspectionAssignment.created_at < now - timedelta(days=1)
+                )
+            )
+        ).order_by(InspectionAssignment.deadline.asc()).all()
+
+        results = []
+        for assignment in overdue_assignments:
+            # Calculate days overdue
+            if assignment.deadline:
+                days_overdue = max(0, (now - assignment.deadline).days)
+            else:
+                days_overdue = max(0, (now - assignment.created_at).days - 1)
+
+            # Get risk assessment using shared scorer
+            risk_context = {
+                'days_overdue': days_overdue,
+                'severity': 'normal',
+                'current_workload': 0,
+                'completion_rate': 100
+            }
+
+            # Check inspector workload
+            inspector_id = assignment.mechanical_inspector_id or assignment.electrical_inspector_id
+            if inspector_id:
+                workload = InspectionAssignment.query.filter(
+                    db.or_(
+                        InspectionAssignment.mechanical_inspector_id == inspector_id,
+                        InspectionAssignment.electrical_inspector_id == inspector_id
+                    ),
+                    InspectionAssignment.status.notin_(['completed', 'both_complete'])
+                ).count()
+                risk_context['current_workload'] = workload
+
+            risk_result = overdue_risk_scorer.calculate(risk_context)
+
+            results.append({
+                'id': assignment.id,
+                'type': 'inspection_assignment',
+                'equipment_id': assignment.equipment_id,
+                'equipment_name': assignment.equipment.name if assignment.equipment else None,
+                'mechanical_inspector_id': assignment.mechanical_inspector_id,
+                'mechanical_inspector': assignment.mechanical_inspector.full_name if assignment.mechanical_inspector else None,
+                'electrical_inspector_id': assignment.electrical_inspector_id,
+                'electrical_inspector': assignment.electrical_inspector.full_name if assignment.electrical_inspector else None,
+                'status': assignment.status,
+                'deadline': assignment.deadline.isoformat() if assignment.deadline else None,
+                'days_overdue': days_overdue,
+                'risk_score': risk_result.total_score,
+                'risk_level': risk_result.level.value,
+                'created_at': assignment.created_at.isoformat() if assignment.created_at else None
+            })
+
+        # Sort by days overdue descending
+        results.sort(key=lambda x: x['days_overdue'], reverse=True)
+        return results
+
+    def get_overdue_defects(self) -> List[Dict[str, Any]]:
+        """
+        Get SLA-breached defects from database.
+        Defects are overdue when SLA deadline has passed based on severity.
+
+        Returns:
+            List of overdue defect dicts with SLA details
+        """
+        from app.models import Defect
+
+        # Query open/in_progress defects
+        open_defects = Defect.query.filter(
+            Defect.status.in_(['open', 'in_progress'])
+        ).all()
+
+        results = []
+        for defect in open_defects:
+            # Check SLA status using the tracker
+            sla_status = self.sla_trackers['defect'].get_status(
+                created_at=defect.created_at,
+                severity=defect.severity or 'medium',
+                completed_at=None
+            )
+
+            # Only include if SLA is breached
+            if sla_status['is_breached']:
+                days_overdue = int(sla_status['elapsed_hours'] / 24)
+
+                # Get risk assessment
+                risk_context = {
+                    'days_overdue': days_overdue,
+                    'severity': defect.severity or 'medium',
+                    'current_workload': 0,
+                    'completion_rate': 100
+                }
+                risk_result = overdue_risk_scorer.calculate(risk_context)
+
+                results.append({
+                    'id': defect.id,
+                    'type': 'defect',
+                    'description': defect.description[:100] + '...' if len(defect.description) > 100 else defect.description,
+                    'severity': defect.severity,
+                    'priority': defect.priority,
+                    'status': defect.status,
+                    'assigned_to_id': defect.assigned_to_id,
+                    'assigned_to': defect.assigned_to.full_name if defect.assigned_to else None,
+                    'due_date': defect.due_date.isoformat() if defect.due_date else None,
+                    'days_overdue': days_overdue,
+                    'sla_percentage': sla_status['percentage'],
+                    'sla_status': sla_status['status'],
+                    'risk_score': risk_result.total_score,
+                    'risk_level': risk_result.level.value,
+                    'created_at': defect.created_at.isoformat() if defect.created_at else None
+                })
+
+        # Sort by days overdue descending
+        results.sort(key=lambda x: x['days_overdue'], reverse=True)
+        return results
+
+    def get_overdue_reviews(self) -> List[Dict[str, Any]]:
+        """
+        Get overdue quality reviews from database.
+        Reviews are overdue when SLA deadline has passed for pending reviews.
+
+        Returns:
+            List of overdue review dicts with SLA details
+        """
+        from app.models import QualityReview
+
+        # Query pending reviews
+        pending_reviews = QualityReview.query.filter(
+            QualityReview.status == 'pending'
+        ).all()
+
+        results = []
+        for review in pending_reviews:
+            # Check SLA status using the tracker
+            sla_status = self.sla_trackers['review'].get_status(
+                created_at=review.created_at,
+                severity='normal',
+                completed_at=None
+            )
+
+            # Only include if SLA is breached
+            if sla_status['is_breached']:
+                days_overdue = int(sla_status['elapsed_hours'] / 24)
+
+                results.append({
+                    'id': review.id,
+                    'type': 'quality_review',
+                    'job_type': review.job_type,
+                    'job_id': review.job_id,
+                    'qe_id': review.qe_id,
+                    'quality_engineer': review.quality_engineer.full_name if review.quality_engineer else None,
+                    'status': review.status,
+                    'sla_deadline': review.sla_deadline.isoformat() if review.sla_deadline else sla_status.get('deadline'),
+                    'days_overdue': days_overdue,
+                    'sla_percentage': sla_status['percentage'],
+                    'sla_status': sla_status['status'],
+                    'created_at': review.created_at.isoformat() if review.created_at else None
+                })
+
+        # Sort by days overdue descending
+        results.sort(key=lambda x: x['days_overdue'], reverse=True)
+        return results
+
+    def bulk_reschedule(
+        self,
+        entity_type: str,
+        entity_ids: List[int],
+        new_date: str
+    ) -> Dict[str, Any]:
+        """
+        Reschedule multiple overdue items to a new date.
+
+        Args:
+            entity_type: Type of entity ('inspection', 'defect', 'review')
+            entity_ids: List of entity IDs to reschedule
+            new_date: New due date in ISO format (YYYY-MM-DD)
+
+        Returns:
+            Dict with success count, failed items, and details
+        """
+        from app.models import InspectionAssignment, Defect, QualityReview
+        from app.extensions import db
+
+        # Parse new date
+        try:
+            if isinstance(new_date, str):
+                new_date_parsed = datetime.fromisoformat(new_date.replace('Z', '+00:00'))
+                if new_date_parsed.tzinfo:
+                    new_date_parsed = new_date_parsed.replace(tzinfo=None)
+            else:
+                new_date_parsed = new_date
+        except ValueError:
+            return {
+                'success': False,
+                'error': 'Invalid date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)',
+                'updated': 0,
+                'failed': entity_ids
+            }
+
+        updated = []
+        failed = []
+
+        for entity_id in entity_ids:
+            try:
+                if entity_type == 'inspection':
+                    entity = InspectionAssignment.query.get(entity_id)
+                    if entity:
+                        entity.deadline = new_date_parsed
+                        entity.backlog_triggered = False
+                        entity.backlog_triggered_at = None
+                        updated.append(entity_id)
+                    else:
+                        failed.append({'id': entity_id, 'reason': 'Not found'})
+
+                elif entity_type == 'defect':
+                    entity = Defect.query.get(entity_id)
+                    if entity:
+                        entity.due_date = new_date_parsed.date() if isinstance(new_date_parsed, datetime) else new_date_parsed
+                        updated.append(entity_id)
+                    else:
+                        failed.append({'id': entity_id, 'reason': 'Not found'})
+
+                elif entity_type == 'review':
+                    entity = QualityReview.query.get(entity_id)
+                    if entity:
+                        entity.sla_deadline = new_date_parsed
+                        updated.append(entity_id)
+                    else:
+                        failed.append({'id': entity_id, 'reason': 'Not found'})
+                else:
+                    failed.append({'id': entity_id, 'reason': f'Unknown entity type: {entity_type}'})
+
+            except Exception as e:
+                logger.error(f"Failed to reschedule {entity_type} {entity_id}: {e}")
+                failed.append({'id': entity_id, 'reason': str(e)})
+
+        # Commit all changes
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Failed to commit bulk reschedule: {e}")
+            return {
+                'success': False,
+                'error': f'Database error: {str(e)}',
+                'updated': 0,
+                'failed': [{'id': eid, 'reason': 'Rollback'} for eid in entity_ids]
+            }
+
+        return {
+            'success': True,
+            'entity_type': entity_type,
+            'new_date': new_date_parsed.isoformat() if isinstance(new_date_parsed, datetime) else str(new_date_parsed),
+            'updated': len(updated),
+            'updated_ids': updated,
+            'failed': len(failed),
+            'failed_items': failed
+        }
+
+    def get_calendar_data(
+        self,
+        start_date: Optional[str],
+        end_date: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get overdue items grouped by date for calendar view.
+
+        Args:
+            start_date: Start date in ISO format (defaults to 30 days ago)
+            end_date: End date in ISO format (defaults to today)
+
+        Returns:
+            List of calendar entries with date and items
+        """
+        from app.models import InspectionAssignment, Defect, QualityReview
+        from collections import defaultdict
+
+        # Parse dates
+        today = date.today()
+        if start_date:
+            try:
+                start = datetime.fromisoformat(start_date.replace('Z', '+00:00')).date()
+            except ValueError:
+                start = today - timedelta(days=30)
+        else:
+            start = today - timedelta(days=30)
+
+        if end_date:
+            try:
+                end = datetime.fromisoformat(end_date.replace('Z', '+00:00')).date()
+            except ValueError:
+                end = today
+        else:
+            end = today
+
+        # Group items by original due date
+        calendar_data = defaultdict(lambda: {'inspections': [], 'defects': [], 'reviews': []})
+
+        # Get overdue inspections
+        overdue_assignments = InspectionAssignment.query.filter(
+            InspectionAssignment.status.notin_(['completed', 'both_complete']),
+            InspectionAssignment.deadline.isnot(None)
+        ).all()
+
+        for assignment in overdue_assignments:
+            due_date = assignment.deadline.date()
+            if start <= due_date <= end and assignment.deadline < datetime.utcnow():
+                days_overdue = (datetime.utcnow() - assignment.deadline).days
+                calendar_data[due_date.isoformat()]['inspections'].append({
+                    'id': assignment.id,
+                    'equipment_name': assignment.equipment.name if assignment.equipment else f'Equipment #{assignment.equipment_id}',
+                    'days_overdue': days_overdue,
+                    'status': assignment.status
+                })
+
+        # Get overdue defects
+        open_defects = Defect.query.filter(
+            Defect.status.in_(['open', 'in_progress']),
+            Defect.due_date.isnot(None)
+        ).all()
+
+        for defect in open_defects:
+            if start <= defect.due_date <= end and defect.due_date < today:
+                days_overdue = (today - defect.due_date).days
+                calendar_data[defect.due_date.isoformat()]['defects'].append({
+                    'id': defect.id,
+                    'description': defect.description[:50] + '...' if len(defect.description) > 50 else defect.description,
+                    'severity': defect.severity,
+                    'days_overdue': days_overdue,
+                    'status': defect.status
+                })
+
+        # Get overdue reviews
+        pending_reviews = QualityReview.query.filter(
+            QualityReview.status == 'pending',
+            QualityReview.sla_deadline.isnot(None)
+        ).all()
+
+        for review in pending_reviews:
+            due_date = review.sla_deadline.date()
+            if start <= due_date <= end and review.sla_deadline < datetime.utcnow():
+                days_overdue = (datetime.utcnow() - review.sla_deadline).days
+                calendar_data[due_date.isoformat()]['reviews'].append({
+                    'id': review.id,
+                    'job_type': review.job_type,
+                    'job_id': review.job_id,
+                    'days_overdue': days_overdue
+                })
+
+        # Convert to list format
+        result = []
+        for date_str, items in sorted(calendar_data.items()):
+            total = len(items['inspections']) + len(items['defects']) + len(items['reviews'])
+            if total > 0:
+                result.append({
+                    'date': date_str,
+                    'inspections': items['inspections'],
+                    'defects': items['defects'],
+                    'reviews': items['reviews'],
+                    'total': total,
+                    'breakdown': {
+                        'inspections': len(items['inspections']),
+                        'defects': len(items['defects']),
+                        'reviews': len(items['reviews'])
+                    }
+                })
+
+        return result
+
+    def analyze_patterns(self) -> Dict[str, Any]:
+        """
+        Analyze overdue patterns. Alias for analyze_overdue_patterns().
+
+        Returns:
+            PatternAnalysis as dict
+        """
+        return self.analyze_overdue_patterns().to_dict()
+
+    def predict_overdue_risk(self, entity_type: str, entity_id: int) -> Dict[str, Any]:
+        """
+        Predict the risk of an entity becoming overdue.
+
+        Args:
+            entity_type: Type of entity ('inspection', 'defect', 'review')
+            entity_id: ID of the entity to analyze
+
+        Returns:
+            Risk prediction result with risk score, level, and recommendations
+        """
+        from app.models import InspectionAssignment, Defect, QualityReview
+
+        result = {
+            'entity_type': entity_type,
+            'entity_id': entity_id,
+        }
+
+        if entity_type == 'inspection':
+            entity = InspectionAssignment.query.get(entity_id)
+            if not entity:
+                return {'error': f'Inspection assignment {entity_id} not found'}
+
+            # Calculate days overdue or days until due
+            now = datetime.utcnow()
+            if entity.deadline:
+                if entity.deadline < now:
+                    days_overdue = (now - entity.deadline).days
+                    is_overdue = True
+                else:
+                    days_overdue = 0
+                    is_overdue = False
+            else:
+                days_overdue = 0
+                is_overdue = False
+
+            # Calculate workload
+            inspector_id = entity.mechanical_inspector_id or entity.electrical_inspector_id
+            workload = 0
+            if inspector_id:
+                workload = InspectionAssignment.query.filter(
+                    db.or_(
+                        InspectionAssignment.mechanical_inspector_id == inspector_id,
+                        InspectionAssignment.electrical_inspector_id == inspector_id
+                    ),
+                    InspectionAssignment.status.notin_(['completed', 'both_complete'])
+                ).count()
+
+            risk_context = {
+                'days_overdue': days_overdue,
+                'severity': 'normal',
+                'current_workload': workload,
+                'completion_rate': 100
+            }
+            risk_result = overdue_risk_scorer.calculate(risk_context)
+
+            result.update({
+                'is_overdue': is_overdue,
+                'days_overdue': days_overdue,
+                'deadline': entity.deadline.isoformat() if entity.deadline else None,
+                'status': entity.status,
+                'risk': risk_result.to_dict(),
+                'escalation': self._get_escalation_status(entity_id) if is_overdue else None
+            })
+
+        elif entity_type == 'defect':
+            entity = Defect.query.get(entity_id)
+            if not entity:
+                return {'error': f'Defect {entity_id} not found'}
+
+            sla_status = self.sla_trackers['defect'].get_status(
+                created_at=entity.created_at,
+                severity=entity.severity or 'medium',
+                completed_at=entity.resolved_at
+            )
+
+            days_overdue = int(sla_status['elapsed_hours'] / 24) if sla_status['is_breached'] else 0
+
+            risk_context = {
+                'days_overdue': days_overdue,
+                'severity': entity.severity or 'medium',
+                'current_workload': 0,
+                'completion_rate': 100
+            }
+            risk_result = overdue_risk_scorer.calculate(risk_context)
+
+            result.update({
+                'is_overdue': sla_status['is_breached'],
+                'days_overdue': days_overdue,
+                'due_date': entity.due_date.isoformat() if entity.due_date else None,
+                'severity': entity.severity,
+                'status': entity.status,
+                'sla': sla_status,
+                'risk': risk_result.to_dict()
+            })
+
+        elif entity_type == 'review':
+            entity = QualityReview.query.get(entity_id)
+            if not entity:
+                return {'error': f'Quality review {entity_id} not found'}
+
+            sla_status = self.sla_trackers['review'].get_status(
+                created_at=entity.created_at,
+                severity='normal',
+                completed_at=entity.reviewed_at
+            )
+
+            days_overdue = int(sla_status['elapsed_hours'] / 24) if sla_status['is_breached'] else 0
+
+            risk_context = {
+                'days_overdue': days_overdue,
+                'severity': 'normal',
+                'current_workload': 0,
+                'completion_rate': 100
+            }
+            risk_result = overdue_risk_scorer.calculate(risk_context)
+
+            result.update({
+                'is_overdue': sla_status['is_breached'],
+                'days_overdue': days_overdue,
+                'sla_deadline': entity.sla_deadline.isoformat() if entity.sla_deadline else None,
+                'status': entity.status,
+                'sla': sla_status,
+                'risk': risk_result.to_dict()
+            })
+
+        else:
+            return {'error': f'Unknown entity type: {entity_type}'}
+
+        return result
+
     def _get_escalation_status(self, assignment_id: int) -> Dict[str, Any]:
-        """Get escalation status for an assignment."""
+        """Get escalation status for an inspection assignment."""
         from app.models import InspectionAssignment
 
         assignment = InspectionAssignment.query.get(assignment_id)
@@ -534,16 +1081,19 @@ class OverdueAIService(AIServiceWrapper):
             return {'error': 'Assignment not found'}
 
         days_overdue = 0
-        if assignment.scheduled_date and assignment.status in ['pending', 'in_progress']:
-            days_overdue = (date.today() - assignment.scheduled_date).days
-            if days_overdue < 0:
-                days_overdue = 0
+        now = datetime.utcnow()
+        if assignment.deadline and assignment.status not in ['completed', 'both_complete']:
+            if assignment.deadline < now:
+                days_overdue = (now - assignment.deadline).days
+
+        # Get the primary inspector ID (mechanical or electrical)
+        owner_id = assignment.mechanical_inspector_id or assignment.electrical_inspector_id
 
         context = {
             'entity_id': assignment_id,
             'days_overdue': days_overdue,
-            'owner_id': assignment.inspector_id,
-            'description': f"Assignment #{assignment_id}",
+            'owner_id': owner_id,
+            'description': f"Inspection Assignment #{assignment_id}",
         }
 
         return self.escalation_engine.evaluate(context)
@@ -571,6 +1121,9 @@ class OverdueAIService(AIServiceWrapper):
             if not assignment:
                 continue
 
+            # Get the primary inspector ID (mechanical or electrical)
+            inspector_id = assignment.mechanical_inspector_id or assignment.electrical_inspector_id
+
             # Find best date in next 7 days
             best_date = None
             best_score = float('inf')
@@ -584,26 +1137,34 @@ class OverdueAIService(AIServiceWrapper):
                     continue
 
                 # Check inspector availability
-                if assignment.inspector_id:
+                if inspector_id:
                     roster = RosterEntry.query.filter(
-                        RosterEntry.user_id == assignment.inspector_id,
+                        RosterEntry.user_id == inspector_id,
                         RosterEntry.date == check_date
                     ).first()
 
                     if roster and roster.shift_type == 'off':
                         continue
 
-                # Calculate workload for this date
-                workload = InspectionAssignment.query.filter(
-                    InspectionAssignment.inspector_id == assignment.inspector_id,
-                    InspectionAssignment.scheduled_date == check_date,
-                    InspectionAssignment.status.in_(['pending', 'in_progress'])
-                ).count()
+                    # Calculate workload for this date (check deadline date)
+                    workload = InspectionAssignment.query.filter(
+                        db.or_(
+                            InspectionAssignment.mechanical_inspector_id == inspector_id,
+                            InspectionAssignment.electrical_inspector_id == inspector_id
+                        ),
+                        db.func.date(InspectionAssignment.deadline) == check_date,
+                        InspectionAssignment.status.notin_(['completed', 'both_complete'])
+                    ).count()
 
-                if workload < best_score:
-                    best_score = workload
-                    best_date = check_date
-                    best_conflicts = workload
+                    if workload < best_score:
+                        best_score = workload
+                        best_date = check_date
+                        best_conflicts = workload
+                else:
+                    # No inspector assigned, just find a day
+                    if best_date is None:
+                        best_date = check_date
+                        best_conflicts = 0
 
             if best_date:
                 suggestions.append(DateSuggestion(
@@ -626,31 +1187,43 @@ class OverdueAIService(AIServiceWrapper):
             PatternAnalysis with insights
         """
         from app.models import InspectionAssignment, Defect, User, Equipment
-        from sqlalchemy import func
 
         today = date.today()
+        now = datetime.utcnow()
         thirty_days_ago = today - timedelta(days=30)
+        thirty_days_ago_dt = datetime.combine(thirty_days_ago, datetime.min.time())
 
-        # Analyze overdue assignments from last 30 days
+        # Analyze completed assignments that were overdue (completed after deadline)
         overdue_assignments = InspectionAssignment.query.filter(
-            InspectionAssignment.status == 'completed',
-            InspectionAssignment.scheduled_date >= thirty_days_ago,
-            InspectionAssignment.completed_at > func.date(InspectionAssignment.scheduled_date)
+            InspectionAssignment.status.in_(['completed', 'both_complete']),
+            InspectionAssignment.deadline.isnot(None),
+            InspectionAssignment.deadline >= thirty_days_ago_dt,
+            db.or_(
+                InspectionAssignment.mech_completed_at > InspectionAssignment.deadline,
+                InspectionAssignment.elec_completed_at > InspectionAssignment.deadline
+            )
         ).all()
 
         # Common reasons (days of week with most overdue)
         day_counts = {}
         for a in overdue_assignments:
-            day_name = a.scheduled_date.strftime('%A')
-            day_counts[day_name] = day_counts.get(day_name, 0) + 1
+            if a.deadline:
+                day_name = a.deadline.strftime('%A')
+                day_counts[day_name] = day_counts.get(day_name, 0) + 1
 
         peak_days = sorted(day_counts.keys(), key=lambda x: day_counts.get(x, 0), reverse=True)[:3]
 
-        # Inspector patterns
+        # Inspector patterns - check both mechanical and electrical inspectors
         inspector_overdue = {}
         for a in overdue_assignments:
-            if a.inspector_id:
-                inspector_overdue[a.inspector_id] = inspector_overdue.get(a.inspector_id, 0) + 1
+            # Check mechanical inspector
+            if a.mechanical_inspector_id and a.mech_completed_at and a.deadline:
+                if a.mech_completed_at > a.deadline:
+                    inspector_overdue[a.mechanical_inspector_id] = inspector_overdue.get(a.mechanical_inspector_id, 0) + 1
+            # Check electrical inspector
+            if a.electrical_inspector_id and a.elec_completed_at and a.deadline:
+                if a.elec_completed_at > a.deadline:
+                    inspector_overdue[a.electrical_inspector_id] = inspector_overdue.get(a.electrical_inspector_id, 0) + 1
 
         inspector_patterns = []
         for user_id, count in sorted(inspector_overdue.items(), key=lambda x: x[1], reverse=True)[:5]:
@@ -665,7 +1238,7 @@ class OverdueAIService(AIServiceWrapper):
         # Equipment with most overdue inspections
         equipment_overdue = {}
         for a in overdue_assignments:
-            if hasattr(a, 'equipment_id') and a.equipment_id:
+            if a.equipment_id:
                 equipment_overdue[a.equipment_id] = equipment_overdue.get(a.equipment_id, 0) + 1
 
         high_risk_equipment = []

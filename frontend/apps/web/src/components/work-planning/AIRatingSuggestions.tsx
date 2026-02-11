@@ -2,8 +2,9 @@
  * AIRatingSuggestions.tsx
  * Shows AI-suggested ratings for each worker in a daily review.
  * Includes QC rating, cleaning rating, confidence, reasoning, and override inputs.
+ * Connected to real dailyReviewAIApi for backend AI suggestions.
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   Button,
@@ -31,9 +32,11 @@ import {
   ThunderboltOutlined,
   EditOutlined,
   UserOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { workPlanTrackingApi } from '@inspection/shared';
+import { dailyReviewAIApi, workPlanTrackingApi } from '@inspection/shared';
+import type { RatingSuggestion } from '@inspection/shared';
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
@@ -80,8 +83,29 @@ interface AIRatingSuggestionsProps {
   onClose?: () => void;
 }
 
-// Mock AI suggestions - in production this would come from API
-const generateAISuggestions = (jobs: AIRatingSuggestionsProps['jobs']): WorkerSuggestion[] => {
+// Transform API response to internal format
+const transformAPIResponse = (
+  apiSuggestions: RatingSuggestion[],
+  jobs: AIRatingSuggestionsProps['jobs']
+): WorkerSuggestion[] => {
+  return apiSuggestions.map((s) => {
+    const job = jobs.find((j) => j.id === s.job_id);
+    return {
+      userId: s.user_id,
+      userName: s.user_name,
+      jobId: s.job_id,
+      equipmentName: job?.equipment?.serial_number || job?.equipment?.name || 'Equipment',
+      suggestedQcRating: s.suggested_qc_rating,
+      suggestedCleaningRating: s.suggested_cleaning_rating,
+      confidence: Math.round(s.confidence * 100),
+      reasoning: s.reasoning,
+      selected: true,
+    };
+  });
+};
+
+// Fallback: generate local suggestions when API fails
+const generateLocalSuggestions = (jobs: AIRatingSuggestionsProps['jobs']): WorkerSuggestion[] => {
   const suggestions: WorkerSuggestion[] = [];
 
   jobs.forEach((job) => {
@@ -92,35 +116,25 @@ const generateAISuggestions = (jobs: AIRatingSuggestionsProps['jobs']): WorkerSu
       const existingRating = job.ratings?.find(r => r.user_id === assignment.user_id);
       if (existingRating?.qc_rating) return;
 
-      // Generate mock AI suggestion based on various factors
-      const actualHours = job.tracking?.actual_hours || 0;
       const isLead = assignment.is_lead;
 
-      // AI "analysis" - in production this would be ML-based
       let suggestedQc = 4;
       let suggestedCleaning = 1;
-      let confidence = 85;
+      let confidence = 75;
       let reasoning = 'Based on historical performance and job completion time.';
 
-      // Adjust based on lead status
       if (isLead) {
         suggestedQc = Math.min(5, suggestedQc + 0.5);
-        confidence += 5;
+        confidence += 10;
         reasoning = 'Lead worker with consistent quality record. ' + reasoning;
       }
-
-      // Simulate some variance
-      const variance = Math.random() * 0.5 - 0.25;
-      suggestedQc = Math.max(1, Math.min(5, Math.round((suggestedQc + variance) * 2) / 2));
-      suggestedCleaning = Math.random() > 0.7 ? 2 : Math.random() > 0.4 ? 1 : 0;
-      confidence = Math.max(60, Math.min(98, Math.round(confidence + (Math.random() * 20 - 10))));
 
       suggestions.push({
         userId: assignment.user?.id || assignment.user_id,
         userName: assignment.user?.full_name || `Worker ${assignment.user_id}`,
         jobId: job.id,
         equipmentName: job.equipment?.serial_number || job.equipment?.name || 'Equipment',
-        suggestedQcRating: suggestedQc,
+        suggestedQcRating: Math.round(suggestedQc),
         suggestedCleaningRating: suggestedCleaning,
         confidence,
         reasoning,
@@ -139,10 +153,55 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
   onClose,
 }) => {
   const queryClient = useQueryClient();
-  const [suggestions, setSuggestions] = useState<WorkerSuggestion[]>(() =>
-    generateAISuggestions(jobs)
-  );
-  const [isLoading, setIsLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<WorkerSuggestion[]>([]);
+
+  // Fetch AI suggestions from backend
+  const { isLoading, error, refetch } = useQuery({
+    queryKey: ['ai-rating-suggestions', reviewId],
+    queryFn: async () => {
+      const response = await dailyReviewAIApi.suggestRatings(reviewId);
+      return response.data?.data || [];
+    },
+    enabled: reviewId > 0,
+  });
+
+  // Update suggestions when data loads
+  useEffect(() => {
+    const fetchAndTransform = async () => {
+      try {
+        const response = await dailyReviewAIApi.suggestRatings(reviewId);
+        const apiData = response.data?.data || [];
+        if (apiData.length > 0) {
+          setSuggestions(transformAPIResponse(apiData, jobs));
+        } else {
+          // Fallback to local generation
+          setSuggestions(generateLocalSuggestions(jobs));
+        }
+      } catch (err) {
+        console.warn('AI suggestions API failed, using local fallback:', err);
+        setSuggestions(generateLocalSuggestions(jobs));
+      }
+    };
+    if (reviewId > 0) {
+      fetchAndTransform();
+    }
+  }, [reviewId, jobs]);
+
+  // Apply AI ratings via backend API
+  const applyAIMutation = useMutation({
+    mutationFn: async (overrides: Record<string, { qc_rating?: number; cleaning_rating?: number }>) => {
+      return dailyReviewAIApi.applyAIRatings(reviewId, overrides);
+    },
+    onSuccess: (response) => {
+      const count = response.data?.data?.ratings_applied || response.data?.data?.applied_count || 0;
+      message.success(`Applied ${count} AI-suggested ratings`);
+      queryClient.invalidateQueries({ queryKey: ['daily-review'] });
+      onClose?.();
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Failed to apply AI ratings');
+    },
+  });
 
   // Toggle selection for a suggestion
   const toggleSelection = (index: number) => {
@@ -167,7 +226,7 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
     setSuggestions((prev) => prev.map((s) => ({ ...s, selected })));
   };
 
-  // Apply selected ratings
+  // Fallback: Apply ratings individually when AI bulk apply fails
   const rateMutation = useMutation({
     mutationFn: async (ratings: Array<{
       job_id: number;
@@ -175,7 +234,6 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
       qc_rating: number;
       cleaning_rating: number;
     }>) => {
-      // Apply ratings one by one
       for (const rating of ratings) {
         await workPlanTrackingApi.rateJob(reviewId, rating);
       }
@@ -197,22 +255,30 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
       return;
     }
 
-    const ratings = selectedSuggestions.map((s) => ({
-      job_id: s.jobId,
-      user_id: s.userId,
-      qc_rating: s.overrideQcRating ?? s.suggestedQcRating,
-      cleaning_rating: s.overrideCleaningRating ?? s.suggestedCleaningRating,
-    }));
+    // Build overrides for modified ratings
+    const overrides: Record<string, { qc_rating?: number; cleaning_rating?: number }> = {};
+    selectedSuggestions.forEach((s) => {
+      if (s.overrideQcRating !== undefined || s.overrideCleaningRating !== undefined) {
+        const key = `${s.jobId}_${s.userId}`;
+        overrides[key] = {
+          qc_rating: s.overrideQcRating ?? s.suggestedQcRating,
+          cleaning_rating: s.overrideCleaningRating ?? s.suggestedCleaningRating,
+        };
+      }
+    });
 
     if (onApply) {
-      onApply(ratings.map(r => ({
-        jobId: r.job_id,
-        userId: r.user_id,
-        qcRating: r.qc_rating,
-        cleaningRating: r.cleaning_rating,
-      })));
+      // Use callback if provided
+      const ratings = selectedSuggestions.map((s) => ({
+        jobId: s.jobId,
+        userId: s.userId,
+        qcRating: s.overrideQcRating ?? s.suggestedQcRating,
+        cleaningRating: s.overrideCleaningRating ?? s.suggestedCleaningRating,
+      }));
+      onApply(ratings);
     } else {
-      rateMutation.mutate(ratings);
+      // Use AI bulk apply API
+      applyAIMutation.mutate(overrides);
     }
   };
 
@@ -221,10 +287,27 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
     setTimeout(() => handleApplySelected(), 100);
   };
 
+  const handleRefresh = () => {
+    refetch();
+  };
+
   const selectedCount = suggestions.filter((s) => s.selected).length;
   const averageConfidence = suggestions.length > 0
     ? Math.round(suggestions.reduce((sum, s) => sum + s.confidence, 0) / suggestions.length)
     : 0;
+
+  if (isLoading) {
+    return (
+      <Card>
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16 }}>
+            <Text type="secondary">Analyzing job data and generating AI suggestions...</Text>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   if (suggestions.length === 0) {
     return (
@@ -248,6 +331,14 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
       }
       extra={
         <Space>
+          <Tooltip title="Refresh AI suggestions">
+            <Button
+              type="text"
+              icon={<SyncOutlined spin={isLoading} />}
+              onClick={handleRefresh}
+              size="small"
+            />
+          </Tooltip>
           <Tooltip title="Average confidence across all suggestions">
             <Tag color={averageConfidence >= 80 ? 'green' : averageConfidence >= 60 ? 'orange' : 'red'}>
               {averageConfidence}% confidence
@@ -284,7 +375,7 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
             <Button
               onClick={handleApplySelected}
               disabled={selectedCount === 0}
-              loading={rateMutation.isPending}
+              loading={applyAIMutation.isPending || rateMutation.isPending}
             >
               Apply Selected ({selectedCount})
             </Button>
@@ -292,7 +383,7 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
               type="primary"
               icon={<ThunderboltOutlined />}
               onClick={handleApplyAll}
-              loading={rateMutation.isPending}
+              loading={applyAIMutation.isPending || rateMutation.isPending}
             >
               Apply All
             </Button>
@@ -430,7 +521,7 @@ export const AIRatingSuggestions: React.FC<AIRatingSuggestionsProps> = ({
             icon={<CheckCircleOutlined />}
             onClick={handleApplySelected}
             disabled={selectedCount === 0}
-            loading={rateMutation.isPending}
+            loading={applyAIMutation.isPending || rateMutation.isPending}
           >
             Apply {selectedCount} Rating{selectedCount !== 1 ? 's' : ''}
           </Button>

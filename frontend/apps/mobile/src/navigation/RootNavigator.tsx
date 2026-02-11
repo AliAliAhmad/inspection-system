@@ -44,6 +44,8 @@ import DefectDetailScreen from '../screens/defects/DefectDetailScreen';
 import OverdueScreen from '../screens/overdue/OverdueScreen';
 import MyPerformanceScreen from '../screens/performance/MyPerformanceScreen';
 import GoalsScreen from '../screens/performance/GoalsScreen';
+import TrajectoryScreen from '../screens/performance/TrajectoryScreen';
+import SkillGapsScreen from '../screens/performance/SkillGapsScreen';
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -84,6 +86,8 @@ export type RootStackParamList = {
   Overdue: undefined;
   MyPerformance: undefined;
   Goals: undefined;
+  Trajectory: undefined;
+  SkillGaps: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -129,6 +133,8 @@ export default function RootNavigator() {
       <Stack.Screen name="Overdue" component={OverdueScreen} options={{ headerShown: true, title: 'Overdue Items' }} />
       <Stack.Screen name="MyPerformance" component={MyPerformanceScreen} options={{ headerShown: true, title: 'My Performance' }} />
       <Stack.Screen name="Goals" component={GoalsScreen} options={{ headerShown: true, title: 'My Goals' }} />
+      <Stack.Screen name="Trajectory" component={TrajectoryScreen} options={{ headerShown: true, title: 'Performance Trajectory' }} />
+      <Stack.Screen name="SkillGaps" component={SkillGapsScreen} options={{ headerShown: true, title: 'Skill Gaps' }} />
     </Stack.Navigator>
   );
 }

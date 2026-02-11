@@ -19,10 +19,24 @@ export interface PerformanceGoal {
 
 export interface PerformanceTrajectory {
   user_id: number;
-  current_score: number;
-  predicted_scores: Array<{ month: string; score: number }>;
+  user_name?: string;
+  current_score?: number;
+  current_rank?: number;
+  current_points?: number;
+  predicted_scores?: Array<{ month: string; score: number }>;
+  predictions?: Array<{
+    month: number;
+    date: string;
+    predicted_points: number;
+    predicted_rank: number;
+  }>;
   trend: 'improving' | 'declining' | 'stable';
-  factors_affecting: string[];
+  avg_monthly_growth?: number;
+  confidence?: number;
+  has_sufficient_data?: boolean;
+  message?: string;
+  factors_affecting?: string[];
+  generated_at?: string;
 }
 
 // Note: SkillGap exists in work-plan.types.ts for team/workforce gaps
@@ -36,11 +50,23 @@ export interface PerformanceSkillGap {
   recommended_actions: string[];
 }
 
+export interface BurnoutRiskFactor {
+  factor: string;
+  value: number | boolean;
+  description: string;
+  contribution: number;
+}
+
 export interface BurnoutRisk {
   user_id: number;
+  user_name?: string;
   risk_level: 'low' | 'medium' | 'high' | 'critical';
-  indicators: string[];
-  recommended_interventions: string[];
+  risk_score?: number;
+  indicators?: string[];
+  factors?: BurnoutRiskFactor[];
+  recommendations?: string[];
+  recommended_interventions?: string[];
+  assessed_at?: string;
 }
 
 export interface CoachingTip {

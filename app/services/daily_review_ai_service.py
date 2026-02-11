@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from app.services.ai_base_service import (
     AIServiceWrapper, AnomalyDetector, ScoringUtils
 )
-from app.services.shared import PointCalculator, PointAction, NotificationPatterns
+from app.services.shared import (
+    PointCalculator, PointAction, NotificationPatterns,
+    daily_review_insight_generator, daily_review_recommendation_engine,
+    InsightType, InsightCategory, InsightSeverity,
+    RecommendationType, Urgency,
+)
 from app.extensions import db
 import logging
 
@@ -157,6 +162,109 @@ class DailyReviewAIService(AIServiceWrapper):
         ).scalar()
 
         return float(result) if result else None
+
+    def get_ai_insights(self, review_id: int) -> List[Dict[str, Any]]:
+        """
+        Generate AI insights for a daily review.
+
+        Args:
+            review_id: Daily review ID
+
+        Returns:
+            List of insight dictionaries
+        """
+        from app.models import WorkPlanDailyReview, WorkPlanJob, WorkPlanJobTracking
+
+        review = db.session.get(WorkPlanDailyReview, review_id)
+        if not review:
+            return []
+
+        insights = []
+
+        # Completion rate insight
+        if review.total_jobs > 0:
+            completion_rate = review.approved_jobs / review.total_jobs
+            if completion_rate >= 0.95:
+                insight = daily_review_insight_generator.create_insight(
+                    type=InsightType.SUCCESS,
+                    category=InsightCategory.PERFORMANCE,
+                    title="Excellent Completion Rate",
+                    description=f"Team achieved {completion_rate*100:.0f}% completion rate today.",
+                    severity=InsightSeverity.INFO,
+                    priority=4,
+                    value=completion_rate * 100,
+                )
+                insights.append(insight.to_dict())
+            elif completion_rate < 0.7:
+                insight = daily_review_insight_generator.create_insight(
+                    type=InsightType.WARNING,
+                    category=InsightCategory.PERFORMANCE,
+                    title="Low Completion Rate",
+                    description=f"Only {completion_rate*100:.0f}% of jobs completed. Review blockers.",
+                    severity=InsightSeverity.WARNING,
+                    priority=2,
+                    value=completion_rate * 100,
+                    action_items=[
+                        "Review incomplete jobs for patterns",
+                        "Check worker assignments",
+                        "Consider resource reallocation",
+                    ],
+                )
+                insights.append(insight.to_dict())
+
+        # Time estimation insights from analyzeTimeAccuracy
+        time_analysis = self.analyze_time_accuracy(7)  # Last 7 days
+        if time_analysis.get('overall_accuracy') and time_analysis['overall_accuracy'] < 0.7:
+            insight = daily_review_insight_generator.create_insight(
+                type=InsightType.RECOMMENDATION,
+                category=InsightCategory.OPERATIONAL,
+                title="Time Estimation Needs Improvement",
+                description=f"Estimation accuracy at {time_analysis['overall_accuracy']*100:.0f}%. Consider reviewing estimation process.",
+                severity=InsightSeverity.INFO,
+                priority=3,
+                action_items=[
+                    "Review historical job completion times",
+                    "Adjust estimates based on job type patterns",
+                ],
+            )
+            insights.append(insight.to_dict())
+
+        return insights
+
+    def get_recommendations(self, review_id: int) -> List[Dict[str, Any]]:
+        """
+        Generate AI recommendations for a daily review.
+
+        Args:
+            review_id: Daily review ID
+
+        Returns:
+            List of recommendation dictionaries
+        """
+        from app.models import WorkPlanDailyReview
+
+        review = db.session.get(WorkPlanDailyReview, review_id)
+        if not review:
+            return []
+
+        recommendations = []
+
+        # Check for incomplete jobs
+        incomplete_predictions = self.predict_incomplete_jobs(review.date)
+        for pred in incomplete_predictions[:3]:  # Top 3 at-risk
+            rec = daily_review_recommendation_engine.create_recommendation(
+                type=RecommendationType.SCHEDULING,
+                title=f"At-Risk Job: {pred.get('equipment_name', 'Unknown')}",
+                description=f"Risk score: {pred['risk_score']}. {', '.join(pred['risk_factors'])}",
+                urgency=Urgency.HIGH if pred['risk_score'] > 50 else Urgency.MEDIUM,
+                confidence=0.8,
+                action="reassign_or_prioritize",
+                action_params={"job_id": pred['job_id']},
+                impact="Prevent incomplete job",
+            )
+            recommendations.append(rec.to_dict())
+
+        return recommendations
 
     def _generate_reasoning(self, factors: List[Dict], rating: int) -> str:
         """Generate human-readable reasoning for the rating."""
@@ -401,12 +509,26 @@ class DailyReviewAIService(AIServiceWrapper):
                         risk_score += 25
 
             if risk_score > 20:
+                # Calculate completion probability (inverse of risk)
+                completion_probability = max(0.1, min(0.9, 1.0 - (risk_score / 100)))
+
+                # Generate recommended action
+                if risk_score > 50:
+                    recommended_action = 'Consider reassignment or splitting job'
+                elif not job.assignments:
+                    recommended_action = 'Assign worker immediately'
+                else:
+                    recommended_action = 'Monitor progress closely'
+
                 predictions.append({
                     'job_id': job.id,
+                    'job_title': f"{job.job_type.upper()}: {job.equipment.serial_number or job.equipment.name if job.equipment else 'Unknown'}",
                     'job_type': job.job_type,
                     'equipment_name': job.equipment.name if job.equipment else 'Unknown',
                     'risk_score': risk_score,
+                    'completion_probability': completion_probability,
                     'risk_factors': risk_factors,
+                    'recommended_action': recommended_action,
                     'prediction': 'high_risk' if risk_score > 50 else 'medium_risk'
                 })
 

@@ -1,4 +1,5 @@
-import { Card, Typography, Space, Tag, List, Alert, Progress, Spin, Empty, Button, Tooltip } from 'antd';
+import { useState } from 'react';
+import { Card, Typography, Space, Tag, List, Alert, Progress, Spin, Empty, Button, Tooltip, Modal, InputNumber, message } from 'antd';
 import {
   WarningOutlined,
   HeartOutlined,
@@ -9,8 +10,9 @@ import {
   CalendarOutlined,
   ExclamationCircleOutlined,
   CheckCircleOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@inspection/shared';
 
@@ -51,11 +53,16 @@ export interface BurnoutRiskCardProps {
   data?: BurnoutRiskData;
   compact?: boolean;
   onRequestLeave?: () => void;
+  showInterventionButtons?: boolean;
 }
 
 const performanceApi = {
   getBurnoutRisk: (userId?: number) =>
     apiClient.get('/api/performance/burnout-risk', { params: { user_id: userId } }),
+  suggestLeave: (data: { user_id: number; days: number; reason?: string }) =>
+    apiClient.post('/api/performance/interventions/leave', data),
+  reduceWorkload: (data: { user_id: number; reduction_percentage: number }) =>
+    apiClient.post('/api/performance/interventions/workload', data),
 };
 
 const RISK_LEVEL_CONFIG = {
@@ -109,8 +116,14 @@ export function BurnoutRiskCard({
   data: dataProp,
   compact = false,
   onRequestLeave,
+  showInterventionButtons = false,
 }: BurnoutRiskCardProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+  const [workloadModalOpen, setWorkloadModalOpen] = useState(false);
+  const [leaveDays, setLeaveDays] = useState(3);
+  const [reductionPercent, setReductionPercent] = useState(30);
 
   const { data: fetchedData, isLoading } = useQuery({
     queryKey: ['performance', 'burnout-risk', userId],
@@ -119,6 +132,55 @@ export function BurnoutRiskCard({
   });
 
   const riskData: BurnoutRiskData | null = dataProp || fetchedData?.data || null;
+
+  // Mutation for suggesting leave
+  const suggestLeaveMutation = useMutation({
+    mutationFn: (data: { user_id: number; days: number; reason?: string }) =>
+      performanceApi.suggestLeave(data),
+    onSuccess: (response) => {
+      message.success(t('performance.leave_created', 'Leave request created successfully'));
+      setLeaveModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['performance', 'burnout-risk'] });
+      queryClient.invalidateQueries({ queryKey: ['leaves'] });
+    },
+    onError: (error: any) => {
+      message.error(error?.response?.data?.message || t('performance.leave_failed', 'Failed to create leave request'));
+    },
+  });
+
+  // Mutation for reducing workload
+  const reduceWorkloadMutation = useMutation({
+    mutationFn: (data: { user_id: number; reduction_percentage: number }) =>
+      performanceApi.reduceWorkload(data),
+    onSuccess: (response) => {
+      const data = (response.data as any)?.data;
+      const count = data?.jobs_reassigned?.length || 0;
+      message.success(t('performance.workload_reduced', `Workload reduced - ${count} jobs reassigned`));
+      setWorkloadModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['performance', 'burnout-risk'] });
+      queryClient.invalidateQueries({ queryKey: ['work-plan'] });
+    },
+    onError: (error: any) => {
+      message.error(error?.response?.data?.message || t('performance.workload_failed', 'Failed to reduce workload'));
+    },
+  });
+
+  const handleSuggestLeave = () => {
+    if (!riskData?.user_id) return;
+    suggestLeaveMutation.mutate({
+      user_id: riskData.user_id,
+      days: leaveDays,
+      reason: t('performance.burnout_leave_reason', 'Recommended rest period due to high workload'),
+    });
+  };
+
+  const handleReduceWorkload = () => {
+    if (!riskData?.user_id) return;
+    reduceWorkloadMutation.mutate({
+      user_id: riskData.user_id,
+      reduction_percentage: reductionPercent,
+    });
+  };
 
   if (isLoading) {
     return (
@@ -432,6 +494,132 @@ export function BurnoutRiskCard({
           </Space>
         </div>
       )}
+
+      {/* Intervention Buttons for Admin/Engineer */}
+      {showInterventionButtons && riskData.risk_level !== 'low' && (
+        <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
+          <Button
+            type="primary"
+            icon={<CalendarOutlined />}
+            onClick={() => setLeaveModalOpen(true)}
+            style={{
+              flex: 1,
+              backgroundColor: '#1890ff',
+              borderColor: '#1890ff',
+            }}
+          >
+            {t('performance.suggest_leave', 'Suggest Leave')}
+          </Button>
+          <Button
+            icon={<TeamOutlined />}
+            onClick={() => setWorkloadModalOpen(true)}
+            style={{ flex: 1 }}
+          >
+            {t('performance.reduce_workload', 'Reduce Workload')}
+          </Button>
+        </div>
+      )}
+
+      {/* Leave Intervention Modal */}
+      <Modal
+        title={
+          <Space>
+            <CalendarOutlined style={{ color: '#1890ff' }} />
+            {t('performance.suggest_leave_title', 'Suggest Leave for Recovery')}
+          </Space>
+        }
+        open={leaveModalOpen}
+        onCancel={() => setLeaveModalOpen(false)}
+        onOk={handleSuggestLeave}
+        okText={t('performance.create_leave_request', 'Create Leave Request')}
+        okButtonProps={{ loading: suggestLeaveMutation.isPending }}
+        cancelText={t('common.cancel', 'Cancel')}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Alert
+            type="info"
+            showIcon
+            message={t('performance.leave_intervention_info', 'This will create a pending leave request for the employee. They will need to approve it.')}
+            style={{ marginBottom: 16 }}
+          />
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('performance.leave_days_label', 'Number of leave days:')}
+          </Text>
+          <InputNumber
+            min={1}
+            max={14}
+            value={leaveDays}
+            onChange={(value) => setLeaveDays(value || 3)}
+            style={{ width: '100%' }}
+            addonAfter={t('common.days', 'days')}
+          />
+          <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+            {t('performance.leave_recommendation', 'Recommended: 3-5 days for medium risk, 5-7 days for high risk, 7+ days for critical risk.')}
+          </Text>
+        </div>
+        {riskData && (
+          <div style={{ padding: 12, backgroundColor: config.bgColor, borderRadius: 8, border: `1px solid ${config.borderColor}` }}>
+            <Text>
+              {t('performance.creating_leave_for', 'Creating leave for:')} <Text strong>{riskData.user_name}</Text>
+            </Text>
+            <br />
+            <Text type="secondary">
+              {t('performance.current_risk_level', 'Current Risk Level:')} <Tag color={config.color}>{config.label}</Tag>
+            </Text>
+          </div>
+        )}
+      </Modal>
+
+      {/* Workload Reduction Modal */}
+      <Modal
+        title={
+          <Space>
+            <TeamOutlined style={{ color: '#52c41a' }} />
+            {t('performance.reduce_workload_title', 'Reduce Workload')}
+          </Space>
+        }
+        open={workloadModalOpen}
+        onCancel={() => setWorkloadModalOpen(false)}
+        onOk={handleReduceWorkload}
+        okText={t('performance.reassign_jobs', 'Reassign Jobs')}
+        okButtonProps={{ loading: reduceWorkloadMutation.isPending }}
+        cancelText={t('common.cancel', 'Cancel')}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Alert
+            type="warning"
+            showIcon
+            message={t('performance.workload_intervention_info', 'This will reassign some pending jobs to other available team members.')}
+            style={{ marginBottom: 16 }}
+          />
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('performance.reduction_percentage_label', 'Workload reduction percentage:')}
+          </Text>
+          <InputNumber
+            min={10}
+            max={70}
+            value={reductionPercent}
+            onChange={(value) => setReductionPercent(value || 30)}
+            style={{ width: '100%' }}
+            addonAfter="%"
+            step={10}
+          />
+          <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+            {t('performance.reduction_recommendation', 'Recommended: 20-30% for medium risk, 30-50% for high risk, 50%+ for critical risk.')}
+          </Text>
+        </div>
+        {riskData && (
+          <div style={{ padding: 12, backgroundColor: config.bgColor, borderRadius: 8, border: `1px solid ${config.borderColor}` }}>
+            <Text>
+              {t('performance.reducing_workload_for', 'Reducing workload for:')} <Text strong>{riskData.user_name}</Text>
+            </Text>
+            <br />
+            <Text type="secondary">
+              {t('performance.jobs_will_be_reassigned', 'Pending jobs will be reassigned to available team members.')}
+            </Text>
+          </div>
+        )}
+      </Modal>
     </Card>
   );
 }

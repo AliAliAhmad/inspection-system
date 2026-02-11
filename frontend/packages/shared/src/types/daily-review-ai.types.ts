@@ -1,3 +1,10 @@
+export interface RatingSuggestionFactor {
+  name: string;
+  value: number;
+  contribution: number;
+  description: string;
+}
+
 export interface RatingSuggestion {
   job_id: number;
   user_id: number;
@@ -6,15 +13,31 @@ export interface RatingSuggestion {
   suggested_cleaning_rating: number;
   confidence: number;
   reasoning: string;
+  factors?: RatingSuggestionFactor[];
+}
+
+export interface RatingBiasAnomaly {
+  type: string;
+  severity: 'low' | 'medium' | 'high';
+  description: string;
+  recommendation?: string;
 }
 
 export interface RatingBiasResult {
-  engineer_id: number;
-  bias_detected: boolean;
-  average_rating: number;
-  standard_deviation: number;
-  comparison_to_peers: 'above' | 'below' | 'average';
-  flagged_patterns: string[];
+  engineer_id?: number;
+  has_sufficient_data?: boolean;
+  message?: string;
+  sample_size?: number;
+  average_rating?: number;
+  distribution?: Record<number, number>;
+  anomalies?: RatingBiasAnomaly[];
+  has_bias?: boolean;
+  analyzed_at?: string;
+  // Legacy fields
+  bias_detected?: boolean;
+  standard_deviation?: number;
+  comparison_to_peers?: 'above' | 'below' | 'average';
+  flagged_patterns?: string[];
 }
 
 export interface FeedbackSummary {
@@ -30,19 +53,35 @@ export interface FeedbackSummary {
 
 export interface IncompleteJobPrediction {
   job_id: number;
-  job_title: string;
+  job_title?: string;
+  job_type?: string;
+  equipment_name?: string;
+  risk_score?: number;
   completion_probability: number;
   risk_factors: string[];
   recommended_action: string;
+  prediction?: 'high_risk' | 'medium_risk' | 'low_risk';
+}
+
+export interface TimeAccuracyByJobType {
+  count: number;
+  total_variance: number;
+  accuracy: number;
+}
+
+export interface TimeAccuracyOverrun {
+  job_id: number;
+  job_type?: string;
+  variance: number;
 }
 
 export interface TimeAccuracyAnalysis {
   overall_accuracy: number;
-  underestimated_percentage: number;
-  overestimated_percentage: number;
-  by_job_type: Array<{
-    type: string;
-    accuracy: number;
-    average_variance_hours: number;
-  }>;
+  sample_size: number;
+  by_job_type: Record<string, TimeAccuracyByJobType>;
+  common_overruns?: TimeAccuracyOverrun[];
+  analyzed_at?: string;
+  // Legacy fields
+  underestimated_percentage?: number;
+  overestimated_percentage?: number;
 }

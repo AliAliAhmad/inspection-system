@@ -35,12 +35,15 @@ def apply_ai_ratings(review_id: int):
     # Apply ratings (this would call the rating service)
     from app.models import WorkPlanDailyReview, WorkPlanJobRating
     from app.extensions import db, safe_commit
+    from datetime import datetime
 
     review = db.session.get(WorkPlanDailyReview, review_id)
     if not review:
         return jsonify({'status': 'error', 'message': 'Review not found'}), 404
 
+    current_user = get_current_user()
     applied_count = 0
+
     for suggestion in suggestions:
         job_id = suggestion['job_id']
         user_id = suggestion['user_id']
@@ -54,25 +57,27 @@ def apply_ai_ratings(review_id: int):
             qc_rating = suggestion['suggested_qc_rating']
             cleaning_rating = suggestion['suggested_cleaning_rating']
 
-        # Check if rating exists
+        # Check if rating exists - use correct column name: work_plan_job_id
         existing = WorkPlanJobRating.query.filter_by(
-            review_id=review_id,
-            job_id=job_id,
+            daily_review_id=review_id,
+            work_plan_job_id=job_id,
             user_id=user_id
         ).first()
 
         if existing:
             existing.qc_rating = qc_rating
             existing.cleaning_rating = cleaning_rating
-            existing.is_ai_suggested = True
+            existing.rated_by_id = current_user.id
+            existing.rated_at = datetime.utcnow()
         else:
             rating = WorkPlanJobRating(
-                review_id=review_id,
-                job_id=job_id,
+                daily_review_id=review_id,
+                work_plan_job_id=job_id,
                 user_id=user_id,
                 qc_rating=qc_rating,
                 cleaning_rating=cleaning_rating,
-                is_ai_suggested=True
+                rated_by_id=current_user.id,
+                rated_at=datetime.utcnow()
             )
             db.session.add(rating)
 
@@ -82,7 +87,7 @@ def apply_ai_ratings(review_id: int):
 
     return jsonify({
         'status': 'success',
-        'data': {'applied_count': applied_count}
+        'data': {'applied_count': applied_count, 'ratings_applied': applied_count}
     })
 
 
@@ -138,4 +143,22 @@ def analyze_time_accuracy():
     """Analyze time estimation accuracy."""
     days = request.args.get('days', 30, type=int)
     result = daily_review_ai_service.analyze_time_accuracy(days)
+    return jsonify({'status': 'success', 'data': result})
+
+
+@bp.route('/<int:review_id>/ai/insights', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def get_ai_insights(review_id: int):
+    """Get AI-generated insights for a daily review."""
+    result = daily_review_ai_service.get_ai_insights(review_id)
+    return jsonify({'status': 'success', 'data': result})
+
+
+@bp.route('/<int:review_id>/ai/recommendations', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def get_ai_recommendations(review_id: int):
+    """Get AI-generated recommendations for a daily review."""
+    result = daily_review_ai_service.get_recommendations(review_id)
     return jsonify({'status': 'success', 'data': result})
