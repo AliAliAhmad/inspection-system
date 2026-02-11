@@ -59,6 +59,22 @@ def get_weekly_schedule():
     }), 200
 
 
+@bp.route('', methods=['GET'])
+@jwt_required()
+@admin_required()
+def list_schedules():
+    """
+    Get all schedules. Admin only.
+    Returns weekly schedule in a list format.
+    """
+    schedule = ScheduleService.get_weekly_schedule()
+
+    return jsonify({
+        'status': 'success',
+        'data': schedule
+    }), 200
+
+
 @bp.route('', methods=['POST'])
 @jwt_required()
 @admin_required()

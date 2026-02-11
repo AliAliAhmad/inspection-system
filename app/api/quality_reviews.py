@@ -937,11 +937,16 @@ def get_review(review_id):
 
 @bp.route('/pending', methods=['GET'])
 @jwt_required()
-@quality_engineer_required()
+@role_required('admin', 'quality_engineer')
 def pending_reviews():
-    """Get pending reviews for current QE."""
+    """Get pending reviews for current QE or all pending if admin."""
     user = get_current_user()
-    reviews = QualityService.get_pending_reviews(user.id)
+
+    # Admin sees all pending reviews, QE sees only theirs
+    if user.role == 'admin':
+        reviews = QualityReview.query.filter_by(status='pending').all()
+    else:
+        reviews = QualityService.get_pending_reviews(user.id)
 
     return jsonify({
         'status': 'success',

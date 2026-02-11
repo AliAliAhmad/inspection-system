@@ -404,6 +404,35 @@ def create_user():
     }), 201
 
 
+@bp.route('/<int:user_id>', methods=['GET'])
+@jwt_required()
+def get_user(user_id):
+    """
+    Get user details by ID.
+    Users can view their own profile, admins can view any user.
+    """
+    current_user = get_current_user()
+
+    # Users can only view their own profile unless they're admin
+    if current_user.role != 'admin' and current_user.id != user_id:
+        return jsonify({
+            'status': 'error',
+            'message': 'Unauthorized'
+        }), 403
+
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({
+            'status': 'error',
+            'message': 'User not found'
+        }), 404
+
+    return jsonify({
+        'status': 'success',
+        'data': user.to_dict()
+    }), 200
+
+
 @bp.route('/<int:user_id>', methods=['PUT'])
 @jwt_required()
 @admin_required()
