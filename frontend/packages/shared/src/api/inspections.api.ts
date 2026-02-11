@@ -244,4 +244,9 @@ export const inspectionsApi = {
       { params: { q: query } },
     );
   },
+
+  // Reschedule an inspection
+  reschedule(id: number, payload: { new_date: string; reason?: string }) {
+    return getApiClient().post<ApiResponse<Inspection>>(`/api/inspections/${id}/reschedule`, payload);
+  },
 };

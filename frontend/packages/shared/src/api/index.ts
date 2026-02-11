@@ -256,3 +256,9 @@ export type {
   QualityReviewBulkEvaluateResponse,
   AIDashboardStats,
 } from './unified-ai.api';
+
+// Enhanced AI Module APIs
+export { defectAIApi } from './defect-ai.api';
+export { overdueApi } from './overdue.api';
+export { dailyReviewAIApi } from './daily-review-ai.api';
+export { performanceApi } from './performance.api';

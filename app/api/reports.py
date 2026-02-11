@@ -7,6 +7,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.utils.decorators import admin_required, get_current_user, role_required
 from app.services.analytics_service import AnalyticsService
+from app.services.reports_ai_service import reports_ai_service
 from app.extensions import db
 
 bp = Blueprint('reports', __name__)
@@ -301,3 +302,129 @@ def work_plan_stats():
             'jobs_by_day': jobs_by_day
         }
     }), 200
+
+
+# ============================================================================
+# AI-POWERED REPORTS
+# ============================================================================
+
+@bp.route('/ai/executive-summary', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def executive_summary():
+    """
+    Generate AI-powered executive summary for a period.
+    Query params: period (daily|weekly|monthly)
+    """
+    period = request.args.get('period', 'weekly')
+    if period not in ['daily', 'weekly', 'monthly']:
+        period = 'weekly'
+
+    summary = reports_ai_service.generate_executive_summary(period)
+    return jsonify({
+        'status': 'success',
+        'data': summary.to_dict()
+    })
+
+
+@bp.route('/ai/anomalies', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def detect_anomalies():
+    """
+    Detect anomalies in metrics.
+    Query params: lookback_days (default: 30)
+    """
+    lookback_days = request.args.get('lookback_days', 30, type=int)
+    result = reports_ai_service.detect_metric_anomalies(lookback_days)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'status': result.status,
+            'max_severity': result.max_severity.value,
+            'total_severity_score': result.total_severity_score,
+            'anomalies': [
+                {
+                    'type': a.anomaly_type,
+                    'severity': a.severity.value,
+                    'description': a.description,
+                    'value': a.value,
+                    'baseline': a.baseline,
+                    'metadata': a.metadata,
+                }
+                for a in result.anomalies
+            ]
+        }
+    })
+
+
+@bp.route('/ai/forecast', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def forecast_metrics():
+    """
+    Forecast metrics for future periods.
+    Query params: metric (inspections|defects|jobs|completion_rate), periods (default: 4)
+    """
+    metric = request.args.get('metric', 'inspections')
+    periods = request.args.get('periods', 4, type=int)
+
+    result = reports_ai_service.forecast_metrics(metric, periods)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'metric': metric,
+            'predictions': [
+                {
+                    'predicted_value': p.predicted_value,
+                    'confidence': p.confidence,
+                    'horizon_days': p.horizon_days,
+                    'reasoning': p.reasoning,
+                    'metadata': p.metadata,
+                }
+                for p in result.predictions
+            ]
+        }
+    })
+
+
+@bp.route('/ai/query', methods=['POST'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def natural_language_query():
+    """
+    Process a natural language query about reports.
+    Body: { "question": "How many inspections this week?" }
+    """
+    data = request.get_json()
+    if not data or 'question' not in data:
+        return jsonify({
+            'status': 'error',
+            'message': 'question is required'
+        }), 400
+
+    result = reports_ai_service.query_reports(data['question'])
+
+    return jsonify({
+        'status': 'success',
+        'data': result.to_dict()
+    })
+
+
+@bp.route('/ai/insights', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def auto_insights():
+    """
+    Get AI-generated insights across all categories.
+    Query params: limit (default: 10)
+    """
+    limit = request.args.get('limit', 10, type=int)
+    insights = reports_ai_service.get_auto_insights(limit)
+
+    return jsonify({
+        'status': 'success',
+        'data': [i.to_dict() for i in insights]
+    })

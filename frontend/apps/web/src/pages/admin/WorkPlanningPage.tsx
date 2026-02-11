@@ -24,6 +24,7 @@ import {
   Checkbox,
   Popconfirm,
   Drawer,
+  Switch,
 } from 'antd';
 import {
   PlusOutlined,
@@ -46,6 +47,7 @@ import {
   CopyOutlined,
   BulbOutlined,
   AlertOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import {
   DndContext,
@@ -77,6 +79,10 @@ import {
   ResourceHeatmap,
   WorkPlanAIPanel,
   ConflictResolutionPanel,
+  IncompleteJobsWarning,
+  generateMockPredictions,
+  TimeAccuracyChart,
+  calculateTimeAccuracy,
   type ViewMode
 } from '../../components/work-planning';
 import VoiceTextArea from '../../components/VoiceTextArea';
@@ -136,6 +142,7 @@ export default function WorkPlanningPage() {
   const [copyWeekModalOpen, setCopyWeekModalOpen] = useState(false);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [conflictPanelOpen, setConflictPanelOpen] = useState(false);
+  const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
 
@@ -515,6 +522,18 @@ export default function WorkPlanningPage() {
     return jobs;
   }, [currentPlan]);
 
+  // AI predictions for incomplete jobs
+  const incompleteJobPredictions = useMemo(() => {
+    if (!aiAssistanceEnabled || !allJobs.length) return [];
+    return generateMockPredictions(allJobs as any);
+  }, [allJobs, aiAssistanceEnabled]);
+
+  // Time accuracy data
+  const timeAccuracyData = useMemo(() => {
+    if (!aiAssistanceEnabled || !allJobs.length) return null;
+    return calculateTimeAccuracy(allJobs as any);
+  }, [allJobs, aiAssistanceEnabled]);
+
   // Toggle job selection
   const toggleJobSelection = useCallback((jobId: number) => {
     setSelectedJobIds(prev => {
@@ -711,9 +730,22 @@ export default function WorkPlanningPage() {
                   />
                 )}
                 <ViewToggle value={viewMode} onChange={setViewMode} />
+                <Tooltip title="Toggle AI-powered predictions and suggestions">
+                  <Space size={4}>
+                    <Switch
+                      checked={aiAssistanceEnabled}
+                      onChange={setAiAssistanceEnabled}
+                      checkedChildren={<RobotOutlined />}
+                      unCheckedChildren={<RobotOutlined />}
+                      size="small"
+                    />
+                    <Text type="secondary" style={{ fontSize: 12 }}>AI</Text>
+                  </Space>
+                </Tooltip>
                 <Button
                   icon={<BulbOutlined />}
                   onClick={() => setAiDrawerOpen(true)}
+                  disabled={!aiAssistanceEnabled}
                 >
                   AI Insights
                 </Button>
@@ -997,10 +1029,39 @@ export default function WorkPlanningPage() {
               </Card>
             ) : currentPlan ? (
               viewMode === 'analytics' ? (
-                <AnalyticsView
-                  plan={currentPlan}
-                  weekStart={weekStartStr}
-                />
+                <div style={{ padding: 16, overflow: 'auto' }}>
+                  {/* AI-powered incomplete jobs warning */}
+                  {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
+                    <IncompleteJobsWarning
+                      jobs={incompleteJobPredictions}
+                      compact
+                      maxItems={5}
+                      onTakeAction={(jobId, action) => {
+                        message.info(`Recommended action for job ${jobId}: ${action}`);
+                      }}
+                    />
+                  )}
+
+                  {/* Standard Analytics View */}
+                  <AnalyticsView
+                    plan={currentPlan}
+                    weekStart={weekStartStr}
+                  />
+
+                  {/* AI Time Accuracy Chart */}
+                  {aiAssistanceEnabled && timeAccuracyData && timeAccuracyData.overallAccuracy > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      <TimeAccuracyChart
+                        overallAccuracy={timeAccuracyData.overallAccuracy}
+                        underEstimatedCount={timeAccuracyData.underEstimatedCount}
+                        overEstimatedCount={timeAccuracyData.overEstimatedCount}
+                        accurateCount={timeAccuracyData.accurateCount}
+                        byJobType={timeAccuracyData.byJobType}
+                        periodLabel={`Week of ${dayjs(weekStartStr).format('MMM D')}`}
+                      />
+                    </div>
+                  )}
+                </div>
               ) : viewMode === 'gantt' ? (
                 <GanttChartView
                   jobs={allJobs}
@@ -1023,6 +1084,18 @@ export default function WorkPlanningPage() {
                 />
               ) : (
                 <Card bodyStyle={{ padding: '16px' }} style={{ height: '100%', overflow: 'auto' }}>
+                  {/* AI-powered incomplete jobs warning - shown prominently at top */}
+                  {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
+                    <IncompleteJobsWarning
+                      jobs={incompleteJobPredictions}
+                      compact
+                      maxItems={3}
+                      onTakeAction={(jobId, action) => {
+                        message.info(`Recommended action for job ${jobId}: ${action}`);
+                      }}
+                    />
+                  )}
+
                   {/* Legend */}
                   <div style={{ marginBottom: 12, display: 'flex', gap: 16, fontSize: 12, color: '#595959' }}>
                     <span><strong>Legend:</strong></span>

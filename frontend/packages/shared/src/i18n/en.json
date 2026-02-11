@@ -1170,6 +1170,54 @@
     "leave": "Leave",
     "coveringFor": "Covering for"
   },
+  "sidebar": {
+    "overdue": "Overdue Management",
+    "performance": "Performance"
+  },
+  "overdue": {
+    "title": "Overdue Management",
+    "summary": "Summary",
+    "inspections": "Overdue Inspections",
+    "defects": "Overdue Defects",
+    "reviews": "Overdue Reviews",
+    "aging": "Aging Analysis",
+    "patterns": "Patterns",
+    "reschedule": "Reschedule",
+    "bulkReschedule": "Bulk Reschedule",
+    "daysOverdue": "{{days}} days overdue",
+    "calendar": "Calendar View"
+  },
+  "performance": {
+    "title": "Performance",
+    "trajectory": "Trajectory",
+    "goals": "My Goals",
+    "createGoal": "Create Goal",
+    "skillGaps": "Skill Gaps",
+    "burnoutRisk": "Burnout Risk",
+    "peerComparison": "Peer Comparison",
+    "learningPath": "Learning Path",
+    "coachingTips": "Coaching Tips",
+    "onTrack": "On Track",
+    "behindSchedule": "Behind Schedule",
+    "daysRemaining": "{{days}} days remaining"
+  },
+  "defects": {
+    "kanban": "Kanban View",
+    "tableView": "Table View",
+    "risk": "Risk Score",
+    "slaStatus": "SLA Status",
+    "similar": "Similar Defects",
+    "rootCause": "Root Cause",
+    "prevention": "Prevention",
+    "escalate": "Escalate"
+  },
+  "dailyReview": {
+    "aiSuggestions": "AI Suggestions",
+    "applyAll": "Apply All",
+    "feedbackSummary": "Feedback Summary",
+    "incompleteWarning": "Jobs at Risk",
+    "timeAccuracy": "Time Accuracy"
+  },
   "equipmentAI": {
     "title": "Equipment Intelligence",
     "fleetHealth": "Fleet Health",

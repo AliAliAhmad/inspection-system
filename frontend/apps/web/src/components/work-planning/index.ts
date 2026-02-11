@@ -25,3 +25,11 @@ export { EquipmentRestrictionsManager } from './EquipmentRestrictionsManager';
 
 // Cycle Optimization
 export { default as CycleOptimizerPanel } from './CycleOptimizerPanel';
+
+// Daily Review AI Enhancements
+export { AIRatingSuggestions } from './AIRatingSuggestions';
+export { FeedbackSummaryCard } from './FeedbackSummaryCard';
+export { IncompleteJobsWarning, generateMockPredictions } from './IncompleteJobsWarning';
+export { TimeAccuracyChart, calculateTimeAccuracy } from './TimeAccuracyChart';
+export { RatingBiasAlert, detectRatingBias } from './RatingBiasAlert';
+export { DailyReviewForm } from './DailyReviewForm';

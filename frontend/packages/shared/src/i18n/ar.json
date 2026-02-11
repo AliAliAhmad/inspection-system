@@ -972,6 +972,54 @@
     "leave": "إجازة",
     "coveringFor": "ينوب عن"
   },
+  "sidebar": {
+    "overdue": "إدارة المتأخرات",
+    "performance": "الأداء"
+  },
+  "overdue": {
+    "title": "إدارة المتأخرات",
+    "summary": "ملخص",
+    "inspections": "الفحوصات المتأخرة",
+    "defects": "العيوب المتأخرة",
+    "reviews": "المراجعات المتأخرة",
+    "aging": "تحليل التقادم",
+    "patterns": "الأنماط",
+    "reschedule": "إعادة الجدولة",
+    "bulkReschedule": "إعادة جدولة جماعية",
+    "daysOverdue": "متأخر {{days}} أيام",
+    "calendar": "عرض التقويم"
+  },
+  "performance": {
+    "title": "الأداء",
+    "trajectory": "المسار",
+    "goals": "أهدافي",
+    "createGoal": "إنشاء هدف",
+    "skillGaps": "فجوات المهارات",
+    "burnoutRisk": "خطر الإرهاق",
+    "peerComparison": "مقارنة الزملاء",
+    "learningPath": "مسار التعلم",
+    "coachingTips": "نصائح التدريب",
+    "onTrack": "على المسار",
+    "behindSchedule": "متأخر عن الجدول",
+    "daysRemaining": "{{days}} أيام متبقية"
+  },
+  "defects": {
+    "kanban": "عرض كانبان",
+    "tableView": "عرض الجدول",
+    "risk": "درجة المخاطر",
+    "slaStatus": "حالة SLA",
+    "similar": "عيوب مشابهة",
+    "rootCause": "السبب الجذري",
+    "prevention": "الوقاية",
+    "escalate": "تصعيد"
+  },
+  "dailyReview": {
+    "aiSuggestions": "اقتراحات الذكاء الاصطناعي",
+    "applyAll": "تطبيق الكل",
+    "feedbackSummary": "ملخص التقييم",
+    "incompleteWarning": "وظائف معرضة للخطر",
+    "timeAccuracy": "دقة الوقت"
+  },
   "equipmentAI": {
     "title": "ذكاء المعدات",
     "fleetHealth": "صحة الأسطول",

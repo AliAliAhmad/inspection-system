@@ -30,6 +30,7 @@ import {
   UnorderedListOutlined,
   ThunderboltOutlined,
   LineChartOutlined,
+  RiseOutlined,
 } from '@ant-design/icons';
 import { Dropdown, Avatar, Space } from 'antd';
 import { useAuth } from '../providers/AuthProvider';
@@ -77,7 +78,8 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/backlog', name: t('nav.backlog'), icon: <WarningOutlined /> },
     { path: '/admin/reports', name: t('nav.reports'), icon: <BarChartOutlined /> },
     { path: '/admin/daily-review', name: 'Daily Review', icon: <CheckCircleOutlined /> },
-    { path: '/admin/performance', name: 'Performance', icon: <BarChartOutlined /> },
+    { path: '/admin/overdue', name: t('sidebar.overdue'), icon: <ClockCircleOutlined /> },
+    { path: '/admin/performance', name: t('sidebar.performance'), icon: <RiseOutlined /> },
     { path: '/admin/notification-rules', name: t('nav.notification_rules'), icon: <ThunderboltOutlined /> },
     { path: '/admin/notification-analytics', name: t('nav.notification_analytics'), icon: <LineChartOutlined /> },
     { path: '/admin/leave-settings', name: t('nav.leave_settings'), icon: <SettingOutlined /> },
@@ -102,7 +104,8 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/engineer/pause-approvals', name: t('nav.pause_approvals'), icon: <PauseCircleOutlined /> },
     { path: '/admin/defects', name: t('nav.defects'), icon: <BugOutlined /> },
     { path: '/admin/daily-review', name: 'Daily Review', icon: <CheckCircleOutlined /> },
-    { path: '/admin/performance', name: 'Performance', icon: <BarChartOutlined /> },
+    { path: '/admin/overdue', name: t('sidebar.overdue'), icon: <ClockCircleOutlined /> },
+    { path: '/admin/performance', name: t('sidebar.performance'), icon: <RiseOutlined /> },
   ];
 
   const qeItems: MenuDataItem[] = [

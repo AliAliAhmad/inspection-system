@@ -19,6 +19,15 @@ export * from './error.types';
 export * from './leaderboard.types';
 export * from './material.types';
 export * from './auto-approval.types';
+// SLA and Escalation types
+export * from './sla.types';
+export * from './escalation.types';
+// Enhanced AI module types
+export * from './defect-ai.types';
+export * from './overdue.types';
+export * from './daily-review-ai.types';
+export * from './performance-ai.types';
+export * from './reports-ai.types';
 // AI Base types - selectively export to avoid conflicts with existing types
 export type {
   Severity,

@@ -39,6 +39,12 @@ import JobExecutionScreen from '../screens/shared/JobExecutionScreen';
 import WorkerPerformanceScreen from '../screens/shared/WorkerPerformanceScreen';
 import DailyReviewScreen from '../screens/engineer/DailyReviewScreen';
 
+// Enhanced module screens
+import DefectDetailScreen from '../screens/defects/DefectDetailScreen';
+import OverdueScreen from '../screens/overdue/OverdueScreen';
+import MyPerformanceScreen from '../screens/performance/MyPerformanceScreen';
+import GoalsScreen from '../screens/performance/GoalsScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
@@ -73,6 +79,11 @@ export type RootStackParamList = {
   JobExecution: { jobId: number };
   WorkerPerformance: undefined;
   DailyReview: undefined;
+  // Enhanced modules
+  DefectDetail: { defectId: number };
+  Overdue: undefined;
+  MyPerformance: undefined;
+  Goals: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -113,6 +124,11 @@ export default function RootNavigator() {
       <Stack.Screen name="JobExecution" component={JobExecutionScreen} options={{ headerShown: true, title: 'Job Execution' }} />
       <Stack.Screen name="WorkerPerformance" component={WorkerPerformanceScreen} options={{ headerShown: true, title: 'My Performance' }} />
       <Stack.Screen name="DailyReview" component={DailyReviewScreen} options={{ headerShown: true, title: 'Daily Review' }} />
+      {/* Enhanced module screens */}
+      <Stack.Screen name="DefectDetail" component={DefectDetailScreen} options={{ headerShown: true, title: 'Defect Details' }} />
+      <Stack.Screen name="Overdue" component={OverdueScreen} options={{ headerShown: true, title: 'Overdue Items' }} />
+      <Stack.Screen name="MyPerformance" component={MyPerformanceScreen} options={{ headerShown: true, title: 'My Performance' }} />
+      <Stack.Screen name="Goals" component={GoalsScreen} options={{ headerShown: true, title: 'My Goals' }} />
     </Stack.Navigator>
   );
 }

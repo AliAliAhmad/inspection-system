@@ -12,6 +12,7 @@ export interface DefectListParams extends PaginationParams {
   status?: DefectStatus;
   severity?: DefectSeverity;
   equipment_id?: number;
+  sla_overdue?: boolean;
 }
 
 export interface AssignSpecialistPayload {
@@ -25,6 +26,10 @@ export const defectsApi = {
     return getApiClient().get<PaginatedResponse<Defect>>('/api/defects', { params });
   },
 
+  get(id: number) {
+    return getApiClient().get<ApiResponse<Defect>>(`/api/defects/${id}`);
+  },
+
   resolve(id: number) {
     return getApiClient().post<ApiResponse<Defect>>(`/api/defects/${id}/resolve`);
   },
@@ -35,5 +40,13 @@ export const defectsApi = {
 
   assignSpecialist(id: number, payload: AssignSpecialistPayload) {
     return getApiClient().post<ApiResponse<any>>(`/api/defects/${id}/assign-specialist`, payload);
+  },
+
+  escalate(id: number, payload: { reason: string }) {
+    return getApiClient().post<ApiResponse<Defect>>(`/api/defects/${id}/escalate`, payload);
+  },
+
+  updateSLA(id: number, payload: { new_deadline: string; reason?: string }) {
+    return getApiClient().put<ApiResponse<Defect>>(`/api/defects/${id}/sla`, payload);
   },
 };

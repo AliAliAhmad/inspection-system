@@ -1,15 +1,18 @@
 /**
  * Daily Review Page (Web)
  * Engineer reviews jobs, rates workers, handles pauses, manages carry-overs.
+ * Enhanced with AI-powered suggestions and worker feedback.
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Card, Row, Col, Button, Tag, Statistic, DatePicker, Select, Table, Modal,
-  Rate, Input, Alert, Badge, Space, Typography, Tooltip, Progress, message, Checkbox,
+  Rate, Input, Alert, Badge, Space, Typography, Tooltip, Progress, message,
+  Tabs, Drawer, Switch, Divider,
 } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, PauseCircleOutlined,
   CarryOutOutlined, StarOutlined, SendOutlined, ExclamationCircleOutlined,
+  RobotOutlined, UserOutlined, BulbOutlined, BarChartOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workPlanTrackingApi } from '@inspection/shared';
@@ -17,6 +20,15 @@ import type {
   ShiftType, WorkPlanDailyReview, WorkPlanJobRating,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+
+import {
+  AIRatingSuggestions,
+  FeedbackSummaryCard,
+  IncompleteJobsWarning,
+  generateMockPredictions,
+  RatingBiasAlert,
+  detectRatingBias,
+} from '../../components/work-planning';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -40,6 +52,10 @@ export default function DailyReviewPage() {
   const [qcRating, setQcRating] = useState(0);
   const [qcReason, setQcReason] = useState('');
   const [cleaningRating, setCleaningRating] = useState(0);
+  const [aiSuggestionsOpen, setAiSuggestionsOpen] = useState(false);
+  const [showWorkerFeedback, setShowWorkerFeedback] = useState(false);
+  const [activeTab, setActiveTab] = useState('jobs');
+  const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['daily-review', selectedDate, shift],
@@ -48,6 +64,52 @@ export default function DailyReviewPage() {
 
   const review: WorkPlanDailyReview | undefined = data?.data?.review;
   const jobs: any[] = data?.data?.jobs || [];
+
+  // AI predictions for incomplete jobs
+  const incompleteJobPredictions = useMemo(() => {
+    if (!aiAssistanceEnabled) return [];
+    return generateMockPredictions(
+      jobs.filter(j => j.tracking?.status !== 'completed')
+    );
+  }, [jobs, aiAssistanceEnabled]);
+
+  // Get unique workers from jobs for feedback cards
+  const workers = useMemo(() => {
+    const workerMap = new Map<number, any>();
+    jobs.forEach((job) => {
+      (job.assignments || []).forEach((a: any) => {
+        if (a.user && !workerMap.has(a.user.id)) {
+          const workerJobs = jobs.filter(j =>
+            j.assignments?.some((assign: any) => assign.user?.id === a.user.id)
+          );
+          const completed = workerJobs.filter(j => j.tracking?.status === 'completed').length;
+          const ratings = workerJobs
+            .flatMap(j => j.ratings || [])
+            .filter((r: any) => r.user_id === a.user.id);
+
+          workerMap.set(a.user.id, {
+            ...a.user,
+            jobCount: workerJobs.length,
+            completedCount: completed,
+            avgQcRating: ratings.length > 0
+              ? ratings.reduce((sum: number, r: any) => sum + (r.qc_rating || 0), 0) / ratings.length
+              : null,
+            avgCleaningRating: ratings.length > 0
+              ? ratings.reduce((sum: number, r: any) => sum + (r.cleaning_rating || 0), 0) / ratings.length
+              : null,
+          });
+        }
+      });
+    });
+    return Array.from(workerMap.values());
+  }, [jobs]);
+
+  // Count completed jobs that need rating
+  const completedUnratedCount = jobs.filter(j => {
+    if (j.tracking?.status !== 'completed') return false;
+    const workers = j.assignments || [];
+    return workers.some((a: any) => !j.ratings?.find((r: any) => r.user_id === a.user?.id && r.qc_rating));
+  }).length;
 
   // Mutations
   const rateMutation = useMutation({
@@ -124,18 +186,33 @@ export default function DailyReviewPage() {
     });
   };
 
+  const handleAIRatingsApplied = (ratings: any[]) => {
+    message.success(`Applied ${ratings.length} AI-suggested ratings`);
+    setAiSuggestionsOpen(false);
+    queryClient.invalidateQueries({ queryKey: ['daily-review'] });
+  };
+
   const columns = [
     {
       title: 'Type',
       dataIndex: 'job_type',
       width: 80,
-      render: (type: string) => <Tag color="blue">{type?.toUpperCase()}</Tag>,
+      render: (type: string) => (
+        <Tag color={type === 'pm' ? 'blue' : type === 'defect' ? 'red' : 'green'}>
+          {type?.toUpperCase()}
+        </Tag>
+      ),
     },
     {
       title: 'Equipment',
       key: 'equipment',
       render: (_: any, record: any) => (
-        <Text strong>{record.equipment?.name || 'Unknown'}</Text>
+        <Space direction="vertical" size={0}>
+          <Text strong>{record.equipment?.serial_number || record.equipment?.name || 'Unknown'}</Text>
+          {record.equipment?.name && record.equipment?.serial_number && (
+            <Text type="secondary" style={{ fontSize: 11 }}>{record.equipment.name}</Text>
+          )}
+        </Space>
       ),
     },
     {
@@ -160,7 +237,7 @@ export default function DailyReviewPage() {
     {
       title: 'Workers',
       key: 'workers',
-      width: 200,
+      width: 220,
       render: (_: any, record: any) => (
         <Space direction="vertical" size={2}>
           {(record.assignments || []).map((a: any) => {
@@ -175,7 +252,7 @@ export default function DailyReviewPage() {
                     icon={<StarOutlined />}
                     onClick={() => openRatingModal(record, a.user)}
                   >
-                    {rated ? `★${rated.time_rating || ''}` : 'Rate'}
+                    {rated ? `${rated.qc_rating || ''}` : 'Rate'}
                   </Button>
                 )}
               </Space>
@@ -257,6 +334,7 @@ export default function DailyReviewPage() {
 
   return (
     <div style={{ padding: 24 }}>
+      {/* Header with AI Toggle */}
       <Row gutter={16} align="middle" style={{ marginBottom: 16 }}>
         <Col>
           <Title level={3} style={{ margin: 0 }}>Daily Review</Title>
@@ -273,7 +351,33 @@ export default function DailyReviewPage() {
             <Select.Option value="night">Night Shift</Select.Option>
           </Select>
         </Col>
+        <Col>
+          <Tooltip title="Toggle AI-powered suggestions">
+            <Space size={4}>
+              <Switch
+                checked={aiAssistanceEnabled}
+                onChange={setAiAssistanceEnabled}
+                checkedChildren={<RobotOutlined />}
+                unCheckedChildren={<RobotOutlined />}
+                size="small"
+              />
+              <Text type="secondary" style={{ fontSize: 12 }}>AI</Text>
+            </Space>
+          </Tooltip>
+        </Col>
         <Col flex="auto" />
+        {aiAssistanceEnabled && completedUnratedCount > 0 && (
+          <Col>
+            <Button
+              type="primary"
+              icon={<RobotOutlined />}
+              onClick={() => setAiSuggestionsOpen(true)}
+            >
+              Get AI Suggestions
+              <Badge count={completedUnratedCount} style={{ marginLeft: 8, backgroundColor: '#fff', color: '#1890ff' }} />
+            </Button>
+          </Col>
+        )}
         {review && review.status !== 'submitted' && (
           <Col>
             <Button
@@ -300,6 +404,18 @@ export default function DailyReviewPage() {
         )}
       </Row>
 
+      {/* AI-powered incomplete jobs warning */}
+      {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
+        <IncompleteJobsWarning
+          jobs={incompleteJobPredictions}
+          compact
+          maxItems={3}
+          onTakeAction={(jobId, action) => {
+            message.info(`Recommended action for job ${jobId}: ${action}`);
+          }}
+        />
+      )}
+
       {/* Summary stats */}
       {review && (
         <>
@@ -311,17 +427,17 @@ export default function DailyReviewPage() {
             </Col>
             <Col span={4}>
               <Card size="small">
-                <Statistic title="Completed" value={review.approved_jobs} valueStyle={{ color: '#3f8600' }} />
+                <Statistic title="Completed" value={review.approved_jobs} valueStyle={{ color: '#3f8600' }} prefix={<CheckCircleOutlined />} />
               </Card>
             </Col>
             <Col span={4}>
               <Card size="small">
-                <Statistic title="Incomplete" value={review.incomplete_jobs} valueStyle={{ color: '#cf1322' }} />
+                <Statistic title="Incomplete" value={review.incomplete_jobs} valueStyle={{ color: '#cf1322' }} prefix={<CloseCircleOutlined />} />
               </Card>
             </Col>
             <Col span={4}>
               <Card size="small">
-                <Statistic title="Not Started" value={review.not_started_jobs} />
+                <Statistic title="Not Started" value={review.not_started_jobs} prefix={<PauseCircleOutlined />} />
               </Card>
             </Col>
             <Col span={4}>
@@ -330,11 +446,11 @@ export default function DailyReviewPage() {
               </Card>
             </Col>
             <Col span={4}>
-              <Card size="small">
+              <Card size="small" bodyStyle={{ textAlign: 'center' }}>
                 <Progress
                   type="circle"
                   percent={review.completion_rate}
-                  width={60}
+                  width={50}
                   strokeColor={review.completion_rate >= 90 ? '#52c41a' : review.completion_rate >= 70 ? '#faad14' : '#ff4d4f'}
                 />
               </Card>
@@ -357,15 +473,85 @@ export default function DailyReviewPage() {
         </>
       )}
 
-      {/* Jobs table */}
-      <Table
-        columns={columns}
-        dataSource={jobs}
-        rowKey="id"
-        loading={isLoading}
-        pagination={false}
-        size="small"
-        scroll={{ x: 1000 }}
+      {/* Main Content Tabs */}
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            key: 'jobs',
+            label: (
+              <Space>
+                <BarChartOutlined />
+                Jobs
+                <Badge count={jobs.length} style={{ backgroundColor: '#1890ff' }} />
+              </Space>
+            ),
+            children: (
+              <Table
+                columns={columns}
+                dataSource={jobs}
+                rowKey="id"
+                loading={isLoading}
+                pagination={false}
+                size="small"
+                scroll={{ x: 1000 }}
+              />
+            ),
+          },
+          {
+            key: 'workers',
+            label: (
+              <Space>
+                <UserOutlined />
+                Worker Feedback
+                <Badge count={workers.length} style={{ backgroundColor: '#52c41a' }} />
+              </Space>
+            ),
+            children: (
+              <div>
+                <Row justify="end" style={{ marginBottom: 16 }}>
+                  <Space>
+                    <Switch
+                      checked={showWorkerFeedback}
+                      onChange={setShowWorkerFeedback}
+                    />
+                    <Text type="secondary">Detailed View</Text>
+                  </Space>
+                </Row>
+                <Row gutter={[16, 16]}>
+                  {workers.map((worker) => (
+                    <Col key={worker.id} span={showWorkerFeedback ? 24 : 8}>
+                      <FeedbackSummaryCard
+                        worker={{
+                          id: worker.id,
+                          fullName: worker.full_name,
+                          role: worker.role,
+                        }}
+                        period={{
+                          start: selectedDate,
+                          end: selectedDate,
+                          label: 'Today',
+                        }}
+                        performance={{
+                          avgQcRating: worker.avgQcRating,
+                          avgCleaningRating: worker.avgCleaningRating,
+                          avgTimeRating: null,
+                          totalJobs: worker.jobCount,
+                          completedJobs: worker.completedCount,
+                          completionRate: worker.jobCount > 0
+                            ? Math.round((worker.completedCount / worker.jobCount) * 100)
+                            : 0,
+                        }}
+                        compact={!showWorkerFeedback}
+                      />
+                    </Col>
+                  ))}
+                </Row>
+              </div>
+            ),
+          },
+        ]}
       />
 
       {/* Rating Modal */}
@@ -420,6 +606,29 @@ export default function DailyReviewPage() {
           />
         )}
       </Modal>
+
+      {/* AI Suggestions Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <RobotOutlined style={{ color: '#1890ff' }} />
+            <span>AI Rating Suggestions</span>
+          </Space>
+        }
+        open={aiSuggestionsOpen}
+        onClose={() => setAiSuggestionsOpen(false)}
+        width={900}
+        destroyOnClose
+      >
+        {review && (
+          <AIRatingSuggestions
+            reviewId={review.id}
+            jobs={jobs}
+            onApply={handleAIRatingsApplied}
+            onClose={() => setAiSuggestionsOpen(false)}
+          />
+        )}
+      </Drawer>
     </div>
   );
 }

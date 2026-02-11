@@ -135,6 +135,7 @@ from app.models.user_challenge import UserChallenge
 from app.models.user_level import UserLevel
 from app.models.point_history import PointHistory
 from app.models.leaderboard_snapshot import LeaderboardSnapshot
+from app.models.performance_goal import PerformanceGoal
 
 __all__ = [
     'User',
@@ -248,4 +249,5 @@ __all__ = [
     'UserLevel',
     'PointHistory',
     'LeaderboardSnapshot',
+    'PerformanceGoal',
 ]

@@ -168,4 +168,20 @@ export const aiApi = {
       thread_id: threadId,
     });
   },
+
+  // -------- DAILY REVIEW AI (convenience re-exports) --------
+
+  /** Get AI-suggested ratings for a daily review */
+  suggestRatings(reviewId: number) {
+    return getApiClient().get<ApiResponse<any>>(`/api/work-plan-tracking/${reviewId}/ai/suggest-ratings`);
+  },
+
+  // -------- DEFECT AI --------
+
+  /** Analyze defect risk score */
+  analyzeDefectRisk(defectId: number) {
+    return getApiClient().get<ApiResponse<{ risk_score: number; factors: string[] }>>(
+      `/api/defects/${defectId}/ai/risk-analysis`
+    );
+  },
 };

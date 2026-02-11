@@ -17,8 +17,19 @@ import {
   Empty,
   Badge,
   Collapse,
+  Drawer,
+  Segmented,
+  Tooltip,
 } from 'antd';
-import { ToolOutlined, InfoCircleOutlined, SearchOutlined, RobotOutlined } from '@ant-design/icons';
+import {
+  ToolOutlined,
+  InfoCircleOutlined,
+  SearchOutlined,
+  RobotOutlined,
+  TableOutlined,
+  AppstoreOutlined,
+  CloseOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
@@ -33,6 +44,12 @@ import {
 } from '@inspection/shared';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import InspectionFindingCard from '../../components/InspectionFindingCard';
+import {
+  DefectKanban,
+  DefectAIPanel,
+  DefectInsightsCard,
+  SLAStatusBadge,
+} from '../../components/defects';
 
 const severityColors: Record<string, string> = {
   critical: 'red',
@@ -57,9 +74,14 @@ const statusLabels: Record<string, string> = {
   false_alarm: 'False Alarm',
 };
 
+type ViewMode = 'table' | 'kanban';
+
 export default function DefectsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
 
   const [activeStatus, setActiveStatus] = useState<DefectStatus | undefined>();
   const [page, setPage] = useState(1);
@@ -69,6 +91,10 @@ export default function DefectsPage() {
   const [category, setCategory] = useState<string | undefined>();
 
   const [equipmentFilter, setEquipmentFilter] = useState<number | undefined>();
+
+  // AI Panel drawer state
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiPanelDefect, setAiPanelDefect] = useState<Defect | null>(null);
 
   // AI Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -144,12 +170,54 @@ export default function DefectsPage() {
     }
   };
 
+  // Handle defect click (opens AI panel)
+  const handleDefectClick = (defect: Defect) => {
+    setAiPanelDefect(defect);
+    setAiPanelOpen(true);
+  };
+
+  // Handle defect escalation from AI panel
+  const handleEscalate = (defectId: number, level: number) => {
+    // In production, this would trigger escalation notifications
+    console.log(`Defect ${defectId} escalated to level ${level}`);
+    queryClient.invalidateQueries({ queryKey: ['defects'] });
+  };
+
+  // Calculate mock SLA for table view
+  const getSLAInfo = (defect: Defect) => {
+    if (defect.status === 'closed' || defect.status === 'resolved') {
+      return { status: 'on_track' as const, hoursRemaining: 0 };
+    }
+
+    const createdAt = new Date(defect.created_at);
+    const baseHours = defect.severity === 'critical' ? 4 :
+                     defect.severity === 'high' ? 24 :
+                     defect.severity === 'medium' ? 72 : 168;
+    const deadline = new Date(createdAt.getTime() + baseHours * 60 * 60 * 1000);
+    const now = new Date();
+    const hoursRemaining = Math.max(0, (deadline.getTime() - now.getTime()) / (1000 * 60 * 60));
+    const percentageElapsed = Math.min(100, ((baseHours - hoursRemaining) / baseHours) * 100);
+
+    let status: 'on_track' | 'warning' | 'at_risk' | 'breached' | 'critical' = 'on_track';
+    if (percentageElapsed >= 100) status = 'breached';
+    else if (percentageElapsed >= 90) status = 'critical';
+    else if (percentageElapsed >= 75) status = 'at_risk';
+    else if (percentageElapsed >= 50) status = 'warning';
+
+    return { status, hoursRemaining };
+  };
+
   const columns: ColumnsType<Defect> = [
     {
       title: t('defects.id', 'ID'),
       dataIndex: 'id',
       key: 'id',
       width: 70,
+      render: (id: number, record: Defect) => (
+        <Button type="link" size="small" onClick={() => handleDefectClick(record)}>
+          #{id}
+        </Button>
+      ),
     },
     {
       title: t('defects.equipment', 'Equipment'),
@@ -188,6 +256,7 @@ export default function DefectsPage() {
       title: t('defects.severity', 'Severity'),
       dataIndex: 'severity',
       key: 'severity',
+      width: 100,
       render: (severity: string) => (
         <Tag color={severityColors[severity] || 'default'}>
           {severity?.toUpperCase()}
@@ -195,9 +264,25 @@ export default function DefectsPage() {
       ),
     },
     {
+      title: t('defects.sla', 'SLA'),
+      key: 'sla',
+      width: 120,
+      render: (_: unknown, record: Defect) => {
+        const slaInfo = getSLAInfo(record);
+        return (
+          <SLAStatusBadge
+            status={slaInfo.status}
+            hoursRemaining={slaInfo.hoursRemaining}
+            size="small"
+          />
+        );
+      },
+    },
+    {
       title: t('defects.status', 'Status'),
       dataIndex: 'status',
       key: 'status',
+      width: 110,
       render: (status: string) => (
         <Tag color={statusColors[status] || 'default'}>
           {statusLabels[status] || status?.toUpperCase()}
@@ -208,6 +293,7 @@ export default function DefectsPage() {
       title: t('defects.category', 'Category'),
       dataIndex: 'category',
       key: 'category',
+      width: 100,
       render: (cat: string | null) =>
         cat ? (
           <Tag color={cat === 'mechanical' ? 'blue' : 'gold'}>
@@ -218,40 +304,45 @@ export default function DefectsPage() {
         ),
     },
     {
-      title: t('defects.priority', 'Priority'),
-      dataIndex: 'priority',
-      key: 'priority',
-      render: (priority: string) => <Tag>{priority?.toUpperCase()}</Tag>,
-    },
-    {
       title: t('defects.dueDate', 'Due Date'),
       dataIndex: 'due_date',
       key: 'due_date',
+      width: 100,
       render: (v: string | null) => v || '-',
     },
     {
       title: t('common.actions', 'Actions'),
       key: 'actions',
-      width: 160,
+      width: 180,
       render: (_: unknown, record: Defect) => {
         const hasJob = !!(record as any).specialist_job;
         return (
-          <Button
-            type="primary"
-            size="small"
-            icon={<ToolOutlined />}
-            onClick={() => {
-              setSelectedDefect(record);
-              assignForm.resetFields();
-              setCategory(undefined);
-              setAssignOpen(true);
-            }}
-            disabled={hasJob || record.status === 'closed' || record.status === 'resolved'}
-          >
-            {hasJob
-              ? t('defects.assigned', 'Assigned')
-              : t('defects.assignSpecialist', 'Assign Specialist')}
-          </Button>
+          <Space>
+            <Tooltip title={t('defects.viewAIInsights', 'View AI Insights')}>
+              <Button
+                type="default"
+                size="small"
+                icon={<RobotOutlined />}
+                onClick={() => handleDefectClick(record)}
+              />
+            </Tooltip>
+            <Button
+              type="primary"
+              size="small"
+              icon={<ToolOutlined />}
+              onClick={() => {
+                setSelectedDefect(record);
+                assignForm.resetFields();
+                setCategory(undefined);
+                setAssignOpen(true);
+              }}
+              disabled={hasJob || record.status === 'closed' || record.status === 'resolved'}
+            >
+              {hasJob
+                ? t('defects.assigned', 'Assigned')
+                : t('defects.assign', 'Assign')}
+            </Button>
+          </Space>
         );
       },
     },
@@ -275,114 +366,145 @@ export default function DefectsPage() {
   };
 
   return (
-    <Card
-      title={<Typography.Title level={4}>{t('nav.defects', 'Defects')}</Typography.Title>}
-      extra={
-        <Button
-          icon={<RobotOutlined />}
-          onClick={() => setSearchModalOpen(true)}
-        >
-          {t('defects.findSimilar', 'Find Similar Defects')}
-        </Button>
-      }
-    >
-      <Tabs
-        activeKey={activeStatus || 'all'}
-        onChange={handleTabChange}
-        items={tabItems}
-      />
+    <div className="space-y-4">
+      {/* AI Insights Card */}
+      <DefectInsightsCard />
 
-      <div style={{ marginBottom: 16 }}>
-        <Space>
-          <Typography.Text strong>{t('defects.filterByEquipment', 'Equipment')}:</Typography.Text>
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder={t('defects.selectEquipment', 'Filter by equipment...')}
-            style={{ width: 300 }}
-            value={equipmentFilter}
-            onChange={(val) => { setEquipmentFilter(val); setPage(1); }}
-            options={equipmentList.map((eq: any) => ({
-              value: eq.id,
-              label: `${eq.name} (${eq.serial_number})`,
-            }))}
-          />
-        </Space>
-      </div>
+      {/* Main Card */}
+      <Card
+        title={<Typography.Title level={4}>{t('nav.defects', 'Defects')}</Typography.Title>}
+        extra={
+          <Space>
+            {/* View Toggle */}
+            <Segmented
+              value={viewMode}
+              onChange={(value) => setViewMode(value as ViewMode)}
+              options={[
+                {
+                  value: 'table',
+                  icon: <TableOutlined />,
+                  label: t('defects.tableView', 'Table'),
+                },
+                {
+                  value: 'kanban',
+                  icon: <AppstoreOutlined />,
+                  label: t('defects.kanbanView', 'Kanban'),
+                },
+              ]}
+            />
+            <Button
+              icon={<RobotOutlined />}
+              onClick={() => setSearchModalOpen(true)}
+            >
+              {t('defects.findSimilar', 'Find Similar')}
+            </Button>
+          </Space>
+        }
+      >
+        {viewMode === 'table' ? (
+          <>
+            <Tabs
+              activeKey={activeStatus || 'all'}
+              onChange={handleTabChange}
+              items={tabItems}
+            />
 
-      <Table
-        rowKey="id"
-        columns={columns}
-        dataSource={defects}
-        loading={isLoading}
-        locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
-        expandable={{
-          expandedRowRender: (record: Defect) => {
-            const occurrences = record.occurrences ?? [];
-            if (occurrences.length > 1) {
-              const ordinalLabel = (n: number) => {
-                const s = ['th', 'st', 'nd', 'rd'];
-                const v = n % 100;
-                return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
-              };
-              return (
-                <Collapse
-                  defaultActiveKey={[occurrences[occurrences.length - 1]?.id]}
-                  items={occurrences.map((occ) => ({
-                    key: occ.id,
-                    label: (
-                      <Space>
-                        <Tag color="blue">{ordinalLabel(occ.occurrence_number)} Occurrence</Tag>
-                        {occ.found_by && (
-                          <Typography.Text type="secondary">
-                            Found by: {occ.found_by.full_name}
-                          </Typography.Text>
-                        )}
-                        {occ.found_at && (
-                          <Typography.Text type="secondary">
-                            — {new Date(occ.found_at).toLocaleDateString()}
-                          </Typography.Text>
-                        )}
-                      </Space>
-                    ),
-                    children: occ.inspection_answer ? (
-                      <InspectionFindingCard answer={occ.inspection_answer} />
-                    ) : (
-                      <Typography.Text type="secondary">
-                        {t('common.noData', 'No inspection data')}
-                      </Typography.Text>
-                    ),
+            <div style={{ marginBottom: 16 }}>
+              <Space>
+                <Typography.Text strong>{t('defects.filterByEquipment', 'Equipment')}:</Typography.Text>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t('defects.selectEquipment', 'Filter by equipment...')}
+                  style={{ width: 300 }}
+                  value={equipmentFilter}
+                  onChange={(val) => { setEquipmentFilter(val); setPage(1); }}
+                  options={equipmentList.map((eq: any) => ({
+                    value: eq.id,
+                    label: `${eq.name} (${eq.serial_number})`,
                   }))}
                 />
-              );
-            }
-            // Single occurrence — show directly
-            return record.inspection_answer ? (
-              <InspectionFindingCard answer={record.inspection_answer} />
-            ) : (
-              <Typography.Text type="secondary">{t('common.noData', 'No inspection data')}</Typography.Text>
-            );
-          },
-          rowExpandable: (record: Defect) =>
-            !!record.inspection_answer || (record.occurrences?.length ?? 0) > 0,
-          expandIcon: ({ expanded, onExpand, record }) =>
-            record.inspection_answer || (record.occurrences?.length ?? 0) > 0 ? (
-              <InfoCircleOutlined
-                style={{ color: expanded ? '#1677ff' : '#999', cursor: 'pointer' }}
-                onClick={(e) => onExpand(record, e)}
-              />
-            ) : null,
-        }}
-        pagination={{
-          current: pagination?.page || page,
-          pageSize: pagination?.per_page || 20,
-          total: pagination?.total || 0,
-          showSizeChanger: false,
-          onChange: (p) => setPage(p),
-        }}
-        scroll={{ x: 1300 }}
-      />
+              </Space>
+            </div>
+
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={defects}
+              loading={isLoading}
+              locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
+              expandable={{
+                expandedRowRender: (record: Defect) => {
+                  const occurrences = record.occurrences ?? [];
+                  if (occurrences.length > 1) {
+                    const ordinalLabel = (n: number) => {
+                      const s = ['th', 'st', 'nd', 'rd'];
+                      const v = n % 100;
+                      return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+                    };
+                    return (
+                      <Collapse
+                        defaultActiveKey={[occurrences[occurrences.length - 1]?.id]}
+                        items={occurrences.map((occ) => ({
+                          key: occ.id,
+                          label: (
+                            <Space>
+                              <Tag color="blue">{ordinalLabel(occ.occurrence_number)} Occurrence</Tag>
+                              {occ.found_by && (
+                                <Typography.Text type="secondary">
+                                  Found by: {occ.found_by.full_name}
+                                </Typography.Text>
+                              )}
+                              {occ.found_at && (
+                                <Typography.Text type="secondary">
+                                  — {new Date(occ.found_at).toLocaleDateString()}
+                                </Typography.Text>
+                              )}
+                            </Space>
+                          ),
+                          children: occ.inspection_answer ? (
+                            <InspectionFindingCard answer={occ.inspection_answer} />
+                          ) : (
+                            <Typography.Text type="secondary">
+                              {t('common.noData', 'No inspection data')}
+                            </Typography.Text>
+                          ),
+                        }))}
+                      />
+                    );
+                  }
+                  // Single occurrence — show directly
+                  return record.inspection_answer ? (
+                    <InspectionFindingCard answer={record.inspection_answer} />
+                  ) : (
+                    <Typography.Text type="secondary">{t('common.noData', 'No inspection data')}</Typography.Text>
+                  );
+                },
+                rowExpandable: (record: Defect) =>
+                  !!record.inspection_answer || (record.occurrences?.length ?? 0) > 0,
+                expandIcon: ({ expanded, onExpand, record }) =>
+                  record.inspection_answer || (record.occurrences?.length ?? 0) > 0 ? (
+                    <InfoCircleOutlined
+                      style={{ color: expanded ? '#1677ff' : '#999', cursor: 'pointer' }}
+                      onClick={(e) => onExpand(record, e)}
+                    />
+                  ) : null,
+              }}
+              pagination={{
+                current: pagination?.page || page,
+                pageSize: pagination?.per_page || 20,
+                total: pagination?.total || 0,
+                showSizeChanger: false,
+                onChange: (p) => setPage(p),
+              }}
+              scroll={{ x: 1400 }}
+            />
+          </>
+        ) : (
+          <DefectKanban onDefectClick={handleDefectClick} />
+        )}
+      </Card>
 
       {/* Assign Specialist Modal */}
       <Modal
@@ -533,6 +655,15 @@ export default function DefectsPage() {
                   marginBottom: 8,
                   borderRadius: 8,
                   padding: 12,
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  // Find the defect and open AI panel
+                  const defect = defects.find(d => d.id === item.id);
+                  if (defect) {
+                    setSearchModalOpen(false);
+                    handleDefectClick(defect);
+                  }
                 }}
               >
                 <List.Item.Meta
@@ -571,6 +702,53 @@ export default function DefectsPage() {
           />
         )}
       </Modal>
-    </Card>
+
+      {/* AI Panel Drawer */}
+      <Drawer
+        title={
+          <Space>
+            <RobotOutlined style={{ color: '#1677ff' }} />
+            {t('defects.aiInsights', 'AI Insights')}
+            {aiPanelDefect && (
+              <Tag>#{aiPanelDefect.id}</Tag>
+            )}
+          </Space>
+        }
+        placement="right"
+        width={420}
+        open={aiPanelOpen}
+        onClose={() => {
+          setAiPanelOpen(false);
+          setAiPanelDefect(null);
+        }}
+        extra={
+          <Button
+            type="text"
+            icon={<CloseOutlined />}
+            onClick={() => {
+              setAiPanelOpen(false);
+              setAiPanelDefect(null);
+            }}
+          />
+        }
+        styles={{
+          body: { padding: 16, backgroundColor: '#f5f5f5' },
+        }}
+      >
+        {aiPanelDefect && (
+          <DefectAIPanel
+            defect={aiPanelDefect}
+            onDefectClick={(defectId) => {
+              // Find and switch to clicked defect
+              const clickedDefect = defects.find(d => d.id === defectId);
+              if (clickedDefect) {
+                setAiPanelDefect(clickedDefect);
+              }
+            }}
+            onEscalate={handleEscalate}
+          />
+        )}
+      </Drawer>
+    </div>
   );
 }

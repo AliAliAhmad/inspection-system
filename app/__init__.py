@@ -82,7 +82,9 @@ def create_app(config_name='development'):
         quality_reviews, engineer_jobs, leaves, leaderboards, bonus_stars,
         files, sync, inspection_routines, roster, voice, ai,
         work_plans, materials, cycles, pm_templates, work_plan_tracking,
-        approvals, auto_approvals, unified_ai
+        approvals, auto_approvals, unified_ai,
+        # AI-Enhanced Modules
+        defect_ai, overdue, daily_review_ai, performance
     )
 
     # Core
@@ -153,6 +155,12 @@ def create_app(config_name='development'):
 
     # Unified AI Services (Approvals, Quality Reviews, Inspection Routines)
     app.register_blueprint(unified_ai.bp, url_prefix='/api/ai')
+
+    # AI-Enhanced Modules
+    app.register_blueprint(defect_ai.bp, url_prefix='/api/defects')
+    app.register_blueprint(overdue.bp, url_prefix='/api/overdue')
+    app.register_blueprint(daily_review_ai.bp, url_prefix='/api/work-plan-tracking')
+    app.register_blueprint(performance.bp, url_prefix='/api/performance')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)

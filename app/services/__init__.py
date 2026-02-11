@@ -25,6 +25,25 @@ from app.services.unified_ai_services import (
     InspectionRoutineAIService,
 )
 
+# Enhanced AI Services (5 new modules)
+from app.services.defect_ai_service import DefectAIService
+from app.services.overdue_ai_service import OverdueAIService
+from app.services.daily_review_ai_service import DailyReviewAIService
+from app.services.performance_ai_service import PerformanceAIService
+from app.services.reports_ai_service import ReportsAIService
+
+# Shared Services
+from app.services.shared import (
+    NotificationPatterns,
+    EscalationEngine,
+    EscalationRule,
+    PointCalculator,
+    PointRule,
+    PointAction,
+    SLATracker,
+    SLAConfig,
+)
+
 __all__ = [
     # Existing services
     'LeaveAIService',
@@ -43,4 +62,19 @@ __all__ = [
     'ApprovalAIService',
     'QualityReviewAIService',
     'InspectionRoutineAIService',
+    # Enhanced AI Services (5 modules)
+    'DefectAIService',
+    'OverdueAIService',
+    'DailyReviewAIService',
+    'PerformanceAIService',
+    'ReportsAIService',
+    # Shared Services
+    'NotificationPatterns',
+    'EscalationEngine',
+    'EscalationRule',
+    'PointCalculator',
+    'PointRule',
+    'PointAction',
+    'SLATracker',
+    'SLAConfig',
 ]
