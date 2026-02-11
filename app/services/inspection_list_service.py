@@ -70,16 +70,43 @@ class InspectionListService:
             )
 
         # Find equipment matching these asset types
-        equipment_list = Equipment.query.filter(
+        # First, get equipment that match asset types
+        equipment_candidates = Equipment.query.filter(
             Equipment.equipment_type.in_(list(asset_types)),
             Equipment.status.in_(['active', 'under_maintenance'])
         ).all()
 
+        # Filter by imported schedule: only include equipment scheduled for this day/shift
+        # Get schedule entries for this day and shift
+        schedule_entries = InspectionSchedule.query.filter_by(
+            day_of_week=day_of_week,
+            shift=shift,
+            is_active=True
+        ).all()
+
+        scheduled_equipment_ids = {se.equipment_id for se in schedule_entries}
+
+        # Only include equipment that is in the imported schedule for this day/shift
+        equipment_list = [
+            eq for eq in equipment_candidates
+            if eq.id in scheduled_equipment_ids
+        ]
+
         if not equipment_list:
-            raise ValidationError(
-                f"No equipment found matching asset types: {', '.join(asset_types)}. "
-                f"Check that equipment exists with these types and is active."
-            )
+            # Provide helpful error message
+            if equipment_candidates:
+                day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                raise ValidationError(
+                    f"No equipment scheduled for {day_names[day_of_week]} {shift} shift. "
+                    f"Found {len(equipment_candidates)} equipment with matching asset types, "
+                    f"but none are scheduled for this day/shift in the imported schedule. "
+                    f"Please import an inspection schedule first."
+                )
+            else:
+                raise ValidationError(
+                    f"No equipment found matching asset types: {', '.join(asset_types)}. "
+                    f"Check that equipment exists with these types and is active."
+                )
 
         # Create inspection list
         inspection_list = InspectionList(
