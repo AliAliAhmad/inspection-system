@@ -1413,3 +1413,23 @@ def workload_preview():
             'preview': preview
         }
     }), 200
+
+
+@bp.route('/clear-all', methods=['DELETE'])
+@jwt_required()
+@admin_required()
+def clear_all_assignments():
+    """
+    Clear all inspection assignments (for debugging/testing).
+    Admin only. Use with caution!
+    """
+    from app.models import InspectionAssignment
+    
+    deleted_count = InspectionAssignment.query.delete()
+    safe_commit()
+    
+    return jsonify({
+        'status': 'success',
+        'message': f'Deleted {deleted_count} inspection assignments',
+        'deleted': deleted_count,
+    }), 200

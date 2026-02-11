@@ -367,4 +367,11 @@ export const inspectionAssignmentsApi = {
       { list_id: listId },
     );
   },
+
+  // Clear all assignments (admin only, for debugging)
+  clearAllAssignments() {
+    return getApiClient().delete<ApiResponse<{ deleted: number }>>(
+      '/api/inspection-assignments/clear-all',
+    );
+  },
 };

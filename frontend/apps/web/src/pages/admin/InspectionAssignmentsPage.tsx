@@ -391,6 +391,16 @@ export default function InspectionAssignmentsPage() {
     },
   });
 
+  const clearAllMutation = useMutation({
+    mutationFn: () => inspectionAssignmentsApi.clearAllAssignments(),
+    onSuccess: (res) => {
+      const result = (res.data as any).data || res.data;
+      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
+      message.success(`Cleared ${result.deleted || 0} assignments`);
+    },
+    onError: () => message.error('Failed to clear assignments'),
+  });
+
   // Flatten: extract all assignments from all lists
   const rawLists: any[] = data?.data?.data || (data?.data as any)?.data || [];
   const allAssignments: any[] = useMemo(() => {
@@ -842,6 +852,21 @@ export default function InspectionAssignmentsPage() {
               />
             </Button.Group>
             <Button icon={<ReloadOutlined />} onClick={() => refetch()} />
+            <Button
+              danger
+              onClick={() => {
+                Modal.confirm({
+                  title: 'Clear All Assignments?',
+                  content: 'This will delete ALL inspection assignments from the database. This cannot be undone!',
+                  okText: 'Yes, Clear All',
+                  okType: 'danger',
+                  onOk: () => clearAllMutation.mutate(),
+                });
+              }}
+              loading={clearAllMutation.isPending}
+            >
+              🗑️ Clear All
+            </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateOpen(true)}>
               {t('assignments.generate', 'Generate List')}
             </Button>
