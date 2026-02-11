@@ -178,8 +178,14 @@ export default function SchedulesPage() {
     for (const e of entries) {
       const key = e.berth || 'Unknown';
       if (!map[key]) map[key] = { day: [], night: [] };
-      if (e.shift === 'day') map[key].day.push(e);
-      else map[key].night.push(e);
+      // Default to day shift if shift is not specified
+      const shift = e.shift || 'day';
+      if (shift === 'night') {
+        map[key].night.push(e);
+      } else {
+        // 'day', 'both', or any other value goes to day
+        map[key].day.push(e);
+      }
     }
     return Object.entries(map)
       .sort(([a], [b]) => a.localeCompare(b))
