@@ -38,7 +38,8 @@ import {
   OverduePatternCard,
   OverdueCalendar,
 } from '../../components/overdue';
-import type { OverdueItem, OverdueItemType, AgingBucket } from '../../components/overdue';
+import type { OverdueItem, OverdueItemType } from '../../components/overdue';
+import type { AgingBucket } from '../../components/overdue/AgingBuckets';
 import { overdueApi } from '@inspection/shared';
 
 const { Title } = Typography;
@@ -64,7 +65,36 @@ export default function OverduePage() {
   // Fetch aging buckets
   const { data: bucketsData } = useQuery({
     queryKey: ['overdue', 'aging-buckets', activeTab],
-    queryFn: () => overdueApi.getAgingBuckets(activeTab === 'all' ? undefined : activeTab).then(r => r.data?.data),
+    queryFn: async () => {
+      const response = await overdueApi.getAgingBuckets(activeTab === 'all' ? undefined : activeTab);
+      const apiData = response.data?.data || [];
+
+      // Transform API data to component format
+      const bucketColors: Record<string, string> = {
+        '1-7': '#52c41a',
+        '8-14': '#fadb14',
+        '15-30': '#faad14',
+        '31-60': '#fa8c16',
+        '60+': '#ff4d4f',
+      };
+
+      const bucketRanges: Record<string, { label: string; min: number; max: number | null }> = {
+        '1-7': { label: '1-7 days', min: 1, max: 7 },
+        '8-14': { label: '8-14 days', min: 8, max: 14 },
+        '15-30': { label: '15-30 days', min: 15, max: 30 },
+        '31-60': { label: '31-60 days', min: 31, max: 60 },
+        '60+': { label: '60+ days', min: 60, max: null },
+      };
+
+      return apiData.map((item: any) => ({
+        label: bucketRanges[item.bucket]?.label || item.bucket,
+        key: item.bucket,
+        min_days: bucketRanges[item.bucket]?.min || 0,
+        max_days: bucketRanges[item.bucket]?.max || null,
+        count: item.count,
+        color: bucketColors[item.bucket] || '#d9d9d9',
+      })) as AgingBucket[];
+    },
   });
 
   // Fetch patterns for badge count
