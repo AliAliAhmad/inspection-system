@@ -86,6 +86,25 @@ def create_app(config_name='development'):
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['Permissions-Policy'] = 'camera=(), microphone=(self), geolocation=()'
+
+        # Content Security Policy
+        # Note: unsafe-eval is needed for React DevTools and some build tools
+        # unsafe-inline for styles is common in React apps
+        csp_directives = [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-eval'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: https: blob:",
+            "font-src 'self' data:",
+            "connect-src 'self' https:",
+            "media-src 'self' https: blob:",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+        ]
+        response.headers['Content-Security-Policy'] = '; '.join(csp_directives)
+
         # Remove server header
         response.headers.pop('Server', None)
         return response
