@@ -86,4 +86,10 @@ export const inspectionRoutinesApi = {
   getUpcoming() {
     return getApiClient().get<ApiResponse<UpcomingData>>('/api/inspection-routines/schedules/upcoming');
   },
+  debugSchedules() {
+    return getApiClient().get<ApiResponse<any>>('/api/inspection-routines/schedules/debug');
+  },
+  clearAllSchedules() {
+    return getApiClient().delete<ApiResponse<{ deleted: number }>>('/api/inspection-routines/schedules/clear-all');
+  },
 };

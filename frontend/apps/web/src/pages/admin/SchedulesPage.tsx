@@ -59,6 +59,7 @@ export default function SchedulesPage() {
     errors: string[];
   } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('1');
+  const [debugData, setDebugData] = useState<any>(null);
 
   // Equipment schedule grid
   const { data: schedules, isLoading: schedulesLoading } = useQuery({
@@ -108,6 +109,24 @@ export default function SchedulesPage() {
       message.error(
         t('schedules.uploadError', 'Failed to upload schedule'),
       ),
+  });
+
+  const debugMutation = useMutation({
+    mutationFn: () => inspectionRoutinesApi.debugSchedules(),
+    onSuccess: (res) => {
+      setDebugData((res.data as any).data || res.data);
+    },
+    onError: () => message.error('Failed to fetch debug data'),
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: () => inspectionRoutinesApi.clearAllSchedules(),
+    onSuccess: (res) => {
+      const result = (res.data as any).data || res.data;
+      queryClient.invalidateQueries({ queryKey: ['inspection-schedules'] });
+      message.success(`Cleared ${result.deleted || 0} schedule entries`);
+    },
+    onError: () => message.error('Failed to clear schedules'),
   });
 
   const scheduleColumns: ColumnsType<EquipmentSchedule> = [
@@ -324,7 +343,30 @@ export default function SchedulesPage() {
               label: t('schedules.ai.scheduleGrid', 'Schedule Grid'),
               children: (
                 <div>
-                  <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+                    <Space>
+                      <Button
+                        onClick={() => debugMutation.mutate()}
+                        loading={debugMutation.isPending}
+                      >
+                        🔍 Debug Schedules
+                      </Button>
+                      <Button
+                        danger
+                        onClick={() => {
+                          Modal.confirm({
+                            title: 'Clear All Schedules?',
+                            content: 'This will delete ALL schedule entries from the database. This cannot be undone!',
+                            okText: 'Yes, Clear All',
+                            okType: 'danger',
+                            onOk: () => clearMutation.mutate(),
+                          });
+                        }}
+                        loading={clearMutation.isPending}
+                      >
+                        🗑️ Clear All Schedules
+                      </Button>
+                    </Space>
                     <Upload
                       accept=".xlsx,.xls"
                       showUploadList={false}
@@ -435,6 +477,65 @@ export default function SchedulesPage() {
               />
             )}
           </>
+        )}
+      </Modal>
+
+      {/* Debug Modal */}
+      <Modal
+        title="🔍 Schedule Debug Information"
+        open={debugData !== null}
+        onCancel={() => setDebugData(null)}
+        onOk={() => setDebugData(null)}
+        width={800}
+        cancelButtonProps={{ style: { display: 'none' } }}
+      >
+        {debugData && (
+          <div>
+            <Alert
+              type="info"
+              message={
+                <div>
+                  <strong>Summary:</strong> {debugData.total_schedules || 0} total schedules |{' '}
+                  <Tag color="gold">{debugData.day_shifts || 0} Day Shifts</Tag>
+                  <Tag color="purple">{debugData.night_shifts || 0} Night Shifts</Tag>
+                  {debugData.other_shifts > 0 && (
+                    <Tag color="red">{debugData.other_shifts} Other</Tag>
+                  )}
+                </div>
+              }
+              style={{ marginBottom: 16 }}
+            />
+            <div style={{ maxHeight: 400, overflow: 'auto' }}>
+              <Table
+                size="small"
+                dataSource={debugData.schedules || []}
+                rowKey="id"
+                pagination={false}
+                columns={[
+                  { title: 'ID', dataIndex: 'id', width: 60 },
+                  { title: 'Equipment', dataIndex: 'equipment_name', width: 150 },
+                  { title: 'Berth', dataIndex: 'berth', width: 80 },
+                  {
+                    title: 'Day',
+                    dataIndex: 'day_of_week',
+                    width: 100,
+                    render: (d: number) =>
+                      ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d] || d,
+                  },
+                  {
+                    title: 'Shift',
+                    dataIndex: 'shift',
+                    width: 100,
+                    render: (shift: string) => (
+                      <Tag color={shift === 'day' ? 'gold' : shift === 'night' ? 'purple' : 'red'}>
+                        {shift}
+                      </Tag>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          </div>
         )}
       </Modal>
     </div>
