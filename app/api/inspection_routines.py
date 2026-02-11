@@ -295,6 +295,7 @@ def upload_schedule():
     created = 0
     equipment_processed = 0
     errors = []
+    import_details = []  # Track what was imported for debugging
 
     for row_num, row in enumerate(rows[1:], start=2):
         equipment_name = str(row[0]).strip() if row and row[0] else None
@@ -319,6 +320,14 @@ def upload_schedule():
         # Delete existing schedules for this equipment
         InspectionSchedule.query.filter_by(equipment_id=equipment.id).delete()
         equipment_processed += 1
+
+        # Track this equipment's schedule
+        equipment_detail = {
+            'equipment_name': equipment_name,
+            'berth': row_berth,
+            'shifts_created': {'day': 0, 'night': 0},
+            'cell_values': []
+        }
 
         # Parse each day column
         for col_idx, day_int in day_columns.items():
@@ -350,6 +359,15 @@ def upload_schedule():
                 )
                 continue
 
+            # Track what we're creating
+            day_name = header[col_idx] if col_idx < len(header) else f"Day{day_int}"
+            equipment_detail['cell_values'].append({
+                'day': day_name,
+                'raw_value': str(raw_value),
+                'processed_value': cell_value,
+                'shifts': shifts_to_create
+            })
+
             for shift in shifts_to_create:
                 schedule = InspectionSchedule(
                     equipment_id=equipment.id,
@@ -360,6 +378,10 @@ def upload_schedule():
                 )
                 db.session.add(schedule)
                 created += 1
+                equipment_detail['shifts_created'][shift] += 1
+
+        # Add equipment detail to import details
+        import_details.append(equipment_detail)
 
     if created > 0:
         safe_commit()
@@ -379,6 +401,7 @@ def upload_schedule():
             'night_shifts': night_count,
             'total_active': day_count + night_count,
         },
+        'import_details': import_details,  # Detailed breakdown for debugging
     }), 201
 
 
