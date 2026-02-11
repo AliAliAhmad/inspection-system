@@ -5,6 +5,7 @@ import LoginPage from './pages/auth/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import AiAssistantChat from './components/AiAssistantChat';
 import OfflineBanner from './components/OfflineBanner';
+import CommandPalette from './components/CommandPalette';
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -26,6 +27,7 @@ export default function App() {
       <OfflineBanner />
       <AppRouter />
       <AiAssistantChat />
+      <CommandPalette />
     </ErrorBoundary>
   );
 }

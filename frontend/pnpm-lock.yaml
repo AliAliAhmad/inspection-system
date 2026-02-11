@@ -98,6 +98,9 @@ importers:
       react-native-gesture-handler:
         specifier: ~2.20.0
         version: 2.20.2(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1)
+      react-native-paper:
+        specifier: ^5.15.0
+        version: 5.15.0(react-native-safe-area-context@4.12.0(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1)
       react-native-safe-area-context:
         specifier: 4.12.0
         version: 4.12.0(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1)
@@ -171,6 +174,9 @@ importers:
       react-router-dom:
         specifier: ^6.28.0
         version: 6.30.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      recharts:
+        specifier: ^3.7.0
+        version: 3.7.0(@types/react@18.3.27)(react-dom@18.3.1(react@18.3.1))(react-is@18.3.1)(react@18.3.1)(redux@5.0.1)
     devDependencies:
       '@playwright/test':
         specifier: ^1.58.0
@@ -1083,6 +1089,11 @@ packages:
 
   '@bang88/react-native-ultimate-listview@4.1.1':
     resolution: {integrity: sha512-3/87AwY8YA7pvTCDHdh8JbiDXF7iQXdmNwIHC5N2CWGbhyVeBrqzft3G3cIVQWMn504JaNAUkW9oYV5DpUn6Lw==}
+
+  '@callstack/react-theme-provider@3.0.9':
+    resolution: {integrity: sha512-tTQ0uDSCL0ypeMa8T/E9wAZRGKWj8kXP7+6RYgPTfOPs9N07C9xM8P02GJ3feETap4Ux5S69D9nteq9mEj86NA==}
+    peerDependencies:
+      react: '>=16.3.0'
 
   '@csstools/color-helpers@5.1.0':
     resolution: {integrity: sha512-S11EXWJyy0Mz5SYvRmY8nJYTFFd1LCNV+7cXyAgQtOOuzb4EsgfqDufL+9esx72/eLhsRdGZwaldu/h+E4t4BA==}
@@ -2661,6 +2672,9 @@ packages:
   color-string@1.9.1:
     resolution: {integrity: sha512-shrVawQFojnZv6xM40anx4CkoDP+fZsw/ZerEMsW/pyzsRbElpsL/DBVW7q3ExxwusdNXI3lXpuhEZkzs8p5Eg==}
 
+  color@3.2.1:
+    resolution: {integrity: sha512-aBl7dZI9ENN6fUGC7mWpMTPNHmWUSNan9tuWN6ahh5ZLNk9baLJOnSMlrQkHcrfFgz2/RigjUVAjdx36VcemKA==}
+
   color@4.2.3:
     resolution: {integrity: sha512-1rXeuUUiGGrykh+CeBdu5Ie7OJwinCgQY0bc7GCRxy5xVHy+moaqkpL/jqQq0MtQOeYcrqEz4abc5f0KtU7W4A==}
     engines: {node: '>=12.5.0'}
@@ -2891,6 +2905,10 @@ packages:
   deep-extend@0.6.0:
     resolution: {integrity: sha512-LOHxIOaPYdHlJRtCQfDIVZtfw/ufM8+rVj649RIHzcm/vGwQRXFt6OPqIFWsm2XEMrNIEtWR64sY1LEKD2vAOA==}
     engines: {node: '>=4.0.0'}
+
+  deepmerge@3.3.0:
+    resolution: {integrity: sha512-GRQOafGHwMHpjPx9iCvTgpu9NojZ49q794EEL94JVEw6VaeA8XTUyBKvAkOOjBX9oJNiV6G3P+T+tihFjo2TqA==}
+    engines: {node: '>=0.10.0'}
 
   deepmerge@4.3.1:
     resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
@@ -5173,6 +5191,13 @@ packages:
     peerDependencies:
       react: '>16.0.0'
       react-native: '>0.50.0'
+
+  react-native-paper@5.15.0:
+    resolution: {integrity: sha512-I/1CQLfW9VM0Oo5I5dQI/hjgf1I6q2S1wwgzAdsv6whAQ3zO97GWHwtgNh9se9j8zBOJ86afPTQKxxUL0IJd9A==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+      react-native-safe-area-context: '*'
 
   react-native-reanimated@4.2.1:
     resolution: {integrity: sha512-/NcHnZMyOvsD/wYXug/YqSKw90P9edN0kEPL5lP4PFf1aQ4F1V7MKe/E0tvfkXKIajy3Qocp5EiEnlcrK/+BZg==}
@@ -7538,6 +7563,12 @@ snapshots:
 
   '@bang88/react-native-ultimate-listview@4.1.1': {}
 
+  '@callstack/react-theme-provider@3.0.9(react@18.3.1)':
+    dependencies:
+      deepmerge: 3.3.0
+      hoist-non-react-statics: 3.3.2
+      react: 18.3.1
+
   '@csstools/color-helpers@5.1.0': {}
 
   '@csstools/css-calc@2.1.4(@csstools/css-parser-algorithms@3.0.5(@csstools/css-tokenizer@3.0.4))(@csstools/css-tokenizer@3.0.4)':
@@ -9435,6 +9466,11 @@ snapshots:
       color-name: 1.1.4
       simple-swizzle: 0.2.4
 
+  color@3.2.1:
+    dependencies:
+      color-convert: 1.9.3
+      color-string: 1.9.1
+
   color@4.2.3:
     dependencies:
       color-convert: 2.0.1
@@ -9657,6 +9693,8 @@ snapshots:
       mimic-response: 3.1.0
 
   deep-extend@0.6.0: {}
+
+  deepmerge@3.3.0: {}
 
   deepmerge@4.3.1: {}
 
@@ -12295,6 +12333,15 @@ snapshots:
       prop-types: 15.8.1
       react: 18.3.1
       react-native: 0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1)
+
+  react-native-paper@5.15.0(react-native-safe-area-context@4.12.0(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1):
+    dependencies:
+      '@callstack/react-theme-provider': 3.0.9(react@18.3.1)
+      color: 3.2.1
+      react: 18.3.1
+      react-native: 0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1)
+      react-native-safe-area-context: 4.12.0(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1)
+      use-latest-callback: 0.2.6(react@18.3.1)
 
   react-native-reanimated@4.2.1(react-native-worklets@0.7.2(@babel/core@7.28.6)(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1))(react-native@0.76.9(@babel/core@7.28.6)(@babel/preset-env@7.28.6(@babel/core@7.28.6))(@types/react@18.3.27)(react@18.3.1))(react@18.3.1):
     dependencies:

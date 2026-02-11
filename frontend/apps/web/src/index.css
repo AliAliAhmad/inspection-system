@@ -6,6 +6,37 @@ html, body, #root {
   padding: 0;
 }
 
+/* Smooth transitions for theme switching */
+body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark mode overrides for ProLayout and custom elements */
+body.dark-mode {
+  background-color: #141414;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+body.dark-mode .ant-pro-layout-bg-list {
+  background-color: #1f1f1f !important;
+}
+
+body.dark-mode .ant-pro-sider {
+  background-color: #1f1f1f !important;
+}
+
+body.dark-mode .ant-pro-global-header {
+  background-color: #1f1f1f !important;
+}
+
+body.dark-mode .inactive-row {
+  background-color: #2a2a2a !important;
+}
+
+body.dark-mode .inactive-row:hover {
+  background-color: #333 !important;
+}
+
 /* RTL support */
 html[dir='rtl'] {
   direction: rtl;
@@ -20,4 +51,32 @@ html[dir='rtl'] {
 
 .inactive-row:hover {
   background-color: #ebebeb !important;
+}
+
+/* Status badge colors */
+.status-active { color: #52c41a; }
+.status-inactive { color: #ff4d4f; }
+.status-pending { color: #faad14; }
+.status-processing { color: #1890ff; }
+.status-completed { color: #52c41a; }
+.status-overdue { color: #ff4d4f; }
+
+/* Card hover effects */
+.hover-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Smooth page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
