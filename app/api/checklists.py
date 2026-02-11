@@ -423,20 +423,42 @@ def import_checklist():
         from app.services.translation_service import TranslationService
         name_ar = TranslationService.translate_to_arabic(template_name)
 
-        # Create template
-        template = ChecklistTemplate(
-            name=template_name,
-            name_ar=name_ar,
-            description=f"Checklist for {equipment_type} with assemblies: {', '.join(assemblies)}",
-            function=equipment_type,
-            assembly=', '.join(assemblies),  # Store all assemblies comma-separated at template level
-            equipment_type=equipment_type.lower().replace(' ', '_'),
-            version=version,
-            is_active=True,
-            created_by_id=int(current_user_id)
-        )
-        db.session.add(template)
-        db.session.flush()
+        # Check if template with same equipment_type and version already exists
+        equipment_type_key = equipment_type.lower().replace(' ', '_')
+        existing_template = ChecklistTemplate.query.filter_by(
+            equipment_type=equipment_type_key,
+            version=version
+        ).first()
+
+        if existing_template:
+            # Update existing template
+            template = existing_template
+            template.name = template_name
+            template.name_ar = name_ar
+            template.description = f"Checklist for {equipment_type} with assemblies: {', '.join(assemblies)}"
+            template.function = equipment_type
+            template.assembly = ', '.join(assemblies)
+            template.is_active = True
+            template.updated_at = datetime.now()
+
+            # Delete old items to replace with new ones
+            ChecklistItem.query.filter_by(template_id=template.id).delete()
+            db.session.flush()
+        else:
+            # Create new template
+            template = ChecklistTemplate(
+                name=template_name,
+                name_ar=name_ar,
+                description=f"Checklist for {equipment_type} with assemblies: {', '.join(assemblies)}",
+                function=equipment_type,
+                assembly=', '.join(assemblies),
+                equipment_type=equipment_type_key,
+                version=version,
+                is_active=True,
+                created_by_id=int(current_user_id)
+            )
+            db.session.add(template)
+            db.session.flush()
 
         items_created = 0
         assembly_counters = {}  # Track item numbers per assembly
@@ -560,12 +582,14 @@ def import_checklist():
 
         safe_commit()
 
+        action = "updated" if existing_template else "imported"
         return jsonify({
             'status': 'success',
-            'message': f'Template "{template_name}" imported with {items_created} items across {len(assemblies)} assemblies',
+            'message': f'Template "{template_name}" {action} with {items_created} items across {len(assemblies)} assemblies',
             'template': template.to_dict(include_items=True, language=get_language()),
             'items_count': items_created,
-            'assemblies': assemblies
+            'assemblies': assemblies,
+            'action': action
         }), 201
 
     except ValidationError:
