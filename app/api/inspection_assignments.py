@@ -1424,10 +1424,11 @@ def clear_all_assignments():
     Admin only. Use with caution!
     """
     from app.models import InspectionAssignment
-    
+    from app.extensions import safe_commit
+
     deleted_count = InspectionAssignment.query.delete()
     safe_commit()
-    
+
     return jsonify({
         'status': 'success',
         'message': f'Deleted {deleted_count} inspection assignments',

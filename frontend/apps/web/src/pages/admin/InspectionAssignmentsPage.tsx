@@ -25,6 +25,7 @@ import {
   Tabs,
   List,
   Divider,
+  Empty,
 } from 'antd';
 import {
   PlusOutlined,
@@ -364,65 +365,230 @@ function ScheduledEquipmentPreview({ form, selectedEquipmentIds, onSelectChange 
   }
 
   return (
-    <div style={{ marginTop: 16 }}>
-      <Divider orientation="left">
+    <Card
+      size="small"
+      title={
         <Space>
           <AppstoreOutlined />
           {t('assignments.scheduledEquipment', 'Scheduled Equipment')}
           <Badge count={selectedEquipmentIds.length} style={{ backgroundColor: '#52c41a' }} />
           <Text type="secondary">/ {equipment.length}</Text>
         </Space>
-      </Divider>
-
-      <Alert
-        type="success"
-        message={t('assignments.equipmentFound', `Found ${equipment.length} equipment in inspection schedule`)}
-        description={t(
-          'assignments.selectEquipmentDesc',
-          'Select which equipment to include in the inspection list. All equipment are selected by default.'
-        )}
-        icon={<CheckCircleOutlined />}
-        style={{ marginBottom: 16 }}
-      />
-
-      <Space direction="vertical" style={{ width: '100%' }}>
+      }
+      extra={
         <Space>
           <Button
             size="small"
+            type="link"
             onClick={() => onSelectChange(equipment.map((eq: any) => eq.id))}
           >
-            {t('common.selectAll', 'Select All')}
+            Select All
           </Button>
           <Button
             size="small"
+            type="link"
+            danger
             onClick={() => onSelectChange([])}
           >
-            {t('common.deselectAll', 'Deselect All')}
+            Deselect All
           </Button>
         </Space>
+      }
+    >
+      <Alert
+        type="success"
+        message={`Found ${equipment.length} equipment`}
+        description="Select which equipment to include in the inspection list. All are selected by default."
+        icon={<CheckCircleOutlined />}
+        style={{ marginBottom: 16 }}
+        showIcon
+      />
 
+      <div style={{ maxHeight: 400, overflowY: 'auto' }}>
         <Checkbox.Group
           value={selectedEquipmentIds}
           onChange={onSelectChange as any}
           style={{ width: '100%' }}
         >
-          <Row gutter={[8, 8]}>
+          <Space direction="vertical" style={{ width: '100%' }} size={8}>
             {equipment.map((eq: any) => (
-              <Col span={12} key={eq.id}>
+              <Card
+                key={eq.id}
+                size="small"
+                hoverable
+                style={{
+                  borderLeft: selectedEquipmentIds.includes(eq.id) ? '3px solid #52c41a' : '3px solid #d9d9d9',
+                }}
+              >
                 <Checkbox value={eq.id} style={{ width: '100%' }}>
                   <Space>
-                    <Tag color="blue">{eq.serial_number}</Tag>
-                    <Text>{eq.name}</Text>
+                    <Tag color="blue">{eq.serial_number || eq.name}</Tag>
+                    <Text strong>{eq.name}</Text>
+                    {eq.equipment_type && (
+                      <Tag color="cyan">{eq.equipment_type}</Tag>
+                    )}
                     {eq.berth && (
                       <Tag color="geekblue">{eq.berth}</Tag>
                     )}
                   </Space>
                 </Checkbox>
-              </Col>
+              </Card>
             ))}
-          </Row>
+          </Space>
         </Checkbox.Group>
-      </Space>
+      </div>
+    </Card>
+  );
+}
+
+// Preview Panel Component for Generate Modal
+interface GeneratePreviewPanelProps {
+  form: any;
+}
+
+function GeneratePreviewPanel({ form }: GeneratePreviewPanelProps) {
+  const { t } = useTranslation();
+
+  // Watch form values
+  const targetDate = Form.useWatch('target_date', form);
+  const shift = Form.useWatch('shift', form);
+
+  // Calculate day of week
+  const dayInfo = useMemo(() => {
+    if (!targetDate) return null;
+    const day = dayjs(targetDate);
+    return {
+      dayName: day.format('dddd'),
+      dayShort: day.format('ddd'),
+      date: day.format('DD MMM YYYY'),
+      dayOfWeek: day.day() === 0 ? 6 : day.day() - 1, // Convert to 0=Monday
+    };
+  }, [targetDate]);
+
+  const shiftConfig = useMemo(() => {
+    if (shift === 'day') {
+      return {
+        icon: <SunOutlined style={{ fontSize: 32, color: '#faad14' }} />,
+        label: 'Day Shift',
+        color: '#faad14',
+        time: '06:00 - 18:00',
+      };
+    } else if (shift === 'night') {
+      return {
+        icon: <MoonOutlined style={{ fontSize: 32, color: '#722ed1' }} />,
+        label: 'Night Shift',
+        color: '#722ed1',
+        time: '18:00 - 06:00',
+      };
+    }
+    return null;
+  }, [shift]);
+
+  return (
+    <div>
+      <Card size="small" title="📊 Generation Summary" style={{ marginBottom: 16 }}>
+        {!targetDate || !shift ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <Text type="secondary">Select date and shift to see preview</Text>
+            }
+            style={{ padding: 20 }}
+          />
+        ) : (
+          <Space direction="vertical" style={{ width: '100%' }} size={16}>
+            {/* Date Card */}
+            <Card
+              size="small"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+              }}
+            >
+              <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
+                  Target Date
+                </Text>
+                <Title level={4} style={{ color: '#fff', margin: 0 }}>
+                  {dayInfo?.dayName}
+                </Title>
+                <Text style={{ color: '#fff', fontSize: 16 }}>
+                  {dayInfo?.date}
+                </Text>
+              </Space>
+            </Card>
+
+            {/* Shift Card */}
+            <Card
+              size="small"
+              style={{
+                background: `linear-gradient(135deg, ${shiftConfig?.color}22 0%, ${shiftConfig?.color}44 100%)`,
+                border: `2px solid ${shiftConfig?.color}`,
+              }}
+            >
+              <Space direction="vertical" style={{ width: '100%' }} align="center" size={8}>
+                {shiftConfig?.icon}
+                <Title level={4} style={{ margin: 0, color: shiftConfig?.color }}>
+                  {shiftConfig?.label}
+                </Title>
+                <Text type="secondary">{shiftConfig?.time}</Text>
+              </Space>
+            </Card>
+
+            {/* Info Cards */}
+            <Row gutter={8}>
+              <Col span={12}>
+                <Card size="small" bodyStyle={{ padding: 12 }}>
+                  <Statistic
+                    title="Equipment"
+                    value={0}
+                    prefix={<AppstoreOutlined />}
+                    valueStyle={{ fontSize: 20 }}
+                  />
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card size="small" bodyStyle={{ padding: 12 }}>
+                  <Statistic
+                    title="Inspectors"
+                    value="TBD"
+                    prefix={<TeamOutlined />}
+                    valueStyle={{ fontSize: 20 }}
+                  />
+                </Card>
+              </Col>
+            </Row>
+
+            <Alert
+              type="info"
+              message="Ready to Generate"
+              description="Click OK to create inspection assignments for the selected date and shift."
+              icon={<CheckCircleOutlined />}
+              showIcon
+            />
+          </Space>
+        )}
+      </Card>
+
+      <Card size="small" title="ℹ️ Important Notes">
+        <List size="small">
+          <List.Item>
+            <Text type="secondary">
+              • Equipment will be assigned from the imported inspection schedule
+            </Text>
+          </List.Item>
+          <List.Item>
+            <Text type="secondary">
+              • Assignments will be created in 'unassigned' status
+            </Text>
+          </List.Item>
+          <List.Item>
+            <Text type="secondary">
+              • You can assign inspectors after generation
+            </Text>
+          </List.Item>
+        </List>
+      </Card>
     </div>
   );
 }
@@ -1209,7 +1375,7 @@ export default function InspectionAssignmentsPage() {
       </Card>
       )}
 
-      {/* Generate List Modal - Enhanced with Equipment Preview */}
+      {/* Generate List Modal - Enhanced Interactive Version */}
       <Modal
         title={
           <Space>
@@ -1226,58 +1392,73 @@ export default function InspectionAssignmentsPage() {
         onOk={() => generateForm.submit()}
         confirmLoading={generateMutation.isPending}
         destroyOnClose
-        width={800}
+        width={1000}
       >
-        <Form
-          form={generateForm}
-          layout="vertical"
-          onFinish={(values: any) =>
-            generateMutation.mutate({
-              target_date: values.target_date.format('YYYY-MM-DD'),
-              shift: values.shift,
-            })
-          }
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="target_date"
-                label={t('assignments.targetDate', 'Target Date')}
-                rules={[{ required: true, message: 'Please select a date' }]}
-              >
-                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="shift"
-                label={t('assignments.shift', 'Shift')}
-                rules={[{ required: true, message: 'Please select a shift' }]}
-              >
-                <Select placeholder="Select shift">
-                  <Select.Option value="day">
-                    <Space>
-                      <SunOutlined style={{ color: '#faad14' }} />
-                      {t('common.day', 'Day')}
-                    </Space>
-                  </Select.Option>
-                  <Select.Option value="night">
-                    <Space>
-                      <MoonOutlined style={{ color: '#722ed1' }} />
-                      {t('common.night', 'Night')}
-                    </Space>
-                  </Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
+        <Row gutter={24}>
+          <Col xs={24} lg={14}>
+            <Form
+              form={generateForm}
+              layout="vertical"
+              onFinish={(values: any) =>
+                generateMutation.mutate({
+                  target_date: values.target_date.format('YYYY-MM-DD'),
+                  shift: values.shift,
+                })
+              }
+            >
+              <Card size="small" title="📅 Date & Shift Selection" style={{ marginBottom: 16 }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      name="target_date"
+                      label={t('assignments.targetDate', 'Target Date')}
+                      rules={[{ required: true, message: 'Please select a date' }]}
+                    >
+                      <DatePicker
+                        style={{ width: '100%' }}
+                        format="DD/MM/YYYY"
+                        size="large"
+                        placeholder="Select date"
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item
+                      name="shift"
+                      label={t('assignments.shift', 'Shift')}
+                      rules={[{ required: true, message: 'Please select a shift' }]}
+                    >
+                      <Select placeholder="Select shift" size="large">
+                        <Select.Option value="day">
+                          <Space>
+                            <SunOutlined style={{ color: '#faad14', fontSize: 16 }} />
+                            <span style={{ fontWeight: 500 }}>{t('common.day', 'Day Shift')}</span>
+                          </Space>
+                        </Select.Option>
+                        <Select.Option value="night">
+                          <Space>
+                            <MoonOutlined style={{ color: '#722ed1', fontSize: 16 }} />
+                            <span style={{ fontWeight: 500 }}>{t('common.night', 'Night Shift')}</span>
+                          </Space>
+                        </Select.Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Card>
 
-          <ScheduledEquipmentPreview
-            form={generateForm}
-            selectedEquipmentIds={selectedEquipmentIds}
-            onSelectChange={setSelectedEquipmentIds}
-          />
-        </Form>
+              <ScheduledEquipmentPreview
+                form={generateForm}
+                selectedEquipmentIds={selectedEquipmentIds}
+                onSelectChange={setSelectedEquipmentIds}
+              />
+            </Form>
+          </Col>
+
+          <Col xs={24} lg={10}>
+            <GeneratePreviewPanel form={generateForm} />
+          </Col>
+        </Row>
       </Modal>
 
       {/* Assign Team Modal */}
