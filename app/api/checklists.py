@@ -97,6 +97,28 @@ def create_template():
     }), 201
 
 
+@bp.route('/<int:template_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required()
+def delete_template(template_id):
+    """
+    Delete a checklist template. Admin only.
+    Sets is_active to False (soft delete).
+    """
+    template = db.session.get(ChecklistTemplate, template_id)
+    if not template:
+        raise NotFoundError(f"Template with ID {template_id} not found")
+
+    # Soft delete - set is_active to False
+    template.is_active = False
+    safe_commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Template "{template.name}" has been deleted'
+    }), 200
+
+
 @bp.route('/<int:template_id>/items', methods=['POST'])
 @jwt_required()
 @admin_required()

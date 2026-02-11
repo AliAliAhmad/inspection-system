@@ -140,6 +140,12 @@ export const checklistsApi = {
     );
   },
 
+  deleteTemplate(templateId: number) {
+    return getApiClient().delete<ApiResponse>(
+      `/api/checklists/${templateId}`,
+    );
+  },
+
   downloadTemplate() {
     return getApiClient().get('/api/checklists/download-template', {
       responseType: 'blob',

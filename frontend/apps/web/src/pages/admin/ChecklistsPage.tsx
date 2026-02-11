@@ -268,6 +268,15 @@ export default function ChecklistsPage() {
     onError: () => message.error(t('checklists.itemDeleteError', 'Failed to delete item')),
   });
 
+  const deleteTemplateMutation = useMutation({
+    mutationFn: (templateId: number) => checklistsApi.deleteTemplate(templateId),
+    onSuccess: () => {
+      message.success(t('checklists.templateDeleted', 'Template deleted successfully'));
+      queryClient.invalidateQueries({ queryKey: ['checklists'] });
+    },
+    onError: () => message.error(t('checklists.templateDeleteError', 'Failed to delete template')),
+  });
+
   const cloneMutation = useMutation({
     mutationFn: ({ templateId, options }: { templateId: number; options?: { name?: string; equipment_type?: string } }) =>
       checklistsApi.cloneTemplate(templateId, options),
@@ -518,6 +527,17 @@ export default function ChecklistsPage() {
               onClick={() => setReorderModeTemplate(record)}
             />
           </Tooltip>
+          <Popconfirm
+            title={t('checklists.deleteConfirm', 'Delete this checklist template?')}
+            description={t('checklists.deleteWarning', 'This will deactivate the template. Existing inspections will not be affected.')}
+            onConfirm={() => deleteTemplateMutation.mutate(record.id)}
+            okText={t('common.yes', 'Yes')}
+            cancelText={t('common.no', 'No')}
+          >
+            <Tooltip title="Delete">
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            </Tooltip>
+          </Popconfirm>
         </Space>
       ),
     },
