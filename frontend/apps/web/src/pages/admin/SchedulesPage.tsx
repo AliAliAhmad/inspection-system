@@ -140,19 +140,19 @@ export default function SchedulesPage() {
 
   const downloadTemplate = () => {
     const csvContent = `Equipment,Berth,Mon,Tue,Wed,Thu,Fri,Sat,Sun
-Crane-01,B1,D,D,D,D,D,,
-Crane-02,B1,N,N,N,N,N,,
-Forklift-01,B2,D,D,D,D,D,,
-Loader-01,B3,D+N,D+N,D+N,D+N,D+N,D,
+Crane-01,East,D,D,D,D,D,,
+Crane-02,East,N,N,N,N,N,,
+Forklift-01,West,D,D,D,D,D,,
+Loader-01,West,D+N,D+N,D+N,D+N,D+N,D,
 
 Instructions:
 - Column A: Equipment name (must match exactly with equipment in system)
-- Column B: Berth (required, e.g. B1, B2, B3)
+- Column B: Berth (required, e.g. East, West)
 - Columns C-I: Days of week (Mon, Tue, Wed, Thu, Fri, Sat, Sun)
 - Cell values:
-  D or 1 = Day shift
-  N or 2 = Night shift
-  D+N or 3 = Both shifts
+  D or 1 or DAY = Day shift
+  N or 2 or NIGHT = Night shift
+  D+N or 3 or BOTH = Both shifts
   Empty = No inspection
 `;
 
@@ -623,7 +623,7 @@ Instructions:
                 <p><strong>Columns:</strong></p>
                 <ul style={{ marginBottom: 16 }}>
                   <li><strong>Column A:</strong> Equipment name (must match exactly with equipment in system)</li>
-                  <li><strong>Column B:</strong> Berth (required, e.g., B1, B2, B3)</li>
+                  <li><strong>Column B:</strong> Berth (required, e.g., East, West)</li>
                   <li><strong>Columns C-I:</strong> Days of week (Mon, Tue, Wed, Thu, Fri, Sat, Sun)</li>
                 </ul>
                 <p><strong>Cell Values (Day Columns):</strong></p>
@@ -664,7 +664,7 @@ Instructions:
               <tbody>
                 <tr>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Crane-01</td>
-                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>B1</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>East</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#fff7e6' }}>D</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#fff7e6' }}>D</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#fff7e6' }}>D</td>
@@ -675,7 +675,7 @@ Instructions:
                 </tr>
                 <tr>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Crane-02</td>
-                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>B1</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>East</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#f9f0ff' }}>N</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#f9f0ff' }}>N</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#f9f0ff' }}>N</td>
@@ -686,7 +686,7 @@ Instructions:
                 </tr>
                 <tr>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Forklift-01</td>
-                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>B2</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>West</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D+N</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D+N</td>
                   <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D+N</td>
