@@ -98,10 +98,28 @@ class InspectionService:
                 raise NotFoundError(f"Checklist template with ID {template_id} not found")
         else:
             # Fallback 1: look up by equipment type on ChecklistTemplate
+            # Support comma-separated equipment types (e.g., "pump,compressor,motor" or "rs,ech,tt")
+            # First try exact match
             template = ChecklistTemplate.query.filter_by(
                 equipment_type=equipment.equipment_type,
                 is_active=True
             ).first()
+
+            # If no exact match, search for templates where the equipment type
+            # is contained in a comma-separated list
+            if not template:
+                all_templates = ChecklistTemplate.query.filter_by(is_active=True).all()
+                # Normalize equipment type for comparison (lowercase, replace spaces with underscores)
+                normalized_eq_type = equipment.equipment_type.lower().replace(' ', '_')
+
+                for t in all_templates:
+                    if t.equipment_type and ',' in t.equipment_type:
+                        # Split comma-separated types and check if equipment's type is in the list
+                        # Each type in the template is already normalized during import
+                        types = [typ.strip() for typ in t.equipment_type.split(',')]
+                        if normalized_eq_type in types:
+                            template = t
+                            break
 
             # Fallback 2: look up via InspectionRoutine that covers this equipment type
             if not template:

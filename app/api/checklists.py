@@ -405,6 +405,7 @@ def import_checklist():
             raise ValidationError(f"Missing required columns: {', '.join(missing_cols)}")
 
         # Get equipment type from first row
+        # Supports comma-separated values: "pump,compressor,motor" or "RS,ECH,TT"
         equipment_type = None
         for _, row in df.iterrows():
             et = row.get('Equipment Type')
@@ -423,8 +424,13 @@ def import_checklist():
         from app.services.translation_service import TranslationService
         name_ar = TranslationService.translate_to_arabic(template_name)
 
-        # Check if template with same equipment_type and version already exists
-        equipment_type_key = equipment_type.lower().replace(' ', '_')
+        # Normalize equipment_type: if comma-separated, clean up spaces and lowercase
+        # Example: "RS, ECH, TT" becomes "rs,ech,tt"
+        if ',' in equipment_type:
+            types_list = [t.strip().lower().replace(' ', '_') for t in equipment_type.split(',')]
+            equipment_type_key = ','.join(types_list)
+        else:
+            equipment_type_key = equipment_type.lower().replace(' ', '_')
         existing_template = ChecklistTemplate.query.filter_by(
             equipment_type=equipment_type_key,
             version=version

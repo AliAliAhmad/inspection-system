@@ -199,10 +199,12 @@ def work_plan_stats():
     completed_jobs = 0
     in_progress_jobs = 0
     for job in all_jobs:
-        if job.tracking:
-            if job.tracking.status == 'completed':
+        if job.tracking and len(job.tracking) > 0:
+            # job.tracking is a list, get the first (latest) tracking record
+            latest_tracking = job.tracking[0]
+            if latest_tracking.status == 'completed':
                 completed_jobs += 1
-            elif job.tracking.status in ['in_progress', 'paused']:
+            elif latest_tracking.status in ['in_progress', 'paused']:
                 in_progress_jobs += 1
 
     # Count overdue and critical jobs
