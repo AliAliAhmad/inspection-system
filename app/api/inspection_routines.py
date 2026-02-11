@@ -322,22 +322,31 @@ def upload_schedule():
 
         # Parse each day column
         for col_idx, day_int in day_columns.items():
-            cell_value = str(row[col_idx]).strip().upper() if col_idx < len(row) and row[col_idx] else ''
+            # Handle different cell value types (string, number, boolean, None)
+            raw_value = row[col_idx] if col_idx < len(row) else None
+            if raw_value is None or raw_value == '':
+                continue
 
-            if not cell_value:
+            # Convert to string and normalize
+            cell_value = str(raw_value).strip().upper()
+
+            if not cell_value or cell_value == 'NONE':
                 continue
 
             shifts_to_create = []
-            if cell_value in ('D', 'DAY'):
+            # Day shift variations
+            if cell_value in ('D', 'DAY', '1', 'TRUE', 'YES', 'Y'):
                 shifts_to_create = ['day']
-            elif cell_value in ('N', 'NIGHT'):
+            # Night shift variations
+            elif cell_value in ('N', 'NIGHT', '2', 'FALSE', 'NO'):
                 shifts_to_create = ['night']
-            elif cell_value in ('D+N', 'DN', 'D/N', 'BOTH', 'DAY+NIGHT'):
+            # Both shifts variations
+            elif cell_value in ('D+N', 'DN', 'D/N', 'BOTH', 'DAY+NIGHT', '3', 'B'):
                 shifts_to_create = ['day', 'night']
             else:
                 errors.append(
                     f"Row {row_num}, {header[col_idx]}: unknown value '{cell_value}' "
-                    f"(expected D, N, or D+N)"
+                    f"(expected D, N, D+N, or 1, 2, 3)"
                 )
                 continue
 
@@ -355,12 +364,21 @@ def upload_schedule():
     if created > 0:
         safe_commit()
 
+    # Count shifts for debugging
+    day_count = InspectionSchedule.query.filter_by(shift='day', is_active=True).count()
+    night_count = InspectionSchedule.query.filter_by(shift='night', is_active=True).count()
+
     return jsonify({
         'status': 'success',
         'message': f'{created} schedule entries created for {equipment_processed} equipment',
         'created': created,
         'equipment_processed': equipment_processed,
         'errors': errors,
+        'summary': {
+            'day_shifts': day_count,
+            'night_shifts': night_count,
+            'total_active': day_count + night_count,
+        },
     }), 201
 
 
