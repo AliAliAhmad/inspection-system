@@ -28,9 +28,10 @@ def get_inspection_stats():
     Get comprehensive inspection statistics for dashboard.
     Returns counts by status, pass/fail rates, trends, and performance metrics.
     """
-    today = date.today()
-    week_ago = today - timedelta(days=7)
-    month_ago = today - timedelta(days=30)
+    try:
+        today = date.today()
+        week_ago = today - timedelta(days=7)
+        month_ago = today - timedelta(days=30)
 
     # Overall counts
     total = Inspection.query.count()
@@ -196,6 +197,14 @@ def get_inspection_stats():
             }
         }
     }), 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to get inspection stats',
+            'error': str(e)
+        }), 500
 
 
 # ============================================
