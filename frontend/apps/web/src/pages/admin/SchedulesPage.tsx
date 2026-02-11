@@ -14,7 +14,7 @@ import {
   Tabs,
   Space,
 } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
+import { UploadOutlined, DownloadOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
@@ -66,6 +66,7 @@ export default function SchedulesPage() {
   } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('1');
   const [debugData, setDebugData] = useState<any>(null);
+  const [showFormatHelp, setShowFormatHelp] = useState(false);
 
   // Equipment schedule grid
   const { data: schedules, isLoading: schedulesLoading } = useQuery({
@@ -136,6 +137,36 @@ export default function SchedulesPage() {
     },
     onError: () => message.error('Failed to clear schedules'),
   });
+
+  const downloadTemplate = () => {
+    const csvContent = `Equipment,Berth,Mon,Tue,Wed,Thu,Fri,Sat,Sun
+Crane-01,B1,D,D,D,D,D,,
+Crane-02,B1,N,N,N,N,N,,
+Forklift-01,B2,D,D,D,D,D,,
+Loader-01,B3,D+N,D+N,D+N,D+N,D+N,D,
+
+Instructions:
+- Column A: Equipment name (must match exactly with equipment in system)
+- Column B: Berth (required, e.g. B1, B2, B3)
+- Columns C-I: Days of week (Mon, Tue, Wed, Thu, Fri, Sat, Sun)
+- Cell values:
+  D or 1 = Day shift
+  N or 2 = Night shift
+  D+N or 3 = Both shifts
+  Empty = No inspection
+`;
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'schedule-template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    message.success('Template downloaded! Open in Excel and save as .xlsx');
+  };
 
   const scheduleColumns: ColumnsType<EquipmentSchedule> = [
     {
@@ -354,6 +385,18 @@ export default function SchedulesPage() {
                   <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
                     <Space>
                       <Button
+                        icon={<DownloadOutlined />}
+                        onClick={downloadTemplate}
+                      >
+                        Download Template
+                      </Button>
+                      <Button
+                        icon={<InfoCircleOutlined />}
+                        onClick={() => setShowFormatHelp(true)}
+                      >
+                        Import Format
+                      </Button>
+                      <Button
                         onClick={() => debugMutation.mutate()}
                         loading={debugMutation.isPending}
                       >
@@ -560,6 +603,116 @@ export default function SchedulesPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Format Help Modal */}
+      <Modal
+        title="📋 Schedule Import Format"
+        open={showFormatHelp}
+        onCancel={() => setShowFormatHelp(false)}
+        onOk={() => setShowFormatHelp(false)}
+        width={700}
+        cancelButtonProps={{ style: { display: 'none' } }}
+      >
+        <div style={{ fontSize: '14px' }}>
+          <Alert
+            type="info"
+            message="Excel Format Requirements"
+            description={
+              <div style={{ marginTop: 8 }}>
+                <p><strong>Columns:</strong></p>
+                <ul style={{ marginBottom: 16 }}>
+                  <li><strong>Column A:</strong> Equipment name (must match exactly with equipment in system)</li>
+                  <li><strong>Column B:</strong> Berth (required, e.g., B1, B2, B3)</li>
+                  <li><strong>Columns C-I:</strong> Days of week (Mon, Tue, Wed, Thu, Fri, Sat, Sun)</li>
+                </ul>
+                <p><strong>Cell Values (Day Columns):</strong></p>
+                <ul>
+                  <li><Tag color="gold">D</Tag> or <Tag>1</Tag> = Day shift only</li>
+                  <li><Tag color="purple">N</Tag> or <Tag>2</Tag> = Night shift only</li>
+                  <li><Tag color="blue">D+N</Tag> or <Tag>3</Tag> = Both day and night shifts</li>
+                  <li><Tag color="default">Empty</Tag> = No inspection scheduled</li>
+                </ul>
+              </div>
+            }
+            style={{ marginBottom: 16 }}
+          />
+
+          <div style={{
+            border: '1px solid #d9d9d9',
+            borderRadius: 4,
+            padding: 12,
+            backgroundColor: '#fafafa',
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            overflow: 'auto'
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#e6f7ff' }}>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Equipment</th>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Berth</th>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Mon</th>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Tue</th>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Wed</th>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Thu</th>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Fri</th>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Sat</th>
+                  <th style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Sun</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Crane-01</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>B1</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#fff7e6' }}>D</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#fff7e6' }}>D</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#fff7e6' }}>D</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#fff7e6' }}>D</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#fff7e6' }}>D</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}></td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}></td>
+                </tr>
+                <tr>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Crane-02</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>B1</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#f9f0ff' }}>N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#f9f0ff' }}>N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#f9f0ff' }}>N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#f9f0ff' }}>N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#f9f0ff' }}>N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}></td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}></td>
+                </tr>
+                <tr>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>Forklift-01</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}>B2</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D+N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D+N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D+N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D+N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D+N</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px', backgroundColor: '#e6f7ff' }}>D</td>
+                  <td style={{ border: '1px solid #d9d9d9', padding: '4px 8px' }}></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <Alert
+            type="success"
+            message="Pro Tips"
+            description={
+              <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
+                <li>Equipment names are case-insensitive but must match exactly</li>
+                <li>You can use <code>D</code>, <code>DAY</code>, or <code>1</code> for day shift</li>
+                <li>You can use <code>N</code>, <code>NIGHT</code>, or <code>2</code> for night shift</li>
+                <li>Click "Download Template" to get a ready-to-use example file</li>
+              </ul>
+            }
+            style={{ marginTop: 16 }}
+          />
+        </div>
       </Modal>
     </div>
   );
