@@ -296,6 +296,7 @@ def upload_schedule():
     equipment_processed = 0
     errors = []
     import_details = []  # Track what was imported for debugging
+    processed_equipment = set()  # Track duplicates
 
     for row_num, row in enumerate(rows[1:], start=2):
         equipment_name = str(row[0]).strip() if row and row[0] else None
@@ -316,6 +317,16 @@ def upload_schedule():
         if not equipment:
             errors.append(f"Row {row_num}: equipment '{equipment_name}' not found")
             continue
+
+        # Check for duplicates in the Excel file
+        equipment_key = equipment_name.lower()
+        if equipment_key in processed_equipment:
+            errors.append(
+                f"Row {row_num}: DUPLICATE - '{equipment_name}' appears multiple times! "
+                f"This will overwrite previous rows. Use D+N in ONE row for both shifts."
+            )
+            # Continue processing but warn user
+        processed_equipment.add(equipment_key)
 
         # Delete existing schedules for this equipment
         InspectionSchedule.query.filter_by(equipment_id=equipment.id).delete()
