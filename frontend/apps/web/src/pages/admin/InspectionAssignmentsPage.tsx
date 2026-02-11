@@ -44,12 +44,18 @@ import {
   FileOutlined,
   SwapOutlined,
   WarningOutlined,
+  SunOutlined,
+  CloudOutlined,
+  MoonOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   inspectionAssignmentsApi,
   rosterApi,
+  inspectionRoutinesApi,
+  equipmentApi,
   type AssignTeamPayload,
   type AssignmentStats,
   type InspectorSuggestion,
@@ -259,6 +265,168 @@ function SLAMonitorView() {
   );
 }
 
+// Equipment Preview Component for Generate Modal
+interface ScheduledEquipmentPreviewProps {
+  form: any;
+  selectedEquipmentIds: number[];
+  onSelectChange: (ids: number[]) => void;
+}
+
+function ScheduledEquipmentPreview({ form, selectedEquipmentIds, onSelectChange }: ScheduledEquipmentPreviewProps) {
+  const { t } = useTranslation();
+
+  // Watch form values
+  const targetDate = Form.useWatch('target_date', form);
+  const shift = Form.useWatch('shift', form);
+
+  // Calculate day of week from target date
+  const dayOfWeek = useMemo(() => {
+    if (!targetDate) return null;
+    const day = dayjs(targetDate).day(); // 0=Sunday, 1=Monday, ...
+    return day === 0 ? 6 : day - 1; // Convert to 0=Monday, 6=Sunday
+  }, [targetDate]);
+
+  // Fetch all schedules
+  const { data: allSchedulesData, isLoading: isLoadingSchedule } = useQuery({
+    queryKey: ['inspection-schedules'],
+    queryFn: async () => {
+      const response = await inspectionRoutinesApi.getSchedules();
+      return (response.data as any).data || [];
+    },
+    staleTime: 60000,
+  });
+
+  // Filter schedules by day_of_week and shift
+  const equipment = useMemo(() => {
+    if (!allSchedulesData || dayOfWeek === null || !shift) return [];
+
+    const filtered = allSchedulesData.filter((item: any) => {
+      const days = item.days || {};
+      const dayKey = String(dayOfWeek);
+      const dayValue = days[dayKey];
+
+      // Check if this equipment is scheduled for the selected day and shift
+      return dayValue === shift || dayValue === 'both';
+    });
+
+    return filtered.map((item: any) => ({
+      id: item.equipment_id,
+      name: item.equipment_name,
+      equipment_type: item.equipment_type,
+      berth: item.berth,
+      location: item.location,
+      serial_number: item.equipment_name, // Use name as serial for display
+    }));
+  }, [allSchedulesData, dayOfWeek, shift]);
+
+  // Auto-select all equipment when data loads
+  useMemo(() => {
+    if (equipment.length > 0 && selectedEquipmentIds.length === 0) {
+      onSelectChange(equipment.map((eq: any) => eq.id));
+    }
+  }, [equipment, selectedEquipmentIds.length, onSelectChange]);
+
+  if (!targetDate || !shift) {
+    return (
+      <Alert
+        type="info"
+        message={t('assignments.selectDateShift', 'Please select a date and shift to preview equipment')}
+        icon={<CalendarOutlined />}
+        style={{ marginTop: 16 }}
+      />
+    );
+  }
+
+  if (isLoadingSchedule) {
+    return (
+      <div style={{ textAlign: 'center', padding: 40 }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 16 }}>
+          {t('assignments.loadingSchedule', 'Loading scheduled equipment...')}
+        </div>
+      </div>
+    );
+  }
+
+  if (equipment.length === 0) {
+    return (
+      <Alert
+        type="warning"
+        message={t('assignments.noScheduledEquipment', 'No equipment scheduled')}
+        description={t(
+          'assignments.noScheduledEquipmentDesc',
+          'No equipment is scheduled for this date and shift in the imported inspection schedule. Please check the schedule or select a different date/shift.'
+        )}
+        icon={<ExclamationCircleOutlined />}
+        style={{ marginTop: 16 }}
+      />
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <Divider orientation="left">
+        <Space>
+          <AppstoreOutlined />
+          {t('assignments.scheduledEquipment', 'Scheduled Equipment')}
+          <Badge count={selectedEquipmentIds.length} style={{ backgroundColor: '#52c41a' }} />
+          <Text type="secondary">/ {equipment.length}</Text>
+        </Space>
+      </Divider>
+
+      <Alert
+        type="success"
+        message={t('assignments.equipmentFound', `Found ${equipment.length} equipment in inspection schedule`)}
+        description={t(
+          'assignments.selectEquipmentDesc',
+          'Select which equipment to include in the inspection list. All equipment are selected by default.'
+        )}
+        icon={<CheckCircleOutlined />}
+        style={{ marginBottom: 16 }}
+      />
+
+      <Space direction="vertical" style={{ width: '100%' }}>
+        <Space>
+          <Button
+            size="small"
+            onClick={() => onSelectChange(equipment.map((eq: any) => eq.id))}
+          >
+            {t('common.selectAll', 'Select All')}
+          </Button>
+          <Button
+            size="small"
+            onClick={() => onSelectChange([])}
+          >
+            {t('common.deselectAll', 'Deselect All')}
+          </Button>
+        </Space>
+
+        <Checkbox.Group
+          value={selectedEquipmentIds}
+          onChange={onSelectChange as any}
+          style={{ width: '100%' }}
+        >
+          <Row gutter={[8, 8]}>
+            {equipment.map((eq: any) => (
+              <Col span={12} key={eq.id}>
+                <Checkbox value={eq.id} style={{ width: '100%' }}>
+                  <Space>
+                    <Tag color="blue">{eq.serial_number}</Tag>
+                    <Text>{eq.name}</Text>
+                    {eq.berth && (
+                      <Tag color="geekblue">{eq.berth}</Tag>
+                    )}
+                  </Space>
+                </Checkbox>
+              </Col>
+            ))}
+          </Row>
+        </Checkbox.Group>
+      </Space>
+    </div>
+  );
+}
+
 export default function InspectionAssignmentsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -267,6 +435,7 @@ export default function InspectionAssignmentsPage() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<number[]>([]);
   const [aiSuggestionOpen, setAiSuggestionOpen] = useState(false);
   const [workloadDrawerOpen, setWorkloadDrawerOpen] = useState(false);
 
@@ -1040,14 +1209,24 @@ export default function InspectionAssignmentsPage() {
       </Card>
       )}
 
-      {/* Generate List Modal */}
+      {/* Generate List Modal - Enhanced with Equipment Preview */}
       <Modal
-        title={t('assignments.generate', 'Generate Inspection List')}
+        title={
+          <Space>
+            <CalendarOutlined />
+            {t('assignments.generate', 'Generate Inspection List')}
+          </Space>
+        }
         open={generateOpen}
-        onCancel={() => { setGenerateOpen(false); generateForm.resetFields(); }}
+        onCancel={() => {
+          setGenerateOpen(false);
+          generateForm.resetFields();
+          setSelectedEquipmentIds([]);
+        }}
         onOk={() => generateForm.submit()}
         confirmLoading={generateMutation.isPending}
         destroyOnClose
+        width={800}
       >
         <Form
           form={generateForm}
@@ -1059,23 +1238,45 @@ export default function InspectionAssignmentsPage() {
             })
           }
         >
-          <Form.Item
-            name="target_date"
-            label={t('assignments.targetDate', 'Target Date')}
-            rules={[{ required: true }]}
-          >
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="shift"
-            label={t('assignments.shift', 'Shift')}
-            rules={[{ required: true }]}
-          >
-            <Select>
-              <Select.Option value="day">{t('common.day', 'Day')}</Select.Option>
-              <Select.Option value="night">{t('common.night', 'Night')}</Select.Option>
-            </Select>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="target_date"
+                label={t('assignments.targetDate', 'Target Date')}
+                rules={[{ required: true, message: 'Please select a date' }]}
+              >
+                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="shift"
+                label={t('assignments.shift', 'Shift')}
+                rules={[{ required: true, message: 'Please select a shift' }]}
+              >
+                <Select placeholder="Select shift">
+                  <Select.Option value="day">
+                    <Space>
+                      <SunOutlined style={{ color: '#faad14' }} />
+                      {t('common.day', 'Day')}
+                    </Space>
+                  </Select.Option>
+                  <Select.Option value="night">
+                    <Space>
+                      <MoonOutlined style={{ color: '#722ed1' }} />
+                      {t('common.night', 'Night')}
+                    </Space>
+                  </Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <ScheduledEquipmentPreview
+            form={generateForm}
+            selectedEquipmentIds={selectedEquipmentIds}
+            onSelectChange={setSelectedEquipmentIds}
+          />
         </Form>
       </Modal>
 
