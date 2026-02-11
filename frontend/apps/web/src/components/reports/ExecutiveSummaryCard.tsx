@@ -317,7 +317,11 @@ export function ExecutiveSummaryCard({ compact = false }: ExecutiveSummaryCardPr
           <Card size="small" title={t('reports.ai.trends', 'Trends')}>
             <Space wrap>
               {summary.trends.map((trend, index) => {
-                const config = TREND_CONFIG[trend.direction];
+                const config = TREND_CONFIG[trend.direction] || {
+                  color: '#1677ff',
+                  icon: <MinusOutlined />,
+                  label: trend.direction,
+                };
                 return (
                   <Tag
                     key={index}
