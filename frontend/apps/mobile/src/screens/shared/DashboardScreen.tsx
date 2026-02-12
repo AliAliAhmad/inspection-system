@@ -30,6 +30,15 @@ function QuickLink({ label, onPress }: { label: string; onPress: () => void }) {
   );
 }
 
+function FeatureButton({ icon, label, color, onPress }: { icon: string; label: string; color: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={[styles.featureBtn, { backgroundColor: color }]} onPress={onPress} activeOpacity={0.8}>
+      <Text style={styles.featureBtnIcon}>{icon}</Text>
+      <Text style={styles.featureBtnLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function DashboardScreen() {
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -51,6 +60,7 @@ export default function DashboardScreen() {
 
   const loading = isAdmin ? adminLoading : dashLoading;
   const refetch = isAdmin ? adminRefetch : dashRefetch;
+  const isAr = t('common.welcome').includes('\u0623\u0647\u0644');
 
   return (
     <ScrollView
@@ -60,6 +70,22 @@ export default function DashboardScreen() {
       <Text style={styles.welcome}>
         {t('common.welcome')}, {user?.full_name}
       </Text>
+
+      {/* Quick Feature Buttons - visible to all roles */}
+      <View style={styles.featureBtnRow}>
+        <FeatureButton
+          icon="💬"
+          label={isAr ? 'محادثة الفريق' : 'Team Chat'}
+          color="#1677ff"
+          onPress={() => navigation.navigate('ChannelList')}
+        />
+        <FeatureButton
+          icon="⚙️"
+          label={isAr ? 'أدوات العمل' : 'My Toolkit'}
+          color="#722ed1"
+          onPress={() => navigation.navigate('ToolkitSettings')}
+        />
+      </View>
 
       {loading ? (
         <ActivityIndicator size="large" color="#1677ff" style={{ marginTop: 32 }} />
@@ -143,4 +169,20 @@ const styles = StyleSheet.create({
   },
   quickLinkText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1976D2' },
   quickLinkArrow: { fontSize: 22, color: '#999' },
+  featureBtnRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  featureBtn: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  featureBtnIcon: { fontSize: 32, marginBottom: 6 },
+  featureBtnLabel: { fontSize: 14, fontWeight: '700', color: '#fff', textAlign: 'center' },
 });

@@ -86,7 +86,11 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/notification-analytics', name: `\ud83d\udcc9 ${t('nav.notification_analytics')}`, icon: <LineChartOutlined /> },
     { path: '/admin/leave-settings', name: `\u2699\ufe0f ${t('nav.leave_settings')}`, icon: <SettingOutlined /> },
     { path: '/admin/work-plan-settings', name: `\u2699\ufe0f ${t('nav.work_plan_settings')}`, icon: <SettingOutlined /> },
-    { path: '/admin/team-communication', name: '💬 Team Communication', icon: <TeamOutlined /> },
+  ];
+
+  // Shared role items (appear for ALL roles, after shared menu)
+  const allRoleItems: MenuDataItem[] = [
+    { path: '/admin/team-communication', name: '\ud83d\udcac Team Communication', icon: <TeamOutlined /> },
   ];
 
   const inspectorItems: MenuDataItem[] = [
@@ -125,7 +129,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     quality_engineer: qeItems,
   };
 
-  return [...shared, ...(roleMenus[role] || [])];
+  return [...shared, ...(roleMenus[role] || []), ...allRoleItems];
 }
 
 export default function MainLayout() {

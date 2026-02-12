@@ -133,7 +133,7 @@ export default function AppRouter() {
             <Route path="pause-approvals" element={<Navigate to="/admin/approvals?tab=pause" replace />} />
             <Route path="notification-rules" element={<RoleGuard roles={['admin']}><NotificationRulesPage /></RoleGuard>} />
             <Route path="notification-analytics" element={<RoleGuard roles={['admin']}><NotificationAnalyticsPage /></RoleGuard>} />
-            <Route path="team-communication" element={<RoleGuard roles={['admin']}><TeamCommunicationPage /></RoleGuard>} />
+            <Route path="team-communication" element={<RoleGuard roles={['admin', 'engineer', 'inspector', 'specialist', 'quality_engineer']}><TeamCommunicationPage /></RoleGuard>} />
           </Route>
 
           {/* Inspector routes */}
