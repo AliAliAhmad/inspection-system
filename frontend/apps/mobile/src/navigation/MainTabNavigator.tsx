@@ -24,6 +24,7 @@ import BonusRequestsScreen from '../screens/quality_engineer/BonusRequestsScreen
 import AdminApprovalsScreen from '../screens/admin/AdminApprovalsScreen';
 import AdminUsersScreen from '../screens/admin/AdminUsersScreen';
 import AdminReportsScreen from '../screens/admin/AdminReportsScreen';
+import AdminMoreScreen from '../screens/admin/AdminMoreScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -81,7 +82,7 @@ function AdminTabs({ t }: { t: (key: string) => string }) {
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
       <Tab.Screen name="WorkPlan" component={WorkPlanOverviewScreen} options={{ tabBarLabel: t('nav.work_planning') }} />
       <Tab.Screen name="Approvals" component={AdminApprovalsScreen} options={{ tabBarLabel: t('nav.approvals') }} />
-      <Tab.Screen name="Reports" component={AdminReportsScreen} options={{ tabBarLabel: t('nav.reports') }} />
+      <Tab.Screen name="More" component={AdminMoreScreen} options={{ tabBarLabel: 'More' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
   );

@@ -79,7 +79,10 @@
       "Bash(sort:*)",
       "Bash(do echo '=== $\\(basename $f .output\\) ===' tail -20 $f)",
       "Bash(test:*)",
-      "Bash(do echo '=== COMMIT: $commit ===')"
+      "Bash(do echo '=== COMMIT: $commit ===')",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(open:*)"
     ]
   }
 }
