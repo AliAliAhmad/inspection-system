@@ -26,8 +26,6 @@ import {
   PlusOutlined,
   TeamOutlined,
   SoundOutlined,
-  SearchOutlined,
-  SendOutlined,
   AudioOutlined,
   PictureOutlined,
   EnvironmentOutlined,
@@ -36,16 +34,17 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamCommunicationApi } from '@inspection/shared';
 import type { TeamChannel, TeamMessage } from '@inspection/shared';
+import { useTranslation } from 'react-i18next';
 
 const { TextArea } = Input;
 const { Text, Title } = Typography;
 
-const CHANNEL_TYPE_CONFIG: Record<string, { color: string; icon: string; label: string }> = {
-  general: { color: 'blue', icon: '💬', label: 'General' },
-  shift: { color: 'orange', icon: '🔄', label: 'Shift' },
-  role: { color: 'purple', icon: '👥', label: 'Role' },
-  job: { color: 'cyan', icon: '🔧', label: 'Job' },
-  emergency: { color: 'red', icon: '🚨', label: 'Emergency' },
+const CHANNEL_TYPE_CONFIG: Record<string, { color: string; icon: string; label: string; labelAr: string }> = {
+  general: { color: 'blue', icon: '💬', label: 'General', labelAr: 'عام' },
+  shift: { color: 'orange', icon: '🔄', label: 'Shift', labelAr: 'وردية' },
+  role: { color: 'purple', icon: '👥', label: 'Role', labelAr: 'دور' },
+  job: { color: 'cyan', icon: '🔧', label: 'Job', labelAr: 'عمل' },
+  emergency: { color: 'red', icon: '🚨', label: 'Emergency', labelAr: 'طوارئ' },
 };
 
 const MSG_TYPE_ICON: Record<string, React.ReactNode> = {
@@ -57,6 +56,8 @@ const MSG_TYPE_ICON: Record<string, React.ReactNode> = {
 };
 
 export default function TeamCommunicationPage() {
+  const { i18n } = useTranslation();
+  const isAr = i18n.language === 'ar';
   const queryClient = useQueryClient();
   const [selectedChannel, setSelectedChannel] = useState<TeamChannel | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -80,28 +81,34 @@ export default function TeamCommunicationPage() {
   const createMutation = useMutation({
     mutationFn: (values: any) => teamCommunicationApi.createChannel(values),
     onSuccess: () => {
-      message.success('Channel created');
+      message.success(isAr ? 'تم إنشاء القناة' : 'Channel created');
       setCreateModalVisible(false);
       form.resetFields();
       queryClient.invalidateQueries({ queryKey: ['admin-channels'] });
+    },
+    onError: () => {
+      message.error(isAr ? 'فشل إنشاء القناة' : 'Failed to create channel');
     },
   });
 
   const broadcastMutation = useMutation({
     mutationFn: (values: { content: string }) => teamCommunicationApi.broadcast(values),
     onSuccess: () => {
-      message.success('Broadcast sent to all channels');
+      message.success(isAr ? 'تم إرسال البث لجميع القنوات' : 'Broadcast sent to all channels');
       setBroadcastVisible(false);
       broadcastForm.resetFields();
     },
+    onError: () => {
+      message.error(isAr ? 'فشل إرسال البث' : 'Failed to send broadcast');
+    },
   });
 
-  const totalMessages = channels.reduce((acc: number, ch: TeamChannel) => acc + (ch.member_count || 0), 0);
+  const totalMembers = channels.reduce((acc: number, ch: TeamChannel) => acc + (ch.member_count || 0), 0);
   const totalUnread = channels.reduce((acc: number, ch: TeamChannel) => acc + (ch.unread_count || 0), 0);
 
   const channelColumns = [
     {
-      title: 'Channel',
+      title: isAr ? 'القناة' : 'Channel',
       key: 'name',
       render: (_: any, record: TeamChannel) => (
         <Space>
@@ -118,15 +125,15 @@ export default function TeamCommunicationPage() {
       ),
     },
     {
-      title: 'Type',
+      title: isAr ? 'النوع' : 'Type',
       key: 'type',
       render: (_: any, record: TeamChannel) => {
         const cfg = CHANNEL_TYPE_CONFIG[record.channel_type];
-        return <Tag color={cfg?.color}>{cfg?.label || record.channel_type}</Tag>;
+        return <Tag color={cfg?.color}>{isAr ? cfg?.labelAr : cfg?.label || record.channel_type}</Tag>;
       },
     },
     {
-      title: 'Members',
+      title: isAr ? 'الأعضاء' : 'Members',
       dataIndex: 'member_count',
       key: 'members',
       render: (count: number) => (
@@ -137,7 +144,7 @@ export default function TeamCommunicationPage() {
       ),
     },
     {
-      title: 'Filters',
+      title: isAr ? 'الفلاتر' : 'Filters',
       key: 'filters',
       render: (_: any, record: TeamChannel) => (
         <Space size={4} wrap>
@@ -147,7 +154,7 @@ export default function TeamCommunicationPage() {
       ),
     },
     {
-      title: 'Last Activity',
+      title: isAr ? 'آخر نشاط' : 'Last Activity',
       key: 'last',
       render: (_: any, record: TeamChannel) =>
         record.last_message ? (
@@ -161,14 +168,14 @@ export default function TeamCommunicationPage() {
         ),
     },
     {
-      title: 'Unread',
+      title: isAr ? 'غير مقروء' : 'Unread',
       key: 'unread',
       render: (_: any, record: TeamChannel) => (
         <Badge count={record.unread_count || 0} />
       ),
     },
     {
-      title: 'Action',
+      title: isAr ? 'إجراء' : 'Action',
       key: 'action',
       render: (_: any, record: TeamChannel) => (
         <Button
@@ -176,7 +183,7 @@ export default function TeamCommunicationPage() {
           icon={<MessageOutlined />}
           onClick={() => setSelectedChannel(record)}
         >
-          View
+          {isAr ? 'عرض' : 'View'}
         </Button>
       ),
     },
@@ -189,7 +196,7 @@ export default function TeamCommunicationPage() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Total Channels"
+              title={isAr ? 'إجمالي القنوات' : 'Total Channels'}
               value={channels.length}
               prefix={<MessageOutlined />}
             />
@@ -198,8 +205,8 @@ export default function TeamCommunicationPage() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Total Members"
-              value={totalMessages}
+              title={isAr ? 'إجمالي الأعضاء' : 'Total Members'}
+              value={totalMembers}
               prefix={<TeamOutlined />}
             />
           </Card>
@@ -207,7 +214,7 @@ export default function TeamCommunicationPage() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Unread Messages"
+              title={isAr ? 'رسائل غير مقروءة' : 'Unread Messages'}
               value={totalUnread}
               prefix={<AlertOutlined />}
               valueStyle={totalUnread > 0 ? { color: '#ff4d4f' } : undefined}
@@ -217,7 +224,7 @@ export default function TeamCommunicationPage() {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Active Channels"
+              title={isAr ? 'قنوات نشطة' : 'Active Channels'}
               value={channels.filter((c: TeamChannel) => c.is_active).length}
               prefix="🟢"
             />
@@ -227,7 +234,9 @@ export default function TeamCommunicationPage() {
 
       {/* Actions */}
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-        <Title level={4} style={{ margin: 0 }}>💬 Team Communication</Title>
+        <Title level={4} style={{ margin: 0 }}>
+          {isAr ? '💬 تواصل الفريق' : '💬 Team Communication'}
+        </Title>
         <Space>
           <Button
             type="primary"
@@ -235,14 +244,14 @@ export default function TeamCommunicationPage() {
             icon={<SoundOutlined />}
             onClick={() => setBroadcastVisible(true)}
           >
-            Broadcast
+            {isAr ? 'بث عام' : 'Broadcast'}
           </Button>
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => setCreateModalVisible(true)}
           >
-            New Channel
+            {isAr ? 'قناة جديدة' : 'New Channel'}
           </Button>
         </Space>
       </div>
@@ -254,7 +263,7 @@ export default function TeamCommunicationPage() {
         items={[
           {
             key: 'channels',
-            label: <span>📋 Channels ({channels.length})</span>,
+            label: <span>{isAr ? '📋 القنوات' : '📋 Channels'} ({channels.length})</span>,
             children: (
               <Card>
                 <Table
@@ -272,7 +281,7 @@ export default function TeamCommunicationPage() {
             label: selectedChannel ? (
               <span>💬 {selectedChannel.name}</span>
             ) : (
-              <span>💬 Messages</span>
+              <span>💬 {isAr ? 'الرسائل' : 'Messages'}</span>
             ),
             disabled: !selectedChannel,
             children: selectedChannel ? (
@@ -290,7 +299,7 @@ export default function TeamCommunicationPage() {
                 }
                 extra={
                   <Button onClick={() => setSelectedChannel(null)}>
-                    Back to Channels
+                    {isAr ? 'رجوع للقنوات' : 'Back to Channels'}
                   </Button>
                 }
               >
@@ -310,11 +319,11 @@ export default function TeamCommunicationPage() {
                         }
                         title={
                           <Space>
-                            <Text strong>{msg.sender_name || 'System'}</Text>
+                            <Text strong>{msg.sender_name || (isAr ? 'النظام' : 'System')}</Text>
                             <Text type="secondary" style={{ fontSize: 12 }}>
                               {msg.sender_role}
                             </Text>
-                            {msg.is_priority && <Tag color="red">URGENT</Tag>}
+                            {msg.is_priority && <Tag color="red">{isAr ? 'عاجل' : 'URGENT'}</Tag>}
                             <span>{MSG_TYPE_ICON[msg.message_type]}</span>
                           </Space>
                         }
@@ -323,19 +332,19 @@ export default function TeamCommunicationPage() {
                             {msg.message_type === 'voice' ? (
                               <Space>
                                 <AudioOutlined />
-                                <Text>Voice message ({msg.duration_seconds}s)</Text>
+                                <Text>{isAr ? 'رسالة صوتية' : 'Voice message'} ({msg.duration_seconds}s)</Text>
                               </Space>
                             ) : msg.message_type === 'photo' ? (
                               <Space>
                                 <PictureOutlined />
-                                <Text>Photo</Text>
+                                <Text>{isAr ? 'صورة' : 'Photo'}</Text>
                               </Space>
                             ) : (
                               <Text>{msg.content}</Text>
                             )}
                             <div>
                               <Text type="secondary" style={{ fontSize: 11 }}>
-                                {new Date(msg.created_at).toLocaleString()} · {msg.read_count} reads
+                                {new Date(msg.created_at).toLocaleString()} · {msg.read_count} {isAr ? 'قراءة' : 'reads'}
                               </Text>
                             </div>
                           </div>
@@ -343,7 +352,7 @@ export default function TeamCommunicationPage() {
                       />
                     </List.Item>
                   )}
-                  locale={{ emptyText: <Empty description="No messages" /> }}
+                  locale={{ emptyText: <Empty description={isAr ? 'لا رسائل' : 'No messages'} /> }}
                 />
               </Card>
             ) : null,
@@ -353,42 +362,47 @@ export default function TeamCommunicationPage() {
 
       {/* Create Channel Modal */}
       <Modal
-        title="➕ Create Channel"
+        title={isAr ? '➕ إنشاء قناة' : '➕ Create Channel'}
         open={createModalVisible}
         onCancel={() => setCreateModalVisible(false)}
         onOk={() => form.validateFields().then(createMutation.mutate)}
         confirmLoading={createMutation.isPending}
-        okText="Create"
+        okText={isAr ? 'إنشاء' : 'Create'}
+        cancelText={isAr ? 'إلغاء' : 'Cancel'}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="Channel Name" rules={[{ required: true }]}>
-            <Input placeholder="e.g. Morning Shift Team" />
+          <Form.Item
+            name="name"
+            label={isAr ? 'اسم القناة' : 'Channel Name'}
+            rules={[{ required: true, message: isAr ? 'مطلوب' : 'Required' }]}
+          >
+            <Input placeholder={isAr ? 'مثال: فريق الصيانة' : 'e.g. Morning Shift Team'} maxLength={100} />
           </Form.Item>
-          <Form.Item name="description" label="Description">
-            <TextArea rows={2} placeholder="What's this channel for?" />
+          <Form.Item name="description" label={isAr ? 'الوصف' : 'Description'}>
+            <TextArea rows={2} placeholder={isAr ? 'وصف القناة...' : "What's this channel for?"} maxLength={500} />
           </Form.Item>
-          <Form.Item name="channel_type" label="Type" initialValue="general">
+          <Form.Item name="channel_type" label={isAr ? 'النوع' : 'Type'} initialValue="general">
             <Select>
-              <Select.Option value="general">💬 General</Select.Option>
-              <Select.Option value="shift">🔄 Shift</Select.Option>
-              <Select.Option value="role">👥 Role</Select.Option>
-              <Select.Option value="job">🔧 Job</Select.Option>
-              <Select.Option value="emergency">🚨 Emergency</Select.Option>
+              <Select.Option value="general">💬 {isAr ? 'عام' : 'General'}</Select.Option>
+              <Select.Option value="shift">🔄 {isAr ? 'وردية' : 'Shift'}</Select.Option>
+              <Select.Option value="role">👥 {isAr ? 'حسب الدور' : 'Role'}</Select.Option>
+              <Select.Option value="job">🔧 {isAr ? 'محادثة عمل' : 'Job'}</Select.Option>
+              <Select.Option value="emergency">🚨 {isAr ? 'طوارئ' : 'Emergency'}</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="shift" label="Shift Filter">
-            <Select allowClear placeholder="All shifts">
-              <Select.Option value="morning">🌅 Morning</Select.Option>
-              <Select.Option value="afternoon">☀️ Afternoon</Select.Option>
-              <Select.Option value="night">🌙 Night</Select.Option>
+          <Form.Item name="shift" label={isAr ? 'فلتر الوردية' : 'Shift Filter'}>
+            <Select allowClear placeholder={isAr ? 'جميع الورديات' : 'All shifts'}>
+              <Select.Option value="morning">🌅 {isAr ? 'صباحي' : 'Morning'}</Select.Option>
+              <Select.Option value="afternoon">☀️ {isAr ? 'مسائي' : 'Afternoon'}</Select.Option>
+              <Select.Option value="night">🌙 {isAr ? 'ليلي' : 'Night'}</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item name="role_filter" label="Role Filter">
-            <Select allowClear placeholder="All roles">
-              <Select.Option value="inspector">🔍 Inspectors</Select.Option>
-              <Select.Option value="specialist">🔧 Specialists</Select.Option>
-              <Select.Option value="engineer">👷 Engineers</Select.Option>
-              <Select.Option value="quality_engineer">✅ Quality Engineers</Select.Option>
+          <Form.Item name="role_filter" label={isAr ? 'فلتر الدور' : 'Role Filter'}>
+            <Select allowClear placeholder={isAr ? 'جميع الأدوار' : 'All roles'}>
+              <Select.Option value="inspector">🔍 {isAr ? 'المفتشين' : 'Inspectors'}</Select.Option>
+              <Select.Option value="specialist">🔧 {isAr ? 'الفنيين' : 'Specialists'}</Select.Option>
+              <Select.Option value="engineer">👷 {isAr ? 'المهندسين' : 'Engineers'}</Select.Option>
+              <Select.Option value="quality_engineer">✅ {isAr ? 'جودة' : 'Quality Engineers'}</Select.Option>
             </Select>
           </Form.Item>
         </Form>
@@ -396,12 +410,13 @@ export default function TeamCommunicationPage() {
 
       {/* Broadcast Modal */}
       <Modal
-        title="📢 Emergency Broadcast"
+        title={isAr ? '📢 بث طوارئ' : '📢 Emergency Broadcast'}
         open={broadcastVisible}
         onCancel={() => setBroadcastVisible(false)}
         onOk={() => broadcastForm.validateFields().then(broadcastMutation.mutate)}
         confirmLoading={broadcastMutation.isPending}
-        okText="Send Broadcast"
+        okText={isAr ? 'إرسال البث' : 'Send Broadcast'}
+        cancelText={isAr ? 'إلغاء' : 'Cancel'}
         okButtonProps={{ danger: true }}
       >
         <div style={{
@@ -409,13 +424,18 @@ export default function TeamCommunicationPage() {
           border: '1px solid #ffa39e',
         }}>
           <Text type="danger">
-            ⚠️ This will send a priority message to ALL active channels.
-            Use only for urgent communications.
+            {isAr
+              ? '⚠️ سيتم إرسال رسالة عاجلة لجميع القنوات النشطة. استخدم فقط للاتصالات العاجلة.'
+              : '⚠️ This will send a priority message to ALL active channels. Use only for urgent communications.'}
           </Text>
         </div>
         <Form form={broadcastForm} layout="vertical">
-          <Form.Item name="content" label="Message" rules={[{ required: true }]}>
-            <TextArea rows={4} placeholder="Type your broadcast message..." />
+          <Form.Item
+            name="content"
+            label={isAr ? 'الرسالة' : 'Message'}
+            rules={[{ required: true, message: isAr ? 'مطلوب' : 'Required' }]}
+          >
+            <TextArea rows={4} placeholder={isAr ? 'اكتب رسالة البث...' : 'Type your broadcast message...'} maxLength={2000} />
           </Form.Item>
         </Form>
       </Modal>

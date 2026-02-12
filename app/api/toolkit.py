@@ -130,15 +130,6 @@ def nfc_lookup():
     if not equipment:
         return jsonify({'status': 'error', 'message': 'Equipment not found'}), 404
 
-    # Get active jobs for this equipment
-    from app.models.specialist_job import SpecialistJob
-    active_jobs = SpecialistJob.query.filter(
-        SpecialistJob.status.in_(['assigned', 'in_progress', 'paused']),
-    ).join(
-        db.Model.metadata.tables.get('defects', db.Table('defects', db.MetaData())),
-        isouter=True
-    ).all() if hasattr(SpecialistJob, 'defect') else []
-
     return jsonify({
         'status': 'success',
         'data': {

@@ -8,8 +8,6 @@ import {
   Vibration,
   Dimensions,
 } from 'react-native';
-import { useTranslation } from 'react-i18next';
-
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface FABAction {

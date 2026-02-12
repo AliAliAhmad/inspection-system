@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -78,6 +78,9 @@ export default function ChatRoomScreen() {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Stable random heights for voice wave bars (avoid re-randomizing on render)
+  const voiceBarHeights = useMemo(() => Array.from({ length: 12 }, () => 8 + Math.random() * 16), []);
+
   const renderMessage = ({ item }: { item: TeamMessage }) => {
     const isMe = item.sender_id === user?.id;
     const isSystem = item.message_type === 'system';
@@ -112,10 +115,10 @@ export default function ChatRoomScreen() {
             <View style={styles.voiceMsg}>
               <Text style={styles.voiceIcon}>🎤</Text>
               <View style={styles.voiceWave}>
-                {Array.from({ length: 12 }).map((_, i) => (
+                {voiceBarHeights.map((h, i) => (
                   <View
                     key={i}
-                    style={[styles.voiceBar, { height: 8 + Math.random() * 16 }]}
+                    style={[styles.voiceBar, { height: h }]}
                   />
                 ))}
               </View>

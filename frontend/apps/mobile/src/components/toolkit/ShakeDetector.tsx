@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { Vibration, Platform } from 'react-native';
+import { Vibration } from 'react-native';
 
 interface ShakeDetectorProps {
   onShake: () => void;

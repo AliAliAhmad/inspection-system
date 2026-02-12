@@ -10,6 +10,19 @@ from datetime import datetime
 
 bp = Blueprint('team_communication', __name__)
 
+MAX_PER_PAGE = 100
+
+
+def _require_membership(channel_id, user_id):
+    """Check if user is a member of the channel. Returns member or None."""
+    return ChannelMember.query.filter_by(channel_id=channel_id, user_id=user_id).first()
+
+
+def _require_channel_admin(channel_id, user_id):
+    """Check if user is an admin of the channel."""
+    member = _require_membership(channel_id, user_id)
+    return member if member and member.role == 'admin' else None
+
 
 # ============ CHANNELS ============
 
@@ -59,12 +72,23 @@ def get_channels():
 def create_channel():
     """Create a new communication channel."""
     user_id = get_jwt_identity()
-    data = request.get_json()
+    data = request.get_json() or {}
+
+    # Input validation
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'status': 'error', 'message': 'Channel name is required'}), 400
+    if len(name) > 100:
+        return jsonify({'status': 'error', 'message': 'Channel name too long (max 100 chars)'}), 400
+
+    channel_type = data.get('channel_type', 'general')
+    if channel_type not in ('general', 'shift', 'role', 'job', 'emergency'):
+        return jsonify({'status': 'error', 'message': 'Invalid channel type'}), 400
 
     channel = TeamChannel(
-        name=data['name'],
-        description=data.get('description'),
-        channel_type=data.get('channel_type', 'general'),
+        name=name,
+        description=(data.get('description') or '')[:500] if data.get('description') else None,
+        channel_type=channel_type,
         shift=data.get('shift'),
         role_filter=data.get('role_filter'),
         job_id=data.get('job_id'),
@@ -96,7 +120,11 @@ def create_channel():
 @bp.route('/channels/<int:channel_id>', methods=['GET'])
 @jwt_required()
 def get_channel_detail(channel_id):
-    """Get channel details with members."""
+    """Get channel details with members. Must be a member."""
+    user_id = get_jwt_identity()
+    if not _require_membership(channel_id, user_id):
+        return jsonify({'status': 'error', 'message': 'Not a channel member'}), 403
+
     channel = TeamChannel.query.get_or_404(channel_id)
     result = channel.to_dict()
     result['members'] = [m.to_dict() for m in channel.members]
@@ -135,18 +163,29 @@ def leave_channel(channel_id):
 @bp.route('/channels/<int:channel_id>/members', methods=['POST'])
 @jwt_required()
 def add_members(channel_id):
-    """Add members to a channel."""
-    data = request.get_json()
+    """Add members to a channel. Only channel admins can add members."""
+    user_id = get_jwt_identity()
+
+    if not _require_channel_admin(channel_id, user_id):
+        # Allow app-level admins too
+        from app.models.user import User
+        user = User.query.get(user_id)
+        if not user or user.role != 'admin':
+            return jsonify({'status': 'error', 'message': 'Only channel admins can add members'}), 403
+
+    data = request.get_json() or {}
     member_ids = data.get('member_ids', [])
+    added = 0
 
     for uid in member_ids:
         existing = ChannelMember.query.filter_by(channel_id=channel_id, user_id=uid).first()
         if not existing:
             m = ChannelMember(channel_id=channel_id, user_id=uid, role='member')
             db.session.add(m)
+            added += 1
 
     safe_commit()
-    return jsonify({'status': 'success', 'message': f'Added {len(member_ids)} members'}), 200
+    return jsonify({'status': 'success', 'message': f'Added {added} members'}), 200
 
 
 # ============ MESSAGES ============
@@ -154,9 +193,12 @@ def add_members(channel_id):
 @bp.route('/channels/<int:channel_id>/messages', methods=['GET'])
 @jwt_required()
 def get_messages(channel_id):
-    """Get messages for a channel with pagination."""
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
+    """Get messages for a channel. Must be a member."""
+    user_id = get_jwt_identity()
+    if not _require_membership(channel_id, user_id):
+        return jsonify({'status': 'error', 'message': 'Not a channel member'}), 403
+
+    per_page = min(request.args.get('per_page', 50, type=int), MAX_PER_PAGE)
     before_id = request.args.get('before_id', type=int)
 
     query = TeamMessage.query.filter_by(
@@ -179,15 +221,24 @@ def get_messages(channel_id):
 @bp.route('/channels/<int:channel_id>/messages', methods=['POST'])
 @jwt_required()
 def send_message(channel_id):
-    """Send a message to a channel."""
+    """Send a message to a channel. Must be a member."""
     user_id = get_jwt_identity()
-    data = request.get_json()
+    if not _require_membership(channel_id, user_id):
+        return jsonify({'status': 'error', 'message': 'Not a channel member'}), 403
+
+    data = request.get_json() or {}
+    content = data.get('content')
+    msg_type = data.get('message_type', 'text')
+
+    # Validate: must have content or media
+    if msg_type == 'text' and not (content and content.strip()):
+        return jsonify({'status': 'error', 'message': 'Message content is required'}), 400
 
     message = TeamMessage(
         channel_id=channel_id,
         sender_id=user_id,
-        message_type=data.get('message_type', 'text'),
-        content=data.get('content'),
+        message_type=msg_type,
+        content=content[:2000] if content else None,
         media_url=data.get('media_url'),
         media_thumbnail=data.get('media_thumbnail'),
         duration_seconds=data.get('duration_seconds'),
@@ -212,12 +263,14 @@ def send_message(channel_id):
 @bp.route('/messages/<int:message_id>', methods=['DELETE'])
 @jwt_required()
 def delete_message(message_id):
-    """Soft-delete a message."""
+    """Soft-delete a message. Only sender or channel admin can delete."""
     user_id = get_jwt_identity()
     message = TeamMessage.query.get_or_404(message_id)
 
     if message.sender_id != user_id:
-        return jsonify({'status': 'error', 'message': 'Not your message'}), 403
+        # Allow channel admins to delete messages
+        if not _require_channel_admin(message.channel_id, user_id):
+            return jsonify({'status': 'error', 'message': 'Not authorized'}), 403
 
     message.is_deleted = True
     safe_commit()
@@ -263,7 +316,11 @@ def broadcast_message():
     if not user or user.role != 'admin':
         return jsonify({'status': 'error', 'message': 'Admin only'}), 403
 
-    data = request.get_json()
+    data = request.get_json() or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'status': 'error', 'message': 'Broadcast content is required'}), 400
+
     channels = TeamChannel.query.filter_by(is_active=True).all()
 
     count = 0
@@ -272,7 +329,7 @@ def broadcast_message():
             channel_id=ch.id,
             sender_id=user_id,
             message_type='system',
-            content=data.get('content', ''),
+            content=content[:2000],
             is_priority=True,
             original_language=data.get('language', 'en'),
         )
@@ -289,21 +346,27 @@ def broadcast_message():
 @bp.route('/search', methods=['GET'])
 @jwt_required()
 def search_messages():
-    """Search messages across all channels."""
+    """Search messages across user's channels only."""
     user_id = get_jwt_identity()
-    q = request.args.get('q', '')
+    q = request.args.get('q', '').strip()
 
     if not q or len(q) < 2:
-        return jsonify({'status': 'error', 'message': 'Query too short'}), 400
+        return jsonify({'status': 'error', 'message': 'Query too short (min 2 chars)'}), 400
 
-    # Get user's channel IDs
+    # Escape LIKE special characters
+    q_safe = q.replace('%', r'\%').replace('_', r'\_')
+
+    # Only search in user's channels
     memberships = ChannelMember.query.filter_by(user_id=user_id).all()
     channel_ids = [m.channel_id for m in memberships]
+
+    if not channel_ids:
+        return jsonify({'status': 'success', 'data': []}), 200
 
     messages = TeamMessage.query.filter(
         TeamMessage.channel_id.in_(channel_ids),
         TeamMessage.is_deleted == False,
-        TeamMessage.content.ilike(f'%{q}%')
+        TeamMessage.content.ilike(f'%{q_safe}%')
     ).order_by(TeamMessage.created_at.desc()).limit(20).all()
 
     return jsonify({'status': 'success', 'data': [m.to_dict() for m in messages]}), 200
