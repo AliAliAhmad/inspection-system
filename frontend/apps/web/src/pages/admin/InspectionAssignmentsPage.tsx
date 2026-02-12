@@ -1405,12 +1405,14 @@ export default function InspectionAssignmentsPage() {
       </Card>
       )}
 
-      {/* Generate List Modal - NEW LAYOUT */}
+      {/* Generate List Modal - ENHANCED */}
       <Modal
         title={
           <Space>
-            <CalendarOutlined />
-            {t('assignments.generate', 'Generate Inspection List')}
+            <CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />
+            <span style={{ fontSize: 18, fontWeight: 600 }}>
+              {t('assignments.generate', 'Generate Inspection List')}
+            </span>
           </Space>
         }
         open={generateOpen}
@@ -1419,10 +1421,39 @@ export default function InspectionAssignmentsPage() {
           generateForm.resetFields();
           setSelectedEquipmentIds([]);
         }}
-        onOk={() => generateForm.submit()}
-        confirmLoading={generateMutation.isPending}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              {Form.useWatch('shift', generateForm) && Form.useWatch('target_date', generateForm) && selectedEquipmentIds.length > 0 && (
+                <Space>
+                  <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                  <Text type="secondary">
+                    {selectedEquipmentIds.length} equipment &middot; {Form.useWatch('shift', generateForm)} shift &middot; {Form.useWatch('target_date', generateForm)?.format('DD MMM YYYY')}
+                  </Text>
+                </Space>
+              )}
+            </div>
+            <Space>
+              <Button onClick={() => { setGenerateOpen(false); generateForm.resetFields(); setSelectedEquipmentIds([]); }}>
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                size="large"
+                icon={<ThunderboltOutlined />}
+                loading={generateMutation.isPending}
+                onClick={() => generateForm.submit()}
+                disabled={!Form.useWatch('shift', generateForm) || !Form.useWatch('target_date', generateForm) || selectedEquipmentIds.length === 0}
+                style={{ fontWeight: 600, borderRadius: 8, minWidth: 160 }}
+              >
+                Generate List
+              </Button>
+            </Space>
+          </div>
+        }
         destroyOnClose
-        width={900}
+        width={960}
+        styles={{ body: { padding: '16px 24px' } }}
       >
         <Form
           form={generateForm}
@@ -1434,182 +1465,155 @@ export default function InspectionAssignmentsPage() {
             })
           }
         >
-          {/* Date Picker at Top */}
-          <Form.Item
-            name="target_date"
-            label={<Text strong style={{ fontSize: 16 }}>{t('assignments.targetDate', 'Select Date')}</Text>}
-            rules={[{ required: true, message: 'Please select a date' }]}
-            style={{ marginBottom: 24 }}
+          {/* STEP 1: Date + Shift in one row */}
+          <Card
+            size="small"
+            style={{ marginBottom: 16, borderRadius: 10, background: 'linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%)' }}
+            bodyStyle={{ padding: '16px 20px' }}
           >
-            <DatePicker
-              style={{ width: '100%' }}
-              format="DD/MM/YYYY"
-              size="large"
-              placeholder="Select inspection date"
-            />
-          </Form.Item>
+            <Row gutter={24} align="middle">
+              <Col span={8}>
+                <Form.Item
+                  name="target_date"
+                  label={<Text strong>📅 Date</Text>}
+                  rules={[{ required: true, message: 'Select date' }]}
+                  style={{ marginBottom: 0 }}
+                >
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    format="DD/MM/YYYY"
+                    size="large"
+                    placeholder="Pick date"
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={16}>
+                <Form.Item
+                  name="shift"
+                  label={<Text strong>⏰ Shift</Text>}
+                  rules={[{ required: true, message: 'Select shift' }]}
+                  style={{ marginBottom: 0 }}
+                >
+                  <Radio.Group style={{ width: '100%' }}>
+                    <Row gutter={8}>
+                      <Col span={8}>
+                        <Radio.Button value="morning" style={{ width: '100%', height: 60, padding: 0, borderRadius: 8, overflow: 'hidden' }}>
+                          <div style={{
+                            textAlign: 'center', paddingTop: 8,
+                            background: Form.useWatch('shift', generateForm) === 'morning' ? 'linear-gradient(135deg, #fff7e6, #ffe7ba)' : undefined,
+                            height: '100%',
+                          }}>
+                            <SunOutlined style={{ fontSize: 22, color: '#faad14' }} />
+                            <div style={{ fontWeight: 600, color: '#d48806', fontSize: 13 }}>Morning</div>
+                            <div style={{ fontSize: 10, color: '#999' }}>06:00 - 14:00</div>
+                          </div>
+                        </Radio.Button>
+                      </Col>
+                      <Col span={8}>
+                        <Radio.Button value="afternoon" style={{ width: '100%', height: 60, padding: 0, borderRadius: 8, overflow: 'hidden' }}>
+                          <div style={{
+                            textAlign: 'center', paddingTop: 8,
+                            background: Form.useWatch('shift', generateForm) === 'afternoon' ? 'linear-gradient(135deg, #e6f7ff, #bae7ff)' : undefined,
+                            height: '100%',
+                          }}>
+                            <CloudOutlined style={{ fontSize: 22, color: '#1890ff' }} />
+                            <div style={{ fontWeight: 600, color: '#096dd9', fontSize: 13 }}>Afternoon</div>
+                            <div style={{ fontSize: 10, color: '#999' }}>14:00 - 22:00</div>
+                          </div>
+                        </Radio.Button>
+                      </Col>
+                      <Col span={8}>
+                        <Radio.Button value="night" style={{ width: '100%', height: 60, padding: 0, borderRadius: 8, overflow: 'hidden' }}>
+                          <div style={{
+                            textAlign: 'center', paddingTop: 8,
+                            background: Form.useWatch('shift', generateForm) === 'night' ? 'linear-gradient(135deg, #f9f0ff, #efdbff)' : undefined,
+                            height: '100%',
+                          }}>
+                            <MoonOutlined style={{ fontSize: 22, color: '#722ed1' }} />
+                            <div style={{ fontWeight: 600, color: '#531dab', fontSize: 13 }}>Night</div>
+                            <div style={{ fontSize: 10, color: '#999' }}>22:00 - 06:00</div>
+                          </div>
+                        </Radio.Button>
+                      </Col>
+                    </Row>
+                  </Radio.Group>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Card>
 
-          <Row gutter={24}>
-            {/* LEFT SIDE: Equipment List (60%) */}
-            <Col span={14}>
+          {/* STEP 2: Equipment List + Summary Side by Side */}
+          <Row gutter={16}>
+            <Col span={15}>
               <ScheduledEquipmentPreview
                 form={generateForm}
                 selectedEquipmentIds={selectedEquipmentIds}
                 onSelectChange={setSelectedEquipmentIds}
               />
             </Col>
-
-            {/* RIGHT SIDE: Success Indicators (40%) */}
-            <Col span={10}>
+            <Col span={9}>
               <Card
                 size="small"
-                style={{
-                  backgroundColor: '#f6ffed',
-                  borderColor: '#52c41a',
-                  marginBottom: 16
-                }}
+                style={{ borderRadius: 10, height: '100%' }}
+                bodyStyle={{ padding: 16 }}
               >
-                <Space direction="vertical" style={{ width: '100%' }} size={16}>
-                  <div style={{ textAlign: 'center' }}>
-                    <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a' }} />
+                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                    {selectedEquipmentIds.length > 0 ? (
+                      <>
+                        <div style={{ fontSize: 48, marginBottom: 4 }}>✅</div>
+                        <Title level={2} style={{ margin: 0, color: '#52c41a' }}>
+                          {selectedEquipmentIds.length}
+                        </Title>
+                        <Text type="secondary">Equipment Selected</Text>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 48, marginBottom: 4 }}>📋</div>
+                        <Title level={4} style={{ margin: 0, color: '#999' }}>
+                          Select Date & Shift
+                        </Title>
+                        <Text type="secondary">to preview equipment</Text>
+                      </>
+                    )}
                   </div>
 
-                  <Statistic
-                    title={<Text style={{ color: '#52c41a', fontWeight: 600 }}>Equipment Selected</Text>}
-                    value={selectedEquipmentIds.length}
-                    valueStyle={{ color: '#52c41a', fontSize: 32, fontWeight: 'bold' }}
-                    suffix="items"
-                  />
+                  <Divider style={{ margin: '4px 0' }} />
 
-                  <Divider style={{ margin: '8px 0' }} />
+                  <div>
+                    <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Text type="secondary">📅 Date</Text>
+                        <Text strong>
+                          {Form.useWatch('target_date', generateForm)?.format('DD MMM YYYY') || '—'}
+                        </Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Text type="secondary">⏰ Shift</Text>
+                        <Text strong style={{ textTransform: 'capitalize' }}>
+                          {Form.useWatch('shift', generateForm) || '—'}
+                        </Text>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Text type="secondary">🔧 Equipment</Text>
+                        <Text strong>{selectedEquipmentIds.length || '—'}</Text>
+                      </div>
+                    </Space>
+                  </div>
 
-                  <Statistic
-                    title={<Text style={{ color: '#52c41a', fontWeight: 600 }}>Inspectors Available</Text>}
-                    value="Ready"
-                    valueStyle={{ color: '#52c41a', fontSize: 20, fontWeight: 'bold' }}
-                    prefix={<TeamOutlined />}
-                  />
-
-                  <Alert
-                    type="success"
-                    message="System Ready"
-                    description="All requirements met for inspection list generation"
-                    showIcon
-                  />
+                  {selectedEquipmentIds.length > 0 && (
+                    <Alert
+                      type="success"
+                      message="Ready to Generate"
+                      description={`${selectedEquipmentIds.length} inspection assignments will be created`}
+                      showIcon
+                      style={{ borderRadius: 8 }}
+                    />
+                  )}
                 </Space>
               </Card>
             </Col>
           </Row>
-
-          {/* BOTTOM: Shift Selector Cards */}
-          <Divider orientation="left">
-            <Text strong style={{ fontSize: 16 }}>Select Shift</Text>
-          </Divider>
-
-          <Form.Item
-            name="shift"
-            rules={[{ required: true, message: 'Please select a shift' }]}
-          >
-            <Radio.Group style={{ width: '100%' }}>
-              <Row gutter={16}>
-                {/* Morning Shift Card */}
-                <Col span={8}>
-                  <Radio.Button
-                    value="morning"
-                    style={{
-                      width: '100%',
-                      height: 'auto',
-                      padding: 0,
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <Card
-                      hoverable
-                      style={{
-                        textAlign: 'center',
-                        border: 'none',
-                        height: 160,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        backgroundColor: Form.useWatch('shift', generateForm) === 'morning' ? '#fff7e6' : '#fafafa',
-                        borderLeft: Form.useWatch('shift', generateForm) === 'morning' ? '4px solid #faad14' : 'none',
-                      }}
-                      bodyStyle={{ padding: '20px' }}
-                    >
-                      <SunOutlined style={{ fontSize: 40, color: '#faad14', marginBottom: 12 }} />
-                      <Title level={4} style={{ margin: '8px 0', color: '#faad14' }}>Morning</Title>
-                      <Text type="secondary" style={{ fontSize: 13 }}>06:00 - 14:00</Text>
-                    </Card>
-                  </Radio.Button>
-                </Col>
-
-                {/* Afternoon Shift Card */}
-                <Col span={8}>
-                  <Radio.Button
-                    value="afternoon"
-                    style={{
-                      width: '100%',
-                      height: 'auto',
-                      padding: 0,
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <Card
-                      hoverable
-                      style={{
-                        textAlign: 'center',
-                        border: 'none',
-                        height: 160,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        backgroundColor: Form.useWatch('shift', generateForm) === 'afternoon' ? '#e6f7ff' : '#fafafa',
-                        borderLeft: Form.useWatch('shift', generateForm) === 'afternoon' ? '4px solid #1890ff' : 'none',
-                      }}
-                      bodyStyle={{ padding: '20px' }}
-                    >
-                      <CloudOutlined style={{ fontSize: 40, color: '#1890ff', marginBottom: 12 }} />
-                      <Title level={4} style={{ margin: '8px 0', color: '#1890ff' }}>Afternoon</Title>
-                      <Text type="secondary" style={{ fontSize: 13 }}>14:00 - 22:00</Text>
-                    </Card>
-                  </Radio.Button>
-                </Col>
-
-                {/* Night Shift Card */}
-                <Col span={8}>
-                  <Radio.Button
-                    value="night"
-                    style={{
-                      width: '100%',
-                      height: 'auto',
-                      padding: 0,
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <Card
-                      hoverable
-                      style={{
-                        textAlign: 'center',
-                        border: 'none',
-                        height: 160,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        backgroundColor: Form.useWatch('shift', generateForm) === 'night' ? '#f9f0ff' : '#fafafa',
-                        borderLeft: Form.useWatch('shift', generateForm) === 'night' ? '4px solid #722ed1' : 'none',
-                      }}
-                      bodyStyle={{ padding: '20px' }}
-                    >
-                      <MoonOutlined style={{ fontSize: 40, color: '#722ed1', marginBottom: 12 }} />
-                      <Title level={4} style={{ margin: '8px 0', color: '#722ed1' }}>Night</Title>
-                      <Text type="secondary" style={{ fontSize: 13 }}>22:00 - 06:00</Text>
-                    </Card>
-                  </Radio.Button>
-                </Col>
-              </Row>
-            </Radio.Group>
-          </Form.Item>
         </Form>
       </Modal>
 
