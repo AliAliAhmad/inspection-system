@@ -125,7 +125,9 @@ def create_app(config_name='development'):
         # AI-Enhanced Modules
         defect_ai, overdue, daily_review_ai, performance, schedule_ai,
         # Admin Audit
-        admin_activity
+        admin_activity,
+        # Team Communication & Toolkit
+        team_communication, toolkit
     )
 
     # Core
@@ -206,6 +208,10 @@ def create_app(config_name='development'):
 
     # Admin Audit Trail
     app.register_blueprint(admin_activity.bp, url_prefix='/api/admin-activity')
+
+    # Team Communication & Mobile Toolkit
+    app.register_blueprint(team_communication.bp, url_prefix='/api/communication')
+    app.register_blueprint(toolkit.bp, url_prefix='/api/toolkit')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)
