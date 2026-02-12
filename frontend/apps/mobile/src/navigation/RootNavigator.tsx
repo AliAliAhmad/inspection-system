@@ -53,6 +53,14 @@ import EquipmentRiskListScreen from '../screens/schedules/EquipmentRiskListScree
 import RouteOptimizerScreen from '../screens/schedules/RouteOptimizerScreen';
 import InspectorStatsScreen from '../screens/schedules/InspectorStatsScreen';
 
+// Communication screens
+import ChannelListScreen from '../screens/communication/ChannelListScreen';
+import ChatRoomScreen from '../screens/communication/ChatRoomScreen';
+import NewChannelScreen from '../screens/communication/NewChannelScreen';
+
+// Toolkit screens
+import ToolkitSettingsScreen from '../components/toolkit/ToolkitSettingsScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
@@ -99,6 +107,12 @@ export type RootStackParamList = {
   EquipmentRisks: undefined;
   RouteOptimizer: undefined;
   InspectorStats: undefined;
+  // Communication
+  ChannelList: undefined;
+  ChatRoom: { channelId: number; channelName: string };
+  NewChannel: undefined;
+  // Toolkit
+  ToolkitSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -151,6 +165,12 @@ export default function RootNavigator() {
       <Stack.Screen name="EquipmentRisks" component={EquipmentRiskListScreen} options={{ headerShown: true, title: 'Equipment Risk Analysis' }} />
       <Stack.Screen name="RouteOptimizer" component={RouteOptimizerScreen} options={{ headerShown: true, title: 'Route Optimizer' }} />
       <Stack.Screen name="InspectorStats" component={InspectorStatsScreen} options={{ headerShown: true, title: 'My Performance' }} />
+      {/* Communication screens */}
+      <Stack.Screen name="ChannelList" component={ChannelListScreen} options={{ headerShown: false, title: 'Team Chat' }} />
+      <Stack.Screen name="ChatRoom" component={ChatRoomScreen} options={{ headerShown: false, title: 'Chat' }} />
+      <Stack.Screen name="NewChannel" component={NewChannelScreen} options={{ headerShown: false, title: 'New Channel' }} />
+      {/* Toolkit */}
+      <Stack.Screen name="ToolkitSettings" component={ToolkitSettingsScreen} options={{ headerShown: true, title: 'Toolkit Settings' }} />
     </Stack.Navigator>
   );
 }

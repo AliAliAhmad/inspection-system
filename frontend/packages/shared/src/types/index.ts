@@ -51,6 +51,9 @@ export type {
   RiskResult as AIBaseRiskResult,
   AIInsight as AIBaseInsight,
 } from './ai-base.types';
+// Mobile Toolkit & Communication types
+export * from './toolkit.types';
+export * from './team-communication.types';
 // Color constants (values, not types)
 export {
   RISK_COLORS,

@@ -65,6 +65,9 @@ const ALL_COMMANDS: CommandItem[] = [
   { label: 'Pending Reviews', emoji: '\ud83d\udd0d', path: '/quality/reviews', category: 'Quality', keywords: ['pending', 'review', 'quality'], roles: ['quality_engineer'] },
   { label: 'Overdue Reviews', emoji: '\u23f0', path: '/quality/overdue', category: 'Quality', keywords: ['overdue', 'late', 'review'], roles: ['quality_engineer'] },
   { label: 'Bonus Requests', emoji: '\ud83c\udf1f', path: '/quality/bonus-requests', category: 'Quality', keywords: ['bonus', 'star', 'reward'], roles: ['quality_engineer'] },
+
+  // Communication
+  { label: 'Team Communication', emoji: '💬', path: '/admin/team-communication', category: 'Admin', keywords: ['chat', 'message', 'channel', 'broadcast', 'walkie', 'communication'], roles: ['admin'] },
 ];
 
 export default function CommandPalette() {

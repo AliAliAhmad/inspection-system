@@ -140,6 +140,15 @@ from app.models.performance_goal import PerformanceGoal
 # Admin Audit
 from app.models.admin_activity_log import AdminActivityLog
 
+# Team Communication
+from app.models.team_channel import TeamChannel
+from app.models.channel_member import ChannelMember
+from app.models.team_message import TeamMessage
+from app.models.message_read_receipt import MessageReadReceipt
+
+# Mobile Toolkit
+from app.models.toolkit_preference import ToolkitPreference
+
 __all__ = [
     'User',
     'Equipment',
@@ -255,4 +264,11 @@ __all__ = [
     'PerformanceGoal',
     # Admin Audit
     'AdminActivityLog',
+    # Team Communication
+    'TeamChannel',
+    'ChannelMember',
+    'TeamMessage',
+    'MessageReadReceipt',
+    # Mobile Toolkit
+    'ToolkitPreference',
 ]

@@ -264,3 +264,7 @@ export { dailyReviewAIApi } from './daily-review-ai.api';
 export { performanceApi } from './performance.api';
 export { reportsAIApi } from './reports-ai.api';
 export { scheduleAIApi } from './schedule-ai.api';
+
+// Mobile Toolkit & Communication
+export { toolkitApi } from './toolkit.api';
+export { teamCommunicationApi } from './team-communication.api';
