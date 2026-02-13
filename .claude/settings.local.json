@@ -84,7 +84,8 @@
       "Bash(gh pr view:*)",
       "Bash(open:*)",
       "Bash(do curl -s https://inspection-api-o3hz.onrender.com/health)",
-      "mcp__voicemode__converse"
+      "mcp__voicemode__converse",
+      "Bash(git rm:*)"
     ]
   }
 }

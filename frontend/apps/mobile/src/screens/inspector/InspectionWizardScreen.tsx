@@ -13,6 +13,7 @@ import {
   Animated,
   RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
@@ -48,9 +49,11 @@ interface LocalAnswer {
   comment?: string;
   photo_uri?: string;
   photo_url?: string;
+  photo_ai_analysis?: { en: string; ar: string };
   video_uri?: string;
   video_url?: string;
   video_file_id?: number;
+  video_ai_analysis?: { en: string; ar: string };
   voice_note_id?: number;
   voice_note_url?: string;
   voice_transcription?: { en: string; ar: string };
@@ -164,7 +167,9 @@ export default function InspectionWizardScreen() {
           answer_value: ans.answer_value,
           comment: ans.comment ?? undefined,
           photo_url: photoUrl ?? undefined,
+          photo_ai_analysis: ans.photo_ai_analysis ?? undefined,
           video_url: videoUrl ?? undefined,
+          video_ai_analysis: ans.video_ai_analysis ?? undefined,
           voice_note_id: ans.voice_note_id ?? undefined,
           voice_note_url: voiceNoteUrl ?? undefined,
         };
@@ -172,6 +177,41 @@ export default function InspectionWizardScreen() {
       setLocalAnswers((prev) => ({ ...prev, ...merged }));
     }
   }, [inspection]);
+
+  // Resume on same question - Load saved index when inspection loads
+  useEffect(() => {
+    if (inspection?.id && totalItems > 0) {
+      const loadSavedIndex = async () => {
+        try {
+          const savedIndexStr = await AsyncStorage.getItem(`inspection_${inspection.id}_currentIndex`);
+          if (savedIndexStr !== null) {
+            const savedIndex = parseInt(savedIndexStr, 10);
+            // Validate saved index is within bounds
+            if (savedIndex >= 0 && savedIndex < totalItems) {
+              setCurrentIndex(savedIndex);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load saved inspection index:', error);
+        }
+      };
+      loadSavedIndex();
+    }
+  }, [inspection?.id, totalItems]);
+
+  // Save current index whenever it changes
+  useEffect(() => {
+    if (inspection?.id) {
+      const saveCurrentIndex = async () => {
+        try {
+          await AsyncStorage.setItem(`inspection_${inspection.id}_currentIndex`, currentIndex.toString());
+        } catch (error) {
+          console.error('Failed to save inspection index:', error);
+        }
+      };
+      saveCurrentIndex();
+    }
+  }, [currentIndex, inspection?.id]);
 
   // Answer mutation
   const answerMutation = useMutation({
@@ -185,7 +225,14 @@ export default function InspectionWizardScreen() {
   // Submit mutation
   const submitMutation = useMutation({
     mutationFn: () => inspectionsApi.submit(inspectionId!),
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Clear saved index on submit
+      try {
+        await AsyncStorage.removeItem(`inspection_${inspectionId}_currentIndex`);
+      } catch (error) {
+        console.error('Failed to clear saved inspection index:', error);
+      }
+
       queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
       queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
       navigation.replace('Assessment', { id });
@@ -582,7 +629,7 @@ export default function InspectionWizardScreen() {
   }, [currentItem]);
 
   // Handle video recorded
-  const handleVideoRecorded = useCallback((videoFileId: number) => {
+  const handleVideoRecorded = useCallback((videoFileId: number, aiAnalysis?: { en: string; ar: string }) => {
     if (!currentItem) return;
 
     setLocalAnswers((prev) => ({
@@ -590,6 +637,7 @@ export default function InspectionWizardScreen() {
       [currentItem.id]: {
         ...prev[currentItem.id],
         video_file_id: videoFileId,
+        video_ai_analysis: aiAnalysis,
       },
     }));
   }, [currentItem]);
@@ -816,8 +864,29 @@ export default function InspectionWizardScreen() {
   const answerValue = currentAnswer?.answer_value || '';
   const isNumericFieldEmpty = currentItem.answer_type === 'numeric' && !answerValue.trim();
 
-  // Can proceed if: not fail without media AND not empty numeric field
-  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty;
+  // Check if this is RNR (Running Hours) or TWL (Twistlock Count) question - these ALWAYS require photo
+  const questionText = (isArabic && currentItem.question_text_ar)
+    ? currentItem.question_text_ar
+    : currentItem.question_text;
+  const questionTextLower = questionText.toLowerCase();
+
+  const isRNRQuestion = questionTextLower.includes('rnr') ||
+                        questionTextLower.includes('running hours') ||
+                        questionTextLower.includes('running hour') ||
+                        questionTextLower.includes('ساعات التشغيل') ||
+                        questionTextLower.includes('ساعة التشغيل');
+
+  const isTWLQuestion = questionTextLower.includes('twl') ||
+                        questionTextLower.includes('twistlock') ||
+                        questionTextLower.includes('twist lock') ||
+                        questionTextLower.includes('تويست لوك') ||
+                        questionTextLower.includes('عدد التويست');
+
+  const isRNRorTWL = isRNRQuestion || isTWLQuestion;
+  const isRNRorTWLWithoutPhoto = isRNRorTWL && !photoSource && !isUploading;
+
+  // Can proceed if: not fail without media AND not empty numeric field AND not RNR/TWL without photo
+  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty && !isRNRorTWLWithoutPhoto;
 
   // Get expected result and action if fail
   const expectedResult = isArabic
@@ -1015,6 +1084,23 @@ export default function InspectionWizardScreen() {
               disabled={isUploading}
             />
 
+            {/* Video AI Analysis */}
+            {currentAnswer?.video_ai_analysis && (
+              <View style={styles.aiAnalysisBox}>
+                <Text style={styles.aiAnalysisLabel}>🎥 Video AI Analysis:</Text>
+                {currentAnswer.video_ai_analysis.en && (
+                  <Text style={styles.aiAnalysisText}>
+                    {currentAnswer.video_ai_analysis.en}
+                  </Text>
+                )}
+                {currentAnswer.video_ai_analysis.ar && (
+                  <Text style={[styles.aiAnalysisText, styles.aiAnalysisTextAr]}>
+                    {currentAnswer.video_ai_analysis.ar}
+                  </Text>
+                )}
+              </View>
+            )}
+
             {/* Voice note */}
             <VoiceNoteRecorder
               key={currentItem.id} // Force new instance for each question
@@ -1032,6 +1118,15 @@ export default function InspectionWizardScreen() {
             <View style={styles.validationWarning}>
               <Text style={styles.warningText}>
                 ⚠️ {t('inspection.fail_requires_media', 'Photo, video, or voice note required for failed items')}
+              </Text>
+            </View>
+          )}
+
+          {/* Validation warning for RNR/TWL without photo */}
+          {isRNRorTWL && !photoSource && (
+            <View style={styles.validationWarning}>
+              <Text style={styles.warningText}>
+                📸 {t('inspection.rnr_twl_requires_photo', 'Photo required to verify Running Hours (RNR) or Twistlock Count (TWL)')}
               </Text>
             </View>
           )}
@@ -1056,6 +1151,15 @@ export default function InspectionWizardScreen() {
         </View>
       )}
 
+      {/* Warning if RNR/TWL without photo */}
+      {isRNRorTWLWithoutPhoto && (
+        <View style={styles.requiredMediaWarning}>
+          <Text style={styles.requiredMediaWarningText}>
+            📸 {t('inspection.rnr_twl_photo_required', 'Photo required to verify Running Hours (RNR) or Twistlock Count (TWL)')}
+          </Text>
+        </View>
+      )}
+
       {/* Navigation buttons */}
       <View style={styles.navButtonRow}>
         <TouchableOpacity
@@ -1068,20 +1172,7 @@ export default function InspectionWizardScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Skip button - allow skipping except for fail questions without media */}
-        <TouchableOpacity
-          style={[
-            styles.skipButton,
-            (isCurrentAnswered && !isUploading) && styles.skipButtonHidden,
-            !canProceedToNext && styles.skipButtonDisabled,
-          ]}
-          onPress={handleSkip}
-          disabled={currentIndex === totalItems - 1 || !canProceedToNext}
-        >
-          <Text style={styles.skipButtonText}>
-            {isUploading ? t('inspection.skip_upload', 'Skip Upload') : t('inspection.skip', 'Skip')}
-          </Text>
-        </TouchableOpacity>
+        {/* Skip button removed - user must answer all questions */}
 
         {currentIndex === totalItems - 1 ? (
           <TouchableOpacity

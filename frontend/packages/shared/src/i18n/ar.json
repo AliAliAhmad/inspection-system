@@ -159,7 +159,14 @@
     "withinRange": "صحيح",
     "outOfRange": "خارج النطاق",
     "valueOutOfRange": "القيمة خارج النطاق المتوقع",
-    "critical": "حرج"
+    "critical": "حرج",
+    "exitTitle": "الخروج من التفتيش؟",
+    "exitMessage": "تم حفظ تقدمك. يمكنك الاستئناف لاحقاً من المهام.",
+    "exit": "خروج",
+    "fail_requires_media_to_proceed": "العناصر الفاشلة تتطلب صورة أو فيديو أو تسجيل صوتي للمتابعة",
+    "numeric_required": "أدخل رقماً أو اكتب \"معطل\" إذا كان العداد معطلاً",
+    "rnr_twl_requires_photo": "صورة مطلوبة للتحقق من ساعات التشغيل (RNR) أو عدد التويست لوك (TWL)",
+    "rnr_twl_photo_required": "صورة مطلوبة للتحقق من ساعات التشغيل (RNR) أو عدد التويست لوك (TWL)"
   },
   "jobs": {
     "planned_time": "الوقت المخطط",

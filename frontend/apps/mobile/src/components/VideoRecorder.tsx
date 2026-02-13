@@ -13,7 +13,7 @@ import * as FileSystem from 'expo-file-system';
 import { getApiClient } from '@inspection/shared';
 
 interface VideoRecorderProps {
-  onVideoRecorded: (videoFileId: number) => void;
+  onVideoRecorded: (videoFileId: number, aiAnalysis?: { en: string; ar: string }) => void;
   onVideoDeleted?: () => void;
   existingVideoUrl?: string | null;
   disabled?: boolean;
@@ -101,11 +101,19 @@ export default function VideoRecorder({
         }
       );
 
-      const result = (response.data as any)?.data;
+      const responseData = (response.data as any);
+      const result = responseData?.data;
+      const aiAnalysis = responseData?.ai_analysis;
+
+      console.log('Video upload response:', {
+        hasFile: !!result?.id,
+        hasAiAnalysis: !!aiAnalysis,
+        analysisFailed: responseData?.analysis_failed
+      });
 
       if (result?.id) {
         setCloudinaryUrl(result.url || null);
-        onVideoRecorded(result.id);
+        onVideoRecorded(result.id, aiAnalysis);
       }
     } catch (err: any) {
       console.error('Failed to upload video:', err);

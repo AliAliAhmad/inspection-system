@@ -174,7 +174,14 @@
     "withinRange": "OK",
     "outOfRange": "Out of range",
     "valueOutOfRange": "Value is out of expected range",
-    "critical": "CRITICAL"
+    "critical": "CRITICAL",
+    "exitTitle": "Exit Inspection?",
+    "exitMessage": "Your progress is saved. You can resume later from assignments.",
+    "exit": "Exit",
+    "fail_requires_media_to_proceed": "Failed items require photo, video, or voice note to proceed",
+    "numeric_required": "Enter a number or type \"faulty\" if meter is broken",
+    "rnr_twl_requires_photo": "Photo required to verify Running Hours (RNR) or Twistlock Count (TWL)",
+    "rnr_twl_photo_required": "Photo required to verify Running Hours (RNR) or Twistlock Count (TWL)"
   },
   "jobs": {
     "planned_time": "Planned Time",
