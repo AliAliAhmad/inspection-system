@@ -733,12 +733,16 @@ def upload_answer_media(inspection_id):
             from openai import OpenAI
 
             api_key = os.getenv('OPENAI_API_KEY')
+            logger.info(f"Photo AI analysis starting... API key present: {bool(api_key)}")
+
             if api_key:
                 client = OpenAI(api_key=api_key)
+                photo_url = file_record.file_path
+                logger.info(f"Analyzing photo at URL: {photo_url}")
 
                 # Analyze the photo with GPT-4 Vision
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-4o",  # Use gpt-4o which supports vision
                     messages=[
                         {
                             "role": "user",
@@ -765,12 +769,15 @@ def upload_answer_media(inspection_id):
                 )
 
                 analysis_text = response.choices[0].message.content.strip()
+                logger.info(f"Received analysis text: {analysis_text[:200]}")
 
                 # Try to parse as JSON
                 try:
                     import json
                     ai_analysis = json.loads(analysis_text)
-                except:
+                    logger.info(f"Parsed as JSON successfully")
+                except Exception as parse_err:
+                    logger.info(f"Not JSON, translating... Error: {parse_err}")
                     # If not JSON, treat as plain text and translate
                     from app.services.translation_service import TranslationService
                     translated = TranslationService.auto_translate(analysis_text)
@@ -779,22 +786,26 @@ def upload_answer_media(inspection_id):
                         'ar': translated.get('ar') or analysis_text
                     }
 
+                logger.info(f"Final ai_analysis: {ai_analysis}")
+
             else:
                 logger.warning("Photo analysis skipped: OPENAI_API_KEY not configured")
                 analysis_failed = True
 
         except Exception as e:
-            logger.error(f"Photo AI analysis failed: {e}")
+            logger.error(f"Photo AI analysis failed: {e}", exc_info=True)
             analysis_failed = True
 
-    return jsonify({
+    response_data = {
         'status': 'success',
         'message': f'{"Video" if is_video else "Photo"} uploaded',
         'data': file_record.to_dict(),
         'media_type': media_type,
         'ai_analysis': ai_analysis,
         'analysis_failed': analysis_failed,
-    }), 201
+    }
+    logger.info(f"Returning response with ai_analysis: {bool(ai_analysis)}, analysis_failed: {analysis_failed}")
+    return jsonify(response_data), 201
 
 
 
