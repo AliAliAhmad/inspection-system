@@ -116,7 +116,7 @@ export default function DashboardPage() {
                   type="primary"
                   ghost
                   icon={<CalendarOutlined />}
-                  onClick={() => navigate('/work-planning')}
+                  onClick={() => navigate('/admin/work-planning')}
                   style={{ borderColor: '#fff', color: '#fff' }}
                 >
                   📅 Work Planning
@@ -125,7 +125,7 @@ export default function DashboardPage() {
                   type="primary"
                   ghost
                   icon={<UploadOutlined />}
-                  onClick={() => navigate('/work-planning')}
+                  onClick={() => navigate('/admin/work-planning')}
                   style={{ borderColor: '#fff', color: '#fff' }}
                 >
                   📥 Import SAP
@@ -134,7 +134,7 @@ export default function DashboardPage() {
                   <Button
                     type="primary"
                     icon={<PlusOutlined />}
-                    onClick={() => navigate('/work-planning')}
+                    onClick={() => navigate('/admin/work-planning')}
                     style={{ background: '#52c41a', borderColor: '#52c41a' }}
                   >
                     ➕ Create Plan
@@ -177,7 +177,7 @@ export default function DashboardPage() {
                 type="primary"
                 icon={<PlusOutlined />}
                 style={{ marginTop: 16 }}
-                onClick={() => navigate('/work-planning')}
+                onClick={() => navigate('/admin/work-planning')}
               >
                 Create Work Plan
               </Button>
@@ -318,7 +318,7 @@ export default function DashboardPage() {
                   title={<span>🎯 Today's Focus</span>}
                   style={{ marginTop: 16 }}
                   extra={
-                    <Button type="link" onClick={() => navigate('/work-planning')}>
+                    <Button type="link" onClick={() => navigate('/admin/work-planning')}>
                       View All →
                     </Button>
                   }
@@ -391,7 +391,7 @@ export default function DashboardPage() {
       {isAdmin && adminData ? (
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} lg={6}>
-            <Card hoverable onClick={() => navigate('/users')}>
+            <Card hoverable onClick={() => navigate('/admin/users')}>
               <Statistic
                 title={<span>👥 {t('nav.users')}</span>}
                 value={adminData.users_count}
@@ -400,7 +400,7 @@ export default function DashboardPage() {
             </Card>
           </Col>
           <Col xs={24} sm={12} lg={6}>
-            <Card hoverable onClick={() => navigate('/equipment')}>
+            <Card hoverable onClick={() => navigate('/admin/equipment')}>
               <Statistic
                 title={<span>⚙️ {t('nav.equipment')}</span>}
                 value={adminData.equipment_count}
@@ -409,7 +409,7 @@ export default function DashboardPage() {
             </Card>
           </Col>
           <Col xs={24} sm={12} lg={6}>
-            <Card hoverable onClick={() => navigate('/inspections')}>
+            <Card hoverable onClick={() => navigate('/admin/inspections')}>
               <Statistic
                 title={<span>✅ {t('nav.inspections')} Today</span>}
                 value={adminData.inspections_today}
@@ -418,7 +418,7 @@ export default function DashboardPage() {
             </Card>
           </Col>
           <Col xs={24} sm={12} lg={6}>
-            <Card hoverable onClick={() => navigate('/defects')}>
+            <Card hoverable onClick={() => navigate('/admin/defects')}>
               <Statistic
                 title={<span>⚠️ Open {t('nav.defects')}</span>}
                 value={adminData.open_defects}
