@@ -149,6 +149,12 @@ export default function VoiceNoteRecorder({
 
       const result = (response.data as any)?.data;
 
+      // DEBUG: Log the full response to see what backend returns
+      console.log('=== VOICE UPLOAD RESPONSE ===');
+      console.log('Full response.data:', JSON.stringify(response.data, null, 2));
+      console.log('result:', JSON.stringify(result, null, 2));
+      console.log('============================');
+
       if (result?.audio_file?.id) {
         setCloudinaryUrl(result.audio_file.url || null);
         const trans = { en: result.en || '', ar: result.ar || '' };
