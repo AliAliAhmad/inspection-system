@@ -11,10 +11,15 @@ import {
   Dimensions,
   Image,
   Animated,
+  RefreshControl,
 } from 'react-native';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system';
 import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
+import VideoRecorder from '../../components/VideoRecorder';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -45,10 +50,12 @@ interface LocalAnswer {
   photo_url?: string;
   video_uri?: string;
   video_url?: string;
+  video_file_id?: number;
   voice_note_id?: number;
   voice_note_url?: string;
   voice_transcription?: { en: string; ar: string };
   isUploading?: boolean;
+  uploadFailed?: boolean;
   skipped?: boolean;
 }
 
@@ -397,7 +404,9 @@ export default function InspectionWizardScreen() {
     }
   }, [currentItem, t]);
 
-  const uploadPhoto = useCallback(async (checklistItemId: number, uri: string, fileName: string) => {
+  const uploadPhoto = useCallback(async (checklistItemId: number, uri: string, fileName: string, retryCount = 0) => {
+    const MAX_RETRIES = 2;
+
     setLocalAnswers((prev) => ({
       ...prev,
       [checklistItemId]: {
@@ -408,15 +417,29 @@ export default function InspectionWizardScreen() {
     }));
 
     try {
-      const formData = new FormData();
-      formData.append('file', { uri, name: fileName || 'photo.jpg', type: 'image/jpeg' } as any);
-      formData.append('checklist_item_id', String(checklistItemId));
+      // Read file as base64
+      console.log('Reading photo as base64...', uri);
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
+      console.log('Uploading photo via base64...', base64.substring(0, 50) + '...');
+
+      // Upload as JSON with base64
       const response = await getApiClient().post(
         `/api/inspections/${inspectionId}/upload-media`,
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        {
+          file_base64: base64,
+          file_name: fileName || 'photo.jpg',
+          file_type: 'image/jpeg',
+          checklist_item_id: checklistItemId,
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 180000, // 3 minutes
+        }
       );
+
       const data = (response.data as any)?.data;
       const cloudinaryUrl = data?.photo_file?.url || data?.url;
 
@@ -427,20 +450,44 @@ export default function InspectionWizardScreen() {
           photo_uri: undefined,
           photo_url: cloudinaryUrl,
           isUploading: false,
+          uploadFailed: false,
         },
       }));
 
       queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
     } catch (error: any) {
-      Alert.alert(t('common.error'), error?.response?.data?.message || 'Failed to upload photo');
+      // Retry logic for network/timeout errors
+      const isRetryableError =
+        error?.code === 'ECONNABORTED' ||
+        error?.message?.includes('timeout') ||
+        error?.message?.includes('Network Error') ||
+        !error?.response;
+
+      if (isRetryableError && retryCount < MAX_RETRIES) {
+        console.log(`Upload failed, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+        // Wait 2 seconds before retry
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return uploadPhoto(checklistItemId, uri, fileName, retryCount + 1);
+      }
+      const errorMsg = error?.response?.data?.message || error?.message || 'Failed to upload photo';
+
+      // Keep the photo locally even if upload fails - allow user to proceed
       setLocalAnswers((prev) => ({
         ...prev,
         [checklistItemId]: {
           ...prev[checklistItemId],
-          photo_uri: undefined,
+          // Keep photo_uri so user can see it and proceed
           isUploading: false,
+          uploadFailed: true,
         },
       }));
+
+      // Show error with retry option
+      Alert.alert(
+        t('common.error'),
+        `${errorMsg}\n\nPhoto saved locally. Tap "Retry Upload" to try again, or proceed to next question.`,
+        [{ text: 'OK' }]
+      );
     }
   }, [id, inspectionId, queryClient, t]);
 
@@ -467,6 +514,77 @@ export default function InspectionWizardScreen() {
       });
     }
   }, [currentItem, localAnswers, answerMutation]);
+
+  // Handle voice note deletion
+  const handleVoiceNoteDeleted = useCallback(() => {
+    if (!currentItem) return;
+
+    setLocalAnswers((prev) => ({
+      ...prev,
+      [currentItem.id]: {
+        ...prev[currentItem.id],
+        voice_note_id: undefined,
+        voice_note_url: undefined,
+        voice_transcription: undefined,
+      },
+    }));
+  }, [currentItem]);
+
+  // Handle photo deletion
+  const handlePhotoDelete = useCallback(() => {
+    if (!currentItem) return;
+
+    Alert.alert(
+      'Delete Photo',
+      'Are you sure you want to delete this photo?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setLocalAnswers((prev) => ({
+              ...prev,
+              [currentItem.id]: {
+                ...prev[currentItem.id],
+                photo_uri: undefined,
+                photo_url: undefined,
+                uploadFailed: false,
+              },
+            }));
+          },
+        },
+      ]
+    );
+  }, [currentItem]);
+
+  // Handle video recorded
+  const handleVideoRecorded = useCallback((videoFileId: number) => {
+    if (!currentItem) return;
+
+    setLocalAnswers((prev) => ({
+      ...prev,
+      [currentItem.id]: {
+        ...prev[currentItem.id],
+        video_file_id: videoFileId,
+      },
+    }));
+  }, [currentItem]);
+
+  // Handle video deletion
+  const handleVideoDeleted = useCallback(() => {
+    if (!currentItem) return;
+
+    setLocalAnswers((prev) => ({
+      ...prev,
+      [currentItem.id]: {
+        ...prev[currentItem.id],
+        video_uri: undefined,
+        video_url: undefined,
+        video_file_id: undefined,
+      },
+    }));
+  }, [currentItem]);
 
   // Render progress dots
   const renderProgressDots = () => {
@@ -665,6 +783,13 @@ export default function InspectionWizardScreen() {
   const isUploading = currentAnswer?.isUploading;
   const validation = validateAnswer(currentItem, currentAnswer?.answer_value || '');
 
+  // Check if fail response has required media (photo, video, or voice)
+  const hasVoiceNote = currentAnswer?.voice_note_id || currentAnswer?.voice_note_url;
+  const hasVideo = currentAnswer?.video_file_id || currentAnswer?.video_url || currentAnswer?.video_uri;
+  const hasMedia = photoSource || hasVoiceNote || hasVideo;
+  const isFailWithoutMedia = validation === 'fail' && !hasMedia && !isUploading;
+  const canProceedToNext = !isFailWithoutMedia;
+
   // Get expected result and action if fail
   const expectedResult = isArabic
     ? ((currentItem as any).expected_result_ar || (currentItem as any).expected_result)
@@ -776,47 +901,86 @@ export default function InspectionWizardScreen() {
           {/* Answer input */}
           {renderAnswerInput()}
 
-          {/* Photo section */}
+          {/* Media section - Photo, Video, Voice */}
           <View style={styles.mediaSection}>
-            <TouchableOpacity
-              style={[styles.photoButton, isUploading && styles.buttonDisabled]}
-              onPress={handleTakePhoto}
-              disabled={isUploading}
-            >
-              <Text style={styles.photoButtonText}>📷 {t('inspection.take_photo')}</Text>
-            </TouchableOpacity>
+            {/* Photo */}
+            <View style={styles.mediaSectionRow}>
+              <TouchableOpacity
+                style={[styles.mediaButton, isUploading && styles.buttonDisabled]}
+                onPress={handleTakePhoto}
+                disabled={isUploading}
+              >
+                <Text style={styles.mediaButtonText}>📷</Text>
+              </TouchableOpacity>
 
-            {photoSource && (
-              <View style={styles.photoContainer}>
-                <Image source={{ uri: photoSource }} style={styles.photoPreview} resizeMode="cover" />
-                {isUploading && (
-                  <View style={styles.uploadOverlay}>
-                    <ActivityIndicator color="#fff" size="large" />
+              {photoSource && (
+                <View style={styles.mediaPreviewContainer}>
+                  <View style={styles.photoContainer}>
+                    <Image source={{ uri: photoSource }} style={styles.photoPreview} resizeMode="cover" />
+                    {isUploading && (
+                      <View style={styles.uploadOverlay}>
+                        <ActivityIndicator color="#fff" size="large" />
+                        <Text style={styles.uploadingText}>Uploading...</Text>
+                      </View>
+                    )}
+                    {currentAnswer?.uploadFailed && currentAnswer?.photo_uri && (
+                      <TouchableOpacity
+                        style={styles.retryButtonSmall}
+                        onPress={() => uploadPhoto(currentItem.id, currentAnswer.photo_uri!, currentItem.id + '.jpg')}
+                      >
+                        <Text style={styles.retryButtonTextSmall}>🔄</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
-                )}
-              </View>
-            )}
+                  <TouchableOpacity
+                    style={styles.mediaDeleteButton}
+                    onPress={handlePhotoDelete}
+                  >
+                    <Text style={styles.deleteIconSmall}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Video */}
+            <VideoRecorder
+              onVideoRecorded={handleVideoRecorded}
+              onVideoDeleted={handleVideoDeleted}
+              existingVideoUrl={currentAnswer?.video_url}
+              disabled={isUploading}
+            />
+
+            {/* Voice note */}
+            <VoiceNoteRecorder
+              key={currentItem.id} // Force new instance for each question
+              onVoiceNoteRecorded={handleVoiceNoteRecorded}
+              onVoiceNoteDeleted={handleVoiceNoteDeleted}
+              existingVoiceUrl={currentAnswer?.voice_note_url}
+              existingTranscription={currentAnswer?.voice_transcription}
+              disabled={isUploading}
+              language={i18n.language}
+            />
           </View>
 
-          {/* Voice note */}
-          <VoiceNoteRecorder
-            onVoiceNoteRecorded={handleVoiceNoteRecorded}
-            existingVoiceUrl={currentAnswer?.voice_note_url}
-            existingTranscription={currentAnswer?.voice_transcription}
-            disabled={isUploading}
-            language={i18n.language}
-          />
-
           {/* Validation warning for failed items */}
-          {validation === 'fail' && !photoSource && (
+          {validation === 'fail' && !hasMedia && (
             <View style={styles.validationWarning}>
               <Text style={styles.warningText}>
-                ⚠️ {t('inspection.fail_requires_media', 'Photo recommended for failed items')}
+                ⚠️ {t('inspection.fail_requires_media', 'Photo, video, or voice note required for failed items')}
               </Text>
             </View>
           )}
         </ScrollView>
       </Animated.View>
+
+      {/* Warning if fail without media */}
+      {isFailWithoutMedia && (
+        <View style={styles.requiredMediaWarning}>
+          <Text style={styles.requiredMediaWarningText}>
+            ⚠️ {t('inspection.fail_requires_media_to_proceed', 'Failed items require photo, video, or voice note to proceed')}
+          </Text>
+        </View>
+      )}
 
       {/* Navigation buttons */}
       <View style={styles.navButtonRow}>
@@ -830,14 +994,18 @@ export default function InspectionWizardScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Skip button */}
+        {/* Skip button - allow skipping except for fail questions without media */}
         <TouchableOpacity
-          style={[styles.skipButton, isCurrentAnswered && styles.skipButtonHidden]}
+          style={[
+            styles.skipButton,
+            (isCurrentAnswered && !isUploading) && styles.skipButtonHidden,
+            !canProceedToNext && styles.skipButtonDisabled,
+          ]}
           onPress={handleSkip}
-          disabled={isCurrentAnswered || currentIndex === totalItems - 1}
+          disabled={currentIndex === totalItems - 1 || !canProceedToNext}
         >
           <Text style={styles.skipButtonText}>
-            {t('inspection.skip', 'Skip')}
+            {isUploading ? t('inspection.skip_upload', 'Skip Upload') : t('inspection.skip', 'Skip')}
           </Text>
         </TouchableOpacity>
 
@@ -855,11 +1023,20 @@ export default function InspectionWizardScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.navButton, styles.navButtonPrimary]}
+            style={[
+              styles.navButton,
+              styles.navButtonPrimary,
+              !canProceedToNext && styles.navButtonDisabled,
+            ]}
             onPress={goToNext}
+            disabled={!canProceedToNext}
           >
-            <Text style={[styles.navButtonText, styles.navButtonTextPrimary]}>
-              →
+            <Text style={[
+              styles.navButtonText,
+              styles.navButtonTextPrimary,
+              !canProceedToNext && styles.navButtonTextDisabled,
+            ]}>
+              {isUploading ? 'Next →' : '→'}
             </Text>
           </TouchableOpacity>
         )}
@@ -1178,6 +1355,33 @@ const styles = StyleSheet.create({
   },
   mediaSection: {
     marginBottom: 16,
+    gap: 8,
+  },
+  mediaSectionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  mediaButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E0F2F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  mediaButtonText: {
+    fontSize: 20,
+  },
+  mediaPreviewContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   photoButton: {
     backgroundColor: '#E0F2F1',
@@ -1192,13 +1396,28 @@ const styles = StyleSheet.create({
     color: '#00897B',
   },
   photoContainer: {
-    marginTop: 12,
     position: 'relative',
   },
   photoPreview: {
-    width: '100%',
-    height: 150,
-    borderRadius: 8,
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+  },
+  mediaDeleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ff4d4f',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  deleteIconSmall: {
+    fontSize: 14,
   },
   uploadOverlay: {
     position: 'absolute',
@@ -1211,6 +1430,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  uploadingText: {
+    color: '#fff',
+    fontSize: 14,
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  retryButton: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  retryButtonSmall: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: '#FF9800',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
+  retryButtonTextSmall: {
+    color: '#fff',
+    fontSize: 16,
+  },
   validationWarning: {
     backgroundColor: '#FFF8E1',
     padding: 12,
@@ -1221,6 +1482,21 @@ const styles = StyleSheet.create({
   warningText: {
     fontSize: 12,
     color: '#E65100',
+  },
+  requiredMediaWarning: {
+    backgroundColor: '#FFEBEE',
+    padding: 12,
+    marginHorizontal: 12,
+    marginTop: 8,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
+  },
+  requiredMediaWarningText: {
+    fontSize: 13,
+    color: '#c62828',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   navButtonRow: {
     flexDirection: 'row',
@@ -1266,6 +1542,9 @@ const styles = StyleSheet.create({
   },
   skipButtonHidden: {
     opacity: 0.3,
+  },
+  skipButtonDisabled: {
+    opacity: 0.4,
   },
   skipButtonText: {
     fontSize: 14,
