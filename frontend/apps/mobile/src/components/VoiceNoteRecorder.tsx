@@ -318,6 +318,21 @@ export default function VoiceNoteRecorder({
           <Text style={styles.hintText}>Hold to record</Text>
         )}
       </View>
+
+      {/* Transcription Display */}
+      {transcription && (transcription.en || transcription.ar) && (
+        <View style={styles.transcriptionBox}>
+          <Text style={styles.transcriptionLabel}>📝 Transcription:</Text>
+          {transcription.en && (
+            <Text style={styles.transcriptionText}>{transcription.en}</Text>
+          )}
+          {transcription.ar && (
+            <Text style={[styles.transcriptionText, styles.transcriptionAr]}>
+              {transcription.ar}
+            </Text>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -420,5 +435,29 @@ const styles = StyleSheet.create({
   },
   deleteIcon: {
     fontSize: 12,
+  },
+  transcriptionBox: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1677ff',
+  },
+  transcriptionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1677ff',
+    marginBottom: 6,
+  },
+  transcriptionText: {
+    fontSize: 13,
+    color: '#262626',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  transcriptionAr: {
+    textAlign: 'right',
+    fontFamily: 'System',
   },
 });

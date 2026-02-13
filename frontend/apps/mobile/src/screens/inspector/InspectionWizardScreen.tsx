@@ -458,14 +458,9 @@ export default function InspectionWizardScreen() {
         },
       }));
 
-      // Show AI analysis result to user
+      // Log analysis status
       if (aiAnalysis) {
-        const analysisText = aiAnalysis.en || aiAnalysis.ar || 'Analysis complete';
-        Alert.alert(
-          '🤖 AI Analysis',
-          analysisText,
-          [{ text: 'OK' }]
-        );
+        console.log('Photo AI analysis received:', aiAnalysis);
       } else if (result?.analysis_failed) {
         console.log('Photo uploaded but AI analysis not available');
       }
@@ -954,6 +949,23 @@ export default function InspectionWizardScreen() {
                   >
                     <Text style={styles.deleteIconSmall}>🗑️</Text>
                   </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Photo AI Analysis */}
+              {currentAnswer?.photo_ai_analysis && (
+                <View style={styles.aiAnalysisBox}>
+                  <Text style={styles.aiAnalysisLabel}>🤖 AI Analysis:</Text>
+                  {currentAnswer.photo_ai_analysis.en && (
+                    <Text style={styles.aiAnalysisText}>
+                      {currentAnswer.photo_ai_analysis.en}
+                    </Text>
+                  )}
+                  {currentAnswer.photo_ai_analysis.ar && (
+                    <Text style={[styles.aiAnalysisText, styles.aiAnalysisTextAr]}>
+                      {currentAnswer.photo_ai_analysis.ar}
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
@@ -1600,5 +1612,29 @@ const styles = StyleSheet.create({
   noItemsText: {
     fontSize: 14,
     color: '#999',
+  },
+  aiAnalysisBox: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1677ff',
+  },
+  aiAnalysisLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1677ff',
+    marginBottom: 6,
+  },
+  aiAnalysisText: {
+    fontSize: 13,
+    color: '#262626',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  aiAnalysisTextAr: {
+    textAlign: 'right',
+    fontFamily: 'System',
   },
 });
