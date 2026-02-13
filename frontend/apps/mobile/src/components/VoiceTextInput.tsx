@@ -110,15 +110,7 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
     } catch (err: any) {
       console.error('Voice transcription failed:', err);
       setTranscriptionFailed(true);
-      let message = err?.response?.data?.message || 'Recording saved but transcription failed.';
-
-      // Better error message for network/timeout errors
-      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
-        message = 'Upload timeout. The server may be starting up. Please try again in 30 seconds.';
-      } else if (err?.message?.includes('Network Error') || !err?.response) {
-        message = 'Network error. Please check your internet connection and try again.';
-      }
-
+      const message = err?.response?.data?.message || 'Recording saved but transcription failed.';
       Alert.alert('Voice Saved', message);
     } finally {
       setTranscribing(false);

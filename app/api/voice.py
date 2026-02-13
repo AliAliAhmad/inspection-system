@@ -85,11 +85,8 @@ def transcribe():
     """
     Save an audio recording to Cloudinary and transcribe it to both English and Arabic text.
 
-    Accepts:
-    1. multipart/form-data with 'audio' file field
-    2. JSON with base64: audio_base64, file_name, file_type, language
-
-    Optional: 'related_type', 'related_id' for linking the audio to an entity.
+    Accepts: multipart/form-data with 'audio' file field.
+             Optional: 'related_type', 'related_id' for linking the audio to an entity.
     Returns: {
         "status": "success",
         "data": {
@@ -99,70 +96,32 @@ def transcribe():
         }
     }
     """
-    import base64
-    from io import BytesIO
-    from werkzeug.datastructures import FileStorage
+    if 'audio' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No audio file provided'}), 400
+
+    audio_file = request.files['audio']
+    if not audio_file.filename:
+        return jsonify({'status': 'error', 'message': 'Empty audio file'}), 400
 
     user_id = get_jwt_identity()
-
-    # Check if base64 or FormData
-    is_base64 = request.is_json and 'audio_base64' in request.json
-
-    if is_base64:
-        # Handle base64 upload
-        data = request.json
-        audio_base64 = data.get('audio_base64')
-        file_name = data.get('file_name', 'recording.m4a')
-        file_type = data.get('file_type', 'audio/m4a')
-        language_hint = data.get('language', 'en')
-        related_type = data.get('related_type')
-        related_id = data.get('related_id')
-
-        if not audio_base64:
-            return jsonify({'status': 'error', 'message': 'audio_base64 is required'}), 400
-
-        # Decode base64 to bytes
-        try:
-            audio_bytes = base64.b64decode(audio_base64)
-            audio_content = audio_bytes
-        except Exception as e:
-            return jsonify({'status': 'error', 'message': f'Invalid base64 data: {str(e)}'}), 400
-
-        # Create FileStorage object from bytes
-        audio_file = FileStorage(
-            stream=BytesIO(audio_bytes),
-            filename=file_name,
-            content_type=file_type
-        )
-        filename = file_name
-    else:
-        # Handle FormData upload (original method)
-        if 'audio' not in request.files:
-            return jsonify({'status': 'error', 'message': 'No audio file provided'}), 400
-
-        audio_file = request.files['audio']
-        if not audio_file.filename:
-            return jsonify({'status': 'error', 'message': 'Empty audio file'}), 400
-
-        related_type = request.form.get('related_type')
-        related_id = request.form.get('related_id')
-        language_hint = request.form.get('language')
-
-        # Read audio content before upload
-        audio_content = audio_file.read()
-        audio_file.seek(0)  # Reset for upload
-
-        # Ensure filename has an extension
-        filename = audio_file.filename or 'recording.webm'
-        if '.' not in filename:
-            filename = filename + '.webm'
-        audio_file.filename = filename
-
+    related_type = request.form.get('related_type')
+    related_id = request.form.get('related_id')
+    language_hint = request.form.get('language')  # 'en' or 'ar' from frontend
     if related_id:
         try:
             related_id = int(related_id)
         except (ValueError, TypeError):
             related_id = None
+
+    # --- 1. Read audio content before upload (needed for both upload and transcription) ---
+    audio_content = audio_file.read()
+    audio_file.seek(0)  # Reset for upload
+
+    # Ensure filename has an extension
+    filename = audio_file.filename or 'recording.webm'
+    if '.' not in filename:
+        filename = filename + '.webm'
+    audio_file.filename = filename
 
     # --- 2. Save the audio file to Cloudinary ---
     audio_file_record = None

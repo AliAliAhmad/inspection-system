@@ -161,17 +161,8 @@ export function PhotoCapture({
       const fileData = res.data?.data;
       const filePath = fileData?.filename ? `/uploads/${fileData.filename}` : `/uploads/${filename}`;
       setPhotoPath(filePath);
-    } catch (err: any) {
-      let message = err?.response?.data?.message || t('common.upload_failed', 'Upload failed');
-
-      // Better error message for network/timeout errors
-      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
-        message = 'Upload timeout. The server may be starting up. Please try again in 30 seconds.';
-      } else if (err?.message?.includes('Network Error') || !err?.response) {
-        message = 'Network error. Please check your internet connection and try again.';
-      }
-
-      Alert.alert(t('common.error'), message);
+    } catch (err) {
+      Alert.alert(t('common.error'), t('common.upload_failed', 'Upload failed'));
       setPhoto(null);
     } finally {
       setUploading(false);

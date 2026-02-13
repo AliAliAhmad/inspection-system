@@ -82,9 +82,7 @@
       "Bash(do echo '=== COMMIT: $commit ===')",
       "Bash(gh pr list:*)",
       "Bash(gh pr view:*)",
-      "Bash(open:*)",
-      "Bash(do curl -s https://inspection-api-o3hz.onrender.com/health)",
-      "mcp__voicemode__converse"
+      "Bash(open:*)"
     ]
   }
 }

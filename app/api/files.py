@@ -19,53 +19,17 @@ bp = Blueprint('files', __name__)
 def upload_file():
     """
     Upload a file.
-    Supports:
-    1. Multipart form: file, related_type, related_id, category
-    2. JSON with base64: file_base64, file_name, file_type, related_type, related_id, category
+    Multipart form: file, related_type, related_id, category
     """
-    import base64
-    from io import BytesIO
-    from werkzeug.datastructures import FileStorage
-
     user = get_current_user()
 
-    # Check if base64 or FormData
-    is_base64 = request.is_json and 'file_base64' in request.json
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'message': 'No file in request'}), 400
 
-    if is_base64:
-        # Handle base64 upload
-        data = request.json
-        file_base64 = data.get('file_base64')
-        file_name = data.get('file_name', 'file')
-        file_type = data.get('file_type', 'application/octet-stream')
-        related_type = data.get('related_type')
-        related_id = data.get('related_id')
-        category = data.get('category', 'general')
-
-        if not file_base64:
-            return jsonify({'status': 'error', 'message': 'file_base64 is required'}), 400
-
-        # Decode base64 to bytes
-        try:
-            file_bytes = base64.b64decode(file_base64)
-        except Exception as e:
-            return jsonify({'status': 'error', 'message': f'Invalid base64 data: {str(e)}'}), 400
-
-        # Create FileStorage object from bytes
-        file = FileStorage(
-            stream=BytesIO(file_bytes),
-            filename=file_name,
-            content_type=file_type
-        )
-    else:
-        # Handle FormData upload (original method)
-        if 'file' not in request.files:
-            return jsonify({'status': 'error', 'message': 'No file in request'}), 400
-
-        file = request.files['file']
-        related_type = request.form.get('related_type')
-        related_id = request.form.get('related_id')
-        category = request.form.get('category', 'general')
+    file = request.files['file']
+    related_type = request.form.get('related_type')
+    related_id = request.form.get('related_id')
+    category = request.form.get('category', 'general')
 
     file_record = FileService.upload_file(
         file=file,
