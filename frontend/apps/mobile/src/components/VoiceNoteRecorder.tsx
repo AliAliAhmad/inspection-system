@@ -155,6 +155,12 @@ export default function VoiceNoteRecorder({
       console.log('result:', JSON.stringify(result, null, 2));
       console.log('============================');
 
+      // DEBUG: Show what we received
+      Alert.alert(
+        '🔍 Voice Response Debug',
+        `en: ${result?.en || 'NONE'}\nar: ${result?.ar || 'NONE'}\nfailed: ${result?.transcription_failed}`
+      );
+
       if (result?.audio_file?.id) {
         setCloudinaryUrl(result.audio_file.url || null);
         const trans = { en: result.en || '', ar: result.ar || '' };

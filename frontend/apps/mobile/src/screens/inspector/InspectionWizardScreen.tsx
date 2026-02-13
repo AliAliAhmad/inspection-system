@@ -453,6 +453,15 @@ export default function InspectionWizardScreen() {
       console.log('analysis_failed:', result?.analysis_failed);
       console.log('============================');
 
+      // DEBUG: Show alert with AI analysis status
+      if (aiAnalysis) {
+        Alert.alert('✅ AI Analysis Received', JSON.stringify(aiAnalysis, null, 2).substring(0, 200));
+      } else if (result?.analysis_failed) {
+        Alert.alert('⚠️ AI Analysis Failed', 'Backend returned analysis_failed=true');
+      } else {
+        Alert.alert('❌ No AI Analysis', 'Backend did not return ai_analysis field');
+      }
+
       // Update local state with photo URL and AI analysis
       setLocalAnswers((prev) => ({
         ...prev,
