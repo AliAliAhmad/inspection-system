@@ -755,53 +755,53 @@ def upload_answer_media(inspection_id):
                 analyze_url = file_record.file_path
                 logger.info(f"Analyzing photo at URL: {analyze_url}")
 
-                # Analyze the photo/video with GPT-4 Vision
-                response = client.chat.completions.create(
-                    model="gpt-4o",  # Use gpt-4o which supports vision
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": (
-                                        f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
-                                        "Identify any visible defects, damage, or issues. "
-                                        "Provide a brief analysis in English and Arabic. "
-                                        "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
-                                    )
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": analyze_url,  # Photo URL or video thumbnail URL
-                                    }
+            # Analyze the photo/video with GPT-4 Vision (runs for BOTH photos and videos)
+            response = client.chat.completions.create(
+                model="gpt-4o",  # Use gpt-4o which supports vision
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
+                                    "Identify any visible defects, damage, or issues. "
+                                    "Provide a brief analysis in English and Arabic. "
+                                    "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
+                                )
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": analyze_url,  # Photo URL or video thumbnail URL
                                 }
-                            ]
-                        }
-                    ],
-                    max_tokens=300
-                )
-
-                analysis_text = response.choices[0].message.content.strip()
-                logger.info(f"Received analysis text: {analysis_text[:200]}")
-
-                # Try to parse as JSON
-                try:
-                    import json
-                    ai_analysis = json.loads(analysis_text)
-                    logger.info(f"Parsed as JSON successfully")
-                except Exception as parse_err:
-                    logger.info(f"Not JSON, translating... Error: {parse_err}")
-                    # If not JSON, treat as plain text and translate
-                    from app.services.translation_service import TranslationService
-                    translated = TranslationService.auto_translate(analysis_text)
-                    ai_analysis = {
-                        'en': translated.get('en') or analysis_text,
-                        'ar': translated.get('ar') or analysis_text
+                            }
+                        ]
                     }
+                ],
+                max_tokens=300
+            )
 
-                logger.info(f"Final ai_analysis: {ai_analysis}")
+            analysis_text = response.choices[0].message.content.strip()
+            logger.info(f"Received analysis text: {analysis_text[:200]}")
+
+            # Try to parse as JSON
+            try:
+                import json
+                ai_analysis = json.loads(analysis_text)
+                logger.info(f"Parsed as JSON successfully")
+            except Exception as parse_err:
+                logger.info(f"Not JSON, translating... Error: {parse_err}")
+                # If not JSON, treat as plain text and translate
+                from app.services.translation_service import TranslationService
+                translated = TranslationService.auto_translate(analysis_text)
+                ai_analysis = {
+                    'en': translated.get('en') or analysis_text,
+                    'ar': translated.get('ar') or analysis_text
+                }
+
+            logger.info(f"Final ai_analysis: {ai_analysis}")
 
         else:
             logger.warning(f"{media_type_label} analysis skipped: OPENAI_API_KEY not configured")
