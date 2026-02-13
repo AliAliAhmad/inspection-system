@@ -3,6 +3,7 @@ Inspection endpoints for the core workflow.
 Enhanced with stats, advanced filters, bulk actions, and AI insights.
 """
 
+import logging
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.inspection_service import InspectionService
@@ -12,6 +13,8 @@ from app.utils.decorators import get_current_user, admin_required, get_language,
 from app.extensions import db
 from sqlalchemy import func, and_, or_
 from datetime import datetime, date, timedelta
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint('inspections', __name__)
 
