@@ -212,6 +212,11 @@ export default function InspectionWizardScreen() {
 
     // For numeric type - check against min/max values
     if (item.answer_type === 'numeric') {
+      // Allow "faulty" as valid input for broken meters
+      if (answer === 'faulty' || answer === 'معطل') {
+        return 'fail'; // Faulty meter is marked as fail
+      }
+
       const numValue = parseFloat(answerValue);
       if (isNaN(numValue)) return 'unknown';
 
@@ -806,7 +811,13 @@ export default function InspectionWizardScreen() {
   const hasVideo = currentAnswer?.video_file_id || currentAnswer?.video_url || currentAnswer?.video_uri;
   const hasMedia = photoSource || hasVoiceNote || hasVideo;
   const isFailWithoutMedia = validation === 'fail' && !hasMedia && !isUploading;
-  const canProceedToNext = !isFailWithoutMedia;
+
+  // Check if numeric field is empty (must enter number or "faulty")
+  const answerValue = currentAnswer?.answer_value || '';
+  const isNumericFieldEmpty = currentItem.answer_type === 'numeric' && !answerValue.trim();
+
+  // Can proceed if: not fail without media AND not empty numeric field
+  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty;
 
   // Get expected result and action if fail
   const expectedResult = isArabic
@@ -824,9 +835,28 @@ export default function InspectionWizardScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header with equipment info and switch button */}
+      {/* Header with equipment info and buttons */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
+          <TouchableOpacity
+            style={styles.exitButton}
+            onPress={() => {
+              Alert.alert(
+                t('inspection.exitTitle', 'Exit Inspection?'),
+                t('inspection.exitMessage', 'Your progress is saved. You can resume later from assignments.'),
+                [
+                  { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+                  {
+                    text: t('inspection.exit', 'Exit'),
+                    style: 'destructive',
+                    onPress: () => navigation.goBack()
+                  }
+                ]
+              );
+            }}
+          >
+            <Text style={styles.exitButtonText}>← {t('inspection.exit', 'Exit')}</Text>
+          </TouchableOpacity>
           <Text style={styles.equipmentName} numberOfLines={1}>
             {inspData.equipment?.name ?? `Equipment #${inspData.equipment_id}`}
           </Text>
@@ -1017,6 +1047,15 @@ export default function InspectionWizardScreen() {
         </View>
       )}
 
+      {/* Warning if numeric field is empty */}
+      {isNumericFieldEmpty && (
+        <View style={styles.requiredMediaWarning}>
+          <Text style={styles.requiredMediaWarningText}>
+            ⚠️ {t('inspection.numeric_required', 'Enter a number or type "faulty" if meter is broken')}
+          </Text>
+        </View>
+      )}
+
       {/* Navigation buttons */}
       <View style={styles.navButtonRow}>
         <TouchableOpacity
@@ -1106,6 +1145,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     flex: 1,
+  },
+  exitButton: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  exitButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   switchButton: {
     backgroundColor: 'rgba(255,255,255,0.2)',
