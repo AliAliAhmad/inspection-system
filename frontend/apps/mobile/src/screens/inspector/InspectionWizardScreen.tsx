@@ -440,19 +440,35 @@ export default function InspectionWizardScreen() {
         }
       );
 
-      const data = (response.data as any)?.data;
+      const result = (response.data as any);
+      const data = result?.data;
       const cloudinaryUrl = data?.photo_file?.url || data?.url;
+      const aiAnalysis = result?.ai_analysis;
 
+      // Update local state with photo URL and AI analysis
       setLocalAnswers((prev) => ({
         ...prev,
         [checklistItemId]: {
           ...prev[checklistItemId],
           photo_uri: undefined,
           photo_url: cloudinaryUrl,
+          photo_ai_analysis: aiAnalysis,
           isUploading: false,
           uploadFailed: false,
         },
       }));
+
+      // Show AI analysis result to user
+      if (aiAnalysis) {
+        const analysisText = aiAnalysis.en || aiAnalysis.ar || 'Analysis complete';
+        Alert.alert(
+          '🤖 AI Analysis',
+          analysisText,
+          [{ text: 'OK' }]
+        );
+      } else if (result?.analysis_failed) {
+        console.log('Photo uploaded but AI analysis not available');
+      }
 
       queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
     } catch (error: any) {

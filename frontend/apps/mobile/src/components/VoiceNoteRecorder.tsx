@@ -118,9 +118,17 @@ export default function VoiceNoteRecorder({
 
       // Read audio file as base64
       console.log('Reading audio as base64...', uri);
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      let base64;
+      try {
+        base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        console.log('Base64 read successfully, length:', base64.length);
+      } catch (readError: any) {
+        console.error('Failed to read audio file:', readError);
+        Alert.alert('Error', `Failed to read audio file: ${readError.message}`);
+        throw readError;
+      }
 
       console.log('Uploading voice note via base64...');
 

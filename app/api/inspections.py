@@ -723,14 +723,77 @@ def upload_answer_media(inspection_id):
 
     db.session.commit()
 
-    # AI analysis is handled client-side to avoid race conditions
-    # (both frontend and backend were writing to comment field with different formats)
+    # AI analysis for photos (backend-side to ensure it happens)
+    ai_analysis = None
+    analysis_failed = False
+
+    if not is_video:  # Only analyze photos
+        try:
+            import os
+            from openai import OpenAI
+
+            api_key = os.getenv('OPENAI_API_KEY')
+            if api_key:
+                client = OpenAI(api_key=api_key)
+
+                # Analyze the photo with GPT-4 Vision
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "Analyze this industrial equipment inspection photo. "
+                                        "Identify any visible defects, damage, or issues. "
+                                        "Provide a brief analysis in English and Arabic. "
+                                        "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
+                                    )
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": file_record.file_path,  # Cloudinary URL
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=300
+                )
+
+                analysis_text = response.choices[0].message.content.strip()
+
+                # Try to parse as JSON
+                try:
+                    import json
+                    ai_analysis = json.loads(analysis_text)
+                except:
+                    # If not JSON, treat as plain text and translate
+                    from app.services.translation_service import TranslationService
+                    translated = TranslationService.auto_translate(analysis_text)
+                    ai_analysis = {
+                        'en': translated.get('en') or analysis_text,
+                        'ar': translated.get('ar') or analysis_text
+                    }
+
+            else:
+                logger.warning("Photo analysis skipped: OPENAI_API_KEY not configured")
+                analysis_failed = True
+
+        except Exception as e:
+            logger.error(f"Photo AI analysis failed: {e}")
+            analysis_failed = True
 
     return jsonify({
         'status': 'success',
         'message': f'{"Video" if is_video else "Photo"} uploaded',
         'data': file_record.to_dict(),
         'media_type': media_type,
+        'ai_analysis': ai_analysis,
+        'analysis_failed': analysis_failed,
     }), 201
 
 

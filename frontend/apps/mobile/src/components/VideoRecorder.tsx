@@ -72,9 +72,17 @@ export default function VideoRecorder({
     try {
       // Read video file as base64
       console.log('Reading video as base64...', uri);
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      let base64;
+      try {
+        base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        console.log('Base64 read successfully, length:', base64.length);
+      } catch (readError: any) {
+        console.error('Failed to read video file:', readError);
+        Alert.alert('Error', `Failed to read video file: ${readError.message}`);
+        throw readError;
+      }
 
       console.log('Uploading video via base64...');
 
