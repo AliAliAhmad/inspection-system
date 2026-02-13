@@ -445,22 +445,12 @@ export default function InspectionWizardScreen() {
       const cloudinaryUrl = data?.photo_file?.url || data?.url;
       const aiAnalysis = result?.ai_analysis;
 
-      // DEBUG: Log the full response to see what backend returns
-      console.log('=== PHOTO UPLOAD RESPONSE ===');
-      console.log('Full response.data:', JSON.stringify(result, null, 2));
-      console.log('cloudinaryUrl:', cloudinaryUrl);
-      console.log('aiAnalysis:', JSON.stringify(aiAnalysis, null, 2));
-      console.log('analysis_failed:', result?.analysis_failed);
-      console.log('============================');
-
-      // DEBUG: Show alert with AI analysis status
-      if (aiAnalysis) {
-        Alert.alert('✅ AI Analysis Received', JSON.stringify(aiAnalysis, null, 2).substring(0, 200));
-      } else if (result?.analysis_failed) {
-        Alert.alert('⚠️ AI Analysis Failed', 'Backend returned analysis_failed=true');
-      } else {
-        Alert.alert('❌ No AI Analysis', 'Backend did not return ai_analysis field');
-      }
+      // Log the response for debugging
+      console.log('Photo upload response:', {
+        cloudinaryUrl,
+        hasAiAnalysis: !!aiAnalysis,
+        analysisFailed: result?.analysis_failed
+      });
 
       // Update local state with photo URL and AI analysis
       setLocalAnswers((prev) => ({

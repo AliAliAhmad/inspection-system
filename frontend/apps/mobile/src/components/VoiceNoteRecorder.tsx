@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -58,6 +58,33 @@ export default function VoiceNoteRecorder({
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Cleanup audio resources when component unmounts or question changes
+  useEffect(() => {
+    return () => {
+      // Stop and cleanup recording
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch((err) => {
+          console.error('Error cleaning up recording:', err);
+        });
+        recordingRef.current = null;
+      }
+
+      // Stop and cleanup sound
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch((err) => {
+          console.error('Error cleaning up sound:', err);
+        });
+        soundRef.current = null;
+      }
+
+      // Clear timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -149,17 +176,12 @@ export default function VoiceNoteRecorder({
 
       const result = (response.data as any)?.data;
 
-      // DEBUG: Log the full response to see what backend returns
-      console.log('=== VOICE UPLOAD RESPONSE ===');
-      console.log('Full response.data:', JSON.stringify(response.data, null, 2));
-      console.log('result:', JSON.stringify(result, null, 2));
-      console.log('============================');
-
-      // DEBUG: Show what we received
-      Alert.alert(
-        '🔍 Voice Response Debug',
-        `en: ${result?.en || 'NONE'}\nar: ${result?.ar || 'NONE'}\nfailed: ${result?.transcription_failed}`
-      );
+      // Log the response for debugging
+      console.log('Voice upload response:', {
+        hasAudioFile: !!result?.audio_file?.id,
+        hasTranscription: !!(result?.en || result?.ar),
+        transcriptionFailed: result?.transcription_failed
+      });
 
       if (result?.audio_file?.id) {
         setCloudinaryUrl(result.audio_file.url || null);
