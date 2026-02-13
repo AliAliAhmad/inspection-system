@@ -9,10 +9,12 @@ import {
   Image,
 } from 'react-native';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { getApiClient } from '@inspection/shared';
 
 interface VoiceNoteRecorderProps {
   onVoiceNoteRecorded: (voiceNoteId: number, transcription?: { en: string; ar: string }) => void;
+  onVoiceNoteDeleted?: () => void;
   existingVoiceUrl?: string | null;
   existingTranscription?: { en: string; ar: string } | null;
   disabled?: boolean;
@@ -39,6 +41,7 @@ function getAudioMp3Url(url: string): string {
 
 export default function VoiceNoteRecorder({
   onVoiceNoteRecorded,
+  onVoiceNoteDeleted,
   existingVoiceUrl,
   existingTranscription,
   disabled = false,
@@ -113,22 +116,27 @@ export default function VoiceNoteRecorder({
       setLocalAudioUri(uri);
       setIsUploading(true);
 
-      // Create FormData for React Native file upload
-      const formData = new FormData();
-      formData.append('audio', {
-        uri,
-        name: 'recording.m4a',
-        type: 'audio/m4a',
-      } as any);
-      if (language) {
-        formData.append('language', language);
-      }
+      // Read audio file as base64
+      console.log('Reading audio as base64...', uri);
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
-      // Upload directly via API client
+      console.log('Uploading voice note via base64...');
+
+      // Upload as JSON with base64
       const response = await getApiClient().post(
         '/api/voice/transcribe',
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        {
+          audio_base64: base64,
+          file_name: 'recording.m4a',
+          file_type: 'audio/m4a',
+          language: language || 'en',
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 180000, // 3 minutes
+        }
       );
 
       const result = (response.data as any)?.data;
@@ -148,7 +156,15 @@ export default function VoiceNoteRecorder({
       }
     } catch (err: any) {
       console.error('Failed to upload voice note:', err);
-      const message = err?.response?.data?.message || err?.message || 'Failed to upload voice note';
+      let message = err?.response?.data?.message || err?.message || 'Failed to upload voice note';
+
+      // Better error message for network/timeout errors
+      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
+        message = 'Upload timeout. The server may be starting up. Please try again in 30 seconds.';
+      } else if (err?.message?.includes('Network Error') || !err?.response) {
+        message = 'Network error. Please check your internet connection and try again.';
+      }
+
       Alert.alert('Error', message);
     } finally {
       setIsUploading(false);
@@ -203,6 +219,36 @@ export default function VoiceNoteRecorder({
     }
   }, [isRecording, startRecording, stopRecording]);
 
+  const handleDelete = useCallback(() => {
+    Alert.alert(
+      'Delete Voice Note',
+      'Are you sure you want to delete this voice recording?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            // Clear local state
+            setLocalAudioUri(null);
+            setCloudinaryUrl(null);
+            setTranscription(null);
+            setIsPlaying(false);
+
+            // Stop any playing audio
+            if (soundRef.current) {
+              soundRef.current.unloadAsync();
+              soundRef.current = null;
+            }
+
+            // Notify parent
+            onVoiceNoteDeleted?.();
+          },
+        },
+      ]
+    );
+  }, [onVoiceNoteDeleted]);
+
   const hasAudio = !!(cloudinaryUrl || localAudioUri);
   const waveformUrl = cloudinaryUrl ? getWaveformUrl(cloudinaryUrl) : null;
 
@@ -234,23 +280,32 @@ export default function VoiceNoteRecorder({
         ) : isUploading ? (
           <Text style={styles.uploadingText}>Uploading...</Text>
         ) : hasAudio ? (
-          // Compact audio playback
-          <TouchableOpacity
-            style={styles.compactPlayButton}
-            onPress={isPlaying ? stopAudio : playAudio}
-          >
-            <Text style={styles.playIconSmall}>{isPlaying ? '⏹' : '▶️'}</Text>
-            <Text style={styles.playLabelSmall}>
-              {isPlaying ? 'Stop' : 'Play'}
-            </Text>
-            {waveformUrl && (
-              <Image
-                source={{ uri: waveformUrl }}
-                style={styles.waveformSmall}
-                resizeMode="contain"
-              />
-            )}
-          </TouchableOpacity>
+          // WhatsApp-style audio playback with waveform and delete
+          <View style={styles.audioPlaybackContainer}>
+            <TouchableOpacity
+              style={styles.compactPlayButton}
+              onPress={isPlaying ? stopAudio : playAudio}
+            >
+              <Text style={styles.playIconSmall}>{isPlaying ? '⏹' : '▶️'}</Text>
+              {waveformUrl ? (
+                <Image
+                  source={{ uri: waveformUrl }}
+                  style={styles.waveformSmall}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Text style={styles.playLabelSmall}>
+                  {isPlaying ? 'Stop' : 'Play'}
+                </Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={handleDelete}
+            >
+              <Text style={styles.deleteIcon}>🗑️</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <Text style={styles.hintText}>Hold to record</Text>
         )}
@@ -320,6 +375,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
   },
+  audioPlaybackContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   compactPlayButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -338,8 +398,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   waveformSmall: {
-    width: 60,
-    height: 20,
+    width: 80,
+    height: 24,
     borderRadius: 2,
+  },
+  deleteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ff4d4f',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteIcon: {
+    fontSize: 12,
   },
 });

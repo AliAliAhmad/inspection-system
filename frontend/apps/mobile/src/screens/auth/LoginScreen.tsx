@@ -31,7 +31,15 @@ export default function LoginScreen() {
     try {
       await login(username.trim(), password);
     } catch (err: any) {
-      const message = err?.response?.data?.message || err?.response?.data?.error || err?.message || t('auth.login_failed');
+      let message = err?.response?.data?.message || err?.response?.data?.error || err?.message || t('auth.login_failed');
+
+      // Better error message for network/timeout errors
+      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
+        message = 'Server is starting up (this may take 30-60 seconds on first use). Please try again.';
+      } else if (err?.message?.includes('Network Error') || !err?.response) {
+        message = 'Network error. Please check your internet connection and try again.';
+      }
+
       Alert.alert(t('common.error'), message);
     } finally {
       setLoading(false);

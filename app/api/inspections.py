@@ -620,10 +620,15 @@ def upload_answer_media(inspection_id):
     """
     Upload a photo or video for an inspection answer.
     Auto-detects image vs video from file type.
-    Multipart form: file, checklist_item_id
+    Supports:
+    1. Multipart form: file, checklist_item_id
+    2. JSON with base64: file_base64, file_name, file_type, checklist_item_id
     """
     from app.services.file_service import FileService
     from app.models import InspectionAnswer
+    import base64
+    from io import BytesIO
+    from werkzeug.datastructures import FileStorage
 
     current_user_id = get_jwt_identity()
 
@@ -638,14 +643,45 @@ def upload_answer_media(inspection_id):
     if user.role != 'admin' and inspection.technician_id != int(current_user_id):
         raise ForbiddenError("You can only upload media to your own inspections")
 
-    if 'file' not in request.files:
-        raise ValidationError("No file in request")
+    # Check if base64 or FormData
+    is_base64 = request.is_json and 'file_base64' in request.json
 
-    checklist_item_id = request.form.get('checklist_item_id')
-    if not checklist_item_id:
-        raise ValidationError("checklist_item_id is required")
+    if is_base64:
+        # Handle base64 upload
+        data = request.json
+        file_base64 = data.get('file_base64')
+        file_name = data.get('file_name', 'photo.jpg')
+        file_type = data.get('file_type', 'image/jpeg')
+        checklist_item_id = data.get('checklist_item_id')
 
-    file = request.files['file']
+        if not file_base64:
+            raise ValidationError("file_base64 is required")
+        if not checklist_item_id:
+            raise ValidationError("checklist_item_id is required")
+
+        # Decode base64 to bytes
+        try:
+            file_bytes = base64.b64decode(file_base64)
+        except Exception as e:
+            raise ValidationError(f"Invalid base64 data: {str(e)}")
+
+        # Create FileStorage object from bytes
+        file = FileStorage(
+            stream=BytesIO(file_bytes),
+            filename=file_name,
+            content_type=file_type
+        )
+    else:
+        # Handle FormData upload (original method)
+        if 'file' not in request.files:
+            raise ValidationError("No file in request")
+
+        checklist_item_id = request.form.get('checklist_item_id')
+        if not checklist_item_id:
+            raise ValidationError("checklist_item_id is required")
+
+        file = request.files['file']
+
     media_type = _detect_media_type(file)
     is_video = (media_type == 'video')
 

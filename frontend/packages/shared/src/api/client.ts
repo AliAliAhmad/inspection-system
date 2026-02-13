@@ -26,7 +26,7 @@ export function initApiClient(baseURL: string, storage: ITokenStorage): AxiosIns
 
   apiClient = axios.create({
     baseURL,
-    timeout: 30000,
+    timeout: 90000, // Increased to 90s to handle Render cold starts
     headers: { 'Content-Type': 'application/json' },
   });
 
@@ -36,9 +36,12 @@ export function initApiClient(baseURL: string, storage: ITokenStorage): AxiosIns
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    // Don't set Content-Type for FormData - let browser set it with boundary
+    // Don't set Content-Type for FormData - let browser/RN set it with boundary
+    // Increase timeout for file uploads (voice notes, photos, documents)
     if (config.data instanceof FormData) {
+      // CRITICAL: Delete Content-Type to let axios/RN set it correctly with boundary
       delete config.headers['Content-Type'];
+      config.timeout = 180000; // 3 minutes for file uploads
     }
     return config;
   });
