@@ -151,6 +151,7 @@ def init_scheduler(app):
     # 9. Send daily review reminders (hourly check)
     @run_with_context
     def send_review_reminders():
+        from app.extensions import db
         from app.models.work_plan_daily_review import WorkPlanDailyReview
         from app.services.notification_service import NotificationService
         from datetime import date, datetime
@@ -214,6 +215,7 @@ def init_scheduler(app):
     # 11. Send morning job notifications (7 AM)
     @run_with_context
     def send_morning_notifications():
+        from app.extensions import db
         from app.models import WorkPlanAssignment, WorkPlanJob, WorkPlanDay
         from app.models.work_plan_job_tracking import WorkPlanJobTracking
         from app.models.work_plan_performance import WorkPlanPerformance
@@ -282,6 +284,7 @@ def init_scheduler(app):
     # 12. Red zone alert - check jobs exceeding 80% estimated time
     @run_with_context
     def check_red_zone():
+        from app.extensions import db
         from app.models import WorkPlanJob, WorkPlanDay, WorkPlan
         from app.models.work_plan_job_tracking import WorkPlanJobTracking
         from app.services.notification_service import NotificationService

@@ -35,6 +35,15 @@ export default function VideoRecorder({
   const videoRef = useRef<Video | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Reset state when existingVideoUrl changes (new question)
+  React.useEffect(() => {
+    setCloudinaryUrl(existingVideoUrl || null);
+    setLocalVideoUri(null);
+    setIsPlaying(false);
+    setIsRecording(false);
+    setRecordingTime(0);
+  }, [existingVideoUrl]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;

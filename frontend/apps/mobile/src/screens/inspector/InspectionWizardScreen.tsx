@@ -392,9 +392,47 @@ export default function InspectionWizardScreen() {
     navigation.replace('InspectionChecklist', { id });
   }, [navigation, id]);
 
+  // Helper to check if item requires media but doesn't have valid combo
+  const itemMissingMedia = useCallback((item: ChecklistItem) => {
+    const answer = localAnswers[item.id];
+    if (!answer?.answer_value) return false; // Unanswered items handled separately
+
+    const questionText = (isArabic && item.question_text_ar)
+      ? item.question_text_ar
+      : item.question_text;
+    const questionTextLower = questionText.toLowerCase();
+
+    // Check if it's a reading question
+    const isReading = questionTextLower.includes('reading') ||
+                      questionTextLower.includes('قراءة') ||
+                      questionTextLower.includes('عداد') ||
+                      questionTextLower.includes('rnr') ||
+                      questionTextLower.includes('running hours') ||
+                      questionTextLower.includes('twl') ||
+                      questionTextLower.includes('twistlock');
+
+    const hasPhoto = !!(answer.photo_url || answer.photo_uri);
+    const hasVoice = !!(answer.voice_note_id || answer.voice_note_url);
+    const hasVideo = !!(answer.video_file_id || answer.video_url || answer.video_uri);
+
+    // Reading questions require photo
+    if (isReading && !hasPhoto) return true;
+
+    // Check validation for this item
+    const validation = validateAnswer(item, answer.answer_value);
+
+    // Failed items require (photo + voice) or (video + voice)
+    if (validation === 'fail') {
+      const hasValidCombo = (hasPhoto && hasVoice) || (hasVideo && hasVoice);
+      if (!hasValidCombo) return true;
+    }
+
+    return false;
+  }, [localAnswers, isArabic, validateAnswer]);
+
   // Handle submit
   const handleSubmit = useCallback(() => {
-    // Check for skipped or unanswered items
+    // Step 1: Check for skipped or unanswered items
     const unanswered = allChecklistItems.filter((item) =>
       !localAnswers[item.id]?.answer_value || skippedItems.has(item.id)
     );
@@ -421,6 +459,30 @@ export default function InspectionWizardScreen() {
       return;
     }
 
+    // Step 2: Check for items missing required media
+    const missingMedia = allChecklistItems.filter(itemMissingMedia);
+
+    if (missingMedia.length > 0) {
+      Alert.alert(
+        t('common.warning', 'Warning'),
+        t('inspection.missingMedia', `${missingMedia.length} questions are missing required photo/video/voice. Add media before submitting.`),
+        [
+          {
+            text: t('inspection.goToFirstMissing', 'Go to first missing'),
+            onPress: () => {
+              const firstMissingIndex = allChecklistItems.findIndex(itemMissingMedia);
+              if (firstMissingIndex >= 0) {
+                goToIndex(firstMissingIndex);
+              }
+            }
+          },
+          { text: t('common.cancel'), style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
+    // Step 3: All complete - confirm submit
     Alert.alert(
       t('common.confirm'),
       t('inspection.submit') + '?',
@@ -433,7 +495,7 @@ export default function InspectionWizardScreen() {
         },
       ],
     );
-  }, [t, submitMutation, allChecklistItems, localAnswers, skippedItems, goToIndex]);
+  }, [t, submitMutation, allChecklistItems, localAnswers, skippedItems, goToIndex, itemMissingMedia]);
 
   // Photo upload
   const handleTakePhoto = useCallback(async () => {
@@ -854,22 +916,32 @@ export default function InspectionWizardScreen() {
   const isUploading = currentAnswer?.isUploading;
   const validation = validateAnswer(currentItem, currentAnswer?.answer_value || '');
 
-  // Check if fail response has required media (photo, video, or voice)
-  const hasVoiceNote = currentAnswer?.voice_note_id || currentAnswer?.voice_note_url;
-  const hasVideo = currentAnswer?.video_file_id || currentAnswer?.video_url || currentAnswer?.video_uri;
-  const hasMedia = photoSource || hasVoiceNote || hasVideo;
-  const isFailWithoutMedia = validation === 'fail' && !hasMedia && !isUploading;
+  // Check if fail response has required media
+  // Valid combinations: (photo + voice) OR (video + voice)
+  const hasVoiceNote = !!(currentAnswer?.voice_note_id || currentAnswer?.voice_note_url);
+  const hasVideo = !!(currentAnswer?.video_file_id || currentAnswer?.video_url || currentAnswer?.video_uri);
+  const hasPhoto = !!photoSource;
+
+  // Valid media = (photo AND voice) OR (video AND voice)
+  const hasValidMediaCombo = (hasPhoto && hasVoiceNote) || (hasVideo && hasVoiceNote);
+  const isFailWithoutMedia = validation === 'fail' && !hasValidMediaCombo && !isUploading;
 
   // Check if numeric field is empty (must enter number or "faulty")
   const answerValue = currentAnswer?.answer_value || '';
   const isNumericFieldEmpty = currentItem.answer_type === 'numeric' && !answerValue.trim();
 
-  // Check if this is RNR (Running Hours) or TWL (Twistlock Count) question - these ALWAYS require photo
+  // Check if this is a "reading" question - these ALWAYS require photo to verify the value
   const questionText = (isArabic && currentItem.question_text_ar)
     ? currentItem.question_text_ar
     : currentItem.question_text;
   const questionTextLower = questionText.toLowerCase();
 
+  // Detect "reading" questions (meter readings that need photo verification)
+  const isReadingQuestion = questionTextLower.includes('reading') ||
+                            questionTextLower.includes('قراءة') ||
+                            questionTextLower.includes('عداد');
+
+  // Keep RNR/TWL detection for backwards compatibility but mainly use "reading"
   const isRNRQuestion = questionTextLower.includes('rnr') ||
                         questionTextLower.includes('running hours') ||
                         questionTextLower.includes('running hour') ||
@@ -882,11 +954,12 @@ export default function InspectionWizardScreen() {
                         questionTextLower.includes('تويست لوك') ||
                         questionTextLower.includes('عدد التويست');
 
-  const isRNRorTWL = isRNRQuestion || isTWLQuestion;
-  const isRNRorTWLWithoutPhoto = isRNRorTWL && !photoSource && !isUploading;
+  // Any question requiring photo verification (reading, RNR, TWL)
+  const requiresPhotoVerification = isReadingQuestion || isRNRQuestion || isTWLQuestion;
+  const isReadingWithoutPhoto = requiresPhotoVerification && !hasPhoto && !isUploading;
 
-  // Can proceed if: not fail without media AND not empty numeric field AND not RNR/TWL without photo
-  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty && !isRNRorTWLWithoutPhoto;
+  // Can proceed if: not fail without valid media combo AND not empty numeric field AND not reading without photo
+  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty && !isReadingWithoutPhoto;
 
   // Get expected result and action if fail
   const expectedResult = isArabic
@@ -1078,6 +1151,7 @@ export default function InspectionWizardScreen() {
 
             {/* Video */}
             <VideoRecorder
+              key={`video-${currentItem.id}`}
               onVideoRecorded={handleVideoRecorded}
               onVideoDeleted={handleVideoDeleted}
               existingVideoUrl={currentAnswer?.video_url}
@@ -1113,31 +1187,31 @@ export default function InspectionWizardScreen() {
             />
           </View>
 
-          {/* Validation warning for failed items */}
-          {validation === 'fail' && !hasMedia && (
+          {/* Validation warning for failed items - need (photo+voice) or (video+voice) */}
+          {validation === 'fail' && !hasValidMediaCombo && (
             <View style={styles.validationWarning}>
               <Text style={styles.warningText}>
-                ⚠️ {t('inspection.fail_requires_media', 'Photo, video, or voice note required for failed items')}
+                ⚠️ {t('inspection.fail_requires_media_combo', 'Failed items require (Photo + Voice) or (Video + Voice)')}
               </Text>
             </View>
           )}
 
-          {/* Validation warning for RNR/TWL without photo */}
-          {isRNRorTWL && !photoSource && (
+          {/* Validation warning for reading questions without photo */}
+          {requiresPhotoVerification && !hasPhoto && (
             <View style={styles.validationWarning}>
               <Text style={styles.warningText}>
-                📸 {t('inspection.rnr_twl_requires_photo', 'Photo required to verify Running Hours (RNR) or Twistlock Count (TWL)')}
+                📸 {t('inspection.reading_requires_photo', 'Photo required to verify meter reading')}
               </Text>
             </View>
           )}
         </ScrollView>
       </Animated.View>
 
-      {/* Warning if fail without media */}
+      {/* Warning if fail without valid media combo */}
       {isFailWithoutMedia && (
         <View style={styles.requiredMediaWarning}>
           <Text style={styles.requiredMediaWarningText}>
-            ⚠️ {t('inspection.fail_requires_media_to_proceed', 'Failed items require photo, video, or voice note to proceed')}
+            ⚠️ {t('inspection.fail_requires_media_combo_proceed', 'Failed items require (Photo + Voice) or (Video + Voice) to proceed')}
           </Text>
         </View>
       )}
@@ -1151,11 +1225,11 @@ export default function InspectionWizardScreen() {
         </View>
       )}
 
-      {/* Warning if RNR/TWL without photo */}
-      {isRNRorTWLWithoutPhoto && (
+      {/* Warning if reading question without photo */}
+      {isReadingWithoutPhoto && (
         <View style={styles.requiredMediaWarning}>
           <Text style={styles.requiredMediaWarningText}>
-            📸 {t('inspection.rnr_twl_photo_required', 'Photo required to verify Running Hours (RNR) or Twistlock Count (TWL)')}
+            📸 {t('inspection.reading_photo_required', 'Photo required to verify meter reading')}
           </Text>
         </View>
       )}
