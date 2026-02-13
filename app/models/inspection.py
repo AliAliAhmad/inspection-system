@@ -122,6 +122,8 @@ class InspectionAnswer(db.Model):
     video_path = db.Column(db.String(500), nullable=True)
     video_file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
     voice_note_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
+    photo_ai_analysis = db.Column(db.JSON, nullable=True)  # AI analysis result for photo
+    video_ai_analysis = db.Column(db.JSON, nullable=True)  # AI analysis result for video
     answered_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -164,8 +166,10 @@ class InspectionAnswer(db.Model):
             'comment': comment,
             'photo_path': self.photo_path,
             'photo_file': photo_file_record.to_dict() if photo_file_record else None,
+            'photo_ai_analysis': self.photo_ai_analysis,
             'video_path': self.video_path,
             'video_file': video_file_record.to_dict() if video_file_record else None,
+            'video_ai_analysis': self.video_ai_analysis,
             'voice_note_id': self.voice_note_id,
             'voice_note': self.voice_note.to_dict() if self.voice_note else None,
             'answered_at': self.answered_at.isoformat() if self.answered_at else None

@@ -726,24 +726,36 @@ def upload_answer_media(inspection_id):
 
     db.session.commit()
 
-    # AI analysis for photos (backend-side to ensure it happens)
+    # AI analysis for photos and videos (backend-side to ensure it happens)
     ai_analysis = None
     analysis_failed = False
 
-    if not is_video:  # Only analyze photos
-        try:
-            import os
-            from openai import OpenAI
+    # Analyze both photos and videos
+    try:
+        import os
+        from openai import OpenAI
 
-            api_key = os.getenv('OPENAI_API_KEY')
-            logger.info(f"Photo AI analysis starting... API key present: {bool(api_key)}")
+        api_key = os.getenv('OPENAI_API_KEY')
+        media_type_label = "Video" if is_video else "Photo"
+        logger.info(f"{media_type_label} AI analysis starting... API key present: {bool(api_key)}")
 
-            if api_key:
-                client = OpenAI(api_key=api_key)
-                photo_url = file_record.file_path
-                logger.info(f"Analyzing photo at URL: {photo_url}")
+        if api_key:
+            client = OpenAI(api_key=api_key)
 
-                # Analyze the photo with GPT-4 Vision
+            # For videos, use Cloudinary thumbnail URL
+            if is_video:
+                # Generate thumbnail URL: replace /upload/ with /upload/so_auto,w_640,h_480,c_fill,f_jpg/
+                # and change extension to .jpg
+                analyze_url = file_record.file_path.replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
+                # Replace video extension with .jpg
+                import re
+                analyze_url = re.sub(r'\.(mp4|mov|webm|avi|mkv)$', '.jpg', analyze_url, flags=re.IGNORECASE)
+                logger.info(f"Analyzing video thumbnail at URL: {analyze_url}")
+            else:
+                analyze_url = file_record.file_path
+                logger.info(f"Analyzing photo at URL: {analyze_url}")
+
+                # Analyze the photo/video with GPT-4 Vision
                 response = client.chat.completions.create(
                     model="gpt-4o",  # Use gpt-4o which supports vision
                     messages=[
@@ -753,7 +765,7 @@ def upload_answer_media(inspection_id):
                                 {
                                     "type": "text",
                                     "text": (
-                                        "Analyze this industrial equipment inspection photo. "
+                                        f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
                                         "Identify any visible defects, damage, or issues. "
                                         "Provide a brief analysis in English and Arabic. "
                                         "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
@@ -762,7 +774,7 @@ def upload_answer_media(inspection_id):
                                 {
                                     "type": "image_url",
                                     "image_url": {
-                                        "url": file_record.file_path,  # Cloudinary URL
+                                        "url": analyze_url,  # Photo URL or video thumbnail URL
                                     }
                                 }
                             ]
@@ -791,13 +803,22 @@ def upload_answer_media(inspection_id):
 
                 logger.info(f"Final ai_analysis: {ai_analysis}")
 
-            else:
-                logger.warning("Photo analysis skipped: OPENAI_API_KEY not configured")
-                analysis_failed = True
-
-        except Exception as e:
-            logger.error(f"Photo AI analysis failed: {e}", exc_info=True)
+        else:
+            logger.warning(f"{media_type_label} analysis skipped: OPENAI_API_KEY not configured")
             analysis_failed = True
+
+    except Exception as e:
+        logger.error(f"{media_type_label} AI analysis failed: {e}", exc_info=True)
+        analysis_failed = True
+
+    # Save AI analysis to the inspection answer
+    if ai_analysis and answer:
+        if is_video:
+            answer.video_ai_analysis = ai_analysis
+        else:
+            answer.photo_ai_analysis = ai_analysis
+        db.session.commit()
+        logger.info(f"Saved {media_type_label} AI analysis to answer #{answer.id}")
 
     response_data = {
         'status': 'success',
