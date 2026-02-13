@@ -11,7 +11,7 @@ from app.models import (
     WorkPlan, WorkPlanDay, WorkPlanJob, WorkPlanAssignment, WorkPlanMaterial,
     Material, MaterialKit, MaterialKitItem, User, Equipment, Defect,
     InspectionAssignment, Notification, MaintenanceCycle, PMTemplate, PMTemplateMaterial,
-    SAPWorkOrder,
+    SAPWorkOrder, WorkPlanJobTracking,
     # Enhanced Work Planning models
     JobTemplate, JobTemplateMaterial, JobTemplateChecklist, JobDependency,
     CapacityConfig, WorkerSkill, EquipmentRestriction, WorkPlanVersion,
@@ -1044,10 +1044,13 @@ def publish_plan(plan_id):
 def get_my_plan():
     """
     Get the current user's assigned jobs for a week.
+    Optimized to include tracking data and use eager loading.
 
     Query params:
         - week_start: Week to get (YYYY-MM-DD), defaults to current week
     """
+    from sqlalchemy.orm import joinedload
+
     user = get_current_user()
     language = user.language or 'en'
 
@@ -1066,27 +1069,95 @@ def get_my_plan():
     if week_date.weekday() != 0:
         week_date = week_date - timedelta(days=week_date.weekday())
 
-    plan = WorkPlan.query.filter_by(week_start=week_date, status='published').first()
+    # Optimized query with eager loading to prevent N+1 issues
+    plan = WorkPlan.query.options(
+        joinedload(WorkPlan.days)
+        .joinedload(WorkPlanDay.jobs)
+        .joinedload(WorkPlanJob.assignments),
+        joinedload(WorkPlan.days)
+        .joinedload(WorkPlanDay.jobs)
+        .joinedload(WorkPlanJob.equipment),
+        joinedload(WorkPlan.days)
+        .joinedload(WorkPlanDay.jobs)
+        .joinedload(WorkPlanJob.defect),
+        joinedload(WorkPlan.days)
+        .joinedload(WorkPlanDay.jobs)
+        .joinedload(WorkPlanJob.tracking),
+        joinedload(WorkPlan.pdf_file),
+    ).filter_by(week_start=week_date, status='published').first()
 
     if not plan:
         return jsonify({
             'status': 'success',
             'message': 'No published plan for this week',
             'work_plan': None,
-            'my_jobs': []
+            'my_jobs': [],
+            'total_jobs': 0
         }), 200
 
-    # Get user's assigned jobs
+    # Get user's assigned jobs with minimal data + tracking
     my_jobs = []
     for day in plan.days:
         day_jobs = []
         for job in day.jobs:
             for assignment in job.assignments:
                 if assignment.user_id == user.id:
-                    job_dict = job.to_dict(language)
-                    job_dict['is_lead'] = assignment.is_lead
-                    job_dict['day_date'] = day.date.isoformat()
-                    job_dict['day_name'] = day.date.strftime('%A')
+                    # Build compact job dict with only essential data
+                    job_dict = {
+                        'id': job.id,
+                        'job_type': job.job_type,
+                        'berth': job.berth,
+                        'equipment_id': job.equipment_id,
+                        'equipment': {
+                            'id': job.equipment.id,
+                            'name': job.equipment.name,
+                            'serial_number': job.equipment.serial_number
+                        } if job.equipment else None,
+                        'defect_id': job.defect_id,
+                        'defect': {
+                            'id': job.defect.id,
+                            'description': job.defect.description,
+                            'status': job.defect.status
+                        } if job.defect else None,
+                        'sap_order_number': job.sap_order_number,
+                        'description': job.description,
+                        'estimated_hours': job.estimated_hours,
+                        'priority': job.priority,
+                        'notes': job.notes,
+                        'checklist_required': job.checklist_required,
+                        'checklist_completed': job.checklist_completed,
+                        'completion_photo_required': job.completion_photo_required,
+                        'is_lead': assignment.is_lead,
+                        'day_date': day.date.isoformat(),
+                        'day_name': day.date.strftime('%A'),
+                        'assignments': [
+                            {
+                                'id': a.id,
+                                'user_id': a.user_id,
+                                'user_name': a.user.name if a.user else None,
+                                'is_lead': a.is_lead
+                            } for a in job.assignments
+                        ],
+                    }
+
+                    # Add tracking info if exists
+                    if job.tracking:
+                        t = job.tracking
+                        job_dict['tracking'] = {
+                            'id': t.id,
+                            'status': t.status,
+                            'started_at': (t.started_at.isoformat() + 'Z') if t.started_at else None,
+                            'paused_at': (t.paused_at.isoformat() + 'Z') if t.paused_at else None,
+                            'completed_at': (t.completed_at.isoformat() + 'Z') if t.completed_at else None,
+                            'total_paused_minutes': t.total_paused_minutes or 0,
+                            'actual_hours': float(t.actual_hours) if t.actual_hours else None,
+                            'is_running': t.is_running(),
+                            'is_paused': t.is_paused(),
+                            'work_notes': t.work_notes,
+                        }
+                    else:
+                        job_dict['tracking'] = None
+
                     day_jobs.append(job_dict)
                     break
 
