@@ -231,6 +231,165 @@ class GeminiVisionService:
             logger.error(f"Gemini Vision error: {e}", exc_info=True)
             return None
 
+    def analyze_video(self, video_content: bytes = None, video_url: str = None) -> dict:
+        """
+        Analyze a video using Gemini Vision.
+
+        Args:
+            video_content: Raw video bytes
+            video_url: URL of video to analyze (will be downloaded)
+
+        Returns:
+            dict with 'en' and 'ar' analysis text
+        """
+        if not is_gemini_configured():
+            logger.warning("Gemini API key not configured")
+            return None
+
+        try:
+            # Download video if URL provided
+            if video_url and not video_content:
+                try:
+                    response = requests.get(video_url, timeout=60)
+                    response.raise_for_status()
+                    video_content = response.content
+                except Exception as e:
+                    logger.error(f"Failed to download video: {e}")
+                    return None
+
+            if not video_content:
+                logger.error("No video provided")
+                return None
+
+            # Check video size (Gemini inline limit is ~20MB)
+            if len(video_content) > 20 * 1024 * 1024:
+                logger.warning("Video too large for inline analysis (>20MB)")
+                return {'en': 'Video too large for analysis', 'ar': 'الفيديو كبير جداً للتحليل'}
+
+            # Convert video to base64
+            video_b64 = base64.b64encode(video_content).decode('utf-8')
+
+            # Detect video type
+            if video_content[:4] == b'\x00\x00\x00\x1c' or video_content[:4] == b'\x00\x00\x00\x20':
+                mime_type = "video/mp4"
+            elif video_content[:4] == b'\x1a\x45\xdf\xa3':
+                mime_type = "video/webm"
+            elif video_content[:3] == b'FLV':
+                mime_type = "video/x-flv"
+            else:
+                mime_type = "video/mp4"  # Default to MP4
+
+            # Build prompt for video analysis
+            prompt = (
+                "Analyze this industrial inspection video. Describe what you see in MAX 2-3 sentences. "
+                "Focus on: equipment condition, any visible defects, safety concerns, or maintenance needs. "
+                "Reply in this EXACT format (2 lines only):\n"
+                "EN: [Description in English]\n"
+                "AR: [Same description in Arabic]\n"
+                "Example:\n"
+                "EN: Video shows pump motor running with slight vibration. No visible leaks or damage.\n"
+                "AR: يظهر الفيديو محرك المضخة يعمل مع اهتزاز طفيف. لا توجد تسريبات أو أضرار مرئية."
+            )
+
+            # Build request payload for Gemini
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": mime_type,
+                                "data": video_b64
+                            }
+                        }
+                    ]
+                }],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "maxOutputTokens": 200
+                }
+            }
+
+            api_key = _get_api_key()
+
+            # Try each model in order until one succeeds
+            result = None
+            last_error = None
+            for model in VISION_MODELS:
+                url = f"{GEMINI_API_URL}/{model}:generateContent?key={api_key}"
+                logger.info(f"Trying Gemini Video API with model: {model}, video size: {len(video_content)} bytes")
+
+                try:
+                    response = requests.post(
+                        url,
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=120  # Videos take longer
+                    )
+
+                    logger.info(f"Gemini Video {model} response status: {response.status_code}")
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"Video analysis success with model: {model}")
+                        break
+                    else:
+                        last_error = f"{response.status_code} - {response.text[:200]}"
+                        logger.warning(f"Video model {model} failed: {last_error}, trying next...")
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(f"Video model {model} error: {e}, trying next...")
+
+            if result is None:
+                logger.error(f"All video models failed. Last error: {last_error}")
+                return None
+
+            # Extract the response text
+            candidates = result.get('candidates', [])
+            if not candidates:
+                logger.warning("Gemini returned no candidates for video")
+                return None
+
+            content = candidates[0].get('content', {})
+            parts = content.get('parts', [])
+            if not parts:
+                logger.warning("Gemini returned no parts for video")
+                return None
+
+            analysis_text = parts[0].get('text', '')
+
+            if not analysis_text:
+                logger.warning("Gemini returned empty video response")
+                return None
+
+            logger.info(f"Gemini video analysis: {analysis_text[:200]}...")
+
+            import re
+
+            # Parse EN and AR from response
+            en_text = analysis_text
+            ar_text = analysis_text
+
+            en_match = re.search(r'EN:\s*(.+?)(?=\nAR:|$)', analysis_text, re.IGNORECASE | re.DOTALL)
+            ar_match = re.search(r'AR:\s*(.+?)(?=\n|$)', analysis_text, re.IGNORECASE | re.DOTALL)
+
+            if en_match:
+                en_text = en_match.group(1).strip()
+            if ar_match:
+                ar_text = ar_match.group(1).strip()
+
+            if not ar_match or ar_text == en_text:
+                ar_text = en_text
+
+            return {
+                'en': en_text,
+                'ar': ar_text
+            }
+
+        except Exception as e:
+            logger.error(f"Gemini Video error: {e}", exc_info=True)
+            return None
+
 
 class GeminiSpeechService:
     """

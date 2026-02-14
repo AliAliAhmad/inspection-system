@@ -62,6 +62,41 @@ def read_gauge():
         return jsonify({'status': 'error', 'message': result.get('error', 'Reading failed')}), 500
 
 
+@bp.route('/vision/analyze-video', methods=['POST'])
+@limiter.limit("10 per minute")
+@jwt_required()
+def analyze_video():
+    """
+    Analyze a video using Gemini Vision.
+
+    Body: {"video_url": "https://..."}
+    """
+    from app.services.gemini_service import get_vision_service, is_gemini_configured
+
+    data = request.get_json()
+    video_url = data.get('video_url')
+
+    if not video_url:
+        return jsonify({'status': 'error', 'message': 'video_url required'}), 400
+
+    if not is_gemini_configured():
+        return jsonify({'status': 'error', 'message': 'Gemini API not configured'}), 500
+
+    vision_service = get_vision_service()
+    result = vision_service.analyze_video(video_url=video_url)
+
+    if result:
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'analysis_en': result.get('en'),
+                'analysis_ar': result.get('ar'),
+            }
+        }), 200
+    else:
+        return jsonify({'status': 'error', 'message': 'Video analysis failed'}), 500
+
+
 @bp.route('/vision/compare', methods=['POST'])
 @limiter.limit("10 per minute")
 @jwt_required()
