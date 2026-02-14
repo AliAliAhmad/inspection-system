@@ -120,6 +120,8 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
   const { data: usersData, isLoading: usersLoading, refetch: refetchUsers } = useQuery({
     queryKey: ['users', 'active'],
     queryFn: () => usersApi.list({ is_active: true, per_page: 500 }).then(r => r.data.data),
+    staleTime: 60000, // Cache for 60 seconds
+    refetchOnWindowFocus: false,
   });
 
   // Fetch roster for the week
@@ -131,6 +133,8 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
       return response.data.data;
     },
     enabled: !!weekStart,
+    staleTime: 60000, // Cache for 60 seconds
+    refetchOnWindowFocus: false,
   });
 
   // Get users on leave

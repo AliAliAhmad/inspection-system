@@ -215,6 +215,8 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   const { data: availableJobs, isLoading } = useQuery({
     queryKey: ['available-jobs', berth, planId],
     queryFn: () => workPlansApi.getAvailableJobs({ berth, plan_id: planId }).then(r => r.data),
+    staleTime: 30000, // Cache for 30 seconds to prevent excessive refetches
+    refetchOnWindowFocus: false,
   });
 
   // Get unique equipment list for filter

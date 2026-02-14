@@ -73,6 +73,8 @@ export const ConflictResolutionPanel: React.FC<ConflictResolutionPanelProps> = (
   const { data: conflicts, isLoading, refetch } = useQuery({
     queryKey: ['plan-conflicts', planId],
     queryFn: () => workPlansApi.listConflicts(planId),
+    staleTime: 30000, // Cache for 30 seconds
+    refetchOnWindowFocus: false,
   });
 
   const resolveMutation = useMutation({

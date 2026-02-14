@@ -51,16 +51,22 @@ export const WorkPlanAIPanel: React.FC<WorkPlanAIPanelProps> = ({
     queryKey: ['plan-live-status', planId],
     queryFn: () => workPlansApi.getLiveStatus(planId),
     refetchInterval: 30000,
+    staleTime: 25000, // Cache for 25 seconds (slightly less than refetchInterval)
+    refetchOnWindowFocus: false,
   });
 
   const { data: bottlenecks, isLoading: bottlenecksLoading } = useQuery({
     queryKey: ['plan-bottlenecks', planId],
     queryFn: () => workPlansApi.analyzeBottlenecks(planId),
+    staleTime: 60000, // Cache for 60 seconds
+    refetchOnWindowFocus: false,
   });
 
   const { data: completion, isLoading: completionLoading } = useQuery({
     queryKey: ['plan-completion', planId],
     queryFn: () => workPlansApi.predictCompletion(planId),
+    staleTime: 60000, // Cache for 60 seconds
+    refetchOnWindowFocus: false,
   });
 
   const autoScheduleMutation = useMutation({
