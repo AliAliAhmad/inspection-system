@@ -31,32 +31,38 @@ def check_ai_status():
     """
     import os
     from app.services.google_cloud_service import is_google_cloud_configured
-    from app.services.huggingface_service import is_huggingface_configured
+    from app.services.together_ai_service import is_together_configured
+    from app.services.groq_service import is_groq_configured
 
     openai_key = os.getenv('OPENAI_API_KEY')
     google_configured = is_google_cloud_configured()
-    huggingface_configured = is_huggingface_configured()
+    together_configured = is_together_configured()
+    groq_configured = is_groq_configured()
 
     # Determine which service will be used (priority order)
     if google_configured:
         active_service = 'Google Cloud (FREE tier)'
         message = 'Google Cloud Vision + Speech configured (1000 images + 60 min audio FREE/month)'
-    elif huggingface_configured:
-        active_service = 'Hugging Face (FREE, no credit card)'
-        message = 'Hugging Face configured (FREE, unlimited with rate limits)'
+    elif together_configured:
+        active_service = 'Together AI (highest quality)'
+        message = 'Together AI configured - Llama 3.2 90B Vision (highest quality)'
+    elif groq_configured:
+        active_service = 'Groq (fast)'
+        message = 'Groq configured - Llama 3.2 11B Vision (fast inference)'
     elif openai_key:
         active_service = 'OpenAI (paid)'
         message = 'OpenAI configured as fallback (requires credits)'
     else:
         active_service = 'None'
-        message = 'No AI service configured. Set HUGGINGFACE_API_KEY (free, no card) or GOOGLE_CLOUD_KEY_JSON or OPENAI_API_KEY'
+        message = 'No AI service configured. Set TOGETHER_API_KEY, GROQ_API_KEY, GOOGLE_CLOUD_KEY_JSON, or OPENAI_API_KEY'
 
     return jsonify({
         'active_service': active_service,
         'google_cloud_configured': google_configured,
-        'huggingface_configured': huggingface_configured,
+        'together_ai_configured': together_configured,
+        'groq_configured': groq_configured,
         'openai_configured': bool(openai_key),
-        'priority_order': '1. Google Cloud → 2. Hugging Face → 3. OpenAI',
+        'priority_order': '1. Google Cloud → 2. Together AI → 3. Groq → 4. OpenAI',
         'environment': os.getenv('FLASK_ENV', 'not set'),
         'render_service': os.getenv('RENDER_SERVICE_NAME', 'not on render'),
         'message': message
@@ -66,11 +72,14 @@ def check_ai_status():
 @bp.route('/debug/ai-test', methods=['GET'])
 def test_ai_connection():
     """
-    Test AI API connection (Google Cloud, Hugging Face, or OpenAI).
+    Test AI API connection (Google Cloud, Together AI, Groq, or OpenAI).
+    Tests in priority order: Google Cloud → Together AI → Groq → OpenAI
     """
     import os
+    import requests
     from app.services.google_cloud_service import is_google_cloud_configured, get_vision_service
-    from app.services.huggingface_service import is_huggingface_configured
+    from app.services.together_ai_service import is_together_configured
+    from app.services.groq_service import is_groq_configured
 
     # Test Google Cloud first
     if is_google_cloud_configured():
@@ -96,75 +105,82 @@ def test_ai_connection():
                 'error': str(e)
             }), 500
 
-    # Test Hugging Face second - actually test the API
-    if is_huggingface_configured():
-        import requests
-        api_key = os.getenv('HUGGINGFACE_API_KEY', '')
-
-        # Check key format
-        key_info = {
-            'key_length': len(api_key),
-            'starts_with_hf': api_key.startswith('hf_'),
-            'first_chars': api_key[:10] + '...' if len(api_key) > 10 else 'too_short',
-            'has_whitespace': api_key != api_key.strip(),
-        }
-
-        # Make a simple API call to test
-        test_url = "https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-large"
-        headers = {"Authorization": f"Bearer {api_key.strip()}"}
-
+    # Test Together AI second (highest quality)
+    if is_together_configured():
+        api_key = os.getenv('TOGETHER_API_KEY', '').strip()
         try:
-            # Just check if we can reach the API (don't send actual image)
-            response = requests.post(test_url, headers=headers, json={"inputs": "test"}, timeout=30)
-
-            response_info = {
-                'status_code': response.status_code,
-                'content_type': response.headers.get('Content-Type', 'unknown'),
-                'is_html': 'text/html' in response.headers.get('Content-Type', ''),
-                'response_preview': response.text[:500] if response.text else 'empty',
-            }
-
-            # 503 means model is loading (normal for free tier)
-            if response.status_code == 503:
+            response = requests.post(
+                "https://api.together.ai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+                    "messages": [{"role": "user", "content": "Say OK"}],
+                    "max_tokens": 5
+                },
+                timeout=30
+            )
+            if response.status_code == 200:
                 return jsonify({
                     'success': True,
-                    'service': 'Hugging Face',
-                    'message': 'API key valid! Model is loading (cold start). Wait 20-30 seconds and try again.',
-                    'cost': 'FREE',
-                    'key_info': key_info,
-                    'response_info': response_info
+                    'service': 'Together AI',
+                    'message': 'Together AI is working! Using Llama 3.2 90B Vision (highest quality)',
+                    'cost': 'FREE credits for new accounts',
+                    'model': 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo'
                 }), 200
-            elif response.status_code == 200:
-                return jsonify({
-                    'success': True,
-                    'service': 'Hugging Face',
-                    'message': 'Hugging Face API is working!',
-                    'cost': 'FREE',
-                    'key_info': key_info,
-                    'response_info': response_info
-                }), 200
-            elif response.status_code == 401:
-                return jsonify({
-                    'success': False,
-                    'service': 'Hugging Face',
-                    'error': 'Invalid API key (401 Unauthorized)',
-                    'key_info': key_info,
-                    'response_info': response_info
-                }), 401
             else:
                 return jsonify({
                     'success': False,
-                    'service': 'Hugging Face',
-                    'error': f'Unexpected response: {response.status_code}',
-                    'key_info': key_info,
-                    'response_info': response_info
+                    'service': 'Together AI',
+                    'error': f'API error: {response.status_code}',
+                    'response': response.text[:300]
                 }), 500
         except Exception as e:
             return jsonify({
                 'success': False,
-                'service': 'Hugging Face',
-                'error': f'API call failed: {str(e)}',
-                'key_info': key_info
+                'service': 'Together AI',
+                'error': str(e)
+            }), 500
+
+    # Test Groq third (fast)
+    if is_groq_configured():
+        api_key = os.getenv('GROQ_API_KEY', '').strip()
+        try:
+            response = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.2-11b-vision-preview",
+                    "messages": [{"role": "user", "content": "Say OK"}],
+                    "max_tokens": 5
+                },
+                timeout=30
+            )
+            if response.status_code == 200:
+                return jsonify({
+                    'success': True,
+                    'service': 'Groq',
+                    'message': 'Groq is working! Using Llama 3.2 11B Vision (fast inference)',
+                    'cost': 'FREE tier',
+                    'model': 'llama-3.2-11b-vision-preview'
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'service': 'Groq',
+                    'error': f'API error: {response.status_code}',
+                    'response': response.text[:300]
+                }), 500
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'service': 'Groq',
+                'error': str(e)
             }), 500
 
     # Fall back to OpenAI test
@@ -193,7 +209,7 @@ def test_ai_connection():
 
     return jsonify({
         'success': False,
-        'error': 'No AI service configured. Set HUGGINGFACE_API_KEY (free, no card) or GOOGLE_CLOUD_KEY_JSON or OPENAI_API_KEY'
+        'error': 'No AI service configured. Set TOGETHER_API_KEY, GROQ_API_KEY, GOOGLE_CLOUD_KEY_JSON, or OPENAI_API_KEY'
     }), 400
 
 
@@ -958,8 +974,9 @@ def upload_answer_media(inspection_id):
             analyze_url = file_record.file_path
             logger.info(f"Analyzing photo at URL: {analyze_url}")
 
-        # Priority: 1. Google Cloud (free) → 2. Hugging Face (free) → 3. OpenAI (paid)
-        from app.services.huggingface_service import get_vision_service as get_hf_vision, is_huggingface_configured
+        # Priority: 1. Google Cloud → 2. Together AI → 3. Groq → 4. OpenAI
+        from app.services.together_ai_service import get_vision_service as get_together_vision, is_together_configured
+        from app.services.groq_service import get_vision_service as get_groq_vision, is_groq_configured
 
         # Download image content (needed for all services except OpenAI)
         image_content = None
@@ -967,6 +984,7 @@ def upload_answer_media(inspection_id):
             img_response = requests.get(analyze_url, timeout=30)
             img_response.raise_for_status()
             image_content = img_response.content
+            logger.info(f"Downloaded image: {len(image_content)} bytes")
         except Exception as download_err:
             logger.error(f"Failed to download image: {download_err}")
 
@@ -993,13 +1011,13 @@ def upload_answer_media(inspection_id):
             else:
                 analysis_failed = True
 
-        # Option 2: Hugging Face (FREE, no credit card needed)
-        elif is_huggingface_configured():
-            logger.info("Using Hugging Face Vision API (free, no credit card)")
-            hf_vision = get_hf_vision()
+        # Option 2: Together AI (highest quality - Llama 3.2 90B Vision)
+        elif is_together_configured():
+            logger.info("Using Together AI Vision (Llama 3.2 90B - highest quality)")
+            together_vision = get_together_vision()
 
             if image_content:
-                result = hf_vision.analyze_image(
+                result = together_vision.analyze_image(
                     image_content=image_content,
                     is_reading_question=is_reading_question
                 )
@@ -1009,14 +1027,37 @@ def upload_answer_media(inspection_id):
                     if 'reading' in result and is_reading_question:
                         extracted_reading = result.get('reading')
                         logger.info(f"Extracted reading value: {extracted_reading}")
-                    logger.info(f"Hugging Face analysis complete: {ai_analysis}")
+                    logger.info(f"Together AI analysis complete: {ai_analysis}")
                 else:
-                    logger.warning("Hugging Face returned no results")
+                    logger.warning("Together AI returned no results")
                     analysis_failed = True
             else:
                 analysis_failed = True
 
-        # Option 3: OpenAI (paid fallback)
+        # Option 3: Groq (fast inference - Llama 3.2 11B Vision)
+        elif is_groq_configured():
+            logger.info("Using Groq Vision (Llama 3.2 11B - fast)")
+            groq_vision = get_groq_vision()
+
+            if image_content:
+                result = groq_vision.analyze_image(
+                    image_content=image_content,
+                    is_reading_question=is_reading_question
+                )
+
+                if result:
+                    ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
+                    if 'reading' in result and is_reading_question:
+                        extracted_reading = result.get('reading')
+                        logger.info(f"Extracted reading value: {extracted_reading}")
+                    logger.info(f"Groq analysis complete: {ai_analysis}")
+                else:
+                    logger.warning("Groq returned no results")
+                    analysis_failed = True
+            else:
+                analysis_failed = True
+
+        # Option 4: OpenAI (paid fallback)
         else:
             from openai import OpenAI
             api_key = os.getenv('OPENAI_API_KEY')

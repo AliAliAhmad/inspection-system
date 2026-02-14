@@ -188,9 +188,9 @@ def transcribe():
     temp_files_to_cleanup = []
 
     try:
-        # Priority: 1. Google Cloud (free) → 2. Hugging Face (free) → 3. OpenAI (paid)
+        # Priority: 1. Google Cloud (free) → 2. Groq (free) → 3. OpenAI (paid)
         from app.services.google_cloud_service import get_speech_service, is_google_cloud_configured
-        from app.services.huggingface_service import get_speech_service as get_hf_speech, is_huggingface_configured
+        from app.services.groq_service import get_speech_service as get_groq_speech, is_groq_configured
 
         # Create temp file from audio content (needed for all services)
         suffix = _get_suffix(filename)
@@ -218,12 +218,12 @@ def transcribe():
                 transcription_failed = True
                 logger.warning("Google Speech returned no results")
 
-        # Option 2: Hugging Face (FREE, no credit card needed)
-        elif is_huggingface_configured():
-            logger.info("Using Hugging Face Whisper (free, no credit card)")
-            hf_speech = get_hf_speech()
+        # Option 2: Groq Whisper (FREE, very fast)
+        elif is_groq_configured():
+            logger.info("Using Groq Whisper (free, fast)")
+            groq_speech = get_groq_speech()
 
-            result = hf_speech.transcribe_file(source_path, language_hint or 'en')
+            result = groq_speech.transcribe_file(source_path, language_hint or 'en')
 
             if result and result.get('text'):
                 text = result['text'].strip()
@@ -234,7 +234,7 @@ def transcribe():
                 ar_text = translated.get('ar') or text
             else:
                 transcription_failed = True
-                logger.warning("Hugging Face Speech returned no results")
+                logger.warning("Groq Speech returned no results")
 
         # Option 3: OpenAI Whisper (paid fallback)
         else:
@@ -243,7 +243,7 @@ def transcribe():
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
                 transcription_failed = True
-                logger.warning("Transcription skipped: No AI service configured (set HUGGINGFACE_API_KEY, GOOGLE_CLOUD_KEY_JSON, or OPENAI_API_KEY)")
+                logger.warning("Transcription skipped: No AI service configured (set GROQ_API_KEY, GOOGLE_CLOUD_KEY_JSON, or OPENAI_API_KEY)")
             else:
                 logger.info("Using OpenAI Whisper (paid)")
                 client = OpenAI(api_key=api_key)
