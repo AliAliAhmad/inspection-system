@@ -127,7 +127,9 @@ def create_app(config_name='development'):
         # Admin Audit
         admin_activity,
         # Team Communication & Toolkit
-        team_communication, toolkit
+        team_communication, toolkit,
+        # Translation
+        translations
     )
 
     # Core
@@ -212,6 +214,9 @@ def create_app(config_name='development'):
     # Team Communication & Mobile Toolkit
     app.register_blueprint(team_communication.bp, url_prefix='/api/communication')
     app.register_blueprint(toolkit.bp, url_prefix='/api/toolkit')
+
+    # Translation
+    app.register_blueprint(translations.bp)
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)
