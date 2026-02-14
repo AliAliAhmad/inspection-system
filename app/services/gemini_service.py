@@ -25,9 +25,10 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 VISION_MODELS = ["gemini-3-pro-preview", "gemini-2.5-flash"]
 VISION_MODEL = VISION_MODELS[0]  # Primary model
 
-# Audio transcription - try native-audio-dialog first (Unlimited), fallback to gemini-2.5-flash
-AUDIO_MODELS = ["gemini-2.5-flash-preview-native-audio-dialog", "gemini-2.5-flash"]
-AUDIO_MODEL = AUDIO_MODELS[0]  # Primary model
+# Audio transcription - gemini-2.5-flash (supports audio files via generateContent API)
+# Note: Native Audio Dialog is for Live API (real-time) only, not file uploads
+AUDIO_MODELS = ["gemini-2.5-flash"]
+AUDIO_MODEL = AUDIO_MODELS[0]
 
 
 def is_gemini_configured():
