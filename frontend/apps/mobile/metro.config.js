@@ -20,8 +20,25 @@ config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = true;
 
 // Ensure we can resolve workspace packages
+// CRITICAL: Force single React instance to prevent "Invalid hook call" errors
 config.resolver.extraNodeModules = {
   '@inspection/shared': path.resolve(monorepoRoot, 'packages/shared'),
+  // Force React resolution from mobile's node_modules only
+  'react': path.resolve(projectRoot, 'node_modules/react'),
+  'react-dom': path.resolve(projectRoot, 'node_modules/react-dom'),
+  'react-native': path.resolve(projectRoot, 'node_modules/react-native'),
+};
+
+// Prevent loading React from other locations in the monorepo
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'react' || moduleName === 'react-dom') {
+    return {
+      filePath: path.resolve(projectRoot, 'node_modules', moduleName, 'index.js'),
+      type: 'sourceFile',
+    };
+  }
+  // Fall back to default resolution
+  return context.resolveRequest(context, moduleName, platform);
 };
 
 module.exports = config;

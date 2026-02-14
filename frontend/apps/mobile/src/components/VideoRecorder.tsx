@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
+import { useTranslation } from 'react-i18next';
 import { getApiClient } from '@inspection/shared';
 
 interface VideoRecorderProps {
@@ -25,6 +26,7 @@ export default function VideoRecorder({
   existingVideoUrl,
   disabled = false,
 }: VideoRecorderProps) {
+  const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -50,30 +52,71 @@ export default function VideoRecorder({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const startRecording = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission Required', 'Camera access is needed for video recording.');
-        return;
-      }
+  const handleAddVideo = useCallback(() => {
+    Alert.alert(
+      t('inspection.addVideo', 'Add Video'),
+      t('inspection.chooseVideoSource', 'How would you like to add a video?'),
+      [
+        {
+          text: t('inspection.recordVideo', 'Record Video'),
+          onPress: async () => {
+            try {
+              const permission = await ImagePicker.requestCameraPermissionsAsync();
+              if (!permission.granted) {
+                Alert.alert(t('common.error'), t('inspection.cameraPermissionRequired', 'Camera access is needed for video recording.'));
+                return;
+              }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-        quality: 0.7,
-        videoMaxDuration: 60, // 1 minute max
-      });
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['videos'],
+                quality: 0.7,
+                videoMaxDuration: 60, // 1 minute max
+              });
 
-      if (!result.canceled && result.assets?.[0]) {
-        const asset = result.assets[0];
-        setLocalVideoUri(asset.uri);
-        uploadVideo(asset.uri, asset.fileName || 'video.mp4');
-      }
-    } catch (err) {
-      console.error('Failed to record video:', err);
-      Alert.alert('Error', 'Failed to record video');
-    }
-  }, []);
+              if (!result.canceled && result.assets?.[0]) {
+                const asset = result.assets[0];
+                setLocalVideoUri(asset.uri);
+                uploadVideo(asset.uri, asset.fileName || 'video.mp4');
+              }
+            } catch (err) {
+              console.error('Failed to record video:', err);
+              Alert.alert(t('common.error'), t('inspection.failedToRecordVideo', 'Failed to record video'));
+            }
+          },
+        },
+        {
+          text: t('inspection.from_gallery', 'From Gallery'),
+          onPress: async () => {
+            try {
+              const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (!permission.granted) {
+                Alert.alert(t('common.error'), t('inspection.galleryPermissionRequired', 'Gallery access is needed to select videos.'));
+                return;
+              }
+
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['videos'],
+                quality: 0.7,
+              });
+
+              if (!result.canceled && result.assets?.[0]) {
+                const asset = result.assets[0];
+                setLocalVideoUri(asset.uri);
+                uploadVideo(asset.uri, asset.fileName || 'video.mp4');
+              }
+            } catch (err) {
+              console.error('Failed to select video:', err);
+              Alert.alert(t('common.error'), t('inspection.failedToSelectVideo', 'Failed to select video'));
+            }
+          },
+        },
+        {
+          text: t('common.cancel', 'Cancel'),
+          style: 'cancel',
+        },
+      ]
+    );
+  }, [t]);
 
   const uploadVideo = useCallback(async (uri: string, fileName: string) => {
     setIsUploading(true);
@@ -81,15 +124,18 @@ export default function VideoRecorder({
     try {
       // Read video file as base64
       console.log('Reading video as base64...', uri);
-      let base64;
+      let base64: string;
       try {
         base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
+          encoding: 'base64',
         });
+        if (!base64) {
+          throw new Error('File read returned empty result');
+        }
         console.log('Base64 read successfully, length:', base64.length);
       } catch (readError: any) {
         console.error('Failed to read video file:', readError);
-        Alert.alert('Error', `Failed to read video file: ${readError.message}`);
+        Alert.alert('Error', `Failed to read video file: ${readError?.message || 'Unknown error'}`);
         throw readError;
       }
 
@@ -183,7 +229,7 @@ export default function VideoRecorder({
             styles.videoButton,
             disabled && styles.buttonDisabled,
           ]}
-          onPress={startRecording}
+          onPress={handleAddVideo}
           disabled={disabled || isUploading}
         >
           {isUploading ? (

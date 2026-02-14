@@ -9,7 +9,7 @@ import {
   Image,
 } from 'react-native';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getApiClient } from '@inspection/shared';
 
 interface VoiceNoteRecorderProps {
@@ -145,15 +145,18 @@ export default function VoiceNoteRecorder({
 
       // Read audio file as base64
       console.log('Reading audio as base64...', uri);
-      let base64;
+      let base64: string;
       try {
         base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
+          encoding: 'base64',
         });
+        if (!base64) {
+          throw new Error('File read returned empty result');
+        }
         console.log('Base64 read successfully, length:', base64.length);
       } catch (readError: any) {
         console.error('Failed to read audio file:', readError);
-        Alert.alert('Error', `Failed to read audio file: ${readError.message}`);
+        Alert.alert('Error', `Failed to read audio file: ${readError?.message || 'Unknown error'}`);
         throw readError;
       }
 

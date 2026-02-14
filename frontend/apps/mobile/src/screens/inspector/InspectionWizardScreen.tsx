@@ -16,7 +16,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
@@ -172,6 +172,7 @@ export default function InspectionWizardScreen() {
           video_ai_analysis: ans.video_ai_analysis ?? undefined,
           voice_note_id: ans.voice_note_id ?? undefined,
           voice_note_url: voiceNoteUrl ?? undefined,
+          voice_transcription: (ans as any).voice_transcription ?? undefined,
         };
       });
       setLocalAnswers((prev) => ({ ...prev, ...merged }));
@@ -430,6 +431,72 @@ export default function InspectionWizardScreen() {
     return false;
   }, [localAnswers, isArabic, validateAnswer]);
 
+  // Check if all items are complete and offer to go to submit
+  const checkAllCompleteAndOfferSubmit = useCallback((updatedAnswers: Record<number, LocalAnswer>) => {
+    // Check if all items are answered
+    const allAnswered = allChecklistItems.every(item =>
+      updatedAnswers[item.id]?.answer_value && !skippedItems.has(item.id)
+    );
+
+    if (!allAnswered) return;
+
+    // Check if any items are missing required media (using the updated answers)
+    const anyMissingMedia = allChecklistItems.some(item => {
+      const answer = updatedAnswers[item.id];
+      if (!answer?.answer_value) return false;
+
+      const questionText = (isArabic && item.question_text_ar)
+        ? item.question_text_ar
+        : item.question_text;
+      const questionTextLower = questionText.toLowerCase();
+
+      // Check if it's a reading question
+      const isReading = questionTextLower.includes('reading') ||
+                        questionTextLower.includes('قراءة') ||
+                        questionTextLower.includes('عداد') ||
+                        questionTextLower.includes('rnr') ||
+                        questionTextLower.includes('running hours') ||
+                        questionTextLower.includes('twl') ||
+                        questionTextLower.includes('twistlock');
+
+      const hasPhoto = !!(answer.photo_url || answer.photo_uri);
+      const hasVoice = !!(answer.voice_note_id || answer.voice_note_url);
+      const hasVideo = !!(answer.video_file_id || answer.video_url || answer.video_uri);
+
+      // Reading questions require photo
+      if (isReading && !hasPhoto) return true;
+
+      // Check validation for this item
+      const validation = validateAnswer(item, answer.answer_value);
+
+      // Failed items require (photo + voice) or (video + voice)
+      if (validation === 'fail') {
+        const hasValidCombo = (hasPhoto && hasVoice) || (hasVideo && hasVoice);
+        if (!hasValidCombo) return true;
+      }
+
+      return false;
+    });
+
+    if (anyMissingMedia) return;
+
+    // All complete! Offer to go to submit
+    Alert.alert(
+      t('inspection.allComplete', 'All Complete!'),
+      t('inspection.readyToSubmit', 'All questions are answered with required media. Go to submit?'),
+      [
+        {
+          text: t('inspection.goToSubmit', 'Go to Submit'),
+          onPress: () => goToIndex(totalItems - 1), // Go to last question where submit button is
+        },
+        {
+          text: t('common.cancel', 'Cancel'),
+          style: 'cancel',
+        },
+      ]
+    );
+  }, [allChecklistItems, skippedItems, isArabic, validateAnswer, goToIndex, totalItems, t]);
+
   // Handle submit
   const handleSubmit = useCallback(() => {
     // Step 1: Check for skipped or unanswered items
@@ -497,29 +564,70 @@ export default function InspectionWizardScreen() {
     );
   }, [t, submitMutation, allChecklistItems, localAnswers, skippedItems, goToIndex, itemMissingMedia]);
 
-  // Photo upload
-  const handleTakePhoto = useCallback(async () => {
+  // Photo upload - show options (Camera or Gallery)
+  const handleTakePhoto = useCallback(() => {
+    // DEBUG: Check if function is called
+    Alert.alert('DEBUG', `handleTakePhoto called. currentItem: ${currentItem?.id || 'NULL'}`);
+
     if (!currentItem) return;
 
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(t('common.error'), 'Camera permission is required.');
-      return;
-    }
+    Alert.alert(
+      t('inspection.addPhoto', 'Add Photo'),
+      t('inspection.choosePhotoSource', 'How would you like to add a photo?'),
+      [
+        {
+          text: t('inspection.takePhoto', 'Take Photo'),
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert(t('common.error'), 'Camera permission is required.');
+              return;
+            }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ['images'],
+              quality: 0.7,
+            });
 
-    if (!result.canceled && result.assets?.[0]) {
-      const asset = result.assets[0];
-      uploadPhoto(currentItem.id, asset.uri, asset.fileName || 'photo.jpg');
-    }
+            if (!result.canceled && result.assets?.[0]) {
+              const asset = result.assets[0];
+              uploadPhoto(currentItem.id, asset.uri, asset.fileName || 'photo.jpg');
+            }
+          },
+        },
+        {
+          text: t('inspection.fromGallery', 'From Gallery'),
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert(t('common.error'), 'Gallery permission is required.');
+              return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              quality: 0.7,
+            });
+
+            if (!result.canceled && result.assets?.[0]) {
+              const asset = result.assets[0];
+              uploadPhoto(currentItem.id, asset.uri, asset.fileName || 'photo.jpg');
+            }
+          },
+        },
+        {
+          text: t('common.cancel', 'Cancel'),
+          style: 'cancel',
+        },
+      ]
+    );
   }, [currentItem, t]);
 
   const uploadPhoto = useCallback(async (checklistItemId: number, uri: string, fileName: string, retryCount = 0) => {
     const MAX_RETRIES = 2;
+
+    // DEBUG: Confirm upload started
+    Alert.alert('DEBUG', `Upload started for item ${checklistItemId}\nURI: ${uri.substring(0, 50)}...`);
 
     setLocalAnswers((prev) => ({
       ...prev,
@@ -533,11 +641,20 @@ export default function InspectionWizardScreen() {
     try {
       // Read file as base64
       console.log('Reading photo as base64...', uri);
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      let base64: string;
+      try {
+        base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: 'base64',
+        });
+        if (!base64) {
+          throw new Error('File read returned empty result');
+        }
+      } catch (readError: any) {
+        console.error('Failed to read photo file:', readError);
+        throw new Error(`Could not read photo file: ${readError?.message || 'Unknown error'}`);
+      }
 
-      console.log('Uploading photo via base64...', base64.substring(0, 50) + '...');
+      console.log('Uploading photo via base64... length:', base64.length);
 
       // Upload as JSON with base64
       const response = await getApiClient().post(
@@ -558,26 +675,107 @@ export default function InspectionWizardScreen() {
       const data = result?.data;
       const cloudinaryUrl = data?.photo_file?.url || data?.url;
       const aiAnalysis = result?.ai_analysis;
+      const extractedReading = result?.extracted_reading;
+      const readingValidation = result?.reading_validation;
 
       // Log the response for debugging
       console.log('Photo upload response:', {
         cloudinaryUrl,
         hasAiAnalysis: !!aiAnalysis,
-        analysisFailed: result?.analysis_failed
+        analysisFailed: result?.analysis_failed,
+        extractedReading,
+        readingValidation
       });
 
+      // DEBUG: Show alert with AI analysis status (ALWAYS - for testing)
+      Alert.alert(
+        'DEBUG: Photo Upload Result',
+        `AI Analysis: ${aiAnalysis ? 'YES' : 'NO'}\n` +
+        `Failed: ${result?.analysis_failed ? 'YES' : 'NO'}\n` +
+        `Content: ${aiAnalysis ? JSON.stringify(aiAnalysis).substring(0, 100) : 'none'}`,
+        [{ text: 'OK' }]
+      );
+
       // Update local state with photo URL and AI analysis
-      setLocalAnswers((prev) => ({
-        ...prev,
-        [checklistItemId]: {
-          ...prev[checklistItemId],
-          photo_uri: undefined,
-          photo_url: cloudinaryUrl,
-          photo_ai_analysis: aiAnalysis,
-          isUploading: false,
-          uploadFailed: false,
-        },
-      }));
+      setLocalAnswers((prev) => {
+        const updated = {
+          ...prev,
+          [checklistItemId]: {
+            ...prev[checklistItemId],
+            photo_uri: undefined,
+            photo_url: cloudinaryUrl,
+            photo_ai_analysis: aiAnalysis,
+            isUploading: false,
+            uploadFailed: false,
+          },
+        };
+
+        // Handle RNR/TWL reading validation
+        if (readingValidation) {
+          if (!readingValidation.is_valid) {
+            // Reading was rejected (less than previous) - show warning
+            Alert.alert(
+              t('common.warning', 'Warning'),
+              readingValidation.rejection_reason ||
+              t('inspection.reading_less_than_previous', 'Reading must be greater than previous inspection value'),
+              [{ text: 'OK' }]
+            );
+            // Clear the field so user must re-enter
+            updated[checklistItemId].answer_value = '';
+          } else if (readingValidation.parsed_value !== null) {
+            // Valid reading - always use the extracted value from photo
+            const extractedValue = String(readingValidation.parsed_value);
+            updated[checklistItemId].answer_value = extractedValue;
+            answerMutation.mutate({
+              checklist_item_id: checklistItemId,
+              answer_value: extractedValue,
+            });
+            console.log('Auto-filled validated reading:', extractedValue);
+
+            // Show confirmation with previous value
+            if (readingValidation.last_reading) {
+              Alert.alert(
+                t('inspection.readingConfirmed', 'Reading Confirmed'),
+                `${t('inspection.extractedValue', 'Extracted')}: ${extractedValue}\n${t('inspection.previousValue', 'Previous')}: ${readingValidation.last_reading}`,
+                [{ text: 'OK' }]
+              );
+            }
+          } else if (readingValidation.is_faulty) {
+            // Faulty meter
+            updated[checklistItemId].answer_value = 'faulty';
+            answerMutation.mutate({
+              checklist_item_id: checklistItemId,
+              answer_value: 'faulty',
+            });
+            Alert.alert(
+              t('inspection.meterFaulty', 'Meter Faulty'),
+              t('inspection.meterDetectedFaulty', 'The meter appears to be faulty or unreadable'),
+              [{ text: 'OK' }]
+            );
+          }
+        } else if (extractedReading && extractedReading !== 'faulty') {
+          // General reading (not RNR/TWL) - auto-fill if empty
+          const currentValue = prev[checklistItemId]?.answer_value;
+          if (!currentValue || currentValue.trim() === '') {
+            updated[checklistItemId].answer_value = extractedReading;
+            answerMutation.mutate({
+              checklist_item_id: checklistItemId,
+              answer_value: extractedReading,
+            });
+            console.log('Auto-filled reading value:', extractedReading);
+          }
+        } else if (extractedReading === 'faulty') {
+          // If meter is faulty, set value to 'faulty'
+          updated[checklistItemId].answer_value = 'faulty';
+          answerMutation.mutate({
+            checklist_item_id: checklistItemId,
+            answer_value: 'faulty',
+          });
+          console.log('Meter detected as faulty');
+        }
+
+        return updated;
+      });
 
       // Log analysis status
       if (aiAnalysis) {
@@ -587,6 +785,14 @@ export default function InspectionWizardScreen() {
       }
 
       queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
+
+      // Check if all items are now complete after a short delay for state to settle
+      setTimeout(() => {
+        setLocalAnswers(current => {
+          checkAllCompleteAndOfferSubmit(current);
+          return current; // Don't modify state, just read it
+        });
+      }, 500);
     } catch (error: any) {
       // Retry logic for network/timeout errors
       const isRetryableError =
@@ -621,7 +827,7 @@ export default function InspectionWizardScreen() {
         [{ text: 'OK' }]
       );
     }
-  }, [id, inspectionId, queryClient, t]);
+  }, [id, inspectionId, queryClient, t, answerMutation]);
 
   // Handle voice note
   const handleVoiceNoteRecorded = useCallback((voiceNoteId: number, transcription?: { en: string; ar: string }) => {
@@ -645,7 +851,15 @@ export default function InspectionWizardScreen() {
         voice_note_id: voiceNoteId,
       });
     }
-  }, [currentItem, localAnswers, answerMutation]);
+
+    // Check if all items are now complete
+    setTimeout(() => {
+      setLocalAnswers(currentAnswers => {
+        checkAllCompleteAndOfferSubmit(currentAnswers);
+        return currentAnswers;
+      });
+    }, 500);
+  }, [currentItem, localAnswers, answerMutation, checkAllCompleteAndOfferSubmit]);
 
   // Handle voice note deletion
   const handleVoiceNoteDeleted = useCallback(() => {
@@ -702,7 +916,15 @@ export default function InspectionWizardScreen() {
         video_ai_analysis: aiAnalysis,
       },
     }));
-  }, [currentItem]);
+
+    // Check if all items are now complete after a short delay for state to settle
+    setTimeout(() => {
+      setLocalAnswers(current => {
+        checkAllCompleteAndOfferSubmit(current);
+        return current; // Don't modify state, just read it
+      });
+    }, 500);
+  }, [currentItem, checkAllCompleteAndOfferSubmit]);
 
   // Handle video deletion
   const handleVideoDeleted = useCallback(() => {
@@ -895,8 +1117,8 @@ export default function InspectionWizardScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{(error as any)?.message || t('common.error')}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
-          <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+        <TouchableOpacity style={styles.errorRetryButton} onPress={() => refetch()}>
+          <Text style={styles.errorRetryButtonText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -977,6 +1199,12 @@ export default function InspectionWizardScreen() {
 
   return (
     <View style={styles.container}>
+      {/* DEBUG BANNER - REMOVE AFTER TESTING */}
+      <View style={{ backgroundColor: 'purple', padding: 15 }}>
+        <Text style={{ color: 'yellow', fontWeight: 'bold', textAlign: 'center', fontSize: 16 }}>
+          DEBUG v5 - TAP CAMERA TO TEST
+        </Text>
+      </View>
       {/* Header with equipment info and buttons */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
@@ -1093,7 +1321,7 @@ export default function InspectionWizardScreen() {
 
           {/* Media section - Photo, Video, Voice */}
           <View style={styles.mediaSection}>
-            {/* Photo */}
+            {/* Photo Row */}
             <View style={styles.mediaSectionRow}>
               <TouchableOpacity
                 style={[styles.mediaButton, isUploading && styles.buttonDisabled]}
@@ -1131,25 +1359,29 @@ export default function InspectionWizardScreen() {
                 </View>
               )}
 
-              {/* Photo AI Analysis */}
-              {currentAnswer?.photo_ai_analysis && (
-                <View style={styles.aiAnalysisBox}>
-                  <Text style={styles.aiAnalysisLabel}>🤖 AI Analysis:</Text>
-                  {currentAnswer.photo_ai_analysis.en && (
-                    <Text style={styles.aiAnalysisText}>
-                      {currentAnswer.photo_ai_analysis.en}
-                    </Text>
-                  )}
-                  {currentAnswer.photo_ai_analysis.ar && (
-                    <Text style={[styles.aiAnalysisText, styles.aiAnalysisTextAr]}>
-                      {currentAnswer.photo_ai_analysis.ar}
-                    </Text>
-                  )}
-                </View>
+              {!photoSource && !isUploading && (
+                <Text style={styles.mediaHintText}>{t('inspection.tapToAddPhoto', 'Tap to add photo')}</Text>
               )}
             </View>
 
-            {/* Video */}
+            {/* Photo AI Analysis - OUTSIDE the row for full width */}
+            {currentAnswer?.photo_ai_analysis && (
+              <View style={styles.aiAnalysisBox}>
+                <Text style={styles.aiAnalysisLabel}>🤖 {t('inspection.photoAiAnalysis', 'Photo AI Analysis')}:</Text>
+                {currentAnswer.photo_ai_analysis.en && (
+                  <Text style={styles.aiAnalysisText}>
+                    {currentAnswer.photo_ai_analysis.en}
+                  </Text>
+                )}
+                {currentAnswer.photo_ai_analysis.ar && (
+                  <Text style={[styles.aiAnalysisText, styles.aiAnalysisTextAr]}>
+                    {currentAnswer.photo_ai_analysis.ar}
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* Video Row */}
             <VideoRecorder
               key={`video-${currentItem.id}`}
               onVideoRecorded={handleVideoRecorded}
@@ -1158,10 +1390,10 @@ export default function InspectionWizardScreen() {
               disabled={isUploading}
             />
 
-            {/* Video AI Analysis */}
+            {/* Video AI Analysis - Full width below video */}
             {currentAnswer?.video_ai_analysis && (
               <View style={styles.aiAnalysisBox}>
-                <Text style={styles.aiAnalysisLabel}>🎥 Video AI Analysis:</Text>
+                <Text style={styles.aiAnalysisLabel}>🎥 {t('inspection.videoAiAnalysis', 'Video AI Analysis')}:</Text>
                 {currentAnswer.video_ai_analysis.en && (
                   <Text style={styles.aiAnalysisText}>
                     {currentAnswer.video_ai_analysis.en}
@@ -1175,7 +1407,7 @@ export default function InspectionWizardScreen() {
               </View>
             )}
 
-            {/* Voice note */}
+            {/* Voice note Row */}
             <VoiceNoteRecorder
               key={currentItem.id} // Force new instance for each question
               onVoiceNoteRecorded={handleVoiceNoteRecorded}
@@ -1629,6 +1861,11 @@ const styles = StyleSheet.create({
   mediaButtonText: {
     fontSize: 20,
   },
+  mediaHintText: {
+    fontSize: 12,
+    color: '#999',
+    alignSelf: 'center',
+  },
   mediaPreviewContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1822,13 +2059,13 @@ const styles = StyleSheet.create({
     color: '#E53935',
     marginBottom: 12,
   },
-  retryButton: {
+  errorRetryButton: {
     paddingHorizontal: 24,
     paddingVertical: 10,
     backgroundColor: '#1976D2',
     borderRadius: 8,
   },
-  retryButtonText: {
+  errorRetryButtonText: {
     color: '#fff',
     fontWeight: '600',
   },

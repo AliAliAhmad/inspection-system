@@ -125,6 +125,7 @@ from app.models.work_plan_performance import WorkPlanPerformance
 from app.models.equipment_watch import EquipmentWatch
 from app.models.equipment_note import EquipmentNote
 from app.models.equipment_certification import EquipmentCertification
+from app.models.equipment_reading import EquipmentReading
 
 # Gamification & Leaderboard
 from app.models.achievement import Achievement
@@ -252,6 +253,7 @@ __all__ = [
     'EquipmentWatch',
     'EquipmentNote',
     'EquipmentCertification',
+    'EquipmentReading',
     # Gamification & Leaderboard
     'Achievement',
     'UserAchievement',

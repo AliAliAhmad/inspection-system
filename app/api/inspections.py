@@ -43,6 +43,45 @@ def check_ai_status():
     }), 200
 
 
+@bp.route('/debug/ai-test', methods=['GET'])
+def test_ai_connection():
+    """
+    Test OpenAI API connection by making a simple call.
+    """
+    import os
+    api_key = os.getenv('OPENAI_API_KEY')
+
+    if not api_key:
+        return jsonify({
+            'success': False,
+            'error': 'OPENAI_API_KEY not configured'
+        }), 400
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+
+        # Simple test call
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "Say 'AI is working' in 3 words or less"}],
+            max_tokens=10
+        )
+
+        return jsonify({
+            'success': True,
+            'response': response.choices[0].message.content,
+            'model': response.model
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
+
 # ============================================
 # STATS & ANALYTICS
 # ============================================

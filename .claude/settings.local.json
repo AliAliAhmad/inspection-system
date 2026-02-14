@@ -85,7 +85,12 @@
       "Bash(open:*)",
       "Bash(do curl -s https://inspection-api-o3hz.onrender.com/health)",
       "mcp__voicemode__converse",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(export PATH=\"/opt/homebrew/opt/node@20/bin:$PATH\")",
+      "Bash(/opt/homebrew/opt/node@20/bin/npx expo install --fix)",
+      "Bash(/opt/homebrew/opt/node@20/bin/node:*)",
+      "Bash(/opt/homebrew/opt/node@20/bin/npm ls react)",
+      "Bash(export PATH=/opt/homebrew/opt/node@20/bin:$PATH)"
     ]
   }
 }

@@ -47,6 +47,13 @@ export default function LoginScreen() {
   };
 
   return (
+    <>
+      {/* DEBUG BANNER - Shows on Login */}
+      <View style={{ backgroundColor: 'red', padding: 15, marginTop: 50 }}>
+        <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: 18 }}>
+          DEBUG v3 - SDK54 WORKING
+        </Text>
+      </View>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -95,6 +102,7 @@ export default function LoginScreen() {
 
       </View>
     </KeyboardAvoidingView>
+    </>
   );
 }
 

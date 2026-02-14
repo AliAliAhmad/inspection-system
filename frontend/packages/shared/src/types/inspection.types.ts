@@ -32,10 +32,13 @@ export interface InspectionAnswer {
   comment: string | null;
   photo_path: string | null;
   photo_file: FileRecord | null;
+  photo_ai_analysis?: { en: string; ar: string } | null;
   video_path: string | null;
   video_file: FileRecord | null;
+  video_ai_analysis?: { en: string; ar: string } | null;
   voice_note_id: number | null;
   voice_note: FileRecord | null;
+  voice_transcription?: string | null;
   answered_at: string;
 }
 

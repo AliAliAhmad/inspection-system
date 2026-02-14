@@ -140,6 +140,13 @@
     "take_photo": "التقاط صورة",
     "from_gallery": "من المعرض",
     "video": "فيديو",
+    "addVideo": "إضافة فيديو",
+    "chooseVideoSource": "كيف تريد إضافة الفيديو؟",
+    "recordVideo": "تسجيل فيديو",
+    "addPhoto": "إضافة صورة",
+    "choosePhotoSource": "كيف تريد إضافة الصورة؟",
+    "readingAutoFilled": "تم ملء القراءة تلقائياً من الصورة",
+    "meterFaulty": "تم اكتشاف أن العداد معطل",
     "chooseMode": "اختر وضع الفحص",
     "chooseModeDesc": "كيف تريد إكمال هذا الفحص؟",
     "wizardMode": "خطوة بخطوة",
@@ -172,7 +179,12 @@
     "rnr_twl_requires_photo": "صورة مطلوبة للتحقق من ساعات التشغيل (RNR) أو عدد التويست لوك (TWL)",
     "rnr_twl_photo_required": "صورة مطلوبة للتحقق من ساعات التشغيل (RNR) أو عدد التويست لوك (TWL)",
     "missingMedia": "أسئلة تفتقر إلى الصورة/الفيديو/الصوت المطلوب. أضف الوسائط قبل الإرسال.",
-    "goToFirstMissing": "انتقل إلى الأول الناقص"
+    "goToFirstMissing": "انتقل إلى الأول الناقص",
+    "readingConfirmed": "تم تأكيد القراءة",
+    "extractedValue": "القيمة المستخرجة",
+    "previousValue": "القيمة السابقة",
+    "reading_less_than_previous": "يجب أن تكون القراءة أكبر من قيمة التفتيش السابق. ساعات التشغيل وعدد التويست لوك تزداد دائماً.",
+    "meterDetectedFaulty": "يبدو أن العداد معطل أو غير قابل للقراءة"
   },
   "jobs": {
     "planned_time": "الوقت المخطط",

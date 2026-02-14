@@ -360,7 +360,7 @@ export default function InspectionChecklistScreen() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 0.7,
       });
 
@@ -381,7 +381,7 @@ export default function InspectionChecklistScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 0.7,
       });
 
@@ -607,7 +607,7 @@ export default function InspectionChecklistScreen() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: ['videos'],
         quality: 0.7,
         videoMaxDuration: 60, // Max 60 seconds
       });

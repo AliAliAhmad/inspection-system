@@ -155,6 +155,13 @@
     "take_photo": "Take Photo",
     "from_gallery": "From Gallery",
     "video": "Video",
+    "addVideo": "Add Video",
+    "chooseVideoSource": "How would you like to add a video?",
+    "recordVideo": "Record Video",
+    "addPhoto": "Add Photo",
+    "choosePhotoSource": "How would you like to add a photo?",
+    "readingAutoFilled": "Reading auto-filled from photo",
+    "meterFaulty": "Meter detected as faulty",
     "chooseMode": "Choose Inspection Mode",
     "chooseModeDesc": "How would you like to complete this inspection?",
     "wizardMode": "Step-by-Step",
@@ -187,7 +194,12 @@
     "rnr_twl_requires_photo": "Photo required to verify Running Hours (RNR) or Twistlock Count (TWL)",
     "rnr_twl_photo_required": "Photo required to verify Running Hours (RNR) or Twistlock Count (TWL)",
     "missingMedia": "questions are missing required photo/video/voice. Add media before submitting.",
-    "goToFirstMissing": "Go to first missing"
+    "goToFirstMissing": "Go to first missing",
+    "readingConfirmed": "Reading Confirmed",
+    "extractedValue": "Extracted",
+    "previousValue": "Previous",
+    "reading_less_than_previous": "Reading must be greater than previous inspection value. Running hours and twistlock counts always increase.",
+    "meterDetectedFaulty": "The meter appears to be faulty or unreadable"
   },
   "jobs": {
     "planned_time": "Planned Time",

@@ -8,7 +8,8 @@ interface Environment {
 
 const ENV: Record<string, Environment> = {
   development: {
-    apiUrl: 'https://inspection-api-o3hz.onrender.com',
+    // Use local server for development (change IP if needed)
+    apiUrl: 'http://192.168.1.13:5001',
     appName: 'Inspection System (Dev)',
     isDev: true,
   },
@@ -25,9 +26,8 @@ const ENV: Record<string, Environment> = {
 };
 
 function getEnvironment(): Environment {
-  // Check EXPO_PUBLIC_ENV first (set in eas.json), then EAS channel, then default to development
-  const env = process.env.EXPO_PUBLIC_ENV || Constants.expoConfig?.extra?.eas?.channel || 'development';
-  return ENV[env] ?? ENV.development;
+  // Use production Render server
+  return ENV.production;
 }
 
 export const environment = getEnvironment();
