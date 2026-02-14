@@ -20,6 +20,30 @@ bp = Blueprint('inspections', __name__)
 
 
 # ============================================
+# DIAGNOSTIC ENDPOINTS
+# ============================================
+
+@bp.route('/debug/ai-status', methods=['GET'])
+def check_ai_status():
+    """
+    Diagnostic endpoint to check if AI is configured.
+    No auth required for debugging purposes.
+    """
+    import os
+    api_key = os.getenv('OPENAI_API_KEY')
+    key_preview = f"{api_key[:8]}...{api_key[-4:]}" if api_key and len(api_key) > 12 else None
+
+    return jsonify({
+        'ai_configured': bool(api_key),
+        'api_key_preview': key_preview,
+        'api_key_length': len(api_key) if api_key else 0,
+        'environment': os.getenv('FLASK_ENV', 'not set'),
+        'render_service': os.getenv('RENDER_SERVICE_NAME', 'not on render'),
+        'message': 'OPENAI_API_KEY is configured' if api_key else 'OPENAI_API_KEY is NOT configured - add it in Render dashboard'
+    }), 200
+
+
+# ============================================
 # STATS & ANALYTICS
 # ============================================
 
@@ -729,6 +753,34 @@ def upload_answer_media(inspection_id):
     # AI analysis for photos and videos (backend-side to ensure it happens)
     ai_analysis = None
     analysis_failed = False
+    extracted_reading = None  # For meter reading extraction
+
+    # Check if this is a "reading" question that needs number extraction
+    from app.models import ChecklistItem
+    checklist_item = db.session.get(ChecklistItem, int(checklist_item_id))
+    is_reading_question = False
+    is_rnr_reading = False  # Running Hours (RNR)
+    is_twl_reading = False  # Twistlock Count (TWL)
+
+    if checklist_item:
+        question_text = (checklist_item.question_text or '').lower()
+        question_text_ar = (checklist_item.question_text_ar or '').lower()
+        combined_text = question_text + ' ' + question_text_ar
+
+        # Check for RNR (Running Hours) reading
+        is_rnr_reading = any(keyword in combined_text for keyword in [
+            'rnr', 'running hours', 'running hour', 'ساعات التشغيل', 'ساعة التشغيل'
+        ])
+
+        # Check for TWL (Twistlock) reading
+        is_twl_reading = any(keyword in combined_text for keyword in [
+            'twl', 'twistlock', 'twist lock', 'تويست لوك', 'عدد التويست'
+        ])
+
+        # General reading question (any meter/gauge reading)
+        is_reading_question = is_rnr_reading or is_twl_reading or any(keyword in combined_text for keyword in [
+            'reading', 'قراءة', 'عداد', 'meter', 'gauge', 'counter'
+        ])
 
     # Analyze both photos and videos
     try:
@@ -737,7 +789,14 @@ def upload_answer_media(inspection_id):
 
         api_key = os.getenv('OPENAI_API_KEY')
         media_type_label = "Video" if is_video else "Photo"
-        logger.info(f"{media_type_label} AI analysis starting... API key present: {bool(api_key)}")
+        # Enhanced debug logging
+        api_key_preview = f"{api_key[:8]}..." if api_key and len(api_key) > 8 else "MISSING"
+        logger.info(f"=== AI ANALYSIS DEBUG ===")
+        logger.info(f"{media_type_label} AI analysis starting...")
+        logger.info(f"API key status: {api_key_preview}")
+        logger.info(f"API key present: {bool(api_key)}")
+        logger.info(f"Is reading question: {is_reading_question}")
+        logger.info(f"File URL: {file_record.file_path}")
 
         if api_key:
             client = OpenAI(api_key=api_key)
@@ -755,6 +814,25 @@ def upload_answer_media(inspection_id):
                 analyze_url = file_record.file_path
                 logger.info(f"Analyzing photo at URL: {analyze_url}")
 
+            # Different prompt for reading questions vs general inspection
+            if is_reading_question and not is_video:
+                # Special prompt for meter/gauge reading extraction
+                prompt_text = (
+                    "This is a photo of a meter, gauge, or counter reading. "
+                    "Extract the numeric value shown on the display/dial. "
+                    "If the meter appears faulty or unreadable, indicate that. "
+                    "Provide response in this exact JSON format:\n"
+                    "{ \"en\": \"English description\", \"ar\": \"Arabic description\", \"reading\": \"12345\" }\n"
+                    "The 'reading' field should contain ONLY the numeric value (or 'faulty' if broken/unreadable)."
+                )
+            else:
+                prompt_text = (
+                    f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
+                    "Identify any visible defects, damage, or issues. "
+                    "Provide a brief analysis in English and Arabic. "
+                    "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
+                )
+
             # Analyze the photo/video with GPT-4 Vision (runs for BOTH photos and videos)
             response = client.chat.completions.create(
                 model="gpt-4o",  # Use gpt-4o which supports vision
@@ -764,12 +842,7 @@ def upload_answer_media(inspection_id):
                         "content": [
                             {
                                 "type": "text",
-                                "text": (
-                                    f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
-                                    "Identify any visible defects, damage, or issues. "
-                                    "Provide a brief analysis in English and Arabic. "
-                                    "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
-                                )
+                                "text": prompt_text
                             },
                             {
                                 "type": "image_url",
@@ -791,6 +864,13 @@ def upload_answer_media(inspection_id):
                 import json
                 ai_analysis = json.loads(analysis_text)
                 logger.info(f"Parsed as JSON successfully")
+
+                # Extract reading value if present (for meter reading questions)
+                if 'reading' in ai_analysis and is_reading_question:
+                    extracted_reading = ai_analysis.get('reading')
+                    logger.info(f"Extracted reading value: {extracted_reading}")
+                    # Remove reading from ai_analysis to keep it clean for display
+                    # but we'll return it separately
             except Exception as parse_err:
                 logger.info(f"Not JSON, translating... Error: {parse_err}")
                 # If not JSON, treat as plain text and translate
@@ -801,13 +881,16 @@ def upload_answer_media(inspection_id):
                     'ar': translated.get('ar') or analysis_text
                 }
 
-            logger.info(f"Final ai_analysis: {ai_analysis}")
+            logger.info(f"Final ai_analysis: {ai_analysis}, extracted_reading: {extracted_reading}")
 
         else:
+            logger.warning(f"=== OPENAI_API_KEY NOT CONFIGURED ===")
             logger.warning(f"{media_type_label} analysis skipped: OPENAI_API_KEY not configured")
+            logger.warning(f"Set OPENAI_API_KEY in Render environment variables!")
             analysis_failed = True
 
     except Exception as e:
+        logger.error(f"=== AI ANALYSIS EXCEPTION ===")
         logger.error(f"{media_type_label} AI analysis failed: {e}", exc_info=True)
         analysis_failed = True
 
@@ -820,6 +903,90 @@ def upload_answer_media(inspection_id):
         db.session.commit()
         logger.info(f"Saved {media_type_label} AI analysis to answer #{answer.id}")
 
+    # Save RNR or TWL reading to EquipmentReading model for historical tracking
+    reading_validation = None  # Will contain validation result for frontend
+    if extracted_reading and (is_rnr_reading or is_twl_reading) and inspection:
+        try:
+            from app.models.equipment_reading import EquipmentReading
+            from datetime import date as date_module
+
+            reading_type = 'rnr' if is_rnr_reading else 'twl'
+            is_faulty = extracted_reading.lower() == 'faulty' if isinstance(extracted_reading, str) else False
+
+            # Parse the reading value
+            reading_value = None
+            if not is_faulty:
+                try:
+                    # Handle numeric strings like "12345" or "12,345"
+                    clean_value = str(extracted_reading).replace(',', '').strip()
+                    reading_value = float(clean_value)
+                except (ValueError, TypeError):
+                    is_faulty = True
+
+            # Get the last reading for this equipment to validate
+            last_reading = EquipmentReading.get_latest_reading(inspection.equipment_id, reading_type)
+            last_value = last_reading.reading_value if last_reading and not last_reading.is_faulty else None
+
+            # Validate: new reading must be >= last reading (running hours/twistlock count always increases)
+            reading_rejected = False
+            rejection_reason = None
+
+            if reading_value is not None and last_value is not None:
+                if reading_value < last_value:
+                    reading_rejected = True
+                    rejection_reason = f"Reading {reading_value} is less than last reading {last_value}. Running hours/twistlock count cannot decrease."
+                    logger.warning(f"Rejected {reading_type.upper()} reading: {reading_value} < {last_value} for equipment #{inspection.equipment_id}")
+
+            # Build validation response for frontend
+            reading_validation = {
+                'extracted_value': str(extracted_reading),
+                'parsed_value': reading_value,
+                'is_faulty': is_faulty,
+                'last_reading': last_value,
+                'reading_type': reading_type,
+                'is_valid': not reading_rejected,
+                'rejection_reason': rejection_reason,
+            }
+
+            # Only save if not rejected
+            if not reading_rejected and not is_faulty:
+                equipment_reading = EquipmentReading(
+                    equipment_id=inspection.equipment_id,
+                    reading_type=reading_type,
+                    reading_value=reading_value,
+                    is_faulty=is_faulty,
+                    reading_date=date_module.today(),
+                    recorded_by_id=int(current_user_id),
+                    inspection_id=inspection_id,
+                    checklist_item_id=int(checklist_item_id),
+                    photo_file_id=file_record.id if not is_video else None,
+                    ai_analysis=ai_analysis,
+                )
+                db.session.add(equipment_reading)
+                db.session.commit()
+                logger.info(f"Saved {reading_type.upper()} reading: {reading_value} for equipment #{inspection.equipment_id}")
+            elif is_faulty:
+                # Save faulty reading for tracking
+                equipment_reading = EquipmentReading(
+                    equipment_id=inspection.equipment_id,
+                    reading_type=reading_type,
+                    reading_value=None,
+                    is_faulty=True,
+                    reading_date=date_module.today(),
+                    recorded_by_id=int(current_user_id),
+                    inspection_id=inspection_id,
+                    checklist_item_id=int(checklist_item_id),
+                    photo_file_id=file_record.id if not is_video else None,
+                    ai_analysis=ai_analysis,
+                )
+                db.session.add(equipment_reading)
+                db.session.commit()
+                logger.info(f"Saved FAULTY {reading_type.upper()} reading for equipment #{inspection.equipment_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to save equipment reading: {e}")
+            # Don't fail the whole upload, just log the error
+
     response_data = {
         'status': 'success',
         'message': f'{"Video" if is_video else "Photo"} uploaded',
@@ -827,8 +994,10 @@ def upload_answer_media(inspection_id):
         'media_type': media_type,
         'ai_analysis': ai_analysis,
         'analysis_failed': analysis_failed,
+        'extracted_reading': extracted_reading,  # For meter reading auto-fill
+        'reading_validation': reading_validation,  # For RNR/TWL validation feedback
     }
-    logger.info(f"Returning response with ai_analysis: {bool(ai_analysis)}, analysis_failed: {analysis_failed}")
+    logger.info(f"Returning response with ai_analysis: {bool(ai_analysis)}, extracted_reading: {extracted_reading}, validation: {reading_validation}")
     return jsonify(response_data), 201
 
 
