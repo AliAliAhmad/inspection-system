@@ -1,9 +1,9 @@
 """
 Google Gemini AI Service for photo analysis and audio transcription.
 
-Models:
-- Photo/Video: gemini-3-pro (1,500 RPD) - Most accurate
-- Audio: gemini-2.5-flash-native-audio-dialog (Unlimited RPD)
+Models (with fallback):
+- Photo/Video: gemini-3-pro-preview → gemini-2.5-flash (1,500 RPD)
+- Audio: gemini-2.5-flash (1,500 RPD)
 
 Setup:
 1. Go to https://aistudio.google.com/apikey
@@ -21,11 +21,12 @@ logger = logging.getLogger(__name__)
 # Gemini API endpoint
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-# Photo/Video analysis - gemini-3-pro (1,500 RPD, most accurate)
-VISION_MODEL = "gemini-3-pro"
+# Photo/Video analysis - try gemini-3-pro-preview first, fallback to gemini-2.5-flash
+VISION_MODELS = ["gemini-3-pro-preview", "gemini-2.5-flash"]
+VISION_MODEL = VISION_MODELS[0]  # Primary model
 
-# Audio transcription - native audio dialog (Unlimited RPD)
-AUDIO_MODEL = "gemini-2.5-flash-native-audio-dialog"
+# Audio transcription - gemini-2.5-flash (supports audio files, 1,500 RPD)
+AUDIO_MODEL = "gemini-2.5-flash"
 
 
 def is_gemini_configured():
@@ -129,24 +130,38 @@ class GeminiVisionService:
             }
 
             api_key = _get_api_key()
-            url = f"{GEMINI_API_URL}/{VISION_MODEL}:generateContent?key={api_key}"
 
-            logger.info(f"Calling Gemini Vision API with model: {VISION_MODEL}")
+            # Try each model in order until one succeeds
+            result = None
+            last_error = None
+            for model in VISION_MODELS:
+                url = f"{GEMINI_API_URL}/{model}:generateContent?key={api_key}"
+                logger.info(f"Trying Gemini Vision API with model: {model}")
 
-            response = requests.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=60
-            )
+                try:
+                    response = requests.post(
+                        url,
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=60
+                    )
 
-            logger.info(f"Gemini response status: {response.status_code}")
+                    logger.info(f"Gemini {model} response status: {response.status_code}")
 
-            if response.status_code != 200:
-                logger.error(f"Gemini API error: {response.status_code} - {response.text[:500]}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"Success with model: {model}")
+                        break
+                    else:
+                        last_error = f"{response.status_code} - {response.text[:200]}"
+                        logger.warning(f"Model {model} failed: {last_error}, trying next...")
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(f"Model {model} error: {e}, trying next...")
+
+            if result is None:
+                logger.error(f"All vision models failed. Last error: {last_error}")
                 return None
-
-            result = response.json()
 
             # Extract the response text
             candidates = result.get('candidates', [])

@@ -142,13 +142,13 @@ class TranslationService:
 
     @staticmethod
     def _translate_gemini(text, system_prompt, target_lang):
-        """Translate using Gemma 3 4B (14,400 RPD - high volume)."""
+        """Translate using Gemini 2.5 Flash (1,500 RPD)."""
         api_key = os.getenv('GEMINI_API_KEY', '').strip()
         if not api_key:
             raise Exception("Gemini API key not configured")
 
-        # Using gemma-3-4b for translation (14,400 RPD)
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-3-4b-it:generateContent?key={api_key}"
+        # Using gemini-2.5-flash for translation (reliable, 1,500 RPD)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
 
         payload = {
             "contents": [{

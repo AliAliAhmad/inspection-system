@@ -39,13 +39,13 @@ def _get_ai_provider():
 
 
 def _call_gemini_text(prompt: str, max_tokens: int = 500) -> Optional[str]:
-    """Call Gemma 3 4B for text generation (14,400 RPD)."""
+    """Call Gemini 2.5 Flash for text generation (1,500 RPD)."""
     api_key = os.getenv('GEMINI_API_KEY', '').strip()
     if not api_key:
         return None
 
-    # Using gemma-3-4b-it for general text (14,400 RPD)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-3-4b-it:generateContent?key={api_key}"
+    # Using gemini-2.5-flash for general text (1,500 RPD)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],

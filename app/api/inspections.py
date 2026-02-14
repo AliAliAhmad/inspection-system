@@ -112,12 +112,12 @@ def test_ai_connection():
                 'error': str(e)
             }), 500
 
-    # Test Gemini second (gemini-3-pro for vision, 1500 RPD)
+    # Test Gemini second (gemini-2.5-pro for vision, 1500 RPD)
     if is_gemini_configured():
         api_key = os.getenv('GEMINI_API_KEY', '').strip()
         try:
             response = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro:generateContent?key={api_key}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}",
                 headers={"Content-Type": "application/json"},
                 json={
                     "contents": [{"parts": [{"text": "Say OK"}]}],
@@ -129,9 +129,9 @@ def test_ai_connection():
                 return jsonify({
                     'success': True,
                     'service': 'Gemini',
-                    'message': 'Gemini is working! Models: gemini-3-pro (vision), gemini-2.5-flash-native-audio-dialog (audio), gemma-3-4b (translation)',
-                    'cost': 'FREE (1500/day vision, unlimited audio, 14400/day translation)',
-                    'model': 'gemini-3-pro'
+                    'message': 'Gemini is working! Vision: gemini-2.5-pro, Audio: gemini-2.5-flash, Text: gemini-2.5-flash',
+                    'cost': 'FREE (1500/day)',
+                    'model': 'gemini-2.5-flash'
                 }), 200
             else:
                 return jsonify({
