@@ -59,6 +59,20 @@ export default function VoiceNoteRecorder({
   const soundRef = useRef<Audio.Sound | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Sync existing voice URL from props when it changes (e.g., when navigating back)
+  useEffect(() => {
+    if (existingVoiceUrl !== undefined) {
+      setCloudinaryUrl(existingVoiceUrl || null);
+    }
+  }, [existingVoiceUrl]);
+
+  // Sync existing transcription from props when it changes (e.g., when navigating back)
+  useEffect(() => {
+    if (existingTranscription !== undefined) {
+      setTranscription(existingTranscription || null);
+    }
+  }, [existingTranscription]);
+
   // Cleanup audio resources when component unmounts or question changes
   useEffect(() => {
     return () => {

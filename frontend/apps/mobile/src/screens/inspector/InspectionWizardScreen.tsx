@@ -218,7 +218,7 @@ export default function InspectionWizardScreen() {
 
   // Answer mutation
   const answerMutation = useMutation({
-    mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string; voice_note_id?: number }) =>
+    mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string; voice_note_id?: number; voice_transcription?: { en: string; ar: string } }) =>
       inspectionsApi.answerQuestion(inspectionId!, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inspectionProgress', inspectionId] });
@@ -836,6 +836,7 @@ export default function InspectionWizardScreen() {
         answer_value: current.answer_value,
         comment: current.comment,
         voice_note_id: voiceNoteId,
+        voice_transcription: transcription, // Save transcription to server
       });
     }
 
