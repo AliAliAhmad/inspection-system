@@ -188,29 +188,29 @@ def transcribe():
     temp_files_to_cleanup = []
 
     try:
-        # Try Google Cloud Speech-to-Text first (free tier: 60 min/month)
+        # Priority: 1. Google Cloud (free) → 2. Hugging Face (free) → 3. OpenAI (paid)
         from app.services.google_cloud_service import get_speech_service, is_google_cloud_configured
+        from app.services.huggingface_service import get_speech_service as get_hf_speech, is_huggingface_configured
 
+        # Create temp file from audio content (needed for all services)
+        suffix = _get_suffix(filename)
+        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        tmp.write(audio_content)
+        tmp.close()
+        source_path = tmp.name
+        temp_files_to_cleanup.append(source_path)
+
+        # Option 1: Google Cloud Speech-to-Text (FREE tier: 60 min/month)
         if is_google_cloud_configured():
-            logger.info("Using Google Cloud Speech-to-Text for transcription")
+            logger.info("Using Google Cloud Speech-to-Text (free tier)")
             speech_service = get_speech_service()
 
-            # Create temp file from audio content
-            suffix = _get_suffix(filename)
-            tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-            tmp.write(audio_content)
-            tmp.close()
-            source_path = tmp.name
-            temp_files_to_cleanup.append(source_path)
-
-            # Transcribe using Google
             result = speech_service.transcribe_file(source_path, language_hint or 'en')
 
             if result and result.get('text'):
                 text = result['text'].strip()
                 detected_language = result.get('detected_language', 'unknown')
 
-                # Translate to both languages
                 translated = TranslationService.auto_translate(text)
                 en_text = translated.get('en') or text
                 ar_text = translated.get('ar') or text
@@ -218,25 +218,35 @@ def transcribe():
                 transcription_failed = True
                 logger.warning("Google Speech returned no results")
 
-        # Fallback to OpenAI Whisper if Google not configured
+        # Option 2: Hugging Face (FREE, no credit card needed)
+        elif is_huggingface_configured():
+            logger.info("Using Hugging Face Whisper (free, no credit card)")
+            hf_speech = get_hf_speech()
+
+            result = hf_speech.transcribe_file(source_path, language_hint or 'en')
+
+            if result and result.get('text'):
+                text = result['text'].strip()
+                detected_language = result.get('detected_language', 'unknown')
+
+                translated = TranslationService.auto_translate(text)
+                en_text = translated.get('en') or text
+                ar_text = translated.get('ar') or text
+            else:
+                transcription_failed = True
+                logger.warning("Hugging Face Speech returned no results")
+
+        # Option 3: OpenAI Whisper (paid fallback)
         else:
             from openai import OpenAI
 
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
                 transcription_failed = True
-                logger.warning("Transcription skipped: Neither GOOGLE_CLOUD nor OPENAI_API_KEY configured")
+                logger.warning("Transcription skipped: No AI service configured (set HUGGINGFACE_API_KEY, GOOGLE_CLOUD_KEY_JSON, or OPENAI_API_KEY)")
             else:
-                logger.info("Using OpenAI Whisper for transcription (fallback)")
+                logger.info("Using OpenAI Whisper (paid)")
                 client = OpenAI(api_key=api_key)
-
-                # Create temp file from audio content for Whisper
-                suffix = _get_suffix(filename)
-                tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-                tmp.write(audio_content)
-                tmp.close()
-                source_path = tmp.name
-                temp_files_to_cleanup.append(source_path)
 
                 # Convert to WAV for better Whisper accuracy
                 whisper_path = _convert_to_wav(source_path)

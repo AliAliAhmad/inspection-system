@@ -31,25 +31,32 @@ def check_ai_status():
     """
     import os
     from app.services.google_cloud_service import is_google_cloud_configured
+    from app.services.huggingface_service import is_huggingface_configured
 
     openai_key = os.getenv('OPENAI_API_KEY')
     google_configured = is_google_cloud_configured()
+    huggingface_configured = is_huggingface_configured()
 
-    # Determine which service will be used
+    # Determine which service will be used (priority order)
     if google_configured:
         active_service = 'Google Cloud (FREE tier)'
         message = 'Google Cloud Vision + Speech configured (1000 images + 60 min audio FREE/month)'
+    elif huggingface_configured:
+        active_service = 'Hugging Face (FREE, no credit card)'
+        message = 'Hugging Face configured (FREE, unlimited with rate limits)'
     elif openai_key:
         active_service = 'OpenAI (paid)'
         message = 'OpenAI configured as fallback (requires credits)'
     else:
         active_service = 'None'
-        message = 'No AI service configured. Set GOOGLE_CLOUD_KEY_JSON (free) or OPENAI_API_KEY (paid)'
+        message = 'No AI service configured. Set HUGGINGFACE_API_KEY (free, no card) or GOOGLE_CLOUD_KEY_JSON or OPENAI_API_KEY'
 
     return jsonify({
         'active_service': active_service,
         'google_cloud_configured': google_configured,
+        'huggingface_configured': huggingface_configured,
         'openai_configured': bool(openai_key),
+        'priority_order': '1. Google Cloud → 2. Hugging Face → 3. OpenAI',
         'environment': os.getenv('FLASK_ENV', 'not set'),
         'render_service': os.getenv('RENDER_SERVICE_NAME', 'not on render'),
         'message': message
@@ -59,10 +66,11 @@ def check_ai_status():
 @bp.route('/debug/ai-test', methods=['GET'])
 def test_ai_connection():
     """
-    Test AI API connection (Google Cloud or OpenAI).
+    Test AI API connection (Google Cloud, Hugging Face, or OpenAI).
     """
     import os
     from app.services.google_cloud_service import is_google_cloud_configured, get_vision_service
+    from app.services.huggingface_service import is_huggingface_configured
 
     # Test Google Cloud first
     if is_google_cloud_configured():
@@ -87,6 +95,16 @@ def test_ai_connection():
                 'service': 'Google Cloud',
                 'error': str(e)
             }), 500
+
+    # Test Hugging Face second
+    if is_huggingface_configured():
+        return jsonify({
+            'success': True,
+            'service': 'Hugging Face',
+            'message': 'Hugging Face API key is configured (FREE, no credit card needed)',
+            'cost': 'FREE',
+            'note': 'First request may take 20-30 seconds (model cold start)'
+        }), 200
 
     # Fall back to OpenAI test
     api_key = os.getenv('OPENAI_API_KEY')
@@ -114,7 +132,7 @@ def test_ai_connection():
 
     return jsonify({
         'success': False,
-        'error': 'No AI service configured. Set GOOGLE_CLOUD_KEY_JSON (free) or OPENAI_API_KEY (paid)'
+        'error': 'No AI service configured. Set HUGGINGFACE_API_KEY (free, no card) or GOOGLE_CLOUD_KEY_JSON or OPENAI_API_KEY'
     }), 400
 
 
@@ -879,19 +897,22 @@ def upload_answer_media(inspection_id):
             analyze_url = file_record.file_path
             logger.info(f"Analyzing photo at URL: {analyze_url}")
 
-        # Try Google Cloud Vision first (FREE tier: 1000 images/month)
+        # Priority: 1. Google Cloud (free) → 2. Hugging Face (free) → 3. OpenAI (paid)
+        from app.services.huggingface_service import get_vision_service as get_hf_vision, is_huggingface_configured
+
+        # Download image content (needed for all services except OpenAI)
+        image_content = None
+        try:
+            img_response = requests.get(analyze_url, timeout=30)
+            img_response.raise_for_status()
+            image_content = img_response.content
+        except Exception as download_err:
+            logger.error(f"Failed to download image: {download_err}")
+
+        # Option 1: Google Cloud Vision (FREE tier: 1000 images/month)
         if is_google_cloud_configured():
             logger.info("Using Google Cloud Vision API (free tier)")
             vision_service = get_vision_service()
-
-            # Download image content for Google Vision
-            try:
-                img_response = requests.get(analyze_url, timeout=30)
-                img_response.raise_for_status()
-                image_content = img_response.content
-            except Exception as download_err:
-                logger.error(f"Failed to download image: {download_err}")
-                image_content = None
 
             if image_content:
                 result = vision_service.analyze_image(
@@ -911,13 +932,36 @@ def upload_answer_media(inspection_id):
             else:
                 analysis_failed = True
 
-        # Fallback to OpenAI if Google Cloud not configured
+        # Option 2: Hugging Face (FREE, no credit card needed)
+        elif is_huggingface_configured():
+            logger.info("Using Hugging Face Vision API (free, no credit card)")
+            hf_vision = get_hf_vision()
+
+            if image_content:
+                result = hf_vision.analyze_image(
+                    image_content=image_content,
+                    is_reading_question=is_reading_question
+                )
+
+                if result:
+                    ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
+                    if 'reading' in result and is_reading_question:
+                        extracted_reading = result.get('reading')
+                        logger.info(f"Extracted reading value: {extracted_reading}")
+                    logger.info(f"Hugging Face analysis complete: {ai_analysis}")
+                else:
+                    logger.warning("Hugging Face returned no results")
+                    analysis_failed = True
+            else:
+                analysis_failed = True
+
+        # Option 3: OpenAI (paid fallback)
         else:
             from openai import OpenAI
             api_key = os.getenv('OPENAI_API_KEY')
 
             if api_key:
-                logger.info("Using OpenAI GPT-4 Vision (fallback)")
+                logger.info("Using OpenAI GPT-4 Vision (paid)")
                 client = OpenAI(api_key=api_key)
 
                 # Different prompt for reading questions vs general inspection
