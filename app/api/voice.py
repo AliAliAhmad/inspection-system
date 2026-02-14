@@ -189,6 +189,7 @@ def transcribe():
 
     try:
         # Priority: 1. Google Cloud → 2. Gemini → 3. Together AI → 4. Groq → 5. OpenAI
+        # IMPORTANT: Try each in sequence with FALLBACK if one fails
         from app.services.google_cloud_service import get_speech_service, is_google_cloud_configured
         from app.services.gemini_service import get_speech_service as get_gemini_speech, is_gemini_configured
         from app.services.together_ai_service import get_speech_service as get_together_speech, is_together_configured
@@ -202,115 +203,121 @@ def transcribe():
         source_path = tmp.name
         temp_files_to_cleanup.append(source_path)
 
+        result = None
+        used_service = None
+
         # Option 1: Google Cloud Speech-to-Text (FREE tier: 60 min/month)
-        if is_google_cloud_configured():
-            logger.info("Using Google Cloud Speech-to-Text (free tier)")
-            speech_service = get_speech_service()
-
-            result = speech_service.transcribe_file(source_path, language_hint or 'en')
-
-            if result and result.get('text'):
-                text = result['text'].strip()
-                detected_language = result.get('detected_language', 'unknown')
-
-                translated = TranslationService.auto_translate(text)
-                en_text = translated.get('en') or text
-                ar_text = translated.get('ar') or text
-            else:
-                transcription_failed = True
-                logger.warning("Google Speech returned no results")
+        if not result and is_google_cloud_configured():
+            try:
+                logger.info("Trying Google Cloud Speech-to-Text (free tier)")
+                speech_service = get_speech_service()
+                result = speech_service.transcribe_file(source_path, language_hint or 'en')
+                if result and result.get('text'):
+                    used_service = 'google_cloud'
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Google Cloud failed: {e}, trying next...")
+                result = None
 
         # Option 2: Gemini (high quality, 1000 free/day)
-        elif is_gemini_configured():
-            logger.info("Using Gemini Audio (high quality, 1000 free/day)")
-            gemini_speech = get_gemini_speech()
-
-            result = gemini_speech.transcribe_file(source_path, language_hint or 'en')
-
-            if result and (result.get('text') or result.get('en')):
-                detected_language = result.get('detected_language', 'unknown')
-
-                # Gemini already returns bilingual EN/AR - use directly (no extra translation needed)
-                en_text = result.get('en', '').strip() or result.get('text', '').strip()
-                ar_text = result.get('ar', '').strip() or en_text
-                logger.info(f"Gemini transcription: EN={en_text[:50]}..., AR={ar_text[:50]}...")
-            else:
-                transcription_failed = True
-                logger.warning("Gemini Speech returned no results")
+        if not result and is_gemini_configured():
+            try:
+                logger.info("Trying Gemini Audio (high quality, 1000 free/day)")
+                gemini_speech = get_gemini_speech()
+                result = gemini_speech.transcribe_file(source_path, language_hint or 'en')
+                if result and (result.get('text') or result.get('en')):
+                    used_service = 'gemini'
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Gemini failed: {e}, trying next...")
+                result = None
 
         # Option 3: Together AI Whisper (FREE, 15x faster than OpenAI)
-        elif is_together_configured():
-            logger.info("Using Together AI Whisper (free, high quality)")
-            together_speech = get_together_speech()
-
-            result = together_speech.transcribe_file(source_path, language_hint or 'en')
-
-            if result and result.get('text'):
-                text = result['text'].strip()
-                detected_language = result.get('detected_language', 'unknown')
-
-                translated = TranslationService.auto_translate(text)
-                en_text = translated.get('en') or text
-                ar_text = translated.get('ar') or text
-            else:
-                transcription_failed = True
-                logger.warning("Together AI Speech returned no results")
+        if not result and is_together_configured():
+            try:
+                logger.info("Trying Together AI Whisper (free, high quality)")
+                together_speech = get_together_speech()
+                result = together_speech.transcribe_file(source_path, language_hint or 'en')
+                if result and result.get('text'):
+                    used_service = 'together'
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Together AI failed: {e}, trying next...")
+                result = None
 
         # Option 4: Groq Whisper (FREE, very fast)
-        elif is_groq_configured():
-            logger.info("Using Groq Whisper (free, fast)")
-            groq_speech = get_groq_speech()
-
-            result = groq_speech.transcribe_file(source_path, language_hint or 'en')
-
-            if result and result.get('text'):
-                text = result['text'].strip()
-                detected_language = result.get('detected_language', 'unknown')
-
-                translated = TranslationService.auto_translate(text)
-                en_text = translated.get('en') or text
-                ar_text = translated.get('ar') or text
-            else:
-                transcription_failed = True
-                logger.warning("Groq Speech returned no results")
+        if not result and is_groq_configured():
+            try:
+                logger.info("Trying Groq Whisper (free, fast)")
+                groq_speech = get_groq_speech()
+                result = groq_speech.transcribe_file(source_path, language_hint or 'en')
+                if result and result.get('text'):
+                    used_service = 'groq'
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Groq failed: {e}, trying next...")
+                result = None
 
         # Option 5: OpenAI Whisper (paid fallback)
-        else:
+        if not result:
             from openai import OpenAI
 
             api_key = os.getenv('OPENAI_API_KEY')
-            if not api_key:
-                transcription_failed = True
-                logger.warning("Transcription skipped: No AI service configured (set GROQ_API_KEY, GOOGLE_CLOUD_KEY_JSON, or OPENAI_API_KEY)")
+            if api_key:
+                try:
+                    logger.info("Trying OpenAI Whisper (paid fallback)")
+                    client = OpenAI(api_key=api_key)
+
+                    # Convert to WAV for better Whisper accuracy
+                    whisper_path = _convert_to_wav(source_path)
+                    if whisper_path != source_path:
+                        temp_files_to_cleanup.append(whisper_path)
+
+                    whisper_kwargs = {
+                        'model': 'whisper-1',
+                        'response_format': 'verbose_json',
+                        'prompt': WHISPER_PROMPT,
+                    }
+                    if language_hint in ('en', 'ar'):
+                        whisper_kwargs['language'] = language_hint
+
+                    with open(whisper_path, 'rb') as f:
+                        whisper_kwargs['file'] = f
+                        transcript = client.audio.transcriptions.create(**whisper_kwargs)
+
+                    text = transcript.text.strip() if transcript.text else ''
+                    if text:
+                        result = {'text': text, 'detected_language': getattr(transcript, 'language', None) or 'unknown'}
+                        used_service = 'openai'
+                except Exception as e:
+                    logger.warning(f"OpenAI failed: {e}")
+                    result = None
             else:
-                logger.info("Using OpenAI Whisper (paid)")
-                client = OpenAI(api_key=api_key)
+                logger.warning("No AI service available for transcription")
 
-                # Convert to WAV for better Whisper accuracy
-                whisper_path = _convert_to_wav(source_path)
-                if whisper_path != source_path:
-                    temp_files_to_cleanup.append(whisper_path)
-
-                # Build Whisper API kwargs
-                whisper_kwargs = {
-                    'model': 'whisper-1',
-                    'response_format': 'verbose_json',
-                    'prompt': WHISPER_PROMPT,
-                }
-                if language_hint in ('en', 'ar'):
-                    whisper_kwargs['language'] = language_hint
-
-                with open(whisper_path, 'rb') as f:
-                    whisper_kwargs['file'] = f
-                    transcript = client.audio.transcriptions.create(**whisper_kwargs)
-
-                text = transcript.text.strip() if transcript.text else ''
-                detected_language = getattr(transcript, 'language', None) or 'unknown'
-
-                if text:
-                    result = TranslationService.auto_translate(text)
-                    en_text = result.get('en') or text
-                    ar_text = result.get('ar') or text
+        # Process result based on which service was used
+        if result and used_service:
+            if used_service == 'gemini':
+                # Gemini already returns bilingual EN/AR
+                detected_language = result.get('detected_language', 'unknown')
+                en_text = result.get('en', '').strip() or result.get('text', '').strip()
+                ar_text = result.get('ar', '').strip() or en_text
+                logger.info(f"Gemini transcription: EN={en_text[:50]}...")
+            else:
+                # Other services need translation
+                text = result.get('text', '').strip()
+                detected_language = result.get('detected_language', 'unknown')
+                translated = TranslationService.auto_translate(text)
+                en_text = translated.get('en') or text
+                ar_text = translated.get('ar') or text
+                logger.info(f"{used_service} transcription: {text[:50]}...")
+        else:
+            transcription_failed = True
+            logger.warning("All transcription services failed")
 
     except Exception as e:
         logger.error("Voice transcription failed: %s", e)

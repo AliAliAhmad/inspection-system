@@ -882,6 +882,7 @@ export default function InspectionWizardScreen() {
                 ...prev[currentItem.id],
                 photo_uri: undefined,
                 photo_url: undefined,
+                photo_ai_analysis: undefined,
                 uploadFailed: false,
               },
             }));
@@ -924,6 +925,7 @@ export default function InspectionWizardScreen() {
         video_uri: undefined,
         video_url: undefined,
         video_file_id: undefined,
+        video_ai_analysis: undefined,
       },
     }));
   }, [currentItem]);
