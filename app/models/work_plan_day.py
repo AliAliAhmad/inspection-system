@@ -55,10 +55,18 @@ class WorkPlanDay(db.Model):
 
     def to_dict(self, language='en'):
         """Convert to dictionary."""
-        jobs_by_berth = self.get_jobs_by_berth()
+        # Use compact mode if there are many jobs (> 10) to avoid timeout
+        compact = len(self.jobs) > 10
 
-        # Use compact mode if there are many jobs (> 20) to avoid timeout
-        compact = len(self.jobs) > 20
+        # Serialize jobs ONCE and cache by ID to avoid double serialization
+        jobs_dict = {}
+        for job in self.jobs:
+            jobs_dict[job.id] = job.to_dict(language, compact=compact)
+
+        # Group job IDs by berth (reuse cached serialization)
+        east_ids = [j.id for j in self.jobs if j.berth == 'east']
+        west_ids = [j.id for j in self.jobs if j.berth == 'west']
+        both_ids = [j.id for j in self.jobs if j.berth == 'both' or j.berth is None]
 
         return {
             'id': self.id,
@@ -68,10 +76,10 @@ class WorkPlanDay(db.Model):
             'notes': self.notes,
             'total_jobs': len(self.jobs),
             'total_hours': self.get_total_hours(),
-            'jobs': [job.to_dict(language, compact=compact) for job in self.jobs],
-            'jobs_east': [job.to_dict(language, compact=compact) for job in jobs_by_berth['east']],
-            'jobs_west': [job.to_dict(language, compact=compact) for job in jobs_by_berth['west']],
-            'jobs_both': [job.to_dict(language, compact=compact) for job in jobs_by_berth['both']],
+            'jobs': list(jobs_dict.values()),
+            'jobs_east': [jobs_dict[jid] for jid in east_ids],
+            'jobs_west': [jobs_dict[jid] for jid in west_ids],
+            'jobs_both': [jobs_dict[jid] for jid in both_ids],
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 

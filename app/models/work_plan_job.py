@@ -234,11 +234,11 @@ class WorkPlanJob(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
-        # Add related defects for PM jobs
+        # Skip related_defects in list view - too expensive (N+1 queries)
+        # Fetch separately when viewing single job detail if needed
         if self.job_type == 'pm':
-            related_defects = self.get_related_defects()
-            data['related_defects'] = [d.to_dict(language) for d in related_defects]
-            data['related_defects_count'] = len(related_defects)
+            data['related_defects'] = []
+            data['related_defects_count'] = 0
 
         return data
 
