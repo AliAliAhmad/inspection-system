@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_AUDIO_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 
-# Vision model
-VISION_MODEL = "llama-3.2-11b-vision-preview"
+# Vision model (Llama 4 - better quality)
+VISION_MODEL = "llama-4-maverick-17b-128e-instruct"
 
-# Audio model (Whisper)
-AUDIO_MODEL = "whisper-large-v3"
+# Audio model (Whisper Turbo - faster)
+AUDIO_MODEL = "whisper-large-v3-turbo"
 
 
 def is_groq_configured():

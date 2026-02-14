@@ -31,11 +31,13 @@ def check_ai_status():
     """
     import os
     from app.services.google_cloud_service import is_google_cloud_configured
+    from app.services.gemini_service import is_gemini_configured
     from app.services.together_ai_service import is_together_configured
     from app.services.groq_service import is_groq_configured
 
     openai_key = os.getenv('OPENAI_API_KEY')
     google_configured = is_google_cloud_configured()
+    gemini_configured = is_gemini_configured()
     together_configured = is_together_configured()
     groq_configured = is_groq_configured()
 
@@ -43,6 +45,9 @@ def check_ai_status():
     if google_configured:
         active_service = 'Google Cloud (FREE tier)'
         message = 'Google Cloud Vision + Speech configured (1000 images + 60 min audio FREE/month)'
+    elif gemini_configured:
+        active_service = 'Gemini (high quality)'
+        message = 'Gemini configured - 1000 free requests/day, high quality'
     elif together_configured:
         active_service = 'Together AI (highest quality)'
         message = 'Together AI configured - Llama 3.2 90B Vision (highest quality)'
@@ -54,15 +59,16 @@ def check_ai_status():
         message = 'OpenAI configured as fallback (requires credits)'
     else:
         active_service = 'None'
-        message = 'No AI service configured. Set TOGETHER_API_KEY, GROQ_API_KEY, GOOGLE_CLOUD_KEY_JSON, or OPENAI_API_KEY'
+        message = 'No AI service configured. Set GEMINI_API_KEY, GROQ_API_KEY, TOGETHER_API_KEY, or OPENAI_API_KEY'
 
     return jsonify({
         'active_service': active_service,
         'google_cloud_configured': google_configured,
+        'gemini_configured': gemini_configured,
         'together_ai_configured': together_configured,
         'groq_configured': groq_configured,
         'openai_configured': bool(openai_key),
-        'priority_order': '1. Google Cloud → 2. Together AI → 3. Groq → 4. OpenAI',
+        'priority_order': '1. Google Cloud → 2. Gemini → 3. Together AI → 4. Groq → 5. OpenAI',
         'environment': os.getenv('FLASK_ENV', 'not set'),
         'render_service': os.getenv('RENDER_SERVICE_NAME', 'not on render'),
         'message': message
@@ -72,12 +78,13 @@ def check_ai_status():
 @bp.route('/debug/ai-test', methods=['GET'])
 def test_ai_connection():
     """
-    Test AI API connection (Google Cloud, Together AI, Groq, or OpenAI).
-    Tests in priority order: Google Cloud → Together AI → Groq → OpenAI
+    Test AI API connection.
+    Tests in priority order: Google Cloud → Gemini → Together AI → Groq → OpenAI
     """
     import os
     import requests
     from app.services.google_cloud_service import is_google_cloud_configured, get_vision_service
+    from app.services.gemini_service import is_gemini_configured
     from app.services.together_ai_service import is_together_configured
     from app.services.groq_service import is_groq_configured
 
@@ -105,7 +112,42 @@ def test_ai_connection():
                 'error': str(e)
             }), 500
 
-    # Test Together AI second (highest quality)
+    # Test Gemini second (high quality, 1000 free/day)
+    if is_gemini_configured():
+        api_key = os.getenv('GEMINI_API_KEY', '').strip()
+        try:
+            response = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": "Say OK"}]}],
+                    "generationConfig": {"maxOutputTokens": 5}
+                },
+                timeout=30
+            )
+            if response.status_code == 200:
+                return jsonify({
+                    'success': True,
+                    'service': 'Gemini',
+                    'message': 'Gemini is working! 1000 free requests/day',
+                    'cost': 'FREE (1000/day)',
+                    'model': 'gemini-2.5-flash-lite'
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'service': 'Gemini',
+                    'error': f'API error: {response.status_code}',
+                    'response': response.text[:300]
+                }), 500
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'service': 'Gemini',
+                'error': str(e)
+            }), 500
+
+    # Test Together AI third
     if is_together_configured():
         api_key = os.getenv('TOGETHER_API_KEY', '').strip()
         try:
@@ -974,7 +1016,8 @@ def upload_answer_media(inspection_id):
             analyze_url = file_record.file_path
             logger.info(f"Analyzing photo at URL: {analyze_url}")
 
-        # Priority: 1. Google Cloud → 2. Together AI → 3. Groq → 4. OpenAI
+        # Priority: 1. Google Cloud → 2. Gemini → 3. Together AI → 4. Groq → 5. OpenAI
+        from app.services.gemini_service import get_vision_service as get_gemini_vision, is_gemini_configured
         from app.services.together_ai_service import get_vision_service as get_together_vision, is_together_configured
         from app.services.groq_service import get_vision_service as get_groq_vision, is_groq_configured
 
@@ -1011,7 +1054,30 @@ def upload_answer_media(inspection_id):
             else:
                 analysis_failed = True
 
-        # Option 2: Together AI (highest quality - Llama 3.2 90B Vision)
+        # Option 2: Gemini (high quality - 1000 free/day)
+        elif is_gemini_configured():
+            logger.info("Using Gemini Vision (high quality, 1000 free/day)")
+            gemini_vision = get_gemini_vision()
+
+            if image_content:
+                result = gemini_vision.analyze_image(
+                    image_content=image_content,
+                    is_reading_question=is_reading_question
+                )
+
+                if result:
+                    ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
+                    if 'reading' in result and is_reading_question:
+                        extracted_reading = result.get('reading')
+                        logger.info(f"Extracted reading value: {extracted_reading}")
+                    logger.info(f"Gemini analysis complete: {ai_analysis}")
+                else:
+                    logger.warning("Gemini returned no results")
+                    analysis_failed = True
+            else:
+                analysis_failed = True
+
+        # Option 3: Together AI (Llama 3.2 90B Vision)
         elif is_together_configured():
             logger.info("Using Together AI Vision (Llama 3.2 90B - highest quality)")
             together_vision = get_together_vision()
@@ -1034,9 +1100,9 @@ def upload_answer_media(inspection_id):
             else:
                 analysis_failed = True
 
-        # Option 3: Groq (fast inference - Llama 3.2 11B Vision)
+        # Option 4: Groq (free forever - Llama 3.2 11B Vision)
         elif is_groq_configured():
-            logger.info("Using Groq Vision (Llama 3.2 11B - fast)")
+            logger.info("Using Groq Vision (Llama 3.2 11B - free)")
             groq_vision = get_groq_vision()
 
             if image_content:
@@ -1057,7 +1123,7 @@ def upload_answer_media(inspection_id):
             else:
                 analysis_failed = True
 
-        # Option 4: OpenAI (paid fallback)
+        # Option 5: OpenAI (paid fallback)
         else:
             from openai import OpenAI
             api_key = os.getenv('OPENAI_API_KEY')
