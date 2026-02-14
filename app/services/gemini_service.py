@@ -21,13 +21,14 @@ logger = logging.getLogger(__name__)
 # Gemini API endpoint
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-# Photo/Video analysis - try gemini-3-pro-preview first, fallback to gemini-2.5-flash
-VISION_MODELS = ["gemini-3-pro-preview", "gemini-2.5-flash"]
+# Photo/Video analysis - gemini-3-flash-preview (faster, higher RPD than pro)
+# Fallback chain: gemini-3-flash → gemini-3-pro → gemini-2.5-flash
+VISION_MODELS = ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-flash"]
 VISION_MODEL = VISION_MODELS[0]  # Primary model
 
-# Audio transcription - gemini-2.5-flash (supports audio files via generateContent API)
-# Note: Native Audio Dialog is for Live API (real-time) only, not file uploads
-AUDIO_MODELS = ["gemini-2.5-flash"]
+# Audio transcription - use gemma-3-4b-it (14,400 RPD) as primary
+# Fallback to gemini-2.5-flash if needed
+AUDIO_MODELS = ["gemma-3-4b-it", "gemini-2.5-flash"]
 AUDIO_MODEL = AUDIO_MODELS[0]
 
 
