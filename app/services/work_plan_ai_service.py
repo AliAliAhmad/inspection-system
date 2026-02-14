@@ -31,13 +31,35 @@ from app.services.openai_service import ReportService, VisionService
 logger = logging.getLogger(__name__)
 
 
+def get_multi_provider_vision_service():
+    """
+    Get the best available vision service based on priority.
+    Priority: Google Cloud → Gemini → Together AI → Groq → OpenAI
+    """
+    from app.services.google_cloud_service import is_google_cloud_configured, get_vision_service as get_google_vision
+    from app.services.gemini_service import is_gemini_configured, get_vision_service as get_gemini_vision
+    from app.services.together_ai_service import is_together_configured, get_vision_service as get_together_vision
+    from app.services.groq_service import is_groq_configured, get_vision_service as get_groq_vision
+
+    if is_google_cloud_configured():
+        return get_google_vision(), 'google_cloud'
+    elif is_gemini_configured():
+        return get_gemini_vision(), 'gemini'
+    elif is_together_configured():
+        return get_together_vision(), 'together_ai'
+    elif is_groq_configured():
+        return get_groq_vision(), 'groq'
+    else:
+        return VisionService(), 'openai'
+
+
 class WorkPlanAIService:
     """AI-powered work planning intelligence."""
 
     def __init__(self):
         """Initialize the AI service."""
         self.openai_service = ReportService()
-        self.vision_service = VisionService()
+        self.vision_service, self.vision_provider = get_multi_provider_vision_service()
 
     # ========================================
     # AUTO-SCHEDULING
@@ -3061,9 +3083,59 @@ class WorkPlanAIService:
         if not image_url:
             return {'error': 'Image URL not available'}
 
-        # Call vision service
+        # Call vision service with multi-provider support
         try:
-            analysis = self.vision_service.analyze_defect_photo(image_url)
+            import requests
+
+            # Download image for providers that need bytes
+            image_content = None
+            try:
+                response = requests.get(image_url, timeout=30)
+                response.raise_for_status()
+                image_content = response.content
+            except Exception as dl_err:
+                logger.warning(f"Could not download image: {dl_err}")
+
+            if self.vision_provider in ('gemini', 'together_ai', 'groq'):
+                # New multi-provider format
+                if image_content:
+                    result = self.vision_service.analyze_image(
+                        image_content=image_content,
+                        is_reading_question=False
+                    )
+                    if result:
+                        analysis = {
+                            'description': result.get('en', ''),
+                            'description_ar': result.get('ar', ''),
+                            'severity': 'N/A',
+                            'safety_risk': ''
+                        }
+                    else:
+                        analysis = {'error': 'Vision analysis returned empty result'}
+                else:
+                    analysis = {'error': 'Could not download image for analysis'}
+            elif self.vision_provider == 'google_cloud':
+                # Google Cloud Vision
+                if image_content:
+                    result = self.vision_service.analyze_image(
+                        image_content=image_content,
+                        is_reading_question=False
+                    )
+                    if result:
+                        analysis = {
+                            'description': result.get('en', ''),
+                            'description_ar': result.get('ar', ''),
+                            'severity': 'N/A',
+                            'safety_risk': ''
+                        }
+                    else:
+                        analysis = {'error': 'Vision analysis returned empty result'}
+                else:
+                    analysis = {'error': 'Could not download image for analysis'}
+            else:
+                # OpenAI fallback
+                analysis = self.vision_service.analyze_defect_photo(image_url)
+
         except Exception as e:
             logger.error(f"Vision analysis failed: {e}")
             return {

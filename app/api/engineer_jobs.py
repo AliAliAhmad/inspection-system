@@ -582,44 +582,91 @@ def add_voice_note(job_id):
 
     if should_transcribe:
         try:
-            # Use the voice transcription service if available
+            # Multi-provider voice transcription
+            # Priority: Google Cloud → Gemini → Together AI → Groq → OpenAI
             import os
-            from openai import OpenAI
+            import tempfile
+            import requests
+            import logging as log
 
-            api_key = os.getenv('OPENAI_API_KEY')
-            if api_key and file_record.file_path:
-                import requests
-                import tempfile
+            from app.services.google_cloud_service import is_google_cloud_configured, get_speech_service as get_google_speech
+            from app.services.gemini_service import is_gemini_configured, get_speech_service as get_gemini_speech
+            from app.services.together_ai_service import is_together_configured, get_speech_service as get_together_speech
+            from app.services.groq_service import is_groq_configured, get_speech_service as get_groq_speech
+            from app.services.translation_service import TranslationService
 
+            if file_record.file_path:
                 # Download from Cloudinary for transcription
                 response = requests.get(file_record.file_path, timeout=30)
                 if response.status_code == 200:
+                    audio_content = response.content
+
                     # Create temp file
                     suffix = '.webm'
                     if '.' in audio_file.filename:
                         suffix = '.' + audio_file.filename.rsplit('.', 1)[1].lower()
 
                     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                        tmp.write(response.content)
+                        tmp.write(audio_content)
                         tmp_path = tmp.name
 
                     try:
-                        client = OpenAI(api_key=api_key)
-                        with open(tmp_path, 'rb') as f:
-                            transcript = client.audio.transcriptions.create(
-                                model='whisper-1',
-                                file=f,
-                                response_format='text'
-                            )
+                        result = None
 
-                        if transcript:
-                            transcription = transcript.strip()
+                        # Priority 1: Google Cloud Speech-to-Text
+                        if is_google_cloud_configured():
+                            log.getLogger(__name__).info("Using Google Cloud Speech-to-Text")
+                            speech_service = get_google_speech()
+                            result = speech_service.transcribe_file(tmp_path, 'en')
 
-                            # Translate if we got a transcription
-                            from app.services.translation_service import TranslationService
-                            result = TranslationService.auto_translate(transcription)
-                            transcription = result.get('en') or transcription
-                            transcription_ar = result.get('ar')
+                        # Priority 2: Gemini
+                        elif is_gemini_configured():
+                            log.getLogger(__name__).info("Using Gemini Audio")
+                            speech_service = get_gemini_speech()
+                            result = speech_service.transcribe_file(tmp_path, 'en')
+
+                        # Priority 3: Together AI
+                        elif is_together_configured():
+                            log.getLogger(__name__).info("Using Together AI Whisper")
+                            speech_service = get_together_speech()
+                            result = speech_service.transcribe_file(tmp_path, 'en')
+
+                        # Priority 4: Groq
+                        elif is_groq_configured():
+                            log.getLogger(__name__).info("Using Groq Whisper")
+                            speech_service = get_groq_speech()
+                            result = speech_service.transcribe_file(tmp_path, 'en')
+
+                        # Priority 5: OpenAI Whisper (paid fallback)
+                        else:
+                            api_key = os.getenv('OPENAI_API_KEY')
+                            if api_key:
+                                log.getLogger(__name__).info("Using OpenAI Whisper (paid)")
+                                from openai import OpenAI
+                                client = OpenAI(api_key=api_key)
+                                with open(tmp_path, 'rb') as f:
+                                    transcript = client.audio.transcriptions.create(
+                                        model='whisper-1',
+                                        file=f,
+                                        response_format='text'
+                                    )
+                                if transcript:
+                                    result = {'text': transcript.strip()}
+
+                        # Process result
+                        if result and result.get('text'):
+                            text = result['text'].strip()
+
+                            # Check if provider returned bilingual (en/ar)
+                            if result.get('en') and result.get('ar'):
+                                transcription = result['en']
+                                transcription_ar = result['ar']
+                            else:
+                                # Use translation service
+                                translated = TranslationService.auto_translate(text)
+                                transcription = translated.get('en') or text
+                                transcription_ar = translated.get('ar')
+
                     finally:
                         os.unlink(tmp_path)
         except Exception as e:

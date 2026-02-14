@@ -4262,32 +4262,143 @@ def ai_sla_check(plan_id):
 @jwt_required()
 def ai_transcribe_handover():
     """
-    Transcribe voice handover (placeholder for audio transcription).
+    Transcribe voice handover using multi-provider AI.
+    Priority: Google Cloud → Gemini → Together AI → Groq → OpenAI
 
     Request body:
         {
-            "audio_file_id": 123
+            "audio_file_id": 123,
+            "language_hint": "en"  # optional
         }
     """
+    import os
+    import tempfile
+    import requests
+    import logging as log
+    from app.models.file import File
+
+    from app.services.google_cloud_service import is_google_cloud_configured, get_speech_service as get_google_speech
+    from app.services.gemini_service import is_gemini_configured, get_speech_service as get_gemini_speech
+    from app.services.together_ai_service import is_together_configured, get_speech_service as get_together_speech
+    from app.services.groq_service import is_groq_configured, get_speech_service as get_groq_speech
+    from app.services.translation_service import TranslationService
+
     user = get_current_user()
 
     data = request.get_json()
     if not data or not data.get('audio_file_id'):
         raise ValidationError("audio_file_id is required")
 
-    # This would integrate with a speech-to-text service
-    # For now, return a placeholder response
+    audio_file_id = data['audio_file_id']
+    language_hint = data.get('language_hint', 'en')
 
-    return jsonify({
-        'status': 'success',
-        'audio_file_id': data['audio_file_id'],
-        'transcription': {
-            'text': 'Voice transcription feature requires integration with speech-to-text service.',
-            'confidence': 0.0,
-            'language': 'en'
-        },
-        'message': 'Transcription service not yet configured'
-    }), 200
+    # Get the file record
+    file_record = db.session.get(File, audio_file_id)
+    if not file_record:
+        raise NotFoundError("Audio file not found")
+
+    if not file_record.file_path:
+        raise ValidationError("Audio file has no URL")
+
+    try:
+        # Download audio from Cloudinary
+        response = requests.get(file_record.file_path, timeout=30)
+        if response.status_code != 200:
+            raise ValidationError("Could not download audio file")
+
+        audio_content = response.content
+
+        # Create temp file
+        suffix = '.wav'
+        if file_record.original_name and '.' in file_record.original_name:
+            suffix = '.' + file_record.original_name.rsplit('.', 1)[1].lower()
+
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio_content)
+            tmp_path = tmp.name
+
+        try:
+            result = None
+
+            # Priority 1: Google Cloud
+            if is_google_cloud_configured():
+                log.getLogger(__name__).info("Using Google Cloud Speech-to-Text")
+                speech_service = get_google_speech()
+                result = speech_service.transcribe_file(tmp_path, language_hint)
+
+            # Priority 2: Gemini
+            elif is_gemini_configured():
+                log.getLogger(__name__).info("Using Gemini Audio")
+                speech_service = get_gemini_speech()
+                result = speech_service.transcribe_file(tmp_path, language_hint)
+
+            # Priority 3: Together AI
+            elif is_together_configured():
+                log.getLogger(__name__).info("Using Together AI Whisper")
+                speech_service = get_together_speech()
+                result = speech_service.transcribe_file(tmp_path, language_hint)
+
+            # Priority 4: Groq
+            elif is_groq_configured():
+                log.getLogger(__name__).info("Using Groq Whisper")
+                speech_service = get_groq_speech()
+                result = speech_service.transcribe_file(tmp_path, language_hint)
+
+            # Priority 5: OpenAI
+            else:
+                api_key = os.getenv('OPENAI_API_KEY')
+                if api_key:
+                    from openai import OpenAI
+                    client = OpenAI(api_key=api_key)
+                    with open(tmp_path, 'rb') as f:
+                        transcript = client.audio.transcriptions.create(
+                            model='whisper-1',
+                            file=f,
+                            response_format='text'
+                        )
+                    if transcript:
+                        result = {'text': transcript.strip()}
+
+            if not result or not result.get('text'):
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No AI transcription service configured',
+                    'hint': 'Set GEMINI_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY'
+                }), 400
+
+            # Process transcription
+            text = result['text'].strip()
+
+            # Check if provider returned bilingual
+            if result.get('en') and result.get('ar'):
+                en_text = result['en']
+                ar_text = result['ar']
+            else:
+                translated = TranslationService.auto_translate(text)
+                en_text = translated.get('en') or text
+                ar_text = translated.get('ar') or text
+
+            return jsonify({
+                'status': 'success',
+                'audio_file_id': audio_file_id,
+                'transcription': {
+                    'text': text,
+                    'en': en_text,
+                    'ar': ar_text,
+                    'confidence': result.get('confidence', 0.95),
+                    'language': result.get('detected_language', language_hint)
+                }
+            }), 200
+
+        finally:
+            os.unlink(tmp_path)
+
+    except Exception as e:
+        log.getLogger(__name__).error(f"Transcription failed: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Transcription failed: {str(e)}'
+        }), 500
 
 
 # ==================== REPORTS ====================

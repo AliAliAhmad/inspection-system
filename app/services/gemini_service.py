@@ -86,23 +86,23 @@ class GeminiVisionService:
             else:
                 mime_type = "image/jpeg"
 
-            # Build prompt based on question type
+            # Build prompt - respond in BOTH English and Arabic, keep SHORT
             if is_reading_question:
                 prompt = (
-                    "This is an industrial equipment inspection photo. "
-                    "Look for any meter readings, gauge values, or numeric displays. "
-                    "Extract any numbers you can see clearly. "
-                    "Also describe the equipment condition. "
-                    "Format your response as: Reading: [number if found], Description: [brief description]"
+                    "Industrial inspection photo. Extract meter/gauge reading. "
+                    "Reply in this EXACT format (2 lines only):\n"
+                    "EN: Reading: [number], [condition in 5 words max]\n"
+                    "AR: القراءة: [number], [condition in Arabic 5 words max]"
                 )
             else:
                 prompt = (
-                    "This is an industrial equipment inspection photo. "
-                    "Describe what you see, focusing on: "
-                    "1. Equipment type and condition "
-                    "2. Any visible defects (rust, damage, leaks, wear) "
-                    "3. Safety concerns if any. "
-                    "Be concise but thorough."
+                    "Industrial inspection photo. Describe in MAX 1-2 short sentences. "
+                    "Reply in this EXACT format (2 lines only):\n"
+                    "EN: [Equipment type]. [Condition - good/fair/poor]. [Any defect].\n"
+                    "AR: [Same in Arabic]\n"
+                    "Example:\n"
+                    "EN: Pump motor in good condition. No defects visible.\n"
+                    "AR: محرك المضخة في حالة جيدة. لا توجد عيوب مرئية."
                 )
 
             # Build request payload for Gemini
@@ -119,8 +119,8 @@ class GeminiVisionService:
                     ]
                 }],
                 "generationConfig": {
-                    "temperature": 0.3,
-                    "maxOutputTokens": 300
+                    "temperature": 0.2,
+                    "maxOutputTokens": 100
                 }
             }
 
@@ -164,27 +164,41 @@ class GeminiVisionService:
 
             logger.info(f"Gemini analysis: {analysis_text[:200]}...")
 
+            import re
+
+            # Parse EN and AR from response
+            en_text = analysis_text
+            ar_text = analysis_text
+
+            # Try to extract EN: and AR: lines
+            en_match = re.search(r'EN:\s*(.+?)(?=\nAR:|$)', analysis_text, re.IGNORECASE | re.DOTALL)
+            ar_match = re.search(r'AR:\s*(.+?)(?=\n|$)', analysis_text, re.IGNORECASE | re.DOTALL)
+
+            if en_match:
+                en_text = en_match.group(1).strip()
+            if ar_match:
+                ar_text = ar_match.group(1).strip()
+
+            # If no AR found, use EN for both
+            if not ar_match or ar_text == en_text:
+                ar_text = en_text  # Will show English if Arabic not generated
+
             # Extract reading if present
             extracted_reading = None
             if is_reading_question:
-                import re
-                # Look for "Reading: X" pattern
                 reading_match = re.search(r'Reading:\s*([\d.]+)', analysis_text)
                 if reading_match:
                     extracted_reading = reading_match.group(1)
+                elif re.search(r'القراءة:\s*([\d.]+)', analysis_text):
+                    extracted_reading = re.search(r'القراءة:\s*([\d.]+)', analysis_text).group(1)
                 else:
-                    # Try to find any numbers
                     numbers = re.findall(r'\d+\.?\d*', analysis_text)
                     if numbers:
                         extracted_reading = max(numbers, key=lambda x: float(x) if x else 0)
 
-            # Translate to Arabic
-            from app.services.translation_service import TranslationService
-            translated = TranslationService.auto_translate(analysis_text)
-
             result = {
-                'en': translated.get('en') or analysis_text,
-                'ar': translated.get('ar') or analysis_text
+                'en': en_text,
+                'ar': ar_text
             }
 
             if extracted_reading:
@@ -222,8 +236,13 @@ class GeminiSpeechService:
             # Convert audio to base64
             audio_b64 = base64.b64encode(audio_content).decode('utf-8')
 
-            # Build prompt for transcription
-            prompt = f"Transcribe this audio recording. The speaker is likely speaking {language_hint}. Provide only the transcription text, nothing else."
+            # Build prompt for transcription - return both languages
+            prompt = (
+                f"Transcribe this audio recording (speaker likely {language_hint}). "
+                "Return transcription in this EXACT format:\n"
+                "EN: [English transcription or translation]\n"
+                "AR: [Arabic transcription or translation]"
+            )
 
             # Build request payload for Gemini
             payload = {
@@ -280,8 +299,28 @@ class GeminiSpeechService:
 
             logger.info(f"Gemini transcription: {text[:100]}...")
 
+            import re
+
+            # Parse EN and AR from response
+            en_text = text
+            ar_text = text
+
+            en_match = re.search(r'EN:\s*(.+?)(?=\nAR:|$)', text, re.IGNORECASE | re.DOTALL)
+            ar_match = re.search(r'AR:\s*(.+?)(?=\n|$)', text, re.IGNORECASE | re.DOTALL)
+
+            if en_match:
+                en_text = en_match.group(1).strip()
+            if ar_match:
+                ar_text = ar_match.group(1).strip()
+
+            # If no AR found, use EN for both
+            if not ar_match or ar_text == en_text:
+                ar_text = en_text
+
             return {
                 'text': text,
+                'en': en_text,
+                'ar': ar_text,
                 'detected_language': language_hint,
                 'confidence': 0.95
             }
