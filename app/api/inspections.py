@@ -1007,10 +1007,22 @@ def upload_answer_media(inspection_id):
         logger.info(f"Is reading question: {is_reading_question}")
         logger.info(f"File URL: {file_record.file_path}")
 
-        # For videos, use Cloudinary thumbnail URL
+        # For videos, use Cloudinary thumbnail URL (extract frame from video)
         if is_video:
-            analyze_url = file_record.file_path.replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
-            analyze_url = re.sub(r'\.(mp4|mov|webm|avi|mkv)$', '.jpg', analyze_url, flags=re.IGNORECASE)
+            # Cloudinary video thumbnail transformation
+            # Transform: /video/upload/xxx.mp4 -> /video/upload/so_auto,w_640,h_480,c_fill,f_jpg/xxx.jpg
+            # Also handle: /upload/xxx.mp4 -> /upload/so_auto,w_640,h_480,c_fill,f_jpg/xxx.jpg
+            analyze_url = file_record.file_path
+
+            # Add thumbnail transformation
+            if '/video/upload/' in analyze_url:
+                analyze_url = analyze_url.replace('/video/upload/', '/video/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
+            elif '/upload/' in analyze_url:
+                analyze_url = analyze_url.replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
+
+            # Change extension to jpg for all video formats
+            analyze_url = re.sub(r'\.(mp4|mov|webm|avi|mkv|m4v|3gp)$', '.jpg', analyze_url, flags=re.IGNORECASE)
+
             logger.info(f"Analyzing video thumbnail at URL: {analyze_url}")
         else:
             analyze_url = file_record.file_path
