@@ -36,10 +36,13 @@ def is_huggingface_configured():
     return bool(os.getenv('HUGGINGFACE_API_KEY'))
 
 
-def _get_headers():
+def _get_headers(content_type: str = None):
     """Get API headers with authentication."""
     api_key = os.getenv('HUGGINGFACE_API_KEY')
-    return {"Authorization": f"Bearer {api_key}"}
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if content_type:
+        headers["Content-Type"] = content_type
+    return headers
 
 
 def _wait_for_model(model_name: str, max_wait: int = 60):
@@ -234,8 +237,11 @@ class HuggingFaceSpeechService:
             return None
 
         try:
-            headers = _get_headers()
+            headers = _get_headers(content_type="audio/wav")
             url = f"{HF_API_URL}/{SPEECH_TO_TEXT_MODEL}"
+
+            logger.info(f"Calling Hugging Face Speech API: {url}")
+            logger.info(f"Audio size: {len(audio_content)} bytes")
 
             response = requests.post(
                 url,
@@ -243,6 +249,8 @@ class HuggingFaceSpeechService:
                 data=audio_content,
                 timeout=120  # Longer timeout for audio
             )
+
+            logger.info(f"HF Speech response status: {response.status_code}")
 
             # Handle model loading
             if response.status_code == 503:
@@ -256,7 +264,14 @@ class HuggingFaceSpeechService:
                 )
 
             if response.status_code != 200:
-                logger.error(f"Hugging Face Speech API error: {response.status_code} - {response.text}")
+                logger.error(f"Hugging Face Speech API error: {response.status_code}")
+                logger.error(f"Response: {response.text[:500] if response.text else 'empty'}")
+                return None
+
+            # Check if response is JSON or HTML
+            content_type = response.headers.get('Content-Type', '')
+            if 'html' in content_type.lower():
+                logger.error(f"Hugging Face returned HTML instead of JSON. Check API token.")
                 return None
 
             result = response.json()
