@@ -105,12 +105,18 @@ class HuggingFaceVisionService:
             # Use image captioning model
             url = f"{HF_API_URL}/{IMAGE_CAPTION_MODEL}"
 
+            logger.info(f"Calling Hugging Face API: {url}")
+            logger.info(f"Image size: {len(image_content)} bytes")
+
             response = requests.post(
                 url,
                 headers=headers,
                 data=image_content,
                 timeout=60
             )
+
+            logger.info(f"Hugging Face response status: {response.status_code}")
+            logger.info(f"Hugging Face response: {response.text[:500] if response.text else 'empty'}")
 
             # Handle model loading
             if response.status_code == 503:
@@ -156,7 +162,7 @@ class HuggingFaceVisionService:
             return result
 
         except Exception as e:
-            logger.error(f"Hugging Face Vision error: {e}")
+            logger.error(f"Hugging Face Vision error: {e}", exc_info=True)
             return None
 
     def _enhance_caption(self, caption: str) -> str:
