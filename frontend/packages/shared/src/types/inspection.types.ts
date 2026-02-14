@@ -38,7 +38,7 @@ export interface InspectionAnswer {
   video_ai_analysis?: { en: string; ar: string } | null;
   voice_note_id: number | null;
   voice_note: FileRecord | null;
-  voice_transcription?: string | null;
+  voice_transcription?: { en: string; ar: string } | null;
   answered_at: string;
 }
 
@@ -91,6 +91,7 @@ export interface AnswerPayload {
   answer_value: string;
   comment?: string;
   voice_note_id?: number;
+  voice_transcription?: { en: string; ar: string };
 }
 
 export interface InspectionProgress {

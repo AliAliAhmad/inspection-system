@@ -589,6 +589,7 @@ def answer_question(inspection_id):
         comment=data.get('comment'),
         photo_path=data.get('photo_path'),
         voice_note_id=data.get('voice_note_id'),
+        voice_transcription=data.get('voice_transcription'),
         current_user_id=current_user_id
     )
 

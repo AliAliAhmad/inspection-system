@@ -214,12 +214,13 @@ export default function InspectionChecklistPage() {
   });
 
   const handleAnswer = useCallback(
-    (checklistItemId: number, value: string, comment?: string, voiceNoteId?: number) => {
+    (checklistItemId: number, value: string, comment?: string, voiceNoteId?: number, voiceTranscription?: { en: string; ar: string }) => {
       answerMutation.mutate({
         checklist_item_id: checklistItemId,
         answer_value: value,
         comment,
         voice_note_id: voiceNoteId,
+        voice_transcription: voiceTranscription,
       });
     },
     [answerMutation],
@@ -400,7 +401,7 @@ interface ChecklistItemCardProps {
   item: ChecklistItem;
   existingAnswer?: InspectionAnswer;
   getQuestionText: (item: ChecklistItem) => string;
-  onAnswer: (id: number, value: string, comment?: string, voiceNoteId?: number) => void;
+  onAnswer: (id: number, value: string, comment?: string, voiceNoteId?: number, voiceTranscription?: { en: string; ar: string }) => void;
   inspectionId: number;
   refetchInspection: () => void;
   isSubmitted: boolean;
@@ -552,16 +553,26 @@ function ChecklistItemCard({
   const [voiceTranscription, setVoiceTranscription] = useState<{ en: string; ar: string } | null>(null);
   const localAnalysisSetRef = useRef(false); // Track if analysis was set locally (not from server)
 
-  // Extract analysis from existing comment on mount - but don't overwrite local state
+  // Extract analysis from existing answer on mount - but don't overwrite local state
   useEffect(() => {
     // Only extract from server if we haven't set analysis locally
-    if (existingAnswer?.comment && !localAnalysisSetRef.current) {
-      const extracted = extractAnalysisFromComment(existingAnswer.comment);
-      if (extracted.photoAnalysis) setPhotoAnalysis(extracted.photoAnalysis);
-      if (extracted.videoAnalysis) setVideoAnalysis(extracted.videoAnalysis);
-      if (extracted.voiceTranscription) setVoiceTranscription(extracted.voiceTranscription);
+    if (!localAnalysisSetRef.current) {
+      // First check the dedicated voice_transcription field (new)
+      if (existingAnswer?.voice_transcription) {
+        setVoiceTranscription(existingAnswer.voice_transcription);
+      }
+      // Then extract from comment for photo/video analysis and fallback voice transcription
+      if (existingAnswer?.comment) {
+        const extracted = extractAnalysisFromComment(existingAnswer.comment);
+        if (extracted.photoAnalysis) setPhotoAnalysis(extracted.photoAnalysis);
+        if (extracted.videoAnalysis) setVideoAnalysis(extracted.videoAnalysis);
+        // Only use comment-extracted transcription if dedicated field is empty
+        if (extracted.voiceTranscription && !existingAnswer.voice_transcription) {
+          setVoiceTranscription(extracted.voiceTranscription);
+        }
+      }
     }
-  }, [existingAnswer?.comment]);
+  }, [existingAnswer?.comment, existingAnswer?.voice_transcription]);
 
   // Reset local flag when component unmounts or item changes
   useEffect(() => {
@@ -660,7 +671,7 @@ function ChecklistItemCard({
     const comment = buildAnalysisComment();
     if (comment) {
       const answerValue = currentValue || existingAnswer?.answer_value || '';
-      onAnswer(item.id, answerValue, comment, voiceNoteId);
+      onAnswer(item.id, answerValue, comment, voiceNoteId, voiceTranscription || undefined);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildAnalysisComment]);
@@ -669,7 +680,7 @@ function ChecklistItemCard({
     setCurrentValue(value);
     // Include any AI analysis/transcription in the comment for persistence
     const analysisComment = buildAnalysisComment();
-    onAnswer(item.id, value, analysisComment, voiceNoteId);
+    onAnswer(item.id, value, analysisComment, voiceNoteId, voiceTranscription || undefined);
   };
 
   // WhatsApp-style hold to record
@@ -729,18 +740,22 @@ function ChecklistItemCard({
         try {
           const result = await voiceApi.transcribe(blob, undefined, undefined, i18n.language);
 
+          // Extract transcription if available
+          const transcription = (!result.transcription_failed && (result.en || result.ar))
+            ? { en: result.en || '', ar: result.ar || '' }
+            : undefined;
+
           if (result.audio_file?.id) {
             setVoiceNoteId(result.audio_file.id);
             voiceNoteIdRef.current = result.audio_file.id;
-            // Save voice_note_id association (answer_value can be empty - backend handles it)
-            onAnswer(item.id, currentValue || '', undefined, result.audio_file.id);
+            // Save voice_note_id AND transcription together
+            onAnswer(item.id, currentValue || '', undefined, result.audio_file.id, transcription);
           }
 
-          if (!result.transcription_failed && (result.en || result.ar)) {
+          if (transcription) {
             // Store transcription in state for display
-            setVoiceTranscription({ en: result.en || '', ar: result.ar || '' });
+            setVoiceTranscription(transcription);
             localAnalysisSetRef.current = true; // Mark that we set this locally
-            // Transcription will be auto-saved by the useEffect that watches buildAnalysisComment
           }
 
           // Delay refetch to allow server to save

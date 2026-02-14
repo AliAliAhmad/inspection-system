@@ -122,6 +122,7 @@ class InspectionAnswer(db.Model):
     video_path = db.Column(db.String(500), nullable=True)
     video_file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
     voice_note_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=True)
+    voice_transcription = db.Column(db.JSON, nullable=True)  # Voice transcription {'en': '...', 'ar': '...'}
     photo_ai_analysis = db.Column(db.JSON, nullable=True)  # AI analysis result for photo
     video_ai_analysis = db.Column(db.JSON, nullable=True)  # AI analysis result for video
     answered_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -172,6 +173,7 @@ class InspectionAnswer(db.Model):
             'video_ai_analysis': self.video_ai_analysis,
             'voice_note_id': self.voice_note_id,
             'voice_note': self.voice_note.to_dict() if self.voice_note else None,
+            'voice_transcription': self.voice_transcription,
             'answered_at': self.answered_at.isoformat() if self.answered_at else None
         }
     
