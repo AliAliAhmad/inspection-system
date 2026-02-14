@@ -1,8 +1,8 @@
 """
 Google Gemini AI Service for photo analysis and audio transcription.
-Uses Gemini 2.5 Flash-Lite - best free tier (1000 requests/day).
+Uses Gemini 1.5 Flash - higher free tier limits.
 
-Free tier: 1000 requests/day, permanent, no credit card needed.
+Free tier limits vary by account - check https://aistudio.google.com/apikey
 Setup:
 1. Go to https://aistudio.google.com/apikey
 2. Create API key
@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 # Gemini API endpoint
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-# Best free model (1000 requests/day)
-VISION_MODEL = "gemini-2.5-flash-lite"
-AUDIO_MODEL = "gemini-2.5-flash-lite"
+# Using Gemini 1.5 Flash - check your AI Studio dashboard for actual limits
+VISION_MODEL = "gemini-1.5-flash"
+AUDIO_MODEL = "gemini-1.5-flash"
 
 
 def is_gemini_configured():
@@ -38,7 +38,7 @@ def _get_api_key():
 class GeminiVisionService:
     """
     Google Gemini Vision for image analysis.
-    High quality, rivals GPT-4, 1000 free requests/day.
+    Check AI Studio dashboard for your account's actual limits.
     """
 
     def analyze_image(self, image_content: bytes = None, image_url: str = None,
