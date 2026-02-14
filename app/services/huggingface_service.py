@@ -33,12 +33,13 @@ SPEECH_TO_TEXT_MODEL = "openai/whisper-large-v3"  # Best for transcription
 
 def is_huggingface_configured():
     """Check if Hugging Face API key is configured."""
-    return bool(os.getenv('HUGGINGFACE_API_KEY'))
+    key = os.getenv('HUGGINGFACE_API_KEY', '').strip()
+    return bool(key) and key.startswith('hf_')
 
 
 def _get_headers(content_type: str = None):
     """Get API headers with authentication."""
-    api_key = os.getenv('HUGGINGFACE_API_KEY')
+    api_key = os.getenv('HUGGINGFACE_API_KEY', '').strip()
     headers = {"Authorization": f"Bearer {api_key}"}
     if content_type:
         headers["Content-Type"] = content_type
@@ -103,13 +104,23 @@ class HuggingFaceVisionService:
             if not image_content:
                 return None
 
-            headers = _get_headers()
+            # Detect image type from magic bytes
+            content_type = "image/jpeg"  # default
+            if image_content[:4] == b'\x89PNG':
+                content_type = "image/png"
+            elif image_content[:2] == b'\xff\xd8':
+                content_type = "image/jpeg"
+            elif image_content[:4] == b'RIFF' and image_content[8:12] == b'WEBP':
+                content_type = "image/webp"
+
+            headers = _get_headers(content_type=content_type)
 
             # Use image captioning model
             url = f"{HF_API_URL}/{IMAGE_CAPTION_MODEL}"
 
             logger.info(f"Calling Hugging Face API: {url}")
-            logger.info(f"Image size: {len(image_content)} bytes")
+            logger.info(f"Image size: {len(image_content)} bytes, Content-Type: {content_type}")
+            logger.info(f"Headers: Authorization=Bearer hf_***..., Content-Type={content_type}")
 
             response = requests.post(
                 url,
@@ -117,6 +128,10 @@ class HuggingFaceVisionService:
                 data=image_content,
                 timeout=60
             )
+
+            # Log response details
+            resp_content_type = response.headers.get('Content-Type', 'unknown')
+            logger.info(f"Response Content-Type: {resp_content_type}")
 
             logger.info(f"Hugging Face response status: {response.status_code}")
             logger.info(f"Hugging Face response: {response.text[:500] if response.text else 'empty'}")
@@ -134,6 +149,13 @@ class HuggingFaceVisionService:
 
             if response.status_code != 200:
                 logger.error(f"Hugging Face API error: {response.status_code} - {response.text}")
+                return None
+
+            # Check for HTML response (indicates auth or API issues)
+            resp_ct = response.headers.get('Content-Type', '')
+            if 'html' in resp_ct.lower() or response.text.strip().startswith('<!DOCTYPE'):
+                logger.error(f"Hugging Face returned HTML instead of JSON. Check API key format (should start with hf_)")
+                logger.error(f"Response preview: {response.text[:300]}")
                 return None
 
             result = response.json()

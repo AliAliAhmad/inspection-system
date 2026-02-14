@@ -96,15 +96,76 @@ def test_ai_connection():
                 'error': str(e)
             }), 500
 
-    # Test Hugging Face second
+    # Test Hugging Face second - actually test the API
     if is_huggingface_configured():
-        return jsonify({
-            'success': True,
-            'service': 'Hugging Face',
-            'message': 'Hugging Face API key is configured (FREE, no credit card needed)',
-            'cost': 'FREE',
-            'note': 'First request may take 20-30 seconds (model cold start)'
-        }), 200
+        import requests
+        api_key = os.getenv('HUGGINGFACE_API_KEY', '')
+
+        # Check key format
+        key_info = {
+            'key_length': len(api_key),
+            'starts_with_hf': api_key.startswith('hf_'),
+            'first_chars': api_key[:10] + '...' if len(api_key) > 10 else 'too_short',
+            'has_whitespace': api_key != api_key.strip(),
+        }
+
+        # Make a simple API call to test
+        test_url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
+        headers = {"Authorization": f"Bearer {api_key.strip()}"}
+
+        try:
+            # Just check if we can reach the API (don't send actual image)
+            response = requests.post(test_url, headers=headers, json={"inputs": "test"}, timeout=30)
+
+            response_info = {
+                'status_code': response.status_code,
+                'content_type': response.headers.get('Content-Type', 'unknown'),
+                'is_html': 'text/html' in response.headers.get('Content-Type', ''),
+                'response_preview': response.text[:500] if response.text else 'empty',
+            }
+
+            # 503 means model is loading (normal for free tier)
+            if response.status_code == 503:
+                return jsonify({
+                    'success': True,
+                    'service': 'Hugging Face',
+                    'message': 'API key valid! Model is loading (cold start). Wait 20-30 seconds and try again.',
+                    'cost': 'FREE',
+                    'key_info': key_info,
+                    'response_info': response_info
+                }), 200
+            elif response.status_code == 200:
+                return jsonify({
+                    'success': True,
+                    'service': 'Hugging Face',
+                    'message': 'Hugging Face API is working!',
+                    'cost': 'FREE',
+                    'key_info': key_info,
+                    'response_info': response_info
+                }), 200
+            elif response.status_code == 401:
+                return jsonify({
+                    'success': False,
+                    'service': 'Hugging Face',
+                    'error': 'Invalid API key (401 Unauthorized)',
+                    'key_info': key_info,
+                    'response_info': response_info
+                }), 401
+            else:
+                return jsonify({
+                    'success': False,
+                    'service': 'Hugging Face',
+                    'error': f'Unexpected response: {response.status_code}',
+                    'key_info': key_info,
+                    'response_info': response_info
+                }), 500
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'service': 'Hugging Face',
+                'error': f'API call failed: {str(e)}',
+                'key_info': key_info
+            }), 500
 
     # Fall back to OpenAI test
     api_key = os.getenv('OPENAI_API_KEY')
