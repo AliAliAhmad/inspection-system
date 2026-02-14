@@ -6,6 +6,7 @@ Enhanced with job templates, dependencies, capacity config, skills, conflicts, a
 
 from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.models import (
     WorkPlan, WorkPlanDay, WorkPlanJob, WorkPlanAssignment, WorkPlanMaterial,
@@ -303,7 +304,27 @@ def list_work_plans():
     status = request.args.get('status')
     include_days = request.args.get('include_days', 'false').lower() == 'true'
 
-    query = WorkPlan.query
+    # Use eager loading when include_days=True to prevent N+1 queries
+    if include_days:
+        query = WorkPlan.query.options(
+            joinedload(WorkPlan.created_by),
+            joinedload(WorkPlan.published_by),
+            joinedload(WorkPlan.pdf_file),
+            selectinload(WorkPlan.days).selectinload(WorkPlanDay.jobs).options(
+                joinedload(WorkPlanJob.equipment),
+                joinedload(WorkPlanJob.defect),
+                joinedload(WorkPlanJob.cycle),
+                joinedload(WorkPlanJob.pm_template),
+                joinedload(WorkPlanJob.template),
+                selectinload(WorkPlanJob.assignments).joinedload(WorkPlanAssignment.user),
+                selectinload(WorkPlanJob.materials).joinedload(WorkPlanMaterial.material),
+            )
+        )
+    else:
+        query = WorkPlan.query.options(
+            joinedload(WorkPlan.created_by),
+            selectinload(WorkPlan.days)  # Just load days for job counts
+        )
 
     if week_start:
         try:
@@ -328,7 +349,22 @@ def list_work_plans():
 @jwt_required()
 def get_work_plan(plan_id):
     """Get a single work plan with full details."""
-    plan = db.session.get(WorkPlan, plan_id)
+    # Use eager loading to prevent N+1 queries (critical for performance)
+    plan = WorkPlan.query.options(
+        joinedload(WorkPlan.created_by),
+        joinedload(WorkPlan.published_by),
+        joinedload(WorkPlan.pdf_file),
+        selectinload(WorkPlan.days).selectinload(WorkPlanDay.jobs).options(
+            joinedload(WorkPlanJob.equipment),
+            joinedload(WorkPlanJob.defect),
+            joinedload(WorkPlanJob.cycle),
+            joinedload(WorkPlanJob.pm_template),
+            joinedload(WorkPlanJob.template),
+            selectinload(WorkPlanJob.assignments).joinedload(WorkPlanAssignment.user),
+            selectinload(WorkPlanJob.materials).joinedload(WorkPlanMaterial.material),
+        )
+    ).filter_by(id=plan_id).first()
+
     if not plan:
         raise NotFoundError("Work plan not found")
 
