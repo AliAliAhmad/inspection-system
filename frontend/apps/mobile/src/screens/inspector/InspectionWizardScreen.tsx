@@ -154,9 +154,10 @@ export default function InspectionWizardScreen() {
     : 0;
   const assemblyTotal = currentAssemblyGroup?.count || 0;
 
-  // Sync server answers into local state
+  // Sync server answers into local state (only once when inspection loads)
+  const inspectionAnswersJson = JSON.stringify(inspection?.answers?.map(a => a.id) || []);
   useEffect(() => {
-    if (inspection?.answers) {
+    if (inspection?.answers && inspection.answers.length > 0) {
       const merged: Record<number, LocalAnswer> = {};
       inspection.answers.forEach((ans: InspectionAnswer) => {
         const photoUrl = (ans.photo_file as any)?.url || null;
@@ -177,7 +178,8 @@ export default function InspectionWizardScreen() {
       });
       setLocalAnswers((prev) => ({ ...prev, ...merged }));
     }
-  }, [inspection]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspectionAnswersJson]);
 
   // Resume on same question - Load saved index when inspection loads
   useEffect(() => {
@@ -566,9 +568,6 @@ export default function InspectionWizardScreen() {
 
   // Photo upload - show options (Camera or Gallery)
   const handleTakePhoto = useCallback(() => {
-    // DEBUG: Check if function is called
-    Alert.alert('DEBUG', `handleTakePhoto called. currentItem: ${currentItem?.id || 'NULL'}`);
-
     if (!currentItem) return;
 
     Alert.alert(
@@ -625,9 +624,6 @@ export default function InspectionWizardScreen() {
 
   const uploadPhoto = useCallback(async (checklistItemId: number, uri: string, fileName: string, retryCount = 0) => {
     const MAX_RETRIES = 2;
-
-    // DEBUG: Confirm upload started
-    Alert.alert('DEBUG', `Upload started for item ${checklistItemId}\nURI: ${uri.substring(0, 50)}...`);
 
     setLocalAnswers((prev) => ({
       ...prev,
@@ -686,15 +682,6 @@ export default function InspectionWizardScreen() {
         extractedReading,
         readingValidation
       });
-
-      // DEBUG: Show alert with AI analysis status (ALWAYS - for testing)
-      Alert.alert(
-        'DEBUG: Photo Upload Result',
-        `AI Analysis: ${aiAnalysis ? 'YES' : 'NO'}\n` +
-        `Failed: ${result?.analysis_failed ? 'YES' : 'NO'}\n` +
-        `Content: ${aiAnalysis ? JSON.stringify(aiAnalysis).substring(0, 100) : 'none'}`,
-        [{ text: 'OK' }]
-      );
 
       // Update local state with photo URL and AI analysis
       setLocalAnswers((prev) => {
@@ -1199,12 +1186,6 @@ export default function InspectionWizardScreen() {
 
   return (
     <View style={styles.container}>
-      {/* DEBUG BANNER - REMOVE AFTER TESTING */}
-      <View style={{ backgroundColor: 'purple', padding: 15 }}>
-        <Text style={{ color: 'yellow', fontWeight: 'bold', textAlign: 'center', fontSize: 16 }}>
-          DEBUG v5 - TAP CAMERA TO TEST
-        </Text>
-      </View>
       {/* Header with equipment info and buttons */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
