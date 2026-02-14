@@ -22,8 +22,8 @@ import time
 
 logger = logging.getLogger(__name__)
 
-# Hugging Face Inference API endpoints
-HF_API_URL = "https://api-inference.huggingface.co/models"
+# Hugging Face Inference API endpoints (updated to new router URL)
+HF_API_URL = "https://router.huggingface.co/hf-inference/models"
 
 # Models to use
 IMAGE_CAPTION_MODEL = "Salesforce/blip-image-captioning-large"  # Good for describing images

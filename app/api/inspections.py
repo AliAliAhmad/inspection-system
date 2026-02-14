@@ -110,7 +110,7 @@ def test_ai_connection():
         }
 
         # Make a simple API call to test
-        test_url = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large"
+        test_url = "https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-large"
         headers = {"Authorization": f"Bearer {api_key.strip()}"}
 
         try:
