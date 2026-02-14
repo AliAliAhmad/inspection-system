@@ -90,7 +90,8 @@
       "Bash(/opt/homebrew/opt/node@20/bin/npx expo install --fix)",
       "Bash(/opt/homebrew/opt/node@20/bin/node:*)",
       "Bash(/opt/homebrew/opt/node@20/bin/npm ls react)",
-      "Bash(export PATH=/opt/homebrew/opt/node@20/bin:$PATH)"
+      "Bash(export PATH=/opt/homebrew/opt/node@20/bin:$PATH)",
+      "Bash(brew reinstall:*)"
     ]
   }
 }

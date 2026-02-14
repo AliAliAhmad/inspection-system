@@ -227,13 +227,13 @@ def transcribe():
 
             result = gemini_speech.transcribe_file(source_path, language_hint or 'en')
 
-            if result and result.get('text'):
-                text = result['text'].strip()
+            if result and (result.get('text') or result.get('en')):
                 detected_language = result.get('detected_language', 'unknown')
 
-                translated = TranslationService.auto_translate(text)
-                en_text = translated.get('en') or text
-                ar_text = translated.get('ar') or text
+                # Gemini already returns bilingual EN/AR - use directly (no extra translation needed)
+                en_text = result.get('en', '').strip() or result.get('text', '').strip()
+                ar_text = result.get('ar', '').strip() or en_text
+                logger.info(f"Gemini transcription: EN={en_text[:50]}..., AR={ar_text[:50]}...")
             else:
                 transcription_failed = True
                 logger.warning("Gemini Speech returned no results")
