@@ -188,8 +188,9 @@ def transcribe():
     temp_files_to_cleanup = []
 
     try:
-        # Priority: 1. Google Cloud (free) → 2. Groq (free) → 3. OpenAI (paid)
+        # Priority: 1. Google Cloud (free) → 2. Together AI (free) → 3. Groq (free) → 4. OpenAI (paid)
         from app.services.google_cloud_service import get_speech_service, is_google_cloud_configured
+        from app.services.together_ai_service import get_speech_service as get_together_speech, is_together_configured
         from app.services.groq_service import get_speech_service as get_groq_speech, is_groq_configured
 
         # Create temp file from audio content (needed for all services)
@@ -218,7 +219,25 @@ def transcribe():
                 transcription_failed = True
                 logger.warning("Google Speech returned no results")
 
-        # Option 2: Groq Whisper (FREE, very fast)
+        # Option 2: Together AI Whisper (FREE, 15x faster than OpenAI)
+        elif is_together_configured():
+            logger.info("Using Together AI Whisper (free, high quality)")
+            together_speech = get_together_speech()
+
+            result = together_speech.transcribe_file(source_path, language_hint or 'en')
+
+            if result and result.get('text'):
+                text = result['text'].strip()
+                detected_language = result.get('detected_language', 'unknown')
+
+                translated = TranslationService.auto_translate(text)
+                en_text = translated.get('en') or text
+                ar_text = translated.get('ar') or text
+            else:
+                transcription_failed = True
+                logger.warning("Together AI Speech returned no results")
+
+        # Option 3: Groq Whisper (FREE, very fast)
         elif is_groq_configured():
             logger.info("Using Groq Whisper (free, fast)")
             groq_speech = get_groq_speech()
@@ -236,7 +255,7 @@ def transcribe():
                 transcription_failed = True
                 logger.warning("Groq Speech returned no results")
 
-        # Option 3: OpenAI Whisper (paid fallback)
+        # Option 4: OpenAI Whisper (paid fallback)
         else:
             from openai import OpenAI
 
