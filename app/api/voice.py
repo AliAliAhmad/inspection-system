@@ -188,16 +188,14 @@ def transcribe():
     temp_files_to_cleanup = []
 
     try:
-        from openai import OpenAI
+        # Try Google Cloud Speech-to-Text first (free tier: 60 min/month)
+        from app.services.google_cloud_service import get_speech_service, is_google_cloud_configured
 
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            transcription_failed = True
-            logger.warning("Transcription skipped: OPENAI_API_KEY not configured")
-        else:
-            client = OpenAI(api_key=api_key)
+        if is_google_cloud_configured():
+            logger.info("Using Google Cloud Speech-to-Text for transcription")
+            speech_service = get_speech_service()
 
-            # Create temp file from audio content for Whisper
+            # Create temp file from audio content
             suffix = _get_suffix(filename)
             tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
             tmp.write(audio_content)
@@ -205,31 +203,66 @@ def transcribe():
             source_path = tmp.name
             temp_files_to_cleanup.append(source_path)
 
-            # Convert to WAV for better Whisper accuracy
-            whisper_path = _convert_to_wav(source_path)
-            if whisper_path != source_path:
-                temp_files_to_cleanup.append(whisper_path)
+            # Transcribe using Google
+            result = speech_service.transcribe_file(source_path, language_hint or 'en')
 
-            # Build Whisper API kwargs
-            whisper_kwargs = {
-                'model': 'whisper-1',
-                'response_format': 'verbose_json',
-                'prompt': WHISPER_PROMPT,
-            }
-            if language_hint in ('en', 'ar'):
-                whisper_kwargs['language'] = language_hint
+            if result and result.get('text'):
+                text = result['text'].strip()
+                detected_language = result.get('detected_language', 'unknown')
 
-            with open(whisper_path, 'rb') as f:
-                whisper_kwargs['file'] = f
-                transcript = client.audio.transcriptions.create(**whisper_kwargs)
+                # Translate to both languages
+                translated = TranslationService.auto_translate(text)
+                en_text = translated.get('en') or text
+                ar_text = translated.get('ar') or text
+            else:
+                transcription_failed = True
+                logger.warning("Google Speech returned no results")
 
-            text = transcript.text.strip() if transcript.text else ''
-            detected_language = getattr(transcript, 'language', None) or 'unknown'
+        # Fallback to OpenAI Whisper if Google not configured
+        else:
+            from openai import OpenAI
 
-            if text:
-                result = TranslationService.auto_translate(text)
-                en_text = result.get('en') or text
-                ar_text = result.get('ar') or text
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                transcription_failed = True
+                logger.warning("Transcription skipped: Neither GOOGLE_CLOUD nor OPENAI_API_KEY configured")
+            else:
+                logger.info("Using OpenAI Whisper for transcription (fallback)")
+                client = OpenAI(api_key=api_key)
+
+                # Create temp file from audio content for Whisper
+                suffix = _get_suffix(filename)
+                tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+                tmp.write(audio_content)
+                tmp.close()
+                source_path = tmp.name
+                temp_files_to_cleanup.append(source_path)
+
+                # Convert to WAV for better Whisper accuracy
+                whisper_path = _convert_to_wav(source_path)
+                if whisper_path != source_path:
+                    temp_files_to_cleanup.append(whisper_path)
+
+                # Build Whisper API kwargs
+                whisper_kwargs = {
+                    'model': 'whisper-1',
+                    'response_format': 'verbose_json',
+                    'prompt': WHISPER_PROMPT,
+                }
+                if language_hint in ('en', 'ar'):
+                    whisper_kwargs['language'] = language_hint
+
+                with open(whisper_path, 'rb') as f:
+                    whisper_kwargs['file'] = f
+                    transcript = client.audio.transcriptions.create(**whisper_kwargs)
+
+                text = transcript.text.strip() if transcript.text else ''
+                detected_language = getattr(transcript, 'language', None) or 'unknown'
+
+                if text:
+                    result = TranslationService.auto_translate(text)
+                    en_text = result.get('en') or text
+                    ar_text = result.get('ar') or text
 
     except Exception as e:
         logger.error("Voice transcription failed: %s", e)

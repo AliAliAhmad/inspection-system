@@ -26,60 +26,96 @@ bp = Blueprint('inspections', __name__)
 @bp.route('/debug/ai-status', methods=['GET'])
 def check_ai_status():
     """
-    Diagnostic endpoint to check if AI is configured.
+    Diagnostic endpoint to check if AI services are configured.
     No auth required for debugging purposes.
     """
     import os
-    api_key = os.getenv('OPENAI_API_KEY')
-    key_preview = f"{api_key[:8]}...{api_key[-4:]}" if api_key and len(api_key) > 12 else None
+    from app.services.google_cloud_service import is_google_cloud_configured
+
+    openai_key = os.getenv('OPENAI_API_KEY')
+    google_configured = is_google_cloud_configured()
+
+    # Determine which service will be used
+    if google_configured:
+        active_service = 'Google Cloud (FREE tier)'
+        message = 'Google Cloud Vision + Speech configured (1000 images + 60 min audio FREE/month)'
+    elif openai_key:
+        active_service = 'OpenAI (paid)'
+        message = 'OpenAI configured as fallback (requires credits)'
+    else:
+        active_service = 'None'
+        message = 'No AI service configured. Set GOOGLE_CLOUD_KEY_JSON (free) or OPENAI_API_KEY (paid)'
 
     return jsonify({
-        'ai_configured': bool(api_key),
-        'api_key_preview': key_preview,
-        'api_key_length': len(api_key) if api_key else 0,
+        'active_service': active_service,
+        'google_cloud_configured': google_configured,
+        'openai_configured': bool(openai_key),
         'environment': os.getenv('FLASK_ENV', 'not set'),
         'render_service': os.getenv('RENDER_SERVICE_NAME', 'not on render'),
-        'message': 'OPENAI_API_KEY is configured' if api_key else 'OPENAI_API_KEY is NOT configured - add it in Render dashboard'
+        'message': message
     }), 200
 
 
 @bp.route('/debug/ai-test', methods=['GET'])
 def test_ai_connection():
     """
-    Test OpenAI API connection by making a simple call.
+    Test AI API connection (Google Cloud or OpenAI).
     """
     import os
+    from app.services.google_cloud_service import is_google_cloud_configured, get_vision_service
+
+    # Test Google Cloud first
+    if is_google_cloud_configured():
+        try:
+            vision_service = get_vision_service()
+            if vision_service.client:
+                return jsonify({
+                    'success': True,
+                    'service': 'Google Cloud Vision',
+                    'message': 'Google Cloud Vision API is working (FREE tier: 1000 images/month)',
+                    'cost': 'FREE'
+                }), 200
+            else:
+                return jsonify({
+                    'success': False,
+                    'service': 'Google Cloud',
+                    'error': 'Vision client failed to initialize - check credentials'
+                }), 500
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'service': 'Google Cloud',
+                'error': str(e)
+            }), 500
+
+    # Fall back to OpenAI test
     api_key = os.getenv('OPENAI_API_KEY')
+    if api_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": "Say 'OK' only"}],
+                max_tokens=5
+            )
+            return jsonify({
+                'success': True,
+                'service': 'OpenAI',
+                'response': response.choices[0].message.content,
+                'cost': 'PAID (requires credits)'
+            }), 200
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'service': 'OpenAI',
+                'error': str(e)
+            }), 500
 
-    if not api_key:
-        return jsonify({
-            'success': False,
-            'error': 'OPENAI_API_KEY not configured'
-        }), 400
-
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-
-        # Simple test call
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": "Say 'AI is working' in 3 words or less"}],
-            max_tokens=10
-        )
-
-        return jsonify({
-            'success': True,
-            'response': response.choices[0].message.content,
-            'model': response.model
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'error_type': type(e).__name__
-        }), 500
+    return jsonify({
+        'success': False,
+        'error': 'No AI service configured. Set GOOGLE_CLOUD_KEY_JSON (free) or OPENAI_API_KEY (paid)'
+    }), 400
 
 
 # ============================================
@@ -821,112 +857,119 @@ def upload_answer_media(inspection_id):
             'reading', 'قراءة', 'عداد', 'meter', 'gauge', 'counter'
         ])
 
-    # Analyze both photos and videos
+    # Analyze both photos and videos using Google Cloud Vision (free tier: 1000 images/month)
+    # Falls back to OpenAI if Google Cloud not configured
     try:
         import os
-        from openai import OpenAI
+        import re
+        import requests
+        from app.services.google_cloud_service import get_vision_service, is_google_cloud_configured
 
-        api_key = os.getenv('OPENAI_API_KEY')
         media_type_label = "Video" if is_video else "Photo"
-        # Enhanced debug logging
-        api_key_preview = f"{api_key[:8]}..." if api_key and len(api_key) > 8 else "MISSING"
-        logger.info(f"=== AI ANALYSIS DEBUG ===")
-        logger.info(f"{media_type_label} AI analysis starting...")
-        logger.info(f"API key status: {api_key_preview}")
-        logger.info(f"API key present: {bool(api_key)}")
+        logger.info(f"=== AI ANALYSIS ({media_type_label}) ===")
         logger.info(f"Is reading question: {is_reading_question}")
         logger.info(f"File URL: {file_record.file_path}")
 
-        if api_key:
-            client = OpenAI(api_key=api_key)
-
-            # For videos, use Cloudinary thumbnail URL
-            if is_video:
-                # Generate thumbnail URL: replace /upload/ with /upload/so_auto,w_640,h_480,c_fill,f_jpg/
-                # and change extension to .jpg
-                analyze_url = file_record.file_path.replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
-                # Replace video extension with .jpg
-                import re
-                analyze_url = re.sub(r'\.(mp4|mov|webm|avi|mkv)$', '.jpg', analyze_url, flags=re.IGNORECASE)
-                logger.info(f"Analyzing video thumbnail at URL: {analyze_url}")
-            else:
-                analyze_url = file_record.file_path
-                logger.info(f"Analyzing photo at URL: {analyze_url}")
-
-            # Different prompt for reading questions vs general inspection
-            if is_reading_question and not is_video:
-                # Special prompt for meter/gauge reading extraction
-                prompt_text = (
-                    "This is a photo of a meter, gauge, or counter reading. "
-                    "Extract the numeric value shown on the display/dial. "
-                    "If the meter appears faulty or unreadable, indicate that. "
-                    "Provide response in this exact JSON format:\n"
-                    "{ \"en\": \"English description\", \"ar\": \"Arabic description\", \"reading\": \"12345\" }\n"
-                    "The 'reading' field should contain ONLY the numeric value (or 'faulty' if broken/unreadable)."
-                )
-            else:
-                prompt_text = (
-                    f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
-                    "Identify any visible defects, damage, or issues. "
-                    "Provide a brief analysis in English and Arabic. "
-                    "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
-                )
-
-            # Analyze the photo/video with GPT-4 Vision (runs for BOTH photos and videos)
-            response = client.chat.completions.create(
-                model="gpt-4o",  # Use gpt-4o which supports vision
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt_text
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": analyze_url,  # Photo URL or video thumbnail URL
-                                }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=300
-            )
-
-            analysis_text = response.choices[0].message.content.strip()
-            logger.info(f"Received analysis text: {analysis_text[:200]}")
-
-            # Try to parse as JSON
-            try:
-                import json
-                ai_analysis = json.loads(analysis_text)
-                logger.info(f"Parsed as JSON successfully")
-
-                # Extract reading value if present (for meter reading questions)
-                if 'reading' in ai_analysis and is_reading_question:
-                    extracted_reading = ai_analysis.get('reading')
-                    logger.info(f"Extracted reading value: {extracted_reading}")
-                    # Remove reading from ai_analysis to keep it clean for display
-                    # but we'll return it separately
-            except Exception as parse_err:
-                logger.info(f"Not JSON, translating... Error: {parse_err}")
-                # If not JSON, treat as plain text and translate
-                from app.services.translation_service import TranslationService
-                translated = TranslationService.auto_translate(analysis_text)
-                ai_analysis = {
-                    'en': translated.get('en') or analysis_text,
-                    'ar': translated.get('ar') or analysis_text
-                }
-
-            logger.info(f"Final ai_analysis: {ai_analysis}, extracted_reading: {extracted_reading}")
-
+        # For videos, use Cloudinary thumbnail URL
+        if is_video:
+            analyze_url = file_record.file_path.replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
+            analyze_url = re.sub(r'\.(mp4|mov|webm|avi|mkv)$', '.jpg', analyze_url, flags=re.IGNORECASE)
+            logger.info(f"Analyzing video thumbnail at URL: {analyze_url}")
         else:
-            logger.warning(f"=== OPENAI_API_KEY NOT CONFIGURED ===")
-            logger.warning(f"{media_type_label} analysis skipped: OPENAI_API_KEY not configured")
-            logger.warning(f"Set OPENAI_API_KEY in Render environment variables!")
-            analysis_failed = True
+            analyze_url = file_record.file_path
+            logger.info(f"Analyzing photo at URL: {analyze_url}")
+
+        # Try Google Cloud Vision first (FREE tier: 1000 images/month)
+        if is_google_cloud_configured():
+            logger.info("Using Google Cloud Vision API (free tier)")
+            vision_service = get_vision_service()
+
+            # Download image content for Google Vision
+            try:
+                img_response = requests.get(analyze_url, timeout=30)
+                img_response.raise_for_status()
+                image_content = img_response.content
+            except Exception as download_err:
+                logger.error(f"Failed to download image: {download_err}")
+                image_content = None
+
+            if image_content:
+                result = vision_service.analyze_image(
+                    image_content=image_content,
+                    is_reading_question=is_reading_question
+                )
+
+                if result:
+                    ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
+                    if 'reading' in result and is_reading_question:
+                        extracted_reading = result.get('reading')
+                        logger.info(f"Extracted reading value: {extracted_reading}")
+                    logger.info(f"Google Vision analysis complete: {ai_analysis}")
+                else:
+                    logger.warning("Google Vision returned no results")
+                    analysis_failed = True
+            else:
+                analysis_failed = True
+
+        # Fallback to OpenAI if Google Cloud not configured
+        else:
+            from openai import OpenAI
+            api_key = os.getenv('OPENAI_API_KEY')
+
+            if api_key:
+                logger.info("Using OpenAI GPT-4 Vision (fallback)")
+                client = OpenAI(api_key=api_key)
+
+                # Different prompt for reading questions vs general inspection
+                if is_reading_question and not is_video:
+                    prompt_text = (
+                        "This is a photo of a meter, gauge, or counter reading. "
+                        "Extract the numeric value shown on the display/dial. "
+                        "If the meter appears faulty or unreadable, indicate that. "
+                        "Provide response in this exact JSON format:\n"
+                        "{ \"en\": \"English description\", \"ar\": \"Arabic description\", \"reading\": \"12345\" }\n"
+                        "The 'reading' field should contain ONLY the numeric value (or 'faulty' if broken/unreadable)."
+                    )
+                else:
+                    prompt_text = (
+                        f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
+                        "Identify any visible defects, damage, or issues. "
+                        "Provide a brief analysis in English and Arabic. "
+                        "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
+                    )
+
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt_text},
+                                {"type": "image_url", "image_url": {"url": analyze_url}}
+                            ]
+                        }
+                    ],
+                    max_tokens=300
+                )
+
+                analysis_text = response.choices[0].message.content.strip()
+                logger.info(f"OpenAI analysis: {analysis_text[:200]}")
+
+                try:
+                    import json
+                    ai_analysis = json.loads(analysis_text)
+                    if 'reading' in ai_analysis and is_reading_question:
+                        extracted_reading = ai_analysis.get('reading')
+                except Exception:
+                    from app.services.translation_service import TranslationService
+                    translated = TranslationService.auto_translate(analysis_text)
+                    ai_analysis = {
+                        'en': translated.get('en') or analysis_text,
+                        'ar': translated.get('ar') or analysis_text
+                    }
+            else:
+                logger.warning("No AI service configured (set GOOGLE_CLOUD_KEY_JSON or OPENAI_API_KEY)")
+                analysis_failed = True
 
     except Exception as e:
         logger.error(f"=== AI ANALYSIS EXCEPTION ===")
