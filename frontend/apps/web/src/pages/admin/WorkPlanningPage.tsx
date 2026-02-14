@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   Card,
   Button,
@@ -160,15 +160,27 @@ export default function WorkPlanningPage() {
   const { data: plansData, isLoading, refetch, error, isError } = useQuery({
     queryKey: ['work-plans', weekStartStr],
     queryFn: () => workPlansApi.list({ week_start: weekStartStr, include_days: true }).then((r) => r.data),
-    staleTime: 0, // Always refetch when week changes
+    staleTime: 30000, // Cache for 30 seconds to prevent excessive refetches
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
     retry: 1,
   });
 
-  // Show error if query failed
-  if (isError) {
-    console.error('Work plans query error:', error);
-    message.error('Failed to load work plan: ' + ((error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error'));
-  }
+  // Track if error was already shown to prevent duplicate messages
+  const errorShownRef = useRef<string | null>(null);
+
+  // Show error once when query fails
+  useEffect(() => {
+    if (isError && error) {
+      const errorMsg = (error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error';
+      if (errorShownRef.current !== errorMsg) {
+        errorShownRef.current = errorMsg;
+        console.error('Work plans query error:', error);
+        message.error('Failed to load work plan: ' + errorMsg);
+      }
+    } else {
+      errorShownRef.current = null;
+    }
+  }, [isError, error]);
 
   const currentPlan = plansData?.work_plans?.[0];
   const isDraft = currentPlan?.status === 'draft';
