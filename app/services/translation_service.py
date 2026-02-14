@@ -1,31 +1,18 @@
 """
-AI-powered bidirectional translation service using OpenAI.
+AI-powered bidirectional translation service.
+Multi-provider: Gemini → Groq → OpenAI
 Auto-detects language and translates between English and Arabic.
 """
 
 import os
 import re
 import logging
-from openai import OpenAI
+import requests
 
 logger = logging.getLogger(__name__)
 
-_client = None
-
 # Arabic Unicode range detection
 _ARABIC_RE = re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+')
-
-
-def _get_client():
-    """Lazy-initialize OpenAI client."""
-    global _client
-    if _client is None:
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            logger.warning("OPENAI_API_KEY not set — translation disabled")
-            return None
-        _client = OpenAI(api_key=api_key)
-    return _client
 
 
 def is_arabic(text):
@@ -41,8 +28,22 @@ def is_arabic(text):
     return (arabic_chars / max(non_space, 1)) > 0.3
 
 
+def _get_ai_provider():
+    """Get the best available AI provider for translation."""
+    from app.services.gemini_service import is_gemini_configured
+    from app.services.groq_service import is_groq_configured
+
+    if is_gemini_configured():
+        return 'gemini'
+    elif is_groq_configured():
+        return 'groq'
+    elif os.getenv('OPENAI_API_KEY'):
+        return 'openai'
+    return None
+
+
 class TranslationService:
-    """Bidirectional translation between English and Arabic using OpenAI."""
+    """Bidirectional translation between English and Arabic using multi-provider AI."""
 
     SYSTEM_PROMPT_EN_TO_AR = (
         "You are a professional English-to-Arabic translator specializing in "
@@ -92,7 +93,8 @@ class TranslationService:
     @staticmethod
     def _translate(text, target_lang):
         """
-        Core translation method.
+        Core translation method using multi-provider AI.
+        Priority: Gemini → Groq → OpenAI
 
         Args:
             text: Text to translate
@@ -104,8 +106,9 @@ class TranslationService:
         if not text or not text.strip():
             return None
 
-        client = _get_client()
-        if not client:
+        provider = _get_ai_provider()
+        if not provider:
+            logger.warning("No AI provider configured for translation")
             return None
 
         prompt = (
@@ -114,22 +117,125 @@ class TranslationService:
         )
 
         try:
-            response = client.chat.completions.create(
-                model=os.getenv('OPENAI_TRANSLATE_MODEL', 'gpt-4o-mini'),
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": text}
-                ],
-                temperature=0.2,
-                max_tokens=max(len(text) * 3, 100),
-            )
-            translation = response.choices[0].message.content.strip()
-            direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
-            logger.debug(f"[{direction}] '{text[:40]}' → '{translation[:40]}'")
-            return translation
+            if provider == 'gemini':
+                return TranslationService._translate_gemini(text, prompt, target_lang)
+            elif provider == 'groq':
+                return TranslationService._translate_groq(text, prompt, target_lang)
+            else:
+                return TranslationService._translate_openai(text, prompt, target_lang)
         except Exception as e:
-            logger.error(f"Translation failed: {e}")
+            logger.error(f"Translation failed with {provider}: {e}")
+            # Try fallback providers
+            if provider == 'gemini':
+                try:
+                    return TranslationService._translate_groq(text, prompt, target_lang)
+                except:
+                    pass
+            if provider in ('gemini', 'groq'):
+                try:
+                    return TranslationService._translate_openai(text, prompt, target_lang)
+                except:
+                    pass
             return None
+
+    @staticmethod
+    def _translate_gemini(text, system_prompt, target_lang):
+        """Translate using Gemini API."""
+        api_key = os.getenv('GEMINI_API_KEY', '').strip()
+        if not api_key:
+            raise Exception("Gemini API key not configured")
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
+
+        payload = {
+            "contents": [{
+                "parts": [{"text": f"{system_prompt}\n\nText to translate:\n{text}"}]
+            }],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": max(len(text) * 3, 100)
+            }
+        }
+
+        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+
+        if response.status_code != 200:
+            raise Exception(f"Gemini API error: {response.status_code}")
+
+        result = response.json()
+        candidates = result.get('candidates', [])
+        if not candidates:
+            raise Exception("Gemini returned no candidates")
+
+        content = candidates[0].get('content', {})
+        parts = content.get('parts', [])
+        if not parts:
+            raise Exception("Gemini returned no parts")
+
+        translation = parts[0].get('text', '').strip()
+        direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
+        logger.debug(f"[Gemini {direction}] '{text[:40]}' → '{translation[:40]}'")
+        return translation
+
+    @staticmethod
+    def _translate_groq(text, system_prompt, target_lang):
+        """Translate using Groq API."""
+        api_key = os.getenv('GROQ_API_KEY', '').strip()
+        if not api_key:
+            raise Exception("Groq API key not configured")
+
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ],
+            "temperature": 0.2,
+            "max_tokens": max(len(text) * 3, 100)
+        }
+
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+
+        if response.status_code != 200:
+            raise Exception(f"Groq API error: {response.status_code}")
+
+        result = response.json()
+        translation = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+
+        direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
+        logger.debug(f"[Groq {direction}] '{text[:40]}' → '{translation[:40]}'")
+        return translation
+
+    @staticmethod
+    def _translate_openai(text, system_prompt, target_lang):
+        """Translate using OpenAI API (fallback)."""
+        from openai import OpenAI
+
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            raise Exception("OpenAI API key not configured")
+
+        client = OpenAI(api_key=api_key)
+
+        response = client.chat.completions.create(
+            model=os.getenv('OPENAI_TRANSLATE_MODEL', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text}
+            ],
+            temperature=0.2,
+            max_tokens=max(len(text) * 3, 100),
+        )
+
+        translation = response.choices[0].message.content.strip()
+        direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
+        logger.debug(f"[OpenAI {direction}] '{text[:40]}' → '{translation[:40]}'")
+        return translation
 
     @staticmethod
     def translate_batch(texts):
@@ -146,8 +252,8 @@ class TranslationService:
         if not texts:
             return {}
 
-        client = _get_client()
-        if not client:
+        provider = _get_ai_provider()
+        if not provider:
             return {k: None for k in texts}
 
         # Split into EN→AR and AR→EN batches
@@ -182,8 +288,8 @@ class TranslationService:
     @staticmethod
     def _translate_batch_one_direction(texts, target_lang):
         """Translate a batch of texts in one direction."""
-        client = _get_client()
-        if not client:
+        provider = _get_ai_provider()
+        if not provider:
             return {k: None for k in texts}
 
         lines = []
@@ -202,23 +308,19 @@ class TranslationService:
             "Keep technical terms accurate.\n\n" + "\n".join(lines)
         )
 
-        prompt = (
+        system_prompt = (
             TranslationService.SYSTEM_PROMPT_EN_TO_AR if target_lang == 'ar'
             else TranslationService.SYSTEM_PROMPT_AR_TO_EN
         )
 
         try:
-            response = client.chat.completions.create(
-                model=os.getenv('OPENAI_TRANSLATE_MODEL', 'gpt-4o-mini'),
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": batch_prompt}
-                ],
-                temperature=0.2,
-                max_tokens=sum(len(t) * 3 for t in texts.values()),
-            )
+            if provider == 'gemini':
+                result_text = TranslationService._translate_gemini(batch_prompt, system_prompt, target_lang)
+            elif provider == 'groq':
+                result_text = TranslationService._translate_groq(batch_prompt, system_prompt, target_lang)
+            else:
+                result_text = TranslationService._translate_openai(batch_prompt, system_prompt, target_lang)
 
-            result_text = response.choices[0].message.content.strip()
             result = {k: None for k in texts}
 
             for line in result_text.split('\n'):

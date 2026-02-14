@@ -1,5 +1,6 @@
 """
-OpenAI Service - AI features for inspection system.
+AI Service - AI features for inspection system.
+Multi-provider: Gemini → Groq → OpenAI
 Provides: Vision analysis, report generation, embeddings search, TTS, and AI assistant.
 """
 
@@ -14,7 +15,7 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 
-def _get_client() -> Optional[OpenAI]:
+def _get_openai_client() -> Optional[OpenAI]:
     """Get OpenAI client if API key is configured."""
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
@@ -23,13 +24,132 @@ def _get_client() -> Optional[OpenAI]:
     return OpenAI(api_key=api_key)
 
 
+def _get_ai_provider():
+    """Get the best available AI provider."""
+    from app.services.gemini_service import is_gemini_configured
+    from app.services.groq_service import is_groq_configured
+
+    if is_gemini_configured():
+        return 'gemini'
+    elif is_groq_configured():
+        return 'groq'
+    elif os.getenv('OPENAI_API_KEY'):
+        return 'openai'
+    return None
+
+
+def _call_gemini_text(prompt: str, max_tokens: int = 500) -> Optional[str]:
+    """Call Gemini for text generation."""
+    api_key = os.getenv('GEMINI_API_KEY', '').strip()
+    if not api_key:
+        return None
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": max_tokens
+        }
+    }
+
+    response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
+
+    if response.status_code != 200:
+        raise Exception(f"Gemini API error: {response.status_code}")
+
+    result = response.json()
+    candidates = result.get('candidates', [])
+    if not candidates:
+        return None
+
+    content = candidates[0].get('content', {})
+    parts = content.get('parts', [])
+    if not parts:
+        return None
+
+    return parts[0].get('text', '').strip()
+
+
+def _call_groq_text(prompt: str, max_tokens: int = 500) -> Optional[str]:
+    """Call Groq for text generation."""
+    api_key = os.getenv('GROQ_API_KEY', '').strip()
+    if not api_key:
+        return None
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+        "max_tokens": max_tokens
+    }
+
+    response = requests.post(url, json=payload, headers=headers, timeout=60)
+
+    if response.status_code != 200:
+        raise Exception(f"Groq API error: {response.status_code}")
+
+    result = response.json()
+    return result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+
+
+def _call_openai_text(prompt: str, max_tokens: int = 500) -> Optional[str]:
+    """Call OpenAI for text generation."""
+    client = _get_openai_client()
+    if not client:
+        return None
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens
+    )
+
+    return response.choices[0].message.content.strip()
+
+
+def _call_ai_text(prompt: str, max_tokens: int = 500) -> Optional[str]:
+    """Call best available AI for text generation."""
+    provider = _get_ai_provider()
+
+    try:
+        if provider == 'gemini':
+            return _call_gemini_text(prompt, max_tokens)
+        elif provider == 'groq':
+            return _call_groq_text(prompt, max_tokens)
+        elif provider == 'openai':
+            return _call_openai_text(prompt, max_tokens)
+    except Exception as e:
+        logger.error(f"AI text generation failed with {provider}: {e}")
+        # Try fallback
+        if provider == 'gemini':
+            try:
+                return _call_groq_text(prompt, max_tokens)
+            except:
+                pass
+        if provider in ('gemini', 'groq'):
+            try:
+                return _call_openai_text(prompt, max_tokens)
+            except:
+                pass
+
+    return None
+
+
 class VisionService:
-    """GPT-4 Vision - Analyze inspection photos for defects."""
+    """Multi-provider Vision - Analyze inspection photos for defects."""
 
     @staticmethod
     def analyze_defect_photo(image_url: str, language: str = 'en') -> Dict[str, Any]:
         """
-        Analyze a defect photo using GPT-4 Vision.
+        Analyze a defect photo using multi-provider AI.
+        Priority: Gemini → Groq → OpenAI
 
         Args:
             image_url: URL of the image (Cloudinary URL)
@@ -38,9 +158,60 @@ class VisionService:
         Returns:
             Analysis result with defect description, severity, recommendations
         """
-        client = _get_client()
+        from app.services.gemini_service import is_gemini_configured, get_vision_service as get_gemini_vision
+        from app.services.groq_service import is_groq_configured, get_vision_service as get_groq_vision
+
+        # Download image for providers that need bytes
+        image_content = None
+        try:
+            response = requests.get(image_url, timeout=30)
+            response.raise_for_status()
+            image_content = response.content
+        except Exception as e:
+            logger.warning(f"Could not download image: {e}")
+
+        # Try Gemini first
+        if is_gemini_configured() and image_content:
+            try:
+                gemini_vision = get_gemini_vision()
+                result = gemini_vision.analyze_image(image_content=image_content, is_reading_question=False)
+                if result:
+                    return {
+                        'success': True,
+                        'description': result.get('en', ''),
+                        'description_ar': result.get('ar', ''),
+                        'severity': 'N/A',
+                        'cause': 'N/A',
+                        'recommendation': 'Continue regular maintenance',
+                        'safety_risk': 'None identified',
+                        'provider': 'gemini'
+                    }
+            except Exception as e:
+                logger.warning(f"Gemini vision failed: {e}")
+
+        # Try Groq second
+        if is_groq_configured() and image_content:
+            try:
+                groq_vision = get_groq_vision()
+                result = groq_vision.analyze_image(image_content=image_content, is_reading_question=False)
+                if result:
+                    return {
+                        'success': True,
+                        'description': result.get('en', ''),
+                        'description_ar': result.get('ar', ''),
+                        'severity': 'N/A',
+                        'cause': 'N/A',
+                        'recommendation': 'Continue regular maintenance',
+                        'safety_risk': 'None identified',
+                        'provider': 'groq'
+                    }
+            except Exception as e:
+                logger.warning(f"Groq vision failed: {e}")
+
+        # Fall back to OpenAI
+        client = _get_openai_client()
         if not client:
-            return {'error': 'OpenAI not configured'}
+            return {'error': 'No AI service configured', 'success': False}
 
         lang_instruction = "Respond in Arabic." if language == 'ar' else "Respond in English."
 
@@ -75,7 +246,6 @@ Format your response as JSON with keys: description, severity, cause, recommenda
 
             # Try to parse as JSON
             try:
-                # Remove markdown code blocks if present
                 if '```json' in content:
                     content = content.split('```json')[1].split('```')[0]
                 elif '```' in content:
@@ -85,6 +255,7 @@ Format your response as JSON with keys: description, severity, cause, recommenda
                 result = {'raw_analysis': content}
 
             result['success'] = True
+            result['provider'] = 'openai'
             return result
 
         except Exception as e:
@@ -95,6 +266,7 @@ Format your response as JSON with keys: description, severity, cause, recommenda
     def read_gauge(image_url: str) -> Dict[str, Any]:
         """
         Read gauge/meter values from an image.
+        Uses multi-provider AI.
 
         Args:
             image_url: URL of the gauge image
@@ -102,9 +274,52 @@ Format your response as JSON with keys: description, severity, cause, recommenda
         Returns:
             Reading value and unit
         """
-        client = _get_client()
+        from app.services.gemini_service import is_gemini_configured, get_vision_service as get_gemini_vision
+        from app.services.groq_service import is_groq_configured, get_vision_service as get_groq_vision
+
+        # Download image
+        image_content = None
+        try:
+            response = requests.get(image_url, timeout=30)
+            response.raise_for_status()
+            image_content = response.content
+        except Exception as e:
+            logger.warning(f"Could not download image: {e}")
+
+        # Try Gemini first
+        if is_gemini_configured() and image_content:
+            try:
+                gemini_vision = get_gemini_vision()
+                result = gemini_vision.analyze_image(image_content=image_content, is_reading_question=True)
+                if result and result.get('reading'):
+                    return {
+                        'success': True,
+                        'value': result.get('reading'),
+                        'description': result.get('en', ''),
+                        'provider': 'gemini'
+                    }
+            except Exception as e:
+                logger.warning(f"Gemini gauge reading failed: {e}")
+
+        # Try Groq second
+        if is_groq_configured() and image_content:
+            try:
+                groq_vision = get_groq_vision()
+                result = groq_vision.analyze_image(image_content=image_content, is_reading_question=True)
+                if result and result.get('reading'):
+                    return {
+                        'success': True,
+                        'value': result.get('reading'),
+                        'description': result.get('en', ''),
+                        'provider': 'groq'
+                    }
+            except Exception as e:
+                logger.warning(f"Groq gauge reading failed: {e}")
+
+        # Fall back to OpenAI
+        client = _get_openai_client()
         if not client:
-            return {'error': 'OpenAI not configured'}
+            return {'error': 'No AI service configured', 'success': False}
 
         prompt = """Look at this gauge/meter image and extract:
 1. The current reading value
@@ -140,6 +355,7 @@ Format as JSON: {"value": number, "unit": "string", "min": number, "max": number
                 result = {'raw': content}
 
             result['success'] = True
+            result['provider'] = 'openai'
             return result
 
         except Exception as e:
@@ -150,6 +366,7 @@ Format as JSON: {"value": number, "unit": "string", "min": number, "max": number
     def compare_images(before_url: str, after_url: str, language: str = 'en') -> Dict[str, Any]:
         """
         Compare before/after images to identify changes.
+        Note: This feature requires OpenAI as it needs multi-image support.
 
         Args:
             before_url: URL of before image
@@ -159,9 +376,9 @@ Format as JSON: {"value": number, "unit": "string", "min": number, "max": number
         Returns:
             Comparison analysis
         """
-        client = _get_client()
+        client = _get_openai_client()
         if not client:
-            return {'error': 'OpenAI not configured'}
+            return {'error': 'OpenAI not configured (required for image comparison)', 'success': False}
 
         lang_instruction = "Respond in Arabic." if language == 'ar' else "Respond in English."
 
@@ -211,12 +428,13 @@ Format as JSON: {{"changes": [], "condition_change": "improved|worsened|same", "
 
 
 class ReportService:
-    """GPT-4 Text - Generate reports and summaries."""
+    """Multi-provider Text - Generate reports and summaries."""
 
     @staticmethod
     def generate_inspection_report(inspection_data: Dict, language: str = 'en') -> Dict[str, Any]:
         """
         Generate a comprehensive inspection report.
+        Uses multi-provider AI.
 
         Args:
             inspection_data: Inspection details including answers, defects, etc.
@@ -225,10 +443,6 @@ class ReportService:
         Returns:
             Generated report text
         """
-        client = _get_client()
-        if not client:
-            return {'error': 'OpenAI not configured'}
-
         lang_instruction = "Write the report in Arabic." if language == 'ar' else "Write the report in English."
 
         prompt = f"""Generate a professional industrial equipment inspection report based on this data:
@@ -246,26 +460,16 @@ Include:
 {lang_instruction}
 Make it professional and suitable for management review."""
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000
-            )
-
-            return {
-                'success': True,
-                'report': response.choices[0].message.content
-            }
-
-        except Exception as e:
-            logger.error(f"Report generation failed: {e}")
-            return {'error': str(e), 'success': False}
+        result = _call_ai_text(prompt, max_tokens=2000)
+        if result:
+            return {'success': True, 'report': result}
+        return {'error': 'No AI service configured', 'success': False}
 
     @staticmethod
     def summarize_defects(defects: List[Dict], language: str = 'en') -> Dict[str, Any]:
         """
         Summarize multiple defects into a brief overview.
+        Uses multi-provider AI.
 
         Args:
             defects: List of defect data
@@ -274,10 +478,6 @@ Make it professional and suitable for management review."""
         Returns:
             Summary text
         """
-        client = _get_client()
-        if not client:
-            return {'error': 'OpenAI not configured'}
-
         lang_instruction = "Respond in Arabic." if language == 'ar' else "Respond in English."
 
         prompt = f"""Summarize these equipment defects for a manager:
@@ -293,26 +493,16 @@ Provide:
 {lang_instruction}
 Keep it concise (under 200 words)."""
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=500
-            )
-
-            return {
-                'success': True,
-                'summary': response.choices[0].message.content
-            }
-
-        except Exception as e:
-            logger.error(f"Defect summary failed: {e}")
-            return {'error': str(e), 'success': False}
+        result = _call_ai_text(prompt, max_tokens=500)
+        if result:
+            return {'success': True, 'summary': result}
+        return {'error': 'No AI service configured', 'success': False}
 
     @staticmethod
     def translate(text: str, target_language: str) -> Dict[str, Any]:
         """
         Translate text between English and Arabic.
+        Uses the TranslationService which supports multi-provider.
 
         Args:
             text: Text to translate
@@ -321,34 +511,21 @@ Keep it concise (under 200 words)."""
         Returns:
             Translated text
         """
-        client = _get_client()
-        if not client:
-            return {'error': 'OpenAI not configured'}
+        from app.services.translation_service import TranslationService
 
-        target = "English" if target_language == 'en' else "Arabic"
+        if target_language == 'ar':
+            result = TranslationService.translate_to_arabic(text)
+        else:
+            result = TranslationService.translate_to_english(text)
 
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": f"Translate the following text to {target}. Only provide the translation, nothing else."},
-                    {"role": "user", "content": text}
-                ],
-                max_tokens=1000
-            )
-
-            return {
-                'success': True,
-                'translation': response.choices[0].message.content
-            }
-
-        except Exception as e:
-            logger.error(f"Translation failed: {e}")
-            return {'error': str(e), 'success': False}
+        if result:
+            return {'success': True, 'translation': result}
+        return {'error': 'Translation failed', 'success': False}
 
 
 class EmbeddingsService:
-    """Embeddings - Semantic search for similar defects."""
+    """Embeddings - Semantic search for similar defects.
+    Note: This requires OpenAI as embeddings are model-specific."""
 
     @staticmethod
     def create_embedding(text: str) -> Optional[List[float]]:
@@ -361,7 +538,7 @@ class EmbeddingsService:
         Returns:
             Embedding vector (1536 dimensions)
         """
-        client = _get_client()
+        client = _get_openai_client()
         if not client:
             return None
 
@@ -425,7 +602,8 @@ class EmbeddingsService:
 
 
 class TTSService:
-    """Text-to-Speech - Convert text to audio."""
+    """Text-to-Speech - Convert text to audio.
+    Note: This requires OpenAI for TTS capabilities."""
 
     VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
 
@@ -441,7 +619,7 @@ class TTSService:
         Returns:
             Audio bytes (MP3 format)
         """
-        client = _get_client()
+        client = _get_openai_client()
         if not client:
             return None
 
@@ -478,7 +656,8 @@ class TTSService:
 
 
 class AssistantService:
-    """AI Assistant - Interactive helper for engineers."""
+    """AI Assistant - Interactive helper for engineers.
+    Note: This requires OpenAI for Assistants API."""
 
     _assistant_id = None
 
@@ -488,7 +667,7 @@ class AssistantService:
         if cls._assistant_id:
             return cls._assistant_id
 
-        client = _get_client()
+        client = _get_openai_client()
         if not client:
             return None
 
@@ -539,13 +718,13 @@ Always be helpful, precise, and safety-conscious.""",
         Returns:
             Assistant response and thread ID
         """
-        client = _get_client()
+        client = _get_openai_client()
         if not client:
-            return {'error': 'OpenAI not configured'}
+            return {'error': 'OpenAI not configured (required for Assistant)', 'success': False}
 
         assistant_id = AssistantService._get_or_create_assistant()
         if not assistant_id:
-            return {'error': 'Could not create assistant'}
+            return {'error': 'Could not create assistant', 'success': False}
 
         try:
             # Create or use existing thread
