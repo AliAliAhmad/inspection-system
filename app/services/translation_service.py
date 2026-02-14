@@ -1,9 +1,12 @@
 """
 AI-powered bidirectional translation service.
-Multi-provider: Gemma 3 4B → Groq → OpenAI
-Auto-detects language and translates between English and Arabic.
-
-Uses gemma-3-4b for translation (14,400 RPD - high volume).
+FULL FALLBACK CHAIN (FREE providers prioritized):
+1. Gemma 3 27B (14,400 FREE/day) - Primary
+2. Groq Llama (FREE forever) - FREE fallback
+3. OpenRouter (FREE models) - FREE fallback
+4. DeepInfra ($0.03/M) - Cheapest paid
+5. Ollama (FREE local) - Offline backup
+6. OpenAI (PAID) - Final fallback
 """
 
 import os
@@ -21,27 +24,41 @@ def is_arabic(text):
     """Check if text is primarily Arabic."""
     if not text:
         return False
-    # Count total Arabic characters (sum of all match lengths)
     arabic_chars = sum(len(m) for m in _ARABIC_RE.findall(text))
-    # If more than 30% of non-space chars are Arabic, consider it Arabic
     non_space = len(text.replace(' ', ''))
     if non_space == 0:
         return False
     return (arabic_chars / max(non_space, 1)) > 0.3
 
 
-def _get_ai_provider():
-    """Get the best available AI provider for translation."""
+def _get_ai_providers():
+    """Get list of available AI providers in priority order (FREE first)."""
     from app.services.gemini_service import is_gemini_configured
     from app.services.groq_service import is_groq_configured
+    from app.services.openrouter_service import is_openrouter_configured
+    from app.services.deepinfra_service import is_deepinfra_configured
+    from app.services.ollama_service import is_ollama_configured
 
+    providers = []
     if is_gemini_configured():
-        return 'gemini'
-    elif is_groq_configured():
-        return 'groq'
-    elif os.getenv('OPENAI_API_KEY'):
-        return 'openai'
-    return None
+        providers.append('gemini')
+    if is_groq_configured():
+        providers.append('groq')
+    if is_openrouter_configured():
+        providers.append('openrouter')
+    if is_deepinfra_configured():
+        providers.append('deepinfra')
+    if is_ollama_configured():
+        providers.append('ollama')
+    if os.getenv('OPENAI_API_KEY'):
+        providers.append('openai')
+    return providers
+
+
+def _get_ai_provider():
+    """Get the first available AI provider for translation."""
+    providers = _get_ai_providers()
+    return providers[0] if providers else None
 
 
 class TranslationService:
@@ -95,8 +112,8 @@ class TranslationService:
     @staticmethod
     def _translate(text, target_lang):
         """
-        Core translation method using multi-provider AI.
-        Priority: Gemini → Groq → OpenAI
+        Core translation method using FULL FALLBACK CHAIN.
+        Order: 1.Gemini → 2.Groq(FREE) → 3.OpenRouter(FREE) → 4.DeepInfra → 5.Ollama → 6.OpenAI
 
         Args:
             text: Text to translate
@@ -108,8 +125,8 @@ class TranslationService:
         if not text or not text.strip():
             return None
 
-        provider = _get_ai_provider()
-        if not provider:
+        providers = _get_ai_providers()
+        if not providers:
             logger.warning("No AI provider configured for translation")
             return None
 
@@ -118,27 +135,33 @@ class TranslationService:
             else TranslationService.SYSTEM_PROMPT_AR_TO_EN
         )
 
-        try:
-            if provider == 'gemini':
-                return TranslationService._translate_gemini(text, prompt, target_lang)
-            elif provider == 'groq':
-                return TranslationService._translate_groq(text, prompt, target_lang)
-            else:
-                return TranslationService._translate_openai(text, prompt, target_lang)
-        except Exception as e:
-            logger.error(f"Translation failed with {provider}: {e}")
-            # Try fallback providers
-            if provider == 'gemini':
-                try:
-                    return TranslationService._translate_groq(text, prompt, target_lang)
-                except:
-                    pass
-            if provider in ('gemini', 'groq'):
-                try:
-                    return TranslationService._translate_openai(text, prompt, target_lang)
-                except:
-                    pass
-            return None
+        # Try each provider in order until one succeeds
+        for provider in providers:
+            try:
+                logger.debug(f"Trying translation with: {provider}")
+                if provider == 'gemini':
+                    result = TranslationService._translate_gemini(text, prompt, target_lang)
+                elif provider == 'groq':
+                    result = TranslationService._translate_groq(text, prompt, target_lang)
+                elif provider == 'openrouter':
+                    result = TranslationService._translate_openrouter(text, prompt, target_lang)
+                elif provider == 'deepinfra':
+                    result = TranslationService._translate_deepinfra(text, prompt, target_lang)
+                elif provider == 'ollama':
+                    result = TranslationService._translate_ollama(text, prompt, target_lang)
+                elif provider == 'openai':
+                    result = TranslationService._translate_openai(text, prompt, target_lang)
+                else:
+                    continue
+
+                if result and result.strip():
+                    return result
+            except Exception as e:
+                logger.warning(f"Translation failed with {provider}: {e}, trying next...")
+                continue
+
+        logger.error("All translation providers failed")
+        return None
 
     @staticmethod
     def _translate_gemini(text, system_prompt, target_lang):
@@ -222,7 +245,7 @@ class TranslationService:
 
     @staticmethod
     def _translate_openai(text, system_prompt, target_lang):
-        """Translate using OpenAI API (fallback)."""
+        """Translate using OpenAI API (PAID - final fallback)."""
         from openai import OpenAI
 
         api_key = os.getenv('OPENAI_API_KEY')
@@ -245,6 +268,116 @@ class TranslationService:
         direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
         logger.debug(f"[OpenAI {direction}] '{text[:40]}' → '{translation[:40]}'")
         return translation
+
+    @staticmethod
+    def _translate_openrouter(text, system_prompt, target_lang):
+        """Translate using OpenRouter FREE models."""
+        api_key = os.getenv('OPENROUTER_API_KEY', '').strip()
+        if not api_key:
+            raise Exception("OpenRouter API key not configured")
+
+        # Use FREE models
+        models = [
+            "nousresearch/hermes-3-llama-3.1-405b:free",
+            "meta-llama/llama-3.2-3b-instruct:free",
+            "google/gemma-2-9b-it:free",
+        ]
+
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://inspection-system.com",
+            "X-Title": "Inspection System"
+        }
+
+        for model in models:
+            try:
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": text}
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": max(len(text) * 3, 100)
+                }
+
+                response = requests.post(url, json=payload, headers=headers, timeout=30)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    translation = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                    if translation:
+                        direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
+                        logger.debug(f"[OpenRouter {direction}] '{text[:40]}' → '{translation[:40]}'")
+                        return translation
+            except Exception as e:
+                logger.warning(f"OpenRouter model {model} failed: {e}")
+                continue
+
+        raise Exception("All OpenRouter models failed")
+
+    @staticmethod
+    def _translate_deepinfra(text, system_prompt, target_lang):
+        """Translate using DeepInfra (cheapest: $0.03/M tokens)."""
+        api_key = os.getenv('DEEPINFRA_API_KEY', '').strip()
+        if not api_key:
+            raise Exception("DeepInfra API key not configured")
+
+        url = "https://api.deepinfra.com/v1/openai/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        # Use cheapest model
+        models = ["meta-llama/Llama-3.1-8B-Instruct", "meta-llama/Llama-3.1-70B-Instruct"]
+
+        for model in models:
+            try:
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": text}
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": max(len(text) * 3, 100)
+                }
+
+                response = requests.post(url, json=payload, headers=headers, timeout=30)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    translation = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                    if translation:
+                        direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
+                        logger.debug(f"[DeepInfra {direction}] '{text[:40]}' → '{translation[:40]}'")
+                        return translation
+            except Exception as e:
+                logger.warning(f"DeepInfra model {model} failed: {e}")
+                continue
+
+        raise Exception("All DeepInfra models failed")
+
+    @staticmethod
+    def _translate_ollama(text, system_prompt, target_lang):
+        """Translate using local Ollama (FREE, offline)."""
+        from app.services.ollama_service import is_ollama_configured, get_text_service
+
+        if not is_ollama_configured():
+            raise Exception("Ollama not running")
+
+        text_service = get_text_service()
+        translation = text_service.translate(text, target_lang)
+
+        if translation:
+            direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
+            logger.debug(f"[Ollama {direction}] '{text[:40]}' → '{translation[:40]}'")
+            return translation
+
+        raise Exception("Ollama translation failed")
 
     @staticmethod
     def translate_batch(texts):

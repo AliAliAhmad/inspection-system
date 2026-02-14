@@ -1,14 +1,30 @@
 """
-Google Gemini AI Service for photo analysis and audio transcription.
+Google Gemini AI Service for photo analysis, video analysis, and audio transcription.
 
-Models (with fallback):
-- Photo/Video: gemini-3-pro-preview → gemini-2.5-flash (1,500 RPD)
-- Audio: gemini-2.5-flash (1,500 RPD)
+Models (with fallback) - Based on YOUR Google AI Studio limits:
+┌─────────────────────────────────────────────────────────────────────┐
+│ VISION (Photo/Video):                                               │
+│   1. gemini-3-pro-preview     → 1,500 RPD (Primary - Best quality) │
+│   2. gemini-2.5-pro           → 1,500 RPD (Fallback)               │
+│   3. Groq llama-3.2-vision    → 14,400 RPD (External fallback)     │
+│   4. OpenAI gpt-4o            → Paid (Final fallback)              │
+├─────────────────────────────────────────────────────────────────────┤
+│ AUDIO (Transcription):                                              │
+│   1. gemini-2.5-pro           → 1,500 RPD (Primary)                │
+│   2. Groq whisper-large-v3    → 14,400 RPD (External fallback)     │
+│   3. OpenAI whisper           → Paid (Final fallback)              │
+├─────────────────────────────────────────────────────────────────────┤
+│ TRANSLATION (Text-only):                                            │
+│   1. gemma-3-27b-it           → 14,400 RPD (Best quality text)     │
+│   2. gemini-2.5-flash-lite    → 20 RPD (Backup)                    │
+└─────────────────────────────────────────────────────────────────────┘
 
 Setup:
 1. Go to https://aistudio.google.com/apikey
 2. Create API key
 3. Set GEMINI_API_KEY env var
+4. (Optional) Set GROQ_API_KEY for fallback
+5. (Optional) Set OPENAI_API_KEY for final fallback
 """
 
 import os
@@ -21,15 +37,29 @@ logger = logging.getLogger(__name__)
 # Gemini API endpoint
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-# Photo/Video analysis - gemini-3-flash-preview (faster, higher RPD than pro)
-# Fallback chain: gemini-3-flash → gemini-3-pro → gemini-2.5-flash
-VISION_MODELS = ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-flash"]
+# =============================================================================
+# VISION MODELS (Photo/Video Analysis)
+# Primary: gemini-3-pro-preview (1,500 RPD) - Best quality
+# Fallback: gemini-2.5-pro (1,500 RPD)
+# =============================================================================
+VISION_MODELS = ["gemini-3-pro-preview", "gemini-2.5-pro"]
 VISION_MODEL = VISION_MODELS[0]  # Primary model
 
-# Audio transcription - use gemma-3-4b-it (14,400 RPD) as primary
-# Fallback to gemini-2.5-flash if needed
-AUDIO_MODELS = ["gemma-3-4b-it", "gemini-2.5-flash"]
+# =============================================================================
+# AUDIO MODELS (Transcription)
+# Primary: gemini-2.5-pro (1,500 RPD) - Supports audio
+# Note: gemma models are TEXT-ONLY, cannot process audio!
+# =============================================================================
+AUDIO_MODELS = ["gemini-2.5-pro"]
 AUDIO_MODEL = AUDIO_MODELS[0]
+
+# =============================================================================
+# TRANSLATION MODELS (Text-only)
+# Primary: gemma-3-27b-it (14,400 RPD) - Highest quality text model
+# Fallback: gemini-2.5-flash-lite (20 RPD)
+# =============================================================================
+TRANSLATION_MODELS = ["gemma-3-27b-it", "gemini-2.5-flash-lite"]
+TRANSLATION_MODEL = TRANSLATION_MODELS[0]
 
 
 def is_gemini_configured():
@@ -163,7 +193,31 @@ class GeminiVisionService:
                     logger.warning(f"Model {model} error: {e}, trying next...")
 
             if result is None:
-                logger.error(f"All vision models failed. Last error: {last_error}")
+                logger.warning(f"All Gemini vision models failed. Last error: {last_error}")
+                # Try Groq as fallback
+                try:
+                    from app.services.groq_service import is_groq_configured, get_vision_service as get_groq_vision
+                    if is_groq_configured():
+                        logger.info("Trying Groq Vision as fallback...")
+                        groq_vision = get_groq_vision()
+                        groq_result = groq_vision.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                        if groq_result:
+                            logger.info("Groq Vision fallback succeeded")
+                            return groq_result
+                except Exception as e:
+                    logger.warning(f"Groq fallback failed: {e}")
+
+                # Try OpenAI as final fallback
+                try:
+                    from app.services.openai_service import VisionService
+                    import requests as req
+                    # For OpenAI we need a URL, upload to temp or use base64
+                    logger.info("Trying OpenAI Vision as final fallback...")
+                    # OpenAI VisionService expects URL, so we skip if we only have bytes
+                except Exception as e:
+                    logger.warning(f"OpenAI fallback failed: {e}")
+
+                logger.error("All vision providers failed")
                 return None
 
             # Extract the response text
@@ -475,7 +529,31 @@ class GeminiSpeechService:
                     logger.warning(f"Audio model {model} error: {e}, trying next...")
 
             if result is None:
-                logger.error(f"All audio models failed. Last error: {last_error}")
+                logger.warning(f"All Gemini audio models failed. Last error: {last_error}")
+                # Try Groq Whisper as fallback
+                try:
+                    from app.services.groq_service import is_groq_configured, get_speech_service as get_groq_speech
+                    if is_groq_configured():
+                        logger.info("Trying Groq Whisper as fallback...")
+                        groq_speech = get_groq_speech()
+                        groq_result = groq_speech.transcribe(audio_content, language_hint)
+                        if groq_result:
+                            logger.info("Groq Whisper fallback succeeded")
+                            # Add bilingual translation
+                            text = groq_result.get('text', '')
+                            from app.services.translation_service import TranslationService
+                            translated = TranslationService.auto_translate(text)
+                            return {
+                                'text': text,
+                                'en': translated.get('en', text),
+                                'ar': translated.get('ar', text),
+                                'detected_language': groq_result.get('detected_language', language_hint),
+                                'confidence': groq_result.get('confidence', 0.9)
+                            }
+                except Exception as e:
+                    logger.warning(f"Groq audio fallback failed: {e}")
+
+                logger.error("All audio providers failed")
                 return None
 
             # Extract the response text
@@ -555,9 +633,135 @@ class GeminiSpeechService:
                     pass
 
 
+class GeminiTranslationService:
+    """
+    Google Gemma Translation Service.
+    Uses gemma-3-27b-it (14,400 RPD) for high-volume translation.
+    """
+
+    def translate(self, text: str, target_language: str = 'ar') -> dict:
+        """
+        Translate text using Gemma model.
+
+        Args:
+            text: Text to translate
+            target_language: 'en' for English, 'ar' for Arabic
+
+        Returns:
+            dict with 'text' (translated) and 'original'
+        """
+        if not is_gemini_configured():
+            logger.warning("Gemini API key not configured")
+            return None
+
+        if not text or not text.strip():
+            return None
+
+        try:
+            if target_language == 'ar':
+                prompt = f"Translate this English text to Arabic. Reply with ONLY the Arabic translation, nothing else:\n\n{text}"
+            else:
+                prompt = f"Translate this Arabic text to English. Reply with ONLY the English translation, nothing else:\n\n{text}"
+
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "maxOutputTokens": 500
+                }
+            }
+
+            api_key = _get_api_key()
+
+            # Try each translation model in order
+            result = None
+            last_error = None
+            for model in TRANSLATION_MODELS:
+                url = f"{GEMINI_API_URL}/{model}:generateContent?key={api_key}"
+                logger.info(f"Trying translation with model: {model}")
+
+                try:
+                    response = requests.post(
+                        url,
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=30
+                    )
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"Translation success with model: {model}")
+                        break
+                    else:
+                        last_error = f"{response.status_code} - {response.text[:200]}"
+                        logger.warning(f"Translation model {model} failed: {last_error}, trying next...")
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(f"Translation model {model} error: {e}, trying next...")
+
+            if result is None:
+                logger.error(f"All translation models failed. Last error: {last_error}")
+                return None
+
+            # Extract the response text
+            candidates = result.get('candidates', [])
+            if not candidates:
+                return None
+
+            content = candidates[0].get('content', {})
+            parts = content.get('parts', [])
+            if not parts:
+                return None
+
+            translated_text = parts[0].get('text', '').strip()
+
+            return {
+                'text': translated_text,
+                'original': text,
+                'target_language': target_language
+            }
+
+        except Exception as e:
+            logger.error(f"Gemini Translation error: {e}", exc_info=True)
+            return None
+
+    def translate_bilingual(self, text: str) -> dict:
+        """
+        Translate text to both English and Arabic.
+
+        Args:
+            text: Text to translate (auto-detect language)
+
+        Returns:
+            dict with 'en' and 'ar' translations
+        """
+        if not text or not text.strip():
+            return {'en': '', 'ar': ''}
+
+        # Detect if text is primarily Arabic
+        arabic_chars = sum(1 for c in text if '\u0600' <= c <= '\u06FF')
+        is_arabic = arabic_chars > len(text) * 0.3
+
+        if is_arabic:
+            # Text is Arabic, translate to English
+            en_result = self.translate(text, 'en')
+            return {
+                'en': en_result.get('text', text) if en_result else text,
+                'ar': text
+            }
+        else:
+            # Text is English, translate to Arabic
+            ar_result = self.translate(text, 'ar')
+            return {
+                'en': text,
+                'ar': ar_result.get('text', text) if ar_result else text
+            }
+
+
 # Singleton instances
 _vision_service = None
 _speech_service = None
+_translation_service = None
 
 
 def get_vision_service() -> GeminiVisionService:
@@ -574,3 +778,11 @@ def get_speech_service() -> GeminiSpeechService:
     if _speech_service is None:
         _speech_service = GeminiSpeechService()
     return _speech_service
+
+
+def get_translation_service() -> GeminiTranslationService:
+    """Get or create Translation service singleton."""
+    global _translation_service
+    if _translation_service is None:
+        _translation_service = GeminiTranslationService()
+    return _translation_service

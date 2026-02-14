@@ -188,12 +188,13 @@ def transcribe():
     temp_files_to_cleanup = []
 
     try:
-        # Priority: 1. Google Cloud → 2. Gemini → 3. Together AI → 4. Groq → 5. OpenAI
-        # IMPORTANT: Try each in sequence with FALLBACK if one fails
-        from app.services.google_cloud_service import get_speech_service, is_google_cloud_configured
+        # AUDIO FALLBACK CHAIN (FREE providers prioritized)
+        # Order: 1.Gemini → 2.Groq(FREE) → 3.HuggingFace(FREE) → 4.Together($25) → 5.Ollama(local) → 6.OpenAI(paid)
         from app.services.gemini_service import get_speech_service as get_gemini_speech, is_gemini_configured
-        from app.services.together_ai_service import get_speech_service as get_together_speech, is_together_configured
         from app.services.groq_service import get_speech_service as get_groq_speech, is_groq_configured
+        from app.services.huggingface_service import get_speech_service as get_hf_speech, is_huggingface_configured
+        from app.services.together_ai_service import get_speech_service as get_together_speech, is_together_configured
+        from app.services.ollama_service import get_speech_service as get_ollama_speech, is_ollama_configured
 
         # Create temp file from audio content (needed for all services)
         suffix = _get_suffix(filename)
@@ -206,24 +207,10 @@ def transcribe():
         result = None
         used_service = None
 
-        # Option 1: Google Cloud Speech-to-Text (FREE tier: 60 min/month)
-        if not result and is_google_cloud_configured():
-            try:
-                logger.info("Trying Google Cloud Speech-to-Text (free tier)")
-                speech_service = get_speech_service()
-                result = speech_service.transcribe_file(source_path, language_hint or 'en')
-                if result and result.get('text'):
-                    used_service = 'google_cloud'
-                else:
-                    result = None
-            except Exception as e:
-                logger.warning(f"Google Cloud failed: {e}, trying next...")
-                result = None
-
-        # Option 2: Gemini (high quality, 1000 free/day)
+        # 1. Gemini (1,500 FREE/day) - PRIMARY
         if not result and is_gemini_configured():
             try:
-                logger.info("Trying Gemini Audio (high quality, 1000 free/day)")
+                logger.info("Trying: Gemini Audio (1,500 FREE/day)")
                 gemini_speech = get_gemini_speech()
                 result = gemini_speech.transcribe_file(source_path, language_hint or 'en')
                 if result and (result.get('text') or result.get('en')):
@@ -234,24 +221,10 @@ def transcribe():
                 logger.warning(f"Gemini failed: {e}, trying next...")
                 result = None
 
-        # Option 3: Together AI Whisper (FREE, 15x faster than OpenAI)
-        if not result and is_together_configured():
-            try:
-                logger.info("Trying Together AI Whisper (free, high quality)")
-                together_speech = get_together_speech()
-                result = together_speech.transcribe_file(source_path, language_hint or 'en')
-                if result and result.get('text'):
-                    used_service = 'together'
-                else:
-                    result = None
-            except Exception as e:
-                logger.warning(f"Together AI failed: {e}, trying next...")
-                result = None
-
-        # Option 4: Groq Whisper (FREE, very fast)
+        # 2. Groq Whisper (FREE forever) - FREE FALLBACK
         if not result and is_groq_configured():
             try:
-                logger.info("Trying Groq Whisper (free, fast)")
+                logger.info("Trying: Groq Whisper (FREE forever)")
                 groq_speech = get_groq_speech()
                 result = groq_speech.transcribe_file(source_path, language_hint or 'en')
                 if result and result.get('text'):
@@ -262,17 +235,58 @@ def transcribe():
                 logger.warning(f"Groq failed: {e}, trying next...")
                 result = None
 
-        # Option 5: OpenAI Whisper (paid fallback)
+        # 3. Hugging Face Whisper (FREE, slow) - FREE FALLBACK
+        if not result and is_huggingface_configured():
+            try:
+                logger.info("Trying: Hugging Face Whisper (FREE, may be slow)")
+                hf_speech = get_hf_speech()
+                result = hf_speech.transcribe_file(source_path, language_hint or 'en')
+                if result and result.get('text'):
+                    used_service = 'huggingface'
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Hugging Face failed: {e}, trying next...")
+                result = None
+
+        # 4. Together AI Whisper ($25 credits) - PAID BACKUP
+        if not result and is_together_configured():
+            try:
+                logger.info("Trying: Together AI Whisper ($25 credits)")
+                together_speech = get_together_speech()
+                result = together_speech.transcribe_file(source_path, language_hint or 'en')
+                if result and result.get('text'):
+                    used_service = 'together'
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Together AI failed: {e}, trying next...")
+                result = None
+
+        # 5. Ollama Whisper (FREE local) - OFFLINE BACKUP
+        if not result and is_ollama_configured():
+            try:
+                logger.info("Trying: Ollama Whisper (FREE local)")
+                ollama_speech = get_ollama_speech()
+                result = ollama_speech.transcribe_file(source_path, language_hint or 'en')
+                if result and result.get('text'):
+                    used_service = 'ollama'
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Ollama failed: {e}, trying next...")
+                result = None
+
+        # 6. OpenAI Whisper (PAID) - FINAL FALLBACK
         if not result:
             from openai import OpenAI
 
             api_key = os.getenv('OPENAI_API_KEY')
             if api_key:
                 try:
-                    logger.info("Trying OpenAI Whisper (paid fallback)")
+                    logger.info("Trying: OpenAI Whisper (PAID - final fallback)")
                     client = OpenAI(api_key=api_key)
 
-                    # Convert to WAV for better Whisper accuracy
                     whisper_path = _convert_to_wav(source_path)
                     if whisper_path != source_path:
                         temp_files_to_cleanup.append(whisper_path)
@@ -297,7 +311,7 @@ def transcribe():
                     logger.warning(f"OpenAI failed: {e}")
                     result = None
             else:
-                logger.warning("No AI service available for transcription")
+                logger.warning("No AI service available for transcription - all providers failed")
 
         # Process result based on which service was used
         if result and used_service:

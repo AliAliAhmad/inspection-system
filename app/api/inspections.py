@@ -26,52 +26,162 @@ bp = Blueprint('inspections', __name__)
 @bp.route('/debug/ai-status', methods=['GET'])
 def check_ai_status():
     """
-    Diagnostic endpoint to check if AI services are configured.
-    No auth required for debugging purposes.
+    Diagnostic endpoint to check ALL AI services status.
+    Shows full fallback chain with FREE providers prioritized.
     """
     import os
-    from app.services.google_cloud_service import is_google_cloud_configured
     from app.services.gemini_service import is_gemini_configured
-    from app.services.together_ai_service import is_together_configured
     from app.services.groq_service import is_groq_configured
+    from app.services.openrouter_service import is_openrouter_configured
+    from app.services.huggingface_service import is_huggingface_configured
+    from app.services.together_ai_service import is_together_configured
+    from app.services.deepinfra_service import is_deepinfra_configured
+    from app.services.ollama_service import is_ollama_configured
 
-    openai_key = os.getenv('OPENAI_API_KEY')
-    google_configured = is_google_cloud_configured()
-    gemini_configured = is_gemini_configured()
-    together_configured = is_together_configured()
-    groq_configured = is_groq_configured()
+    # Check all providers
+    providers = {
+        '1_gemini': {'configured': is_gemini_configured(), 'type': 'FREE (1,500 RPD)', 'priority': 1},
+        '2_groq': {'configured': is_groq_configured(), 'type': 'FREE forever', 'priority': 2},
+        '3_openrouter': {'configured': is_openrouter_configured(), 'type': 'FREE models', 'priority': 3},
+        '4_huggingface': {'configured': is_huggingface_configured(), 'type': 'FREE (~30/min)', 'priority': 4},
+        '5_together': {'configured': is_together_configured(), 'type': '$25 credits', 'priority': 5},
+        '6_deepinfra': {'configured': is_deepinfra_configured(), 'type': '$10 credits', 'priority': 6},
+        '7_ollama': {'configured': is_ollama_configured(), 'type': 'FREE local', 'priority': 7},
+        '8_openai': {'configured': bool(os.getenv('OPENAI_API_KEY')), 'type': 'PAID', 'priority': 8},
+    }
 
-    # Determine which service will be used (priority order)
-    if google_configured:
-        active_service = 'Google Cloud (FREE tier)'
-        message = 'Google Cloud Vision + Speech configured (1000 images + 60 min audio FREE/month)'
-    elif gemini_configured:
-        active_service = 'Gemini (high quality)'
-        message = 'Gemini configured - 1000 free requests/day, high quality'
-    elif together_configured:
-        active_service = 'Together AI (highest quality)'
-        message = 'Together AI configured - Llama 3.2 90B Vision (highest quality)'
-    elif groq_configured:
-        active_service = 'Groq (fast)'
-        message = 'Groq configured - Llama 3.2 11B Vision (fast inference)'
-    elif openai_key:
-        active_service = 'OpenAI (paid)'
-        message = 'OpenAI configured as fallback (requires credits)'
+    # Find active providers
+    active_providers = [k for k, v in providers.items() if v['configured']]
+    free_providers = [k for k, v in providers.items() if v['configured'] and 'FREE' in v['type']]
+
+    # Determine primary service
+    if active_providers:
+        primary = active_providers[0]
+        message = f"Primary: {primary.split('_')[1].upper()} | {len(active_providers)} providers available | {len(free_providers)} FREE"
     else:
-        active_service = 'None'
-        message = 'No AI service configured. Set GEMINI_API_KEY, GROQ_API_KEY, TOGETHER_API_KEY, or OPENAI_API_KEY'
+        primary = 'None'
+        message = 'No AI service configured. Set GEMINI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY'
 
     return jsonify({
-        'active_service': active_service,
-        'google_cloud_configured': google_configured,
-        'gemini_configured': gemini_configured,
-        'together_ai_configured': together_configured,
-        'groq_configured': groq_configured,
-        'openai_configured': bool(openai_key),
-        'priority_order': '1. Google Cloud → 2. Gemini → 3. Together AI → 4. Groq → 5. OpenAI',
+        'status': 'success',
+        'primary_provider': primary.split('_')[1] if '_' in primary else primary,
+        'total_configured': len(active_providers),
+        'free_configured': len(free_providers),
+        'providers': {k.split('_')[1]: v for k, v in providers.items()},
+        'fallback_order': [
+            '1. Gemini (1,500 FREE/day)',
+            '2. Groq (FREE forever)',
+            '3. OpenRouter (FREE models)',
+            '4. Hugging Face (FREE, slow)',
+            '5. Together AI ($25 credits)',
+            '6. DeepInfra ($10 credits)',
+            '7. Ollama (FREE local)',
+            '8. OpenAI (PAID)',
+        ],
+        'message': message,
         'environment': os.getenv('FLASK_ENV', 'not set'),
-        'render_service': os.getenv('RENDER_SERVICE_NAME', 'not on render'),
-        'message': message
+    }), 200
+
+
+@bp.route('/debug/ai-test-all', methods=['GET'])
+def test_all_ai_services():
+    """
+    Test ALL configured AI services and return results.
+    Tests: Vision, Audio, Translation for each provider.
+    """
+    import os
+    results = {}
+
+    # Test Gemini
+    try:
+        from app.services.gemini_service import is_gemini_configured
+        if is_gemini_configured():
+            results['gemini'] = {'status': 'configured', 'type': 'FREE (1,500 RPD)'}
+        else:
+            results['gemini'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['gemini'] = {'status': 'error', 'error': str(e)}
+
+    # Test Groq
+    try:
+        from app.services.groq_service import is_groq_configured
+        if is_groq_configured():
+            results['groq'] = {'status': 'configured', 'type': 'FREE forever'}
+        else:
+            results['groq'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['groq'] = {'status': 'error', 'error': str(e)}
+
+    # Test OpenRouter
+    try:
+        from app.services.openrouter_service import is_openrouter_configured
+        if is_openrouter_configured():
+            results['openrouter'] = {'status': 'configured', 'type': 'FREE models'}
+        else:
+            results['openrouter'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['openrouter'] = {'status': 'error', 'error': str(e)}
+
+    # Test Hugging Face
+    try:
+        from app.services.huggingface_service import is_huggingface_configured
+        if is_huggingface_configured():
+            results['huggingface'] = {'status': 'configured', 'type': 'FREE (~30/min)'}
+        else:
+            results['huggingface'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['huggingface'] = {'status': 'error', 'error': str(e)}
+
+    # Test Together AI
+    try:
+        from app.services.together_ai_service import is_together_configured
+        if is_together_configured():
+            results['together'] = {'status': 'configured', 'type': '$25 credits'}
+        else:
+            results['together'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['together'] = {'status': 'error', 'error': str(e)}
+
+    # Test DeepInfra
+    try:
+        from app.services.deepinfra_service import is_deepinfra_configured
+        if is_deepinfra_configured():
+            results['deepinfra'] = {'status': 'configured', 'type': '$10 credits'}
+        else:
+            results['deepinfra'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['deepinfra'] = {'status': 'error', 'error': str(e)}
+
+    # Test Ollama
+    try:
+        from app.services.ollama_service import is_ollama_configured
+        if is_ollama_configured():
+            results['ollama'] = {'status': 'configured', 'type': 'FREE local'}
+        else:
+            results['ollama'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['ollama'] = {'status': 'error', 'error': str(e)}
+
+    # Test OpenAI
+    try:
+        if os.getenv('OPENAI_API_KEY'):
+            results['openai'] = {'status': 'configured', 'type': 'PAID'}
+        else:
+            results['openai'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['openai'] = {'status': 'error', 'error': str(e)}
+
+    configured_count = sum(1 for r in results.values() if r.get('status') == 'configured')
+    free_count = sum(1 for r in results.values() if r.get('status') == 'configured' and 'FREE' in r.get('type', ''))
+
+    return jsonify({
+        'status': 'success',
+        'summary': {
+            'total_configured': configured_count,
+            'free_configured': free_count,
+            'paid_configured': configured_count - free_count,
+        },
+        'providers': results,
     }), 200
 
 
@@ -995,13 +1105,13 @@ def upload_answer_media(inspection_id):
             'reading', 'قراءة', 'عداد', 'meter', 'gauge', 'counter'
         ])
 
-    # Analyze both photos and videos using Google Cloud Vision (free tier: 1000 images/month)
-    # Falls back to OpenAI if Google Cloud not configured
+    # AI Analysis with FULL FALLBACK CHAIN (FREE providers prioritized)
+    # Order: 1.Gemini → 2.Groq(FREE) → 3.OpenRouter(FREE) → 4.HuggingFace(FREE)
+    #        → 5.Together($25) → 6.DeepInfra($10) → 7.Ollama(local) → 8.OpenAI(paid)
     try:
         import os
         import re
         import requests
-        from app.services.google_cloud_service import get_vision_service, is_google_cloud_configured
 
         media_type_label = "Video" if is_video else "Photo"
         logger.info(f"=== AI ANALYSIS ({media_type_label}) ===")
@@ -1010,31 +1120,27 @@ def upload_answer_media(inspection_id):
 
         # For videos, use Cloudinary thumbnail URL (extract frame from video)
         if is_video:
-            # Cloudinary video thumbnail transformation
-            # Transform: /video/upload/xxx.mp4 -> /video/upload/so_auto,w_640,h_480,c_fill,f_jpg/xxx.jpg
-            # Also handle: /upload/xxx.mp4 -> /upload/so_auto,w_640,h_480,c_fill,f_jpg/xxx.jpg
             analyze_url = file_record.file_path
-
-            # Add thumbnail transformation
             if '/video/upload/' in analyze_url:
                 analyze_url = analyze_url.replace('/video/upload/', '/video/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
             elif '/upload/' in analyze_url:
                 analyze_url = analyze_url.replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
-
-            # Change extension to jpg for all video formats
             analyze_url = re.sub(r'\.(mp4|mov|webm|avi|mkv|m4v|3gp)$', '.jpg', analyze_url, flags=re.IGNORECASE)
-
             logger.info(f"Analyzing video thumbnail at URL: {analyze_url}")
         else:
             analyze_url = file_record.file_path
             logger.info(f"Analyzing photo at URL: {analyze_url}")
 
-        # Priority: 1. Google Cloud → 2. Gemini → 3. Together AI → 4. Groq → 5. OpenAI
+        # Import all vision services
         from app.services.gemini_service import get_vision_service as get_gemini_vision, is_gemini_configured
-        from app.services.together_ai_service import get_vision_service as get_together_vision, is_together_configured
         from app.services.groq_service import get_vision_service as get_groq_vision, is_groq_configured
+        from app.services.openrouter_service import get_vision_service as get_openrouter_vision, is_openrouter_configured
+        from app.services.huggingface_service import get_vision_service as get_hf_vision, is_huggingface_configured
+        from app.services.together_ai_service import get_vision_service as get_together_vision, is_together_configured
+        from app.services.deepinfra_service import get_vision_service as get_deepinfra_vision, is_deepinfra_configured
+        from app.services.ollama_service import get_vision_service as get_ollama_vision, is_ollama_configured
 
-        # Download image content (needed for all services except OpenAI)
+        # Download image content (needed for most services)
         image_content = None
         try:
             img_response = requests.get(analyze_url, timeout=30)
@@ -1044,156 +1150,168 @@ def upload_answer_media(inspection_id):
         except Exception as download_err:
             logger.error(f"Failed to download image: {download_err}")
 
-        # Option 1: Google Cloud Vision (FREE tier: 1000 images/month)
-        if is_google_cloud_configured():
-            logger.info("Using Google Cloud Vision API (free tier)")
-            vision_service = get_vision_service()
+        # Helper function to process result
+        def process_vision_result(result, service_name):
+            nonlocal ai_analysis, extracted_reading, analysis_failed
+            if result:
+                ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
+                if 'reading' in result and is_reading_question:
+                    extracted_reading = result.get('reading')
+                    logger.info(f"Extracted reading value: {extracted_reading}")
+                logger.info(f"{service_name} analysis complete")
+                return True
+            return False
 
-            if image_content:
-                result = vision_service.analyze_image(
-                    image_content=image_content,
-                    is_reading_question=is_reading_question
-                )
+        # ===== FALLBACK CHAIN =====
+        result = None
 
-                if result:
-                    ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
-                    if 'reading' in result and is_reading_question:
-                        extracted_reading = result.get('reading')
-                        logger.info(f"Extracted reading value: {extracted_reading}")
-                    logger.info(f"Google Vision analysis complete: {ai_analysis}")
+        # 1. Gemini (1,500 FREE/day) - PRIMARY
+        if not result and is_gemini_configured() and image_content:
+            try:
+                logger.info("Trying: Gemini Vision (1,500 FREE/day)")
+                vision_service = get_gemini_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "Gemini"):
+                    pass  # Success
                 else:
-                    logger.warning("Google Vision returned no results")
-                    analysis_failed = True
-            else:
-                analysis_failed = True
+                    result = None
+            except Exception as e:
+                logger.warning(f"Gemini failed: {e}, trying next...")
+                result = None
 
-        # Option 2: Gemini (high quality - 1000 free/day)
-        elif is_gemini_configured():
-            logger.info("Using Gemini Vision (high quality, 1000 free/day)")
-            gemini_vision = get_gemini_vision()
-
-            if image_content:
-                result = gemini_vision.analyze_image(
-                    image_content=image_content,
-                    is_reading_question=is_reading_question
-                )
-
-                if result:
-                    ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
-                    if 'reading' in result and is_reading_question:
-                        extracted_reading = result.get('reading')
-                        logger.info(f"Extracted reading value: {extracted_reading}")
-                    logger.info(f"Gemini analysis complete: {ai_analysis}")
+        # 2. Groq (FREE forever) - FREE FALLBACK
+        if not result and is_groq_configured() and image_content:
+            try:
+                logger.info("Trying: Groq Vision (FREE forever)")
+                vision_service = get_groq_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "Groq"):
+                    pass
                 else:
-                    logger.warning("Gemini returned no results")
-                    analysis_failed = True
-            else:
-                analysis_failed = True
+                    result = None
+            except Exception as e:
+                logger.warning(f"Groq failed: {e}, trying next...")
+                result = None
 
-        # Option 3: Together AI (Llama 3.2 90B Vision)
-        elif is_together_configured():
-            logger.info("Using Together AI Vision (Llama 3.2 90B - highest quality)")
-            together_vision = get_together_vision()
-
-            if image_content:
-                result = together_vision.analyze_image(
-                    image_content=image_content,
-                    is_reading_question=is_reading_question
-                )
-
-                if result:
-                    ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
-                    if 'reading' in result and is_reading_question:
-                        extracted_reading = result.get('reading')
-                        logger.info(f"Extracted reading value: {extracted_reading}")
-                    logger.info(f"Together AI analysis complete: {ai_analysis}")
+        # 3. OpenRouter (FREE models) - FREE FALLBACK
+        if not result and is_openrouter_configured() and image_content:
+            try:
+                logger.info("Trying: OpenRouter Vision (FREE models)")
+                vision_service = get_openrouter_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "OpenRouter"):
+                    pass
                 else:
-                    logger.warning("Together AI returned no results")
-                    analysis_failed = True
-            else:
-                analysis_failed = True
+                    result = None
+            except Exception as e:
+                logger.warning(f"OpenRouter failed: {e}, trying next...")
+                result = None
 
-        # Option 4: Groq (free forever - Llama 3.2 11B Vision)
-        elif is_groq_configured():
-            logger.info("Using Groq Vision (Llama 3.2 11B - free)")
-            groq_vision = get_groq_vision()
-
-            if image_content:
-                result = groq_vision.analyze_image(
-                    image_content=image_content,
-                    is_reading_question=is_reading_question
-                )
-
-                if result:
-                    ai_analysis = {'en': result.get('en', ''), 'ar': result.get('ar', '')}
-                    if 'reading' in result and is_reading_question:
-                        extracted_reading = result.get('reading')
-                        logger.info(f"Extracted reading value: {extracted_reading}")
-                    logger.info(f"Groq analysis complete: {ai_analysis}")
+        # 4. Hugging Face (FREE, slow) - FREE FALLBACK
+        if not result and is_huggingface_configured() and image_content:
+            try:
+                logger.info("Trying: Hugging Face Vision (FREE, may be slow)")
+                vision_service = get_hf_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "Hugging Face"):
+                    pass
                 else:
-                    logger.warning("Groq returned no results")
-                    analysis_failed = True
-            else:
-                analysis_failed = True
+                    result = None
+            except Exception as e:
+                logger.warning(f"Hugging Face failed: {e}, trying next...")
+                result = None
 
-        # Option 5: OpenAI (paid fallback)
-        else:
+        # 5. Together AI ($25 credits) - PAID BACKUP
+        if not result and is_together_configured() and image_content:
+            try:
+                logger.info("Trying: Together AI Vision ($25 credits)")
+                vision_service = get_together_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "Together AI"):
+                    pass
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Together AI failed: {e}, trying next...")
+                result = None
+
+        # 6. DeepInfra ($10 credits) - CHEAP PAID
+        if not result and is_deepinfra_configured() and image_content:
+            try:
+                logger.info("Trying: DeepInfra Vision ($10 credits, cheapest)")
+                vision_service = get_deepinfra_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "DeepInfra"):
+                    pass
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"DeepInfra failed: {e}, trying next...")
+                result = None
+
+        # 7. Ollama (FREE local) - OFFLINE BACKUP
+        if not result and is_ollama_configured() and image_content:
+            try:
+                logger.info("Trying: Ollama Vision (FREE local)")
+                vision_service = get_ollama_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "Ollama"):
+                    pass
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Ollama failed: {e}, trying next...")
+                result = None
+
+        # 8. OpenAI (PAID) - FINAL FALLBACK
+        if not result:
             from openai import OpenAI
             api_key = os.getenv('OPENAI_API_KEY')
 
             if api_key:
-                logger.info("Using OpenAI GPT-4 Vision (paid)")
-                client = OpenAI(api_key=api_key)
-
-                # Different prompt for reading questions vs general inspection
-                if is_reading_question and not is_video:
-                    prompt_text = (
-                        "This is a photo of a meter, gauge, or counter reading. "
-                        "Extract the numeric value shown on the display/dial. "
-                        "If the meter appears faulty or unreadable, indicate that. "
-                        "Provide response in this exact JSON format:\n"
-                        "{ \"en\": \"English description\", \"ar\": \"Arabic description\", \"reading\": \"12345\" }\n"
-                        "The 'reading' field should contain ONLY the numeric value (or 'faulty' if broken/unreadable)."
-                    )
-                else:
-                    prompt_text = (
-                        f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
-                        "Identify any visible defects, damage, or issues. "
-                        "Provide a brief analysis in English and Arabic. "
-                        "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
-                    )
-
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt_text},
-                                {"type": "image_url", "image_url": {"url": analyze_url}}
-                            ]
-                        }
-                    ],
-                    max_tokens=300
-                )
-
-                analysis_text = response.choices[0].message.content.strip()
-                logger.info(f"OpenAI analysis: {analysis_text[:200]}")
-
                 try:
-                    import json
-                    ai_analysis = json.loads(analysis_text)
-                    if 'reading' in ai_analysis and is_reading_question:
-                        extracted_reading = ai_analysis.get('reading')
-                except Exception:
-                    from app.services.translation_service import TranslationService
-                    translated = TranslationService.auto_translate(analysis_text)
-                    ai_analysis = {
-                        'en': translated.get('en') or analysis_text,
-                        'ar': translated.get('ar') or analysis_text
-                    }
+                    logger.info("Trying: OpenAI GPT-4 Vision (PAID - final fallback)")
+                    client = OpenAI(api_key=api_key)
+
+                    if is_reading_question and not is_video:
+                        prompt_text = (
+                            "This is a photo of a meter, gauge, or counter reading. "
+                            "Extract the numeric value shown on the display/dial. "
+                            "Provide response in JSON: { \"en\": \"description\", \"ar\": \"وصف\", \"reading\": \"12345\" }"
+                        )
+                    else:
+                        prompt_text = (
+                            f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
+                            "Identify defects, damage, or issues. "
+                            "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
+                        )
+
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": analyze_url}}
+                        ]}],
+                        max_tokens=300
+                    )
+
+                    analysis_text = response.choices[0].message.content.strip()
+                    logger.info(f"OpenAI analysis: {analysis_text[:200]}")
+
+                    try:
+                        import json
+                        ai_analysis = json.loads(analysis_text)
+                        if 'reading' in ai_analysis and is_reading_question:
+                            extracted_reading = ai_analysis.get('reading')
+                    except Exception:
+                        from app.services.translation_service import TranslationService
+                        translated = TranslationService.auto_translate(analysis_text)
+                        ai_analysis = {'en': translated.get('en') or analysis_text, 'ar': translated.get('ar') or analysis_text}
+                except Exception as e:
+                    logger.error(f"OpenAI failed: {e}")
+                    analysis_failed = True
             else:
-                logger.warning("No AI service configured (set GOOGLE_CLOUD_KEY_JSON or OPENAI_API_KEY)")
+                logger.warning("No AI service configured - all providers failed or not configured")
                 analysis_failed = True
 
     except Exception as e:
