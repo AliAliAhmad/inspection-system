@@ -1,7 +1,9 @@
 """
 AI-powered bidirectional translation service.
-Multi-provider: Gemini → Groq → OpenAI
+Multi-provider: Gemma 3 4B → Groq → OpenAI
 Auto-detects language and translates between English and Arabic.
+
+Uses gemma-3-4b for translation (14,400 RPD - high volume).
 """
 
 import os
@@ -140,12 +142,13 @@ class TranslationService:
 
     @staticmethod
     def _translate_gemini(text, system_prompt, target_lang):
-        """Translate using Gemini API."""
+        """Translate using Gemma 3 4B (14,400 RPD - high volume)."""
         api_key = os.getenv('GEMINI_API_KEY', '').strip()
         if not api_key:
             raise Exception("Gemini API key not configured")
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
+        # Using gemma-3-4b for translation (14,400 RPD)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-3-4b-it:generateContent?key={api_key}"
 
         payload = {
             "contents": [{
