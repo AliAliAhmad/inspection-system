@@ -18,6 +18,10 @@ interface VideoRecorderProps {
   onVideoDeleted?: () => void;
   existingVideoUrl?: string | null;
   disabled?: boolean;
+  /** Required for AI analysis - the inspection ID */
+  inspectionId?: number;
+  /** Required for AI analysis - the checklist item ID */
+  checklistItemId?: number;
 }
 
 export default function VideoRecorder({
@@ -25,6 +29,8 @@ export default function VideoRecorder({
   onVideoDeleted,
   existingVideoUrl,
   disabled = false,
+  inspectionId,
+  checklistItemId,
 }: VideoRecorderProps) {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
@@ -141,15 +147,33 @@ export default function VideoRecorder({
 
       console.log('Uploading video via base64...');
 
+      // Use inspection endpoint if inspectionId and checklistItemId are provided (triggers AI analysis)
+      // Otherwise fall back to generic file upload (no AI analysis)
+      const useInspectionEndpoint = inspectionId && checklistItemId;
+      const endpoint = useInspectionEndpoint
+        ? `/api/inspections/${inspectionId}/upload-media`
+        : '/api/files/upload';
+
+      const payload = useInspectionEndpoint
+        ? {
+            file_base64: base64,
+            file_name: fileName,
+            file_type: 'video/mp4',
+            checklist_item_id: checklistItemId,
+          }
+        : {
+            file_base64: base64,
+            file_name: fileName,
+            file_type: 'video/mp4',
+            category: 'inspection_video',
+          };
+
+      console.log('Using endpoint:', endpoint, 'with AI analysis:', useInspectionEndpoint);
+
       // Upload as JSON with base64
       const response = await getApiClient().post(
-        '/api/files/upload',
-        {
-          file_base64: base64,
-          file_name: fileName,
-          file_type: 'video/mp4',
-          category: 'inspection_video',
-        },
+        endpoint,
+        payload,
         {
           headers: { 'Content-Type': 'application/json' },
           timeout: 300000, // 5 minutes for video
@@ -162,13 +186,19 @@ export default function VideoRecorder({
 
       console.log('Video upload response:', {
         hasFile: !!result?.id,
+        hasVideoFile: !!result?.video_file,
         hasAiAnalysis: !!aiAnalysis,
         analysisFailed: responseData?.analysis_failed
       });
 
-      if (result?.id) {
-        setCloudinaryUrl(result.url || null);
-        onVideoRecorded(result.id, aiAnalysis);
+      // Extract file ID - may come from different places depending on endpoint
+      const videoFile = result?.video_file || result;
+      const fileId = videoFile?.id;
+      const fileUrl = videoFile?.url || result?.url;
+
+      if (fileId) {
+        setCloudinaryUrl(fileUrl || null);
+        onVideoRecorded(fileId, aiAnalysis);
       }
     } catch (err: any) {
       console.error('Failed to upload video:', err);
@@ -184,7 +214,7 @@ export default function VideoRecorder({
     } finally {
       setIsUploading(false);
     }
-  }, [onVideoRecorded]);
+  }, [onVideoRecorded, inspectionId, checklistItemId]);
 
   const handleDelete = useCallback(() => {
     Alert.alert(

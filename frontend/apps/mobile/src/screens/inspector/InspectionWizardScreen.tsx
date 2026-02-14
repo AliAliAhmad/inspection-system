@@ -1369,6 +1369,8 @@ export default function InspectionWizardScreen() {
               onVideoDeleted={handleVideoDeleted}
               existingVideoUrl={currentAnswer?.video_url}
               disabled={isUploading}
+              inspectionId={inspectionId}
+              checklistItemId={currentItem.id}
             />
 
             {/* Video AI Analysis - Full width below video */}
