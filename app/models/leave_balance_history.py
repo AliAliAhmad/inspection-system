@@ -44,7 +44,7 @@ class LeaveBalanceHistory(db.Model):
 
     # Relationships
     user = db.relationship('User', foreign_keys=[user_id], backref='balance_history')
-    leave_type = db.relationship('LeaveType', foreign_keys=[leave_type_id])
+    leave_type = db.relationship('LeaveType', foreign_keys=[leave_type_id], overlaps='balance_history,leave_type_ref')
     leave = db.relationship('Leave', foreign_keys=[leave_id], backref='balance_changes')
     adjusted_by = db.relationship('User', foreign_keys=[adjusted_by_id])
 

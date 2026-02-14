@@ -45,7 +45,7 @@ class LeaveEncashment(db.Model):
 
     # Relationships
     user = db.relationship('User', foreign_keys=[user_id], backref='leave_encashments')
-    leave_type = db.relationship('LeaveType', foreign_keys=[leave_type_id])
+    leave_type = db.relationship('LeaveType', foreign_keys=[leave_type_id], overlaps='encashments,leave_type_ref')
     approved_by = db.relationship('User', foreign_keys=[approved_by_id])
 
     __table_args__ = (
