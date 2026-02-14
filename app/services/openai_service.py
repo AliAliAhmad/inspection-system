@@ -39,13 +39,14 @@ def _get_ai_provider():
 
 
 def _call_gemini_text(prompt: str, max_tokens: int = 500) -> Optional[str]:
-    """Call Gemini 2.5 Flash for text generation (1,500 RPD)."""
+    """Call Gemma/Gemini for text generation with fallback."""
     api_key = os.getenv('GEMINI_API_KEY', '').strip()
     if not api_key:
         return None
 
-    # Using gemini-2.5-flash for general text (1,500 RPD)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    # Try gemma-3-4b-it first (14,400 RPD), fallback to gemini-2.5-flash (1,500 RPD)
+    models = ["gemma-3-4b-it", "gemini-2.5-flash"]
+    base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -55,22 +56,24 @@ def _call_gemini_text(prompt: str, max_tokens: int = 500) -> Optional[str]:
         }
     }
 
-    response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
+    for model in models:
+        url = f"{base_url}/{model}:generateContent?key={api_key}"
+        try:
+            response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
 
-    if response.status_code != 200:
-        raise Exception(f"Gemini API error: {response.status_code}")
+            if response.status_code == 200:
+                result = response.json()
+                candidates = result.get('candidates', [])
+                if candidates:
+                    content = candidates[0].get('content', {})
+                    parts = content.get('parts', [])
+                    if parts:
+                        return parts[0].get('text', '').strip()
+            logger.warning(f"Text model {model} failed: {response.status_code}, trying next...")
+        except Exception as e:
+            logger.warning(f"Text model {model} error: {e}, trying next...")
 
-    result = response.json()
-    candidates = result.get('candidates', [])
-    if not candidates:
-        return None
-
-    content = candidates[0].get('content', {})
-    parts = content.get('parts', [])
-    if not parts:
-        return None
-
-    return parts[0].get('text', '').strip()
+    return None
 
 
 def _call_groq_text(prompt: str, max_tokens: int = 500) -> Optional[str]:

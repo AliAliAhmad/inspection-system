@@ -25,8 +25,9 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 VISION_MODELS = ["gemini-3-pro-preview", "gemini-2.5-flash"]
 VISION_MODEL = VISION_MODELS[0]  # Primary model
 
-# Audio transcription - gemini-2.5-flash (supports audio files, 1,500 RPD)
-AUDIO_MODEL = "gemini-2.5-flash"
+# Audio transcription - try native-audio-dialog first (Unlimited), fallback to gemini-2.5-flash
+AUDIO_MODELS = ["gemini-2.5-flash-preview-native-audio-dialog", "gemini-2.5-flash"]
+AUDIO_MODEL = AUDIO_MODELS[0]  # Primary model
 
 
 def is_gemini_configured():
@@ -283,24 +284,38 @@ class GeminiSpeechService:
             }
 
             api_key = _get_api_key()
-            url = f"{GEMINI_API_URL}/{AUDIO_MODEL}:generateContent?key={api_key}"
 
-            logger.info(f"Calling Gemini Audio API, audio size: {len(audio_content)} bytes")
+            # Try each audio model in order until one succeeds
+            result = None
+            last_error = None
+            for model in AUDIO_MODELS:
+                url = f"{GEMINI_API_URL}/{model}:generateContent?key={api_key}"
+                logger.info(f"Trying Gemini Audio API with model: {model}, audio size: {len(audio_content)} bytes")
 
-            response = requests.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=120
-            )
+                try:
+                    response = requests.post(
+                        url,
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=120
+                    )
 
-            logger.info(f"Gemini Audio response status: {response.status_code}")
+                    logger.info(f"Gemini {model} response status: {response.status_code}")
 
-            if response.status_code != 200:
-                logger.error(f"Gemini Audio API error: {response.status_code} - {response.text[:500]}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        logger.info(f"Audio success with model: {model}")
+                        break
+                    else:
+                        last_error = f"{response.status_code} - {response.text[:200]}"
+                        logger.warning(f"Audio model {model} failed: {last_error}, trying next...")
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(f"Audio model {model} error: {e}, trying next...")
+
+            if result is None:
+                logger.error(f"All audio models failed. Last error: {last_error}")
                 return None
-
-            result = response.json()
 
             # Extract the response text
             candidates = result.get('candidates', [])

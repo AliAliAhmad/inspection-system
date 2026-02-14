@@ -142,13 +142,14 @@ class TranslationService:
 
     @staticmethod
     def _translate_gemini(text, system_prompt, target_lang):
-        """Translate using Gemini 2.5 Flash (1,500 RPD)."""
+        """Translate using Gemma 3 4B (14,400 RPD) with fallback to Gemini 2.5 Flash."""
         api_key = os.getenv('GEMINI_API_KEY', '').strip()
         if not api_key:
             raise Exception("Gemini API key not configured")
 
-        # Using gemini-2.5-flash for translation (reliable, 1,500 RPD)
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        # Try gemma-3-4b-it first (14,400 RPD), fallback to gemini-2.5-flash (1,500 RPD)
+        models = ["gemma-3-4b-it", "gemini-2.5-flash"]
+        base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
         payload = {
             "contents": [{
@@ -160,25 +161,30 @@ class TranslationService:
             }
         }
 
-        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+        last_error = None
+        for model in models:
+            url = f"{base_url}/{model}:generateContent?key={api_key}"
+            try:
+                response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
 
-        if response.status_code != 200:
-            raise Exception(f"Gemini API error: {response.status_code}")
+                if response.status_code == 200:
+                    result = response.json()
+                    candidates = result.get('candidates', [])
+                    if candidates:
+                        content = candidates[0].get('content', {})
+                        parts = content.get('parts', [])
+                        if parts:
+                            translation = parts[0].get('text', '').strip()
+                            direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
+                            logger.debug(f"[{model} {direction}] '{text[:40]}' → '{translation[:40]}'")
+                            return translation
+                last_error = f"{model}: {response.status_code}"
+                logger.warning(f"Translation model {model} failed: {last_error}, trying next...")
+            except Exception as e:
+                last_error = f"{model}: {str(e)}"
+                logger.warning(f"Translation model {model} error: {e}, trying next...")
 
-        result = response.json()
-        candidates = result.get('candidates', [])
-        if not candidates:
-            raise Exception("Gemini returned no candidates")
-
-        content = candidates[0].get('content', {})
-        parts = content.get('parts', [])
-        if not parts:
-            raise Exception("Gemini returned no parts")
-
-        translation = parts[0].get('text', '').strip()
-        direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
-        logger.debug(f"[Gemini {direction}] '{text[:40]}' → '{translation[:40]}'")
-        return translation
+        raise Exception(f"All translation models failed. Last error: {last_error}")
 
     @staticmethod
     def _translate_groq(text, system_prompt, target_lang):
