@@ -195,14 +195,14 @@ def test_ai_photo_analysis():
     import requests as req
     import time
 
-    # Use a small public domain industrial image
-    test_image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Pressure_gauge.jpg/320px-Pressure_gauge.jpg"
+    # Use a small public test image (picsum.photos serves random free images)
+    test_image_url = "https://picsum.photos/320/240.jpg"
 
     results = {}
 
     # Download image once
     try:
-        img_resp = req.get(test_image_url, timeout=15)
+        img_resp = req.get(test_image_url, timeout=15, headers={'User-Agent': 'InspectionSystem/1.0'})
         if img_resp.status_code != 200:
             return jsonify({'status': 'error', 'message': f'Could not download test image: {img_resp.status_code}'}), 500
         image_content = img_resp.content
