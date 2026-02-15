@@ -40,7 +40,7 @@ import base64
 logger = logging.getLogger(__name__)
 
 # Gemini API endpoint
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models"
 
 # =============================================================================
 # VISION MODELS (Photo/Video Analysis)
