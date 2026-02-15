@@ -36,6 +36,7 @@ def check_ai_status():
     from app.services.huggingface_service import is_huggingface_configured
     from app.services.together_ai_service import is_together_configured
     from app.services.deepinfra_service import is_deepinfra_configured
+    from app.services.sambanova_service import is_sambanova_configured
     from app.services.ollama_service import is_ollama_configured
 
     # Check all providers
@@ -45,9 +46,10 @@ def check_ai_status():
         '3_openrouter': {'configured': is_openrouter_configured(), 'type': 'FREE models', 'priority': 3},
         '4_huggingface': {'configured': is_huggingface_configured(), 'type': 'FREE (~30/min)', 'priority': 4},
         '5_together': {'configured': is_together_configured(), 'type': '$25 credits', 'priority': 5},
-        '6_deepinfra': {'configured': is_deepinfra_configured(), 'type': '$10 credits', 'priority': 6},
-        '7_ollama': {'configured': is_ollama_configured(), 'type': 'FREE local', 'priority': 7},
-        '8_openai': {'configured': bool(os.getenv('OPENAI_API_KEY')), 'type': 'PAID', 'priority': 8},
+        '6_sambanova': {'configured': is_sambanova_configured(), 'type': 'FREE (40 RPD)', 'priority': 6},
+        '7_deepinfra': {'configured': is_deepinfra_configured(), 'type': '$10 credits', 'priority': 7},
+        '8_ollama': {'configured': is_ollama_configured(), 'type': 'FREE local', 'priority': 8},
+        '9_openai': {'configured': bool(os.getenv('OPENAI_API_KEY')), 'type': 'PAID', 'priority': 9},
     }
 
     # Find active providers
@@ -74,9 +76,10 @@ def check_ai_status():
             '3. OpenRouter (FREE models)',
             '4. Hugging Face (FREE, slow)',
             '5. Together AI ($25 credits)',
-            '6. DeepInfra ($10 credits)',
-            '7. Ollama (FREE local)',
-            '8. OpenAI (PAID)',
+            '6. SambaNova (FREE, 40 RPD)',
+            '7. DeepInfra ($10 credits)',
+            '8. Ollama (FREE local)',
+            '9. OpenAI (PAID)',
         ],
         'message': message,
         'environment': os.getenv('FLASK_ENV', 'not set'),
@@ -151,6 +154,16 @@ def test_all_ai_services():
             results['deepinfra'] = {'status': 'not_configured'}
     except Exception as e:
         results['deepinfra'] = {'status': 'error', 'error': str(e)}
+
+    # Test SambaNova
+    try:
+        from app.services.sambanova_service import is_sambanova_configured
+        if is_sambanova_configured():
+            results['sambanova'] = {'status': 'configured', 'type': 'FREE (40 RPD)'}
+        else:
+            results['sambanova'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['sambanova'] = {'status': 'error', 'error': str(e)}
 
     # Test Ollama
     try:
@@ -1107,7 +1120,7 @@ def upload_answer_media(inspection_id):
 
     # AI Analysis with FULL FALLBACK CHAIN (FREE providers prioritized)
     # Order: 1.Gemini → 2.Groq(FREE) → 3.OpenRouter(FREE) → 4.HuggingFace(FREE)
-    #        → 5.Together($25) → 6.DeepInfra($10) → 7.Ollama(local) → 8.OpenAI(paid)
+    #        → 5.Together($25) → 6.SambaNova(FREE) → 7.DeepInfra($10) → 8.Ollama(local) → 9.OpenAI(paid)
     try:
         import os
         import re
@@ -1138,6 +1151,7 @@ def upload_answer_media(inspection_id):
         from app.services.huggingface_service import get_vision_service as get_hf_vision, is_huggingface_configured
         from app.services.together_ai_service import get_vision_service as get_together_vision, is_together_configured
         from app.services.deepinfra_service import get_vision_service as get_deepinfra_vision, is_deepinfra_configured
+        from app.services.sambanova_service import get_vision_service as get_sambanova_vision, is_sambanova_configured
         from app.services.ollama_service import get_vision_service as get_ollama_vision, is_ollama_configured
 
         # Download image content (needed for most services)
@@ -1235,7 +1249,21 @@ def upload_answer_media(inspection_id):
                 logger.warning(f"Together AI failed: {e}, trying next...")
                 result = None
 
-        # 6. DeepInfra ($10 credits) - CHEAP PAID
+        # 6. SambaNova (FREE, 40 RPD) - FREE FALLBACK
+        if not result and is_sambanova_configured() and image_content:
+            try:
+                logger.info("Trying: SambaNova Vision (FREE, 40 RPD)")
+                vision_service = get_sambanova_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "SambaNova"):
+                    pass
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"SambaNova failed: {e}, trying next...")
+                result = None
+
+        # 7. DeepInfra ($10 credits) - CHEAP PAID
         if not result and is_deepinfra_configured() and image_content:
             try:
                 logger.info("Trying: DeepInfra Vision ($10 credits, cheapest)")

@@ -189,11 +189,12 @@ def transcribe():
 
     try:
         # AUDIO FALLBACK CHAIN (FREE providers prioritized)
-        # Order: 1.Gemini → 2.Groq(FREE) → 3.HuggingFace(FREE) → 4.Together($25) → 5.Ollama(local) → 6.OpenAI(paid)
+        # Order: 1.Gemini → 2.Groq(FREE) → 3.HuggingFace(FREE) → 4.Together($25) → 5.SambaNova(FREE) → 6.Ollama(local) → 7.OpenAI(paid)
         from app.services.gemini_service import get_speech_service as get_gemini_speech, is_gemini_configured
         from app.services.groq_service import get_speech_service as get_groq_speech, is_groq_configured
         from app.services.huggingface_service import get_speech_service as get_hf_speech, is_huggingface_configured
         from app.services.together_ai_service import get_speech_service as get_together_speech, is_together_configured
+        from app.services.sambanova_service import get_speech_service as get_sambanova_speech, is_sambanova_configured
         from app.services.ollama_service import get_speech_service as get_ollama_speech, is_ollama_configured
 
         # Create temp file from audio content (needed for all services)
@@ -263,7 +264,21 @@ def transcribe():
                 logger.warning(f"Together AI failed: {e}, trying next...")
                 result = None
 
-        # 5. Ollama Whisper (FREE local) - OFFLINE BACKUP
+        # 5. SambaNova Whisper (FREE, 40 RPD) - FREE FALLBACK
+        if not result and is_sambanova_configured():
+            try:
+                logger.info("Trying: SambaNova Whisper (FREE, 40 RPD)")
+                sambanova_speech = get_sambanova_speech()
+                result = sambanova_speech.transcribe_file(source_path, language_hint or 'en')
+                if result and result.get('text'):
+                    used_service = 'sambanova'
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"SambaNova failed: {e}, trying next...")
+                result = None
+
+        # 6. Ollama Whisper (FREE local) - OFFLINE BACKUP
         if not result and is_ollama_configured():
             try:
                 logger.info("Trying: Ollama Whisper (FREE local)")
