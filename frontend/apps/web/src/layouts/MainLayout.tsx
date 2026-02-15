@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ProLayout, MenuDataItem } from '@ant-design/pro-layout';
+import { Breadcrumb, Typography } from 'antd';
 import {
+  HomeOutlined,
   DashboardOutlined,
   UserOutlined,
   ToolOutlined,
@@ -129,6 +131,123 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
   return [...shared, ...(roleMenus[role] || [])];
 }
 
+const ROUTE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  inspector: 'Inspector',
+  specialist: 'Specialist',
+  engineer: 'Engineer',
+  quality: 'Quality',
+  users: 'Users',
+  equipment: 'Equipment',
+  checklists: 'Checklists',
+  schedules: 'Schedules',
+  assignments: 'Assignments',
+  inspections: 'Inspections',
+  'specialist-jobs': 'Specialist Jobs',
+  'engineer-jobs': 'Engineer Jobs',
+  'quality-reviews': 'Quality Reviews',
+  approvals: 'Approvals',
+  routines: 'Routines',
+  defects: 'Defects',
+  backlog: 'Backlog',
+  reports: 'Reports',
+  'daily-review': 'Daily Review',
+  overdue: 'Overdue',
+  performance: 'Performance',
+  leaves: 'Leaves',
+  roster: 'Roster',
+  materials: 'Materials',
+  'pm-templates': 'PM Templates',
+  cycles: 'Cycles',
+  'work-planning': 'Work Planning',
+  'work-plan-settings': 'Work Plan Settings',
+  'leave-settings': 'Leave Settings',
+  'notification-rules': 'Notification Rules',
+  'notification-analytics': 'Notification Analytics',
+  profile: 'Profile',
+  notifications: 'Notifications',
+  leaderboard: 'Leaderboard',
+  'my-work-plan': 'My Work Plan',
+  'equipment-dashboard': 'Equipment Dashboard',
+  'running-hours': 'Running Hours',
+  'team-communication': 'Team Communication',
+  jobs: 'Jobs',
+  create: 'Create',
+  'team-assignment': 'Team Assignment',
+  'pause-approvals': 'Pause Approvals',
+  reviews: 'Reviews',
+  'bonus-requests': 'Bonus Requests',
+};
+
+function AutoPageHeader({ menuItems }: { menuItems: MenuDataItem[] }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Build a map from path -> menu item (name + emoji)
+  const pathMap = useMemo(() => {
+    const map: Record<string, { name: string; emoji: string }> = {};
+    for (const item of menuItems) {
+      if (item.path && item.name) {
+        // Menu names have format "emoji label", extract them
+        const match = item.name.match(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F?)\s+(.+)$/u);
+        if (match) {
+          map[item.path] = { emoji: match[1], name: match[2] };
+        } else {
+          map[item.path] = { emoji: '', name: item.name };
+        }
+      }
+    }
+    return map;
+  }, [menuItems]);
+
+  // Don't show header on dashboard (root)
+  if (location.pathname === '/') return null;
+
+  // Find current page info from menu items
+  const pageInfo = pathMap[location.pathname];
+
+  // Auto breadcrumbs from URL
+  const segments = location.pathname.split('/').filter(Boolean);
+  const breadcrumbItems: { title: React.ReactNode; onClick?: () => void }[] = [
+    { title: <HomeOutlined />, onClick: () => navigate('/') },
+  ];
+
+  let path = '';
+  for (const segment of segments) {
+    path += `/${segment}`;
+    const label = ROUTE_LABELS[segment] || segment.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const currentPath = path;
+    breadcrumbItems.push({
+      title: label,
+      onClick: currentPath !== location.pathname ? () => navigate(currentPath) : undefined,
+    });
+  }
+
+  // Page title: use menu item name if found, otherwise generate from last URL segment
+  const lastSegment = segments[segments.length - 1] || '';
+  const title = pageInfo?.name || ROUTE_LABELS[lastSegment] || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const emoji = pageInfo?.emoji || '';
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <Breadcrumb
+        items={breadcrumbItems.map((c) => ({
+          title: c.onClick ? (
+            <a onClick={(e) => { e.preventDefault(); c.onClick?.(); }} style={{ cursor: 'pointer' }}>{c.title}</a>
+          ) : (
+            c.title
+          ),
+        }))}
+        style={{ marginBottom: 8 }}
+      />
+      <Typography.Title level={4} style={{ margin: 0 }}>
+        {emoji && <span style={{ marginRight: 8 }}>{emoji}</span>}
+        {title}
+      </Typography.Title>
+    </div>
+  );
+}
+
 export default function MainLayout() {
   const { user, logout } = useAuth();
   const { language, setLanguage } = useLanguage();
@@ -213,6 +332,7 @@ export default function MainLayout() {
         </Dropdown>,
       ]}
     >
+      <AutoPageHeader menuItems={menuItems} />
       <Outlet />
 
       {/* Notification Drawer */}
