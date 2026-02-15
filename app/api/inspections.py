@@ -37,7 +37,6 @@ def check_ai_status():
     from app.services.together_ai_service import is_together_configured
     from app.services.deepinfra_service import is_deepinfra_configured
     from app.services.sambanova_service import is_sambanova_configured
-    from app.services.ollama_service import is_ollama_configured
 
     # Check all providers
     providers = {
@@ -48,8 +47,7 @@ def check_ai_status():
         '5_together': {'configured': is_together_configured(), 'type': '$25 credits', 'priority': 5},
         '6_sambanova': {'configured': is_sambanova_configured(), 'type': 'FREE (40 RPD)', 'priority': 6},
         '7_deepinfra': {'configured': is_deepinfra_configured(), 'type': '$10 credits', 'priority': 7},
-        '8_ollama': {'configured': is_ollama_configured(), 'type': 'FREE local', 'priority': 8},
-        '9_openai': {'configured': bool(os.getenv('OPENAI_API_KEY')), 'type': 'PAID', 'priority': 9},
+        '8_openai': {'configured': bool(os.getenv('OPENAI_API_KEY')), 'type': 'PAID', 'priority': 8},
     }
 
     # Find active providers
@@ -78,8 +76,7 @@ def check_ai_status():
             '5. Together AI ($25 credits)',
             '6. SambaNova (FREE, 40 RPD)',
             '7. DeepInfra ($10 credits)',
-            '8. Ollama (FREE local)',
-            '9. OpenAI (PAID)',
+            '8. OpenAI (PAID)',
         ],
         'message': message,
         'environment': os.getenv('FLASK_ENV', 'not set'),
@@ -164,16 +161,6 @@ def test_all_ai_services():
             results['sambanova'] = {'status': 'not_configured'}
     except Exception as e:
         results['sambanova'] = {'status': 'error', 'error': str(e)}
-
-    # Test Ollama
-    try:
-        from app.services.ollama_service import is_ollama_configured
-        if is_ollama_configured():
-            results['ollama'] = {'status': 'configured', 'type': 'FREE local'}
-        else:
-            results['ollama'] = {'status': 'not_configured'}
-    except Exception as e:
-        results['ollama'] = {'status': 'error', 'error': str(e)}
 
     # Test OpenAI
     try:
@@ -1120,7 +1107,7 @@ def upload_answer_media(inspection_id):
 
     # AI Analysis with FULL FALLBACK CHAIN (FREE providers prioritized)
     # Order: 1.Gemini → 2.Groq(FREE) → 3.OpenRouter(FREE) → 4.HuggingFace(FREE)
-    #        → 5.Together($25) → 6.SambaNova(FREE) → 7.DeepInfra($10) → 8.Ollama(local) → 9.OpenAI(paid)
+    #        → 5.Together($25) → 6.SambaNova(FREE) → 7.DeepInfra($10) → 8.OpenAI(paid)
     try:
         import os
         import re
@@ -1152,7 +1139,6 @@ def upload_answer_media(inspection_id):
         from app.services.together_ai_service import get_vision_service as get_together_vision, is_together_configured
         from app.services.deepinfra_service import get_vision_service as get_deepinfra_vision, is_deepinfra_configured
         from app.services.sambanova_service import get_vision_service as get_sambanova_vision, is_sambanova_configured
-        from app.services.ollama_service import get_vision_service as get_ollama_vision, is_ollama_configured
 
         # Download image content (needed for most services)
         image_content = None
@@ -1275,20 +1261,6 @@ def upload_answer_media(inspection_id):
                     result = None
             except Exception as e:
                 logger.warning(f"DeepInfra failed: {e}, trying next...")
-                result = None
-
-        # 7. Ollama (FREE local) - OFFLINE BACKUP
-        if not result and is_ollama_configured() and image_content:
-            try:
-                logger.info("Trying: Ollama Vision (FREE local)")
-                vision_service = get_ollama_vision()
-                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
-                if process_vision_result(result, "Ollama"):
-                    pass
-                else:
-                    result = None
-            except Exception as e:
-                logger.warning(f"Ollama failed: {e}, trying next...")
                 result = None
 
         # 8. OpenAI (PAID) - FINAL FALLBACK
