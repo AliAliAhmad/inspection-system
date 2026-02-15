@@ -1,4 +1,4 @@
-import { Card, Row, Col, Typography, Spin, Alert, Button, Progress, Tag, Tooltip, Space, Badge } from 'antd';
+import { Card, Row, Col, Typography, Spin, Alert, Button, Progress, Tag, Tooltip, Space, Badge, Tabs } from 'antd';
 import {
   CalendarOutlined,
   PlusOutlined,
@@ -411,7 +411,7 @@ export default function DashboardPage() {
         })}
       </Row>
 
-      {/* ─── Work Plan Stats Widget (Engineers/Admins) ─── */}
+      {/* ─── Work Plan Stats Widget (Tabbed) ─── */}
       {isEngineer && workPlanStats && (
         <Card
           title={
@@ -426,163 +426,210 @@ export default function DashboardPage() {
             </Space>
           }
           extra={
-            <Text type="secondary">
-              {formatWeekRange(workPlanStats.week_start, workPlanStats.week_end)}
-            </Text>
+            <Space>
+              <Text type="secondary">{formatWeekRange(workPlanStats.week_start, workPlanStats.week_end)}</Text>
+              <Button type="link" onClick={() => navigate('/admin/work-planning')}>Open Plan →</Button>
+            </Space>
           }
-          style={{ marginBottom: 16, borderRadius: 12 }}
+          style={{ borderRadius: 12 }}
+          styles={{ body: { padding: workPlanStats.has_plan ? '0 0 12px' : undefined } }}
         >
           {!workPlanStats.has_plan ? (
             <div style={{ textAlign: 'center', padding: 24 }}>
               <Text type="secondary" style={{ fontSize: 16 }}>No work plan for this week</Text>
               <br />
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                style={{ marginTop: 16 }}
-                onClick={() => navigate('/admin/work-planning')}
-              >
+              <Button type="primary" icon={<PlusOutlined />} style={{ marginTop: 16 }} onClick={() => navigate('/admin/work-planning')}>
                 Create Work Plan
               </Button>
             </div>
           ) : (
-            <>
-              {/* Stats Row */}
-              <Row gutter={[16, 16]}>
-                {[
-                  { label: 'Total', value: workPlanStats.total_jobs, bg: '#f6ffed', border: '#b7eb8f', color: '#52c41a', emoji: '📦' },
-                  { label: 'In Pool', value: workPlanStats.jobs_in_pool, bg: '#e6f7ff', border: '#91d5ff', color: '#1890ff', emoji: '📥' },
-                  { label: 'In Progress', value: workPlanStats.in_progress_jobs, bg: '#fff7e6', border: '#ffd591', color: '#fa8c16', emoji: '🔄' },
-                  { label: 'Done', value: workPlanStats.completed_jobs, bg: '#f6ffed', border: '#b7eb8f', color: '#52c41a', emoji: '✅' },
-                  { label: 'Overdue', value: workPlanStats.overdue_jobs, bg: workPlanStats.overdue_jobs > 0 ? '#fff2e8' : '#fafafa', border: workPlanStats.overdue_jobs > 0 ? '#ffbb96' : '#d9d9d9', color: workPlanStats.overdue_jobs > 0 ? '#fa541c' : '#8c8c8c', emoji: '⚠️' },
-                  { label: 'Critical', value: workPlanStats.critical_jobs, bg: workPlanStats.critical_jobs > 0 ? '#fff1f0' : '#fafafa', border: workPlanStats.critical_jobs > 0 ? '#ffa39e' : '#d9d9d9', color: workPlanStats.critical_jobs > 0 ? '#cf1322' : '#8c8c8c', emoji: '🔥' },
-                ].map((s) => (
-                  <Col xs={12} sm={8} md={4} key={s.label}>
-                    <Card size="small" style={{ textAlign: 'center', background: s.bg, borderColor: s.border, borderRadius: 8 }}>
-                      <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{s.emoji} {s.label}</div>
-                      <div style={{ fontSize: 28, fontWeight: 700, color: s.color }}>{s.value}</div>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-
-              {/* Jobs by Type + Day */}
-              <Row gutter={16} style={{ marginTop: 16 }}>
-                <Col xs={24} md={8}>
-                  <Card size="small" title="Jobs by Type" styles={{ body: { padding: '12px' } }} style={{ borderRadius: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-around' }}>
-                      {[
-                        { type: 'pm', label: 'PM', color: '#1890ff' },
-                        { type: 'defect', label: 'Defect', color: '#f5222d' },
-                        { type: 'inspection', label: 'Inspection', color: '#52c41a' },
-                      ].map((jt) => (
-                        <Tooltip key={jt.type} title={`${jt.label} Jobs`}>
-                          <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 24 }}>{JOB_TYPE_EMOJI[jt.type]}</div>
-                            <div style={{ fontSize: 20, fontWeight: 700, color: jt.color }}>
-                              {(workPlanStats.jobs_by_type as any)[jt.type] || 0}
-                            </div>
-                            <div style={{ fontSize: 12, color: '#8c8c8c' }}>{jt.label}</div>
+            <Tabs
+              defaultActiveKey="overview"
+              style={{ padding: '0 16px' }}
+              items={[
+                {
+                  key: 'overview',
+                  label: '📊 Overview',
+                  children: (
+                    <div>
+                      {/* Stacked Progress Bar */}
+                      <div style={{ marginBottom: 16 }}>
+                        <Row gutter={16} style={{ marginBottom: 8 }}>
+                          {[
+                            { label: 'Total', value: workPlanStats.total_jobs, color: '#595959' },
+                            { label: 'Pool', value: workPlanStats.jobs_in_pool, color: '#1890ff' },
+                            { label: 'Active', value: workPlanStats.in_progress_jobs, color: '#fa8c16' },
+                            { label: 'Done', value: workPlanStats.completed_jobs, color: '#52c41a' },
+                            { label: 'Overdue', value: workPlanStats.overdue_jobs, color: '#fa541c' },
+                            { label: 'Critical', value: workPlanStats.critical_jobs, color: '#cf1322' },
+                          ].map((s) => (
+                            <Col xs={8} sm={4} key={s.label} style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
+                              <div style={{ fontSize: 11, color: '#8c8c8c' }}>{s.label}</div>
+                            </Col>
+                          ))}
+                        </Row>
+                        {/* Visual bar */}
+                        {workPlanStats.total_jobs > 0 && (
+                          <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: '#f0f0f0' }}>
+                            {[
+                              { value: workPlanStats.completed_jobs, color: '#52c41a' },
+                              { value: workPlanStats.in_progress_jobs, color: '#fa8c16' },
+                              { value: workPlanStats.jobs_in_pool, color: '#1890ff' },
+                              { value: workPlanStats.overdue_jobs, color: '#fa541c' },
+                              { value: workPlanStats.critical_jobs, color: '#cf1322' },
+                            ].filter((s) => s.value > 0).map((s, i) => (
+                              <Tooltip key={i} title={`${s.value} jobs`}>
+                                <div style={{ width: `${(s.value / workPlanStats.total_jobs) * 100}%`, background: s.color, transition: 'width 0.3s' }} />
+                              </Tooltip>
+                            ))}
                           </div>
-                        </Tooltip>
-                      ))}
-                    </div>
-                  </Card>
-                </Col>
+                        )}
+                      </div>
 
-                <Col xs={24} md={16}>
-                  <Card size="small" title="Jobs by Day" styles={{ body: { padding: '12px' } }} style={{ borderRadius: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', height: 80 }}>
-                      {workPlanStats.jobs_by_day.map((day) => {
-                        const maxJobs = Math.max(...workPlanStats.jobs_by_day.map((d) => d.count), 1);
-                        const height = Math.max((day.count / maxJobs) * 60, 4);
-                        return (
-                          <Tooltip key={day.date} title={`${day.day_name}: ${day.count} jobs`}>
-                            <div style={{ textAlign: 'center', flex: 1 }}>
-                              <div
-                                style={{
-                                  height,
-                                  background: day.is_today
-                                    ? 'linear-gradient(180deg, #52c41a 0%, #237804 100%)'
-                                    : 'linear-gradient(180deg, #1890ff 0%, #0050b3 100%)',
-                                  borderRadius: '4px 4px 0 0',
-                                  margin: '0 2px',
-                                }}
-                              />
-                              <div style={{ fontSize: 10, fontWeight: day.is_today ? 700 : 400, color: day.is_today ? '#52c41a' : '#595959', marginTop: 4 }}>
-                                {day.day_name}
+                      {/* Jobs by Type — horizontal bars */}
+                      <Row gutter={12}>
+                        {[
+                          { type: 'pm', label: 'PM', color: '#1890ff', emoji: '🔧' },
+                          { type: 'defect', label: 'Defect', color: '#f5222d', emoji: '🔴' },
+                          { type: 'inspection', label: 'Inspection', color: '#52c41a', emoji: '✅' },
+                        ].map((jt) => {
+                          const count = (workPlanStats.jobs_by_type as any)[jt.type] || 0;
+                          const pct = workPlanStats.total_jobs > 0 ? Math.round((count / workPlanStats.total_jobs) * 100) : 0;
+                          return (
+                            <Col xs={24} sm={8} key={jt.type}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                <span style={{ fontSize: 18 }}>{jt.emoji}</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                                    <Text style={{ fontSize: 12 }}>{jt.label}</Text>
+                                    <Text strong style={{ fontSize: 12 }}>{count} ({pct}%)</Text>
+                                  </div>
+                                  <Progress percent={pct} showInfo={false} strokeColor={jt.color} size="small" />
+                                </div>
                               </div>
-                              <div style={{ fontSize: 12, fontWeight: 600 }}>{day.count}</div>
-                            </div>
-                          </Tooltip>
-                        );
-                      })}
+                            </Col>
+                          );
+                        })}
+                      </Row>
                     </div>
-                  </Card>
-                </Col>
-              </Row>
-
-              {/* Today's Focus */}
-              {workPlanStats.today_jobs.length > 0 && (
-                <Card
-                  size="small"
-                  title="🎯 Today's Focus"
-                  style={{ marginTop: 16, borderRadius: 8 }}
-                  extra={<Button type="link" onClick={() => navigate('/admin/work-planning')}>View All →</Button>}
-                >
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {workPlanStats.today_jobs.map((job) => (
-                      <Card
-                        key={job.id}
-                        size="small"
-                        style={{ width: 200, borderLeft: `4px solid ${PRIORITY_COLORS[job.priority] || '#1890ff'}`, borderRadius: 8 }}
-                        styles={{ body: { padding: '8px 12px' } }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 16 }}>{JOB_TYPE_EMOJI[job.job_type] || '📋'}</span>
-                          <Text strong ellipsis style={{ flex: 1 }}>{job.equipment_name}</Text>
+                  ),
+                },
+                {
+                  key: 'schedule',
+                  label: '📅 Schedule',
+                  children: (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', height: 140, gap: 6 }}>
+                        {workPlanStats.jobs_by_day.map((day) => {
+                          const maxJobs = Math.max(...workPlanStats.jobs_by_day.map((d) => d.count), 1);
+                          const height = Math.max((day.count / maxJobs) * 110, 6);
+                          const isToday = day.is_today;
+                          return (
+                            <Tooltip key={day.date} title={`${day.day_name}: ${day.count} jobs`}>
+                              <div
+                                style={{ textAlign: 'center', flex: 1, cursor: 'pointer', padding: '4px 0', borderRadius: 8, background: isToday ? '#f6ffed' : 'transparent' }}
+                                onClick={() => navigate('/admin/work-planning')}
+                              >
+                                <div style={{ fontSize: 13, fontWeight: 600, color: isToday ? '#52c41a' : '#262626', marginBottom: 4 }}>
+                                  {day.count}
+                                </div>
+                                <div
+                                  style={{
+                                    height,
+                                    background: isToday
+                                      ? 'linear-gradient(180deg, #73d13d 0%, #237804 100%)'
+                                      : 'linear-gradient(180deg, #69b1ff 0%, #0958d9 100%)',
+                                    borderRadius: 6,
+                                    margin: '0 4px',
+                                    transition: 'height 0.3s',
+                                  }}
+                                />
+                                <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 500, color: isToday ? '#52c41a' : '#595959', marginTop: 6 }}>
+                                  {day.day_name}
+                                </div>
+                                {isToday && <Tag color="green" style={{ fontSize: 10, margin: '4px 0 0', padding: '0 4px' }}>TODAY</Tag>}
+                              </div>
+                            </Tooltip>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'team',
+                  label: `👥 Team (${workPlanStats.team_workload.length})`,
+                  children: (
+                    <div>
+                      {workPlanStats.team_workload.length === 0 ? (
+                        <Text type="secondary">No team data available</Text>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                          {workPlanStats.team_workload.map((member) => {
+                            const maxHours = Math.max(...workPlanStats.team_workload.map((m) => m.hours), 40);
+                            const percent = Math.min(Math.round((member.hours / maxHours) * 100), 100);
+                            return (
+                              <div key={member.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 8, background: member.on_leave ? '#fafafa' : 'transparent' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Text ellipsis style={{ fontSize: 13, maxWidth: 120 }}>
+                                      {member.on_leave && '🏖️ '}{member.name}
+                                    </Text>
+                                    <Text type="secondary" style={{ fontSize: 11 }}>{member.job_count} jobs · {member.hours}h</Text>
+                                  </div>
+                                  <Progress
+                                    percent={percent}
+                                    showInfo={false}
+                                    strokeColor={member.on_leave ? '#d9d9d9' : percent > 80 ? '#ff4d4f' : percent > 60 ? '#faad14' : '#52c41a'}
+                                    size="small"
+                                    style={{ marginTop: 2 }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Tag color={job.status === 'completed' ? 'green' : job.status === 'in_progress' ? 'orange' : 'default'}>
-                            {job.status}
-                          </Tag>
-                          <Text type="secondary" style={{ fontSize: 12 }}>{job.estimated_hours}h</Text>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'focus',
+                  label: `🎯 Today (${workPlanStats.today_jobs.length})`,
+                  children: (
+                    <div>
+                      {workPlanStats.today_jobs.length === 0 ? (
+                        <Text type="secondary">No jobs scheduled for today</Text>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {workPlanStats.today_jobs.map((job) => (
+                            <div
+                              key={job.id}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10,
+                                padding: '8px 12px', borderRadius: 8,
+                                borderLeft: `4px solid ${PRIORITY_COLORS[job.priority] || '#1890ff'}`,
+                                background: '#fafafa',
+                              }}
+                            >
+                              <span style={{ fontSize: 18 }}>{JOB_TYPE_EMOJI[job.job_type] || '📋'}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <Text strong ellipsis style={{ fontSize: 13 }}>{job.equipment_name}</Text>
+                              </div>
+                              <Tag color={job.status === 'completed' ? 'green' : job.status === 'in_progress' ? 'orange' : 'default'} style={{ margin: 0 }}>
+                                {job.status}
+                              </Tag>
+                              <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{job.estimated_hours}h</Text>
+                            </div>
+                          ))}
                         </div>
-                      </Card>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Team Workload */}
-              {workPlanStats.team_workload.length > 0 && (
-                <Card size="small" title="👥 Team Workload" style={{ marginTop: 16, borderRadius: 8 }}>
-                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                    {workPlanStats.team_workload.slice(0, 6).map((member) => {
-                      const maxHours = Math.max(...workPlanStats.team_workload.map((m) => m.hours), 40);
-                      const percent = Math.min((member.hours / maxHours) * 100, 100);
-                      return (
-                        <div key={member.user_id} style={{ minWidth: 150, flex: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text ellipsis style={{ maxWidth: 100 }}>
-                              {member.on_leave ? '🏖️ ' : ''}{member.name}
-                            </Text>
-                            <Text strong>{member.hours}h</Text>
-                          </div>
-                          <Progress
-                            percent={percent}
-                            showInfo={false}
-                            strokeColor={member.on_leave ? '#d9d9d9' : percent > 80 ? '#ff4d4f' : percent > 60 ? '#faad14' : '#52c41a'}
-                            size="small"
-                          />
-                          <Text type="secondary" style={{ fontSize: 11 }}>{member.job_count} jobs</Text>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              )}
-            </>
+                      )}
+                    </div>
+                  ),
+                },
+              ]}
+            />
           )}
         </Card>
       )}
