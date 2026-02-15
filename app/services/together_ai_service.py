@@ -17,8 +17,8 @@ import base64
 logger = logging.getLogger(__name__)
 
 # Together AI API endpoints
-TOGETHER_CHAT_URL = "https://api.together.ai/v1/chat/completions"
-TOGETHER_AUDIO_URL = "https://api.together.ai/v1/audio/transcriptions"
+TOGETHER_CHAT_URL = "https://api.together.xyz/v1/chat/completions"
+TOGETHER_AUDIO_URL = "https://api.together.xyz/v1/audio/transcriptions"
 
 # Best vision model for quality
 VISION_MODEL = "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo"
