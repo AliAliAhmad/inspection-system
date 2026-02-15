@@ -187,6 +187,7 @@ class GeminiVisionService:
             api_key = _get_api_key()
 
             # Try each model in order until one succeeds
+            # IMPORTANT: If we get 429 (quota), stop immediately — all models share the same quota
             result = None
             last_error = None
             for model in VISION_MODELS:
@@ -207,6 +208,10 @@ class GeminiVisionService:
                         result = response.json()
                         logger.info(f"Success with model: {model}")
                         break
+                    elif response.status_code == 429:
+                        last_error = f"429 quota exceeded"
+                        logger.warning(f"Gemini quota exceeded (429) — all models share quota, skipping remaining")
+                        break  # Don't try other models, they share the same quota
                     else:
                         last_error = f"{response.status_code} - {response.text[:200]}"
                         logger.warning(f"Model {model} failed: {last_error}, trying next...")
@@ -543,6 +548,10 @@ class GeminiSpeechService:
                         result = response.json()
                         logger.info(f"Audio success with model: {model}")
                         break
+                    elif response.status_code == 429:
+                        last_error = f"429 quota exceeded"
+                        logger.warning(f"Gemini audio quota exceeded (429) — skipping remaining models")
+                        break
                     else:
                         last_error = f"{response.status_code} - {response.text[:200]}"
                         logger.warning(f"Audio model {model} failed: {last_error}, trying next...")
@@ -713,6 +722,10 @@ class GeminiTranslationService:
                     if response.status_code == 200:
                         result = response.json()
                         logger.info(f"Translation success with model: {model}")
+                        break
+                    elif response.status_code == 429:
+                        last_error = f"429 quota exceeded"
+                        logger.warning(f"Gemini translation quota exceeded (429) — skipping remaining models")
                         break
                     else:
                         last_error = f"{response.status_code} - {response.text[:200]}"
