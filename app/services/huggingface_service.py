@@ -28,7 +28,7 @@ HF_API_URL = "https://api-inference.huggingface.co/models"
 # Models to use
 IMAGE_CAPTION_MODEL = "Salesforce/blip-image-captioning-large"  # Good for describing images
 IMAGE_CLASSIFICATION_MODEL = "google/vit-base-patch16-224"  # For detecting objects
-SPEECH_TO_TEXT_MODEL = "openai/whisper-large-v3"  # Best for transcription
+SPEECH_TO_TEXT_MODEL = "distil-whisper/distil-large-v3"  # 6x faster, free tier compatible
 
 
 def is_huggingface_configured():
