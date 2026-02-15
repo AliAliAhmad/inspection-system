@@ -42,12 +42,17 @@
 - Photo analysis working (English only)
 - Database connected and healthy
 - Deployed on Render (auto-deploy from main branch)
+- AI fallback chains: 8 providers for photo, 6 for voice
+- SambaNova + OpenRouter API keys configured on Render
+- Together AI API key ready to add on Render
 
 ## What Needs Work
 - Arabic language support for AI analysis
-- UI/UX improvements
 - Full QA testing needed
-- Mobile app (React Native/Expo) needs testing
+- Add TOGETHER_API_KEY on Render (key ready)
+- Add GROQ_API_KEY on Render (biggest gap — free, 14,400 RPD audio)
+- Google Gemini 429 quota: free tier limited to 5 RPM (known issue since Dec 2025)
+- New EAS build needed to pick up latest mobile fixes
 
 ## How to Run Locally
 - Backend: `cd backend && flask run --debug`
@@ -95,6 +100,14 @@
 | 2026-02-15 | Rewrote DashboardPage: gradient KPI cards, work plan tabs, alerts, quick actions | ✅ Done |
 | 2026-02-15 | Redesigned WorkPlanningPage: jobs pool right, team pool below, at-risk toolbar badge | ✅ Done |
 | 2026-02-15 | Updated index.css: launcher, dashboard, team pool, at-risk styles | ✅ Done |
+| 2026-02-16 | Fixed Gemini 1.5-flash 404: changed API URL from v1beta to v1 | ✅ Done |
+| 2026-02-16 | Fixed HuggingFace 410 Gone: switched whisper-large-v3 to distil-whisper/distil-large-v3 | ✅ Done |
+| 2026-02-16 | Updated OpenRouter: added 6 free vision models (Llama 4 Scout, Qwen 2.5 VL, Gemma 3, Mistral) | ✅ Done |
+| 2026-02-16 | Created SambaNova service: free vision (Llama-4-Maverick) + voice (Whisper-Large-v3) | ✅ Done |
+| 2026-02-16 | Fixed Together AI: corrected API URL (api.together.xyz), updated to Llama-4-Maverick + Qwen3-VL models | ✅ Done |
+| 2026-02-16 | Removed Ollama from all fallback chains (local-only, not usable on Render) | ✅ Done |
+| 2026-02-16 | Updated photo fallback chain: Gemini→Groq→OpenRouter→HuggingFace→Together→SambaNova→DeepInfra→OpenAI | ✅ Done |
+| 2026-02-16 | Updated voice fallback chain: Gemini→Groq→HuggingFace→Together→SambaNova→OpenAI | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -121,6 +134,10 @@
 | Running hours tracking | ✅ Done | Backend API + mobile screen + web UI |
 | Answer templates | ✅ Done | Backend CRUD API + model |
 | Previous inspection answers | ✅ Done | Copy from previous + panel component |
+| AI multi-provider fallback | ✅ Done | 8 providers for photo, 6 for voice, free-first ordering |
+| SambaNova integration | ✅ Done | Free vision + voice (Llama-4-Maverick, Whisper-Large-v3) |
+| OpenRouter free vision | ✅ Done | 6 free models (Llama 4 Scout, Qwen 2.5 VL, Gemma 3, Mistral) |
+| Together AI integration | ✅ Done | Vision (Llama-4-Maverick, Qwen3-VL) + voice (Whisper) |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

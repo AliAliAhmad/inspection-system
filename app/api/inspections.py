@@ -185,6 +185,108 @@ def test_all_ai_services():
     }), 200
 
 
+@bp.route('/debug/ai-photo-test', methods=['GET'])
+def test_ai_photo_analysis():
+    """
+    Test REAL photo analysis with all configured providers.
+    Uses a sample image URL to test each provider's vision API.
+    """
+    import os
+    import requests as req
+    import time
+
+    # Use a small public domain industrial image
+    test_image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Pressure_gauge.jpg/320px-Pressure_gauge.jpg"
+
+    results = {}
+
+    # Download image once
+    try:
+        img_resp = req.get(test_image_url, timeout=15)
+        if img_resp.status_code != 200:
+            return jsonify({'status': 'error', 'message': f'Could not download test image: {img_resp.status_code}'}), 500
+        image_content = img_resp.content
+        logger.info(f"Test image downloaded: {len(image_content)} bytes")
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Image download failed: {e}'}), 500
+
+    # 1. Gemini
+    try:
+        from app.services.gemini_service import get_vision_service as get_gemini_vision, is_gemini_configured
+        if is_gemini_configured():
+            start = time.time()
+            result = get_gemini_vision().analyze_image(image_content=image_content)
+            elapsed = round(time.time() - start, 1)
+            if result:
+                results['gemini'] = {'status': 'success', 'time_s': elapsed, 'en': (result.get('en') or '')[:200], 'ar': (result.get('ar') or '')[:200]}
+            else:
+                results['gemini'] = {'status': 'failed', 'time_s': elapsed, 'error': 'returned None'}
+        else:
+            results['gemini'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['gemini'] = {'status': 'error', 'error': str(e)[:200]}
+
+    # 2. OpenRouter
+    try:
+        from app.services.openrouter_service import get_vision_service as get_or_vision, is_openrouter_configured
+        if is_openrouter_configured():
+            start = time.time()
+            result = get_or_vision().analyze_image(image_content=image_content)
+            elapsed = round(time.time() - start, 1)
+            if result:
+                results['openrouter'] = {'status': 'success', 'time_s': elapsed, 'en': (result.get('en') or '')[:200], 'ar': (result.get('ar') or '')[:200]}
+            else:
+                results['openrouter'] = {'status': 'failed', 'time_s': elapsed, 'error': 'returned None'}
+        else:
+            results['openrouter'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['openrouter'] = {'status': 'error', 'error': str(e)[:200]}
+
+    # 3. SambaNova
+    try:
+        from app.services.sambanova_service import get_vision_service as get_sn_vision, is_sambanova_configured
+        if is_sambanova_configured():
+            start = time.time()
+            result = get_sn_vision().analyze_image(image_content=image_content)
+            elapsed = round(time.time() - start, 1)
+            if result:
+                results['sambanova'] = {'status': 'success', 'time_s': elapsed, 'en': (result.get('en') or '')[:200], 'ar': (result.get('ar') or '')[:200]}
+            else:
+                results['sambanova'] = {'status': 'failed', 'time_s': elapsed, 'error': 'returned None'}
+        else:
+            results['sambanova'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['sambanova'] = {'status': 'error', 'error': str(e)[:200]}
+
+    # 4. Together AI
+    try:
+        from app.services.together_ai_service import get_vision_service as get_tog_vision, is_together_configured
+        if is_together_configured():
+            start = time.time()
+            result = get_tog_vision().analyze_image(image_content=image_content)
+            elapsed = round(time.time() - start, 1)
+            if result:
+                results['together'] = {'status': 'success', 'time_s': elapsed, 'en': (result.get('en') or '')[:200], 'ar': (result.get('ar') or '')[:200]}
+            else:
+                results['together'] = {'status': 'failed', 'time_s': elapsed, 'error': 'returned None'}
+        else:
+            results['together'] = {'status': 'not_configured'}
+    except Exception as e:
+        results['together'] = {'status': 'error', 'error': str(e)[:200]}
+
+    working = [k for k, v in results.items() if v.get('status') == 'success']
+    failed = [k for k, v in results.items() if v.get('status') in ('failed', 'error')]
+
+    return jsonify({
+        'status': 'success',
+        'test_image': test_image_url,
+        'summary': f'{len(working)} working, {len(failed)} failed',
+        'working': working,
+        'failed': failed,
+        'results': results,
+    }), 200
+
+
 @bp.route('/debug/ai-test', methods=['GET'])
 def test_ai_connection():
     """
