@@ -39,8 +39,16 @@ import base64
 
 logger = logging.getLogger(__name__)
 
-# Gemini API endpoint
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models"
+# Gemini API endpoints (v1 for 2.x models, v1beta for 1.5 models)
+GEMINI_API_V1 = "https://generativelanguage.googleapis.com/v1/models"
+GEMINI_API_V1BETA = "https://generativelanguage.googleapis.com/v1beta/models"
+
+
+def _get_api_url(model: str) -> str:
+    """Get the correct API URL for a model. 1.5 models need v1beta, 2.x+ use v1."""
+    if '1.5' in model:
+        return f"{GEMINI_API_V1BETA}/{model}"
+    return f"{GEMINI_API_V1}/{model}"
 
 # =============================================================================
 # VISION MODELS (Photo/Video Analysis)
@@ -182,7 +190,7 @@ class GeminiVisionService:
             result = None
             last_error = None
             for model in VISION_MODELS:
-                url = f"{GEMINI_API_URL}/{model}:generateContent?key={api_key}"
+                url = f"{_get_api_url(model)}:generateContent?key={api_key}"
                 logger.info(f"Trying Gemini Vision API with model: {model}")
 
                 try:
@@ -385,7 +393,7 @@ class GeminiVisionService:
             result = None
             last_error = None
             for model in VISION_MODELS:
-                url = f"{GEMINI_API_URL}/{model}:generateContent?key={api_key}"
+                url = f"{_get_api_url(model)}:generateContent?key={api_key}"
                 logger.info(f"Trying Gemini Video API with model: {model}, video size: {len(video_content)} bytes")
 
                 try:
@@ -518,7 +526,7 @@ class GeminiSpeechService:
             result = None
             last_error = None
             for model in AUDIO_MODELS:
-                url = f"{GEMINI_API_URL}/{model}:generateContent?key={api_key}"
+                url = f"{_get_api_url(model)}:generateContent?key={api_key}"
                 logger.info(f"Trying Gemini Audio API with model: {model}, audio size: {len(audio_content)} bytes")
 
                 try:
@@ -691,7 +699,7 @@ class GeminiTranslationService:
             result = None
             last_error = None
             for model in TRANSLATION_MODELS:
-                url = f"{GEMINI_API_URL}/{model}:generateContent?key={api_key}"
+                url = f"{_get_api_url(model)}:generateContent?key={api_key}"
                 logger.info(f"Trying translation with model: {model}")
 
                 try:
