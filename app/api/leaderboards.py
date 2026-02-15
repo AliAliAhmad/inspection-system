@@ -420,3 +420,44 @@ def get_tier_info():
         'diamond': {'min_level': 41, 'max_level': 50, 'color': '#b9f2ff'},
     }
     return jsonify({'status': 'success', 'data': tiers})
+
+
+# ==================== ROUTE ALIASES (frontend compatibility) ====================
+
+@bp.route('/ai/predict-rank', methods=['GET'])
+@jwt_required()
+def predict_rank_alias():
+    """Alias for /ai/prediction - frontend uses this path."""
+    user = get_current_user()
+    prediction = leaderboard_ai.get_rank_prediction(user.id)
+    return jsonify({'status': 'success', 'data': prediction})
+
+
+@bp.route('/ai/suggested-challenges', methods=['GET'])
+@jwt_required()
+def suggested_challenges_alias():
+    """Alias for /ai/suggest-challenges - frontend uses this path."""
+    user = get_current_user()
+    suggestions = leaderboard_ai.suggest_challenges(user.id)
+    return jsonify({'status': 'success', 'data': suggestions})
+
+
+@bp.route('/levels/me', methods=['GET'])
+@jwt_required()
+def get_my_level_alias():
+    """Alias for /levels - frontend uses /levels/me."""
+    user = get_current_user()
+    from app.models import UserLevel
+    level_info = UserLevel.query.filter_by(user_id=user.id).first()
+    if level_info:
+        return jsonify({'status': 'success', 'data': level_info.to_dict()})
+    return jsonify({'status': 'success', 'data': {'level': 1, 'current_xp': 0, 'tier': 'bronze'}})
+
+
+@bp.route('/streaks/me', methods=['GET'])
+@jwt_required()
+def get_my_streak_alias():
+    """Alias for /streaks - frontend uses /streaks/me."""
+    user = get_current_user()
+    data = gamification.get_streak_info(user.id)
+    return jsonify({'status': 'success', 'data': data})

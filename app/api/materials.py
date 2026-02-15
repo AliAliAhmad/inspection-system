@@ -981,3 +981,31 @@ def export_materials():
     # Generate Excel export
     # Return file download
     pass
+
+
+# ==================== ROUTE ALIASES (frontend compatibility) ====================
+
+@bp.route('/analytics/abc', methods=['GET'])
+@jwt_required()
+def abc_analysis_alias():
+    """Alias for /ai/abc-analysis - frontend uses /analytics/abc."""
+    analysis = material_ai.get_abc_analysis()
+    return jsonify({'status': 'success', 'data': analysis})
+
+
+@bp.route('/analytics/dead-stock', methods=['GET'])
+@jwt_required()
+def dead_stock_alias():
+    """Alias for /ai/dead-stock - frontend uses /analytics/dead-stock."""
+    months = request.args.get('months', 6, type=int)
+    dead_stock = material_ai.get_dead_stock(months)
+    return jsonify({'status': 'success', 'data': dead_stock})
+
+
+@bp.route('/analytics/budget-forecast', methods=['GET'])
+@jwt_required()
+def budget_forecast_alias():
+    """Alias for /ai/budget-forecast - frontend uses /analytics/budget-forecast."""
+    days = request.args.get('days', 30, type=int)
+    forecast = material_ai.forecast_budget(days)
+    return jsonify({'status': 'success', 'data': forecast})

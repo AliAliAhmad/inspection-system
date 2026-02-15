@@ -2209,3 +2209,131 @@ def get_utilization_report():
             'users': report
         }
     }), 200
+
+
+# ==================== ROUTE ALIASES (frontend compatibility) ====================
+
+@bp.route('/ai/patterns/my', methods=['GET'])
+@jwt_required()
+def get_my_patterns():
+    """Get current user's leave patterns. Alias for /ai/patterns."""
+    user = get_current_user()
+    patterns = leave_ai_service.analyze_leave_patterns(user_id=user.id)
+    return jsonify({'status': 'success', 'data': patterns}), 200
+
+
+@bp.route('/ai/wellness/my', methods=['GET'])
+@jwt_required()
+def get_my_wellness_score():
+    """Get current user's wellness score. Alias for /ai/wellness-score."""
+    score = leave_ai_service.get_team_wellness_score()
+    return jsonify({'status': 'success', 'data': score}), 200
+
+
+@bp.route('/analytics/team', methods=['GET'])
+@jwt_required()
+def get_team_analytics():
+    """Get team leave analytics with date range filtering."""
+    user = get_current_user()
+    language = get_language(user)
+
+    team_id = request.args.get('team_id', type=int)
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+
+    # Default to current year
+    if not date_from:
+        date_from = str(date(date.today().year, 1, 1))
+    if not date_to:
+        date_to = str(date.today())
+
+    try:
+        start = datetime.strptime(date_from, '%Y-%m-%d').date()
+        end = datetime.strptime(date_to, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid date format'}), 400
+
+    # Query leaves in date range
+    query = Leave.query.filter(
+        Leave.status == 'approved',
+        Leave.date_from >= start,
+        Leave.date_to <= end
+    )
+
+    leaves = query.all()
+
+    # Aggregate by type
+    by_type = {}
+    by_user = {}
+    total_days = 0
+
+    for leave in leaves:
+        # By type
+        lt = leave.leave_type.name if leave.leave_type else 'Unknown'
+        by_type[lt] = by_type.get(lt, 0) + float(leave.total_days or 0)
+
+        # By user
+        uid = leave.user_id
+        if uid not in by_user:
+            by_user[uid] = {'name': leave.user.full_name if leave.user else str(uid), 'days': 0, 'count': 0}
+        by_user[uid]['days'] += float(leave.total_days or 0)
+        by_user[uid]['count'] += 1
+
+        total_days += float(leave.total_days or 0)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'date_from': str(start),
+            'date_to': str(end),
+            'total_leaves': len(leaves),
+            'total_days': round(total_days, 1),
+            'by_type': [{'type': k, 'days': round(v, 1)} for k, v in by_type.items()],
+            'by_user': list(by_user.values()),
+            'average_per_user': round(total_days / len(by_user), 1) if by_user else 0,
+        }
+    }), 200
+
+
+@bp.route('/comp-off/my', methods=['GET'])
+@jwt_required()
+def get_my_comp_offs():
+    """Get current user's compensatory leave requests."""
+    user = get_current_user()
+    language = get_language(user)
+
+    status = request.args.get('status')
+    query = CompensatoryLeave.query.filter_by(user_id=user.id)
+    if status:
+        query = query.filter_by(status=status)
+    query = query.order_by(CompensatoryLeave.created_at.desc())
+
+    items, pagination_meta = paginate(query)
+    return jsonify({
+        'status': 'success',
+        'data': [c.to_dict(language=language) for c in items],
+        'pagination': pagination_meta
+    }), 200
+
+
+@bp.route('/comp-off/available', methods=['GET'])
+@jwt_required()
+def get_available_comp_offs():
+    """Get current user's available (approved, unused) compensatory leave."""
+    user = get_current_user()
+    language = get_language(user)
+
+    available = CompensatoryLeave.query.filter_by(
+        user_id=user.id,
+        status='approved'
+    ).filter(
+        db.or_(
+            CompensatoryLeave.expires_at.is_(None),
+            CompensatoryLeave.expires_at >= date.today()
+        )
+    ).order_by(CompensatoryLeave.expires_at.asc()).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': [c.to_dict(language=language) for c in available]
+    }), 200

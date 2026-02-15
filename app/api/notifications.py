@@ -1588,3 +1588,38 @@ def clear_dnd():
         'status': 'success',
         'message': 'DND cleared'
     }), 200
+
+
+# ==================== ROUTE ALIASES (frontend compatibility) ====================
+
+@bp.route('/ai/prioritize', methods=['GET'])
+@jwt_required()
+def ai_prioritize_alias():
+    """Alias for /ai/ranked - frontend uses /ai/prioritize."""
+    current_user_id = get_jwt_identity()
+    lang = get_language()
+
+    result = NotificationService.get_ai_ranked_notifications(int(current_user_id))
+
+    return jsonify({
+        'status': 'success',
+        'notifications': [n.to_dict(language=lang) for n in result['notifications']],
+        'ranking_factors': result['ranking_factors']
+    }), 200
+
+
+@bp.route('/preferences/reset', methods=['POST'])
+@jwt_required()
+def reset_preferences():
+    """Reset notification preferences to defaults."""
+    from app.models import NotificationPreference
+    current_user_id = int(get_jwt_identity())
+
+    # Delete all custom preferences for user
+    NotificationPreference.query.filter_by(user_id=current_user_id).delete()
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Notification preferences reset to defaults'
+    }), 200
