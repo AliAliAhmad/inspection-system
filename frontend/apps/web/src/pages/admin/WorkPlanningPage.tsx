@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React from 'react';
 import {
   Card,
   Button,
@@ -48,9 +49,7 @@ import {
   BulbOutlined,
   AlertOutlined,
   RobotOutlined,
-  PushpinOutlined,
-  AppstoreOutlined,
-  InboxOutlined,
+  WarningFilled,
 } from '@ant-design/icons';
 import {
   DndContext,
@@ -64,10 +63,12 @@ import {
   useSensors,
   DragOverEvent,
   useDroppable,
+  useDraggable,
 } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, equipmentApi, rosterApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority } from '@inspection/shared';
+import { workPlansApi, equipmentApi, rosterApi, usersApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -124,6 +125,50 @@ const DroppableDay: React.FC<{
   );
 };
 
+// Draggable Team Member for Compact Team Pool
+const DraggableTeamMember: React.FC<{ user: any; isOnLeave: boolean; leaveInfo?: string }> = ({ user, isOnLeave, leaveInfo }) => {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `employee-${user.id}`,
+    data: { type: 'employee', user },
+    disabled: isOnLeave,
+  });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.4 : 1,
+    cursor: isOnLeave ? 'not-allowed' : 'grab',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '2px 6px',
+    backgroundColor: isDragging ? '#e6f7ff' : isOnLeave ? '#f5f5f5' : '#fff',
+    border: `1px ${isOnLeave ? 'dashed' : 'solid'} ${isDragging ? '#1890ff' : '#d9d9d9'}`,
+    borderRadius: 6,
+    marginBottom: 2,
+  };
+
+  return (
+    <Tooltip title={isOnLeave ? `${user.full_name} - On Leave${leaveInfo ? ` (${leaveInfo})` : ''}` : user.full_name}>
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={`wp-team-member ${isOnLeave ? 'wp-team-member-leave' : ''}`}
+        {...(isOnLeave ? {} : { ...listeners, ...attributes })}
+      >
+        <span style={{ fontSize: 10, width: 18, height: 18, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: isOnLeave ? '#d9d9d9' : '#1890ff', color: '#fff', flexShrink: 0 }}>
+          {user.full_name?.charAt(0) || '?'}
+        </span>
+        <span style={{ fontSize: 11, color: isOnLeave ? '#8c8c8c' : '#262626', whiteSpace: 'nowrap' }}>
+          {user.full_name?.split(' ')[0]}
+        </span>
+        {isOnLeave && leaveInfo && (
+          <span style={{ fontSize: 9, color: '#fa8c16' }}>{leaveInfo}</span>
+        )}
+      </div>
+    </Tooltip>
+  );
+};
+
 export default function WorkPlanningPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -146,36 +191,9 @@ export default function WorkPlanningPage() {
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [conflictPanelOpen, setConflictPanelOpen] = useState(false);
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
+  const [teamExpanded, setTeamExpanded] = useState(false);
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
-
-  // ─── Panel Mode: Pinned (tabs always visible) vs Auto-Hide (appear on demand) ───
-  const [panelMode, setPanelMode] = useState<'pinned' | 'auto-hide'>(() => {
-    try { return (localStorage.getItem('wp_panel_mode') as 'pinned' | 'auto-hide') || 'pinned'; }
-    catch { return 'pinned'; }
-  });
-  const [activeRightTab, setActiveRightTab] = useState<'jobs' | 'team'>('jobs');
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [panelOpenedByDrag, setPanelOpenedByDrag] = useState(false);
-
-  const togglePanelMode = useCallback(() => {
-    const next = panelMode === 'pinned' ? 'auto-hide' : 'pinned';
-    setPanelMode(next);
-    setRightPanelOpen(false);
-    setPanelOpenedByDrag(false);
-    try { localStorage.setItem('wp_panel_mode', next); } catch {}
-  }, [panelMode]);
-
-  const openRightPanel = useCallback((tab: 'jobs' | 'team') => {
-    setActiveRightTab(tab);
-    setRightPanelOpen(true);
-    setPanelOpenedByDrag(false);
-  }, []);
-
-  const closeRightPanel = useCallback(() => {
-    setRightPanelOpen(false);
-    setPanelOpenedByDrag(false);
-  }, []);
 
   // Calculate week start (Monday)
   const currentWeekStart = dayjs().startOf('isoWeek').add(weekOffset, 'week');
@@ -370,7 +388,7 @@ export default function WorkPlanningPage() {
     onSuccess: (response) => {
       const data = response.data;
       if (data.scheduled > 0) {
-        message.success(`🚀 Auto-scheduled ${data.scheduled} jobs! ${data.skipped > 0 ? `(${data.skipped} skipped)` : ''}`);
+        message.success(`Auto-scheduled ${data.scheduled} jobs! ${data.skipped > 0 ? `(${data.skipped} skipped)` : ''}`);
       } else {
         message.info('No jobs were scheduled. Pool may be empty.');
       }
@@ -445,7 +463,7 @@ export default function WorkPlanningPage() {
     if (day && isUserOnLeaveForDay(user.id, day.date)) {
       warnings.push({
         type: 'error',
-        message: `⚠️ ${user.full_name?.split(' ')[0]} is on leave on ${dayjs(day.date).format('ddd, MMM D')}!`,
+        message: `${user.full_name?.split(' ')[0]} is on leave on ${dayjs(day.date).format('ddd, MMM D')}!`,
       });
     }
 
@@ -455,7 +473,7 @@ export default function WorkPlanningPage() {
       if (totalHours > 10) {
         warnings.push({
           type: 'warning',
-          message: `📊 This day has ${totalHours}h scheduled (high workload)`,
+          message: `This day has ${totalHours}h scheduled (high workload)`,
         });
       }
     }
@@ -513,7 +531,7 @@ export default function WorkPlanningPage() {
       await Promise.all(jobIds.map(jobId => workPlansApi.removeJob(currentPlan.id, jobId)));
     },
     onSuccess: () => {
-      message.success(`🗑️ Deleted ${selectedJobIds.size} jobs`);
+      message.success(`Deleted ${selectedJobIds.size} jobs`);
       setSelectedJobIds(new Set());
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
       queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
@@ -531,7 +549,7 @@ export default function WorkPlanningPage() {
       await Promise.all(jobIds.map(jobId => workPlansApi.moveJob(currentPlan.id, jobId, { target_day_id: targetDayId })));
     },
     onSuccess: () => {
-      message.success(`📦 Moved ${selectedJobIds.size} jobs`);
+      message.success(`Moved ${selectedJobIds.size} jobs`);
       setSelectedJobIds(new Set());
       setBulkMoveModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
@@ -546,7 +564,7 @@ export default function WorkPlanningPage() {
     mutationFn: (sourceWeekStart: string) => workPlansApi.copyFromWeek(currentPlan!.id, sourceWeekStart),
     onSuccess: (response) => {
       const data = response.data;
-      message.success(`📋 Copied ${data.copied} jobs from previous week!`);
+      message.success(`Copied ${data.copied} jobs from previous week!`);
       setCopyWeekModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
@@ -576,6 +594,88 @@ export default function WorkPlanningPage() {
     if (!aiAssistanceEnabled || !allJobs.length) return null;
     return calculateTimeAccuracy(allJobs as any);
   }, [allJobs, aiAssistanceEnabled]);
+
+  // At-risk jobs computation
+  const atRiskJobs = useMemo(() => {
+    if (!currentPlan?.days) return [];
+    const risks: { id: number; reason: string; equipment: string }[] = [];
+    currentPlan.days.forEach(day => {
+      const jobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
+      jobs.forEach((job: any) => {
+        if (!job.sap_order_number) {
+          risks.push({ id: job.id, reason: 'No SAP order', equipment: job.equipment?.serial_number || job.equipment?.name || `Job #${job.id}` });
+        }
+        if (!job.assignments || job.assignments.length === 0) {
+          risks.push({ id: job.id, reason: 'No team assigned', equipment: job.equipment?.serial_number || job.equipment?.name || `Job #${job.id}` });
+        }
+        if (job.computed_priority === 'critical' && job.overdue_value > 0) {
+          risks.push({ id: job.id, reason: 'Critical & overdue', equipment: job.equipment?.serial_number || job.equipment?.name || `Job #${job.id}` });
+        }
+      });
+    });
+    // Deduplicate by job id (keep first risk per job)
+    const seen = new Set<number>();
+    return risks.filter(r => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
+  }, [currentPlan]);
+
+  // Fetch team users for compact team pool
+  const { data: teamUsersData } = useQuery({
+    queryKey: ['users', 'active'],
+    queryFn: () => usersApi.list({ is_active: true, per_page: 500 }).then(r => r.data.data),
+    staleTime: 60000,
+  });
+
+  // Grouped team columns
+  const teamColumns = useMemo(() => {
+    const users = teamUsersData || [];
+    const cols = {
+      engineers: [] as any[],
+      specMech: [] as any[],
+      specElec: [] as any[],
+      inspMech: [] as any[],
+      inspElec: [] as any[],
+    };
+    (users as any[]).forEach((u: any) => {
+      if (u.role === 'admin') return;
+      const spec = u.specialization?.toLowerCase() || 'other';
+      if (u.role === 'engineer') cols.engineers.push(u);
+      else if (u.role === 'specialist') {
+        if (spec === 'mechanical') cols.specMech.push(u);
+        else if (spec === 'electrical') cols.specElec.push(u);
+        else cols.specMech.push(u); // default to mechanical
+      } else if (u.role === 'inspector') {
+        if (spec === 'mechanical') cols.inspMech.push(u);
+        else if (spec === 'electrical') cols.inspElec.push(u);
+        else cols.inspMech.push(u);
+      }
+    });
+    return cols;
+  }, [teamUsersData]);
+
+  // Leave details for team pool
+  const leaveDetails = useMemo(() => {
+    if (!rosterData?.users) return [];
+    const details: { userId: number; name: string; dates: string[]; coveredBy?: string }[] = [];
+    rosterData.users.forEach((u: any) => {
+      const entries = u.entries || {};
+      const leaveDates = Object.entries(entries)
+        .filter(([_, status]) => status === 'leave')
+        .map(([date]) => date);
+      if (leaveDates.length > 0) {
+        details.push({
+          userId: u.id,
+          name: u.full_name || `User ${u.id}`,
+          dates: leaveDates.sort(),
+          coveredBy: u.covered_by_name || undefined,
+        });
+      }
+    });
+    return details;
+  }, [rosterData]);
 
   // Toggle job selection
   const toggleJobSelection = useCallback((jobId: number) => {
@@ -613,26 +713,12 @@ export default function WorkPlanningPage() {
     const data = active.data.current;
     if (data) {
       setActiveItem({ type: data.type, data: data });
-      // Auto-hide mode: show team panel when dragging employee, jobs panel when dragging pool-job
-      if (panelMode === 'auto-hide' && !rightPanelOpen) {
-        if (data.type === 'employee') {
-          // Don't open panel when dragging employee - they need to see the calendar
-        } else if (data.type === 'pool-job') {
-          // Don't auto-open when dragging from pool - they're already in the panel
-        }
-      }
     }
-  }, [panelMode, rightPanelOpen]);
+  }, []);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     setActiveItem(null);
-
-    // Auto-close panel if it was opened by drag
-    if (panelOpenedByDrag) {
-      setRightPanelOpen(false);
-      setPanelOpenedByDrag(false);
-    }
 
     if (!over || !currentPlan || !isDraft) return;
 
@@ -699,7 +785,7 @@ export default function WorkPlanningPage() {
       setPendingAssignment({ job, user });
       setAssignModalOpen(true);
     }
-  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, panelOpenedByDrag]);
+  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation]);
 
   const handleCreatePlan = (values: any) => {
     const weekStart = values.week_start.startOf('isoWeek').format('YYYY-MM-DD');
@@ -744,6 +830,15 @@ export default function WorkPlanningPage() {
     }
   };
 
+  // Team column config for rendering
+  const teamColumnConfig = [
+    { key: 'engineers', label: 'Engineers', emoji: '🔧', color: '#1890ff', users: teamColumns.engineers },
+    { key: 'specMech', label: 'Spec (Mech)', emoji: '⚙️', color: '#52c41a', users: teamColumns.specMech },
+    { key: 'specElec', label: 'Spec (Elec)', emoji: '⚡', color: '#faad14', users: teamColumns.specElec },
+    { key: 'inspMech', label: 'Insp (Mech)', emoji: '🔍', color: '#722ed1', users: teamColumns.inspMech },
+    { key: 'inspElec', label: 'Insp (Elec)', emoji: '⚡', color: '#eb2f96', users: teamColumns.inspElec },
+  ];
+
   return (
     <DndContext
       sensors={sensors}
@@ -751,185 +846,183 @@ export default function WorkPlanningPage() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
-        {/* Header */}
-        <Card bodyStyle={{ padding: '12px 16px' }} style={{ marginBottom: 12 }}>
-          <Row justify="space-between" align="middle">
-            <Col>
-              <Space size="large">
-                <Title level={4} style={{ margin: 0 }}>
-                  <CalendarOutlined /> Work Planning
-                </Title>
-                {/* Week Navigation */}
-                <Space>
-                  <Button icon={<LeftOutlined />} onClick={() => setWeekOffset((o) => o - 1)} />
-                  <div style={{ minWidth: 200, textAlign: 'center' }}>
-                    <Text strong style={{ fontSize: 14 }}>
-                      {currentWeekStart.format('MMM D')} - {currentWeekStart.add(6, 'day').format('MMM D, YYYY')}
-                    </Text>
-                    {weekOffset !== 0 && (
-                      <Button type="link" size="small" onClick={() => setWeekOffset(0)}>
-                        Today
-                      </Button>
-                    )}
-                  </div>
-                  <Button icon={<RightOutlined />} onClick={() => setWeekOffset((o) => o + 1)} />
-                </Space>
-              </Space>
-            </Col>
-            <Col>
-              <Space>
-                {/* Plan Status */}
-                {currentPlan && (
-                  <Badge
-                    status={currentPlan.status === 'published' ? 'success' : 'warning'}
-                    text={<Text type="secondary">{currentPlan.status.toUpperCase()} • {currentPlan.total_jobs} jobs</Text>}
-                  />
-                )}
-                <ViewToggle value={viewMode} onChange={setViewMode} />
-                <Tooltip title="Toggle AI-powered predictions and suggestions">
-                  <Space size={4}>
-                    <Switch
-                      checked={aiAssistanceEnabled}
-                      onChange={setAiAssistanceEnabled}
-                      checkedChildren={<RobotOutlined />}
-                      unCheckedChildren={<RobotOutlined />}
-                      size="small"
-                    />
-                    <Text type="secondary" style={{ fontSize: 12 }}>AI</Text>
-                  </Space>
-                </Tooltip>
-                <Button
-                  icon={<BulbOutlined />}
-                  onClick={() => setAiDrawerOpen(true)}
-                  disabled={!aiAssistanceEnabled}
-                >
-                  AI Insights
-                </Button>
-                <Button
-                  icon={<AlertOutlined />}
-                  onClick={() => setConflictPanelOpen(true)}
-                >
-                  Conflicts
-                </Button>
-                {/* Panel Mode Toggle */}
-                <Tooltip title={panelMode === 'pinned' ? 'Switch to Auto-Hide panels (more calendar space)' : 'Switch to Pinned panels (always visible)'}>
-                  <Button
-                    icon={panelMode === 'pinned' ? <PushpinOutlined /> : <AppstoreOutlined />}
-                    onClick={togglePanelMode}
-                    type={panelMode === 'pinned' ? 'default' : 'dashed'}
-                  >
-                    {panelMode === 'pinned' ? '📌' : '🧲'}
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
+
+        {/* COMPACT TOOLBAR */}
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 12 }}>
+
+          {/* Left side: Path + Week Nav */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>/admin/work-planning</Text>
+            <Space size={4}>
+              <Button size="small" icon={<LeftOutlined />} onClick={() => setWeekOffset(o => o - 1)} />
+              <Text strong style={{ fontSize: 13, minWidth: 170, textAlign: 'center', display: 'inline-block' }}>
+                {currentWeekStart.format('MMM D')} - {currentWeekStart.add(6, 'day').format('MMM D, YYYY')}
+              </Text>
+              <Button size="small" icon={<RightOutlined />} onClick={() => setWeekOffset(o => o + 1)} />
+              {weekOffset !== 0 && <Button type="link" size="small" onClick={() => setWeekOffset(0)}>Today</Button>}
+            </Space>
+          </div>
+
+          {/* Right side: Status + View + AI + At-Risk + Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Plan Status */}
+            {currentPlan && (
+              <Badge status={currentPlan.status === 'published' ? 'success' : 'warning'} text={<Text type="secondary" style={{ fontSize: 12 }}>{currentPlan.status.toUpperCase()} &bull; {currentPlan.total_jobs} jobs</Text>} />
+            )}
+
+            <ViewToggle value={viewMode} onChange={setViewMode} />
+
+            {/* AI Toggle */}
+            <Space size={4}>
+              <Switch checked={aiAssistanceEnabled} onChange={setAiAssistanceEnabled} checkedChildren={<RobotOutlined />} unCheckedChildren={<RobotOutlined />} size="small" />
+            </Space>
+
+            <Button size="small" icon={<BulbOutlined />} onClick={() => setAiDrawerOpen(true)} disabled={!aiAssistanceEnabled}>AI</Button>
+            <Button size="small" icon={<AlertOutlined />} onClick={() => setConflictPanelOpen(true)}>Conflicts</Button>
+
+            {/* AT-RISK BADGE */}
+            {atRiskJobs.length > 0 && (
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: atRiskJobs.slice(0, 10).map(risk => ({
+                    key: `risk-${risk.id}`,
+                    label: (
+                      <div style={{ maxWidth: 250 }}>
+                        <Text strong style={{ fontSize: 12 }}>{risk.equipment}</Text>
+                        <div><Text type="secondary" style={{ fontSize: 11 }}>{risk.reason}</Text></div>
+                      </div>
+                    ),
+                    onClick: () => {
+                      const job = allJobs.find(j => j.id === risk.id);
+                      if (job) handleJobClick(job);
+                    },
+                  })),
+                }}
+              >
+                <Badge count={atRiskJobs.length} size="small" offset={[-2, 2]}>
+                  <Button size="small" danger icon={<WarningFilled />} className="wp-at-risk-badge">
+                    At Risk
                   </Button>
-                </Tooltip>
-                {/* Auto-Schedule Button - Prominent */}
-                {currentPlan && isDraft && (
-                  <Button
-                    type="primary"
-                    style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderColor: '#667eea' }}
-                    onClick={() => {
-                      Modal.confirm({
-                        title: '🚀 Auto-Schedule Jobs',
-                        content: (
-                          <div>
-                            <p>This will automatically distribute all jobs from the pool to the calendar based on:</p>
-                            <ul>
-                              <li>🔥 Critical jobs first (overdue {'>'} 100h or {'>'} 7 days)</li>
-                              <li>⚠️ Then overdue jobs</li>
-                              <li>📊 Then by priority (urgent → high → normal → low)</li>
-                              <li>⚖️ Balanced across days (max ~8h/day per berth)</li>
-                            </ul>
-                            <p style={{ marginTop: 12, color: '#8c8c8c' }}>Weekends will be skipped.</p>
-                          </div>
-                        ),
-                        okText: '🚀 Auto-Schedule',
-                        cancelText: 'Cancel',
-                        onOk: () => autoScheduleMutation.mutate({ include_weekends: false, max_hours_per_day: 8 }),
-                      });
-                    }}
-                    loading={autoScheduleMutation.isPending}
-                  >
-                    🚀 Auto-Schedule
-                  </Button>
-                )}
-                <Dropdown
-                  menu={{
-                    items: [
-                      {
-                        key: 'import',
-                        label: '📥 Import SAP Orders',
-                        onClick: () => setImportModalOpen(true),
-                        disabled: !currentPlan || !isDraft,
-                      },
-                      {
-                        key: 'download-template',
-                        label: '📄 Download SAP Template',
-                        onClick: () => {
-                          window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank');
-                        },
-                      },
-                      { type: 'divider' },
-                      {
-                        key: 'copy-from-week',
-                        label: '📋 Copy from Previous Week',
-                        onClick: () => setCopyWeekModalOpen(true),
-                        disabled: !currentPlan || !isDraft,
-                      },
-                      {
-                        key: 'auto-schedule-weekends',
-                        label: '🗓️ Auto-Schedule (Include Weekends)',
-                        onClick: () => {
-                          if (currentPlan) {
-                            Modal.confirm({
-                              title: '🗓️ Auto-Schedule Including Weekends',
-                              content: 'This will schedule jobs on Saturday and Sunday as well.',
-                              onOk: () => autoScheduleMutation.mutate({ include_weekends: true, max_hours_per_day: 8 }),
-                            });
-                          }
-                        },
-                        disabled: !currentPlan || !isDraft,
-                      },
-                      { type: 'divider' },
-                      {
-                        key: 'publish',
-                        label: '📤 Publish Plan',
-                        onClick: () => {
-                          if (currentPlan) {
-                            Modal.confirm({
-                              title: 'Publish Work Plan?',
-                              content: 'This will notify all assigned employees via email.',
-                              onOk: () => publishMutation.mutate(currentPlan.id),
-                            });
-                          }
-                        },
-                        disabled: !currentPlan || !isDraft,
-                      },
-                      {
-                        key: 'pdf',
-                        label: '📑 Download PDF',
-                        onClick: () => {
-                          if (currentPlan?.pdf_url) {
-                            window.open(currentPlan.pdf_url, '_blank');
-                          } else {
-                            message.info('PDF not available');
-                          }
-                        },
-                        disabled: !currentPlan?.pdf_url,
-                      },
-                    ],
-                  }}
-                >
-                  <Button icon={<SettingOutlined />}>Actions</Button>
-                </Dropdown>
-                {!currentPlan && (
-                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
-                    New Plan
-                  </Button>
-                )}
-              </Space>
-            </Col>
-          </Row>
-        </Card>
+                </Badge>
+              </Dropdown>
+            )}
+
+            {/* Auto-Schedule */}
+            {currentPlan && isDraft && (
+              <Button
+                size="small"
+                type="primary"
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderColor: '#667eea' }}
+                onClick={() => {
+                  Modal.confirm({
+                    title: 'Auto-Schedule Jobs',
+                    content: (
+                      <div>
+                        <p>This will automatically distribute all jobs from the pool to the calendar based on:</p>
+                        <ul>
+                          <li>Critical jobs first (overdue {'>'} 100h or {'>'} 7 days)</li>
+                          <li>Then overdue jobs</li>
+                          <li>Then by priority (urgent &rarr; high &rarr; normal &rarr; low)</li>
+                          <li>Balanced across days (max ~8h/day per berth)</li>
+                        </ul>
+                        <p style={{ marginTop: 12, color: '#8c8c8c' }}>Weekends will be skipped.</p>
+                      </div>
+                    ),
+                    okText: 'Auto-Schedule',
+                    cancelText: 'Cancel',
+                    onOk: () => autoScheduleMutation.mutate({ include_weekends: false, max_hours_per_day: 8 }),
+                  });
+                }}
+                loading={autoScheduleMutation.isPending}
+              >
+                Auto-Schedule
+              </Button>
+            )}
+
+            {/* Actions Dropdown */}
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'import',
+                    label: 'Import SAP Orders',
+                    icon: <FileExcelOutlined />,
+                    onClick: () => setImportModalOpen(true),
+                    disabled: !currentPlan || !isDraft,
+                  },
+                  {
+                    key: 'download-template',
+                    label: 'Download SAP Template',
+                    icon: <DownloadOutlined />,
+                    onClick: () => {
+                      window.open(workPlansApi.getSAPImportTemplateUrl(), '_blank');
+                    },
+                  },
+                  { type: 'divider' },
+                  {
+                    key: 'copy-from-week',
+                    label: 'Copy from Previous Week',
+                    icon: <CopyOutlined />,
+                    onClick: () => setCopyWeekModalOpen(true),
+                    disabled: !currentPlan || !isDraft,
+                  },
+                  {
+                    key: 'auto-schedule-weekends',
+                    label: 'Auto-Schedule (Include Weekends)',
+                    icon: <CalendarOutlined />,
+                    onClick: () => {
+                      if (currentPlan) {
+                        Modal.confirm({
+                          title: 'Auto-Schedule Including Weekends',
+                          content: 'This will schedule jobs on Saturday and Sunday as well.',
+                          onOk: () => autoScheduleMutation.mutate({ include_weekends: true, max_hours_per_day: 8 }),
+                        });
+                      }
+                    },
+                    disabled: !currentPlan || !isDraft,
+                  },
+                  { type: 'divider' },
+                  {
+                    key: 'publish',
+                    label: 'Publish Plan',
+                    icon: <SendOutlined />,
+                    onClick: () => {
+                      if (currentPlan) {
+                        Modal.confirm({
+                          title: 'Publish Work Plan?',
+                          content: 'This will notify all assigned employees via email.',
+                          onOk: () => publishMutation.mutate(currentPlan.id),
+                        });
+                      }
+                    },
+                    disabled: !currentPlan || !isDraft,
+                  },
+                  {
+                    key: 'pdf',
+                    label: 'Download PDF',
+                    icon: <FilePdfOutlined />,
+                    onClick: () => {
+                      if (currentPlan?.pdf_url) {
+                        window.open(currentPlan.pdf_url, '_blank');
+                      } else {
+                        message.info('PDF not available');
+                      }
+                    },
+                    disabled: !currentPlan?.pdf_url,
+                  },
+                ],
+              }}
+            >
+              <Button size="small" icon={<SettingOutlined />}>Actions</Button>
+            </Dropdown>
+
+            {!currentPlan && (
+              <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>New Plan</Button>
+            )}
+          </div>
+        </div>
 
         {/* Berth Tabs */}
         <Tabs
@@ -937,13 +1030,13 @@ export default function WorkPlanningPage() {
           onChange={(k) => setBerth(k as BerthTab)}
           type="card"
           size="small"
-          style={{ marginBottom: 0 }}
+          style={{ marginBottom: 0, paddingLeft: 16, paddingRight: 16 }}
           items={[
             {
               key: 'east',
               label: (
                 <Space>
-                  <span>🚢 East Berth</span>
+                  <span>East Berth</span>
                   {currentPlan && (
                     <Badge
                       count={(currentPlan.days || []).reduce((sum, d) => sum + (d.jobs_east?.length || 0) + (d.jobs_both?.length || 0), 0)}
@@ -958,7 +1051,7 @@ export default function WorkPlanningPage() {
               key: 'west',
               label: (
                 <Space>
-                  <span>⚓ West Berth</span>
+                  <span>West Berth</span>
                   {currentPlan && (
                     <Badge
                       count={(currentPlan.days || []).reduce((sum, d) => sum + (d.jobs_west?.length || 0) + (d.jobs_both?.length || 0), 0)}
@@ -978,9 +1071,10 @@ export default function WorkPlanningPage() {
             size="small"
             bodyStyle={{ padding: '8px 16px' }}
             style={{
-              marginBottom: 8,
+              marginBottom: 0,
               background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%)',
               border: '1px solid #91d5ff',
+              borderRadius: 0,
             }}
           >
             <Row justify="space-between" align="middle">
@@ -1015,7 +1109,7 @@ export default function WorkPlanningPage() {
                     icon={<SwapOutlined />}
                     onClick={() => setBulkMoveModalOpen(true)}
                   >
-                    📦 Move to Day
+                    Move to Day
                   </Button>
                   <Popconfirm
                     title={`Delete ${selectedJobIds.size} job${selectedJobIds.size > 1 ? 's' : ''}?`}
@@ -1029,7 +1123,7 @@ export default function WorkPlanningPage() {
                       danger
                       loading={bulkDeleteMutation.isPending}
                     >
-                      🗑️ Delete
+                      Delete
                     </Button>
                   </Popconfirm>
                 </Space>
@@ -1038,339 +1132,311 @@ export default function WorkPlanningPage() {
           </Card>
         )}
 
-        {/* ═══ Main Content Area: Calendar + Right Panel ═══ */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {/* MAIN CONTENT: Calendar+TeamPool | JobsPool */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-          {/* ──── Calendar / Views Area ──── */}
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            {isLoading ? (
-              <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Spin size="large" />
-              </Card>
-            ) : isError ? (
-              <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ textAlign: 'center', color: '#ff4d4f' }}>
-                  <Text type="danger" style={{ fontSize: 16 }}>Error loading work plan</Text>
-                  <br />
-                  <Text type="secondary">{(error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error'}</Text>
-                  <br />
-                  <Button onClick={() => refetch()} style={{ marginTop: 16 }}>Retry</Button>
+          {/* Left: Calendar + Team Pool */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+            {/* Calendar Area (scrollable) */}
+            <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+              {isLoading ? (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Spin size="large" />
                 </div>
-              </Card>
-            ) : currentPlan ? (
-              viewMode === 'analytics' ? (
-                <div style={{ padding: 16, overflow: 'auto' }}>
-                  {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
-                    <IncompleteJobsWarning
-                      jobs={incompleteJobPredictions}
-                      compact
-                      maxItems={5}
-                      onTakeAction={(jobId, action) => {
-                        message.info(`Recommended action for job ${jobId}: ${action}`);
-                      }}
-                    />
-                  )}
-                  <AnalyticsView plan={currentPlan} weekStart={weekStartStr} />
-                  {aiAssistanceEnabled && timeAccuracyData && timeAccuracyData.overallAccuracy > 0 && (
-                    <div style={{ marginTop: 16 }}>
-                      <TimeAccuracyChart
-                        overallAccuracy={timeAccuracyData.overallAccuracy}
-                        underEstimatedCount={timeAccuracyData.underEstimatedCount}
-                        overEstimatedCount={timeAccuracyData.overEstimatedCount}
-                        accurateCount={timeAccuracyData.accurateCount}
-                        byJobType={timeAccuracyData.byJobType}
-                        periodLabel={`Week of ${dayjs(weekStartStr).format('MMM D')}`}
+              ) : isError ? (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ textAlign: 'center', color: '#ff4d4f' }}>
+                    <Text type="danger" style={{ fontSize: 16 }}>Error loading work plan</Text>
+                    <br />
+                    <Text type="secondary">{(error as any)?.response?.data?.message || (error as any)?.message || 'Unknown error'}</Text>
+                    <br />
+                    <Button onClick={() => refetch()} style={{ marginTop: 16 }}>Retry</Button>
+                  </div>
+                </div>
+              ) : currentPlan ? (
+                viewMode === 'analytics' ? (
+                  <div style={{ overflow: 'auto' }}>
+                    {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
+                      <IncompleteJobsWarning
+                        jobs={incompleteJobPredictions}
+                        compact
+                        maxItems={5}
+                        onTakeAction={(jobId, action) => {
+                          message.info(`Recommended action for job ${jobId}: ${action}`);
+                        }}
                       />
+                    )}
+                    <AnalyticsView plan={currentPlan} weekStart={weekStartStr} />
+                    {aiAssistanceEnabled && timeAccuracyData && timeAccuracyData.overallAccuracy > 0 && (
+                      <div style={{ marginTop: 16 }}>
+                        <TimeAccuracyChart
+                          overallAccuracy={timeAccuracyData.overallAccuracy}
+                          underEstimatedCount={timeAccuracyData.underEstimatedCount}
+                          overEstimatedCount={timeAccuracyData.overEstimatedCount}
+                          accurateCount={timeAccuracyData.accurateCount}
+                          byJobType={timeAccuracyData.byJobType}
+                          periodLabel={`Week of ${dayjs(weekStartStr).format('MMM D')}`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : viewMode === 'gantt' ? (
+                  <GanttChartView
+                    jobs={allJobs}
+                    weekStart={weekStartStr}
+                    onJobClick={(job) => handleJobClick(job as WorkPlanJob)}
+                  />
+                ) : viewMode === 'timeline' ? (
+                  <TimelineView
+                    plan={{
+                      ...currentPlan,
+                      days: currentPlan.days?.map(d => ({
+                        ...d,
+                        jobs_east: berth === 'east' ? d.jobs_east : [],
+                        jobs_west: berth === 'west' ? d.jobs_west : [],
+                        jobs_both: d.jobs_both,
+                      })),
+                    }}
+                    onJobClick={handleJobClick}
+                    readOnly={!isDraft}
+                  />
+                ) : (
+                  <>
+                    {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
+                      <IncompleteJobsWarning
+                        jobs={incompleteJobPredictions}
+                        compact
+                        maxItems={3}
+                        onTakeAction={(jobId, action) => {
+                          message.info(`Recommended action for job ${jobId}: ${action}`);
+                        }}
+                      />
+                    )}
+                    {/* Legend */}
+                    <div style={{ marginBottom: 12, display: 'flex', gap: 16, fontSize: 12, color: '#595959' }}>
+                      <span><strong>Legend:</strong></span>
+                      <span>PM</span>
+                      <span>Defect</span>
+                      <span>Inspection</span>
+                      <span>|</span>
+                      <span style={{ color: '#52c41a' }}>On time</span>
+                      <span style={{ color: '#fa8c16' }}>Overdue</span>
+                      <span style={{ color: '#ff4d4f' }}>Critical</span>
+                      {isDraft && <span style={{ color: '#1890ff' }}>| Drag jobs from the right panel</span>}
                     </div>
-                  )}
-                </div>
-              ) : viewMode === 'gantt' ? (
-                <GanttChartView
-                  jobs={allJobs}
-                  weekStart={weekStartStr}
-                  onJobClick={(job) => handleJobClick(job as WorkPlanJob)}
-                />
-              ) : viewMode === 'timeline' ? (
-                <TimelineView
-                  plan={{
-                    ...currentPlan,
-                    days: currentPlan.days?.map(d => ({
-                      ...d,
-                      jobs_east: berth === 'east' ? d.jobs_east : [],
-                      jobs_west: berth === 'west' ? d.jobs_west : [],
-                      jobs_both: d.jobs_both,
-                    })),
-                  }}
-                  onJobClick={handleJobClick}
-                  readOnly={!isDraft}
-                />
+
+                    {/* Calendar Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+                      {(currentPlan.days || [])
+                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                        .map((day) => {
+                          const date = dayjs(day.date);
+                          const isToday = day.date === dayjs().format('YYYY-MM-DD');
+                          const jobs = getJobsForBerth(day);
+                          const totalHours = jobs.reduce((sum, job) => sum + job.estimated_hours, 0);
+
+                          return (
+                            <DroppableDay key={day.id} day={day} berth={berth}>
+                              <Card
+                                size="small"
+                                style={{
+                                  minHeight: 320,
+                                  backgroundColor: isToday ? '#f6ffed' : undefined,
+                                  borderColor: isToday ? '#52c41a' : undefined,
+                                }}
+                                title={
+                                  <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontWeight: 600, color: isToday ? '#52c41a' : undefined }}>
+                                      {date.format('ddd')}
+                                    </div>
+                                    <div style={{ fontSize: 18, fontWeight: 700, color: isToday ? '#52c41a' : undefined }}>
+                                      {date.format('D')}
+                                    </div>
+                                  </div>
+                                }
+                                extra={
+                                  <Badge count={jobs.length} showZero style={{ backgroundColor: jobs.length > 0 ? '#1890ff' : '#d9d9d9' }} />
+                                }
+                              >
+                                <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 8 }}>
+                                  {totalHours}h total
+                                </div>
+                                {jobs.length === 0 ? (
+                                  <div style={{ textAlign: 'center', padding: 20, color: '#bfbfbf' }}>
+                                    {isDraft ? 'Drop jobs here' : 'No jobs'}
+                                  </div>
+                                ) : (
+                                  <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+                                    {jobs.map((job) => (
+                                      <TimelineJobBlock
+                                        key={job.id}
+                                        job={job}
+                                        onClick={() => handleJobClick(job)}
+                                        compact
+                                        showTeam
+                                        selectable={isDraft}
+                                        selected={selectedJobIds.has(job.id)}
+                                        onSelect={(jobId, sel) => {
+                                          if (sel) {
+                                            setSelectedJobIds(prev => new Set([...prev, jobId]));
+                                          } else {
+                                            setSelectedJobIds(prev => {
+                                              const next = new Set(prev);
+                                              next.delete(jobId);
+                                              return next;
+                                            });
+                                          }
+                                        }}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                              </Card>
+                            </DroppableDay>
+                          );
+                        })}
+                    </div>
+                  </>
+                )
               ) : (
-                <Card bodyStyle={{ padding: '16px' }} style={{ height: '100%', overflow: 'auto' }}>
-                  {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
-                    <IncompleteJobsWarning
-                      jobs={incompleteJobPredictions}
-                      compact
-                      maxItems={3}
-                      onTakeAction={(jobId, action) => {
-                        message.info(`Recommended action for job ${jobId}: ${action}`);
-                      }}
-                    />
-                  )}
-                  {/* Legend */}
-                  <div style={{ marginBottom: 12, display: 'flex', gap: 16, fontSize: 12, color: '#595959' }}>
-                    <span><strong>Legend:</strong></span>
-                    <span>🔧 PM</span>
-                    <span>🔴 Defect</span>
-                    <span>✅ Inspection</span>
-                    <span>|</span>
-                    <span>🟢 On time</span>
-                    <span>🟠 Overdue</span>
-                    <span>🔴 Critical</span>
-                    {isDraft && <span style={{ color: '#1890ff' }}>| 👆 Drag jobs from the right panel</span>}
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <Text type="secondary" style={{ fontSize: 16 }}>No plan for this week</Text>
+                    <br />
+                    <Button type="primary" onClick={() => setCreateModalOpen(true)} style={{ marginTop: 16 }}>
+                      Create Plan
+                    </Button>
                   </div>
-
-                  {/* Calendar Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
-                    {(currentPlan.days || [])
-                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                      .map((day) => {
-                        const date = dayjs(day.date);
-                        const isToday = day.date === dayjs().format('YYYY-MM-DD');
-                        const jobs = getJobsForBerth(day);
-                        const totalHours = jobs.reduce((sum, job) => sum + job.estimated_hours, 0);
-
-                        return (
-                          <DroppableDay key={day.id} day={day} berth={berth}>
-                            <Card
-                              size="small"
-                              style={{
-                                minHeight: 320,
-                                backgroundColor: isToday ? '#f6ffed' : undefined,
-                                borderColor: isToday ? '#52c41a' : undefined,
-                              }}
-                              title={
-                                <div style={{ textAlign: 'center' }}>
-                                  <div style={{ fontWeight: 600, color: isToday ? '#52c41a' : undefined }}>
-                                    {date.format('ddd')}
-                                  </div>
-                                  <div style={{ fontSize: 18, fontWeight: 700, color: isToday ? '#52c41a' : undefined }}>
-                                    {date.format('D')}
-                                  </div>
-                                </div>
-                              }
-                              extra={
-                                <Badge count={jobs.length} showZero style={{ backgroundColor: jobs.length > 0 ? '#1890ff' : '#d9d9d9' }} />
-                              }
-                            >
-                              <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 8 }}>
-                                {totalHours}h total
-                              </div>
-                              {jobs.length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: 20, color: '#bfbfbf' }}>
-                                  {isDraft ? 'Drop jobs here' : 'No jobs'}
-                                </div>
-                              ) : (
-                                <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-                                  {jobs.map((job) => (
-                                    <TimelineJobBlock
-                                      key={job.id}
-                                      job={job}
-                                      onClick={() => handleJobClick(job)}
-                                      compact
-                                      showTeam
-                                      selectable={isDraft}
-                                      selected={selectedJobIds.has(job.id)}
-                                      onSelect={(jobId, sel) => {
-                                        if (sel) {
-                                          setSelectedJobIds(prev => new Set([...prev, jobId]));
-                                        } else {
-                                          setSelectedJobIds(prev => {
-                                            const next = new Set(prev);
-                                            next.delete(jobId);
-                                            return next;
-                                          });
-                                        }
-                                      }}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                            </Card>
-                          </DroppableDay>
-                        );
-                      })}
-                  </div>
-                </Card>
-              )
-            ) : (
-              <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 16 }}>No plan for this week</Text>
-                  <br />
-                  <Button type="primary" onClick={() => setCreateModalOpen(true)} style={{ marginTop: 16 }}>
-                    Create Plan
-                  </Button>
                 </div>
-              </Card>
+              )}
+            </div>
+
+            {/* COMPACT TEAM POOL */}
+            {currentPlan && viewMode === 'calendar' && (
+              <div style={{ borderTop: '1px solid #f0f0f0', padding: '8px 12px', flexShrink: 0, background: '#fafafa' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text strong style={{ fontSize: 12, color: '#595959' }}>Team Pool -- Drag to assign</Text>
+                  <Space size={8}>
+                    {leaveDetails.length > 0 && (
+                      <Tooltip title={leaveDetails.map(l => `${l.name}: ${l.dates.map(d => dayjs(d).format('ddd')).join(', ')}`).join(' | ')}>
+                        <Badge count={leaveDetails.length} size="small" style={{ backgroundColor: '#fa8c16' }}>
+                          <Text style={{ fontSize: 11, color: '#fa8c16', cursor: 'pointer' }}>On Leave</Text>
+                        </Badge>
+                      </Tooltip>
+                    )}
+                    <Button type="text" size="small" onClick={() => setTeamExpanded(!teamExpanded)} style={{ fontSize: 11 }}>
+                      {teamExpanded ? 'Collapse' : 'Expand'}
+                    </Button>
+                  </Space>
+                </div>
+
+                {/* Columns */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                  {teamColumnConfig.map(col => {
+                    const availableUsers = col.users.filter(u => !leaveUserIds.has(u.id));
+                    const onLeaveUsers = col.users.filter(u => leaveUserIds.has(u.id));
+                    const displayUsers = teamExpanded ? availableUsers : availableUsers.slice(0, 4);
+
+                    return (
+                      <div key={col.key} style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 6, padding: 6 }}>
+                        {/* Column Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, borderBottom: '1px solid #f0f0f0', paddingBottom: 4 }}>
+                          <span style={{ fontSize: 11 }}>{col.emoji}</span>
+                          <Text style={{ fontSize: 11, fontWeight: 600, color: col.color }}>{col.label}</Text>
+                          <Badge count={availableUsers.length} size="small" style={{ backgroundColor: col.color, fontSize: 9 }} />
+                        </div>
+
+                        {/* Members */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: teamExpanded ? 200 : 80, overflowY: 'auto' }}>
+                          {displayUsers.map(user => {
+                            const leaveInfo = leaveDetails.find(l => l.userId === user.id);
+                            return (
+                              <DraggableTeamMember
+                                key={user.id}
+                                user={user}
+                                isOnLeave={false}
+                              />
+                            );
+                          })}
+                          {!teamExpanded && availableUsers.length > 4 && (
+                            <Text type="secondary" style={{ fontSize: 10, textAlign: 'center' }}>+{availableUsers.length - 4} more</Text>
+                          )}
+                          {onLeaveUsers.length > 0 && teamExpanded && (
+                            <>
+                              <div style={{ borderTop: '1px dashed #d9d9d9', margin: '2px 0' }} />
+                              {onLeaveUsers.map(user => {
+                                const info = leaveDetails.find(l => l.userId === user.id);
+                                const leaveStr = info?.dates.map(d => dayjs(d).format('ddd')).join(',');
+                                return (
+                                  <DraggableTeamMember
+                                    key={user.id}
+                                    user={user}
+                                    isOnLeave={true}
+                                    leaveInfo={leaveStr}
+                                  />
+                                );
+                              })}
+                            </>
+                          )}
+                          {availableUsers.length === 0 && onLeaveUsers.length === 0 && (
+                            <Text type="secondary" style={{ fontSize: 10, textAlign: 'center', padding: 4 }}>None</Text>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Leave Info Strip */}
+                {leaveDetails.length > 0 && !teamExpanded && (
+                  <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', fontSize: 11 }}>
+                    <WarningOutlined style={{ color: '#fa8c16', fontSize: 12 }} />
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      <strong>Leave:</strong>{' '}
+                      {leaveDetails.slice(0, 3).map(l => `${l.name.split(' ')[0]} (${l.dates.map(d => dayjs(d).format('ddd')).join(',')})`).join(' | ')}
+                      {leaveDetails.length > 3 && ` +${leaveDetails.length - 3} more`}
+                    </Text>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
-          {/* ──── Right Panel: Jobs + Team Tabs (Pinned or Slide-in) ──── */}
-          {viewMode !== 'analytics' && (panelMode === 'pinned' || rightPanelOpen) && (
-            <div
-              className={`wp-right-panel ${panelMode === 'auto-hide' ? 'wp-slide-panel' : ''}`}
-              style={{
-                width: 320,
-                minWidth: 320,
-                display: 'flex',
-                flexDirection: 'column',
-                backgroundColor: '#fff',
-                overflow: 'hidden',
-                ...(panelMode === 'auto-hide' ? {
-                  position: 'absolute' as const,
-                  right: 0,
-                  top: 0,
-                  height: '100%',
-                  boxShadow: '-4px 0 16px rgba(0,0,0,0.15)',
-                  zIndex: 10,
-                  borderRadius: '8px 0 0 8px',
-                } : {
-                  borderLeft: '1px solid #f0f0f0',
-                  flexShrink: 0,
-                }),
+          {/* Right: Jobs Pool (always visible, full height) */}
+          <div className="wp-right-panel" style={{ width: 280, minWidth: 280, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
+            <JobsPool
+              embedded
+              berth={berth}
+              planId={currentPlan?.id}
+              days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
+              onAddJob={() => setAddJobModalOpen(true)}
+              onJobClick={(job, type) => {
+                setSelectedJob({ ...job, job_type: type as JobType } as any);
+                setJobDetailsModalOpen(true);
               }}
-            >
-              {/* Panel Header with Close (auto-hide mode) */}
-              {panelMode === 'auto-hide' && (
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  padding: '4px 8px 0',
-                  flexShrink: 0,
-                }}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CloseOutlined />}
-                    onClick={closeRightPanel}
-                  />
-                </div>
-              )}
-
-              {/* Tabs: Jobs / Team */}
-              <Tabs
-                activeKey={activeRightTab}
-                onChange={(k) => setActiveRightTab(k as 'jobs' | 'team')}
-                size="small"
-                style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-                tabBarStyle={{ padding: '0 12px', marginBottom: 0, flexShrink: 0 }}
-                items={[
-                  {
-                    key: 'jobs',
-                    label: <span><InboxOutlined /> 📥 Jobs</span>,
-                    children: (
-                      <div style={{ flex: 1, overflow: 'hidden', height: '100%' }}>
-                        <JobsPool
-                          embedded
-                          berth={berth}
-                          planId={currentPlan?.id}
-                          days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
-                          onAddJob={() => setAddJobModalOpen(true)}
-                          onJobClick={(job, type) => {
-                            setSelectedJob({ ...job, job_type: type as JobType } as any);
-                            setJobDetailsModalOpen(true);
-                          }}
-                          onImportSAP={() => setImportModalOpen(true)}
-                          onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
-                          onQuickSchedule={(job, jobType, dayId) => {
-                            if (!currentPlan || !isDraft) return;
-                            if (jobType === 'sap' && job.id) {
-                              scheduleSAPMutation.mutate({ planId: currentPlan.id, sapOrderId: job.id, dayId });
-                            } else {
-                              addJobMutation.mutate({
-                                planId: currentPlan.id,
-                                dayId,
-                                jobType: jobType as JobType,
-                                berth: berth as Berth,
-                                equipmentId: job.equipment?.id,
-                                defectId: job.defect?.id,
-                                inspectionAssignmentId: job.assignment?.id,
-                                estimatedHours: job.estimated_hours || 4,
-                              });
-                            }
-                          }}
-                        />
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'team',
-                    label: <span><TeamOutlined /> 👥 Team</span>,
-                    children: (
-                      <div style={{ flex: 1, overflow: 'hidden', height: '100%' }}>
-                        <EmployeePool
-                          vertical
-                          weekStart={weekStartStr}
-                          jobs={currentPlan?.days?.flatMap(d => [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])]) || []}
-                        />
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            </div>
-          )}
-
-          {/* ──── Floating Buttons (Auto-Hide mode only, when panel is closed) ──── */}
-          {viewMode !== 'analytics' && panelMode === 'auto-hide' && !rightPanelOpen && (
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 16,
-                right: 16,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                zIndex: 5,
+              onImportSAP={() => setImportModalOpen(true)}
+              onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
+              onQuickSchedule={(job, jobType, dayId) => {
+                if (!currentPlan || !isDraft) return;
+                if (jobType === 'sap' && job.id) {
+                  scheduleSAPMutation.mutate({ planId: currentPlan.id, sapOrderId: job.id, dayId });
+                } else {
+                  addJobMutation.mutate({
+                    planId: currentPlan.id,
+                    dayId,
+                    jobType: jobType as JobType,
+                    berth: berth as Berth,
+                    equipmentId: job.equipment?.id,
+                    defectId: job.defect?.id,
+                    inspectionAssignmentId: job.assignment?.id,
+                    estimatedHours: job.estimated_hours || 4,
+                  });
+                }
               }}
-            >
-              <Tooltip title="Open Jobs Pool" placement="left">
-                <Button
-                  className="wp-floating-btn"
-                  type="primary"
-                  shape="round"
-                  size="large"
-                  icon={<InboxOutlined />}
-                  onClick={() => openRightPanel('jobs')}
-                  style={{
-                    boxShadow: '0 4px 12px rgba(24,144,255,0.4)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                >
-                  📥 Jobs
-                </Button>
-              </Tooltip>
-              <Tooltip title="Open Team Pool" placement="left">
-                <Button
-                  className="wp-floating-btn"
-                  shape="round"
-                  size="large"
-                  icon={<TeamOutlined />}
-                  onClick={() => openRightPanel('team')}
-                  style={{
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                >
-                  👥 Team
-                </Button>
-              </Tooltip>
-            </div>
-          )}
+            />
+          </div>
         </div>
       </div>
 
@@ -1385,13 +1451,13 @@ export default function WorkPlanningPage() {
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
           }}>
             {activeItem.type === 'pool-job' && (
-              <span>📦 {activeItem.data.job?.equipment?.serial_number || activeItem.data.job?.defect?.description?.substring(0, 20) || 'Job'}</span>
+              <span>{activeItem.data.job?.equipment?.serial_number || activeItem.data.job?.defect?.description?.substring(0, 20) || 'Job'}</span>
             )}
             {activeItem.type === 'job' && (
-              <span>🔧 {activeItem.data.job?.equipment?.serial_number || 'Job'}</span>
+              <span>{activeItem.data.job?.equipment?.serial_number || 'Job'}</span>
             )}
             {activeItem.type === 'employee' && (
-              <span>👤 {activeItem.data.user?.full_name}</span>
+              <span>{activeItem.data.user?.full_name}</span>
             )}
           </div>
         )}
@@ -1422,7 +1488,7 @@ export default function WorkPlanningPage() {
 
       {/* Import SAP Modal */}
       <Modal
-        title="📥 Import SAP Work Orders"
+        title="Import SAP Work Orders"
         open={importModalOpen}
         onCancel={() => setImportModalOpen(false)}
         footer={null}
@@ -1494,7 +1560,7 @@ export default function WorkPlanningPage() {
                 loading={assignMutation.isPending}
                 disabled={assignmentWarnings.some(w => w.type === 'error' && w.message.includes('already assigned'))}
               >
-                👑 As Lead
+                As Lead
               </Button>
               <Button
                 size="large"
@@ -1502,7 +1568,7 @@ export default function WorkPlanningPage() {
                 loading={assignMutation.isPending}
                 disabled={assignmentWarnings.some(w => w.type === 'error' && w.message.includes('already assigned'))}
               >
-                👤 As Member
+                As Member
               </Button>
             </Space>
             <Divider />
@@ -1512,7 +1578,7 @@ export default function WorkPlanningPage() {
             {assignmentWarnings.some(w => w.type === 'error' && !w.message.includes('already assigned')) && (
               <div style={{ marginTop: 8 }}>
                 <Text type="warning" style={{ fontSize: 11 }}>
-                  ⚠️ You can still assign despite warnings
+                  You can still assign despite warnings
                 </Text>
               </div>
             )}
@@ -1626,7 +1692,7 @@ export default function WorkPlanningPage() {
       <Modal
         title={
           <Space>
-            <span>{selectedJob?.job_type === 'pm' ? '🔧' : selectedJob?.job_type === 'defect' ? '🔴' : '✅'}</span>
+            <span>{selectedJob?.job_type === 'pm' ? 'PM' : selectedJob?.job_type === 'defect' ? 'Defect' : 'Inspection'}</span>
             <span>Job Details</span>
           </Space>
         }
@@ -1666,7 +1732,7 @@ export default function WorkPlanningPage() {
               </Card>
             ) : (
               <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fff2f0', borderColor: '#ffccc7' }}>
-                <Text type="danger">⚠️ No SAP Order Number</Text>
+                <Text type="danger">No SAP Order Number</Text>
               </Card>
             )}
 
@@ -1682,7 +1748,7 @@ export default function WorkPlanningPage() {
             {selectedJob.overdue_value && selectedJob.overdue_value > 0 && (
               <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fff7e6', borderColor: '#ffd591' }}>
                 <Text strong style={{ color: '#fa8c16' }}>
-                  ⏰ Overdue by {selectedJob.overdue_value} {selectedJob.overdue_unit}
+                  Overdue by {selectedJob.overdue_value} {selectedJob.overdue_unit}
                 </Text>
               </Card>
             )}
@@ -1694,7 +1760,7 @@ export default function WorkPlanningPage() {
                 <div style={{ marginTop: 8 }}>
                   {selectedJob.assignments.map((a) => (
                     <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span>{a.is_lead ? '👑' : '👤'}</span>
+                      <span>{a.is_lead ? 'Lead' : 'Member'}</span>
                       <span>{a.user?.full_name}</span>
                       <Text type="secondary" style={{ fontSize: 12 }}>({a.user?.role})</Text>
                     </div>
@@ -1712,7 +1778,7 @@ export default function WorkPlanningPage() {
                 <div style={{ marginTop: 8 }}>
                   {selectedJob.materials.map((m) => (
                     <div key={m.id}>
-                      {m.material?.name} × {m.quantity} {m.material?.unit}
+                      {m.material?.name} x {m.quantity} {m.material?.unit}
                     </div>
                   ))}
                 </div>
@@ -1765,7 +1831,7 @@ export default function WorkPlanningPage() {
 
       {/* Add Job Modal */}
       <Modal
-        title="➕ Add Job Manually"
+        title="Add Job Manually"
         open={addJobModalOpen}
         onCancel={() => {
           setAddJobModalOpen(false);

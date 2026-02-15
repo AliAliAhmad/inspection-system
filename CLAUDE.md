@@ -90,6 +90,11 @@
 | 2026-02-15 | Added tabbed work plan stats widget (Overview/Schedule/Team/Focus) | ✅ Done |
 | 2026-02-15 | Fixed job_templates SQL error: added missing columns migration | ✅ Done |
 | 2026-02-15 | Work Planning: combined Side Tab Toggle + Auto-Hide panel layout | ✅ Done |
+| 2026-02-15 | Work Planning: rewrite layout — compact toolbar, inline team pool, always-visible jobs panel, at-risk badge | ✅ Done |
+| 2026-02-15 | Replaced icon sidebar with App Launcher (waffle menu popup) in MainLayout | ✅ Done |
+| 2026-02-15 | Rewrote DashboardPage: gradient KPI cards, work plan tabs, alerts, quick actions | ✅ Done |
+| 2026-02-15 | Redesigned WorkPlanningPage: jobs pool right, team pool below, at-risk toolbar badge | ✅ Done |
+| 2026-02-15 | Updated index.css: launcher, dashboard, team pool, at-risk styles | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -99,8 +104,8 @@
 | Photo upload | ✅ Done | Working |
 | Photo analysis (English) | ✅ Done | Working |
 | Photo analysis (Arabic) | 🔧 In Progress | Returns English only |
-| UI modernization | ✅ Done | Hub cards + icon sidebar + tabbed stats |
-| Work Planning layout | ✅ Done | Side Tab Toggle + Auto-Hide combo panel |
+| UI modernization | ✅ Done | App Launcher + smart dashboard + tabbed stats |
+| Work Planning layout | ✅ Done | Compact toolbar + inline team pool + always-visible jobs panel + at-risk badge |
 | Mobile app | ✅ Done | React Native/Expo — 96+ components |
 | GPS auto-location tagging | ✅ Done | useLocation hook + LocationTag |
 | Push-to-talk walkie-talkie | ✅ Done | Hold-to-record voice messaging |

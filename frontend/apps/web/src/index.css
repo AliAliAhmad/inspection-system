@@ -36,70 +36,6 @@ body.dark-mode .app-header {
   border-bottom-color: #303030;
 }
 
-/* ===================== Icon Sidebar ===================== */
-
-.icon-sidebar {
-  width: 60px;
-  min-width: 60px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 12px 0;
-  border-right: 1px solid #f0f0f0;
-  background: #fafafa;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-body.dark-mode .icon-sidebar {
-  background: #1a1a1a;
-  border-right-color: #303030;
-}
-
-html[dir='rtl'] .icon-sidebar {
-  border-right: none;
-  border-left: 1px solid #f0f0f0;
-}
-
-body.dark-mode html[dir='rtl'] .icon-sidebar,
-html[dir='rtl'] body.dark-mode .icon-sidebar {
-  border-left-color: #303030;
-}
-
-.sidebar-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 20px;
-  margin: 3px 0;
-  color: #595959;
-  background: transparent;
-  transition: all 0.2s ease;
-}
-
-body.dark-mode .sidebar-icon {
-  color: #8c8c8c;
-}
-
-.sidebar-icon:hover {
-  background: rgba(24, 144, 255, 0.08);
-  color: #1890ff;
-}
-
-.sidebar-icon-active {
-  background: rgba(24, 144, 255, 0.12);
-  color: #1890ff !important;
-}
-
-body.dark-mode .sidebar-icon-active {
-  background: rgba(24, 144, 255, 0.2);
-}
-
 /* ===================== Main Content ===================== */
 
 .app-content {
@@ -114,7 +50,83 @@ body.dark-mode .app-content {
   background: #141414;
 }
 
-/* ===================== Hub Cards ===================== */
+/* ===================== App Launcher ===================== */
+
+.launcher-trigger {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #595959;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+body.dark-mode .launcher-trigger {
+  color: #8c8c8c;
+}
+
+.launcher-trigger:hover {
+  background: rgba(24, 144, 255, 0.08);
+  color: #1890ff;
+}
+
+.launcher-trigger-active {
+  background: rgba(24, 144, 255, 0.12);
+  color: #1890ff !important;
+}
+
+.launcher-app-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+body.dark-mode .launcher-app-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark-mode .launcher-app-item span:last-child {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+body.dark-mode .app-launcher-content {
+  background: #1f1f1f;
+}
+
+/* ===================== Dashboard Cards ===================== */
+
+.dash-stat-card {
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.dash-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+body.dark-mode .dash-stat-card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.dash-activity-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.dash-activity-item:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+body.dark-mode .dash-activity-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ===================== Hub Cards (kept for compatibility) ===================== */
 
 .hub-card {
   border-radius: 12px;
@@ -176,9 +188,9 @@ html[dir='rtl'] {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* ===================== Work Planning Right Panel ===================== */
+/* ===================== Work Planning ===================== */
 
-/* Make Ant Tabs fill the panel height properly */
+/* Right panel tabs fix */
 .wp-right-panel .ant-tabs {
   display: flex;
   flex-direction: column;
@@ -203,6 +215,67 @@ html[dir='rtl'] {
 body.dark-mode .wp-right-panel {
   background-color: #1f1f1f;
   border-left-color: #303030;
+}
+
+/* Compact Team Pool */
+.wp-team-col {
+  position: relative;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+  max-height: 96px;
+  overflow: hidden;
+}
+
+.wp-team-col:hover {
+  max-height: 400px;
+  overflow-y: auto;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+body.dark-mode .wp-team-col {
+  background: #1a1a1a;
+  border-color: #303030;
+}
+
+body.dark-mode .wp-team-col:hover {
+  background: #1f1f1f;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.wp-team-member {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  cursor: grab;
+  transition: background 0.15s;
+  font-size: 12px;
+}
+
+.wp-team-member:hover {
+  background: rgba(24, 144, 255, 0.06);
+}
+
+.wp-team-member-leave {
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* At risk dropdown */
+.wp-at-risk-badge {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.wp-at-risk-badge:hover {
+  transform: scale(1.05);
 }
 
 /* Floating action buttons animation */

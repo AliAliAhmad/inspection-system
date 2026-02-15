@@ -1,20 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Breadcrumb, Typography, Dropdown, Avatar, Space, Tooltip, Switch } from 'antd';
+import { Breadcrumb, Typography, Dropdown, Avatar, Space, Tooltip, Switch, Popover, Input, Badge } from 'antd';
 import {
   HomeOutlined,
-  DashboardOutlined,
   UserOutlined,
-  ToolOutlined,
-  FileTextOutlined,
   BellOutlined,
-  ScheduleOutlined,
-  TeamOutlined,
-  SettingOutlined,
-  AppstoreOutlined,
   BulbOutlined,
   BulbFilled,
   SearchOutlined,
+  AppstoreOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../providers/AuthProvider';
 import { useLanguage } from '../providers/LanguageProvider';
@@ -26,119 +21,122 @@ import NotificationBadge from '../components/notifications/NotificationBadge';
 import NotificationDrawer from '../components/notifications/NotificationDrawer';
 import NotificationPreferencesModal from '../components/notifications/NotificationPreferencesModal';
 
-// ─── Sidebar Categories ─────────────────────────────────────────
+// ─── App Launcher Config ─────────────────────────────────────
 
-interface SidebarCategory {
+interface LauncherItem {
   key: string;
-  icon: React.ReactNode;
-  labelKey: string;
-  defaultPath: string | Record<string, string>;
+  emoji: string;
+  label: string;
+  labelAr?: string;
+  path: string;
   roles: string[];
-  pathPrefixes: string[];
 }
 
-const SIDEBAR_CATEGORIES: SidebarCategory[] = [
-  {
-    key: 'dashboard',
-    icon: <DashboardOutlined />,
-    labelKey: 'nav.dashboard',
-    defaultPath: '/',
-    roles: ['admin', 'engineer', 'inspector', 'specialist', 'quality_engineer'],
-    pathPrefixes: [],
-  },
+interface LauncherCategory {
+  key: string;
+  label: string;
+  labelAr: string;
+  emoji: string;
+  color: string;
+  items: LauncherItem[];
+}
+
+const LAUNCHER_CATEGORIES: LauncherCategory[] = [
   {
     key: 'operations',
-    icon: <ScheduleOutlined />,
-    labelKey: 'sidebar.operations',
-    defaultPath: {
-      admin: '/admin/work-planning',
-      engineer: '/admin/work-planning',
-      inspector: '/inspector/assignments',
-      specialist: '/specialist/jobs',
-      quality_engineer: '/quality/reviews',
-    },
-    roles: ['admin', 'engineer', 'inspector', 'specialist', 'quality_engineer'],
-    pathPrefixes: [
-      '/admin/work-planning', '/admin/work-plan/', '/admin/schedules',
-      '/admin/assignments', '/admin/daily-review', '/admin/overdue',
-      '/admin/approvals', '/my-work-plan', '/inspector/', '/specialist/',
-      '/quality/',
+    label: 'Operations',
+    labelAr: '\u0627\u0644\u0639\u0645\u0644\u064A\u0627\u062A',
+    emoji: '\u{1F4CA}',
+    color: '#667eea',
+    items: [
+      { key: 'work-planning', emoji: '\u{1F4C5}', label: 'Work Planning', labelAr: '\u062A\u062E\u0637\u064A\u0637 \u0627\u0644\u0639\u0645\u0644', path: '/admin/work-planning', roles: ['admin', 'engineer'] },
+      { key: 'daily-review', emoji: '\u{1F4DD}', label: 'Daily Review', labelAr: '\u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629', path: '/admin/daily-review', roles: ['admin', 'engineer'] },
+      { key: 'schedules', emoji: '\u{1F4C6}', label: 'Schedules', labelAr: '\u0627\u0644\u062C\u062F\u0627\u0648\u0644', path: '/admin/schedules', roles: ['admin'] },
+      { key: 'assignments', emoji: '\u{1F4CB}', label: 'Assignments', labelAr: '\u0627\u0644\u062A\u0639\u064A\u064A\u0646\u0627\u062A', path: '/admin/assignments', roles: ['admin'] },
+      { key: 'overdue', emoji: '\u23F0', label: 'Overdue', labelAr: '\u0645\u062A\u0623\u062E\u0631', path: '/admin/overdue', roles: ['admin', 'engineer'] },
+      { key: 'approvals', emoji: '\u2714\uFE0F', label: 'Approvals', labelAr: '\u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0627\u062A', path: '/admin/approvals', roles: ['admin'] },
+      { key: 'my-work-plan', emoji: '\u{1F4CB}', label: 'My Work Plan', labelAr: '\u062E\u0637\u0629 \u0639\u0645\u0644\u064A', path: '/my-work-plan', roles: ['inspector', 'specialist', 'engineer'] },
+      { key: 'my-assignments', emoji: '\u{1F4CB}', label: 'My Assignments', labelAr: '\u0645\u0647\u0627\u0645\u064A', path: '/inspector/assignments', roles: ['inspector'] },
+      { key: 'my-jobs-specialist', emoji: '\u{1F527}', label: 'My Jobs', labelAr: '\u0623\u0639\u0645\u0627\u0644\u064A', path: '/specialist/jobs', roles: ['specialist'] },
+      { key: 'my-jobs-engineer', emoji: '\u{1F6E0}\uFE0F', label: 'My Jobs', labelAr: '\u0623\u0639\u0645\u0627\u0644\u064A', path: '/engineer/jobs', roles: ['engineer'] },
     ],
   },
   {
     key: 'equipment',
-    icon: <ToolOutlined />,
-    labelKey: 'nav.equipment',
-    defaultPath: '/equipment-dashboard',
-    roles: ['admin', 'engineer', 'inspector', 'specialist', 'quality_engineer'],
-    pathPrefixes: [
-      '/admin/equipment', '/admin/running-hours', '/admin/defects',
-      '/admin/backlog', '/admin/checklists', '/admin/routines',
-      '/equipment-dashboard',
+    label: 'Equipment',
+    labelAr: '\u0627\u0644\u0645\u0639\u062F\u0627\u062A',
+    emoji: '\u{1F527}',
+    color: '#1890ff',
+    items: [
+      { key: 'equipment-dashboard', emoji: '\u{1F4CA}', label: 'Dashboard', labelAr: '\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u0639\u062F\u0627\u062A', path: '/equipment-dashboard', roles: ['admin', 'engineer', 'inspector', 'specialist', 'quality_engineer'] },
+      { key: 'equipment-list', emoji: '\u{1F527}', label: 'Equipment', labelAr: '\u0627\u0644\u0645\u0639\u062F\u0627\u062A', path: '/admin/equipment', roles: ['admin'] },
+      { key: 'running-hours', emoji: '\u23F1\uFE0F', label: 'Running Hours', labelAr: '\u0633\u0627\u0639\u0627\u062A \u0627\u0644\u062A\u0634\u063A\u064A\u0644', path: '/admin/running-hours', roles: ['admin', 'engineer'] },
+      { key: 'defects', emoji: '\u{1F41B}', label: 'Defects', labelAr: '\u0627\u0644\u0639\u064A\u0648\u0628', path: '/admin/defects', roles: ['admin', 'engineer'] },
+      { key: 'backlog', emoji: '\u{1F4CB}', label: 'Backlog', labelAr: '\u0627\u0644\u0645\u062A\u0631\u0627\u0643\u0645', path: '/admin/backlog', roles: ['admin'] },
+      { key: 'checklists', emoji: '\u2705', label: 'Checklists', labelAr: '\u0642\u0648\u0627\u0626\u0645 \u0627\u0644\u0641\u062D\u0635', path: '/admin/checklists', roles: ['admin'] },
+      { key: 'routines', emoji: '\u{1F501}', label: 'Routines', labelAr: '\u0627\u0644\u0631\u0648\u062A\u064A\u0646', path: '/admin/routines', roles: ['admin'] },
     ],
   },
   {
     key: 'inspections',
-    icon: <FileTextOutlined />,
-    labelKey: 'sidebar.inspections',
-    defaultPath: {
-      admin: '/admin/inspections',
-      engineer: '/engineer/jobs',
-      quality_engineer: '/quality/reviews',
-    },
-    roles: ['admin', 'engineer', 'quality_engineer'],
-    pathPrefixes: [
-      '/admin/inspections', '/admin/quality-reviews', '/admin/specialist-jobs',
-      '/admin/engineer-jobs', '/engineer/jobs', '/engineer/team-assignment',
-      '/engineer/pause-approvals',
+    label: 'Inspections',
+    labelAr: '\u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A',
+    emoji: '\u{1F4CB}',
+    color: '#52c41a',
+    items: [
+      { key: 'all-inspections', emoji: '\u{1F4CB}', label: 'All Inspections', labelAr: '\u0643\u0644 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A', path: '/admin/inspections', roles: ['admin'] },
+      { key: 'quality-reviews', emoji: '\u2B50', label: 'Quality Reviews', labelAr: '\u0645\u0631\u0627\u062C\u0639\u0627\u062A \u0627\u0644\u062C\u0648\u062F\u0629', path: '/admin/quality-reviews', roles: ['admin'] },
+      { key: 'specialist-jobs', emoji: '\u{1F528}', label: 'Specialist Jobs', labelAr: '\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u0645\u062A\u062E\u0635\u0635\u064A\u0646', path: '/admin/specialist-jobs', roles: ['admin'] },
+      { key: 'engineer-jobs', emoji: '\u{1F6E0}\uFE0F', label: 'Engineer Jobs', labelAr: '\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u0645\u0647\u0646\u062F\u0633\u064A\u0646', path: '/admin/engineer-jobs', roles: ['admin'] },
+      { key: 'qe-reviews', emoji: '\u{1F50D}', label: 'My Reviews', labelAr: '\u0645\u0631\u0627\u062C\u0639\u0627\u062A\u064A', path: '/quality/reviews', roles: ['quality_engineer'] },
+      { key: 'qe-overdue', emoji: '\u23F0', label: 'Overdue Reviews', labelAr: '\u0645\u0631\u0627\u062C\u0639\u0627\u062A \u0645\u062A\u0623\u062E\u0631\u0629', path: '/quality/overdue', roles: ['quality_engineer'] },
+      { key: 'qe-bonus', emoji: '\u{1F4B0}', label: 'Bonus Requests', labelAr: '\u0637\u0644\u0628\u0627\u062A \u0645\u0643\u0627\u0641\u0622\u062A', path: '/quality/bonus-requests', roles: ['quality_engineer'] },
     ],
   },
   {
     key: 'team',
-    icon: <TeamOutlined />,
-    labelKey: 'sidebar.team',
-    defaultPath: { admin: '/admin/users', engineer: '/admin/roster' },
-    roles: ['admin', 'engineer'],
-    pathPrefixes: [
-      '/admin/users', '/admin/roster', '/admin/performance',
-      '/leaderboard', '/leaves',
+    label: 'Team',
+    labelAr: '\u0627\u0644\u0641\u0631\u064A\u0642',
+    emoji: '\u{1F465}',
+    color: '#722ed1',
+    items: [
+      { key: 'users', emoji: '\u{1F465}', label: 'Users', labelAr: '\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646', path: '/admin/users', roles: ['admin'] },
+      { key: 'roster', emoji: '\u{1F4C5}', label: 'Roster', labelAr: '\u062C\u062F\u0648\u0644 \u0627\u0644\u062F\u0648\u0627\u0645', path: '/admin/roster', roles: ['admin', 'engineer'] },
+      { key: 'leaves', emoji: '\u{1F3D6}\uFE0F', label: 'Leaves', labelAr: '\u0627\u0644\u0625\u062C\u0627\u0632\u0627\u062A', path: '/leaves', roles: ['admin', 'engineer', 'inspector', 'specialist', 'quality_engineer'] },
+      { key: 'performance', emoji: '\u{1F4C8}', label: 'Performance', labelAr: '\u0627\u0644\u0623\u062F\u0627\u0621', path: '/admin/performance', roles: ['admin', 'engineer'] },
+      { key: 'leaderboard', emoji: '\u{1F3C6}', label: 'Leaderboard', labelAr: '\u0644\u0648\u062D\u0629 \u0627\u0644\u0645\u062A\u0635\u062F\u0631\u064A\u0646', path: '/leaderboard', roles: ['admin', 'engineer', 'inspector', 'specialist', 'quality_engineer'] },
+      { key: 'team-communication', emoji: '\u{1F4AC}', label: 'Communication', labelAr: '\u0627\u0644\u062A\u0648\u0627\u0635\u0644', path: '/admin/team-communication', roles: ['admin'] },
+      { key: 'team-assignment', emoji: '\u{1F465}', label: 'Team Assignment', labelAr: '\u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0641\u0631\u064A\u0642', path: '/engineer/team-assignment', roles: ['engineer'] },
+      { key: 'pause-approvals', emoji: '\u23F8\uFE0F', label: 'Pause Approvals', labelAr: '\u0645\u0648\u0627\u0641\u0642\u0627\u062A \u0627\u0644\u0625\u064A\u0642\u0627\u0641', path: '/engineer/pause-approvals', roles: ['engineer'] },
     ],
   },
   {
     key: 'maintenance',
-    icon: <AppstoreOutlined />,
-    labelKey: 'sidebar.maintenance',
-    defaultPath: '/admin/materials',
-    roles: ['admin', 'engineer'],
-    pathPrefixes: ['/admin/materials', '/admin/pm-templates', '/admin/cycles'],
+    label: 'Maintenance',
+    labelAr: '\u0627\u0644\u0635\u064A\u0627\u0646\u0629',
+    emoji: '\u{1F4E6}',
+    color: '#fa8c16',
+    items: [
+      { key: 'materials', emoji: '\u{1F4E6}', label: 'Materials', labelAr: '\u0627\u0644\u0645\u0648\u0627\u062F', path: '/admin/materials', roles: ['admin', 'engineer'] },
+      { key: 'pm-templates', emoji: '\u{1F4C4}', label: 'PM Templates', labelAr: '\u0642\u0648\u0627\u0644\u0628 \u0627\u0644\u0635\u064A\u0627\u0646\u0629', path: '/admin/pm-templates', roles: ['admin', 'engineer'] },
+      { key: 'cycles', emoji: '\u{1F504}', label: 'Cycles', labelAr: '\u0627\u0644\u062F\u0648\u0631\u0627\u062A', path: '/admin/cycles', roles: ['admin'] },
+      { key: 'reports', emoji: '\u{1F4CA}', label: 'Reports', labelAr: '\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631', path: '/admin/reports', roles: ['admin'] },
+    ],
   },
   {
     key: 'settings',
-    icon: <SettingOutlined />,
-    labelKey: 'sidebar.settings',
-    defaultPath: '/admin/leave-settings',
-    roles: ['admin'],
-    pathPrefixes: [
-      '/admin/leave-settings', '/admin/work-plan-settings',
-      '/admin/notification-rules', '/admin/notification-analytics',
-      '/admin/team-communication',
+    label: 'Settings',
+    labelAr: '\u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A',
+    emoji: '\u2699\uFE0F',
+    color: '#8c8c8c',
+    items: [
+      { key: 'leave-settings', emoji: '\u{1F3D6}\uFE0F', label: 'Leave Settings', labelAr: '\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0625\u062C\u0627\u0632\u0627\u062A', path: '/admin/leave-settings', roles: ['admin'] },
+      { key: 'work-plan-settings', emoji: '\u{1F4C5}', label: 'Work Plan Settings', labelAr: '\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u062E\u0637\u0629 \u0627\u0644\u0639\u0645\u0644', path: '/admin/work-plan-settings', roles: ['admin'] },
+      { key: 'notification-rules', emoji: '\u{1F514}', label: 'Notification Rules', labelAr: '\u0642\u0648\u0627\u0639\u062F \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A', path: '/admin/notification-rules', roles: ['admin'] },
+      { key: 'notification-analytics', emoji: '\u{1F4CA}', label: 'Notification Analytics', labelAr: '\u062A\u062D\u0644\u064A\u0644\u0627\u062A \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A', path: '/admin/notification-analytics', roles: ['admin'] },
     ],
   },
 ];
-
-function getActiveCategory(pathname: string): string {
-  if (pathname === '/') return 'dashboard';
-  for (const cat of SIDEBAR_CATEGORIES) {
-    if (cat.key === 'dashboard') continue;
-    if (cat.pathPrefixes.some((p) => pathname.startsWith(p))) return cat.key;
-  }
-  return 'dashboard';
-}
-
-function getCategoryPath(cat: SidebarCategory, role: string): string {
-  if (typeof cat.defaultPath === 'string') return cat.defaultPath;
-  return cat.defaultPath[role] || cat.defaultPath.admin || '/';
-}
 
 // ─── Route Labels for Auto Breadcrumbs ────────────────────────
 
@@ -164,6 +162,9 @@ const ROUTE_LABELS: Record<string, string> = {
   'bonus-requests': 'Bonus Requests',
 };
 
+// Pages that should NOT show the auto page header (they handle their own)
+const NO_HEADER_PAGES = ['/admin/work-planning', '/admin/work-plan/'];
+
 // ─── Auto Page Header ─────────────────────────────────────────
 
 function AutoPageHeader() {
@@ -171,6 +172,7 @@ function AutoPageHeader() {
   const location = useLocation();
 
   if (location.pathname === '/') return null;
+  if (NO_HEADER_PAGES.some(p => location.pathname.startsWith(p))) return null;
 
   const segments = location.pathname.split('/').filter(Boolean);
   const breadcrumbItems: { title: React.ReactNode; onClick?: () => void }[] = [
@@ -206,6 +208,172 @@ function AutoPageHeader() {
   );
 }
 
+// ─── App Launcher Component ──────────────────────────────────
+
+function AppLauncher({ userRole, language }: { userRole: string; language: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searchRef = useRef<any>(null);
+  const isAr = language === 'ar';
+
+  // Focus search when opened
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => searchRef.current?.focus(), 100);
+    } else {
+      setSearch('');
+    }
+  }, [open]);
+
+  // Filter categories and items based on role and search
+  const filteredCategories = useMemo(() => {
+    const query = search.toLowerCase().trim();
+    return LAUNCHER_CATEGORIES.map(cat => {
+      const items = cat.items.filter(item => {
+        if (!item.roles.includes(userRole)) return false;
+        if (query) {
+          return item.label.toLowerCase().includes(query) ||
+            (item.labelAr && item.labelAr.includes(query)) ||
+            cat.label.toLowerCase().includes(query);
+        }
+        return true;
+      });
+      return { ...cat, items };
+    }).filter(cat => cat.items.length > 0);
+  }, [userRole, search]);
+
+  const handleNavigate = (path: string) => {
+    navigate(path);
+    setOpen(false);
+  };
+
+  const content = (
+    <div className="app-launcher-content" style={{ width: 520, maxHeight: 480, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {/* Search */}
+      <div style={{ padding: '12px 16px 8px', flexShrink: 0 }}>
+        <Input
+          ref={searchRef}
+          placeholder={isAr ? '\u0628\u062D\u062B...' : 'Search apps...'}
+          prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+          allowClear
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ borderRadius: 8 }}
+        />
+      </div>
+
+      {/* Categories Grid */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px 16px' }}>
+        {filteredCategories.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 32, color: '#8c8c8c' }}>
+            {isAr ? '\u0644\u0627 \u062A\u0648\u062C\u062F \u0646\u062A\u0627\u0626\u062C' : 'No apps found'}
+          </div>
+        ) : (
+          filteredCategories.map(cat => (
+            <div key={cat.key} style={{ marginBottom: 16 }}>
+              {/* Category Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 14 }}>{cat.emoji}</span>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  color: cat.color,
+                }}>
+                  {isAr ? cat.labelAr : cat.label}
+                </span>
+                <div style={{ flex: 1, height: 1, background: '#f0f0f0', marginLeft: 8 }} />
+              </div>
+
+              {/* Items Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 4,
+              }}>
+                {cat.items.map(item => {
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <div
+                      key={item.key}
+                      className="launcher-app-item"
+                      onClick={() => handleNavigate(item.path)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '10px 4px',
+                        borderRadius: 10,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        background: isActive ? 'rgba(24, 144, 255, 0.08)' : 'transparent',
+                        border: isActive ? '1px solid rgba(24, 144, 255, 0.2)' : '1px solid transparent',
+                      }}
+                    >
+                      <span style={{ fontSize: 24, lineHeight: 1 }}>{item.emoji}</span>
+                      <span style={{
+                        fontSize: 11,
+                        color: isActive ? '#1890ff' : '#595959',
+                        fontWeight: isActive ? 600 : 400,
+                        textAlign: 'center',
+                        lineHeight: 1.2,
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {isAr && item.labelAr ? item.labelAr : item.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        padding: '8px 16px',
+        borderTop: '1px solid #f0f0f0',
+        textAlign: 'center',
+        flexShrink: 0,
+      }}>
+        <span
+          onClick={() => handleNavigate('/')}
+          style={{ fontSize: 12, color: '#1890ff', cursor: 'pointer' }}
+        >
+          <HomeOutlined /> {isAr ? '\u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629' : 'Dashboard'}
+        </span>
+      </div>
+    </div>
+  );
+
+  return (
+    <Popover
+      content={content}
+      trigger="click"
+      open={open}
+      onOpenChange={setOpen}
+      placement="bottomRight"
+      arrow={false}
+      overlayClassName="app-launcher-popover"
+      overlayInnerStyle={{ padding: 0, borderRadius: 12, overflow: 'hidden' }}
+    >
+      <Tooltip title={isAr ? '\u0627\u0644\u062A\u0637\u0628\u064A\u0642\u0627\u062A' : 'Apps'}>
+        <div className={`launcher-trigger ${open ? 'launcher-trigger-active' : ''}`}>
+          <AppstoreOutlined style={{ fontSize: 20 }} />
+        </div>
+      </Tooltip>
+    </Popover>
+  );
+}
+
 // ─── Main Layout ──────────────────────────────────────────────
 
 export default function MainLayout() {
@@ -214,7 +382,6 @@ export default function MainLayout() {
   const { isDark, toggleTheme } = useTheme();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const location = useLocation();
   const [preferencesOpen, setPreferencesOpen] = useState(false);
 
   useNotificationAlerts({ user, navigate });
@@ -232,9 +399,6 @@ export default function MainLayout() {
 
   if (!user) return null;
 
-  const activeCategory = getActiveCategory(location.pathname);
-  const visibleCategories = SIDEBAR_CATEGORIES.filter((c) => c.roles.includes(user.role));
-
   const userMenuItems = [
     { key: 'profile', label: t('nav.profile') },
     { key: 'lang', label: language === 'en' ? '\u0627\u0644\u0639\u0631\u0628\u064A\u0629' : 'English' },
@@ -246,12 +410,21 @@ export default function MainLayout() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* ─── Header ─── */}
       <header className="app-header">
-        <Typography.Text strong style={{ fontSize: 16 }}>
-          {t('common.app_title')}
-        </Typography.Text>
+        <Space size="middle" align="center">
+          {/* App Launcher */}
+          <AppLauncher userRole={user.role} language={language} />
+
+          <Typography.Text
+            strong
+            style={{ fontSize: 16, cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          >
+            {t('common.app_title')}
+          </Typography.Text>
+        </Space>
 
         <Space size="middle" align="center">
-          <Tooltip title={`${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+'}K`}>
+          <Tooltip title={`${navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl+'}K`}>
             <SearchOutlined
               style={{ fontSize: 18, cursor: 'pointer', color: isDark ? '#8c8c8c' : '#595959' }}
               onClick={() => {
@@ -297,35 +470,11 @@ export default function MainLayout() {
         </Space>
       </header>
 
-      {/* ─── Body: Sidebar + Content ─── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Icon Sidebar */}
-        <nav className="icon-sidebar">
-          {visibleCategories.map((cat) => {
-            const isActive = activeCategory === cat.key;
-            return (
-              <Tooltip
-                key={cat.key}
-                title={t(cat.labelKey)}
-                placement={language === 'ar' ? 'left' : 'right'}
-              >
-                <div
-                  className={`sidebar-icon ${isActive ? 'sidebar-icon-active' : ''}`}
-                  onClick={() => navigate(getCategoryPath(cat, user.role))}
-                >
-                  {cat.icon}
-                </div>
-              </Tooltip>
-            );
-          })}
-        </nav>
-
-        {/* Main Content */}
-        <main className="app-content">
-          <AutoPageHeader />
-          <Outlet />
-        </main>
-      </div>
+      {/* ─── Body: Full Width Content (no sidebar) ─── */}
+      <main className="app-content">
+        <AutoPageHeader />
+        <Outlet />
+      </main>
 
       {/* Notification Drawer */}
       <NotificationDrawer
