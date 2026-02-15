@@ -108,6 +108,13 @@
 | 2026-02-16 | Removed Ollama from all fallback chains (local-only, not usable on Render) | ✅ Done |
 | 2026-02-16 | Updated photo fallback chain: Gemini→Groq→OpenRouter→HuggingFace→Together→SambaNova→DeepInfra→OpenAI | ✅ Done |
 | 2026-02-16 | Updated voice fallback chain: Gemini→Groq→HuggingFace→Together→SambaNova→OpenAI | ✅ Done |
+| 2026-02-15 | Integrated orphaned mobile components: wired providers, dashboard, inspection, chat, profile, navigation | ✅ Done |
+| 2026-02-15 | Added AccessibilityProvider + AIPhotoAnalysisProvider to App.tsx | ✅ Done |
+| 2026-02-15 | DashboardScreen: added KPIAlerts, StreakIndicator, themed UI, communication link | ✅ Done |
+| 2026-02-15 | InspectionWizardScreen: integrated QuickFill templates, QuickNotes, PreviousAnswersPanel | ✅ Done |
+| 2026-02-15 | ChatRoomScreen: integrated MessageReactions, TranslatedMessage, MediaAttachment | ✅ Done |
+| 2026-02-15 | ProfileScreen: added accessibility settings (high contrast, bold text, reduce motion, text scale) | ✅ Done |
+| 2026-02-15 | MainTabNavigator: added Chat tab for all roles (Inspector, Specialist, Engineer, QE, Admin) | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -119,7 +126,7 @@
 | Photo analysis (Arabic) | 🔧 In Progress | Returns English only |
 | UI modernization | ✅ Done | App Launcher + smart dashboard + tabbed stats |
 | Work Planning layout | ✅ Done | Compact toolbar + inline team pool + always-visible jobs panel + at-risk badge |
-| Mobile app | ✅ Done | React Native/Expo — 96+ components |
+| Mobile app | ✅ Done | React Native/Expo — 96+ components, now wired into screens |
 | GPS auto-location tagging | ✅ Done | useLocation hook + LocationTag |
 | Push-to-talk walkie-talkie | ✅ Done | Hold-to-record voice messaging |
 | Team chat UI | ✅ Done | 3 screens + 5 chat components |
@@ -138,6 +145,13 @@
 | SambaNova integration | ✅ Done | Free vision + voice (Llama-4-Maverick, Whisper-Large-v3) |
 | OpenRouter free vision | ✅ Done | 6 free models (Llama 4 Scout, Qwen 2.5 VL, Gemma 3, Mistral) |
 | Together AI integration | ✅ Done | Vision (Llama-4-Maverick, Qwen3-VL) + voice (Whisper) |
+| Mobile component integration | ✅ Done | All orphaned components wired into screens |
+| Chat tab in navigation | ✅ Done | All roles have Chat tab in bottom nav |
+| Accessibility settings | ✅ Done | High contrast, bold text, reduce motion, text scaling |
+| Chat reactions & translation | ✅ Done | MessageReactions, TranslatedMessage, MediaAttachment in ChatRoom |
+| Inspection answer templates | ✅ Done | QuickFill integrated into InspectionWizard text answers |
+| Quick Notes (inspection) | ✅ Done | Floating notes button during inspections |
+| Previous answers panel | ✅ Done | Shows previous inspection answers during current inspection |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

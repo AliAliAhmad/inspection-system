@@ -8,6 +8,8 @@ import { LanguageProvider } from './providers/LanguageProvider';
 import { OfflineProvider } from './providers/OfflineProvider';
 import { VoiceCommandProvider } from './providers/VoiceCommandProvider';
 import { ThemeProvider, useThemeContext } from './providers/ThemeProvider';
+import { AccessibilityProvider } from './providers/AccessibilityProvider';
+import { AIPhotoAnalysisProvider } from './providers/AIPhotoAnalysisProvider';
 import OfflineBanner from './components/common/OfflineBanner';
 import VoiceCommandOverlay from './components/VoiceCommandOverlay';
 import BigButtonOverlay from './components/BigButtonOverlay';
@@ -56,23 +58,27 @@ export default function App() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <OfflineProvider>
-            <LanguageProvider>
-              <NavigationContainer>
-                <AuthProvider>
-                  <VoiceCommandProvider>
-                    <ErrorBoundary>
-                      <ThemedStatusBar />
-                      <OfflineBanner />
-                      <VoiceCommandOverlay />
-                      <AppContent />
-                      <BigButtonOverlay />
-                    </ErrorBoundary>
-                  </VoiceCommandProvider>
-                </AuthProvider>
-              </NavigationContainer>
-            </LanguageProvider>
-          </OfflineProvider>
+          <AccessibilityProvider>
+            <OfflineProvider>
+              <LanguageProvider>
+                <NavigationContainer>
+                  <AuthProvider>
+                    <AIPhotoAnalysisProvider>
+                      <VoiceCommandProvider>
+                        <ErrorBoundary>
+                          <ThemedStatusBar />
+                          <OfflineBanner />
+                          <VoiceCommandOverlay />
+                          <AppContent />
+                          <BigButtonOverlay />
+                        </ErrorBoundary>
+                      </VoiceCommandProvider>
+                    </AIPhotoAnalysisProvider>
+                  </AuthProvider>
+                </NavigationContainer>
+              </LanguageProvider>
+            </OfflineProvider>
+          </AccessibilityProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

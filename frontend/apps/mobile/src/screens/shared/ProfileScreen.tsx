@@ -8,13 +8,16 @@ import {
   Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../providers/AuthProvider';
 import { useLanguage } from '../../providers/LanguageProvider';
 import { useThemeContext } from '../../providers/ThemeProvider';
+import { useAccessibility } from '../../providers/AccessibilityProvider';
 import { useTheme, createThemedStyles } from '../../hooks/useTheme';
 import { getRoleColor } from '../../theme/colors';
 import { ThemeMode } from '../../storage/theme-storage';
 import { minutesToTimeString } from '../../storage/theme-storage';
+import type { TextScale } from '../../storage/accessibility-storage';
 
 const THEME_MODE_LABELS: Record<ThemeMode, { en: string; ar: string }> = {
   system: { en: 'System', ar: '\u0627\u0644\u0646\u0638\u0627\u0645' },
@@ -23,12 +26,28 @@ const THEME_MODE_LABELS: Record<ThemeMode, { en: string; ar: string }> = {
   schedule: { en: 'Schedule', ar: '\u062C\u062F\u0648\u0644\u0629' },
 };
 
+const TEXT_SCALE_LABELS: Record<TextScale, { en: string; ar: string }> = {
+  small: { en: 'Small', ar: '\u0635\u063A\u064A\u0631' },
+  normal: { en: 'Normal', ar: '\u0639\u0627\u062F\u064A' },
+  large: { en: 'Large', ar: '\u0643\u0628\u064A\u0631' },
+  xlarge: { en: 'Extra Large', ar: '\u0643\u0628\u064A\u0631 \u062C\u062F\u0627' },
+};
+
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { language, setLanguage, isRTL } = useLanguage();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const { mode, setMode, sunriseTime, sunsetTime } = useThemeContext();
+  const navigation = useNavigation<any>();
+  const {
+    preferences,
+    updatePreferences,
+    isHighContrast,
+    isBoldText,
+    textScale,
+    isReduceMotion,
+  } = useAccessibility();
   const styles = useStyles();
 
   if (!user) return null;
@@ -170,6 +189,107 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
+      {/* Accessibility Settings */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          {language === 'ar' ? '\u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u0627\u0644\u0648\u0635\u0648\u0644' : 'Accessibility'}
+        </Text>
+
+        {/* High Contrast */}
+        <View style={styles.langRow}>
+          <Text style={styles.langLabel}>
+            {language === 'ar' ? '\u062A\u0628\u0627\u064A\u0646 \u0639\u0627\u0644\u064A' : 'High Contrast'}
+          </Text>
+          <Switch
+            value={isHighContrast}
+            onValueChange={(checked) => updatePreferences({ highContrastEnabled: checked })}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.surface}
+          />
+        </View>
+
+        {/* Bold Text */}
+        <View style={[styles.langRow, { marginTop: 8 }]}>
+          <Text style={styles.langLabel}>
+            {language === 'ar' ? '\u0646\u0635 \u0639\u0631\u064A\u0636' : 'Bold Text'}
+          </Text>
+          <Switch
+            value={isBoldText}
+            onValueChange={(checked) => updatePreferences({ boldTextEnabled: checked })}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.surface}
+          />
+        </View>
+
+        {/* Reduce Motion */}
+        <View style={[styles.langRow, { marginTop: 8 }]}>
+          <Text style={styles.langLabel}>
+            {language === 'ar' ? '\u062A\u0642\u0644\u064A\u0644 \u0627\u0644\u062D\u0631\u0643\u0629' : 'Reduce Motion'}
+          </Text>
+          <Switch
+            value={isReduceMotion}
+            onValueChange={(checked) => updatePreferences({ reduceMotionEnabled: checked })}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.surface}
+          />
+        </View>
+
+        {/* Text Scale */}
+        <Text style={[styles.langLabel, { marginTop: 12, marginBottom: 8 }]}>
+          {language === 'ar' ? '\u062D\u062C\u0645 \u0627\u0644\u0646\u0635' : 'Text Size'}
+        </Text>
+        <View style={styles.themeOptions}>
+          {(['small', 'normal', 'large', 'xlarge'] as TextScale[]).map((scale) => (
+            <TouchableOpacity
+              key={scale}
+              style={[
+                styles.themeOption,
+                textScale === scale && styles.themeOptionActive,
+              ]}
+              onPress={() => updatePreferences({ textScale: scale })}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: textScale === scale }}
+            >
+              <Text
+                style={[
+                  styles.themeOptionText,
+                  textScale === scale && styles.themeOptionTextActive,
+                ]}
+              >
+                {TEXT_SCALE_LABELS[scale][language]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Quick Links */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          {language === 'ar' ? '\u0631\u0648\u0627\u0628\u0637 \u0633\u0631\u064A\u0639\u0629' : 'Quick Links'}
+        </Text>
+        <TouchableOpacity
+          style={styles.quickLinkRow}
+          onPress={() => navigation.navigate('ChannelList')}
+        >
+          <Text style={styles.quickLinkIcon}>💬</Text>
+          <Text style={[styles.langLabel, { flex: 1 }]}>
+            {language === 'ar' ? '\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u0641\u0631\u064A\u0642' : 'Team Chat'}
+          </Text>
+          <Text style={styles.quickLinkArrow}>›</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickLinkRow}
+          onPress={() => navigation.navigate('ToolkitSettings')}
+        >
+          <Text style={styles.quickLinkIcon}>⚙️</Text>
+          <Text style={[styles.langLabel, { flex: 1 }]}>
+            {language === 'ar' ? '\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0623\u062F\u0648\u0627\u062A' : 'Toolkit Settings'}
+          </Text>
+          <Text style={styles.quickLinkArrow}>›</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Logout */}
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>{t('auth.logout')}</Text>
@@ -306,6 +426,21 @@ const useStyles = createThemedStyles((colors, isDark) => ({
     fontSize: 12,
     color: colors.textTertiary,
     marginTop: 8,
+  },
+  quickLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  quickLinkIcon: {
+    fontSize: 18,
+    marginRight: 12,
+  },
+  quickLinkArrow: {
+    fontSize: 20,
+    color: colors.textTertiary,
   },
   logoutButton: {
     margin: 16,

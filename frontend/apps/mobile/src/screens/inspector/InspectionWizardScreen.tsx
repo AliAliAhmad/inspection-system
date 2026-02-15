@@ -23,6 +23,9 @@ import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
 import VideoRecorder from '../../components/VideoRecorder';
 import PhotoGallery from '../../components/PhotoGallery';
 import { Photo } from '../../components/PhotoThumbnailGrid';
+import { QuickFill } from '../../components/inspection/AnswerTemplates';
+import { QuickNotes } from '../../components/inspection/QuickNotes';
+import { PreviousAnswersPanel } from '../../components/inspection/PreviousAnswersPanel';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -1096,14 +1099,21 @@ export default function InspectionWizardScreen() {
 
       case 'text':
         return (
-          <VoiceTextInput
-            style={[styles.textInput, val && styles.textInputAnswered]}
-            value={val}
-            onChangeText={handleAnswer}
-            placeholder={t('inspection.answer')}
-            multiline
-            numberOfLines={3}
-          />
+          <View>
+            <VoiceTextInput
+              style={[styles.textInput, val && styles.textInputAnswered]}
+              value={val}
+              onChangeText={handleAnswer}
+              placeholder={t('inspection.answer')}
+              multiline
+              numberOfLines={3}
+            />
+            <QuickFill
+              onSelect={handleAnswer}
+              questionType="text"
+              questionContext={currentItem?.question_text}
+            />
+          </View>
         );
 
       default:
@@ -1250,6 +1260,25 @@ export default function InspectionWizardScreen() {
           {currentPart && ` → ${currentPart}`}
         </Text>
       </View>
+
+      {/* Previous Answers Panel - compact mode showing previous answer for current question */}
+      {inspectionId && currentItem && (
+        <PreviousAnswersPanel
+          equipmentId={inspData.equipment_id}
+          currentInspectionId={inspectionId}
+          currentItemId={currentItem.id}
+          compact={true}
+          onAnswerCopied={(itemId, value, comment) => {
+            handleAnswer(value);
+            if (comment) {
+              setLocalAnswers(prev => ({
+                ...prev,
+                [itemId]: { ...prev[itemId], comment },
+              }));
+            }
+          }}
+        />
+      )}
 
       {/* Question card with animation */}
       <Animated.View style={[styles.questionCard, { transform: [{ translateX: slideAnim }] }]}>
@@ -1528,6 +1557,20 @@ export default function InspectionWizardScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Quick Notes floating button */}
+      {inspectionId && (
+        <QuickNotes
+          inspectionId={inspectionId}
+          currentQuestionId={currentItem?.id}
+          currentQuestionText={
+            isArabic && currentItem?.question_text_ar
+              ? currentItem.question_text_ar
+              : currentItem?.question_text
+          }
+          showFloatingButton={true}
+        />
+      )}
     </View>
   );
 }

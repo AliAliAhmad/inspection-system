@@ -17,6 +17,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamCommunicationApi } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
 import type { TeamMessage } from '@inspection/shared';
+import { MessageReactions } from '../../components/chat/MessageReactions';
+import { TranslatedMessage } from '../../components/chat/TranslatedMessage';
+import { MediaAttachment } from '../../components/chat/MediaAttachment';
 
 export default function ChatRoomScreen() {
   const route = useRoute<any>();
@@ -73,6 +76,17 @@ export default function ChatRoomScreen() {
     setMessage('');
   }, [message, isAr, sendMutation]);
 
+  const handleReaction = useCallback((messageId: number, emoji: string) => {
+    // Send reaction to server (fire and forget)
+    teamCommunicationApi.sendMessage(channelId, {
+      message_type: 'reaction',
+      content: emoji,
+      parent_message_id: messageId,
+    }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['messages', channelId] });
+    }).catch(() => {});
+  }, [channelId, queryClient]);
+
   const formatTime = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -128,7 +142,16 @@ export default function ChatRoomScreen() {
             </View>
           )}
 
-          {item.message_type === 'photo' && (
+          {item.message_type === 'photo' && (item as any).media_url ? (
+            <MediaAttachment
+              type="photo"
+              mediaUrl={(item as any).media_url}
+              thumbnailUrl={(item as any).thumbnail_url}
+              isMe={isMe}
+              caption={item.content}
+              isAr={isAr}
+            />
+          ) : item.message_type === 'photo' && (
             <View style={styles.photoMsg}>
               <Text style={styles.photoIcon}>📸</Text>
               <Text style={styles.photoText}>
@@ -147,9 +170,14 @@ export default function ChatRoomScreen() {
           )}
 
           {(item.message_type === 'text' || !item.message_type) && item.content && (
-            <Text style={[styles.msgText, isMe && styles.msgTextMe]}>
-              {item.content}
-            </Text>
+            <TranslatedMessage
+              content={item.content}
+              originalLanguage={(item as any).language}
+              translatedContent={(item as any).translated_content}
+              isMe={isMe}
+              userLanguage={isAr ? 'ar' : 'en'}
+              autoTranslate={true}
+            />
           )}
 
           {item.is_priority && (
@@ -160,6 +188,15 @@ export default function ChatRoomScreen() {
             {formatTime(item.created_at)}
             {isMe && ' ✓'}
           </Text>
+
+          {/* Message Reactions */}
+          <MessageReactions
+            messageId={item.id}
+            reactions={(item as any).reactions}
+            isMe={isMe}
+            isAr={isAr}
+            onReact={handleReaction}
+          />
         </View>
       </View>
     );
