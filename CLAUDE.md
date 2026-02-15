@@ -86,6 +86,10 @@
 | 2026-02-15 | Wired RunningHoursScreen into RootNavigator | ✅ Done |
 | 2026-02-15 | Exported previous-inspection API + types in shared package | ✅ Done |
 | 2026-02-15 | Exported templates.types in shared package | ✅ Done |
+| 2026-02-15 | Rewrote web layout: Hub Card Dashboard + minimal icon sidebar | ✅ Done |
+| 2026-02-15 | Added tabbed work plan stats widget (Overview/Schedule/Team/Focus) | ✅ Done |
+| 2026-02-15 | Fixed job_templates SQL error: added missing columns migration | ✅ Done |
+| 2026-02-15 | Work Planning: combined Side Tab Toggle + Auto-Hide panel layout | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -95,7 +99,8 @@
 | Photo upload | ✅ Done | Working |
 | Photo analysis (English) | ✅ Done | Working |
 | Photo analysis (Arabic) | 🔧 In Progress | Returns English only |
-| UI modernization | 📋 Planned | Needs full redesign |
+| UI modernization | ✅ Done | Hub cards + icon sidebar + tabbed stats |
+| Work Planning layout | ✅ Done | Side Tab Toggle + Auto-Hide combo panel |
 | Mobile app | ✅ Done | React Native/Expo — 96+ components |
 | GPS auto-location tagging | ✅ Done | useLocation hook + LocationTag |
 | Push-to-talk walkie-talkie | ✅ Done | Hold-to-record voice messaging |

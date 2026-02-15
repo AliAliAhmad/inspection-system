@@ -48,6 +48,9 @@ import {
   BulbOutlined,
   AlertOutlined,
   RobotOutlined,
+  PushpinOutlined,
+  AppstoreOutlined,
+  InboxOutlined,
 } from '@ant-design/icons';
 import {
   DndContext,
@@ -145,6 +148,34 @@ export default function WorkPlanningPage() {
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
+
+  // ─── Panel Mode: Pinned (tabs always visible) vs Auto-Hide (appear on demand) ───
+  const [panelMode, setPanelMode] = useState<'pinned' | 'auto-hide'>(() => {
+    try { return (localStorage.getItem('wp_panel_mode') as 'pinned' | 'auto-hide') || 'pinned'; }
+    catch { return 'pinned'; }
+  });
+  const [activeRightTab, setActiveRightTab] = useState<'jobs' | 'team'>('jobs');
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [panelOpenedByDrag, setPanelOpenedByDrag] = useState(false);
+
+  const togglePanelMode = useCallback(() => {
+    const next = panelMode === 'pinned' ? 'auto-hide' : 'pinned';
+    setPanelMode(next);
+    setRightPanelOpen(false);
+    setPanelOpenedByDrag(false);
+    try { localStorage.setItem('wp_panel_mode', next); } catch {}
+  }, [panelMode]);
+
+  const openRightPanel = useCallback((tab: 'jobs' | 'team') => {
+    setActiveRightTab(tab);
+    setRightPanelOpen(true);
+    setPanelOpenedByDrag(false);
+  }, []);
+
+  const closeRightPanel = useCallback(() => {
+    setRightPanelOpen(false);
+    setPanelOpenedByDrag(false);
+  }, []);
 
   // Calculate week start (Monday)
   const currentWeekStart = dayjs().startOf('isoWeek').add(weekOffset, 'week');
@@ -582,12 +613,26 @@ export default function WorkPlanningPage() {
     const data = active.data.current;
     if (data) {
       setActiveItem({ type: data.type, data: data });
+      // Auto-hide mode: show team panel when dragging employee, jobs panel when dragging pool-job
+      if (panelMode === 'auto-hide' && !rightPanelOpen) {
+        if (data.type === 'employee') {
+          // Don't open panel when dragging employee - they need to see the calendar
+        } else if (data.type === 'pool-job') {
+          // Don't auto-open when dragging from pool - they're already in the panel
+        }
+      }
     }
-  }, []);
+  }, [panelMode, rightPanelOpen]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     setActiveItem(null);
+
+    // Auto-close panel if it was opened by drag
+    if (panelOpenedByDrag) {
+      setRightPanelOpen(false);
+      setPanelOpenedByDrag(false);
+    }
 
     if (!over || !currentPlan || !isDraft) return;
 
@@ -654,7 +699,7 @@ export default function WorkPlanningPage() {
       setPendingAssignment({ job, user });
       setAssignModalOpen(true);
     }
-  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation]);
+  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, panelOpenedByDrag]);
 
   const handleCreatePlan = (values: any) => {
     const weekStart = values.week_start.startOf('isoWeek').format('YYYY-MM-DD');
@@ -767,6 +812,16 @@ export default function WorkPlanningPage() {
                 >
                   Conflicts
                 </Button>
+                {/* Panel Mode Toggle */}
+                <Tooltip title={panelMode === 'pinned' ? 'Switch to Auto-Hide panels (more calendar space)' : 'Switch to Pinned panels (always visible)'}>
+                  <Button
+                    icon={panelMode === 'pinned' ? <PushpinOutlined /> : <AppstoreOutlined />}
+                    onClick={togglePanelMode}
+                    type={panelMode === 'pinned' ? 'default' : 'dashed'}
+                  >
+                    {panelMode === 'pinned' ? '📌' : '🧲'}
+                  </Button>
+                </Tooltip>
                 {/* Auto-Schedule Button - Prominent */}
                 {currentPlan && isDraft && (
                   <Button
@@ -983,48 +1038,11 @@ export default function WorkPlanningPage() {
           </Card>
         )}
 
-        {/* Jobs Pool - Fixed Right Sidebar (hidden in analytics mode) */}
-        {viewMode !== 'analytics' && (
-          <JobsPool
-            berth={berth}
-            planId={currentPlan?.id}
-            days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
-            onAddJob={() => setAddJobModalOpen(true)}
-            onJobClick={(job, type) => {
-              setSelectedJob({
-                ...job,
-                job_type: type as JobType,
-              } as any);
-              setJobDetailsModalOpen(true);
-            }}
-            onImportSAP={() => setImportModalOpen(true)}
-            onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
-            onQuickSchedule={(job, jobType, dayId) => {
-              if (!currentPlan || !isDraft) return;
-              if (jobType === 'sap' && job.id) {
-                scheduleSAPMutation.mutate({
-                  planId: currentPlan.id,
-                  sapOrderId: job.id,
-                  dayId: dayId,
-                });
-              } else {
-                addJobMutation.mutate({
-                  planId: currentPlan.id,
-                  dayId: dayId,
-                  jobType: jobType as JobType,
-                  berth: berth as Berth,
-                  equipmentId: job.equipment?.id,
-                  defectId: job.defect?.id,
-                  inspectionAssignmentId: job.assignment?.id,
-                  estimatedHours: job.estimated_hours || 4,
-                });
-              }
-            }}
-          />
-        )}
+        {/* ═══ Main Content Area: Calendar + Right Panel ═══ */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
 
-        {/* Main Content Area - Calendar (with right margin for sidebar, full width for analytics) */}
-        <div style={{ flex: 1, overflow: 'auto', marginRight: viewMode === 'analytics' ? 0 : '20%' }}>
+          {/* ──── Calendar / Views Area ──── */}
+          <div style={{ flex: 1, overflow: 'auto' }}>
             {isLoading ? (
               <Card style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Spin size="large" />
@@ -1042,7 +1060,6 @@ export default function WorkPlanningPage() {
             ) : currentPlan ? (
               viewMode === 'analytics' ? (
                 <div style={{ padding: 16, overflow: 'auto' }}>
-                  {/* AI-powered incomplete jobs warning */}
                   {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
                     <IncompleteJobsWarning
                       jobs={incompleteJobPredictions}
@@ -1053,14 +1070,7 @@ export default function WorkPlanningPage() {
                       }}
                     />
                   )}
-
-                  {/* Standard Analytics View */}
-                  <AnalyticsView
-                    plan={currentPlan}
-                    weekStart={weekStartStr}
-                  />
-
-                  {/* AI Time Accuracy Chart */}
+                  <AnalyticsView plan={currentPlan} weekStart={weekStartStr} />
                   {aiAssistanceEnabled && timeAccuracyData && timeAccuracyData.overallAccuracy > 0 && (
                     <div style={{ marginTop: 16 }}>
                       <TimeAccuracyChart
@@ -1096,7 +1106,6 @@ export default function WorkPlanningPage() {
                 />
               ) : (
                 <Card bodyStyle={{ padding: '16px' }} style={{ height: '100%', overflow: 'auto' }}>
-                  {/* AI-powered incomplete jobs warning - shown prominently at top */}
                   {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
                     <IncompleteJobsWarning
                       jobs={incompleteJobPredictions}
@@ -1107,7 +1116,6 @@ export default function WorkPlanningPage() {
                       }}
                     />
                   )}
-
                   {/* Legend */}
                   <div style={{ marginBottom: 12, display: 'flex', gap: 16, fontSize: 12, color: '#595959' }}>
                     <span><strong>Legend:</strong></span>
@@ -1118,7 +1126,7 @@ export default function WorkPlanningPage() {
                     <span>🟢 On time</span>
                     <span>🟠 Overdue</span>
                     <span>🔴 Critical</span>
-                    {isDraft && <span style={{ color: '#1890ff' }}>| 👆 Drag jobs from pool above</span>}
+                    {isDraft && <span style={{ color: '#1890ff' }}>| 👆 Drag jobs from the right panel</span>}
                   </div>
 
                   {/* Calendar Grid */}
@@ -1207,15 +1215,163 @@ export default function WorkPlanningPage() {
             )}
           </div>
 
-        {/* Bottom: Employee Pool (with right margin for sidebar, hidden in analytics mode) */}
-        {viewMode !== 'analytics' && (
-          <div style={{ marginTop: 8, marginRight: '20%' }}>
-            <EmployeePool
-              weekStart={weekStartStr}
-              jobs={currentPlan?.days?.flatMap(d => [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])]) || []}
-            />
-          </div>
-        )}
+          {/* ──── Right Panel: Jobs + Team Tabs (Pinned or Slide-in) ──── */}
+          {viewMode !== 'analytics' && (panelMode === 'pinned' || rightPanelOpen) && (
+            <div
+              className={`wp-right-panel ${panelMode === 'auto-hide' ? 'wp-slide-panel' : ''}`}
+              style={{
+                width: 320,
+                minWidth: 320,
+                display: 'flex',
+                flexDirection: 'column',
+                backgroundColor: '#fff',
+                overflow: 'hidden',
+                ...(panelMode === 'auto-hide' ? {
+                  position: 'absolute' as const,
+                  right: 0,
+                  top: 0,
+                  height: '100%',
+                  boxShadow: '-4px 0 16px rgba(0,0,0,0.15)',
+                  zIndex: 10,
+                  borderRadius: '8px 0 0 8px',
+                } : {
+                  borderLeft: '1px solid #f0f0f0',
+                  flexShrink: 0,
+                }),
+              }}
+            >
+              {/* Panel Header with Close (auto-hide mode) */}
+              {panelMode === 'auto-hide' && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  padding: '4px 8px 0',
+                  flexShrink: 0,
+                }}>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CloseOutlined />}
+                    onClick={closeRightPanel}
+                  />
+                </div>
+              )}
+
+              {/* Tabs: Jobs / Team */}
+              <Tabs
+                activeKey={activeRightTab}
+                onChange={(k) => setActiveRightTab(k as 'jobs' | 'team')}
+                size="small"
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+                tabBarStyle={{ padding: '0 12px', marginBottom: 0, flexShrink: 0 }}
+                items={[
+                  {
+                    key: 'jobs',
+                    label: <span><InboxOutlined /> 📥 Jobs</span>,
+                    children: (
+                      <div style={{ flex: 1, overflow: 'hidden', height: '100%' }}>
+                        <JobsPool
+                          embedded
+                          berth={berth}
+                          planId={currentPlan?.id}
+                          days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
+                          onAddJob={() => setAddJobModalOpen(true)}
+                          onJobClick={(job, type) => {
+                            setSelectedJob({ ...job, job_type: type as JobType } as any);
+                            setJobDetailsModalOpen(true);
+                          }}
+                          onImportSAP={() => setImportModalOpen(true)}
+                          onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
+                          onQuickSchedule={(job, jobType, dayId) => {
+                            if (!currentPlan || !isDraft) return;
+                            if (jobType === 'sap' && job.id) {
+                              scheduleSAPMutation.mutate({ planId: currentPlan.id, sapOrderId: job.id, dayId });
+                            } else {
+                              addJobMutation.mutate({
+                                planId: currentPlan.id,
+                                dayId,
+                                jobType: jobType as JobType,
+                                berth: berth as Berth,
+                                equipmentId: job.equipment?.id,
+                                defectId: job.defect?.id,
+                                inspectionAssignmentId: job.assignment?.id,
+                                estimatedHours: job.estimated_hours || 4,
+                              });
+                            }
+                          }}
+                        />
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'team',
+                    label: <span><TeamOutlined /> 👥 Team</span>,
+                    children: (
+                      <div style={{ flex: 1, overflow: 'hidden', height: '100%' }}>
+                        <EmployeePool
+                          vertical
+                          weekStart={weekStartStr}
+                          jobs={currentPlan?.days?.flatMap(d => [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])]) || []}
+                        />
+                      </div>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          )}
+
+          {/* ──── Floating Buttons (Auto-Hide mode only, when panel is closed) ──── */}
+          {viewMode !== 'analytics' && panelMode === 'auto-hide' && !rightPanelOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 16,
+                right: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                zIndex: 5,
+              }}
+            >
+              <Tooltip title="Open Jobs Pool" placement="left">
+                <Button
+                  className="wp-floating-btn"
+                  type="primary"
+                  shape="round"
+                  size="large"
+                  icon={<InboxOutlined />}
+                  onClick={() => openRightPanel('jobs')}
+                  style={{
+                    boxShadow: '0 4px 12px rgba(24,144,255,0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  📥 Jobs
+                </Button>
+              </Tooltip>
+              <Tooltip title="Open Team Pool" placement="left">
+                <Button
+                  className="wp-floating-btn"
+                  shape="round"
+                  size="large"
+                  icon={<TeamOutlined />}
+                  onClick={() => openRightPanel('team')}
+                  style={{
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  👥 Team
+                </Button>
+              </Tooltip>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Drag Overlay */}

@@ -192,6 +192,8 @@ interface JobsPoolProps {
   onJobClick?: (job: any, jobType: string) => void;
   onClearPool?: () => Promise<void>;
   onQuickSchedule?: (job: any, jobType: string, dayId: number) => void;
+  /** When true, renders inline (no fixed positioning) to fit inside a parent panel */
+  embedded?: boolean;
 }
 
 export const JobsPool: React.FC<JobsPoolProps> = ({
@@ -203,6 +205,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   onJobClick,
   onClearPool,
   onQuickSchedule,
+  embedded = false,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'prm' | 'defect' | 'ins'>('prm');
@@ -363,8 +366,15 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
 
   return (
     <div
-      style={{
-        position: 'fixed',
+      style={embedded ? {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        height: '100%',
+        width: '100%',
+        overflow: 'hidden',
+        backgroundColor: '#fff',
+      } : {
+        position: 'fixed' as const,
         top: 0,
         right: 0,
         width: isCollapsed ? '40px' : '18%',
@@ -374,38 +384,40 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
         boxShadow: '-2px 0 8px rgba(0,0,0,0.15)',
         zIndex: 1000,
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column' as const,
         overflow: 'hidden',
         transition: 'width 0.3s ease',
       }}
     >
-      {/* Collapse Toggle Button */}
-      <Tooltip title={isCollapsed ? 'Open Jobs Pool' : 'Close Jobs Pool'} placement="left">
-        <div
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: '50%',
-            transform: 'translateY(-50%) translateX(-50%)',
-            width: 24,
-            height: 48,
-            backgroundColor: '#1890ff',
-            borderRadius: '4px 0 0 4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            boxShadow: '-2px 0 4px rgba(0,0,0,0.15)',
-            zIndex: 1001,
-          }}
-        >
-          {isCollapsed ? <LeftOutlined style={{ color: '#fff', fontSize: 12 }} /> : <RightOutlined style={{ color: '#fff', fontSize: 12 }} />}
-        </div>
-      </Tooltip>
+      {/* Collapse Toggle Button - standalone mode only */}
+      {!embedded && (
+        <Tooltip title={isCollapsed ? 'Open Jobs Pool' : 'Close Jobs Pool'} placement="left">
+          <div
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: '50%',
+              transform: 'translateY(-50%) translateX(-50%)',
+              width: 24,
+              height: 48,
+              backgroundColor: '#1890ff',
+              borderRadius: '4px 0 0 4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '-2px 0 4px rgba(0,0,0,0.15)',
+              zIndex: 1001,
+            }}
+          >
+            {isCollapsed ? <LeftOutlined style={{ color: '#fff', fontSize: 12 }} /> : <RightOutlined style={{ color: '#fff', fontSize: 12 }} />}
+          </div>
+        </Tooltip>
+      )}
 
-      {/* Collapsed State - Show badge only */}
-      {isCollapsed ? (
+      {/* Collapsed State - Show badge only (standalone mode) */}
+      {!embedded && isCollapsed ? (
         <div
           style={{
             flex: 1,

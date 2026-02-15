@@ -176,6 +176,52 @@ html[dir='rtl'] {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+/* ===================== Work Planning Right Panel ===================== */
+
+/* Make Ant Tabs fill the panel height properly */
+.wp-right-panel .ant-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.wp-right-panel .ant-tabs-content-holder {
+  flex: 1;
+  overflow: hidden;
+}
+
+.wp-right-panel .ant-tabs-content {
+  height: 100%;
+}
+
+.wp-right-panel .ant-tabs-tabpane {
+  height: 100%;
+  overflow: hidden;
+}
+
+body.dark-mode .wp-right-panel {
+  background-color: #1f1f1f;
+  border-left-color: #303030;
+}
+
+/* Floating action buttons animation */
+.wp-floating-btn {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.wp-floating-btn:hover {
+  transform: scale(1.05);
+}
+
+/* Auto-hide panel slide-in animation */
+.wp-slide-panel {
+  animation: slideInRight 0.25s ease-out;
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 /* Smooth page transitions */
 .page-enter {
   opacity: 0;

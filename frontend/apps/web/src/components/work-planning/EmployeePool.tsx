@@ -113,9 +113,11 @@ interface EmployeePoolProps {
   weekStart?: string;
   jobs?: any[]; // All jobs from current plan to calculate workload
   onRefresh?: () => void;
+  /** When true, renders in a vertical single-column layout for sidebar use */
+  vertical?: boolean;
 }
 
-export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = [], onRefresh }) => {
+export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = [], onRefresh, vertical = false }) => {
   // Fetch users
   const { data: usersData, isLoading: usersLoading, refetch: refetchUsers } = useQuery({
     queryKey: ['users', 'active'],
@@ -249,7 +251,12 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
 
   return (
     <div
-      style={{
+      style={vertical ? {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+      } : {
         background: '#fafafa',
         border: '1px solid #e8e8e8',
         borderRadius: 8,
@@ -258,24 +265,25 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
       }}
     >
       {/* Header with Summary */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        ...(vertical
+          ? { padding: '10px 12px', borderBottom: '1px solid #f0f0f0', backgroundColor: '#fafafa', flexShrink: 0 }
+          : { marginBottom: 10 }),
+      }}>
+        <div style={{ display: 'flex', alignItems: vertical ? 'flex-start' : 'center', gap: vertical ? 6 : 16, flexDirection: vertical ? 'column' : 'row' }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: '#595959' }}>
-            👥 Team Pool <span style={{ fontWeight: 400, color: '#8c8c8c' }}>- Drag to assign</span>
+            👥 Team Pool {!vertical && <span style={{ fontWeight: 400, color: '#8c8c8c' }}>- Drag to assign</span>}
           </span>
           {/* Quick Stats */}
-          <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
-            <Tooltip title="Available team members">
-              <Tag color="green">✅ {totalUsers.available} available</Tag>
-            </Tooltip>
+          <div style={{ display: 'flex', gap: vertical ? 4 : 12, fontSize: 11, flexWrap: 'wrap' }}>
+            <Tag color="green" style={{ margin: 0 }}>✅ {totalUsers.available}</Tag>
             {totalUsers.onLeave > 0 && (
-              <Tooltip title="Team members on leave this week">
-                <Tag color="orange">🏖️ {totalUsers.onLeave} on leave</Tag>
-              </Tooltip>
+              <Tag color="orange" style={{ margin: 0 }}>🏖️ {totalUsers.onLeave}</Tag>
             )}
-            <Tooltip title="Total hours assigned this week">
-              <Tag color="blue">⏱️ {totalAssignedHours}h assigned</Tag>
-            </Tooltip>
+            <Tag color="blue" style={{ margin: 0 }}>⏱️ {totalAssignedHours}h</Tag>
           </div>
         </div>
         <Tooltip title="Refresh">
@@ -291,9 +299,9 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
         <div style={{
           background: '#fff7e6',
           border: '1px solid #ffd591',
-          borderRadius: 6,
+          borderRadius: vertical ? 0 : 6,
           padding: '6px 10px',
-          marginBottom: 10,
+          ...(vertical ? { flexShrink: 0 } : { marginBottom: 10 }),
           display: 'flex',
           alignItems: 'center',
           gap: 8,
@@ -301,14 +309,59 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
         }}>
           <WarningOutlined style={{ color: '#fa8c16' }} />
           <span style={{ color: '#ad6800' }}>
-            <strong>On leave this week:</strong> {usersOnLeave.map(u => u.full_name?.split(' ')[0]).join(', ')}
+            <strong>On leave:</strong> {usersOnLeave.map(u => u.full_name?.split(' ')[0]).join(', ')}
           </span>
         </div>
       )}
 
       {isLoading ? (
         <div style={{ textAlign: 'center', padding: 20 }}><Spin size="small" /></div>
+      ) : vertical ? (
+        /* ──── Vertical layout for sidebar ──── */
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+          {(['engineer', 'specialist', 'inspector'] as const).map(role => {
+            const config = ROLE_CONFIG[role];
+            const counts = getRoleCount(role);
+            const specs = groupedUsers[role];
+            if (counts.total === 0) return null;
+
+            return (
+              <div key={role} style={{ marginBottom: 12 }}>
+                {/* Role Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <span>{config.emoji}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: config.color }}>{config.label}</span>
+                  <Badge
+                    count={`${counts.available}/${counts.total}`}
+                    style={{ backgroundColor: config.color, fontSize: 10 }}
+                  />
+                </div>
+
+                {/* All employees for this role */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                  {(['mechanical', 'electrical', 'hvac', 'other'] as const).map(spec => {
+                    const users = (specs[spec] || []).filter((u: any) => !leaveUserIds.has(u.id));
+                    return users.map((user: any) => (
+                      <DraggableEmployee
+                        key={user.id}
+                        user={user}
+                        isOnLeave={false}
+                        assignedHours={userHoursMap.get(user.id) || 0}
+                      />
+                    ));
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Footer hint */}
+          <div style={{ fontSize: 11, color: '#8c8c8c', textAlign: 'center', padding: '8px 0' }}>
+            👆 Drag employees onto jobs in calendar
+          </div>
+        </div>
       ) : (
+        /* ──── Horizontal 3-column layout (default) ──── */
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {/* Role Columns */}
           {(['engineer', 'specialist', 'inspector'] as const).map(role => {
@@ -339,7 +392,6 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
                 {/* Specialization Groups */}
                 {(['mechanical', 'electrical', 'hvac', 'other'] as const).map(spec => {
                   const users = specs[spec] || [];
-                  // Filter out users on leave - only show available employees
                   const availableUsers = users.filter(u => !leaveUserIds.has(u.id));
                   if (availableUsers.length === 0) return null;
                   const specConfig = SPEC_CONFIG[spec] || { label: spec, emoji: '📋' };
