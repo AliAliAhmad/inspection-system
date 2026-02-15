@@ -4,6 +4,13 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MainTabNavigator from './MainTabNavigator';
 import SmartFAB from '../components/SmartFAB';
 
+// Safe wrapper — SmartFAB uses navigation hooks that may fail outside a screen
+class SafeFABWrapper extends React.Component<{}, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() { return this.state.hasError ? null : <SmartFAB />; }
+}
+
 // Detail screens that push on top of tabs
 import InspectionChecklistScreen from '../screens/inspector/InspectionChecklistScreen';
 import InspectionWizardScreen from '../screens/inspector/InspectionWizardScreen';
@@ -190,8 +197,8 @@ export default function RootNavigator() {
         <Stack.Screen name="RunningHours" component={RunningHoursScreen} options={{ headerShown: true, title: 'Running Hours' }} />
       </Stack.Navigator>
 
-      {/* Global Smart FAB - Context-aware based on current screen */}
-      <SmartFAB />
+      {/* Global Smart FAB - wrapped in error boundary for safety */}
+      <SafeFABWrapper />
     </View>
   );
 }
