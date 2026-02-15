@@ -2,7 +2,7 @@ import React from 'react';
 import { Typography, Breadcrumb } from 'antd';
 import { DashboardOutlined, HomeOutlined, SettingOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader } from '../../components/PageHeader';
+import PageHeader from '../../components/PageHeader';
 import { RunningHoursDashboard } from '../../components/equipment';
 
 const { Title } = Typography;

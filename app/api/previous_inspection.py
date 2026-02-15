@@ -10,7 +10,7 @@ from datetime import datetime, date
 from sqlalchemy import desc
 
 from app.extensions import db
-from app.models import Inspection, InspectionAnswer, Equipment, User, FileRecord
+from app.models import Inspection, InspectionAnswer, Equipment, User, File
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from app.utils.decorators import get_current_user, get_language
 
