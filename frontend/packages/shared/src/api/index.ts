@@ -268,3 +268,10 @@ export { scheduleAIApi } from './schedule-ai.api';
 // Mobile Toolkit & Communication
 export { toolkitApi } from './toolkit.api';
 export { teamCommunicationApi } from './team-communication.api';
+
+// Running Hours Tracker
+export { runningHoursApi } from './running-hours.api';
+export type { RunningHoursListParams } from './running-hours.api';
+
+// Previous Inspection & Answer Templates
+export { previousInspectionApi } from './previous-inspection.api';

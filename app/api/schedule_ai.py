@@ -3,28 +3,29 @@ Schedule AI API Endpoints.
 Provides AI-powered scheduling and inspection management features.
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
-from app.services.schedule_ai_service import schedule_ai_service
 from app.utils.decorators import role_required
-from datetime import date, datetime
+import logging
 
-bp = Blueprint('schedule_ai', __name__)
+logger = logging.getLogger(__name__)
+
+bp = Blueprint('schedule_ai', __name__, url_prefix='/api/schedule-ai')
 
 
-# =========================================================================
-# RISK-BASED SCHEDULING
-# =========================================================================
-
+# Risk-Based Scheduling
 @bp.route('/risk-scores', methods=['GET'])
 @jwt_required()
 @role_required('admin', 'engineer')
 def get_risk_scores():
-    """Get AI risk scores for all equipment."""
+    """Get equipment risk scores."""
     try:
-        result = schedule_ai_service.calculate_equipment_risk_scores()
+        from app.services.schedule_ai_service import ScheduleAIService
+        service = ScheduleAIService()
+        result = service.calculate_equipment_risk_scores()
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error getting risk scores: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -32,41 +33,64 @@ def get_risk_scores():
 @jwt_required()
 @role_required('admin', 'engineer')
 def get_coverage_gaps():
-    """Get equipment with insufficient inspection coverage."""
+    """Get coverage gap analysis."""
     try:
-        result = schedule_ai_service.get_coverage_gaps()
+        from app.services.schedule_ai_service import ScheduleAIService
+        service = ScheduleAIService()
+        result = service.get_coverage_gaps()
+
+        # Filter by severity if provided
+        severity = request.args.get('severity')
+        if severity and result:
+            result = [item for item in result if item.get('priority') == severity]
+
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error getting coverage gaps: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-@bp.route('/optimal-frequency/<int:equipment_id>', methods=['GET'])
+@bp.route('/optimal-frequency', methods=['POST'])
 @jwt_required()
 @role_required('admin', 'engineer')
-def suggest_optimal_frequency(equipment_id: int):
-    """Suggest optimal inspection frequency for equipment."""
+def suggest_optimal_frequency():
+    """Suggest optimal inspection frequency."""
     try:
-        result = schedule_ai_service.suggest_optimal_frequency(equipment_id)
+        from app.services.schedule_ai_service import ScheduleAIService
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'status': 'error', 'message': 'Request body required'}), 400
+
+        equipment_id = data.get('equipment_id')
+        if not equipment_id:
+            return jsonify({'status': 'error', 'message': 'equipment_id is required'}), 400
+
+        service = ScheduleAIService()
+        result = service.suggest_optimal_frequency(equipment_id)
+
         if 'error' in result:
             return jsonify({'status': 'error', 'message': result['error']}), 404
+
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error suggesting optimal frequency: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-# =========================================================================
-# INSPECTOR INTELLIGENCE
-# =========================================================================
-
+# Inspector Intelligence
 @bp.route('/inspector-scores', methods=['GET'])
 @jwt_required()
 @role_required('admin', 'engineer')
 def get_inspector_scores():
-    """Get quality scores for inspectors."""
+    """Get inspector quality scores."""
     try:
-        result = schedule_ai_service.get_inspector_quality_scores()
+        from app.services.schedule_ai_service import ScheduleAIService
+        service = ScheduleAIService()
+        result = service.get_inspector_quality_scores()
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error getting inspector scores: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -76,63 +100,72 @@ def get_inspector_scores():
 def get_team_performance():
     """Get team performance metrics."""
     try:
-        result = schedule_ai_service.get_team_performance()
+        from app.services.schedule_ai_service import ScheduleAIService
+        service = ScheduleAIService()
+        result = service.get_team_performance()
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error getting team performance: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @bp.route('/fatigue-risk', methods=['GET'])
 @jwt_required()
 @role_required('admin', 'engineer')
-def get_fatigue_risk():
-    """Detect inspectors at fatigue risk."""
+def get_fatigue_risks():
+    """Detect inspector fatigue risk."""
     try:
-        result = schedule_ai_service.detect_fatigue_risk()
+        from app.services.schedule_ai_service import ScheduleAIService
+        service = ScheduleAIService()
+        result = service.detect_fatigue_risk()
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error detecting fatigue risk: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-# =========================================================================
-# ROUTE OPTIMIZATION
-# =========================================================================
-
+# Route Optimization
 @bp.route('/optimize-route', methods=['POST'])
 @jwt_required()
 @role_required('admin', 'engineer')
 def optimize_route():
-    """Optimize inspection routes."""
+    """Optimize inspection route."""
     try:
-        data = request.get_json() or {}
+        from app.services.schedule_ai_service import ScheduleAIService
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'status': 'error', 'message': 'Request body required'}), 400
+
         assignment_ids = data.get('assignment_ids', [])
-
         if not assignment_ids:
-            return jsonify({'status': 'error', 'message': 'assignment_ids required'}), 400
+            return jsonify({'status': 'error', 'message': 'assignment_ids is required'}), 400
 
-        result = schedule_ai_service.optimize_route(assignment_ids)
+        service = ScheduleAIService()
+        result = service.optimize_route(assignment_ids)
 
         if 'error' in result:
             return jsonify({'status': 'error', 'message': result['error']}), 400
 
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error optimizing route: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-# =========================================================================
-# PROACTIVE ALERTS
-# =========================================================================
-
+# Proactive Alerts
 @bp.route('/sla-warnings', methods=['GET'])
 @jwt_required()
 @role_required('admin', 'engineer')
 def get_sla_warnings():
-    """Get assignments approaching deadline."""
+    """Get SLA violation warnings."""
     try:
-        result = schedule_ai_service.get_sla_warnings()
+        from app.services.schedule_ai_service import ScheduleAIService
+        service = ScheduleAIService()
+        result = service.get_sla_warnings()
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error getting SLA warnings: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -140,30 +173,40 @@ def get_sla_warnings():
 @jwt_required()
 @role_required('admin', 'engineer')
 def get_capacity_forecast():
-    """Get capacity forecast for upcoming days."""
+    """Get capacity forecasting."""
     try:
-        days = request.args.get('days', 7, type=int)
-        result = schedule_ai_service.get_capacity_forecast(days)
+        from app.services.schedule_ai_service import ScheduleAIService
+        days = request.args.get('days', 14, type=int)
+        service = ScheduleAIService()
+        result = service.get_capacity_forecast(days)
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error getting capacity forecast: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-# =========================================================================
-# ANALYTICS
-# =========================================================================
-
-@bp.route('/health-trends/<int:equipment_id>', methods=['GET'])
+# Analytics
+@bp.route('/health-trends', methods=['GET'])
 @jwt_required()
-@role_required('admin', 'engineer', 'inspector')
-def get_health_trends(equipment_id: int):
+@role_required('admin', 'engineer')
+def get_health_trends():
     """Get equipment health trends."""
     try:
-        result = schedule_ai_service.get_equipment_health_trends(equipment_id)
+        from app.services.schedule_ai_service import ScheduleAIService
+        equipment_id = request.args.get('equipment_id', type=int)
+
+        if not equipment_id:
+            return jsonify({'status': 'error', 'message': 'equipment_id query parameter is required'}), 400
+
+        service = ScheduleAIService()
+        result = service.get_equipment_health_trends(equipment_id)
+
         if 'error' in result:
             return jsonify({'status': 'error', 'message': result['error']}), 404
+
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error getting health trends: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
@@ -171,21 +214,31 @@ def get_health_trends(equipment_id: int):
 @jwt_required()
 @role_required('admin', 'engineer')
 def detect_anomalies():
-    """Detect unusual patterns in inspection data."""
+    """Detect schedule anomalies."""
     try:
-        result = schedule_ai_service.detect_anomalies()
+        from app.services.schedule_ai_service import ScheduleAIService
+        service = ScheduleAIService()
+        result = service.detect_anomalies()
         return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error detecting anomalies: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-@bp.route('/dashboard-summary', methods=['GET'])
+@bp.route('/insights', methods=['GET'])
 @jwt_required()
 @role_required('admin', 'engineer')
-def get_dashboard_summary():
-    """Get comprehensive AI summary for scheduling dashboard."""
+def get_insights():
+    """Get AI-generated insights dashboard summary."""
     try:
-        result = schedule_ai_service.get_dashboard_summary()
-        return jsonify(result)
+        from app.services.schedule_ai_service import ScheduleAIService
+        service = ScheduleAIService()
+        result = service.get_dashboard_summary()
+
+        if result.get('status') == 'error':
+            return jsonify({'status': 'error', 'message': result.get('error', 'Unknown error')}), 500
+
+        return jsonify({'status': 'success', 'data': result})
     except Exception as e:
+        logger.error(f"Error generating insights: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500

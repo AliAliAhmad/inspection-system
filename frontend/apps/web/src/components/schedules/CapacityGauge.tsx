@@ -1,175 +1,267 @@
-import { Card, Progress, Typography, Space, Tooltip, Tag } from 'antd';
+import React from 'react';
+import { Card, Progress, Typography, Space, Spin, Empty, Tooltip, Row, Col, Tag } from 'antd';
+import { useQuery } from '@tanstack/react-query';
+import { scheduleAIApi } from '@inspection/shared';
+import type { CapacityForecast } from '@inspection/shared';
 import {
+  TeamOutlined,
+  CalendarOutlined,
   CheckCircleOutlined,
   WarningOutlined,
-  ExclamationCircleOutlined,
 } from '@ant-design/icons';
-import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
-export interface CapacityGaugeProps {
-  utilization: number; // 0-1 or 0-100
-  title?: string;
-  showRecommendations?: boolean;
+interface CapacityGaugeProps {
+  showWeeklyBreakdown?: boolean;
+  days?: number;
+  height?: number;
 }
 
-export function CapacityGauge({
-  utilization,
-  title,
-  showRecommendations = true,
-}: CapacityGaugeProps) {
-  const { t } = useTranslation();
+const getUtilizationColor = (percentage: number): string => {
+  if (percentage >= 95) return '#cf1322'; // Over capacity
+  if (percentage >= 80) return '#faad14'; // Near capacity
+  if (percentage >= 50) return '#52c41a'; // Good utilization
+  return '#1890ff'; // Under-utilized
+};
 
-  // Normalize to 0-100 range
-  const percentage = utilization > 1 ? utilization : utilization * 100;
+const getUtilizationStatus = (percentage: number): string => {
+  if (percentage >= 95) return 'Over Capacity';
+  if (percentage >= 80) return 'Near Capacity';
+  if (percentage >= 50) return 'Optimal';
+  return 'Under-utilized';
+};
 
-  // Determine status and color
-  const getStatus = () => {
-    if (percentage < 70) return 'good';
-    if (percentage < 90) return 'high';
-    return 'overloaded';
-  };
+export const CapacityGauge: React.FC<CapacityGaugeProps> = ({
+  showWeeklyBreakdown = true,
+  days = 7,
+  height = 200,
+}) => {
+  const {
+    data: capacityData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['schedule-ai', 'capacity-forecast', days],
+    queryFn: () => scheduleAIApi.getCapacityForecast(days),
+  });
 
-  const status = getStatus();
+  if (isLoading) {
+    return (
+      <Card
+        title={
+          <Space>
+            <TeamOutlined />
+            <span>Capacity Overview</span>
+          </Space>
+        }
+      >
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16 }}>
+            <Text type="secondary">Calculating capacity...</Text>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
-  const statusConfig = {
-    good: {
-      color: '#52c41a',
-      strokeColor: '#52c41a',
-      label: t('schedules.ai.goodCapacity', 'Good Capacity'),
-      icon: <CheckCircleOutlined />,
-      recommendations: [
-        t('schedules.ai.rec.goodCapacity', 'Current utilization is optimal'),
-        t('schedules.ai.rec.maintainBalance', 'Maintain balanced workload distribution'),
-      ],
-      bgColor: '#f6ffed',
-      borderColor: '#b7eb8f',
-    },
-    high: {
-      color: '#faad14',
-      strokeColor: '#faad14',
-      label: t('schedules.ai.highUtilization', 'High Utilization'),
-      icon: <WarningOutlined />,
-      recommendations: [
-        t('schedules.ai.rec.monitorWorkload', 'Monitor workload closely'),
-        t('schedules.ai.rec.prepareBackup', 'Prepare backup resources'),
-        t('schedules.ai.rec.avoidNewTasks', 'Avoid scheduling non-critical tasks'),
-      ],
-      bgColor: '#fffbe6',
-      borderColor: '#ffe58f',
-    },
-    overloaded: {
-      color: '#ff4d4f',
-      strokeColor: '#ff4d4f',
-      label: t('schedules.ai.overloaded', 'Overloaded'),
-      icon: <ExclamationCircleOutlined />,
-      recommendations: [
-        t('schedules.ai.rec.redistributeTasks', 'Redistribute tasks immediately'),
-        t('schedules.ai.rec.addResources', 'Consider adding additional resources'),
-        t('schedules.ai.rec.postponeNonCritical', 'Postpone non-critical inspections'),
-        t('schedules.ai.rec.escalateManagement', 'Escalate to management'),
-      ],
-      bgColor: '#fff2f0',
-      borderColor: '#ffccc7',
-    },
-  };
+  if (error) {
+    return (
+      <Card
+        title={
+          <Space>
+            <TeamOutlined />
+            <span>Capacity Overview</span>
+          </Space>
+        }
+      >
+        <Empty
+          description="Failed to load capacity data"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      </Card>
+    );
+  }
 
-  const config = statusConfig[status];
+  const forecasts: CapacityForecast[] = capacityData || [];
+  
+  // Calculate overall utilization from forecasts
+  const totalRequired = forecasts.reduce((sum, f) => sum + f.required_inspections, 0);
+  const totalCapacity = forecasts.reduce((sum, f) => sum + f.available_capacity, 0);
+  const overallUtilization = totalCapacity > 0 ? (totalRequired / totalCapacity) * 100 : 0;
+  const overloadedDays = forecasts.filter(f => f.is_overloaded).length;
+  const todayForecast = forecasts[0];
 
-  const tooltipContent = (
-    <div>
-      <div style={{ fontWeight: 'bold', marginBottom: 8 }}>
-        {config.label}
-      </div>
-      <div style={{ fontSize: 12 }}>
-        {percentage < 70 && t('schedules.ai.tooltip.good', 'System has available capacity for additional work')}
-        {percentage >= 70 && percentage < 90 && t('schedules.ai.tooltip.high', 'Approaching maximum capacity - plan carefully')}
-        {percentage >= 90 && t('schedules.ai.tooltip.overloaded', 'Operating at or above optimal capacity - immediate action required')}
-      </div>
-    </div>
-  );
+  const utilizationColor = getUtilizationColor(overallUtilization);
+  const utilizationStatus = getUtilizationStatus(overallUtilization);
 
   return (
     <Card
       title={
-        title && (
-          <Space>
-            {config.icon}
-            <Title level={5} style={{ margin: 0 }}>
-              {title}
-            </Title>
-          </Space>
-        )
+        <Space>
+          <TeamOutlined />
+          <span>Capacity Overview</span>
+        </Space>
       }
-      style={{
-        backgroundColor: config.bgColor,
-        borderColor: config.borderColor,
-        borderWidth: 2,
-      }}
+      extra={
+        <Tooltip title={utilizationStatus}>
+          {overloadedDays > 0 ? (
+            <Tag color="red">{overloadedDays} Overloaded Days</Tag>
+          ) : (
+            <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} />
+          )}
+        </Tooltip>
+      }
     >
-      <div style={{ textAlign: 'center' }}>
-        <Tooltip title={tooltipContent}>
-          <Progress
-            type="circle"
-            percent={Math.round(percentage)}
-            strokeColor={config.strokeColor}
-            strokeWidth={8}
-            width={180}
-            format={(percent) => (
-              <div>
-                <div style={{ fontSize: 32, fontWeight: 'bold', color: config.color }}>
-                  {percent}%
+      <Row gutter={[24, 24]}>
+        <Col xs={24} md={showWeeklyBreakdown ? 8 : 24}>
+          <div style={{ textAlign: 'center' }}>
+            <Progress
+              type="dashboard"
+              percent={Math.min(Math.round(overallUtilization), 100)}
+              strokeColor={utilizationColor}
+              format={(percent) => (
+                <Space direction="vertical" size={0}>
+                  <span
+                    style={{
+                      fontSize: 28,
+                      fontWeight: 'bold',
+                      color: utilizationColor,
+                    }}
+                  >
+                    {percent}%
+                  </span>
+                  <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+                    Utilization
+                  </span>
+                </Space>
+              )}
+              width={height}
+            />
+            <div style={{ marginTop: 16 }}>
+              <Text
+                strong
+                style={{ color: utilizationColor, fontSize: 16 }}
+              >
+                {utilizationStatus}
+              </Text>
+            </div>
+          </div>
+
+          <Row gutter={16} style={{ marginTop: 24 }}>
+            <Col span={12}>
+              <div style={{ textAlign: 'center' }}>
+                <CalendarOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+                <div>
+                  <Text strong style={{ fontSize: 18 }}>
+                    {todayForecast?.required_inspections || 0}
+                  </Text>
                 </div>
-                <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                  {t('schedules.ai.utilization', 'Utilization')}
+                <Text type="secondary">Required Today</Text>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ textAlign: 'center' }}>
+                <TeamOutlined style={{ fontSize: 24, color: '#52c41a' }} />
+                <div>
+                  <Text strong style={{ fontSize: 18 }}>
+                    {todayForecast?.available_capacity || 0}
+                  </Text>
                 </div>
+                <Text type="secondary">Available Today</Text>
+              </div>
+            </Col>
+          </Row>
+        </Col>
+
+        {showWeeklyBreakdown && forecasts.length > 0 && (
+          <Col xs={24} md={16}>
+            <Title level={5}>Weekly Forecast</Title>
+            <Space direction="vertical" style={{ width: '100%' }} size={8}>
+              {forecasts.map((forecast) => {
+                const dayName = new Date(forecast.date).toLocaleDateString('en-US', { weekday: 'short' });
+                const utilization = forecast.utilization_rate;
+                return (
+                  <div key={forecast.date}>
+                    <Space
+                      style={{ width: '100%', justifyContent: 'space-between' }}
+                    >
+                      <Text style={{ width: 60 }}>{dayName}</Text>
+                      <div style={{ flex: 1 }}>
+                        <Progress
+                          percent={Math.min(Math.round(utilization), 100)}
+                          strokeColor={getUtilizationColor(utilization)}
+                          showInfo={false}
+                          size="small"
+                        />
+                      </div>
+                      <Space>
+                        <Text
+                          style={{
+                            width: 80,
+                            textAlign: 'right',
+                            color: getUtilizationColor(utilization),
+                          }}
+                        >
+                          {forecast.required_inspections}/{forecast.available_capacity}
+                        </Text>
+                        {forecast.is_overloaded && (
+                          <WarningOutlined style={{ color: '#cf1322' }} />
+                        )}
+                      </Space>
+                    </Space>
+                  </div>
+                );
+              })}
+            </Space>
+            {forecasts.some(f => f.recommendations.length > 0) && (
+              <div style={{ marginTop: 16 }}>
+                <Text type="secondary" strong>Recommendations:</Text>
+                <ul style={{ margin: '8px 0 0 16px', padding: 0 }}>
+                  {forecasts
+                    .flatMap(f => f.recommendations)
+                    .slice(0, 3)
+                    .map((rec, idx) => (
+                      <li key={idx}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>{rec}</Text>
+                      </li>
+                    ))}
+                </ul>
               </div>
             )}
-          />
-        </Tooltip>
-
-        <div style={{ marginTop: 16 }}>
-          <Tag
-            color={
-              status === 'good'
-                ? 'success'
-                : status === 'high'
-                ? 'warning'
-                : 'error'
-            }
-            icon={config.icon}
-            style={{ fontSize: 14, padding: '4px 12px' }}
-          >
-            {config.label}
-          </Tag>
-        </div>
-
-        {showRecommendations && (
-          <div
-            style={{
-              marginTop: 16,
-              padding: 12,
-              backgroundColor: 'rgba(255,255,255,0.8)',
-              borderRadius: 8,
-              textAlign: 'left',
-            }}
-          >
-            <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-              {t('schedules.ai.recommendations', 'Recommendations')}:
-            </Text>
-            <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12 }}>
-              {config.recommendations.map((rec, idx) => (
-                <li key={idx} style={{ marginBottom: 4 }}>
-                  {rec}
-                </li>
-              ))}
-            </ul>
-          </div>
+          </Col>
         )}
-      </div>
+      </Row>
     </Card>
   );
-}
+};
 
-export default CapacityGauge;
+// Compact version for sidebar or smaller spaces
+export const CapacityMini: React.FC = () => {
+  const { data: capacityData, isLoading } = useQuery({
+    queryKey: ['schedule-ai', 'capacity-forecast', 1],
+    queryFn: () => scheduleAIApi.getCapacityForecast(1),
+  });
+
+  if (isLoading) {
+    return <Spin size="small" />;
+  }
+
+  const todayForecast = capacityData?.[0];
+  const utilization = todayForecast?.utilization_rate || 0;
+
+  return (
+    <Tooltip title={`${Math.round(utilization)}% capacity utilized`}>
+      <Progress
+        type="circle"
+        percent={Math.min(Math.round(utilization), 100)}
+        width={40}
+        strokeColor={getUtilizationColor(utilization)}
+        format={(percent) => (
+          <span style={{ fontSize: 10, fontWeight: 'bold' }}>{percent}%</span>
+        )}
+      />
+    </Tooltip>
+  );
+};

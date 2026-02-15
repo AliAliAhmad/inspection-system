@@ -99,7 +99,25 @@
       "WebFetch(domain:docsbot.ai)",
       "WebFetch(domain:help.apiyi.com)",
       "WebFetch(domain:www.aifreeapi.com)",
-      "WebFetch(domain:discuss.ai.google.dev)"
+      "WebFetch(domain:discuss.ai.google.dev)",
+      "Bash(HOME=/Users/AliAliAhmad_1_2 git:*)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/Desktop/inspection_system status --porcelain)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system status)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/Desktop/inspection_system show HEAD:frontend/packages/shared/src/api/index.ts)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system ls-files:*)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system show HEAD:app/services/schedule_ai_service.py)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/Desktop/inspection_system show HEAD:frontend/packages/shared/src/api/schedule-ai.api.ts)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/Desktop/inspection_system show HEAD:frontend/packages/shared/src/types/schedule-ai.types.ts)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/Desktop/inspection_system show HEAD:frontend/apps/web/src/components/work-planning/index.ts)",
+      "Bash(printf '%s':*)",
+      "Bash(printf:*)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/Desktop/inspection_system status:*)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system show HEAD:app/services/__init__.py)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system grep -r \"analysisFailed\\\\|analysis_failed\")",
+      "Bash(git grep:*)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system show HEAD:app/api/inspections.py)",
+      "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system show HEAD:app/services/gemini_service.py)",
+      "Bash(ln:*)"
     ]
   }
 }

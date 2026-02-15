@@ -367,6 +367,155 @@ Format as JSON: {"value": number, "unit": "string", "min": number, "max": number
             return {'error': str(e), 'success': False}
 
     @staticmethod
+    def analyze_with_prompt(image_url: str, prompt: str) -> Dict[str, Any]:
+        """
+        Analyze an image with a custom prompt.
+        Uses multi-provider AI.
+
+        Args:
+            image_url: URL of the image
+            prompt: Custom analysis prompt
+
+        Returns:
+            Analysis result with 'analysis' field
+        """
+        from app.services.gemini_service import is_gemini_configured
+        from app.services.groq_service import is_groq_configured
+
+        # Download image for providers that need bytes
+        image_content = None
+        try:
+            response = requests.get(image_url, timeout=30)
+            response.raise_for_status()
+            image_content = response.content
+        except Exception as e:
+            logger.warning(f"Could not download image: {e}")
+
+        # Try Gemini first (with custom prompt)
+        if is_gemini_configured() and image_content:
+            try:
+                api_key = os.getenv('GEMINI_API_KEY', '').strip()
+                base64_image = base64.b64encode(image_content).decode('utf-8')
+
+                # Use gemini-2.0-flash for vision with custom prompt
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+
+                payload = {
+                    "contents": [{
+                        "parts": [
+                            {"text": prompt},
+                            {"inline_data": {"mime_type": "image/jpeg", "data": base64_image}}
+                        ]
+                    }],
+                    "generationConfig": {
+                        "temperature": 0.2,
+                        "maxOutputTokens": 1000
+                    }
+                }
+
+                resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
+
+                if resp.status_code == 200:
+                    result = resp.json()
+                    candidates = result.get('candidates', [])
+                    if candidates:
+                        content = candidates[0].get('content', {})
+                        parts = content.get('parts', [])
+                        if parts:
+                            text = parts[0].get('text', '').strip()
+                            # Try to parse as JSON
+                            try:
+                                if '```json' in text:
+                                    text = text.split('```json')[1].split('```')[0]
+                                elif '```' in text:
+                                    text = text.split('```')[1].split('```')[0]
+                                analysis = json.loads(text)
+                                return {'success': True, 'analysis': analysis, 'provider': 'gemini'}
+                            except json.JSONDecodeError:
+                                return {'success': True, 'analysis': text, 'provider': 'gemini'}
+            except Exception as e:
+                logger.warning(f"Gemini custom prompt analysis failed: {e}")
+
+        # Try Groq second
+        if is_groq_configured() and image_content:
+            try:
+                api_key = os.getenv('GROQ_API_KEY', '').strip()
+                base64_image = base64.b64encode(image_content).decode('utf-8')
+
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": "llama-3.2-90b-vision-preview",
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        ]
+                    }],
+                    "temperature": 0.2,
+                    "max_tokens": 1000
+                }
+
+                resp = requests.post(url, json=payload, headers=headers, timeout=60)
+
+                if resp.status_code == 200:
+                    result = resp.json()
+                    text = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                    # Try to parse as JSON
+                    try:
+                        if '```json' in text:
+                            text = text.split('```json')[1].split('```')[0]
+                        elif '```' in text:
+                            text = text.split('```')[1].split('```')[0]
+                        analysis = json.loads(text)
+                        return {'success': True, 'analysis': analysis, 'provider': 'groq'}
+                    except json.JSONDecodeError:
+                        return {'success': True, 'analysis': text, 'provider': 'groq'}
+            except Exception as e:
+                logger.warning(f"Groq custom prompt analysis failed: {e}")
+
+        # Fall back to OpenAI
+        client = _get_openai_client()
+        if not client:
+            return {'error': 'No AI service configured', 'success': False}
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": image_url}}
+                        ]
+                    }
+                ],
+                max_tokens=1000
+            )
+
+            content = response.choices[0].message.content
+
+            # Try to parse as JSON
+            try:
+                if '```json' in content:
+                    content = content.split('```json')[1].split('```')[0]
+                elif '```' in content:
+                    content = content.split('```')[1].split('```')[0]
+                analysis = json.loads(content)
+                return {'success': True, 'analysis': analysis, 'provider': 'openai'}
+            except json.JSONDecodeError:
+                return {'success': True, 'analysis': content, 'provider': 'openai'}
+
+        except Exception as e:
+            logger.error(f"Custom prompt analysis failed: {e}")
+            return {'error': str(e), 'success': False}
+
+    @staticmethod
     def compare_images(before_url: str, after_url: str, language: str = 'en') -> Dict[str, Any]:
         """
         Compare before/after images to identify changes.

@@ -367,3 +367,170 @@ def assistant_chat():
         return jsonify({'status': 'success', 'data': result}), 200
     else:
         return jsonify({'status': 'error', 'message': result.get('error', 'Chat failed')}), 500
+
+
+# ============================================
+# PHOTO ANALYSIS FOR INSPECTIONS
+# ============================================
+
+@bp.route('/analyze-photo', methods=['POST'])
+@limiter.limit("30 per minute")
+@jwt_required()
+def analyze_photo_for_inspection():
+    """
+    Analyze a photo for pass/fail suggestion during inspection.
+
+    Body: {
+        "image_url": "https://...",
+        "checklist_item_id": 123,  # optional
+        "question_context": "Is the motor running smoothly?",  # optional
+        "language": "en"
+    }
+
+    Returns: {
+        "suggestion": "pass" | "fail",
+        "confidence": 0.87,
+        "reason": "No visible defects or damage detected",
+        "reason_ar": "...",
+        "analyzed_at": "2024-01-01T12:00:00Z"
+    }
+    """
+    from datetime import datetime
+
+    data = request.get_json()
+    image_url = data.get('image_url')
+    checklist_item_id = data.get('checklist_item_id')
+    question_context = data.get('question_context', '')
+    language = data.get('language', 'en')
+
+    if not image_url:
+        return jsonify({'status': 'error', 'message': 'image_url required'}), 400
+
+    # Build prompt for inspection-specific analysis
+    prompt = """Analyze this inspection photo and determine if it should PASS or FAIL.
+
+You are an expert industrial equipment inspector. Examine the image for:
+- Visible damage, cracks, or wear
+- Corrosion or rust
+- Leaks or fluid stains
+- Misalignment or loose components
+- Safety hazards
+- General equipment condition
+
+"""
+    if question_context:
+        prompt += f"Context: The inspector is checking: {question_context}\n\n"
+
+    prompt += """Based on your analysis, respond with EXACTLY this JSON format:
+{
+    "suggestion": "pass" or "fail",
+    "confidence": number between 0.0 and 1.0,
+    "reason_en": "Brief explanation in English (1-2 sentences)",
+    "reason_ar": "Brief explanation in Arabic (1-2 sentences)"
+}
+
+Be conservative: if you're unsure or see potential issues, suggest FAIL.
+Only suggest PASS if the image clearly shows equipment in good condition.
+"""
+
+    # Use vision service to analyze
+    try:
+        result = vision.analyze_with_prompt(image_url, prompt)
+
+        if result and result.get('success'):
+            # Parse the response
+            analysis = result.get('analysis', {})
+
+            # Handle both structured and raw responses
+            if isinstance(analysis, dict):
+                suggestion = analysis.get('suggestion', 'fail').lower()
+                confidence = float(analysis.get('confidence', 0.5))
+                reason_en = analysis.get('reason_en', analysis.get('reason', ''))
+                reason_ar = analysis.get('reason_ar', '')
+            else:
+                # Try to parse string response
+                import json
+                try:
+                    parsed = json.loads(str(analysis))
+                    suggestion = parsed.get('suggestion', 'fail').lower()
+                    confidence = float(parsed.get('confidence', 0.5))
+                    reason_en = parsed.get('reason_en', parsed.get('reason', ''))
+                    reason_ar = parsed.get('reason_ar', '')
+                except (json.JSONDecodeError, TypeError):
+                    # Default to fail if parsing fails
+                    suggestion = 'fail'
+                    confidence = 0.3
+                    reason_en = 'Unable to analyze image clearly'
+                    reason_ar = 'تعذر تحليل الصورة بوضوح'
+
+            # Ensure valid values
+            suggestion = 'pass' if suggestion == 'pass' else 'fail'
+            confidence = max(0.0, min(1.0, confidence))
+
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'suggestion': suggestion,
+                    'confidence': confidence,
+                    'reason': reason_en if language == 'en' else reason_ar,
+                    'reason_ar': reason_ar,
+                    'analyzed_at': datetime.utcnow().isoformat() + 'Z'
+                }
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': result.get('error', 'Analysis failed')
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Analysis error: {str(e)}'
+        }), 500
+
+
+@bp.route('/photo-analysis/feedback', methods=['POST'])
+@limiter.limit("60 per minute")
+@jwt_required()
+def record_photo_analysis_feedback():
+    """
+    Record inspector feedback on AI suggestion for ML learning.
+
+    Body: {
+        "photo_id": "...",
+        "ai_suggestion": "pass" | "fail",
+        "inspector_decision": "pass" | "fail",
+        "accepted": true | false
+    }
+    """
+    data = request.get_json()
+    photo_id = data.get('photo_id')
+    ai_suggestion = data.get('ai_suggestion')
+    inspector_decision = data.get('inspector_decision')
+    accepted = data.get('accepted', False)
+
+    if not photo_id or not ai_suggestion or not inspector_decision:
+        return jsonify({
+            'status': 'error',
+            'message': 'photo_id, ai_suggestion, and inspector_decision required'
+        }), 400
+
+    # Log the feedback for future ML training
+    # In a production system, this would be stored in a database
+    current_user = get_current_user()
+    user_id = current_user.id if current_user else None
+
+    # For now, just log it
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"AI Photo Feedback: photo={photo_id}, "
+        f"ai={ai_suggestion}, inspector={inspector_decision}, "
+        f"accepted={accepted}, user={user_id}"
+    )
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Feedback recorded'
+    }), 200

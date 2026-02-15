@@ -7,15 +7,16 @@ Google Gemini AI Service for photo analysis, video analysis, and audio transcrip
 Models (with fallback chain):
 ┌─────────────────────────────────────────────────────────────────────┐
 │ VISION (Photo/Video):                                               │
-│   1. gemini-2.5-pro           → Quality (shared 1,500 RPD)         │
-│   2. gemini-2.0-flash         → Fast (shared quota)                │
-│   3. gemini-1.5-flash         → Fastest (shared quota)             │
+│   1. gemini-2.5-pro           → Best quality (1,500 RPD shared)    │
+│   2. gemini-2.0-flash         → Fast, good quality                 │
+│   3. gemini-1.5-flash         → Fastest, decent quality            │
+│   4. gemini-1.5-pro           → Older pro model                    │
 │   → Then: Groq → OpenRouter → HuggingFace → OpenAI                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │ AUDIO (Transcription):                                              │
-│   1. gemini-2.5-pro           → Best audio (shared 1,500 RPD)      │
-│   2. gemini-2.0-flash         → Fast audio (shared quota)          │
-│   3. gemini-1.5-flash         → Fastest audio (shared quota)       │
+│   1. gemini-2.5-pro           → Best quality audio                 │
+│   2. gemini-2.0-flash         → Fast audio                         │
+│   3. gemini-1.5-flash         → Fastest audio                      │
 │   → Then: Groq (14,400 RPD FREE) → HuggingFace → OpenAI            │
 ├─────────────────────────────────────────────────────────────────────┤
 │ TRANSLATION (Text-only):                                            │

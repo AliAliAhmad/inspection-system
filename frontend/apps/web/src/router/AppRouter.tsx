@@ -43,6 +43,7 @@ const OverduePage = lazy(() => import('../pages/admin/OverduePage'));
 const NotificationRulesPage = lazy(() => import('../pages/admin/NotificationRulesPage'));
 const NotificationAnalyticsPage = lazy(() => import('../pages/admin/NotificationAnalyticsPage'));
 const TeamCommunicationPage = lazy(() => import('../pages/admin/TeamCommunicationPage'));
+const RunningHoursPage = lazy(() => import('../pages/admin/RunningHoursPage'));
 
 // Inspector pages
 const MyAssignmentsPage = lazy(() => import('../pages/inspector/MyAssignmentsPage'));
@@ -134,6 +135,7 @@ export default function AppRouter() {
             <Route path="notification-rules" element={<RoleGuard roles={['admin']}><NotificationRulesPage /></RoleGuard>} />
             <Route path="notification-analytics" element={<RoleGuard roles={['admin']}><NotificationAnalyticsPage /></RoleGuard>} />
             <Route path="team-communication" element={<RoleGuard roles={['admin']}><TeamCommunicationPage /></RoleGuard>} />
+            <Route path="running-hours" element={<RoleGuard roles={['admin', 'engineer']}><RunningHoursPage /></RoleGuard>} />
           </Route>
 
           {/* Inspector routes */}

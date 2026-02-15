@@ -129,7 +129,13 @@ def create_app(config_name='development'):
         # Team Communication & Toolkit
         team_communication, toolkit,
         # Translation
-        translations
+        translations,
+        # Previous Inspection (Photo Compare, Copy from Previous)
+        previous_inspection,
+        # Running Hours & Service Tracking
+        running_hours,
+        # Answer Templates
+        answer_templates,
     )
 
     # Core
@@ -217,6 +223,12 @@ def create_app(config_name='development'):
 
     # Translation
     app.register_blueprint(translations.bp)
+
+    # Running Hours & Service Tracking
+    app.register_blueprint(running_hours.bp, url_prefix='/api/equipment')
+
+    # Answer Templates
+    app.register_blueprint(answer_templates.bp, url_prefix='/api/answer-templates')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)

@@ -1,9 +1,10 @@
+// Schedule AI Components
 export { ScheduleStatsCards } from './ScheduleStatsCards';
 export { AIScheduleInsights } from './AIScheduleInsights';
 export { CoverageGapsPanel } from './CoverageGapsPanel';
-export { RiskIndicator } from './RiskIndicator';
+export { RiskIndicator, RiskBadge, RiskGauge } from './RiskIndicator';
 export { ScheduleHeatmap } from './ScheduleHeatmap';
 export { HealthTrendChart } from './HealthTrendChart';
-export { SLAWarningCard } from './SLAWarningCard';
-export { CapacityGauge } from './CapacityGauge';
-export { AnomalyAlert } from './AnomalyAlert';
+export { SLAWarningCard, SLAWarningItem } from './SLAWarningCard';
+export { CapacityGauge, CapacityMini } from './CapacityGauge';
+export { AnomalyAlert, AnomalyBanner } from './AnomalyAlert';

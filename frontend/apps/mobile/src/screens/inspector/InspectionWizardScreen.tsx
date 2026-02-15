@@ -21,6 +21,8 @@ import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
 import VideoRecorder from '../../components/VideoRecorder';
+import PhotoGallery from '../../components/PhotoGallery';
+import { Photo } from '../../components/PhotoThumbnailGrid';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -44,9 +46,23 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'InspectionWizard'>;
 
+// Photo item for multi-photo support
+interface PhotoItem {
+  id: string;
+  uri: string;
+  url?: string;
+  isUploading?: boolean;
+  uploadFailed?: boolean;
+  ai_analysis?: { en: string; ar: string };
+  order: number;
+}
+
 interface LocalAnswer {
   answer_value: string;
   comment?: string;
+  // Multi-photo support (new)
+  photos?: PhotoItem[];
+  // Legacy single photo support (for backwards compatibility)
   photo_uri?: string;
   photo_url?: string;
   photo_ai_analysis?: { en: string; ar: string };
@@ -1334,6 +1350,20 @@ export default function InspectionWizardScreen() {
                       </TouchableOpacity>
                     )}
                   </View>
+                  {/* Annotate button */}
+                  <TouchableOpacity
+                    style={styles.annotateButton}
+                    onPress={() => {
+                      navigation.navigate('PhotoAnnotation', {
+                        imageUri: photoSource,
+                        returnScreen: 'InspectionWizard',
+                        returnParams: { id },
+                      });
+                    }}
+                    disabled={isUploading}
+                  >
+                    <Text style={styles.annotateButtonIcon}>✏️</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.mediaDeleteButton}
                     onPress={handlePhotoDelete}
@@ -1889,6 +1919,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
+  },
+  annotateButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1677ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  annotateButtonIcon: {
+    fontSize: 14,
   },
   deleteIconSmall: {
     fontSize: 14,

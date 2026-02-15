@@ -28,7 +28,25 @@ export * from './overdue.types';
 export * from './daily-review-ai.types';
 export * from './performance-ai.types';
 export * from './reports-ai.types';
-export * from './schedule-ai.types';
+// Schedule AI types - explicitly export to avoid conflict with ScheduleAnomaly from work-plan.types
+export type {
+  EquipmentRiskScore,
+  RiskScoresResponse,
+  CoverageGap,
+  CoverageGapsResponse,
+  InspectorScore,
+  TeamPerformance,
+  RouteOptimizationRequest,
+  OptimizedRoute,
+  SLAWarning,
+  CapacityForecast,
+  HealthTrend,
+  ScheduleAnomaly as ScheduleAIAnomaly,
+  ScheduleAIInsight,
+  OptimalFrequencyRequest,
+  OptimalFrequencyResponse,
+  FatigueRisk,
+} from './schedule-ai.types';
 // AI Base types - selectively export to avoid conflicts with existing types
 export type {
   Severity,
@@ -54,6 +72,12 @@ export type {
 // Mobile Toolkit & Communication types
 export * from './toolkit.types';
 export * from './team-communication.types';
+// Running Hours types
+export * from './running-hours.types';
+// Previous Inspection types
+export * from './previous-inspection.types';
+// Answer Templates types
+export * from './templates.types';
 // Color constants (values, not types)
 export {
   RISK_COLORS,

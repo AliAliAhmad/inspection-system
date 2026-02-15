@@ -1,147 +1,323 @@
-import { Card, Typography, Space, Tag, Button, Statistic } from 'antd';
+import React from 'react';
+import {
+  Card,
+  List,
+  Tag,
+  Typography,
+  Spin,
+  Empty,
+  Space,
+  Button,
+  Badge,
+  Tooltip,
+  Alert,
+} from 'antd';
+import { useQuery } from '@tanstack/react-query';
+import { scheduleAIApi } from '@inspection/shared';
+import type { SLAWarning } from '@inspection/shared';
 import {
   ClockCircleOutlined,
   WarningOutlined,
+  ExclamationCircleOutlined,
+  CalendarOutlined,
+  RightOutlined,
+  AlertOutlined,
   UserOutlined,
-  ThunderboltOutlined,
 } from '@ant-design/icons';
-import { useTranslation } from 'react-i18next';
-import type { SLAWarning } from '@inspection/shared';
-import { RiskIndicator } from './RiskIndicator';
 
 const { Text } = Typography;
 
-export interface SLAWarningCardProps {
-  warning: SLAWarning;
-  onSchedule?: (equipmentId: number) => void;
-  onReassign?: (equipmentId: number) => void;
-  onEscalate?: (equipmentId: number) => void;
+const getRiskConfig = (level: string) => {
+  switch (level) {
+    case 'critical':
+      return {
+        color: '#cf1322',
+        tagColor: 'red',
+        icon: <ExclamationCircleOutlined />,
+        label: 'Critical',
+      };
+    case 'high':
+      return {
+        color: '#fa541c',
+        tagColor: 'volcano',
+        icon: <AlertOutlined />,
+        label: 'High',
+      };
+    case 'medium':
+      return {
+        color: '#faad14',
+        tagColor: 'orange',
+        icon: <WarningOutlined />,
+        label: 'Medium',
+      };
+    case 'low':
+      return {
+        color: '#52c41a',
+        tagColor: 'green',
+        icon: <ClockCircleOutlined />,
+        label: 'Low',
+      };
+    default:
+      return {
+        color: '#8c8c8c',
+        tagColor: 'default',
+        icon: <ClockCircleOutlined />,
+        label: level,
+      };
+  }
+};
+
+interface SLAWarningCardProps {
+  onViewDetails?: (equipmentId: number) => void;
+  onScheduleInspection?: (equipmentId: number) => void;
+  daysAhead?: number;
+  maxItems?: number;
 }
 
-export function SLAWarningCard({
-  warning,
-  onSchedule,
-  onReassign,
-  onEscalate,
-}: SLAWarningCardProps) {
-  const { t } = useTranslation();
+export const SLAWarningCard: React.FC<SLAWarningCardProps> = ({
+  onViewDetails,
+  onScheduleInspection,
+  daysAhead = 7,
+  maxItems = 5,
+}) => {
+  const {
+    data: slaData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['schedule-ai', 'sla-warnings', daysAhead],
+    queryFn: () => scheduleAIApi.getSLAWarnings(daysAhead),
+  });
 
-  const isUrgent = warning.days_until_due <= 2;
-  const isCritical = warning.risk_level === 'critical' || warning.days_until_due <= 0;
+  if (isLoading) {
+    return (
+      <Card
+        title={
+          <Space>
+            <ClockCircleOutlined />
+            <span>SLA Warnings</span>
+          </Space>
+        }
+      >
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16 }}>
+            <Text type="secondary">Checking SLA status...</Text>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
-  const cardStyle = {
-    backgroundColor: isCritical ? '#fff2f0' : isUrgent ? '#fff7e6' : '#fafafa',
-    borderColor: isCritical ? '#ffccc7' : isUrgent ? '#ffd591' : '#f0f0f0',
-    borderWidth: 2,
-    marginBottom: 16,
-  };
+  if (error) {
+    return (
+      <Card
+        title={
+          <Space>
+            <ClockCircleOutlined />
+            <span>SLA Warnings</span>
+          </Space>
+        }
+      >
+        <Empty
+          description="Failed to load SLA warnings"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      </Card>
+    );
+  }
+
+  const warnings: SLAWarning[] = (slaData || []).slice(0, maxItems);
+  const totalWarnings = slaData?.length || 0;
+  const criticalCount = warnings.filter((w) => w.risk_level === 'critical').length;
+  const overdueCount = warnings.filter((w) => w.days_until_due < 0).length;
 
   return (
     <Card
-      size="small"
-      style={cardStyle}
       title={
         <Space>
-          {isCritical ? (
-            <ThunderboltOutlined style={{ color: '#ff4d4f' }} />
-          ) : (
-            <WarningOutlined style={{ color: isUrgent ? '#fa8c16' : '#faad14' }} />
-          )}
-          <Text strong>{warning.equipment_name}</Text>
-          <RiskIndicator level={warning.risk_level} size="small" />
+          <ClockCircleOutlined
+            style={{ color: criticalCount > 0 ? '#cf1322' : '#faad14' }}
+          />
+          <span>SLA Warnings</span>
+          <Badge
+            count={totalWarnings}
+            style={{
+              backgroundColor: criticalCount > 0 ? '#cf1322' : '#faad14',
+            }}
+          />
         </Space>
       }
+      extra={
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          Next {daysAhead} days
+        </Text>
+      }
     >
-      <div style={{ marginBottom: 16 }}>
-        <Space size="large">
-          {/* Days Until Due */}
-          <Statistic
-            title={t('schedules.ai.daysUntilDue', 'Days Until Due')}
-            value={warning.days_until_due}
-            valueStyle={{
-              fontSize: 24,
-              color: warning.days_until_due <= 0 ? '#ff4d4f' : isUrgent ? '#fa8c16' : '#faad14',
-            }}
-            suffix={
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {warning.days_until_due === 1 ? 'day' : 'days'}
-              </Text>
-            }
-          />
-
-          {/* Due Date */}
-          <div>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              {t('schedules.ai.dueDate', 'Due Date')}
-            </Text>
-            <Space>
-              <ClockCircleOutlined style={{ color: '#1677ff' }} />
-              <Text strong>{new Date(warning.sla_due_date).toLocaleDateString()}</Text>
-            </Space>
-          </div>
-
-          {/* Assigned Inspector */}
-          {warning.assigned_inspector && (
-            <div>
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                {t('schedules.ai.assignedTo', 'Assigned To')}
-              </Text>
-              <Space>
-                <UserOutlined style={{ color: '#722ed1' }} />
-                <Text strong>{warning.assigned_inspector}</Text>
-              </Space>
-            </div>
-          )}
-        </Space>
-      </div>
-
-      {/* Recommendation */}
-      {warning.recommended_action && (
-        <div
-          style={{
-            padding: 12,
-            backgroundColor: 'rgba(255,255,255,0.8)',
-            borderRadius: 8,
-            marginBottom: 12,
-            border: '1px solid #f0f0f0',
-          }}
-        >
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-            {t('schedules.ai.recommendedAction', 'Recommended Action')}:
-          </Text>
-          <Text style={{ fontSize: 13 }}>{warning.recommended_action}</Text>
-        </div>
+      {overdueCount > 0 && (
+        <Alert
+          type="error"
+          message={`${overdueCount} SLA${overdueCount > 1 ? 's' : ''} overdue - immediate action required`}
+          style={{ marginBottom: 16 }}
+          showIcon
+        />
       )}
 
-      {/* Action Buttons */}
+      {warnings.length === 0 ? (
+        <Empty
+          description="No SLA warnings"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      ) : (
+        <List
+          dataSource={warnings}
+          renderItem={(warning: SLAWarning) => {
+            const riskConfig = getRiskConfig(warning.risk_level);
+            return (
+              <List.Item
+                key={warning.equipment_id}
+                actions={[
+                  onScheduleInspection && (
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => onScheduleInspection(warning.equipment_id)}
+                    >
+                      Schedule
+                    </Button>
+                  ),
+                  onViewDetails && (
+                    <Button
+                      type="link"
+                      size="small"
+                      onClick={() => onViewDetails(warning.equipment_id)}
+                      icon={<RightOutlined />}
+                    >
+                      Details
+                    </Button>
+                  ),
+                ].filter(Boolean)}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <Tooltip title={riskConfig.label}>
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: '50%',
+                          backgroundColor: riskConfig.color,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: 18,
+                        }}
+                      >
+                        {riskConfig.icon}
+                      </div>
+                    </Tooltip>
+                  }
+                  title={
+                    <Space>
+                      <Text strong>{warning.equipment_name}</Text>
+                      <Tag color={riskConfig.tagColor}>
+                        {riskConfig.label}
+                      </Tag>
+                    </Space>
+                  }
+                  description={
+                    <Space direction="vertical" size={2}>
+                      <Space>
+                        <CalendarOutlined />
+                        <Text
+                          type={
+                            warning.days_until_due < 0
+                              ? 'danger'
+                              : 'secondary'
+                          }
+                        >
+                          {warning.days_until_due < 0
+                            ? `${Math.abs(warning.days_until_due)} days overdue`
+                            : warning.days_until_due === 0
+                              ? 'Due today'
+                              : `${warning.days_until_due} days remaining`}
+                        </Text>
+                      </Space>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Due: {new Date(warning.sla_due_date).toLocaleDateString()}
+                      </Text>
+                      {warning.assigned_inspector && (
+                        <Space>
+                          <UserOutlined />
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Assigned: {warning.assigned_inspector}
+                          </Text>
+                        </Space>
+                      )}
+                      {warning.recommended_action && (
+                        <Text
+                          type="secondary"
+                          style={{ fontSize: 12, fontStyle: 'italic' }}
+                        >
+                          {warning.recommended_action}
+                        </Text>
+                      )}
+                    </Space>
+                  }
+                />
+              </List.Item>
+            );
+          }}
+        />
+      )}
+
+      {totalWarnings > maxItems && (
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Text type="secondary">
+            Showing {maxItems} of {totalWarnings} warnings
+          </Text>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+// Individual SLA Warning item for use in other components
+export const SLAWarningItem: React.FC<{
+  warning: SLAWarning;
+  compact?: boolean;
+}> = ({ warning, compact = false }) => {
+  const riskConfig = getRiskConfig(warning.risk_level);
+
+  if (compact) {
+    return (
       <Space>
-        {onSchedule && (
-          <Button
-            type="primary"
-            size="small"
-            onClick={() => onSchedule(warning.equipment_id)}
-            danger={isCritical}
-          >
-            {t('schedules.ai.schedule', 'Schedule')}
-          </Button>
-        )}
-        {onReassign && (
-          <Button size="small" onClick={() => onReassign(warning.equipment_id)}>
-            {t('schedules.ai.reassign', 'Reassign')}
-          </Button>
-        )}
-        {onEscalate && isCritical && (
-          <Button
-            size="small"
-            danger
-            onClick={() => onEscalate(warning.equipment_id)}
-          >
-            {t('schedules.ai.escalate', 'Escalate')}
-          </Button>
-        )}
+        <Tag color={riskConfig.tagColor} icon={riskConfig.icon}>
+          {warning.equipment_name}
+        </Tag>
+        <Text type="secondary">
+          {warning.days_until_due < 0
+            ? `${Math.abs(warning.days_until_due)}d overdue`
+            : `${warning.days_until_due}d left`}
+        </Text>
+      </Space>
+    );
+  }
+
+  return (
+    <Card size="small">
+      <Space direction="vertical" style={{ width: '100%' }}>
+        <Space>
+          <Text strong>{warning.equipment_name}</Text>
+          <Tag color={riskConfig.tagColor}>{riskConfig.label}</Tag>
+        </Space>
+        <Text type={warning.days_until_due < 0 ? 'danger' : 'secondary'}>
+          {warning.days_until_due < 0
+            ? `${Math.abs(warning.days_until_due)} days overdue`
+            : `${warning.days_until_due} days remaining`}
+        </Text>
       </Space>
     </Card>
   );
-}
-
-export default SLAWarningCard;
+};

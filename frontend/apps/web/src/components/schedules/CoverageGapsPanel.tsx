@@ -1,57 +1,88 @@
-import { Card, Typography, Space, Spin, Empty, List, Tag, Button, Select } from 'antd';
-import { WarningOutlined, CalendarOutlined, EnvironmentOutlined } from '@ant-design/icons';
-import { useState } from 'react';
+import React from 'react';
+import {
+  Card,
+  List,
+  Tag,
+  Typography,
+  Spin,
+  Empty,
+  Space,
+  Progress,
+  Button,
+  Tooltip,
+  Badge,
+} from 'antd';
 import { useQuery } from '@tanstack/react-query';
-import { useTranslation } from 'react-i18next';
-import { scheduleAIApi, type CoverageGap } from '@inspection/shared';
+import { scheduleAIApi } from '@inspection/shared';
+import type { CoverageGap } from '@inspection/shared';
+import {
+  ExclamationCircleOutlined,
+  CalendarOutlined,
+  ToolOutlined,
+  RightOutlined,
+  EnvironmentOutlined,
+} from '@ant-design/icons';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
-export interface CoverageGapsPanelProps {
-  compact?: boolean;
-}
-
-const SEVERITY_CONFIG = {
-  critical: {
-    color: '#ff4d4f',
-    bgColor: '#fff2f0',
-    borderColor: '#ffccc7',
-    tagColor: 'error',
-  },
-  high: {
-    color: '#fa8c16',
-    bgColor: '#fff7e6',
-    borderColor: '#ffd591',
-    tagColor: 'warning',
-  },
-  medium: {
-    color: '#faad14',
-    bgColor: '#fffbe6',
-    borderColor: '#ffe58f',
-    tagColor: 'gold',
-  },
-  low: {
-    color: '#1677ff',
-    bgColor: '#e6f7ff',
-    borderColor: '#91d5ff',
-    tagColor: 'processing',
-  },
+const getSeverityColor = (severity: string) => {
+  switch (severity) {
+    case 'critical':
+      return '#cf1322';
+    case 'high':
+      return '#fa541c';
+    case 'medium':
+      return '#faad14';
+    case 'low':
+      return '#52c41a';
+    default:
+      return '#8c8c8c';
+  }
 };
 
-export function CoverageGapsPanel({ compact = false }: CoverageGapsPanelProps) {
-  const { t } = useTranslation();
-  const [severityFilter, setSeverityFilter] = useState<string>('');
+const getSeverityTag = (severity: string) => {
+  const colors: Record<string, string> = {
+    critical: 'red',
+    high: 'volcano',
+    medium: 'orange',
+    low: 'green',
+  };
+  return <Tag color={colors[severity] || 'default'}>{severity.toUpperCase()}</Tag>;
+};
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['schedule-ai', 'coverage-gaps', severityFilter],
-    queryFn: () => scheduleAIApi.getCoverageGaps(severityFilter || undefined),
+interface CoverageGapsPanelProps {
+  onScheduleInspection?: (equipmentId: number) => void;
+  maxItems?: number;
+}
+
+export const CoverageGapsPanel: React.FC<CoverageGapsPanelProps> = ({
+  onScheduleInspection,
+  maxItems = 10,
+}) => {
+  const {
+    data: coverageData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['schedule-ai', 'coverage-gaps'],
+    queryFn: () => scheduleAIApi.getCoverageGaps(),
   });
 
   if (isLoading) {
     return (
-      <Card>
-        <div style={{ textAlign: 'center', padding: 48 }}>
+      <Card
+        title={
+          <Space>
+            <ExclamationCircleOutlined />
+            <span>Coverage Gaps</span>
+          </Space>
+        }
+      >
+        <div style={{ textAlign: 'center', padding: '40px' }}>
           <Spin size="large" />
+          <div style={{ marginTop: 16 }}>
+            <Text type="secondary">Analyzing coverage gaps...</Text>
+          </div>
         </div>
       </Card>
     );
@@ -59,169 +90,121 @@ export function CoverageGapsPanel({ compact = false }: CoverageGapsPanelProps) {
 
   if (error) {
     return (
-      <Card>
-        <Empty description={t('schedules.ai.coverageGapsError', 'Failed to load coverage gaps')} />
-      </Card>
-    );
-  }
-
-  const gaps = data?.gaps || [];
-  const totalGaps = data?.total_gaps || 0;
-  const criticalGaps = data?.critical_gaps || 0;
-
-  if (gaps.length === 0) {
-    return (
       <Card
         title={
           <Space>
-            <WarningOutlined style={{ color: '#52c41a' }} />
-            {t('schedules.ai.coverageGaps', 'Coverage Gaps')}
+            <ExclamationCircleOutlined />
+            <span>Coverage Gaps</span>
           </Space>
         }
       >
         <Empty
-          description={t('schedules.ai.noCoverageGaps', 'No coverage gaps detected')}
+          description="Failed to load coverage gaps"
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       </Card>
     );
   }
 
-  // Compact view: show only critical gaps
-  if (compact) {
-    const criticalGapsList = gaps.filter((g) => g.severity === 'critical').slice(0, 3);
+  const gaps: CoverageGap[] = (coverageData?.gaps || []).slice(0, maxItems);
+  const totalGaps = coverageData?.total_gaps || 0;
+  const criticalGaps = coverageData?.critical_gaps || 0;
 
-    if (criticalGapsList.length === 0) {
-      return null;
-    }
-
-    return (
-      <Card
-        size="small"
-        title={
-          <Space>
-            <WarningOutlined style={{ color: '#ff4d4f' }} />
-            <Text strong>{t('schedules.ai.criticalGaps', 'Critical Coverage Gaps')}</Text>
-            <Tag color="error">{criticalGapsList.length}</Tag>
-          </Space>
-        }
-      >
-        <List
-          size="small"
-          dataSource={criticalGapsList}
-          renderItem={(gap) => (
-            <List.Item>
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Space>
-                  <Tag color="error">{gap.severity.toUpperCase()}</Tag>
-                  <Text strong>{gap.equipment_name}</Text>
-                </Space>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  <EnvironmentOutlined /> {gap.location} | {gap.days_overdue} days overdue
-                </Text>
-              </Space>
-            </List.Item>
-          )}
-        />
-      </Card>
-    );
-  }
-
-  // Full view
   return (
     <Card
       title={
         <Space>
-          <WarningOutlined style={{ color: criticalGaps > 0 ? '#ff4d4f' : '#faad14' }} />
-          <Title level={5} style={{ margin: 0 }}>
-            {t('schedules.ai.coverageGaps', 'Coverage Gaps')}
-          </Title>
-          <Tag color={criticalGaps > 0 ? 'error' : 'warning'}>
-            {totalGaps} {t('schedules.ai.gaps', 'Gaps')}
-          </Tag>
-          {criticalGaps > 0 && <Tag color="error">{criticalGaps} Critical</Tag>}
+          <ExclamationCircleOutlined style={{ color: criticalGaps > 0 ? '#cf1322' : '#faad14' }} />
+          <span>Coverage Gaps</span>
+          <Badge
+            count={totalGaps}
+            style={{ backgroundColor: criticalGaps > 0 ? '#cf1322' : '#faad14' }}
+          />
         </Space>
       }
       extra={
-        <Select
-          value={severityFilter}
-          onChange={setSeverityFilter}
-          style={{ width: 120 }}
-          size="small"
-          options={[
-            { label: t('schedules.ai.allSeverities', 'All'), value: '' },
-            { label: t('schedules.ai.critical', 'Critical'), value: 'critical' },
-            { label: t('schedules.ai.high', 'High'), value: 'high' },
-            { label: t('schedules.ai.medium', 'Medium'), value: 'medium' },
-            { label: t('schedules.ai.low', 'Low'), value: 'low' },
-          ]}
-        />
+        criticalGaps > 0 && (
+          <Tag color="red">{criticalGaps} Critical</Tag>
+        )
       }
     >
-      <List
-        dataSource={gaps}
-        renderItem={(gap) => {
-          const config = SEVERITY_CONFIG[gap.severity as keyof typeof SEVERITY_CONFIG];
-          return (
+      {gaps.length === 0 ? (
+        <Empty
+          description="No coverage gaps detected"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      ) : (
+        <List
+          dataSource={gaps}
+          renderItem={(gap: CoverageGap) => (
             <List.Item
-              style={{
-                padding: '12px 16px',
-                backgroundColor: config.bgColor,
-                borderRadius: 8,
-                marginBottom: 8,
-                border: `1px solid ${config.borderColor}`,
-              }}
+              key={gap.equipment_id}
               actions={[
-                <Button type="primary" size="small" key="schedule">
-                  {t('schedules.ai.scheduleNow', 'Schedule Now')}
-                </Button>,
-              ]}
+                onScheduleInspection && (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => onScheduleInspection(gap.equipment_id)}
+                    icon={<RightOutlined />}
+                  >
+                    Schedule
+                  </Button>
+                ),
+              ].filter(Boolean)}
             >
-              <div style={{ width: '100%' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                  }}
-                >
+              <List.Item.Meta
+                avatar={
+                  <Tooltip title={`Risk Score: ${gap.estimated_risk}`}>
+                    <Progress
+                      type="circle"
+                      percent={gap.estimated_risk}
+                      width={50}
+                      strokeColor={getSeverityColor(gap.severity)}
+                      format={(percent) => percent}
+                    />
+                  </Tooltip>
+                }
+                title={
                   <Space>
-                    <Tag color={config.tagColor}>{gap.severity.toUpperCase()}</Tag>
-                    <Text strong style={{ fontSize: 14 }}>
-                      {gap.equipment_name}
+                    <ToolOutlined />
+                    <Text strong>{gap.equipment_name}</Text>
+                    {getSeverityTag(gap.severity)}
+                  </Space>
+                }
+                description={
+                  <Space direction="vertical" size={2}>
+                    <Space>
+                      <EnvironmentOutlined />
+                      <Text type="secondary">{gap.location}</Text>
+                    </Space>
+                    <Space>
+                      <CalendarOutlined />
+                      <Text type="secondary">
+                        {gap.last_inspection_date
+                          ? `Last inspected: ${new Date(gap.last_inspection_date).toLocaleDateString()}`
+                          : 'Never inspected'}
+                      </Text>
+                    </Space>
+                    <Text type="danger">
+                      {gap.days_overdue} days overdue
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Priority: {gap.recommended_priority}
                     </Text>
                   </Space>
-                  <Tag color="red" style={{ fontSize: 12 }}>
-                    {gap.days_overdue} {t('schedules.ai.daysOverdue', 'days overdue')}
-                  </Tag>
-                </div>
-
-                <Space size="large" style={{ fontSize: 12 }}>
-                  <Text type="secondary">
-                    <EnvironmentOutlined /> {gap.location}
-                  </Text>
-                  {gap.last_inspection_date && (
-                    <Text type="secondary">
-                      <CalendarOutlined /> Last:{' '}
-                      {new Date(gap.last_inspection_date).toLocaleDateString()}
-                    </Text>
-                  )}
-                  <Text type="secondary">
-                    Priority: <strong>{gap.recommended_priority}</strong>
-                  </Text>
-                  <Text type="secondary">
-                    Risk: <strong>{(gap.estimated_risk * 100).toFixed(0)}%</strong>
-                  </Text>
-                </Space>
-              </div>
+                }
+              />
             </List.Item>
-          );
-        }}
-        pagination={{ pageSize: 10, size: 'small' }}
-      />
+          )}
+        />
+      )}
+      {totalGaps > maxItems && (
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Text type="secondary">
+            Showing {maxItems} of {totalGaps} gaps
+          </Text>
+        </div>
+      )}
     </Card>
   );
-}
-
-export default CoverageGapsPanel;
+};

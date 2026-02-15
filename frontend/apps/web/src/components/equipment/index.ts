@@ -22,3 +22,10 @@ export { EquipmentNotesPanel } from './EquipmentNotesPanel';
 export { CertificationTracker } from './CertificationTracker';
 export { TechnicianLeaderboard } from './TechnicianLeaderboard';
 export { WatchButton, WatchToggleButton } from './WatchButton';
+
+// Running Hours Components
+export { RunningHoursCard } from './RunningHoursCard';
+export { RunningHoursInput } from './RunningHoursInput';
+export { RunningHoursDashboard } from './RunningHoursDashboard';
+export { ServiceIntervalSettings } from './ServiceIntervalSettings';
+export { ServiceAlertNotification, ServiceAlertBadge } from './ServiceAlertNotification';

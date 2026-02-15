@@ -67,6 +67,7 @@ function getMenuItems(role: string, t: (key: string) => string): MenuDataItem[] 
     { path: '/admin/roster', name: `\ud83d\udc65 ${t('nav.roster')}`, icon: <TeamOutlined /> },
     { path: '/admin/users', name: `\ud83d\udc68\u200d\ud83d\udcbc ${t('nav.users')}`, icon: <TeamOutlined /> },
     { path: '/admin/equipment', name: `\ud83d\udd27 ${t('nav.equipment')}`, icon: <ToolOutlined /> },
+    { path: '/admin/running-hours', name: `\u23f1\ufe0f ${t('nav.running_hours')}`, icon: <DashboardOutlined /> },
     { path: '/admin/checklists', name: `\u2705 ${t('nav.checklists')}`, icon: <CheckCircleOutlined /> },
     { path: '/admin/schedules', name: `\ud83d\udcc6 ${t('nav.inspectionSchedule')}`, icon: <ScheduleOutlined /> },
     { path: '/admin/assignments', name: `\ud83d\udccc ${t('nav.inspection_assignments')}`, icon: <AppstoreOutlined /> },

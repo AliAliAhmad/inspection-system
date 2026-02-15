@@ -25,7 +25,6 @@ export interface RiskScoresResponse {
   };
 }
 
-// Coverage gaps
 export interface CoverageGap {
   equipment_id: number;
   equipment_name: string;
@@ -43,7 +42,6 @@ export interface CoverageGapsResponse {
   critical_gaps: number;
 }
 
-// Inspector scores
 export interface InspectorScore {
   inspector_id: number;
   inspector_name: string;
@@ -72,7 +70,6 @@ export interface TeamPerformance {
   }>;
 }
 
-// Route optimization
 export interface RouteOptimizationRequest {
   equipment_ids: number[];
   inspector_id?: number;
@@ -98,7 +95,6 @@ export interface OptimizedRoute {
   };
 }
 
-// SLA warnings
 export interface SLAWarning {
   equipment_id: number;
   equipment_name: string;
@@ -109,7 +105,6 @@ export interface SLAWarning {
   assigned_inspector: string | null;
 }
 
-// Capacity forecast
 export interface CapacityForecast {
   date: string;
   required_inspections: number;
@@ -119,7 +114,6 @@ export interface CapacityForecast {
   recommendations: string[];
 }
 
-// Health trends
 export interface HealthTrend {
   equipment_id: number;
   equipment_name: string;
@@ -130,8 +124,7 @@ export interface HealthTrend {
   confidence: number;
 }
 
-// Anomalies
-export interface ScheduleAIAnomaly {
+export interface ScheduleAnomaly {
   type: 'frequency_spike' | 'quality_drop' | 'capacity_issue' | 'pattern_change';
   description: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
@@ -140,7 +133,6 @@ export interface ScheduleAIAnomaly {
   recommendation: string;
 }
 
-// AI Insights
 export interface ScheduleAIInsight {
   category: 'risk' | 'efficiency' | 'quality' | 'capacity' | 'optimization';
   title: string;
@@ -151,7 +143,6 @@ export interface ScheduleAIInsight {
   related_data: Record<string, any>;
 }
 
-// Optimal frequency
 export interface OptimalFrequencyRequest {
   equipment_id: number;
   current_frequency_days?: number;
@@ -168,7 +159,6 @@ export interface OptimalFrequencyResponse {
   cost_impact: 'increase' | 'decrease' | 'neutral';
 }
 
-// Fatigue risk
 export interface FatigueRisk {
   inspector_id: number;
   inspector_name: string;

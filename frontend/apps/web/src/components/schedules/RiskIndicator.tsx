@@ -1,102 +1,156 @@
-import { Tag, Tooltip } from 'antd';
+import React from 'react';
+import { Tag, Tooltip, Progress, Space, Typography } from 'antd';
 import {
-  ThunderboltOutlined,
-  ExclamationCircleOutlined,
   WarningOutlined,
+  ExclamationCircleOutlined,
+  CheckCircleOutlined,
   InfoCircleOutlined,
 } from '@ant-design/icons';
 
-export interface RiskIndicatorProps {
-  level: 'critical' | 'high' | 'medium' | 'low';
-  factors?: {
-    age_factor?: number;
-    failure_history_factor?: number;
-    criticality_factor?: number;
-    maintenance_gap_factor?: number;
-  };
-  tooltip?: string;
-  size?: 'small' | 'default';
+const { Text } = Typography;
+
+interface RiskIndicatorProps {
+  riskScore: number;
+  showLabel?: boolean;
+  showProgress?: boolean;
+  size?: 'small' | 'default' | 'large';
+  showIcon?: boolean;
+  tooltipText?: string;
 }
 
-const RISK_CONFIG = {
-  critical: {
-    color: '#ff4d4f',
-    icon: <ThunderboltOutlined />,
-    label: 'Critical',
-  },
-  high: {
-    color: '#fa8c16',
-    icon: <ExclamationCircleOutlined />,
-    label: 'High',
-  },
-  medium: {
-    color: '#faad14',
-    icon: <WarningOutlined />,
-    label: 'Medium',
-  },
-  low: {
-    color: '#52c41a',
-    icon: <InfoCircleOutlined />,
-    label: 'Low',
-  },
+type RiskLevel = 'critical' | 'high' | 'medium' | 'low';
+
+const getRiskLevel = (score: number): RiskLevel => {
+  if (score >= 80) return 'critical';
+  if (score >= 60) return 'high';
+  if (score >= 40) return 'medium';
+  return 'low';
 };
 
-export function RiskIndicator({ level, factors, tooltip, size = 'default' }: RiskIndicatorProps) {
-  const config = RISK_CONFIG[level];
-
-  // Build tooltip content
-  let tooltipContent: React.ReactNode = tooltip;
-  if (!tooltipContent && factors) {
-    const factorEntries = Object.entries(factors)
-      .filter(([_, value]) => value !== undefined && value > 0)
-      .map(([key, value]) => {
-        const label = key
-          .replace(/_/g, ' ')
-          .replace(/factor/i, '')
-          .trim();
-        return `${label}: ${(value * 100).toFixed(0)}%`;
-      });
-
-    if (factorEntries.length > 0) {
-      tooltipContent = (
-        <div>
-          <div style={{ fontWeight: 'bold', marginBottom: 4 }}>Risk Factors:</div>
-          {factorEntries.map((entry, idx) => (
-            <div key={idx} style={{ fontSize: 12 }}>
-              {entry}
-            </div>
-          ))}
-        </div>
-      );
-    }
+const getRiskConfig = (level: RiskLevel) => {
+  switch (level) {
+    case 'critical':
+      return {
+        color: '#cf1322',
+        tagColor: 'red',
+        label: 'Critical Risk',
+        icon: <ExclamationCircleOutlined />,
+      };
+    case 'high':
+      return {
+        color: '#fa541c',
+        tagColor: 'volcano',
+        label: 'High Risk',
+        icon: <WarningOutlined />,
+      };
+    case 'medium':
+      return {
+        color: '#faad14',
+        tagColor: 'orange',
+        label: 'Medium Risk',
+        icon: <InfoCircleOutlined />,
+      };
+    case 'low':
+      return {
+        color: '#52c41a',
+        tagColor: 'green',
+        label: 'Low Risk',
+        icon: <CheckCircleOutlined />,
+      };
+    default:
+      return {
+        color: '#8c8c8c',
+        tagColor: 'default',
+        label: 'Unknown',
+        icon: <InfoCircleOutlined />,
+      };
   }
+};
 
-  const tag = (
+export const RiskIndicator: React.FC<RiskIndicatorProps> = ({
+  riskScore,
+  showLabel = true,
+  showProgress = false,
+  size = 'default',
+  showIcon = true,
+  tooltipText,
+}) => {
+  const level = getRiskLevel(riskScore);
+  const config = getRiskConfig(level);
+
+  const progressWidth = size === 'small' ? 40 : size === 'large' ? 80 : 60;
+  const fontSize = size === 'small' ? 10 : size === 'large' ? 14 : 12;
+
+  const content = showProgress ? (
+    <Space direction="vertical" align="center" size={4}>
+      <Progress
+        type="circle"
+        percent={riskScore}
+        width={progressWidth}
+        strokeColor={config.color}
+        format={(percent) => (
+          <span style={{ fontSize, color: config.color, fontWeight: 'bold' }}>
+            {percent}
+          </span>
+        )}
+      />
+      {showLabel && (
+        <Text style={{ fontSize: fontSize - 2, color: config.color }}>
+          {config.label}
+        </Text>
+      )}
+    </Space>
+  ) : (
     <Tag
-      color={
-        level === 'critical'
-          ? 'error'
-          : level === 'high'
-          ? 'warning'
-          : level === 'medium'
-          ? 'gold'
-          : 'success'
-      }
-      icon={config.icon}
+      color={config.tagColor}
+      icon={showIcon ? config.icon : undefined}
       style={{
-        fontSize: size === 'small' ? 11 : 12,
-        padding: size === 'small' ? '0 4px' : undefined,
+        fontSize: size === 'small' ? 10 : size === 'large' ? 14 : 12,
+        padding: size === 'small' ? '0 4px' : size === 'large' ? '4px 12px' : '2px 8px',
       }}
     >
-      {config.label}
+      {showLabel ? config.label : riskScore}
     </Tag>
   );
 
-  if (tooltipContent) {
-    return <Tooltip title={tooltipContent}>{tag}</Tooltip>;
+  if (tooltipText) {
+    return <Tooltip title={tooltipText}>{content}</Tooltip>;
   }
 
-  return tag;
-}
+  return content;
+};
 
-export default RiskIndicator;
+// Compact version for use in tables
+export const RiskBadge: React.FC<{ score: number }> = ({ score }) => {
+  return <RiskIndicator riskScore={score} showLabel={false} size="small" />;
+};
+
+// Detailed version for cards/panels
+export const RiskGauge: React.FC<{
+  score: number;
+  label?: string;
+  description?: string;
+}> = ({ score, label, description }) => {
+  const level = getRiskLevel(score);
+  const config = getRiskConfig(level);
+
+  return (
+    <Space direction="vertical" align="center" style={{ width: '100%' }}>
+      <Progress
+        type="dashboard"
+        percent={score}
+        strokeColor={config.color}
+        format={(percent) => (
+          <Space direction="vertical" align="center" size={0}>
+            <span style={{ fontSize: 24, fontWeight: 'bold', color: config.color }}>
+              {percent}
+            </span>
+            <span style={{ fontSize: 12, color: '#8c8c8c' }}>Risk Score</span>
+          </Space>
+        )}
+      />
+      {label && <Text strong>{label}</Text>}
+      {description && <Text type="secondary">{description}</Text>}
+    </Space>
+  );
+};

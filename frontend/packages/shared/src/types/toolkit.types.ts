@@ -22,6 +22,7 @@ export interface ToolkitPreference {
   barcode_scanner_enabled: boolean;
   voice_checklist_enabled: boolean;
   auto_location_enabled: boolean;
+  ai_suggestions_enabled: boolean; // AI pass/fail suggestions for photos
   // Engineer toolkit
   team_map_enabled: boolean;
   voice_review_enabled: boolean;
@@ -75,4 +76,23 @@ export interface SimpleModeBtnConfig {
   color: string;
   bgColor: string;
   action: VoiceCommandAction;
+}
+
+// Alias for ToolkitPreference (plural form for convenience)
+export type ToolkitPreferences = ToolkitPreference;
+
+// Widget configuration for home screen widgets
+export interface WidgetConfig {
+  widget_type: 'tasks' | 'stats' | 'quick_actions';
+  position: number;
+  enabled: boolean;
+  settings?: Record<string, any>;
+}
+
+// Smartwatch sync preferences
+export interface SmartwatchPreferences {
+  sync_tasks: boolean;
+  sync_notifications: boolean;
+  vibration_alerts: boolean;
+  quick_reply_enabled: boolean;
 }

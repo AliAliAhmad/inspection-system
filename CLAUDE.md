@@ -66,6 +66,26 @@
 | Date | What Changed | Status |
 |------|-------------|--------|
 | 2026-02-13 | Project setup | ✅ Done |
+| 2026-02-15 | Fixed FileSystem import in PhotoAnnotationScreen (both APIs) | ✅ Done |
+| 2026-02-15 | Added GPS auto-location hook (useLocation) + LocationTag component | ✅ Done |
+| 2026-02-15 | Added Push-to-Talk walkie-talkie component | ✅ Done |
+| 2026-02-15 | Added Trending Alerts pattern detection component | ✅ Done |
+| 2026-02-15 | Added Batch Approval Widget for review queue | ✅ Done |
+| 2026-02-15 | Added Dashboard Widget (team status + system health) | ✅ Done |
+| 2026-02-15 | Added Drag-Drop Job Assignment component | ✅ Done |
+| 2026-02-15 | Added Team Location Map with distance + open-in-maps | ✅ Done |
+| 2026-02-15 | Added Geofence Alert (red zone / restricted area warnings) | ✅ Done |
+| 2026-02-15 | Added KPI Alerts with threshold monitoring | ✅ Done |
+| 2026-02-15 | Added Morning Brief (daily AI summary) component | ✅ Done |
+| 2026-02-15 | Created index files for chat/, quality/ component folders | ✅ Done |
+| 2026-02-15 | Updated hooks/index.ts and shared/index.ts with all new exports | ✅ Done |
+| 2026-02-15 | Built Running Hours backend: 3 models + full REST API + migration | ✅ Done |
+| 2026-02-15 | Built Answer Templates backend: CRUD API + model registration | ✅ Done |
+| 2026-02-15 | Built PreviousAnswersPanel mobile component (copy from previous) | ✅ Done |
+| 2026-02-15 | Built RunningHoursScreen mobile screen (view/enter hours) | ✅ Done |
+| 2026-02-15 | Wired RunningHoursScreen into RootNavigator | ✅ Done |
+| 2026-02-15 | Exported previous-inspection API + types in shared package | ✅ Done |
+| 2026-02-15 | Exported templates.types in shared package | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -76,7 +96,21 @@
 | Photo analysis (English) | ✅ Done | Working |
 | Photo analysis (Arabic) | 🔧 In Progress | Returns English only |
 | UI modernization | 📋 Planned | Needs full redesign |
-| Mobile app | 📋 Planned | React Native/Expo |
+| Mobile app | ✅ Done | React Native/Expo — 96+ components |
+| GPS auto-location tagging | ✅ Done | useLocation hook + LocationTag |
+| Push-to-talk walkie-talkie | ✅ Done | Hold-to-record voice messaging |
+| Team chat UI | ✅ Done | 3 screens + 5 chat components |
+| Trending alerts | ✅ Done | Pattern detection for recurring failures |
+| Batch approval widget | ✅ Done | Multi-select review queue |
+| Dashboard widget | ✅ Done | Team status + system health |
+| Drag-drop job assignment | ✅ Done | Select job → tap inspector |
+| Team location map | ✅ Done | List view with distance + open-in-maps |
+| Red zone / geofencing | ✅ Done | Zone alerts with modal warnings |
+| KPI alerts & monitoring | ✅ Done | Threshold-based with visual indicators |
+| Daily morning brief | ✅ Done | AI summary with priorities + recap |
+| Running hours tracking | ✅ Done | Backend API + mobile screen + web UI |
+| Answer templates | ✅ Done | Backend CRUD API + model |
+| Previous inspection answers | ✅ Done | Copy from previous + panel component |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

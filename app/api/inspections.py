@@ -2113,6 +2113,103 @@ def get_ai_insights():
     }), 200
 
 
+# ============================================
+# PREVIOUS INSPECTION (Copy Functionality)
+# ============================================
+
+@bp.route('/previous/<int:equipment_id>', methods=['GET'])
+@jwt_required()
+def get_previous_inspection(equipment_id):
+    """
+    Get the last completed inspection for equipment.
+    Used for "copy from previous" functionality in mobile app.
+
+    Returns the most recent reviewed/submitted inspection with all answers
+    for the same equipment, allowing inspectors to copy answers.
+
+    Query Parameters:
+        template_id: Optional - filter by specific template
+        include_answers: Include full answers (default: true)
+
+    Returns:
+        {
+            "status": "success",
+            "data": {
+                "inspection": {...},
+                "answers": [...],
+                "can_copy": true
+            }
+        }
+    """
+    current_user = get_current_user()
+    language = get_language(current_user)
+
+    # Validate equipment exists
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        raise NotFoundError(f"Equipment with ID {equipment_id} not found")
+
+    # Build query for previous inspections
+    query = Inspection.query.filter(
+        Inspection.equipment_id == equipment_id,
+        Inspection.status.in_(['submitted', 'reviewed'])
+    )
+
+    # Optional: filter by template
+    template_id = request.args.get('template_id', type=int)
+    if template_id:
+        query = query.filter(Inspection.template_id == template_id)
+
+    # Get the most recent completed inspection
+    previous_inspection = query.order_by(
+        Inspection.submitted_at.desc()
+    ).first()
+
+    if not previous_inspection:
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'inspection': None,
+                'answers': [],
+                'can_copy': False,
+                'message': 'No previous inspection found for this equipment'
+            }
+        }), 200
+
+    include_answers = request.args.get('include_answers', 'true').lower() == 'true'
+
+    inspection_data = previous_inspection.to_dict(
+        include_answers=include_answers,
+        language=language
+    )
+
+    # Format answers for easy copying
+    copyable_answers = []
+    if include_answers:
+        for answer in previous_inspection.answers.all():
+            copyable_answers.append({
+                'checklist_item_id': answer.checklist_item_id,
+                'answer_value': answer.answer_value,
+                'comment': answer.comment,
+                # Don't copy media files - those need fresh evidence
+                'has_photo': bool(answer.photo_file_id or answer.photo_path),
+                'has_video': bool(answer.video_file_id or answer.video_path),
+                'has_voice': bool(answer.voice_note_id),
+            })
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'inspection': inspection_data,
+            'answers': copyable_answers,
+            'can_copy': True,
+            'previous_date': previous_inspection.submitted_at.isoformat() if previous_inspection.submitted_at else None,
+            'previous_result': previous_inspection.result,
+            'days_ago': (datetime.utcnow() - previous_inspection.submitted_at).days if previous_inspection.submitted_at else None,
+        }
+    }), 200
+
+
 @bp.route('/search', methods=['GET'])
 @jwt_required()
 def search_inspections():

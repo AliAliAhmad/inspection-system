@@ -6,11 +6,16 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
 import { LanguageProvider } from './providers/LanguageProvider';
 import { OfflineProvider } from './providers/OfflineProvider';
+import { VoiceCommandProvider } from './providers/VoiceCommandProvider';
+import { ThemeProvider, useThemeContext } from './providers/ThemeProvider';
 import OfflineBanner from './components/common/OfflineBanner';
+import VoiceCommandOverlay from './components/VoiceCommandOverlay';
+import BigButtonOverlay from './components/BigButtonOverlay';
 import RootNavigator from './navigation/RootNavigator';
 import LoginScreen from './screens/auth/LoginScreen';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { useTheme } from './hooks/useTheme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,13 +27,19 @@ const queryClient = new QueryClient({
   },
 });
 
+function ThemedStatusBar() {
+  const { isDark } = useThemeContext();
+  return <StatusBar style={isDark ? 'light' : 'dark'} />;
+}
+
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { colors } = useTheme();
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#1677ff" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -44,19 +55,25 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <OfflineProvider>
-          <LanguageProvider>
-            <NavigationContainer>
-              <AuthProvider>
-                <ErrorBoundary>
-                  <StatusBar style="auto" />
-                  <OfflineBanner />
-                  <AppContent />
-                </ErrorBoundary>
-              </AuthProvider>
-            </NavigationContainer>
-          </LanguageProvider>
-        </OfflineProvider>
+        <ThemeProvider>
+          <OfflineProvider>
+            <LanguageProvider>
+              <NavigationContainer>
+                <AuthProvider>
+                  <VoiceCommandProvider>
+                    <ErrorBoundary>
+                      <ThemedStatusBar />
+                      <OfflineBanner />
+                      <VoiceCommandOverlay />
+                      <AppContent />
+                      <BigButtonOverlay />
+                    </ErrorBoundary>
+                  </VoiceCommandProvider>
+                </AuthProvider>
+              </NavigationContainer>
+            </LanguageProvider>
+          </OfflineProvider>
+        </ThemeProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   );

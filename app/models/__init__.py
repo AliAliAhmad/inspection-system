@@ -150,6 +150,12 @@ from app.models.message_read_receipt import MessageReadReceipt
 # Mobile Toolkit
 from app.models.toolkit_preference import ToolkitPreference
 
+# Running Hours & Service Tracking
+from app.models.running_hours import RunningHoursReading, ServiceInterval, RunningHoursAlert
+
+# Answer Templates
+from app.models.answer_template import AnswerTemplate
+
 __all__ = [
     'User',
     'Equipment',
@@ -273,4 +279,10 @@ __all__ = [
     'MessageReadReceipt',
     # Mobile Toolkit
     'ToolkitPreference',
+    # Running Hours & Service Tracking
+    'RunningHoursReading',
+    'ServiceInterval',
+    'RunningHoursAlert',
+    # Answer Templates
+    'AnswerTemplate',
 ]

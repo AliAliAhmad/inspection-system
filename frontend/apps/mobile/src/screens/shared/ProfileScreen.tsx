@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   Switch,
@@ -11,19 +10,26 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../providers/AuthProvider';
 import { useLanguage } from '../../providers/LanguageProvider';
+import { useThemeContext } from '../../providers/ThemeProvider';
+import { useTheme, createThemedStyles } from '../../hooks/useTheme';
+import { getRoleColor } from '../../theme/colors';
+import { ThemeMode } from '../../storage/theme-storage';
+import { minutesToTimeString } from '../../storage/theme-storage';
 
-const roleColors: Record<string, string> = {
-  admin: '#f5222d',
-  inspector: '#1677ff',
-  specialist: '#52c41a',
-  engineer: '#fa8c16',
-  quality_engineer: '#722ed1',
+const THEME_MODE_LABELS: Record<ThemeMode, { en: string; ar: string }> = {
+  system: { en: 'System', ar: '\u0627\u0644\u0646\u0638\u0627\u0645' },
+  light: { en: 'Light', ar: '\u0641\u0627\u062A\u062D' },
+  dark: { en: 'Dark', ar: '\u062F\u0627\u0643\u0646' },
+  schedule: { en: 'Schedule', ar: '\u062C\u062F\u0648\u0644\u0629' },
 };
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { language, setLanguage, isRTL } = useLanguage();
   const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
+  const { mode, setMode, sunriseTime, sunsetTime } = useThemeContext();
+  const styles = useStyles();
 
   if (!user) return null;
 
@@ -38,44 +44,129 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleThemeModeChange = (newMode: ThemeMode) => {
+    setMode(newMode);
+  };
+
+  const roleColor = getRoleColor(user.role, isDark);
+
   return (
     <ScrollView style={styles.container}>
       {/* Avatar */}
       <View style={styles.avatarSection}>
-        <View style={styles.avatar}>
+        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
           <Text style={styles.avatarText}>{user.full_name.charAt(0)}</Text>
         </View>
         <Text style={styles.name}>{user.full_name}</Text>
-        <View style={[styles.roleBadge, { backgroundColor: roleColors[user.role] || '#999' }]}>
+        <View style={[styles.roleBadge, { backgroundColor: roleColor }]}>
           <Text style={styles.roleText}>{user.role.replace('_', ' ').toUpperCase()}</Text>
         </View>
       </View>
 
       {/* Info */}
       <View style={styles.section}>
-        <InfoRow label={t('auth.username')} value={user.username} />
-        <InfoRow label={t('common.email')} value={user.email} />
-        <InfoRow label="Employee ID" value={user.employee_id} />
-        <InfoRow label={t('common.role')} value={user.role} />
-        {user.specialization && <InfoRow label="Specialization" value={user.specialization} />}
-        {user.shift && <InfoRow label="Shift" value={user.shift} />}
-        <InfoRow label="Points" value={String(user.total_points)} />
+        <InfoRow
+          label={t('auth.username')}
+          value={user.username}
+          colors={colors}
+        />
+        <InfoRow
+          label={t('common.email')}
+          value={user.email}
+          colors={colors}
+        />
+        <InfoRow
+          label="Employee ID"
+          value={user.employee_id}
+          colors={colors}
+        />
+        <InfoRow
+          label={t('common.role')}
+          value={user.role}
+          colors={colors}
+        />
+        {user.specialization && (
+          <InfoRow
+            label="Specialization"
+            value={user.specialization}
+            colors={colors}
+          />
+        )}
+        {user.shift && (
+          <InfoRow
+            label="Shift"
+            value={user.shift}
+            colors={colors}
+          />
+        )}
+        <InfoRow
+          label="Points"
+          value={String(user.total_points)}
+          colors={colors}
+        />
+      </View>
+
+      {/* Theme Settings */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          {language === 'ar' ? '\u0627\u0644\u0645\u0638\u0647\u0631' : 'Appearance'}
+        </Text>
+        <View style={styles.themeOptions}>
+          {(['system', 'light', 'dark', 'schedule'] as ThemeMode[]).map((themeMode) => (
+            <TouchableOpacity
+              key={themeMode}
+              style={[
+                styles.themeOption,
+                mode === themeMode && styles.themeOptionActive,
+              ]}
+              onPress={() => handleThemeModeChange(themeMode)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: mode === themeMode }}
+            >
+              <Text
+                style={[
+                  styles.themeOptionText,
+                  mode === themeMode && styles.themeOptionTextActive,
+                ]}
+              >
+                {THEME_MODE_LABELS[themeMode][language]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {mode === 'schedule' && (
+          <View style={styles.scheduleInfo}>
+            <Text style={styles.scheduleText}>
+              {language === 'ar'
+                ? `\u062F\u0627\u0643\u0646 \u0645\u0646 ${minutesToTimeString(sunsetTime)} \u0625\u0644\u0649 ${minutesToTimeString(sunriseTime)}`
+                : `Dark from ${minutesToTimeString(sunsetTime)} to ${minutesToTimeString(sunriseTime)}`}
+            </Text>
+          </View>
+        )}
+        <Text style={styles.themeHint}>
+          {isDark
+            ? (language === 'ar' ? '\u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u062F\u0627\u0643\u0646 \u0645\u064F\u0641\u0639\u064E\u0644' : 'Dark mode is active')
+            : (language === 'ar' ? '\u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0641\u0627\u062A\u062D \u0645\u064F\u0641\u0639\u064E\u0644' : 'Light mode is active')}
+        </Text>
       </View>
 
       {/* Language */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{t('common.language')}</Text>
+        <Text style={styles.sectionTitle}>{t('profile.languageSettings')}</Text>
         <View style={styles.langRow}>
           <Text style={styles.langLabel}>English</Text>
           <Switch
             value={language === 'ar'}
             onValueChange={(checked) => setLanguage(checked ? 'ar' : 'en')}
-            trackColor={{ false: '#d9d9d9', true: '#1677ff' }}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.surface}
           />
           <Text style={styles.langLabel}>{'\u0627\u0644\u0639\u0631\u0628\u064A\u0629'}</Text>
         </View>
         <Text style={styles.dirText}>
-          {isRTL ? '\u0627\u0644\u0627\u062A\u062C\u0627\u0647: \u0645\u0646 \u0627\u0644\u064A\u0645\u064A\u0646 \u0625\u0644\u0649 \u0627\u0644\u064A\u0633\u0627\u0631' : 'Direction: Left to Right'}
+          {isRTL
+            ? '\u0627\u0644\u0627\u062A\u062C\u0627\u0647: \u0645\u0646 \u0627\u0644\u064A\u0645\u064A\u0646 \u0625\u0644\u0649 \u0627\u0644\u064A\u0633\u0627\u0631'
+            : 'Direction: Left to Right'}
         </Text>
       </View>
 
@@ -87,63 +178,147 @@ export default function ProfileScreen() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+interface InfoRowProps {
+  label: string;
+  value: string;
+  colors: ReturnType<typeof useTheme>['colors'];
+}
+
+function InfoRow({ label, value, colors }: InfoRowProps) {
   return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+    <View
+      style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.divider,
+      }}
+    >
+      <Text style={{ fontSize: 14, color: colors.textSecondary }}>{label}</Text>
+      <Text style={{ fontSize: 14, color: colors.text, fontWeight: '500' }}>{value}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  avatarSection: { alignItems: 'center', paddingVertical: 24, backgroundColor: '#fff' },
+const useStyles = createThemedStyles((colors, isDark) => ({
+  container: {
+    flex: 1,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    backgroundColor: colors.surface,
+  },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#1677ff',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  avatarText: { fontSize: 32, fontWeight: 'bold', color: '#fff' },
-  name: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a' },
+  avatarText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: colors.textInverse,
+  },
+  name: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
   roleBadge: {
     marginTop: 8,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  roleText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  roleText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     marginTop: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#1a1a1a' },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: colors.text,
   },
-  infoLabel: { fontSize: 14, color: '#666' },
-  infoValue: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
-  langRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  langLabel: { fontSize: 14, color: '#1a1a1a' },
-  dirText: { fontSize: 12, color: '#999', marginTop: 8 },
+  themeOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  themeOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  themeOptionActive: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
+  },
+  themeOptionText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  themeOptionTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  scheduleInfo: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 8,
+  },
+  scheduleText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  themeHint: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginTop: 8,
+  },
+  langRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  langLabel: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  dirText: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginTop: 8,
+  },
   logoutButton: {
     margin: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#f5222d',
+    borderColor: colors.error,
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  logoutText: { color: '#f5222d', fontSize: 16, fontWeight: '600' },
-});
+  logoutText: {
+    color: colors.error,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+}));
