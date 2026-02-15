@@ -54,6 +54,7 @@ const ROUTE_LABELS: Record<string, string> = {
   leaderboard: 'Leaderboard',
   'my-work-plan': 'My Work Plan',
   'equipment-dashboard': 'Equipment Dashboard',
+  'running-hours': 'Running Hours',
   jobs: 'Jobs',
   create: 'Create',
   'team-assignment': 'Team Assignment',
