@@ -11,23 +11,129 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Dark mode overrides for ProLayout and custom elements */
+/* Dark mode base */
 body.dark-mode {
   background-color: #141414;
   color: rgba(255, 255, 255, 0.85);
 }
 
-body.dark-mode .ant-pro-layout-bg-list {
-  background-color: #1f1f1f !important;
+/* ===================== App Layout ===================== */
+
+.app-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  z-index: 100;
+  flex-shrink: 0;
 }
 
-body.dark-mode .ant-pro-sider {
-  background-color: #1f1f1f !important;
+body.dark-mode .app-header {
+  background: #1f1f1f;
+  border-bottom-color: #303030;
 }
 
-body.dark-mode .ant-pro-global-header {
-  background-color: #1f1f1f !important;
+/* ===================== Icon Sidebar ===================== */
+
+.icon-sidebar {
+  width: 60px;
+  min-width: 60px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  border-right: 1px solid #f0f0f0;
+  background: #fafafa;
+  overflow-y: auto;
+  flex-shrink: 0;
 }
+
+body.dark-mode .icon-sidebar {
+  background: #1a1a1a;
+  border-right-color: #303030;
+}
+
+html[dir='rtl'] .icon-sidebar {
+  border-right: none;
+  border-left: 1px solid #f0f0f0;
+}
+
+body.dark-mode html[dir='rtl'] .icon-sidebar,
+html[dir='rtl'] body.dark-mode .icon-sidebar {
+  border-left-color: #303030;
+}
+
+.sidebar-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  margin: 3px 0;
+  color: #595959;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+body.dark-mode .sidebar-icon {
+  color: #8c8c8c;
+}
+
+.sidebar-icon:hover {
+  background: rgba(24, 144, 255, 0.08);
+  color: #1890ff;
+}
+
+.sidebar-icon-active {
+  background: rgba(24, 144, 255, 0.12);
+  color: #1890ff !important;
+}
+
+body.dark-mode .sidebar-icon-active {
+  background: rgba(24, 144, 255, 0.2);
+}
+
+/* ===================== Main Content ===================== */
+
+.app-content {
+  flex: 1;
+  padding: 20px 24px;
+  overflow-y: auto;
+  background: #f5f5f5;
+  min-width: 0;
+}
+
+body.dark-mode .app-content {
+  background: #141414;
+}
+
+/* ===================== Hub Cards ===================== */
+
+.hub-card {
+  border-radius: 12px;
+  cursor: pointer;
+  height: 100%;
+  border-top: 3px solid transparent;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hub-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+body.dark-mode .hub-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ===================== Inactive rows ===================== */
 
 body.dark-mode .inactive-row {
   background-color: #2a2a2a !important;
