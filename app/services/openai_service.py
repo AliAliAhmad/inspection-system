@@ -164,6 +164,22 @@ class VisionService:
         """
         from app.services.gemini_service import is_gemini_configured, get_vision_service as get_gemini_vision
         from app.services.groq_service import is_groq_configured, get_vision_service as get_groq_vision
+        from app.services.openrouter_service import is_openrouter_configured, get_vision_service as get_openrouter_vision
+        from app.services.huggingface_service import is_huggingface_configured, get_vision_service as get_hf_vision
+        from app.services.together_ai_service import is_together_configured, get_vision_service as get_together_vision
+        from app.services.sambanova_service import is_sambanova_configured, get_vision_service as get_sambanova_vision
+
+        def _make_success(result, provider_name):
+            return {
+                'success': True,
+                'description': result.get('en', ''),
+                'description_ar': result.get('ar', ''),
+                'severity': 'N/A',
+                'cause': 'N/A',
+                'recommendation': 'Continue regular maintenance',
+                'safety_risk': 'None identified',
+                'provider': provider_name
+            }
 
         # Download image for providers that need bytes
         image_content = None
@@ -174,45 +190,64 @@ class VisionService:
         except Exception as e:
             logger.warning(f"Could not download image: {e}")
 
-        # Try Gemini first
+        # FULL FALLBACK CHAIN (same order as upload-media endpoint)
+        # 1. Gemini → 2. Groq → 3. OpenRouter → 4. HuggingFace → 5. Together → 6. SambaNova → 7. OpenAI
+
+        # 1. Gemini
         if is_gemini_configured() and image_content:
             try:
-                gemini_vision = get_gemini_vision()
-                result = gemini_vision.analyze_image(image_content=image_content, is_reading_question=False)
+                result = get_gemini_vision().analyze_image(image_content=image_content, is_reading_question=False)
                 if result:
-                    return {
-                        'success': True,
-                        'description': result.get('en', ''),
-                        'description_ar': result.get('ar', ''),
-                        'severity': 'N/A',
-                        'cause': 'N/A',
-                        'recommendation': 'Continue regular maintenance',
-                        'safety_risk': 'None identified',
-                        'provider': 'gemini'
-                    }
+                    return _make_success(result, 'gemini')
             except Exception as e:
                 logger.warning(f"Gemini vision failed: {e}")
 
-        # Try Groq second
+        # 2. Groq
         if is_groq_configured() and image_content:
             try:
-                groq_vision = get_groq_vision()
-                result = groq_vision.analyze_image(image_content=image_content, is_reading_question=False)
+                result = get_groq_vision().analyze_image(image_content=image_content, is_reading_question=False)
                 if result:
-                    return {
-                        'success': True,
-                        'description': result.get('en', ''),
-                        'description_ar': result.get('ar', ''),
-                        'severity': 'N/A',
-                        'cause': 'N/A',
-                        'recommendation': 'Continue regular maintenance',
-                        'safety_risk': 'None identified',
-                        'provider': 'groq'
-                    }
+                    return _make_success(result, 'groq')
             except Exception as e:
                 logger.warning(f"Groq vision failed: {e}")
 
-        # Fall back to OpenAI
+        # 3. OpenRouter (FREE models)
+        if is_openrouter_configured() and image_content:
+            try:
+                result = get_openrouter_vision().analyze_image(image_content=image_content, is_reading_question=False)
+                if result:
+                    return _make_success(result, 'openrouter')
+            except Exception as e:
+                logger.warning(f"OpenRouter vision failed: {e}")
+
+        # 4. HuggingFace
+        if is_huggingface_configured() and image_content:
+            try:
+                result = get_hf_vision().analyze_image(image_content=image_content, is_reading_question=False)
+                if result:
+                    return _make_success(result, 'huggingface')
+            except Exception as e:
+                logger.warning(f"HuggingFace vision failed: {e}")
+
+        # 5. Together AI
+        if is_together_configured() and image_content:
+            try:
+                result = get_together_vision().analyze_image(image_content=image_content, is_reading_question=False)
+                if result:
+                    return _make_success(result, 'together')
+            except Exception as e:
+                logger.warning(f"Together AI vision failed: {e}")
+
+        # 6. SambaNova
+        if is_sambanova_configured() and image_content:
+            try:
+                result = get_sambanova_vision().analyze_image(image_content=image_content, is_reading_question=False)
+                if result:
+                    return _make_success(result, 'sambanova')
+            except Exception as e:
+                logger.warning(f"SambaNova vision failed: {e}")
+
+        # 7. Fall back to OpenAI (PAID)
         client = _get_openai_client()
         if not client:
             return {'error': 'No AI service configured', 'success': False}
