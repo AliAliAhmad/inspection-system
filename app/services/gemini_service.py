@@ -1,21 +1,25 @@
 """
 Google Gemini AI Service for photo analysis, video analysis, and audio transcription.
 
-Models (with fallback) - Based on YOUR Google AI Studio limits:
+⚠️  ALL Gemini models SHARE the same 1,500 RPD quota (Free tier)
+    When quota exceeded, system falls back to: Groq → OpenRouter → HuggingFace → OpenAI
+
+Models (with fallback chain):
 ┌─────────────────────────────────────────────────────────────────────┐
 │ VISION (Photo/Video):                                               │
-│   1. gemini-3-pro-preview     → 1,500 RPD (Primary - Best quality) │
-│   2. gemini-2.5-pro           → 1,500 RPD (Fallback)               │
-│   3. Groq llama-3.2-vision    → 14,400 RPD (External fallback)     │
-│   4. OpenAI gpt-4o            → Paid (Final fallback)              │
+│   1. gemini-2.5-pro           → Quality (shared 1,500 RPD)         │
+│   2. gemini-2.0-flash         → Fast (shared quota)                │
+│   3. gemini-1.5-flash         → Fastest (shared quota)             │
+│   → Then: Groq → OpenRouter → HuggingFace → OpenAI                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │ AUDIO (Transcription):                                              │
-│   1. gemini-2.5-pro           → 1,500 RPD (Primary)                │
-│   2. Groq whisper-large-v3    → 14,400 RPD (External fallback)     │
-│   3. OpenAI whisper           → Paid (Final fallback)              │
+│   1. gemini-2.5-pro           → Best audio (shared 1,500 RPD)      │
+│   2. gemini-2.0-flash         → Fast audio (shared quota)          │
+│   3. gemini-1.5-flash         → Fastest audio (shared quota)       │
+│   → Then: Groq (14,400 RPD FREE) → HuggingFace → OpenAI            │
 ├─────────────────────────────────────────────────────────────────────┤
 │ TRANSLATION (Text-only):                                            │
-│   1. gemma-3-27b-it           → 14,400 RPD (Best quality text)     │
+│   1. gemma-3-27b-it           → 14,400 RPD (separate quota)        │
 │   2. gemini-2.5-flash-lite    → 20 RPD (Backup)                    │
 └─────────────────────────────────────────────────────────────────────┘
 
@@ -39,18 +43,27 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 # =============================================================================
 # VISION MODELS (Photo/Video Analysis)
-# Primary: gemini-3-pro-preview (1,500 RPD) - Best quality
-# Fallback: gemini-2.5-pro (1,500 RPD)
+# All share 1,500 RPD quota - ordered by quality
+# Flash models are faster but lower quality
 # =============================================================================
-VISION_MODELS = ["gemini-3-pro-preview", "gemini-2.5-pro"]
+VISION_MODELS = [
+    "gemini-2.5-pro",           # Best quality (1,500 RPD shared)
+    "gemini-2.0-flash",         # Fast, good quality
+    "gemini-1.5-flash",         # Fastest, decent quality
+    "gemini-1.5-pro",           # Older pro model
+]
 VISION_MODEL = VISION_MODELS[0]  # Primary model
 
 # =============================================================================
 # AUDIO MODELS (Transcription)
-# Primary: gemini-2.5-pro (1,500 RPD) - Supports audio
 # Note: gemma models are TEXT-ONLY, cannot process audio!
+# Flash models support audio too
 # =============================================================================
-AUDIO_MODELS = ["gemini-2.5-pro"]
+AUDIO_MODELS = [
+    "gemini-2.5-pro",           # Best quality audio
+    "gemini-2.0-flash",         # Fast audio
+    "gemini-1.5-flash",         # Fastest audio
+]
 AUDIO_MODEL = AUDIO_MODELS[0]
 
 # =============================================================================
