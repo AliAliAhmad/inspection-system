@@ -1,6 +1,6 @@
 """Add voice_transcription field to inspection_answers
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: s8t9u0v1w2x3
 Revises: 11f207522193
 Create Date: 2026-02-15
 """
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers
-revision = 'a1b2c3d4e5f6'
+revision = 's8t9u0v1w2x3'
 down_revision = '11f207522193'
 branch_labels = None
 depends_on = None

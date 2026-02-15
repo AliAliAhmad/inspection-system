@@ -96,7 +96,10 @@
       "Bash(git revert:*)",
       "WebFetch(domain:llm-stats.com)",
       "WebFetch(domain:artificialanalysis.ai)",
-      "WebFetch(domain:docsbot.ai)"
+      "WebFetch(domain:docsbot.ai)",
+      "WebFetch(domain:help.apiyi.com)",
+      "WebFetch(domain:www.aifreeapi.com)",
+      "WebFetch(domain:discuss.ai.google.dev)"
     ]
   }
 }
