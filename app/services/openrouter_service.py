@@ -26,21 +26,25 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # FREE models (prioritized first!)
 FREE_TEXT_MODELS = [
-    "nousresearch/hermes-3-llama-3.1-405b:free",  # Best free, 405B params
-    "meta-llama/llama-3.2-3b-instruct:free",      # Fast, free
-    "google/gemma-2-9b-it:free",                   # Google Gemma, free
-    "mistralai/mistral-7b-instruct:free",          # Mistral, free
+    "meta-llama/llama-4-scout:free",                    # Llama 4, best free
+    "google/gemma-3-27b-it:free",                       # Gemma 3 27B
+    "qwen/qwen-2.5-vl-72b-instruct:free",              # Qwen 72B
+    "mistralai/mistral-small-3.1-24b-instruct:free",    # Mistral
+    "meta-llama/llama-3.2-3b-instruct:free",            # Fast, small
 ]
 
-# FREE vision models
+# FREE vision models (all free, no cost)
 FREE_VISION_MODELS = [
-    "meta-llama/llama-3.2-11b-vision-instruct:free",  # Llama vision, free
+    "meta-llama/llama-4-scout:free",                    # Llama 4 Scout, best free vision
+    "qwen/qwen-2.5-vl-72b-instruct:free",              # Qwen 72B vision, high quality
+    "qwen/qwen-2.5-vl-32b-instruct:free",              # Qwen 32B vision
+    "google/gemma-3-27b-it:free",                       # Gemma 3 27B vision
+    "meta-llama/llama-3.2-11b-vision-instruct:free",    # Llama 3.2 vision
+    "mistralai/mistral-small-3.1-24b-instruct:free",    # Mistral vision
 ]
 
-# Paid models (fallback if free exhausted)
+# Paid models (fallback if all free exhausted)
 PAID_VISION_MODELS = [
-    "meta-llama/llama-4-scout:free",              # Llama 4 Scout
-    "anthropic/claude-3.5-sonnet",                # Best quality (paid)
     "openai/gpt-4o-mini",                         # Cheap OpenAI
 ]
 
