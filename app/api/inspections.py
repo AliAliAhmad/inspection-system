@@ -1173,7 +1173,16 @@ def upload_answer_media(inspection_id):
             answer.photo_path = file_record.stored_filename
             answer.photo_file_id = file_record.id
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as commit_err:
+        logger.error(f"Failed to commit answer link: {commit_err}")
+        db.session.rollback()
+        # Re-query after rollback
+        answer = InspectionAnswer.query.filter_by(
+            inspection_id=inspection_id,
+            checklist_item_id=int(checklist_item_id)
+        ).first()
 
     # AI analysis for photos and videos (backend-side to ensure it happens)
     ai_analysis = None
@@ -1423,12 +1432,23 @@ def upload_answer_media(inspection_id):
 
     # Save AI analysis to the inspection answer
     if ai_analysis and answer:
-        if is_video:
-            answer.video_ai_analysis = ai_analysis
-        else:
-            answer.photo_ai_analysis = ai_analysis
-        db.session.commit()
-        logger.info(f"Saved {media_type_label} AI analysis to answer #{answer.id}")
+        try:
+            # Ensure clean session before saving
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            # Re-fetch answer to ensure it's in current session
+            answer = db.session.merge(answer)
+            if is_video:
+                answer.video_ai_analysis = ai_analysis
+            else:
+                answer.photo_ai_analysis = ai_analysis
+            db.session.commit()
+            logger.info(f"Saved {media_type_label} AI analysis to answer #{answer.id}")
+        except Exception as save_err:
+            logger.error(f"Failed to save AI analysis: {save_err}")
+            db.session.rollback()
 
     # Save RNR or TWL reading to EquipmentReading model for historical tracking
     reading_validation = None  # Will contain validation result for frontend
