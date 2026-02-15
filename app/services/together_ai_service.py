@@ -20,8 +20,13 @@ logger = logging.getLogger(__name__)
 TOGETHER_CHAT_URL = "https://api.together.xyz/v1/chat/completions"
 TOGETHER_AUDIO_URL = "https://api.together.xyz/v1/audio/transcriptions"
 
-# Best vision model for quality
-VISION_MODEL = "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo"
+# Vision models (ordered by quality)
+VISION_MODELS = [
+    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",  # Best, supports video
+    "Qwen/Qwen3-VL-32B-Instruct",                          # High quality vision
+    "Qwen/Qwen3-VL-8B-Instruct",                           # Fast, good quality
+]
+VISION_MODEL = VISION_MODELS[0]
 
 # Best audio model
 AUDIO_MODEL = "openai/whisper-large-v3"
@@ -104,41 +109,46 @@ class TogetherVisionService:
                     "Be concise but thorough."
                 )
 
-            # Build request payload
-            payload = {
-                "model": VISION_MODEL,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": image_data}}
-                        ]
-                    }
-                ],
-                "max_tokens": 300,
-                "temperature": 0.3
-            }
+            # Try each vision model until one works
+            analysis_text = None
+            for model in VISION_MODELS:
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": image_data}}
+                            ]
+                        }
+                    ],
+                    "max_tokens": 300,
+                    "temperature": 0.3
+                }
 
-            logger.info(f"Calling Together AI Vision API with model: {VISION_MODEL}")
+                logger.info(f"Calling Together AI Vision API with model: {model}")
 
-            response = requests.post(
-                TOGETHER_CHAT_URL,
-                headers=_get_headers(),
-                json=payload,
-                timeout=60
-            )
+                try:
+                    response = requests.post(
+                        TOGETHER_CHAT_URL,
+                        headers=_get_headers(),
+                        json=payload,
+                        timeout=60
+                    )
 
-            logger.info(f"Together AI response status: {response.status_code}")
+                    logger.info(f"Together AI {model} response status: {response.status_code}")
 
-            if response.status_code != 200:
-                logger.error(f"Together AI API error: {response.status_code} - {response.text[:500]}")
-                return None
-
-            result = response.json()
-
-            # Extract the response text
-            analysis_text = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    if response.status_code == 200:
+                        result = response.json()
+                        analysis_text = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                        if analysis_text:
+                            logger.info(f"Together AI success with model: {model}")
+                            break
+                    else:
+                        logger.warning(f"Together AI {model} failed: {response.status_code}, trying next...")
+                except Exception as e:
+                    logger.warning(f"Together AI {model} error: {e}, trying next...")
 
             if not analysis_text:
                 logger.warning("Together AI returned empty response")
