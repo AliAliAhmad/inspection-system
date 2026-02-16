@@ -48,7 +48,6 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
-    },
-    "nodeModulesPath": "../../node_modules"
+    }
   }
 }
