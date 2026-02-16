@@ -40,10 +40,10 @@ class Notification(db.Model):
 
     # Snooze and scheduling
     snoozed_until = db.Column(db.DateTime, nullable=True)
-    scheduled_for = db.Column(db.DateTime, nullable=True, index=True)
+    scheduled_for = db.Column(db.DateTime, nullable=True)
 
     # Auto-expiration
-    expires_at = db.Column(db.DateTime, nullable=True, index=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
 
     # Acknowledgment tracking
     acknowledged_at = db.Column(db.DateTime, nullable=True)

@@ -10,6 +10,7 @@ from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import func
 from app.models import ChecklistTemplate, ChecklistItem, User, Inspection, Defect
+from sqlalchemy.exc import IntegrityError
 from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
 from app.utils.decorators import admin_required, get_language
@@ -88,7 +89,11 @@ def create_template():
     )
 
     db.session.add(template)
-    safe_commit()
+    try:
+        safe_commit()
+    except IntegrityError:
+        db.session.rollback()
+        raise ValidationError("A template with this equipment_type and version already exists")
 
     return jsonify({
         'status': 'success',

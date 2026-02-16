@@ -40,7 +40,7 @@ class LeaveBalanceHistory(db.Model):
     adjusted_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
     # Timestamp
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
     user = db.relationship('User', foreign_keys=[user_id], backref='balance_history')

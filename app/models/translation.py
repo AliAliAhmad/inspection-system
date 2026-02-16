@@ -16,7 +16,7 @@ class Translation(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     model_type = db.Column(db.String(50), nullable=False, index=True)  # e.g. 'specialist_job'
-    model_id = db.Column(db.Integer, nullable=False, index=True)
+    model_id = db.Column(db.Integer, nullable=False)
     field_name = db.Column(db.String(50), nullable=False)  # e.g. 'work_notes'
     original_lang = db.Column(db.String(2), nullable=False)  # 'en' or 'ar'
     translated_text = db.Column(db.Text, nullable=True)

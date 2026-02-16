@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MainTabNavigator from './MainTabNavigator';
 import SmartFAB from '../components/SmartFAB';
+import LiveAlertBanner from '../components/LiveAlertBanner';
 
 // Safe wrapper — SmartFAB uses navigation hooks that may fail outside a screen
 class SafeFABWrapper extends React.Component<{}, { hasError: boolean }> {
@@ -139,6 +140,9 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootNavigator() {
   return (
     <View style={styles.container}>
+      {/* Live Alert Banner — tablet: full ticker, phone: critical alerts only */}
+      <LiveAlertBanner />
+
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
         <Stack.Screen name="InspectionChecklist" component={InspectionChecklistScreen} options={{ headerShown: true, title: 'Inspection' }} />

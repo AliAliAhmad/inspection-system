@@ -8,13 +8,16 @@ from datetime import date, timedelta
 
 
 class TestLeaveManagement:
-    def test_request_leave(self, client, mech_inspector, admin_user):
-        headers = get_auth_header(client, 'mech@test.com', 'test123')
+    def test_request_leave(self, client, mech_inspector, specialist, admin_user):
+        # Only admins and engineers can request leaves; inspectors need specialist coverage
+        headers = get_auth_header(client, 'admin@test.com', 'admin123')
         resp = client.post('/api/leaves', json={
             'leave_type': 'annual',
+            'user_id': mech_inspector.id,
             'date_from': (date.today() + timedelta(days=7)).isoformat(),
             'date_to': (date.today() + timedelta(days=10)).isoformat(),
             'reason': 'Vacation',
+            'coverage_user_id': specialist.id,
         }, headers=headers)
         assert resp.status_code in (200, 201)
 

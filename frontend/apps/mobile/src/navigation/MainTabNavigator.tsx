@@ -26,6 +26,9 @@ import AdminUsersScreen from '../screens/admin/AdminUsersScreen';
 import AdminReportsScreen from '../screens/admin/AdminReportsScreen';
 import AdminMoreScreen from '../screens/admin/AdminMoreScreen';
 
+// Communication
+import ChannelListScreen from '../screens/communication/ChannelListScreen';
+
 const Tab = createBottomTabNavigator();
 
 function InspectorTabs({ t }: { t: (key: string) => string }) {
@@ -33,8 +36,8 @@ function InspectorTabs({ t }: { t: (key: string) => string }) {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
       <Tab.Screen name="Assignments" component={MyAssignmentsScreen} options={{ tabBarLabel: t('nav.my_assignments') }} />
+      <Tab.Screen name="Chat" component={ChannelListScreen} options={{ tabBarLabel: t('nav.chat') }} />
       <Tab.Screen name="WorkPlan" component={MyWorkPlanScreen} options={{ tabBarLabel: t('nav.my_work_plan') }} />
-      <Tab.Screen name="Leaves" component={LeavesScreen} options={{ tabBarLabel: t('nav.leaves') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
   );
@@ -45,8 +48,8 @@ function SpecialistTabs({ t }: { t: (key: string) => string }) {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
       <Tab.Screen name="Jobs" component={SpecialistJobsScreen} options={{ tabBarLabel: t('nav.my_jobs') }} />
+      <Tab.Screen name="Chat" component={ChannelListScreen} options={{ tabBarLabel: t('nav.chat') }} />
       <Tab.Screen name="WorkPlan" component={MyWorkPlanScreen} options={{ tabBarLabel: t('nav.my_work_plan') }} />
-      <Tab.Screen name="Leaves" component={LeavesScreen} options={{ tabBarLabel: t('nav.leaves') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
   );
@@ -57,8 +60,8 @@ function EngineerTabs({ t }: { t: (key: string) => string }) {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
       <Tab.Screen name="Jobs" component={EngineerJobsScreen} options={{ tabBarLabel: t('nav.my_jobs') }} />
+      <Tab.Screen name="Chat" component={ChannelListScreen} options={{ tabBarLabel: t('nav.chat') }} />
       <Tab.Screen name="WorkPlan" component={WorkPlanOverviewScreen} options={{ tabBarLabel: t('nav.work_planning') }} />
-      <Tab.Screen name="Approvals" component={PauseApprovalsScreen} options={{ tabBarLabel: t('nav.pause_approvals') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
   );
@@ -69,8 +72,8 @@ function QETabs({ t }: { t: (key: string) => string }) {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
       <Tab.Screen name="Reviews" component={PendingReviewsScreen} options={{ tabBarLabel: t('nav.pending_reviews') }} />
+      <Tab.Screen name="Chat" component={ChannelListScreen} options={{ tabBarLabel: t('nav.chat') }} />
       <Tab.Screen name="WorkPlan" component={MyWorkPlanScreen} options={{ tabBarLabel: t('nav.my_work_plan') }} />
-      <Tab.Screen name="Leaves" component={LeavesScreen} options={{ tabBarLabel: t('nav.leaves') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
   );
@@ -81,7 +84,7 @@ function AdminTabs({ t }: { t: (key: string) => string }) {
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
       <Tab.Screen name="WorkPlan" component={WorkPlanOverviewScreen} options={{ tabBarLabel: t('nav.work_planning') }} />
-      <Tab.Screen name="Approvals" component={AdminApprovalsScreen} options={{ tabBarLabel: t('nav.approvals') }} />
+      <Tab.Screen name="Chat" component={ChannelListScreen} options={{ tabBarLabel: t('nav.chat') }} />
       <Tab.Screen name="More" component={AdminMoreScreen} options={{ tabBarLabel: 'More' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>

@@ -75,7 +75,7 @@ class TestSpecialistJobs:
         db_session.session.commit()
 
         headers = get_auth_header(client, 'spec@test.com', 'test123')
-        resp = client.post(f'/api/jobs/{job.id}/start', headers=headers)
+        resp = client.post(f'/api/jobs/{job.id}/start', headers=headers, json={})
         assert resp.status_code == 200
 
     def test_pause_request(self, client, specialist, admin_user, db_session):

@@ -36,7 +36,7 @@ class CompensatoryLeave(db.Model):
     used_in_leave_id = db.Column(db.Integer, db.ForeignKey('leaves.id'), index=True)
 
     # Expiration
-    expires_at = db.Column(db.Date, index=True)  # comp-off typically expires after X months
+    expires_at = db.Column(db.Date)  # comp-off typically expires after X months
 
     # Timestamp
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

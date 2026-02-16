@@ -31,7 +31,7 @@ class EngineerJobLocation(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     # Timestamps
-    recorded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
     engineer_job = db.relationship('EngineerJob', backref=db.backref('location_history', lazy='dynamic'))

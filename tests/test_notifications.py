@@ -12,7 +12,7 @@ class TestNotifications:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['status'] == 'success'
-        assert data['notifications'] == []
+        assert data['data'] == []
         assert data['unread_count'] == 0
 
     def test_list_notifications_with_data(self, client, admin_user, db_session):
@@ -31,7 +31,7 @@ class TestNotifications:
         resp = client.get('/api/notifications', headers=headers)
         assert resp.status_code == 200
         data = resp.get_json()
-        assert len(data['notifications']) == 1
+        assert len(data['data']) == 1
         assert data['unread_count'] == 1
 
     def test_filter_unread_only(self, client, admin_user, db_session):
@@ -45,8 +45,8 @@ class TestNotifications:
         resp = client.get('/api/notifications?unread_only=true', headers=headers)
         assert resp.status_code == 200
         data = resp.get_json()
-        assert len(data['notifications']) == 1
-        assert data['notifications'][0]['title'] == 'Unread'
+        assert len(data['data']) == 1
+        assert data['data'][0]['title'] == 'Unread'
 
     def test_mark_notification_read(self, client, admin_user, db_session):
         n = Notification(user_id=admin_user.id, type='test', title='T', message='M')
