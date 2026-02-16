@@ -21,8 +21,8 @@ class LeaveBlackout(db.Model):
     name_ar = db.Column(db.String(100))
 
     # Date range
-    date_from = db.Column(db.Date, nullable=False, index=True)
-    date_to = db.Column(db.Date, nullable=False, index=True)
+    date_from = db.Column(db.Date, nullable=False)
+    date_to = db.Column(db.Date, nullable=False)
 
     # Reason for blackout
     reason = db.Column(db.Text)

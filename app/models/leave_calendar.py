@@ -17,8 +17,8 @@ class LeaveCalendar(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Date information
-    date = db.Column(db.Date, unique=True, nullable=False, index=True)
-    year = db.Column(db.Integer, nullable=False, index=True)
+    date = db.Column(db.Date, unique=True, nullable=False)
+    year = db.Column(db.Integer, nullable=False)
 
     # Holiday details
     name = db.Column(db.String(100), nullable=False)

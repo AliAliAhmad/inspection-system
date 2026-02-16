@@ -18,7 +18,7 @@ class NotificationSchedule(db.Model):
     notification_id = db.Column(db.Integer, db.ForeignKey('notifications.id'), nullable=False)
 
     # When to deliver the notification
-    scheduled_for = db.Column(db.DateTime, nullable=True, index=True)
+    scheduled_for = db.Column(db.DateTime, nullable=True)
 
     # When the notification is snoozed until
     snooze_until = db.Column(db.DateTime, nullable=True, index=True)

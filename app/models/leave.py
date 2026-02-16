@@ -22,8 +22,8 @@ class Leave(db.Model):
     leave_type = db.Column(db.String(30), nullable=False)  # sick, annual, emergency, training, other
     leave_type_id = db.Column(db.Integer, db.ForeignKey('leave_types.id'), index=True)  # FK to configurable leave types
     other_reason = db.Column(db.Text, nullable=True)  # Required if leave_type is 'other'
-    date_from = db.Column(db.Date, nullable=False, index=True)
-    date_to = db.Column(db.Date, nullable=False, index=True)
+    date_from = db.Column(db.Date, nullable=False)
+    date_to = db.Column(db.Date, nullable=False)
     total_days = db.Column(db.Integer, nullable=False)
     reason = db.Column(db.Text, nullable=True)
 
