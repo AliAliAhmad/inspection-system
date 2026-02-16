@@ -28,6 +28,9 @@ Usage:
   TEST_USER_PASSWORD=secret \
   RUN_PROD_TESTS=true \
     pytest tests/process/test_smoke_remote.py -v --tb=short -x
+
+NOTE: These tests are superseded by test_smoke_local.py for normal CI runs.
+      They exist for live deployment verification only.
 """
 
 import os
@@ -43,11 +46,12 @@ TEST_EMAIL = os.environ.get('TEST_USER_EMAIL', '')
 TEST_PASSWORD = os.environ.get('TEST_USER_PASSWORD', '')
 IS_PROD = os.environ.get('RUN_PROD_TESTS', '').lower() == 'true'
 
-# Skip entire module if BASE_URL not set (local test runs via Flask client)
-pytestmark = pytest.mark.skipif(
-    not BASE_URL,
-    reason='BASE_URL not set — skipping remote smoke tests',
-)
+# Mark entire module: only collect when BASE_URL is set.
+# With "remote" marker, these never appear as "skipped" in normal runs.
+pytestmark = [
+    pytest.mark.remote,
+    pytest.mark.skipif(not BASE_URL, reason='BASE_URL not set — use test_smoke_local.py for local runs'),
+]
 
 
 def _url(path: str) -> str:

@@ -275,3 +275,12 @@ export type { RunningHoursListParams } from './running-hours.api';
 
 // Previous Inspection & Answer Templates
 export { previousInspectionApi } from './previous-inspection.api';
+
+// Job Show Up & Challenges
+export { jobShowUpApi } from './job-showup.api';
+export type {
+  ShowUpPhoto,
+  ChallengeVoice,
+  ReviewMark,
+  ShowUpSummary,
+} from './job-showup.api';

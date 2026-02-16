@@ -795,6 +795,10 @@ def start_job(job_id):
     job.status = 'in_progress'
     safe_commit()
 
+    # Auto-notification: take show-up photo + record challenges
+    from app.api.job_showup import send_job_start_notification
+    send_job_start_notification('specialist', job.id, job.specialist_id)
+
     return jsonify({
         'status': 'success',
         'message': 'Job started successfully',

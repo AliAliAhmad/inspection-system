@@ -176,9 +176,16 @@ class HuggingFaceVisionService:
                 if numbers:
                     extracted_reading = max(numbers, key=lambda x: float(x) if x else 0)
 
-            # Build response
+            # Build response — try dictionary translation, fall back to English
             en_text = self._enhance_caption(caption)
             ar_text = self._translate_to_arabic(en_text)
+            # If dictionary translation just returned the English text unchanged, use English
+            if ar_text == en_text:
+                try:
+                    from app.services.translation_service import TranslationService
+                    ar_text = TranslationService.translate_to_arabic(en_text) or en_text
+                except Exception:
+                    ar_text = en_text
 
             result = {'en': en_text, 'ar': ar_text}
             if extracted_reading:

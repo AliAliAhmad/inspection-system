@@ -93,13 +93,6 @@ export const aiApi = {
     });
   },
 
-  /** Analyze a video using Gemini Vision */
-  analyzeVideo(videoUrl: string) {
-    return getApiClient().post<ApiResponse<{ analysis_en: string; analysis_ar: string }>>('/api/ai/vision/analyze-video', {
-      video_url: videoUrl,
-    });
-  },
-
   // -------- REPORTS --------
 
   /** Generate an inspection report */

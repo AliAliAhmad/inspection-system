@@ -1184,10 +1184,21 @@ def upload_answer_media(inspection_id):
             checklist_item_id=int(checklist_item_id)
         ).first()
 
-    # AI analysis for photos and videos (backend-side to ensure it happens)
+    # AI analysis for photos only (no AI for videos)
     ai_analysis = None
     analysis_failed = False
     extracted_reading = None  # For meter reading extraction
+
+    if is_video:
+        # Skip AI analysis for video uploads entirely
+        return jsonify({
+            'status': 'success',
+            'message': f'Video uploaded successfully',
+            'data': {
+                'file': file_record.to_dict(),
+                'answer_id': answer.id if answer else None,
+            }
+        }), 200
 
     # Check if this is a "reading" question that needs number extraction
     from app.models import ChecklistItem

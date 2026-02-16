@@ -57,6 +57,7 @@ const INCOMPLETE_REASON_OPTIONS: { value: IncompleteReason; label: string }[] = 
 import { useAuth } from '../../providers/AuthProvider';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import InspectionFindingCard from '../../components/InspectionFindingCard';
+import JobShowUpSection from '../../components/JobShowUpSection';
 
 const STATUS_COLORS: Record<JobStatus, string> = {
   assigned: 'blue',
@@ -414,6 +415,14 @@ export default function SpecialistJobDetailPage() {
           )}
         </Descriptions>
       </Card>
+
+      {/* Show Up & Challenges */}
+      <JobShowUpSection
+        jobType="specialist"
+        jobId={jobId}
+        jobOwnerId={job.specialist_id}
+        jobStatus={job.status}
+      />
 
       {/* Inspector's Finding */}
       {job.defect?.inspection_answer && (

@@ -136,6 +136,8 @@ def create_app(config_name='development'):
         running_hours,
         # Answer Templates
         answer_templates,
+        # Job Show Up & Challenges
+        job_showup,
     )
 
     # Core
@@ -229,6 +231,9 @@ def create_app(config_name='development'):
 
     # Answer Templates
     app.register_blueprint(answer_templates.bp, url_prefix='/api/answer-templates')
+
+    # Job Show Up & Challenges
+    app.register_blueprint(job_showup.bp, url_prefix='/api/job-showup')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)

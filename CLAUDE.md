@@ -33,7 +33,7 @@
 - Always explain what you're changing before doing it
 
 ## Current Issues / History
-- Arabic analysis was returning English only — needs fixing
+- Arabic analysis was returning English only — FIXED (bilingual prompts on all providers)
 - WebSocket (flask-socketio) not installed — non-critical
 - UI needs modernization and improvements
 
@@ -47,8 +47,8 @@
 - Together AI API key ready to add on Render
 
 ## What Needs Work
-- Arabic language support for AI analysis
-- Full QA testing needed
+- ~~Arabic language support for AI analysis~~ ✅ Fixed
+- Full QA testing needed (137 passing, 0 skipped, 15 remote-only deselected)
 - Add TOGETHER_API_KEY on Render (key ready)
 - Add GROQ_API_KEY on Render (biggest gap — free, 14,400 RPD audio)
 - Google Gemini 429 quota: free tier limited to 5 RPM (known issue since Dec 2025)
@@ -119,9 +119,20 @@
 | 2026-02-16 | Fixed all 18 failing tests: response keys, required fields, voice notes, API error handling | ✅ Done |
 | 2026-02-16 | Added IntegrityError handling in checklists API for duplicate templates | ✅ Done |
 | 2026-02-16 | All 121 backend tests passing (0 failures, 16 skipped remote tests) | ✅ Done |
+| 2026-02-16 | Fixed 16 skipped tests: mocked Cloudinary for file upload, created local smoke tests, excluded remote-only tests via pytest marker | ✅ Done |
 | 2026-02-16 | Added Live Ticker: web scrolling news bar (all pages except Work Planning) | ✅ Done |
 | 2026-02-16 | Added mobile LiveAlertBanner: tablet full ticker + phone critical-only popup | ✅ Done |
 | 2026-02-16 | Integrated ticker into MainLayout (web) and RootNavigator (mobile) | ✅ Done |
+| 2026-02-16 | Built Job Show Up & Challenges: 3 models (ShowUpPhoto, ChallengeVoice, ReviewMark) + migration | ✅ Done |
+| 2026-02-16 | Built Show Up API: photo upload, challenge voice with AR/EN transcription, star/point marks | ✅ Done |
+| 2026-02-16 | Auto-notification on job start: "Take show-up photo + record challenges" (specialist + engineer) | ✅ Done |
+| 2026-02-16 | Web JobShowUpSection: photo gallery, voice player with transcriptions, star/point buttons | ✅ Done |
+| 2026-02-16 | Mobile JobShowUpSection: camera capture, voice recorder, audio playback, review marks | ✅ Done |
+| 2026-02-16 | Integrated ShowUp into SpecialistJobDetail + EngineerJobDetail (web + mobile) | ✅ Done |
+| 2026-02-16 | Fixed Arabic analysis: bilingual EN/AR prompts for all 6 vision providers (Gemini, Groq, OpenRouter, Together, SambaNova, HuggingFace) | ✅ Done |
+| 2026-02-16 | Updated master photo analysis prompt with explicit bilingual JSON output + Arabic example | ✅ Done |
+| 2026-02-16 | Fixed TranslationService.auto_translate: always returns both EN + AR, English fallback if translation fails | ✅ Done |
+| 2026-02-16 | Removed video AI analysis entirely: backend endpoint, frontend API, state/UI, backend auto-analysis skip | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -130,7 +141,7 @@
 |---------|--------|-------|
 | Photo upload | ✅ Done | Working |
 | Photo analysis (English) | ✅ Done | Working |
-| Photo analysis (Arabic) | 🔧 In Progress | Returns English only |
+| Photo analysis (Arabic) | ✅ Done | All 6 vision providers now request bilingual EN/AR output |
 | UI modernization | ✅ Done | App Launcher + smart dashboard + tabbed stats |
 | Work Planning layout | ✅ Done | Compact toolbar + inline team pool + always-visible jobs panel + at-risk badge |
 | Mobile app | ✅ Done | React Native/Expo — 96+ components, now wired into screens |
@@ -161,6 +172,9 @@
 | Previous answers panel | ✅ Done | Shows previous inspection answers during current inspection |
 | Live Ticker (web/tablet) | ✅ Done | Scrolling news bar — all pages except Work Planning, dark/RTL, severity-coded |
 | Critical Alert Banner (phone) | ✅ Done | Phone-only critical popup with auto-dismiss + rotation |
+| Job Show Up Photo | ✅ Done | Auto-notification on start, photo upload to job details, web + mobile |
+| Challenge Voice Notes | ✅ Done | Voice recording with Arabic + English transcription in job details |
+| Job Review Marks (Star/Point) | ✅ Done | Admin/Engineer/Specialist Lead can star (show up) or point (challenge) any job |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

@@ -40,6 +40,8 @@ const INCOMPLETE_REASONS: { key: IncompleteReason; label: string }[] = [
   { key: 'other', label: 'Other' },
 ];
 import * as ImagePicker from 'expo-image-picker';
+import JobShowUpSection from '../../components/JobShowUpSection';
+import { useAuth } from '../../providers/AuthProvider';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'SpecialistJobDetail'>;
@@ -98,6 +100,7 @@ export default function SpecialistJobDetailScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ScreenRoute>();
   const queryClient = useQueryClient();
+  const { user: authUser } = useAuth();
   const { jobId: id } = route.params;
 
   // Timer state
@@ -504,6 +507,18 @@ export default function SpecialistJobDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Show Up & Challenges */}
+      {authUser && (
+        <JobShowUpSection
+          jobType="specialist"
+          jobId={id}
+          jobOwnerId={jobData.specialist_id}
+          jobStatus={jobData.status}
+          userRole={authUser.role}
+          userId={authUser.id}
+        />
+      )}
 
       {/* Inspector's Finding Section */}
       {inspectionAnswer && (
