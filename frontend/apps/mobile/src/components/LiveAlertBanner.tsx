@@ -9,7 +9,8 @@ import {
   useColorScheme,
   I18nManager,
 } from 'react-native';
-import { useNavigation, useNavigationState } from '@react-navigation/native';
+// Navigation hooks removed — this component renders outside Stack.Navigator
+// so useNavigationState/useNavigation are not available here.
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -33,10 +34,6 @@ const SEVERITY = {
   info:     { color: '#1890ff', bg: 'rgba(24,144,255,0.06)', darkBg: 'rgba(24,144,255,0.12)', icon: 'i' },
   success:  { color: '#52c41a', bg: 'rgba(82,196,26,0.06)', darkBg: 'rgba(82,196,26,0.12)', icon: '\u2713' },
 };
-
-// ─── Screens where banner is hidden ──────────────────────────
-
-const HIDDEN_SCREENS = ['WorkPlan', 'WorkPlanOverview', 'WorkPlanJobDetail', 'UnassignedJobs'];
 
 // ─── Mock alerts (replace with real API) ─────────────────────
 
@@ -303,26 +300,12 @@ export default function LiveAlertBanner() {
 
   const [items, setItems] = useState<AlertItem[]>([]);
 
-  // Get current screen name to hide on Work Planning
-  const currentRoute = useNavigationState(state => {
-    if (!state) return '';
-    const route = state.routes[state.index];
-    if (route.state) {
-      const nested = route.state as any;
-      const nestedRoute = nested.routes?.[nested.index];
-      return nestedRoute?.name || route.name;
-    }
-    return route.name;
-  });
-
   useEffect(() => {
     setItems(getMockAlerts());
     const interval = setInterval(() => setItems(getMockAlerts()), 60000);
     return () => clearInterval(interval);
   }, []);
 
-  // Hide on Work Planning screens
-  if (HIDDEN_SCREENS.includes(currentRoute)) return null;
   if (items.length === 0) return null;
 
   // Sort: critical first

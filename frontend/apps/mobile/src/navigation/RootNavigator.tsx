@@ -5,7 +5,13 @@ import MainTabNavigator from './MainTabNavigator';
 import SmartFAB from '../components/SmartFAB';
 import LiveAlertBanner from '../components/LiveAlertBanner';
 
-// Safe wrapper — SmartFAB uses navigation hooks that may fail outside a screen
+// Safe wrappers — these components may use navigation hooks that fail outside a screen
+class SafeBannerWrapper extends React.Component<{}, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() { return this.state.hasError ? null : <LiveAlertBanner />; }
+}
+
 class SafeFABWrapper extends React.Component<{}, { hasError: boolean }> {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
@@ -141,7 +147,7 @@ export default function RootNavigator() {
   return (
     <View style={styles.container}>
       {/* Live Alert Banner — tablet: full ticker, phone: critical alerts only */}
-      <LiveAlertBanner />
+      <SafeBannerWrapper />
 
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
