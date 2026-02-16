@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from './navigation/navigationRef';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -61,7 +62,7 @@ export default function App() {
           <AccessibilityProvider>
             <OfflineProvider>
               <LanguageProvider>
-                <NavigationContainer>
+                <NavigationContainer ref={navigationRef}>
                   <AuthProvider>
                     <AIPhotoAnalysisProvider>
                       <VoiceCommandProvider>

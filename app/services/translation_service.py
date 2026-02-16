@@ -1,12 +1,13 @@
 """
-AI-powered bidirectional translation service.
-FULL FALLBACK CHAIN (FREE providers prioritized):
-1. Gemma 3 27B (14,400 FREE/day) - Primary
+Bidirectional translation service (EN <-> AR).
+FULL FALLBACK CHAIN:
+1. Gemma 3 4B (14,400 FREE/day) - Primary
 2. Groq Llama (FREE forever) - FREE fallback
 3. OpenRouter (FREE models) - FREE fallback
 4. DeepInfra ($0.03/M) - Cheapest paid
 5. Ollama (FREE local) - Offline backup
-6. OpenAI (PAID) - Final fallback
+6. OpenAI (PAID) - Paid fallback
+7. Google Translate + MyMemory (FREE, no API key) - Final fallback
 """
 
 import os
@@ -115,7 +116,7 @@ class TranslationService:
     def _translate(text, target_lang):
         """
         Core translation method using FULL FALLBACK CHAIN.
-        Order: 1.Gemini → 2.Groq(FREE) → 3.OpenRouter(FREE) → 4.DeepInfra → 5.Ollama → 6.OpenAI
+        Order: 1.Gemini → 2.Groq → 3.OpenRouter → 4.DeepInfra → 5.Ollama → 6.OpenAI → 7.Google/MyMemory
 
         Args:
             text: Text to translate
@@ -128,16 +129,13 @@ class TranslationService:
             return None
 
         providers = _get_ai_providers()
-        if not providers:
-            logger.warning("No AI provider configured for translation")
-            return None
 
         prompt = (
             TranslationService.SYSTEM_PROMPT_EN_TO_AR if target_lang == 'ar'
             else TranslationService.SYSTEM_PROMPT_AR_TO_EN
         )
 
-        # Try each provider in order until one succeeds
+        # 1-6. Try AI providers in order
         for provider in providers:
             try:
                 logger.debug(f"Trying translation with: {provider}")
@@ -162,7 +160,15 @@ class TranslationService:
                 logger.warning(f"Translation failed with {provider}: {e}, trying next...")
                 continue
 
-        logger.error("All translation providers failed")
+        # 7. LAST RESORT: Google Translate + MyMemory (FREE, no API key)
+        try:
+            result = TranslationService._translate_google_free(text, target_lang)
+            if result and result.strip():
+                return result
+        except Exception as e:
+            logger.warning(f"Google Translate (free) also failed: {e}")
+
+        logger.error("All translation providers failed (including Google Translate)")
         return None
 
     @staticmethod
@@ -380,6 +386,39 @@ class TranslationService:
             return translation
 
         raise Exception("Ollama translation failed")
+
+    @staticmethod
+    def _translate_google_free(text, target_lang):
+        """
+        Translate using FREE services via deep-translator (no API key needed).
+        Tries: 1) Google Translate  2) MyMemory (5K chars/day)
+        """
+        from deep_translator import GoogleTranslator, MyMemoryTranslator
+
+        source = 'ar' if target_lang == 'en' else 'en'
+        direction = "EN→AR" if target_lang == 'ar' else "AR→EN"
+
+        # Try Google Translate first (highest quality, effectively unlimited)
+        try:
+            translation = GoogleTranslator(source=source, target=target_lang).translate(text)
+            if translation and translation.strip():
+                logger.debug(f"[GoogleTranslate FREE {direction}] '{text[:40]}' → '{translation[:40]}'")
+                return translation
+        except Exception as e:
+            logger.warning(f"Google Translate failed: {e}, trying MyMemory...")
+
+        # Fallback: MyMemory (5,000 chars/day, no key) — uses locale codes
+        try:
+            mm_source = 'ar-SA' if source == 'ar' else 'en-GB'
+            mm_target = 'ar-SA' if target_lang == 'ar' else 'en-GB'
+            translation = MyMemoryTranslator(source=mm_source, target=mm_target).translate(text)
+            if translation and translation.strip():
+                logger.debug(f"[MyMemory FREE {direction}] '{text[:40]}' → '{translation[:40]}'")
+                return translation
+        except Exception as e:
+            logger.warning(f"MyMemory also failed: {e}")
+
+        raise Exception("All free translation services failed")
 
     @staticmethod
     def translate_batch(texts):

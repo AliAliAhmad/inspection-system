@@ -282,9 +282,13 @@ class GeminiVisionService:
             if ar_match:
                 ar_text = ar_match.group(1).strip()
 
-            # If no AR found, use EN for both
+            # If no AR found, translate from English
             if not ar_match or ar_text == en_text:
-                ar_text = en_text  # Will show English if Arabic not generated
+                try:
+                    from app.services.translation_service import TranslationService
+                    ar_text = TranslationService.translate_to_arabic(en_text) or en_text
+                except Exception:
+                    ar_text = en_text
 
             # Extract reading if present
             extracted_reading = None
@@ -461,7 +465,11 @@ class GeminiVisionService:
                 ar_text = ar_match.group(1).strip()
 
             if not ar_match or ar_text == en_text:
-                ar_text = en_text
+                try:
+                    from app.services.translation_service import TranslationService
+                    ar_text = TranslationService.translate_to_arabic(en_text) or en_text
+                except Exception:
+                    ar_text = en_text
 
             return {
                 'en': en_text,
@@ -617,9 +625,13 @@ class GeminiSpeechService:
             if ar_match:
                 ar_text = ar_match.group(1).strip()
 
-            # If no AR found, use EN for both
+            # If no AR found, translate from English
             if not ar_match or ar_text == en_text:
-                ar_text = en_text
+                try:
+                    from app.services.translation_service import TranslationService
+                    ar_text = TranslationService.translate_to_arabic(en_text) or en_text
+                except Exception:
+                    ar_text = en_text
 
             return {
                 'text': text,

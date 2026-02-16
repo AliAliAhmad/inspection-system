@@ -33,10 +33,9 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import { navigate } from '../navigation/navigationRef';
 import { useFABContext, FABAction, JobExecutionState } from '../hooks/useFABContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -107,7 +106,6 @@ export default function SmartFAB(props: SmartFABProps) {
   } = props;
 
   const { i18n } = useTranslation();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isArabic = i18n.language === 'ar';
 
   // Get context-aware actions
@@ -205,8 +203,8 @@ export default function SmartFAB(props: SmartFABProps) {
   // Long press to open settings
   const handleLongPress = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    navigation.navigate('ToolkitSettings');
-  }, [navigation]);
+    navigate('ToolkitSettings');
+  }, []);
 
   // Pan responder for dragging
   const panResponder = useRef(

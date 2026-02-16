@@ -59,3 +59,4 @@ python-socketio>=5.8.0
 python-engineio>=4.5.0
 google-cloud-vision>=3.4.0
 google-cloud-speech>=2.21.0
+deep-translator>=1.11.0

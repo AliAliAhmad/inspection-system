@@ -252,9 +252,7 @@ class VisionService:
         if not client:
             return {'error': 'No AI service configured', 'success': False}
 
-        lang_instruction = "Respond in Arabic." if language == 'ar' else "Respond in English."
-
-        prompt = f"""You are an industrial equipment inspection expert. Analyze this inspection photo:
+        prompt = """You are an industrial equipment inspection expert. Analyze this inspection photo:
 
 1. **Description**: What do you see in this image? Describe the equipment, component, or area shown.
 2. **Condition**: Is there any visible damage, wear, defect, or issue? If everything looks normal, say "No issues detected - equipment appears in good condition".
@@ -263,8 +261,8 @@ class VisionService:
 5. **Recommendation**: What action should be taken? If no issues, say "Continue regular maintenance".
 6. **Safety Risk**: Any safety concerns? If none, say "None identified".
 
-{lang_instruction}
-Format your response as JSON with keys: description, severity, cause, recommendation, safety_risk"""
+IMPORTANT: Provide the description in BOTH English AND Arabic.
+Format your response as JSON with keys: description, description_ar, severity, cause, recommendation, safety_risk"""
 
         try:
             response = client.chat.completions.create(
@@ -295,6 +293,15 @@ Format your response as JSON with keys: description, severity, cause, recommenda
 
             result['success'] = True
             result['provider'] = 'openai'
+
+            # Ensure Arabic description exists
+            if result.get('description') and not result.get('description_ar'):
+                try:
+                    from app.services.translation_service import TranslationService
+                    result['description_ar'] = TranslationService.translate_to_arabic(result['description']) or result['description']
+                except Exception:
+                    result['description_ar'] = result['description']
+
             return result
 
         except Exception as e:

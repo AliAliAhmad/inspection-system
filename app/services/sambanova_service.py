@@ -169,10 +169,15 @@ class SambaNovaVisionService:
                     if numbers:
                         extracted_reading = max(numbers, key=lambda x: float(x) if x else 0)
 
-            # Parse bilingual EN/AR response; if Arabic missing, use English
+            # Parse bilingual EN/AR response; if Arabic missing, translate
             en_text, ar_text = _parse_bilingual(analysis_text)
             en_text = en_text or analysis_text
-            ar_text = ar_text or en_text
+            if not ar_text:
+                try:
+                    from app.services.translation_service import TranslationService
+                    ar_text = TranslationService.translate_to_arabic(en_text) or en_text
+                except Exception:
+                    ar_text = en_text
 
             result = {
                 'en': en_text,

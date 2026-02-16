@@ -19,20 +19,16 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, 'node_modules'),
 ];
 
-// 3. Map workspace packages + force single React instance (v19 for RN 0.81)
+// 3. Map workspace packages + single React instance (19.1.0 at root via pnpm overrides)
 config.resolver.extraNodeModules = {
   '@inspection/shared': path.resolve(monorepoRoot, 'packages/shared'),
-  'react': path.resolve(projectRoot, 'node_modules/react'),
-  'react-dom': path.resolve(projectRoot, 'node_modules/react-dom'),
+  'react': path.resolve(monorepoRoot, 'node_modules/react'),
+  'react-dom': path.resolve(monorepoRoot, 'node_modules/react-dom'),
 };
 
-// 4. Block root react v18 — mobile needs v19 for react-native 0.81
+// 4. Exclude web app source files (speeds up Metro, avoids conflicts)
 const exclusionList = require('metro-config/private/defaults/exclusionList').default;
 config.resolver.blockList = exclusionList([
-  // path.resolve strips trailing slash, so add [/\\] explicitly before .*
-  new RegExp(path.resolve(monorepoRoot, 'node_modules/react').replace(/[/\\]/g, '[/\\\\]') + '[/\\\\].*'),
-  new RegExp(path.resolve(monorepoRoot, 'node_modules/react-dom').replace(/[/\\]/g, '[/\\\\]') + '[/\\\\].*'),
-  // Exclude web app source files (speeds up Metro, avoids conflicts)
   new RegExp(path.resolve(monorepoRoot, 'apps/web').replace(/[/\\]/g, '[/\\\\]') + '[/\\\\].*'),
 ]);
 

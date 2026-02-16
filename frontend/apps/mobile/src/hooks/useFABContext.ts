@@ -2,11 +2,10 @@
  * useFABContext Hook
  * Provides context-aware FAB actions based on current screen and state
  */
-import { useMemo, useCallback } from 'react';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toolkitApi } from '@inspection/shared';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { navigationRef, navigate } from '../navigation/navigationRef';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 export type FABAction = {
@@ -93,8 +92,25 @@ const COLORS = {
 };
 
 export function useFABContext(options: FABContextOptions = {}): UseFABContextResult {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute();
+  // Use navigationRef instead of useNavigation/useRoute hooks
+  // (this hook is called from SmartFAB which renders outside the navigator)
+  const [currentRouteName, setCurrentRouteName] = useState<string>('MainTabs');
+
+  useEffect(() => {
+    const updateRoute = () => {
+      const route = navigationRef.getCurrentRoute();
+      if (route?.name) {
+        setCurrentRouteName(route.name);
+      }
+    };
+
+    // Get initial route
+    updateRoute();
+
+    // Listen for navigation state changes
+    const unsubscribe = navigationRef.addListener('state', updateRoute);
+    return () => unsubscribe();
+  }, []);
 
   // Get FAB enabled preference
   const { data: prefs } = useQuery({
@@ -107,9 +123,8 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
 
   // Determine context type from route
   const contextType = useMemo<FABContextType>(() => {
-    const routeName = route.name;
-    return ROUTE_CONTEXT_MAP[routeName] || 'default';
-  }, [route.name]);
+    return ROUTE_CONTEXT_MAP[currentRouteName] || 'default';
+  }, [currentRouteName]);
 
   // Build actions based on context
   const { actions, mainAction, mainColor, mainIcon } = useMemo(() => {
@@ -141,7 +156,7 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
           labelAr: 'اضافة مهمة',
           icon: '+',
           color: COLORS.primary,
-          onPress: () => navigation.navigate('CreateJob'),
+          onPress: () => navigate('CreateJob'),
           isPrimary: true,
         };
         actions = [
@@ -151,7 +166,7 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
             labelAr: 'فحص جديد',
             icon: '📋',
             color: COLORS.cyan,
-            onPress: () => navigation.navigate('AllInspections'),
+            onPress: () => navigate('AllInspections'),
           },
           {
             id: 'view_defects',
@@ -159,7 +174,7 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
             labelAr: 'عرض العيوب',
             icon: '⚠️',
             color: COLORS.warning,
-            onPress: () => navigation.navigate('Defects'),
+            onPress: () => navigate('Defects'),
           },
           {
             id: 'team_chat',
@@ -167,7 +182,7 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
             labelAr: 'محادثة الفريق',
             icon: '💬',
             color: COLORS.purple,
-            onPress: () => navigation.navigate('ChannelList'),
+            onPress: () => navigate('ChannelList'),
           },
         ];
         break;
@@ -387,7 +402,7 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
             labelAr: 'الرئيسية',
             icon: '🏠',
             color: COLORS.primary,
-            onPress: () => navigation.navigate('MainTabs'),
+            onPress: () => navigate('MainTabs'),
           },
           {
             id: 'settings',
@@ -395,14 +410,14 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
             labelAr: 'الإعدادات',
             icon: '⚙️',
             color: COLORS.cyan,
-            onPress: () => navigation.navigate('ToolkitSettings'),
+            onPress: () => navigate('ToolkitSettings'),
           },
         ];
         break;
     }
 
     return { actions, mainAction, mainColor, mainIcon };
-  }, [contextType, options, navigation]);
+  }, [contextType, options]);
 
   return {
     contextType,
