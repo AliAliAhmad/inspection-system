@@ -117,7 +117,31 @@
       "Bash(git grep:*)",
       "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system show HEAD:app/api/inspections.py)",
       "Bash(git -C /Users/AliAliAhmad_1_2/desktop/inspection_system show HEAD:app/services/gemini_service.py)",
-      "Bash(ln:*)"
+      "Bash(ln:*)",
+      "Bash(FLASK_APP=run.py python:*)",
+      "WebFetch(domain:docs.sambanova.ai)",
+      "WebFetch(domain:openrouter.ai)",
+      "WebFetch(domain:api.together.ai)",
+      "WebFetch(domain:docs.together.ai)",
+      "WebFetch(domain:www.together.ai)",
+      "WebFetch(domain:community.groq.com)",
+      "Bash(TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc3MTE5NDY2NiwianRpIjoiODY4N2UxMmItOTQzMS00MjhlLWIwZjQtYmJhNzk1ODRjYmY2IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjEiLCJuYmYiOjE3NzExOTQ2NjYsImNzcmYiOiI3OGM4ZTA5Mi05ZWNmLTRkYWItOTVkMy1jNWQwM2UzMTBlNGIiLCJleHAiOjE3NzEyMjM0NjZ9.WCbm0itD3hHSYEVfG7YjokK4OuwRzD-ws9lDxclo2gs)",
+      "WebFetch(domain:reactjs.org)",
+      "Bash(pip3 install:*)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(xattr:*)",
+      "WebFetch(domain:docs.expo.dev)",
+      "Bash(~/.zshrc)",
+      "Bash(adb version:*)",
+      "Bash(adb devices:*)",
+      "Bash(export ANDROID_HOME=$HOME/Library/Android/sdk)",
+      "Bash(export PATH=$PATH:$ANDROID_HOME/platform-tools)",
+      "Bash(export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator)",
+      "Bash(/usr/libexec/java_home:*)",
+      "Bash(export JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\")",
+      "Bash(export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$JAVA_HOME/bin)",
+      "Bash(java:*)",
+      "Bash(JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" ./gradlew:*)"
     ]
   }
 }
