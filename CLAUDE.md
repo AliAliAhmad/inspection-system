@@ -122,6 +122,12 @@
 | 2026-02-16 | Added Live Ticker: web scrolling news bar (all pages except Work Planning) | ✅ Done |
 | 2026-02-16 | Added mobile LiveAlertBanner: tablet full ticker + phone critical-only popup | ✅ Done |
 | 2026-02-16 | Integrated ticker into MainLayout (web) and RootNavigator (mobile) | ✅ Done |
+| 2026-02-16 | Built Job Show Up & Challenges: 3 models (ShowUpPhoto, ChallengeVoice, ReviewMark) + migration | ✅ Done |
+| 2026-02-16 | Built Show Up API: photo upload, challenge voice with AR/EN transcription, star/point marks | ✅ Done |
+| 2026-02-16 | Auto-notification on job start: "Take show-up photo + record challenges" (specialist + engineer) | ✅ Done |
+| 2026-02-16 | Web JobShowUpSection: photo gallery, voice player with transcriptions, star/point buttons | ✅ Done |
+| 2026-02-16 | Mobile JobShowUpSection: camera capture, voice recorder, audio playback, review marks | ✅ Done |
+| 2026-02-16 | Integrated ShowUp into SpecialistJobDetail + EngineerJobDetail (web + mobile) | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -161,6 +167,9 @@
 | Previous answers panel | ✅ Done | Shows previous inspection answers during current inspection |
 | Live Ticker (web/tablet) | ✅ Done | Scrolling news bar — all pages except Work Planning, dark/RTL, severity-coded |
 | Critical Alert Banner (phone) | ✅ Done | Phone-only critical popup with auto-dismiss + rotation |
+| Job Show Up Photo | ✅ Done | Auto-notification on start, photo upload to job details, web + mobile |
+| Challenge Voice Notes | ✅ Done | Voice recording with Arabic + English transcription in job details |
+| Job Review Marks (Star/Point) | ✅ Done | Admin/Engineer/Specialist Lead can star (show up) or point (challenge) any job |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

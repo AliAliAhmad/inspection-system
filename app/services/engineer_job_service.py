@@ -120,6 +120,11 @@ class EngineerJobService:
         job.status = 'in_progress'
         db.session.commit()
         logger.info("Engineer job started: job_id=%s engineer_id=%s", job_id, engineer_id)
+
+        # Auto-notification: take show-up photo + record challenges
+        from app.api.job_showup import send_job_start_notification
+        send_job_start_notification('engineer', job.id, job.engineer_id)
+
         return job
 
     @staticmethod

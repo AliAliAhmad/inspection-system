@@ -156,6 +156,9 @@ from app.models.running_hours import RunningHoursReading, ServiceInterval, Runni
 # Answer Templates
 from app.models.answer_template import AnswerTemplate
 
+# Job Show Up & Challenges
+from app.models.job_showup import JobShowUpPhoto, JobChallengeVoice, JobReviewMark
+
 __all__ = [
     'User',
     'Equipment',
@@ -285,4 +288,8 @@ __all__ = [
     'RunningHoursAlert',
     # Answer Templates
     'AnswerTemplate',
+    # Job Show Up & Challenges
+    'JobShowUpPhoto',
+    'JobChallengeVoice',
+    'JobReviewMark',
 ]

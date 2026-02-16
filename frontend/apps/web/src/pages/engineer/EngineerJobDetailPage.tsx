@@ -38,6 +38,7 @@ import {
 } from '@inspection/shared';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import InspectionFindingCard from '../../components/InspectionFindingCard';
+import JobShowUpSection from '../../components/JobShowUpSection';
 
 const STATUS_COLOR: Record<string, string> = {
   assigned: 'blue',
@@ -325,6 +326,14 @@ export default function EngineerJobDetailPage() {
           )}
         </Descriptions>
       </Card>
+
+      {/* Show Up & Challenges */}
+      <JobShowUpSection
+        jobType="engineer"
+        jobId={jobId}
+        jobOwnerId={job.engineer_id}
+        jobStatus={job.status}
+      />
 
       {/* Inspector's Finding */}
       {(job as any).defect?.inspection_answer && (

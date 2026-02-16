@@ -12,6 +12,8 @@ import {
   Modal,
 } from 'react-native';
 import VoiceTextInput from '../../components/VoiceTextInput';
+import JobShowUpSection from '../../components/JobShowUpSection';
+import { useAuth } from '../../providers/AuthProvider';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useRoute } from '@react-navigation/native';
@@ -35,6 +37,7 @@ export default function EngineerJobDetailScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'EngineerJobDetail'>>();
   const { jobId: id } = route.params;
   const queryClient = useQueryClient();
+  const { user: authUser } = useAuth();
 
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
   const [workNotes, setWorkNotes] = useState('');
@@ -311,6 +314,18 @@ export default function EngineerJobDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Show Up & Challenges */}
+      {authUser && (
+        <JobShowUpSection
+          jobType="engineer"
+          jobId={id}
+          jobOwnerId={job.engineer_id}
+          jobStatus={job.status}
+          userRole={authUser.role}
+          userId={authUser.id}
+        />
+      )}
 
       {/* Ratings (completed/reviewed) */}
       {(job.status === 'completed' || job.status === 'reviewed') && (
