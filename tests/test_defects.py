@@ -54,14 +54,14 @@ class TestDefects:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['status'] == 'success'
-        assert len(data['defects']) >= 1
+        assert len(data['data']) >= 1
 
     def test_list_defects_filter_severity(self, client, admin_user, mech_inspector, db_session):
         _create_defect(db_session, admin_user, mech_inspector)
         headers = get_auth_header(client, 'admin@test.com', 'admin123')
         resp = client.get('/api/defects?severity=medium', headers=headers)
         assert resp.status_code == 200
-        assert len(resp.get_json()['defects']) >= 1
+        assert len(resp.get_json()['data']) >= 1
 
     def test_resolve_defect(self, client, admin_user, mech_inspector, db_session):
         defect, _ = _create_defect(db_session, admin_user, mech_inspector)

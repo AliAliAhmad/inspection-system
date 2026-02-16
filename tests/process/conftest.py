@@ -15,6 +15,7 @@ from app.models import (
     User, Equipment, ChecklistTemplate, ChecklistItem,
     InspectionList, InspectionAssignment,
 )
+from app.models.file import File
 from datetime import date, datetime, timedelta
 
 
@@ -233,3 +234,19 @@ def login(client, email, password):
     data = resp.get_json()
     token = data.get('access_token', '')
     return token, {'Authorization': f'Bearer {token}'}
+
+
+def make_voice_note(db_session, user_id):
+    """Create a dummy voice note File record for test evidence."""
+    f = File(
+        original_filename='voice_note.webm',
+        stored_filename=f'voice_{user_id}_{datetime.utcnow().timestamp()}.webm',
+        file_path='/uploads/test_voice.webm',
+        file_size=1024,
+        mime_type='audio/webm',
+        uploaded_by=user_id,
+        related_type='inspection_answer',
+    )
+    db_session.session.add(f)
+    db_session.session.flush()
+    return f.id

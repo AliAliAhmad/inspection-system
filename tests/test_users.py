@@ -11,8 +11,8 @@ class TestUsers:
         resp = client.get('/api/users', headers=headers)
         assert resp.status_code == 200
         data = resp.get_json()
-        assert 'users' in data
-        assert len(data['users']) >= 2
+        assert 'data' in data
+        assert len(data['data']) >= 2
 
     def test_update_user(self, client, admin_user, mech_inspector):
         headers = get_auth_header(client, 'admin@test.com', 'admin123')

@@ -30,10 +30,17 @@ class TestEquipment:
         headers = get_auth_header(client, 'admin@test.com', 'admin123')
         resp = client.post('/api/equipment', json={
             'name': 'New Pump',
+            'name_ar': 'مضخة جديدة',
             'equipment_type': 'centrifugal_pump',
+            'equipment_type_2': 'Centrifugal Pump',
             'serial_number': 'EQ-NEW-001',
+            'manufacturer': 'Test Manufacturer',
+            'model_number': 'TM-001',
+            'installation_date': '2024-01-15',
+            'capacity': '500 GPM',
             'location': 'Building B',
             'berth': 'west',
+            'home_berth': 'west',
         }, headers=headers)
         assert resp.status_code in (200, 201)
 
