@@ -6,7 +6,11 @@
   "build": {
     "base": {
       "node": "20.18.0",
-      "channel": "base"
+      "pnpm": "10.28.2",
+      "channel": "base",
+      "install": {
+        "command": "cd ../../ && pnpm install --frozen-lockfile"
+      }
     },
     "development": {
       "extends": "base",
