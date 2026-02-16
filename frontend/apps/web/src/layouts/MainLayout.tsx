@@ -20,6 +20,7 @@ import { useNotificationDrawer } from '../hooks/useNotificationDrawer';
 import NotificationBadge from '../components/notifications/NotificationBadge';
 import NotificationDrawer from '../components/notifications/NotificationDrawer';
 import NotificationPreferencesModal from '../components/notifications/NotificationPreferencesModal';
+import LiveTicker from '../components/LiveTicker';
 
 // ─── App Launcher Config ─────────────────────────────────────
 
@@ -469,6 +470,9 @@ export default function MainLayout() {
           </Dropdown>
         </Space>
       </header>
+
+      {/* ─── Live Ticker (all pages except Work Planning) ─── */}
+      <LiveTicker />
 
       {/* ─── Body: Full Width Content (no sidebar) ─── */}
       <main className="app-content">

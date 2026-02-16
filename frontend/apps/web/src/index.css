@@ -295,6 +295,222 @@ body.dark-mode .wp-team-col:hover {
   to { transform: translateX(0); opacity: 1; }
 }
 
+/* ===================== Live Ticker ===================== */
+
+.live-ticker {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: border-color 0.3s ease;
+}
+
+.live-ticker-critical {
+  border-bottom-color: rgba(255, 77, 79, 0.2) !important;
+}
+
+body.dark-mode .live-ticker-critical {
+  border-bottom-color: rgba(255, 77, 79, 0.3) !important;
+}
+
+/* LIVE label */
+.live-ticker-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  height: 100%;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  border-right: 1px solid #f0f0f0;
+  z-index: 2;
+}
+
+body.dark-mode .live-ticker-label {
+  border-right-color: #303030;
+}
+
+html[dir='rtl'] .live-ticker-label {
+  border-right: none;
+  border-left: 1px solid #f0f0f0;
+}
+
+body.dark-mode html[dir='rtl'] .live-ticker-label,
+html[dir='rtl'] body.dark-mode .live-ticker-label {
+  border-left-color: #303030;
+}
+
+/* Pulsing dot */
+.live-ticker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52c41a;
+  animation: tickerPulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.live-ticker-dot-critical {
+  background: #ff4d4f;
+  animation: tickerPulseCritical 1s ease-in-out infinite;
+}
+
+@keyframes tickerPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+@keyframes tickerPulseCritical {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* Scrolling track container */
+.live-ticker-track-container {
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+  position: relative;
+  mask-image: linear-gradient(to right, transparent 0%, black 2%, black 98%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 2%, black 98%, transparent 100%);
+}
+
+/* Scrolling track */
+.live-ticker-track {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  white-space: nowrap;
+  animation: tickerScroll linear infinite;
+  will-change: transform;
+}
+
+@keyframes tickerScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Individual ticker item */
+.live-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  height: 100%;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.live-ticker-item-clickable {
+  cursor: pointer;
+}
+
+.live-ticker-item-clickable:hover {
+  opacity: 0.75;
+}
+
+/* Severity dot */
+.live-ticker-severity {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Source tag */
+.live-ticker-source {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+/* Message text */
+.live-ticker-message {
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* Timestamp */
+.live-ticker-time {
+  font-size: 10px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Item divider */
+.live-ticker-divider {
+  width: 1px;
+  height: 12px;
+  flex-shrink: 0;
+  margin: 0 10px;
+  opacity: 0.6;
+}
+
+/* Count badge */
+.live-ticker-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  height: 100%;
+  flex-shrink: 0;
+  border-left: 1px solid #f0f0f0;
+  z-index: 2;
+  min-width: 32px;
+}
+
+body.dark-mode .live-ticker-count {
+  border-left-color: #303030;
+}
+
+html[dir='rtl'] .live-ticker-count {
+  border-left: none;
+  border-right: 1px solid #f0f0f0;
+}
+
+body.dark-mode html[dir='rtl'] .live-ticker-count,
+html[dir='rtl'] body.dark-mode .live-ticker-count {
+  border-right-color: #303030;
+}
+
+/* Tablet responsiveness */
+@media (max-width: 768px) {
+  .live-ticker {
+    height: 28px;
+  }
+  .live-ticker-label {
+    padding: 0 8px;
+    font-size: 9px;
+  }
+  .live-ticker-source {
+    display: none;
+  }
+  .live-ticker-message {
+    font-size: 11px;
+  }
+  .live-ticker-time {
+    font-size: 9px;
+  }
+  .live-ticker-divider {
+    margin: 0 6px;
+  }
+  .live-ticker-count {
+    padding: 0 8px;
+    min-width: 28px;
+  }
+}
+
 /* Smooth page transitions */
 .page-enter {
   opacity: 0;

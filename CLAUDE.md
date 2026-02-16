@@ -119,6 +119,9 @@
 | 2026-02-16 | Fixed all 18 failing tests: response keys, required fields, voice notes, API error handling | ✅ Done |
 | 2026-02-16 | Added IntegrityError handling in checklists API for duplicate templates | ✅ Done |
 | 2026-02-16 | All 121 backend tests passing (0 failures, 16 skipped remote tests) | ✅ Done |
+| 2026-02-16 | Added Live Ticker: web scrolling news bar (all pages except Work Planning) | ✅ Done |
+| 2026-02-16 | Added mobile LiveAlertBanner: tablet full ticker + phone critical-only popup | ✅ Done |
+| 2026-02-16 | Integrated ticker into MainLayout (web) and RootNavigator (mobile) | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -156,6 +159,8 @@
 | Inspection answer templates | ✅ Done | QuickFill integrated into InspectionWizard text answers |
 | Quick Notes (inspection) | ✅ Done | Floating notes button during inspections |
 | Previous answers panel | ✅ Done | Shows previous inspection answers during current inspection |
+| Live Ticker (web/tablet) | ✅ Done | Scrolling news bar — all pages except Work Planning, dark/RTL, severity-coded |
+| Critical Alert Banner (phone) | ✅ Done | Phone-only critical popup with auto-dismiss + rotation |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above
