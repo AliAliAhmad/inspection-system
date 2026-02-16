@@ -115,6 +115,10 @@
 | 2026-02-15 | ChatRoomScreen: integrated MessageReactions, TranslatedMessage, MediaAttachment | ✅ Done |
 | 2026-02-15 | ProfileScreen: added accessibility settings (high contrast, bold text, reduce motion, text scale) | ✅ Done |
 | 2026-02-15 | MainTabNavigator: added Chat tab for all roles (Inspector, Specialist, Engineer, QE, Admin) | ✅ Done |
+| 2026-02-16 | Fixed 13 duplicate index definitions across 9 model files (crashed SQLite test DB) | ✅ Done |
+| 2026-02-16 | Fixed all 18 failing tests: response keys, required fields, voice notes, API error handling | ✅ Done |
+| 2026-02-16 | Added IntegrityError handling in checklists API for duplicate templates | ✅ Done |
+| 2026-02-16 | All 121 backend tests passing (0 failures, 16 skipped remote tests) | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
