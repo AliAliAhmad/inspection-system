@@ -48,7 +48,7 @@
 
 ## What Needs Work
 - ~~Arabic language support for AI analysis~~ ✅ Fixed
-- Full QA testing needed
+- Full QA testing needed (137 passing, 0 skipped, 15 remote-only deselected)
 - Add TOGETHER_API_KEY on Render (key ready)
 - Add GROQ_API_KEY on Render (biggest gap — free, 14,400 RPD audio)
 - Google Gemini 429 quota: free tier limited to 5 RPM (known issue since Dec 2025)
@@ -119,6 +119,7 @@
 | 2026-02-16 | Fixed all 18 failing tests: response keys, required fields, voice notes, API error handling | ✅ Done |
 | 2026-02-16 | Added IntegrityError handling in checklists API for duplicate templates | ✅ Done |
 | 2026-02-16 | All 121 backend tests passing (0 failures, 16 skipped remote tests) | ✅ Done |
+| 2026-02-16 | Fixed 16 skipped tests: mocked Cloudinary for file upload, created local smoke tests, excluded remote-only tests via pytest marker | ✅ Done |
 | 2026-02-16 | Added Live Ticker: web scrolling news bar (all pages except Work Planning) | ✅ Done |
 | 2026-02-16 | Added mobile LiveAlertBanner: tablet full ticker + phone critical-only popup | ✅ Done |
 | 2026-02-16 | Integrated ticker into MainLayout (web) and RootNavigator (mobile) | ✅ Done |

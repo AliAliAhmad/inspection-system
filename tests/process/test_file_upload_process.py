@@ -3,19 +3,36 @@ PROCESS TEST: File Upload Workflow
 ====================================
 Validates attachment flow:
   Upload file → Link to inspection → Retrieve → Delete
+
+Mocks Cloudinary so the test runs without real cloud credentials.
 """
 
 import io
 import pytest
+from unittest.mock import patch, MagicMock
 from tests.process.conftest import login
+
+
+def _mock_cloudinary_upload(file_or_bytes, **kwargs):
+    """Fake Cloudinary upload — returns a result dict like the real API."""
+    return {
+        'secure_url': 'https://res.cloudinary.com/test/image/upload/v1/test_photo.png',
+        'public_id': 'inspection_system/photo/2026/02/16/test_photo',
+        'resource_type': kwargs.get('resource_type', 'image'),
+        'tags': [],
+        'info': {},
+    }
 
 
 @pytest.mark.usefixtures('db_session')
 class TestFileUploadProcess:
     """Test file upload linked to an inspection."""
 
+    @patch('app.services.file_service.cloudinary.uploader.upload', side_effect=_mock_cloudinary_upload)
+    @patch('app.services.file_service._init_cloudinary')  # no-op
     def test_upload_and_list_file(
-        self, client, admin_user, inspector_user,
+        self, mock_init, mock_upload,
+        client, admin_user, inspector_user,
         test_equipment, test_template, test_assignment,
     ):
         """Upload a test image, verify it's linked, then delete."""
@@ -54,26 +71,22 @@ class TestFileUploadProcess:
             data=data,
             content_type='multipart/form-data',
         )
-        # File upload may succeed or fail depending on storage config
-        # In testing (no real storage), we accept 201 or graceful error
-        if resp.status_code == 201:
-            file_data = resp.get_json()['data']
-            assert file_data['related_type'] == 'inspection'
-            assert file_data['related_id'] == iid
-            file_id = file_data['id']
+        assert resp.status_code == 201, f"Upload failed: {resp.get_json()}"
+        file_data = resp.get_json()['data']
+        assert file_data['related_type'] == 'inspection'
+        assert file_data['related_id'] == iid
+        file_id = file_data['id']
 
-            # List files for this inspection
-            resp = client.get(
-                f'/api/files?related_type=inspection&related_id={iid}',
-                headers=header,
-            )
-            assert resp.status_code == 200
-            files = resp.get_json()['data']
-            assert any(f['id'] == file_id for f in files)
+        # List files for this inspection
+        resp = client.get(
+            f'/api/files?related_type=inspection&related_id={iid}',
+            headers=header,
+        )
+        assert resp.status_code == 200
+        files = resp.get_json()['data']
+        assert any(f['id'] == file_id for f in files)
 
-            # Delete
+        # Delete (mock Cloudinary destroy too)
+        with patch('app.services.file_service.cloudinary.uploader.destroy'):
             resp = client.delete(f'/api/files/{file_id}', headers=header)
             assert resp.status_code == 200
-        else:
-            # Storage not configured in test env — skip gracefully
-            pytest.skip('File storage not available in test environment')
