@@ -544,12 +544,12 @@ function ChecklistItemCard({
   const [recordingTime, setRecordingTime] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isAnalyzingVideo, setIsAnalyzingVideo] = useState(false);
+  // Video AI analysis removed — videos upload without AI processing
   const [isReadingAloud, setIsReadingAloud] = useState(false);
 
   // Separate state for each analysis type - use refs to track if we've set from local action
   const [photoAnalysis, setPhotoAnalysis] = useState<{ en: string; ar: string } | null>(null);
-  const [videoAnalysis, setVideoAnalysis] = useState<{ en: string; ar: string } | null>(null);
+  // videoAnalysis state removed — no AI for video uploads
   const [voiceTranscription, setVoiceTranscription] = useState<{ en: string; ar: string } | null>(null);
   const localAnalysisSetRef = useRef(false); // Track if analysis was set locally (not from server)
 
@@ -565,7 +565,7 @@ function ChecklistItemCard({
       if (existingAnswer?.comment) {
         const extracted = extractAnalysisFromComment(existingAnswer.comment);
         if (extracted.photoAnalysis) setPhotoAnalysis(extracted.photoAnalysis);
-        if (extracted.videoAnalysis) setVideoAnalysis(extracted.videoAnalysis);
+        // videoAnalysis extraction skipped — no AI for video
         // Only use comment-extracted transcription if dedicated field is empty
         if (extracted.voiceTranscription && !existingAnswer.voice_transcription) {
           setVoiceTranscription(extracted.voiceTranscription);
@@ -651,10 +651,6 @@ function ChecklistItemCard({
       if (photoAnalysis.en) parts.push(photoAnalysis.en);
       if (photoAnalysis.ar) parts.push(photoAnalysis.ar);
     }
-    if (videoAnalysis?.en || videoAnalysis?.ar) {
-      if (videoAnalysis.en) parts.push(videoAnalysis.en);
-      if (videoAnalysis.ar) parts.push(videoAnalysis.ar);
-    }
     if (voiceTranscription?.en || voiceTranscription?.ar) {
       const voiceParts: string[] = [];
       if (voiceTranscription?.en) voiceParts.push(`EN: ${voiceTranscription.en}`);
@@ -662,7 +658,7 @@ function ChecklistItemCard({
       if (voiceParts.length > 0) parts.push(voiceParts.join('\n'));
     }
     return parts.length > 0 ? parts.join('\n\n') : undefined;
-  }, [photoAnalysis, videoAnalysis, voiceTranscription]);
+  }, [photoAnalysis, voiceTranscription]);
 
   // Auto-save analysis comment when any analysis state changes
   // This runs AFTER React commits the new state, so buildAnalysisComment reads correct values
@@ -791,38 +787,23 @@ function ChecklistItemCard({
       message.success(t('inspection.mediaUploaded', 'Media uploaded'));
       refetchInspection();
 
+      // Skip AI analysis for videos — only analyze photos
+      if (isVideo) return;
+
       // Get the Cloudinary URL from response
       const data = (response.data as any)?.data;
-      const mediaUrl = isVideo
-        ? data?.video_file?.url || data?.url
-        : data?.photo_file?.url || data?.url;
+      const mediaUrl = data?.photo_file?.url || data?.url;
 
       if (mediaUrl && mediaUrl.includes('cloudinary.com')) {
-        // Auto-analyze with AI
-        if (isVideo) {
-          setIsAnalyzingVideo(true);
-        } else {
-          setIsAnalyzing(true);
-        }
+        setIsAnalyzing(true);
         try {
-          // For videos, use thumbnail URL for analysis
-          // Cloudinary video thumbnail: so_auto (auto select best frame), f_jpg (force JPG output)
-          let analyzeUrl = mediaUrl;
-          if (isVideo) {
-            // Extract thumbnail from video - use auto frame selection and explicit format
-            analyzeUrl = mediaUrl
-              .replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
-              .replace(/\.(mp4|mov|webm|avi|mkv)$/i, '.jpg');
-            console.log('Video thumbnail URL for analysis:', analyzeUrl);
-          }
-
           // Get analysis in both languages
           const [enResult, arResult] = await Promise.all([
-            aiApi.analyzeDefect(analyzeUrl, 'en').catch(err => {
+            aiApi.analyzeDefect(mediaUrl, 'en').catch(err => {
               console.error('EN analysis failed:', err);
               return { data: { data: { success: false } } };
             }),
-            aiApi.analyzeDefect(analyzeUrl, 'ar').catch(err => {
+            aiApi.analyzeDefect(mediaUrl, 'ar').catch(err => {
               console.error('AR analysis failed:', err);
               return { data: { data: { success: false } } };
             }),
@@ -832,12 +813,9 @@ function ChecklistItemCard({
           const arData = (arResult.data as any)?.data;
 
           if (enData?.success || arData?.success) {
-            // Format analysis as bilingual comment
-            const typeLabel = isVideo ? 'Video' : 'Photo';
-            const typeLabelAr = isVideo ? 'فيديو' : 'صورة';
             const formatAnalysis = (data: any, lang: string) => {
               if (!data || !data.success) return '';
-              const prefix = lang === 'en' ? `🔍 ${typeLabel} Analysis (EN)` : `🔍 تحليل ${typeLabelAr} (AR)`;
+              const prefix = lang === 'en' ? '🔍 Photo Analysis (EN)' : '🔍 تحليل صورة (AR)';
               const lines = [prefix];
               if (data.description) lines.push(`• ${lang === 'en' ? 'Issue' : 'المشكلة'}: ${data.description}`);
               if (data.severity) lines.push(`• ${lang === 'en' ? 'Severity' : 'الخطورة'}: ${data.severity}`);
@@ -847,33 +825,16 @@ function ChecklistItemCard({
               return lines.join('\n');
             };
 
-            const enAnalysis = formatAnalysis(enData, 'en');
-            const arAnalysis = formatAnalysis(arData, 'ar');
-
-            // Store in state for separate display
-            if (isVideo) {
-              setVideoAnalysis({ en: enAnalysis, ar: arAnalysis });
-            } else {
-              setPhotoAnalysis({ en: enAnalysis, ar: arAnalysis });
-            }
-            localAnalysisSetRef.current = true; // Mark that we set this locally
-            // Analysis will be auto-saved by the useEffect that watches buildAnalysisComment
+            setPhotoAnalysis({ en: formatAnalysis(enData, 'en'), ar: formatAnalysis(arData, 'ar') });
+            localAnalysisSetRef.current = true;
             setShowComment(true);
             message.success(t('inspection.aiAnalysisComplete', 'AI analysis complete'));
           }
         } catch (err) {
           console.warn('AI analysis failed:', err);
-          message.warning(isVideo
-            ? t('inspection.videoAnalysisFailed', 'Video analysis failed')
-            : t('inspection.photoAnalysisFailed', 'Photo analysis failed')
-          );
+          message.warning(t('inspection.photoAnalysisFailed', 'Photo analysis failed'));
         } finally {
-          if (isVideo) {
-            setIsAnalyzingVideo(false);
-          } else {
-            setIsAnalyzing(false);
-          }
-          // Delay refetch to allow server to save the comment
+          setIsAnalyzing(false);
           setTimeout(() => refetchInspection(), 1500);
         }
       }
@@ -1139,19 +1100,6 @@ function ChecklistItemCard({
               style={{ maxWidth: 310, maxHeight: 220, borderRadius: 6, display: 'block', background: '#000' }}
               preload="metadata"
             />
-            {/* AI Analyzing indicator for video */}
-            {isAnalyzingVideo && (
-              <div style={{
-                position: 'absolute', bottom: 8, left: 8, right: 8,
-                background: 'rgba(0,0,0,0.7)', borderRadius: 4, padding: '4px 8px',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-                <Spin size="small" />
-                <Typography.Text style={{ color: '#fff', fontSize: 11 }}>
-                  {t('inspection.aiAnalyzingVideo', 'AI Analyzing Video...')}
-                </Typography.Text>
-              </div>
-            )}
             {!isSubmitted && (
               <Button
                 type="primary"
@@ -1162,7 +1110,6 @@ function ChecklistItemCard({
                 onClick={() => {
                   deleteVideoMutation.mutate();
                   setLocalVideoUrl(null);
-                  setVideoAnalysis(null);
                 }}
                 style={{ position: 'absolute', top: 8, right: 8 }}
               />
@@ -1249,18 +1196,6 @@ function ChecklistItemCard({
             enContent={photoAnalysis.en}
             arContent={photoAnalysis.ar}
             color="#52c41a"
-          />
-        )}
-
-        {/* Video Analysis Box */}
-        {videoAnalysis && (videoAnalysis.en || videoAnalysis.ar) && (
-          <AnalysisBox
-            title="Video Analysis"
-            titleAr="تحليل الفيديو"
-            icon={<VideoCameraOutlined style={{ color: '#1890ff' }} />}
-            enContent={videoAnalysis.en}
-            arContent={videoAnalysis.ar}
-            color="#1890ff"
           />
         )}
 

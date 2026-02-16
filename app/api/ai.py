@@ -62,23 +62,6 @@ def read_gauge():
         return jsonify({'status': 'error', 'message': result.get('error', 'Reading failed')}), 500
 
 
-@bp.route('/vision/analyze-video', methods=['POST'])
-@limiter.limit("10 per minute")
-@jwt_required()
-def analyze_video():
-    """
-    Video analysis endpoint — disabled (not needed).
-    Returns a stub response so existing frontend calls don't break.
-    """
-    return jsonify({
-        'status': 'success',
-        'data': {
-            'analysis_en': 'Video analysis is not available.',
-            'analysis_ar': 'تحليل الفيديو غير متاح.',
-        }
-    }), 200
-
-
 @bp.route('/vision/compare', methods=['POST'])
 @limiter.limit("10 per minute")
 @jwt_required()
