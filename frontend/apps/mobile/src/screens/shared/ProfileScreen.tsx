@@ -27,10 +27,10 @@ const THEME_MODE_LABELS: Record<ThemeMode, { en: string; ar: string }> = {
 };
 
 const TEXT_SCALE_LABELS: Record<TextScale, { en: string; ar: string }> = {
-  small: { en: 'Small', ar: '\u0635\u063A\u064A\u0631' },
-  normal: { en: 'Normal', ar: '\u0639\u0627\u062F\u064A' },
-  large: { en: 'Large', ar: '\u0643\u0628\u064A\u0631' },
-  xlarge: { en: 'Extra Large', ar: '\u0643\u0628\u064A\u0631 \u062C\u062F\u0627' },
+  1: { en: 'Small', ar: '\u0635\u063A\u064A\u0631' },
+  1.25: { en: 'Normal', ar: '\u0639\u0627\u062F\u064A' },
+  1.5: { en: 'Large', ar: '\u0643\u0628\u064A\u0631' },
+  2: { en: 'Extra Large', ar: '\u0643\u0628\u064A\u0631 \u062C\u062F\u0627' },
 };
 
 export default function ProfileScreen() {
@@ -239,7 +239,7 @@ export default function ProfileScreen() {
           {language === 'ar' ? '\u062D\u062C\u0645 \u0627\u0644\u0646\u0635' : 'Text Size'}
         </Text>
         <View style={styles.themeOptions}>
-          {(['small', 'normal', 'large', 'xlarge'] as TextScale[]).map((scale) => (
+          {([1, 1.25, 1.5, 2] as TextScale[]).map((scale) => (
             <TouchableOpacity
               key={scale}
               style={[

@@ -79,9 +79,8 @@ export default function ChatRoomScreen() {
   const handleReaction = useCallback((messageId: number, emoji: string) => {
     // Send reaction to server (fire and forget)
     teamCommunicationApi.sendMessage(channelId, {
-      message_type: 'reaction',
-      content: emoji,
-      parent_message_id: messageId,
+      message_type: 'text',
+      content: `[reaction:${emoji}:${messageId}]`,
     }).then(() => {
       queryClient.invalidateQueries({ queryKey: ['messages', channelId] });
     }).catch(() => {});
