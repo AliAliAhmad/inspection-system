@@ -71,6 +71,7 @@
 | Date | What Changed | Status |
 |------|-------------|--------|
 | 2026-02-13 | Project setup | ✅ Done |
+| 2026-02-16 | Fix React error #310 — moved useCallback before early return in LiveTicker.tsx | ✅ Done |
 | 2026-02-15 | Fixed FileSystem import in PhotoAnnotationScreen (both APIs) | ✅ Done |
 | 2026-02-15 | Added GPS auto-location hook (useLocation) + LocationTag component | ✅ Done |
 | 2026-02-15 | Added Push-to-Talk walkie-talkie component | ✅ Done |

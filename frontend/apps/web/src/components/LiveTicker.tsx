@@ -146,18 +146,18 @@ export default function LiveTicker() {
 
   const hasCritical = sortedItems.some(i => i.severity === 'critical');
 
+  const handleItemClick = useCallback((item: TickerItem) => {
+    if (item.route) {
+      window.location.href = item.route;
+    }
+  }, []);
+
   // Hidden on Work Planning
   const isHidden = HIDDEN_PAGES.some(p => location.pathname.startsWith(p));
   if (isHidden || sortedItems.length === 0) return null;
 
   // Animation duration scales with item count for consistent read speed
   const animDuration = sortedItems.length * 8;
-
-  const handleItemClick = useCallback((item: TickerItem) => {
-    if (item.route) {
-      window.location.href = item.route;
-    }
-  }, []);
 
   return (
     <div
