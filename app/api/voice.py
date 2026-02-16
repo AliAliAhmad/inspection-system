@@ -322,12 +322,16 @@ def transcribe():
                 ar_text = result.get('ar', '').strip() or en_text
                 logger.info(f"Gemini transcription: EN={en_text[:50]}...")
             else:
-                # Other services need translation
+                # Other services return text — try translation, fall back to English
                 text = result.get('text', '').strip()
                 detected_language = result.get('detected_language', 'unknown')
-                translated = TranslationService.auto_translate(text)
-                en_text = translated.get('en') or text
-                ar_text = translated.get('ar') or text
+                try:
+                    translated = TranslationService.auto_translate(text)
+                    en_text = translated.get('en') or text
+                    ar_text = translated.get('ar') or text
+                except Exception:
+                    en_text = text
+                    ar_text = text
                 logger.info(f"{used_service} transcription: {text[:50]}...")
         else:
             transcription_failed = True

@@ -92,6 +92,8 @@ class TranslationService:
     def auto_translate(text):
         """
         Auto-detect language and translate to the other language.
+        Always returns both 'en' and 'ar' — uses original text as fallback
+        if translation fails (English is acceptable as Arabic fallback).
 
         Args:
             text: Input text (English or Arabic)
@@ -100,14 +102,14 @@ class TranslationService:
             dict: {'en': english_text, 'ar': arabic_text}
         """
         if not text or not text.strip():
-            return {'en': text, 'ar': None}
+            return {'en': text or '', 'ar': text or ''}
 
         if is_arabic(text):
             en = TranslationService._translate(text, 'en')
-            return {'en': en, 'ar': text}
+            return {'en': en or text, 'ar': text}
         else:
             ar = TranslationService._translate(text, 'ar')
-            return {'en': text, 'ar': ar}
+            return {'en': text, 'ar': ar or text}
 
     @staticmethod
     def _translate(text, target_lang):

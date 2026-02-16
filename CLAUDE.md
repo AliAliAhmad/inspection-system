@@ -33,7 +33,7 @@
 - Always explain what you're changing before doing it
 
 ## Current Issues / History
-- Arabic analysis was returning English only — needs fixing
+- Arabic analysis was returning English only — FIXED (bilingual prompts on all providers)
 - WebSocket (flask-socketio) not installed — non-critical
 - UI needs modernization and improvements
 
@@ -47,7 +47,7 @@
 - Together AI API key ready to add on Render
 
 ## What Needs Work
-- Arabic language support for AI analysis
+- ~~Arabic language support for AI analysis~~ ✅ Fixed
 - Full QA testing needed
 - Add TOGETHER_API_KEY on Render (key ready)
 - Add GROQ_API_KEY on Render (biggest gap — free, 14,400 RPD audio)
@@ -128,6 +128,10 @@
 | 2026-02-16 | Web JobShowUpSection: photo gallery, voice player with transcriptions, star/point buttons | ✅ Done |
 | 2026-02-16 | Mobile JobShowUpSection: camera capture, voice recorder, audio playback, review marks | ✅ Done |
 | 2026-02-16 | Integrated ShowUp into SpecialistJobDetail + EngineerJobDetail (web + mobile) | ✅ Done |
+| 2026-02-16 | Fixed Arabic analysis: bilingual EN/AR prompts for all 6 vision providers (Gemini, Groq, OpenRouter, Together, SambaNova, HuggingFace) | ✅ Done |
+| 2026-02-16 | Updated master photo analysis prompt with explicit bilingual JSON output + Arabic example | ✅ Done |
+| 2026-02-16 | Fixed TranslationService.auto_translate: always returns both EN + AR, English fallback if translation fails | ✅ Done |
+| 2026-02-16 | Disabled video AI analyzer endpoint (returns stub response, frontend unchanged) | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -136,7 +140,7 @@
 |---------|--------|-------|
 | Photo upload | ✅ Done | Working |
 | Photo analysis (English) | ✅ Done | Working |
-| Photo analysis (Arabic) | 🔧 In Progress | Returns English only |
+| Photo analysis (Arabic) | ✅ Done | All 6 vision providers now request bilingual EN/AR output |
 | UI modernization | ✅ Done | App Launcher + smart dashboard + tabbed stats |
 | Work Planning layout | ✅ Done | Compact toolbar + inline team pool + always-visible jobs panel + at-risk badge |
 | Mobile app | ✅ Done | React Native/Expo — 96+ components, now wired into screens |

@@ -16,6 +16,17 @@ import base64
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_bilingual(text):
+    """Parse 'EN: ... / AR: ...' format. Returns (en_text, ar_text) or (None, None)."""
+    import re
+    en_match = re.search(r'EN:\s*(.+)', text)
+    ar_match = re.search(r'AR:\s*(.+)', text)
+    en = en_match.group(1).strip() if en_match else None
+    ar = ar_match.group(1).strip() if ar_match else None
+    return en, ar
+
+
 # Groq API endpoints
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_AUDIO_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
@@ -85,23 +96,26 @@ class GroqVisionService:
                 logger.error("No image provided")
                 return None
 
-            # Build prompt based on question type
+            # Build prompt based on question type — BILINGUAL (EN + AR)
             if is_reading_question:
                 prompt = (
                     "This is an industrial equipment inspection photo. "
                     "Look for any meter readings, gauge values, or numeric displays. "
                     "Extract any numbers you can see clearly. "
-                    "Also describe the equipment condition. "
-                    "Format: Reading: [number if found], Description: [brief description]"
+                    "Reply in this EXACT format (2 lines):\n"
+                    "EN: Reading: [number if found]. [condition in English]\n"
+                    "AR: القراءة: [number if found]. [condition in Arabic]"
                 )
             else:
                 prompt = (
                     "This is an industrial equipment inspection photo. "
-                    "Describe what you see, focusing on: "
-                    "1. Equipment type and condition "
-                    "2. Any visible defects (rust, damage, leaks, wear) "
-                    "3. Safety concerns if any. "
-                    "Be concise but thorough."
+                    "Describe in MAX 1-2 short sentences. "
+                    "Reply in this EXACT format (2 lines only):\n"
+                    "EN: [Equipment type]. [Condition - good/fair/poor]. [Any defect].\n"
+                    "AR: [Same description in Arabic]\n"
+                    "Example:\n"
+                    "EN: Pump motor in good condition. No defects visible.\n"
+                    "AR: محرك المضخة في حالة جيدة. لا توجد عيوب مرئية."
                 )
 
             # Build request payload
@@ -160,13 +174,20 @@ class GroqVisionService:
                     if numbers:
                         extracted_reading = max(numbers, key=lambda x: float(x) if x else 0)
 
-            # Translate to Arabic
+            # Parse bilingual EN/AR response, fall back to translation
             from app.services.translation_service import TranslationService
-            translated = TranslationService.auto_translate(analysis_text)
+            en_text, ar_text = _parse_bilingual(analysis_text)
+
+            if not ar_text:
+                translated = TranslationService.auto_translate(en_text or analysis_text)
+                en_text = en_text or translated.get('en') or analysis_text
+                ar_text = translated.get('ar') or analysis_text
+            if not en_text:
+                en_text = analysis_text
 
             result = {
-                'en': translated.get('en') or analysis_text,
-                'ar': translated.get('ar') or analysis_text
+                'en': en_text,
+                'ar': ar_text
             }
 
             if extracted_reading:

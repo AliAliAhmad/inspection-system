@@ -67,34 +67,16 @@ def read_gauge():
 @jwt_required()
 def analyze_video():
     """
-    Analyze a video using Gemini Vision.
-
-    Body: {"video_url": "https://..."}
+    Video analysis endpoint — disabled (not needed).
+    Returns a stub response so existing frontend calls don't break.
     """
-    from app.services.gemini_service import get_vision_service, is_gemini_configured
-
-    data = request.get_json()
-    video_url = data.get('video_url')
-
-    if not video_url:
-        return jsonify({'status': 'error', 'message': 'video_url required'}), 400
-
-    if not is_gemini_configured():
-        return jsonify({'status': 'error', 'message': 'Gemini API not configured'}), 500
-
-    vision_service = get_vision_service()
-    result = vision_service.analyze_video(video_url=video_url)
-
-    if result:
-        return jsonify({
-            'status': 'success',
-            'data': {
-                'analysis_en': result.get('en'),
-                'analysis_ar': result.get('ar'),
-            }
-        }), 200
-    else:
-        return jsonify({'status': 'error', 'message': 'Video analysis failed'}), 500
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'analysis_en': 'Video analysis is not available.',
+            'analysis_ar': 'تحليل الفيديو غير متاح.',
+        }
+    }), 200
 
 
 @bp.route('/vision/compare', methods=['POST'])
@@ -406,7 +388,7 @@ def analyze_photo_for_inspection():
     if not image_url:
         return jsonify({'status': 'error', 'message': 'image_url required'}), 400
 
-    # Build prompt for inspection-specific analysis
+    # Build prompt for inspection-specific analysis — BILINGUAL (EN + AR)
     prompt = """Analyze this inspection photo and determine if it should PASS or FAIL.
 
 You are an expert industrial equipment inspector. Examine the image for:
@@ -421,12 +403,22 @@ You are an expert industrial equipment inspector. Examine the image for:
     if question_context:
         prompt += f"Context: The inspector is checking: {question_context}\n\n"
 
-    prompt += """Based on your analysis, respond with EXACTLY this JSON format:
+    prompt += """IMPORTANT: You MUST provide explanations in BOTH English AND Arabic.
+
+Based on your analysis, respond with EXACTLY this JSON format:
 {
     "suggestion": "pass" or "fail",
     "confidence": number between 0.0 and 1.0,
     "reason_en": "Brief explanation in English (1-2 sentences)",
-    "reason_ar": "Brief explanation in Arabic (1-2 sentences)"
+    "reason_ar": "شرح موجز بالعربية (جملة أو جملتين)"
+}
+
+Example for a good result:
+{
+    "suggestion": "pass",
+    "confidence": 0.9,
+    "reason_en": "Pump motor in good condition. No visible defects or damage.",
+    "reason_ar": "محرك المضخة في حالة جيدة. لا توجد عيوب أو أضرار مرئية."
 }
 
 Be conservative: if you're unsure or see potential issues, suggest FAIL.
@@ -467,12 +459,21 @@ Only suggest PASS if the image clearly shows equipment in good condition.
             suggestion = 'pass' if suggestion == 'pass' else 'fail'
             confidence = max(0.0, min(1.0, confidence))
 
+            # Ensure Arabic is always populated — translate if AI didn't provide it
+            if reason_en and not reason_ar:
+                try:
+                    from app.services.translation_service import TranslationService
+                    reason_ar = TranslationService.translate_to_arabic(reason_en) or reason_en
+                except Exception:
+                    reason_ar = reason_en
+
             return jsonify({
                 'status': 'success',
                 'data': {
                     'suggestion': suggestion,
                     'confidence': confidence,
                     'reason': reason_en if language == 'en' else reason_ar,
+                    'reason_en': reason_en,
                     'reason_ar': reason_ar,
                     'analyzed_at': datetime.utcnow().isoformat() + 'Z'
                 }
