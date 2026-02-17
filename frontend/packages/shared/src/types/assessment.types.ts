@@ -17,6 +17,20 @@ export interface FinalAssessment {
   created_at: string;
 }
 
+export interface AnswerSummaryEntry {
+  answer_value: string;
+  answer_type: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
+  min_value?: number | null;
+  max_value?: number | null;
+  numeric_rule?: 'less_than' | 'greater_than' | 'between' | null;
+}
+
+export interface AssessmentSummary {
+  final_status: 'operational' | 'urgent' | null;
+  mech_verdict: 'operational' | 'urgent' | null;
+  elec_verdict: 'operational' | 'urgent' | null;
+}
+
 export interface InspectionAssignment {
   id: number;
   inspection_list_id: number;
@@ -35,6 +49,8 @@ export interface InspectionAssignment {
   backlog_triggered_at: string | null;
   assigned_at: string | null;
   created_at: string;
+  answers_summary?: AnswerSummaryEntry[];
+  assessment?: AssessmentSummary | null;
 }
 
 export interface InspectionList {

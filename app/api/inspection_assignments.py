@@ -493,7 +493,10 @@ def my_stats():
 @bp.route('/my-assignments', methods=['GET'])
 @jwt_required()
 def my_assignments():
-    """Get current user's inspection assignments."""
+    """Get current user's inspection assignments with answer summaries."""
+    from app.models import Inspection, InspectionAnswer, FinalAssessment
+    from app.models.checklist import ChecklistItem
+
     user = get_current_user()
     today = date.today()
 
@@ -514,9 +517,81 @@ def my_assignments():
 
     assignments = query.order_by(InspectionAssignment.created_at.desc()).all()
 
+    # Build answer summaries and assessment for each assignment
+    assignment_ids = [a.id for a in assignments]
+
+    # Batch-fetch inspections for these assignments
+    inspections = Inspection.query.filter(
+        Inspection.assignment_id.in_(assignment_ids)
+    ).all() if assignment_ids else []
+    inspection_map = {}
+    for insp in inspections:
+        inspection_map.setdefault(insp.assignment_id, []).append(insp)
+
+    # Batch-fetch assessments
+    assessments = FinalAssessment.query.filter(
+        FinalAssessment.inspection_assignment_id.in_(assignment_ids)
+    ).all() if assignment_ids else []
+    assessment_map = {a.inspection_assignment_id: a for a in assessments}
+
+    # Batch-fetch answers for all inspections
+    inspection_ids = [insp.id for insp in inspections]
+    answers = InspectionAnswer.query.filter(
+        InspectionAnswer.inspection_id.in_(inspection_ids)
+    ).all() if inspection_ids else []
+
+    # Group answers by inspection_id
+    answers_by_inspection = {}
+    checklist_item_ids = set()
+    for ans in answers:
+        answers_by_inspection.setdefault(ans.inspection_id, []).append(ans)
+        checklist_item_ids.add(ans.checklist_item_id)
+
+    # Batch-fetch checklist items for validation rules
+    items = ChecklistItem.query.filter(
+        ChecklistItem.id.in_(list(checklist_item_ids))
+    ).all() if checklist_item_ids else []
+    item_map = {it.id: it for it in items}
+
+    result = []
+    for a in assignments:
+        d = a.to_dict()
+
+        # Build answers_summary
+        answers_summary = []
+        insps = inspection_map.get(a.id, [])
+        for insp in insps:
+            for ans in answers_by_inspection.get(insp.id, []):
+                ci = item_map.get(ans.checklist_item_id)
+                if not ci:
+                    continue
+                entry = {
+                    'answer_value': ans.answer_value,
+                    'answer_type': ci.answer_type,
+                }
+                if ci.answer_type == 'numeric':
+                    entry['min_value'] = ci.min_value
+                    entry['max_value'] = ci.max_value
+                    entry['numeric_rule'] = ci.numeric_rule
+                answers_summary.append(entry)
+        d['answers_summary'] = answers_summary
+
+        # Assessment verdict
+        fa = assessment_map.get(a.id)
+        if fa:
+            d['assessment'] = {
+                'final_status': fa.final_status,
+                'mech_verdict': fa.mech_verdict,
+                'elec_verdict': fa.elec_verdict,
+            }
+        else:
+            d['assessment'] = None
+
+        result.append(d)
+
     return jsonify({
         'status': 'success',
-        'data': [a.to_dict() for a in assignments]
+        'data': result
     }), 200
 
 
