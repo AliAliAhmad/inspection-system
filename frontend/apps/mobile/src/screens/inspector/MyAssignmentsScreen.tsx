@@ -309,7 +309,7 @@ function AnswerDetailModal({
   );
 }
 
-// ─── Stat Filter Card ─────────────────────────────────────
+// ─── Stat Filter Card (exact copy of Dashboard QuickActionCard) ──
 function StatFilterCard({
   label,
   value,
@@ -328,16 +328,17 @@ function StatFilterCard({
   return (
     <TouchableOpacity
       style={[
-        styles.statCard,
-        isActive && { borderColor: color, borderWidth: 2.5 },
+        styles.quickActionCard,
+        isActive && styles.quickActionCardActive,
       ]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Text style={styles.statIcon}>{icon}</Text>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
-      {isActive && <View style={[styles.statActiveDot, { backgroundColor: color }]} />}
+      <View style={[styles.quickActionIcon, { backgroundColor: color + '18' }]}>
+        <Text style={styles.quickActionEmoji}>{icon}</Text>
+      </View>
+      <Text style={[styles.quickActionValue, { color }]}>{value}</Text>
+      <Text style={[styles.quickActionLabel, { color: '#333' }]} numberOfLines={1}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -615,19 +616,17 @@ export default function MyAssignmentsScreen() {
     );
   }
 
-  // Stat cards data — tapping filters the list
-  const statCards: { key: FilterStatus; label: string; value: number; icon: string; color: string }[] = [
-    { key: 'all', label: isAr ? 'الكل' : 'All', value: filterCounts.all, icon: '📋', color: '#1976D2' },
-    { key: 'assigned', label: isAr ? 'معين' : 'Assigned', value: filterCounts.assigned, icon: '⏳', color: '#FF9800' },
-    { key: 'in_progress', label: isAr ? 'جاري' : 'In Progress', value: filterCounts.inProgress, icon: '🔧', color: '#9C27B0' },
-    { key: 'completed', label: isAr ? 'مكتمل' : 'Completed', value: filterCounts.completed, icon: '✅', color: '#4CAF50' },
+  // All stat cards in one row — tapping filters the list
+  const statCards: { key: FilterStatus; label: string; value: number; icon: string; color: string; filterable: boolean }[] = [
+    { key: 'all', label: isAr ? 'الكل' : 'All', value: filterCounts.all, icon: '📋', color: '#1976D2', filterable: true },
+    { key: 'assigned', label: isAr ? 'معين' : 'Assigned', value: filterCounts.assigned, icon: '⏳', color: '#FF9800', filterable: true },
+    { key: 'in_progress', label: isAr ? 'جاري' : 'In Progress', value: filterCounts.inProgress, icon: '🔧', color: '#9C27B0', filterable: true },
+    { key: 'completed', label: isAr ? 'مكتمل' : 'Completed', value: filterCounts.completed, icon: '✅', color: '#4CAF50', filterable: true },
+    ...(stats ? [
+      { key: 'week' as FilterStatus, label: isAr ? 'الأسبوع' : 'Week', value: stats.week?.completed ?? 0, icon: '📊', color: '#00897B', filterable: false },
+      { key: 'month' as FilterStatus, label: isAr ? 'الشهر' : 'Month', value: stats.month?.completed ?? 0, icon: '🏆', color: '#3F51B5', filterable: false },
+    ] : []),
   ];
-
-  // Add week/month stats if available
-  const extraStats = stats ? [
-    { key: 'week' as FilterStatus, label: isAr ? 'هذا الأسبوع' : 'This Week', value: stats.week?.completed ?? 0, icon: '📊', color: '#00897B' },
-    { key: 'month' as FilterStatus, label: isAr ? 'هذا الشهر' : 'This Month', value: stats.month?.completed ?? 0, icon: '🏆', color: '#3F51B5' },
-  ] : [];
 
   return (
     <View style={styles.container}>
@@ -643,39 +642,37 @@ export default function MyAssignmentsScreen() {
         )}
       </View>
 
-      {/* Stat cards as clickable filters — horizontal scroll */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.statsContainer}
-        contentContainerStyle={styles.statsContent}
-      >
-        {statCards.map((card) => (
-          <StatFilterCard
-            key={card.key}
-            label={card.label}
-            value={card.value}
-            icon={card.icon}
-            color={card.color}
-            isActive={activeFilter === card.key}
-            onPress={() => handleStatPress(card.key)}
-          />
-        ))}
-        {extraStats.map((card) => (
-          <View key={card.key} style={styles.statCard}>
-            <Text style={styles.statIcon}>{card.icon}</Text>
-            <Text style={[styles.statValue, { color: card.color }]}>{card.value}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>{card.label}</Text>
-          </View>
-        ))}
-        {stats && stats.backlog_count > 0 && (
-          <View style={[styles.statCard, { borderColor: '#E53935', borderWidth: 1.5 }]}>
-            <Text style={styles.statIcon}>⚠️</Text>
-            <Text style={[styles.statValue, { color: '#E53935' }]}>{stats.backlog_count}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>{isAr ? 'متأخر' : 'Backlog'}</Text>
-          </View>
-        )}
-      </ScrollView>
+      {/* Stat cards — horizontal row, exact dashboard QuickActions style */}
+      <View style={styles.quickActionsRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickActionsContent}
+        >
+          {statCards.map((card) => (
+            <StatFilterCard
+              key={card.key}
+              label={card.label}
+              value={card.value}
+              icon={card.icon}
+              color={card.color}
+              isActive={card.filterable && activeFilter === card.key}
+              onPress={() => card.filterable ? handleStatPress(card.key) : undefined}
+            />
+          ))}
+          {stats && stats.backlog_count > 0 && (
+            <StatFilterCard
+              key="backlog"
+              label={isAr ? 'متأخر' : 'Backlog'}
+              value={stats.backlog_count}
+              icon="⚠️"
+              color="#E53935"
+              isActive={false}
+              onPress={() => {}}
+            />
+          )}
+        </ScrollView>
+      </View>
 
       {/* Assessment filter */}
       {renderAssessmentFilters()}
@@ -723,24 +720,28 @@ const styles = StyleSheet.create({
   },
   starText: { fontSize: 13, fontWeight: '700', color: '#F57F17' },
 
-  // Stat filter cards (horizontal scroll)
-  statsContainer: {
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0',
-    maxHeight: 100,
+  // Quick Action cards (exact copy from DashboardScreen)
+  quickActionsRow: {
+    backgroundColor: '#fff', paddingBottom: 4,
   },
-  statsContent: { paddingHorizontal: 8, paddingVertical: 10, gap: 8 },
-  statCard: {
-    backgroundColor: '#fff', borderRadius: 10, minWidth: 80, padding: 10,
-    alignItems: 'center', borderWidth: 1, borderColor: '#E8E8E8',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08, shadowRadius: 3, elevation: 2,
+  quickActionsContent: {
+    paddingHorizontal: 16, paddingVertical: 10, gap: 10,
   },
-  statIcon: { fontSize: 16, marginBottom: 2 },
-  statValue: { fontSize: 20, fontWeight: 'bold' },
-  statLabel: { fontSize: 11, color: '#757575', marginTop: 2, textAlign: 'center' },
-  statActiveDot: {
-    width: 6, height: 6, borderRadius: 3, marginTop: 4,
+  quickActionCard: {
+    width: (SCREEN_WIDTH - 32 - 40) / 4,
+    backgroundColor: '#fff', borderRadius: 18, padding: 10, alignItems: 'center',
+    borderWidth: 1, borderColor: '#E0E0E0',
   },
+  quickActionCardActive: {
+    borderBottomWidth: 3, borderBottomColor: '#1976D2',
+  },
+  quickActionIcon: {
+    width: 36, height: 36, borderRadius: 18,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 6,
+  },
+  quickActionEmoji: { fontSize: 18 },
+  quickActionValue: { fontSize: 17, fontWeight: '800', marginBottom: 2 },
+  quickActionLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
 
   // Assessment filter row
   assessmentFilterRow: {

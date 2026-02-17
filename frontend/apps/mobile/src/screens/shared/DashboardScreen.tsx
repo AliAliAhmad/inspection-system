@@ -314,7 +314,12 @@ export default function DashboardScreen() {
         <View style={s.welcomeRow}>
           <View style={s.welcomeTextContainer}>
             <Text style={s.greetingText}>{greeting}</Text>
-            <Text style={s.welcomeName}>{user?.full_name}</Text>
+            <View style={s.nameRow}>
+              <Text style={s.welcomeName}>{user?.full_name}</Text>
+              <View style={s.starBadge}>
+                <Text style={s.starText}>⭐ {(user as any)?.total_stars ?? 0}</Text>
+              </View>
+            </View>
           </View>
           <StreakIndicator
             currentStreak={user?.total_points ? Math.min(Math.floor(user.total_points / 10), 30) : 0}
@@ -408,7 +413,7 @@ const s = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   welcomeHeader: {
     marginHorizontal: -16, marginTop: -16,
-    padding: 20, paddingTop: 50,
+    paddingHorizontal: 20, paddingTop: 30, paddingBottom: 10,
     borderBottomLeftRadius: 20, borderBottomRightRadius: 20,
     marginBottom: 16,
   },
@@ -416,6 +421,11 @@ const s = StyleSheet.create({
   welcomeTextContainer: { flex: 1 },
   greetingText: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
   welcomeName: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  starBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14,
+  },
+  starText: { fontSize: 22, fontWeight: '800', color: '#fff' },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 20, marginBottom: 10 },
 
   // Quick Actions grid
