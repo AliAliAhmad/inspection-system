@@ -285,7 +285,7 @@ export default function ChannelListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fafafa' },
+  container: { flex: 1, backgroundColor: '#fff' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4, marginRight: 8 },
   backBtnText: { fontSize: 24, color: '#1677ff' },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#262626', flex: 1 },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   peopleBtn: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center',
@@ -306,10 +306,11 @@ const styles = StyleSheet.create({
   peopleBtnActive: { backgroundColor: '#e6f4ff' },
   peopleBtnText: { fontSize: 20 },
   newBtn: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 44, height: 44, borderRadius: 22,
     backgroundColor: '#1677ff', justifyContent: 'center', alignItems: 'center',
+    zIndex: 10,
   },
-  newBtnText: { color: '#fff', fontSize: 24, fontWeight: '600', marginTop: -2 },
+  newBtnText: { color: '#fff', fontSize: 26, fontWeight: '600', lineHeight: 28 },
   searchContainer: { padding: 12, backgroundColor: '#fff' },
   searchInput: {
     backgroundColor: '#f5f5f5', borderRadius: 12, paddingHorizontal: 16,
@@ -318,7 +319,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13, fontWeight: '700', color: '#8c8c8c',
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6,
-    backgroundColor: '#fafafa',
+    backgroundColor: '#fff',
   },
   // User cards
   userCard: {

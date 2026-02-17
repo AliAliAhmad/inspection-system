@@ -24,7 +24,6 @@ import {
   AnswerSummaryEntry,
   AssessmentSummary,
 } from '@inspection/shared';
-import { StatCard } from '../../components/shared/StatCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -33,7 +32,6 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type FilterStatus = 'all' | 'assigned' | 'in_progress' | 'completed';
 type AssessmentFilter = 'all' | 'operational' | 'urgent' | 'stopped';
 
-const FILTER_OPTIONS: FilterStatus[] = ['all', 'assigned', 'in_progress', 'completed'];
 const ASSESSMENT_FILTERS: AssessmentFilter[] = ['all', 'operational', 'urgent', 'stopped'];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -48,7 +46,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const URGENCY_COLORS = ['#4CAF50', '#FF9800', '#FF5722', '#F44336'];
-const URGENCY_BG = ['#E8F5E9', '#FFF3E0', '#FBE9E7', '#FFEBEE'];
 const URGENCY_LABELS_EN = ['OK', 'Monitor', 'Attention', 'Critical'];
 const URGENCY_LABELS_AR = ['سليم', 'مراقبة', 'يحتاج انتباه', 'حرج'];
 
@@ -76,7 +73,6 @@ function isNumericInRange(num: number, entry: AnswerSummaryEntry): boolean {
 // ─── Answer Cell (Clickable) ──────────────────────────────
 function AnswerCell({
   entry,
-  index,
   onPress,
 }: {
   entry: AnswerSummaryEntry;
@@ -119,7 +115,6 @@ function AnswerCell({
     textColor = '#3F51B5';
   }
 
-  // Urgency border indicator
   const urgency = entry.urgency_level ?? 0;
   if (urgency > 0) {
     borderColor = URGENCY_COLORS[urgency] ?? 'transparent';
@@ -169,12 +164,10 @@ function AnswerBar({
 function AssessmentBadge({
   assessment,
   predicted,
-  urgencyScore,
   isAr,
 }: {
   assessment?: AssessmentSummary | null;
   predicted?: 'operational' | 'urgent' | 'monitor' | null;
-  urgencyScore?: number;
   isAr: boolean;
 }) {
   const status = assessment?.final_status ?? predicted;
@@ -240,15 +233,12 @@ function AnswerDetailModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
-          {/* Handle bar */}
           <View style={styles.modalHandle} />
 
-          {/* Question text */}
           <Text style={styles.modalQuestionText}>
             {entry.question_text || (isAr ? 'سؤال' : 'Question')}
           </Text>
 
-          {/* Category */}
           {entry.category && (
             <View style={styles.modalCategoryRow}>
               <Text style={styles.modalCategoryLabel}>
@@ -260,26 +250,21 @@ function AnswerDetailModal({
                   ? { backgroundColor: '#E3F2FD' }
                   : { backgroundColor: '#FFF3E0' },
               ]}>
-                <Text style={styles.modalCategoryText}>
-                  {entry.category}
-                </Text>
+                <Text style={styles.modalCategoryText}>{entry.category}</Text>
               </View>
             </View>
           )}
 
-          {/* Answer */}
           <View style={styles.modalRow}>
             <Text style={styles.modalLabel}>{isAr ? 'الإجابة' : 'Answer'}</Text>
             <Text style={styles.modalValue}>{entry.answer_value || '—'}</Text>
           </View>
 
-          {/* Answer Type */}
           <View style={styles.modalRow}>
             <Text style={styles.modalLabel}>{isAr ? 'نوع' : 'Type'}</Text>
             <Text style={styles.modalValue}>{entry.answer_type?.replace('_', ' ')}</Text>
           </View>
 
-          {/* Numeric range if applicable */}
           {entry.answer_type === 'numeric' && (entry.min_value != null || entry.max_value != null) && (
             <View style={styles.modalRow}>
               <Text style={styles.modalLabel}>{isAr ? 'النطاق' : 'Range'}</Text>
@@ -293,7 +278,6 @@ function AnswerDetailModal({
             </View>
           )}
 
-          {/* Urgency */}
           <View style={styles.modalRow}>
             <Text style={styles.modalLabel}>{isAr ? 'مستوى الطوارئ' : 'Urgency'}</Text>
             <View style={[styles.modalUrgencyBadge, { backgroundColor: urgencyColor }]}>
@@ -301,7 +285,6 @@ function AnswerDetailModal({
             </View>
           </View>
 
-          {/* Comment */}
           {entry.comment && (
             <View style={styles.modalCommentSection}>
               <Text style={styles.modalLabel}>{isAr ? 'ملاحظة' : 'Comment'}</Text>
@@ -309,7 +292,6 @@ function AnswerDetailModal({
             </View>
           )}
 
-          {/* Photo indicator */}
           {entry.has_photo && (
             <View style={styles.modalPhotoIndicator}>
               <Text style={styles.modalPhotoText}>
@@ -318,13 +300,45 @@ function AnswerDetailModal({
             </View>
           )}
 
-          {/* Close button */}
           <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
             <Text style={styles.modalCloseText}>{isAr ? 'إغلاق' : 'Close'}</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
     </Modal>
+  );
+}
+
+// ─── Stat Filter Card ─────────────────────────────────────
+function StatFilterCard({
+  label,
+  value,
+  icon,
+  color,
+  isActive,
+  onPress,
+}: {
+  label: string;
+  value: number;
+  icon: string;
+  color: string;
+  isActive: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.statCard,
+        isActive && { borderColor: color, borderWidth: 2.5 },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text style={styles.statIcon}>{icon}</Text>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
+      {isActive && <View style={[styles.statActiveDot, { backgroundColor: color }]} />}
+    </TouchableOpacity>
   );
 }
 
@@ -369,6 +383,15 @@ export default function MyAssignmentsScreen() {
   const IN_PROGRESS_STATUSES = ['in_progress', 'mech_complete', 'elec_complete', 'both_complete', 'assessment_pending'];
   const COMPLETED_STATUSES = ['completed'];
   const ASSIGNED_STATUSES = ['assigned', 'pending'];
+
+  // Compute counts for each filter
+  const filterCounts = useMemo(() => {
+    const all = allAssignments.length;
+    const assigned = allAssignments.filter(a => ASSIGNED_STATUSES.includes(a.status)).length;
+    const inProgress = allAssignments.filter(a => IN_PROGRESS_STATUSES.includes(a.status)).length;
+    const completed = allAssignments.filter(a => COMPLETED_STATUSES.includes(a.status)).length;
+    return { all, assigned, inProgress, completed };
+  }, [allAssignments]);
 
   const assignments = useMemo(() => {
     return allAssignments.filter((a) => {
@@ -416,15 +439,9 @@ export default function MyAssignmentsScreen() {
     setModalVisible(true);
   }, []);
 
-  const getFilterLabel = (filter: FilterStatus): string => {
-    switch (filter) {
-      case 'all': return t('common.all');
-      case 'assigned': return t('status.assigned');
-      case 'in_progress': return t('status.in_progress');
-      case 'completed': return t('status.completed');
-      default: return filter;
-    }
-  };
+  const handleStatPress = useCallback((filter: FilterStatus) => {
+    setActiveFilter(prev => prev === filter ? 'all' : filter);
+  }, []);
 
   const getAssessmentLabel = (filter: AssessmentFilter): string => {
     if (filter === 'all') return isAr ? 'الكل' : 'All';
@@ -441,29 +458,8 @@ export default function MyAssignmentsScreen() {
     return '#1976D2';
   };
 
-  const renderFilterChips = () => (
-    <View style={styles.filterRow}>
-      {FILTER_OPTIONS.map((filter) => (
-        <TouchableOpacity
-          key={filter}
-          style={[
-            styles.filterChip,
-            activeFilter === filter && styles.filterChipActive,
-          ]}
-          onPress={() => setActiveFilter(filter)}
-        >
-          <Text
-            style={[
-              styles.filterChipText,
-              activeFilter === filter && styles.filterChipTextActive,
-            ]}
-          >
-            {getFilterLabel(filter)}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+  // User star score
+  const userStars = (user as any)?.total_stars ?? 0;
 
   const renderAssessmentFilters = () => (
     <View style={styles.assessmentFilterRow}>
@@ -512,7 +508,7 @@ export default function MyAssignmentsScreen() {
         onPress={() => handlePress(item)}
         activeOpacity={0.7}
       >
-        {/* ─── Card Header: Equipment Name + Assessment Badge ─── */}
+        {/* Card Header: Equipment Name + Assessment Badge */}
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
             <Text style={styles.equipmentName} numberOfLines={1}>
@@ -521,7 +517,6 @@ export default function MyAssignmentsScreen() {
             <AssessmentBadge
               assessment={assessment}
               predicted={predicted}
-              urgencyScore={urgencyScore}
               isAr={isAr}
             />
           </View>
@@ -535,7 +530,6 @@ export default function MyAssignmentsScreen() {
           </View>
         </View>
 
-        {/* Equipment details */}
         {equipmentType ? (
           <Text style={styles.equipmentType}>
             {t('equipment.type')}: {equipmentType}
@@ -548,7 +542,7 @@ export default function MyAssignmentsScreen() {
           </Text>
         ) : null}
 
-        {/* ─── Answer Bar + Urgency Score ─── */}
+        {/* Answer Bar + Urgency Score */}
         {answersSummary && answersSummary.length > 0 && (
           <View style={styles.answerSection}>
             <AnswerBar
@@ -621,40 +615,72 @@ export default function MyAssignmentsScreen() {
     );
   }
 
-  const renderStatsSection = () => {
-    if (statsLoading) {
-      return (
-        <View style={styles.statsLoading}>
-          <ActivityIndicator size="small" color="#1976D2" />
-        </View>
-      );
-    }
-    if (!stats) return null;
-    return (
+  // Stat cards data — tapping filters the list
+  const statCards: { key: FilterStatus; label: string; value: number; icon: string; color: string }[] = [
+    { key: 'all', label: isAr ? 'الكل' : 'All', value: filterCounts.all, icon: '📋', color: '#1976D2' },
+    { key: 'assigned', label: isAr ? 'معين' : 'Assigned', value: filterCounts.assigned, icon: '⏳', color: '#FF9800' },
+    { key: 'in_progress', label: isAr ? 'جاري' : 'In Progress', value: filterCounts.inProgress, icon: '🔧', color: '#9C27B0' },
+    { key: 'completed', label: isAr ? 'مكتمل' : 'Completed', value: filterCounts.completed, icon: '✅', color: '#4CAF50' },
+  ];
+
+  // Add week/month stats if available
+  const extraStats = stats ? [
+    { key: 'week' as FilterStatus, label: isAr ? 'هذا الأسبوع' : 'This Week', value: stats.week?.completed ?? 0, icon: '📊', color: '#00897B' },
+    { key: 'month' as FilterStatus, label: isAr ? 'هذا الشهر' : 'This Month', value: stats.month?.completed ?? 0, icon: '🏆', color: '#3F51B5' },
+  ] : [];
+
+  return (
+    <View style={styles.container}>
+      {/* User greeting + star score */}
+      <View style={styles.greetingRow}>
+        <Text style={styles.greetingText}>
+          {user?.full_name || (isAr ? 'مفتش' : 'Inspector')}
+        </Text>
+        {userStars > 0 && (
+          <View style={styles.starBadge}>
+            <Text style={styles.starText}>⭐ {userStars}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Stat cards as clickable filters — horizontal scroll */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.statsContainer}
         contentContainerStyle={styles.statsContent}
       >
-        <StatCard label={t('inspections.today_total', 'Today Total')} value={stats.today.total} color="#2196F3" icon="📋" size="small" />
-        <StatCard label={t('status.assigned', 'Assigned')} value={stats.today.assigned} color="#FF9800" icon="⏳" size="small" />
-        <StatCard label={t('status.in_progress', 'In Progress')} value={stats.today.in_progress} color="#9C27B0" icon="🔧" size="small" />
-        <StatCard label={t('inspections.today_completed', 'Completed')} value={stats.today.completed} color="#4CAF50" icon="✅" size="small" />
-        <StatCard label={t('inspections.week_completed', 'This Week')} value={stats.week.completed} subtitle={`/ ${stats.week.total}`} color="#00897B" icon="📊" size="small" />
-        <StatCard label={t('inspections.month_completed', 'This Month')} value={stats.month.completed} color="#3F51B5" icon="🏆" size="small" />
-        {stats.backlog_count > 0 && (
-          <StatCard label={t('inspections.backlog', 'Backlog')} value={stats.backlog_count} color="#E53935" icon="⚠️" size="small" />
+        {statCards.map((card) => (
+          <StatFilterCard
+            key={card.key}
+            label={card.label}
+            value={card.value}
+            icon={card.icon}
+            color={card.color}
+            isActive={activeFilter === card.key}
+            onPress={() => handleStatPress(card.key)}
+          />
+        ))}
+        {extraStats.map((card) => (
+          <View key={card.key} style={styles.statCard}>
+            <Text style={styles.statIcon}>{card.icon}</Text>
+            <Text style={[styles.statValue, { color: card.color }]}>{card.value}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>{card.label}</Text>
+          </View>
+        ))}
+        {stats && stats.backlog_count > 0 && (
+          <View style={[styles.statCard, { borderColor: '#E53935', borderWidth: 1.5 }]}>
+            <Text style={styles.statIcon}>⚠️</Text>
+            <Text style={[styles.statValue, { color: '#E53935' }]}>{stats.backlog_count}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>{isAr ? 'متأخر' : 'Backlog'}</Text>
+          </View>
         )}
       </ScrollView>
-    );
-  };
 
-  return (
-    <View style={styles.container}>
-      {renderStatsSection()}
-      {renderFilterChips()}
+      {/* Assessment filter */}
       {renderAssessmentFilters()}
+
+      {/* Assignment list */}
       <FlatList
         data={assignments}
         keyExtractor={(item) => String(item.id)}
@@ -684,17 +710,37 @@ export default function MyAssignmentsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  statsLoading: { padding: 16, alignItems: 'center', backgroundColor: '#fff' },
-  statsContainer: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
-  statsContent: { paddingHorizontal: 8, paddingVertical: 12, gap: 8 },
-  filterRow: {
-    flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0',
+
+  // Greeting row
+  greetingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#fff',
   },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#e8e8e8', marginRight: 8 },
-  filterChipActive: { backgroundColor: '#1976D2' },
-  filterChipText: { fontSize: 13, color: '#555', fontWeight: '500' },
-  filterChipTextActive: { color: '#fff' },
+  greetingText: { fontSize: 17, fontWeight: '700', color: '#212121' },
+  starBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#FFF8E1', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
+  },
+  starText: { fontSize: 13, fontWeight: '700', color: '#F57F17' },
+
+  // Stat filter cards (horizontal scroll)
+  statsContainer: {
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0',
+    maxHeight: 100,
+  },
+  statsContent: { paddingHorizontal: 8, paddingVertical: 10, gap: 8 },
+  statCard: {
+    backgroundColor: '#fff', borderRadius: 10, minWidth: 80, padding: 10,
+    alignItems: 'center', borderWidth: 1, borderColor: '#E8E8E8',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08, shadowRadius: 3, elevation: 2,
+  },
+  statIcon: { fontSize: 16, marginBottom: 2 },
+  statValue: { fontSize: 20, fontWeight: 'bold' },
+  statLabel: { fontSize: 11, color: '#757575', marginTop: 2, textAlign: 'center' },
+  statActiveDot: {
+    width: 6, height: 6, borderRadius: 3, marginTop: 4,
+  },
 
   // Assessment filter row
   assessmentFilterRow: {
@@ -726,7 +772,7 @@ const styles = StyleSheet.create({
   equipmentType: { fontSize: 13, color: '#757575', marginBottom: 2 },
   detailText: { fontSize: 13, color: '#757575', marginBottom: 2 },
 
-  // ─── Assessment Badge (inline) ───
+  // Assessment Badge (inline)
   assessmentBadge: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, gap: 4,
@@ -736,7 +782,7 @@ const styles = StyleSheet.create({
     fontSize: 9, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic',
   },
 
-  // ─── Answer Bar ───
+  // Answer Bar
   answerSection: {
     marginTop: 10, marginBottom: 4, gap: 6,
   },
@@ -767,7 +813,7 @@ const styles = StyleSheet.create({
   retryButton: { paddingHorizontal: 24, paddingVertical: 10, backgroundColor: '#1976D2', borderRadius: 8 },
   retryButtonText: { color: '#fff', fontWeight: '600' },
 
-  // ─── Modal ───
+  // Modal
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end',
   },
