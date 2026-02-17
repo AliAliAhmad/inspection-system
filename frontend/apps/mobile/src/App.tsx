@@ -17,8 +17,33 @@ import BigButtonOverlay from './components/BigButtonOverlay';
 import RootNavigator from './navigation/RootNavigator';
 import LoginScreen from './screens/auth/LoginScreen';
 import ErrorBoundary from './components/common/ErrorBoundary';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text, TextInput } from 'react-native';
 import { useTheme } from './hooks/useTheme';
+
+// ─── Global font size boost (small text +3, large text +1) ──
+const originalTextRender = (Text as any).render;
+(Text as any).render = function (...args: any[]) {
+  const origin = originalTextRender.call(this, ...args);
+  const style = origin.props?.style;
+  const flatStyle = StyleSheet.flatten(style) || {};
+  const currentSize = flatStyle.fontSize || 14;
+  const boost = currentSize <= 13 ? 3 : currentSize <= 16 ? 2 : 1;
+  return React.cloneElement(origin, {
+    style: [style, { fontSize: currentSize + boost }],
+  });
+};
+
+const originalInputRender = (TextInput as any).render;
+(TextInput as any).render = function (...args: any[]) {
+  const origin = originalInputRender.call(this, ...args);
+  const style = origin.props?.style;
+  const flatStyle = StyleSheet.flatten(style) || {};
+  const currentSize = flatStyle.fontSize || 14;
+  const boost = currentSize <= 13 ? 3 : currentSize <= 16 ? 2 : 1;
+  return React.cloneElement(origin, {
+    style: [style, { fontSize: currentSize + boost }],
+  });
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {

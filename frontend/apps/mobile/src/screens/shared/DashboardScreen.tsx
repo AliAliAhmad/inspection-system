@@ -98,7 +98,7 @@ function AssignmentSummary({ stats, isAr, colors, onPress }: { stats: MyAssignme
 
 function QuickActions({ isAr, colors, navigation }: { isAr: boolean; colors: any; navigation: any }) {
   const actions = [
-    { icon: '📋', label: isAr ? 'بدء فحص' : 'Start Inspection', screen: 'MyAssignments', color: '#1976D2' },
+    { icon: '📋', label: isAr ? 'بدء فحص' : 'Start Inspection', screen: 'Assignments', color: '#1976D2' },
     { icon: '⚠️', label: isAr ? 'إبلاغ عيب' : 'Report Defect', screen: 'Defects', color: '#E53935' },
     { icon: '📅', label: isAr ? 'خطة العمل' : 'Work Plan', screen: 'MyWorkPlan', color: '#7B1FA2' },
     { icon: '💬', label: isAr ? 'محادثة' : 'Team Chat', screen: 'ChannelList', color: '#00897B' },
@@ -342,7 +342,7 @@ export default function DashboardScreen() {
               stats={myStats}
               isAr={isAr}
               colors={colors}
-              onPress={() => navigation.navigate('MyAssignments')}
+              onPress={() => navigation.navigate('Assignments')}
             />
           )}
 
