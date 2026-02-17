@@ -1,4 +1,5 @@
-export type Verdict = 'operational' | 'urgent';
+export type Verdict = 'operational' | 'monitor' | 'stop';
+export type EscalationLevel = 'none' | 'engineer' | 'admin';
 
 export interface FinalAssessment {
   id: number;
@@ -9,10 +10,29 @@ export interface FinalAssessment {
   mech_verdict: Verdict | null;
   elec_verdict: Verdict | null;
   final_status: Verdict | null;
+  // System auto-assessment
+  system_verdict: Verdict | null;
+  system_urgency_score: number | null;
+  system_has_critical: boolean;
+  system_has_fail_urgency: boolean;
+  // Reasons
   urgent_reason: string | null;
-  resolved_by: 'agreement' | 'safety_rule' | 'admin' | null;
+  monitor_reason: string | null;
+  stop_reason: string | null;
+  // Resolution
+  resolved_by: 'agreement' | 'escalation' | 'engineer' | 'admin' | null;
   admin_decision_by: number | null;
   admin_decision_notes: string | null;
+  // Engineer
+  engineer_id: number | null;
+  engineer_verdict: Verdict | null;
+  engineer_notes: string | null;
+  engineer_reviewed_at: string | null;
+  // Escalation
+  escalation_level: EscalationLevel;
+  escalation_reason: string | null;
+  // Meta
+  assessment_version: number;
   finalized_at: string | null;
   created_at: string;
 }
@@ -31,9 +51,12 @@ export interface AnswerSummaryEntry {
 }
 
 export interface AssessmentSummary {
-  final_status: 'operational' | 'urgent' | null;
-  mech_verdict: 'operational' | 'urgent' | null;
-  elec_verdict: 'operational' | 'urgent' | null;
+  final_status: Verdict | null;
+  mech_verdict: Verdict | null;
+  elec_verdict: Verdict | null;
+  system_verdict?: Verdict | null;
+  engineer_verdict?: Verdict | null;
+  escalation_level?: EscalationLevel;
 }
 
 export interface InspectionAssignment {
@@ -57,7 +80,7 @@ export interface InspectionAssignment {
   answers_summary?: AnswerSummaryEntry[];
   assessment?: AssessmentSummary | null;
   urgency_score?: number;
-  predicted_assessment?: 'operational' | 'urgent' | 'monitor' | null;
+  predicted_assessment?: Verdict | null;
 }
 
 export interface InspectionList {

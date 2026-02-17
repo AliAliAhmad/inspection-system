@@ -1,6 +1,7 @@
 """
-Final Equipment Assessment endpoints.
-Both inspectors submit verdict. Safety-first logic.
+Multi-layer equipment assessment endpoints.
+4-layer flow: System Auto → Inspector → Engineer → Admin
+3 verdicts: operational / monitor / stop
 """
 
 from flask import Blueprint, request, jsonify
@@ -15,11 +16,11 @@ bp = Blueprint('assessments', __name__)
 @bp.route('', methods=['GET'])
 @jwt_required()
 def list_assessments():
-    """List assessments. Inspectors see their own, admins see all."""
+    """List assessments. Inspectors see their own, admins/engineers see all."""
     user = get_current_user()
     status = request.args.get('status')
 
-    if user.role == 'admin':
+    if user.role in ('admin', 'engineer'):
         query = FinalAssessment.query
     else:
         query = FinalAssessment.query.filter(
@@ -44,10 +45,8 @@ def list_assessments():
 @jwt_required()
 def get_assessment(id_value):
     """Get assessment details. Looks up by assessment ID first, then by assignment ID."""
-    # First try as assessment_id (direct lookup)
     assessment = FinalAssessment.query.get(id_value)
     if not assessment:
-        # Try as assignment_id (the frontend passes assignmentId)
         assessment = FinalAssessment.query.filter_by(
             inspection_assignment_id=id_value
         ).first()
@@ -63,7 +62,7 @@ def get_assessment(id_value):
 @bp.route('/create/<int:assignment_id>', methods=['POST'])
 @jwt_required()
 def create_assessment(assignment_id):
-    """Create final assessment when both inspectors complete checklists."""
+    """Create final assessment when inspectors complete checklists. Computes system verdict."""
     assessment = AssessmentService.create_assessment(assignment_id)
     return jsonify({
         'status': 'success',
@@ -75,7 +74,7 @@ def create_assessment(assignment_id):
 @bp.route('/<int:assessment_id>/verdict', methods=['POST'])
 @jwt_required()
 def submit_verdict(assessment_id):
-    """Submit inspector verdict (operational or urgent)."""
+    """Submit inspector verdict (operational, monitor, or stop)."""
     user = get_current_user()
     data = request.get_json()
 
@@ -83,15 +82,22 @@ def submit_verdict(assessment_id):
         assessment_id=assessment_id,
         inspector_id=user.id,
         verdict=data['verdict'],
-        urgent_reason=data.get('urgent_reason')
+        monitor_reason=data.get('monitor_reason'),
+        stop_reason=data.get('stop_reason'),
+        urgent_reason=data.get('urgent_reason')  # Legacy support
     )
 
-    # Auto-translate urgent reason
+    # Auto-translate reason fields
+    from app.utils.bilingual import auto_translate_and_save
+    translate_fields = {}
+    if data.get('monitor_reason'):
+        translate_fields['monitor_reason'] = data['monitor_reason']
+    if data.get('stop_reason'):
+        translate_fields['stop_reason'] = data['stop_reason']
     if data.get('urgent_reason'):
-        from app.utils.bilingual import auto_translate_and_save
-        auto_translate_and_save('final_assessment', assessment.id, {
-            'urgent_reason': data['urgent_reason']
-        })
+        translate_fields['urgent_reason'] = data['urgent_reason']
+    if translate_fields:
+        auto_translate_and_save('final_assessment', assessment.id, translate_fields)
 
     return jsonify({
         'status': 'success',
@@ -100,11 +106,39 @@ def submit_verdict(assessment_id):
     }), 200
 
 
+@bp.route('/<int:assessment_id>/engineer-verdict', methods=['POST'])
+@jwt_required()
+def submit_engineer_verdict(assessment_id):
+    """Engineer submits review verdict after escalation."""
+    user = get_current_user()
+    data = request.get_json()
+
+    assessment = AssessmentService.submit_engineer_verdict(
+        assessment_id=assessment_id,
+        engineer_id=user.id,
+        verdict=data['verdict'],
+        notes=data.get('notes')
+    )
+
+    # Auto-translate engineer notes
+    if data.get('notes'):
+        from app.utils.bilingual import auto_translate_and_save
+        auto_translate_and_save('final_assessment', assessment.id, {
+            'engineer_notes': data['notes']
+        })
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Engineer verdict submitted',
+        'data': assessment.to_dict()
+    }), 200
+
+
 @bp.route('/<int:assessment_id>/admin-resolve', methods=['POST'])
 @jwt_required()
 @admin_required()
 def admin_resolve(assessment_id):
-    """Admin resolves disagreement or overrides."""
+    """Admin resolves escalation with final decision."""
     user = get_current_user()
     data = request.get_json()
 
@@ -139,4 +173,39 @@ def pending_assessments():
     return jsonify({
         'status': 'success',
         'data': [a.to_dict() for a in assessments]
+    }), 200
+
+
+@bp.route('/engineer-pending', methods=['GET'])
+@jwt_required()
+def engineer_pending():
+    """Get assessments awaiting engineer review."""
+    assessments = AssessmentService.get_pending_engineer_reviews()
+    return jsonify({
+        'status': 'success',
+        'data': [a.to_dict() for a in assessments]
+    }), 200
+
+
+@bp.route('/admin-pending', methods=['GET'])
+@jwt_required()
+@admin_required()
+def admin_pending():
+    """Get assessments awaiting admin final decision."""
+    assessments = AssessmentService.get_pending_admin_reviews()
+    return jsonify({
+        'status': 'success',
+        'data': [a.to_dict() for a in assessments]
+    }), 200
+
+
+@bp.route('/<int:assessment_id>/shared-answers', methods=['GET'])
+@jwt_required()
+def shared_answers(assessment_id):
+    """Get first inspector's answers for the second inspector."""
+    user = get_current_user()
+    answers = AssessmentService.get_shared_answers(assessment_id, user.id)
+    return jsonify({
+        'status': 'success',
+        'data': answers
     }), 200

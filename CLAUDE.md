@@ -163,6 +163,16 @@
 | 2026-02-17 | Added urgency selector UI to InspectionWizard: 4 colored buttons (OK/Monitor/Attention/Critical) per question | ✅ Done |
 | 2026-02-17 | Upgraded MyAssignments: clickable answer cells → detail bottom sheet modal, assessment badge near equipment name, urgency border indicators, risk score | ✅ Done |
 | 2026-02-17 | Added predicted assessment scoring: urgency weights [0,1,3,5], thresholds at 5 (monitor) and 10 (urgent) | ✅ Done |
+| 2026-02-17 | Increased all fontSize values in 5 mobile screens (Dashboard, MyAssignments, ChannelList, ChatRoom, Login) for better readability | ✅ Done |
+| 2026-02-17 | Multi-layer assessment: migration (12 new columns), model (system auto-verdict, evaluate_multi_layer, evaluate_engineer_review), service (submit_engineer_verdict, notifications, escalation) | ✅ Done |
+| 2026-02-17 | Assessment API: 4 new endpoints (engineer-verdict, engineer-pending, admin-pending, shared-answers), updated verdict for 3 options | ✅ Done |
+| 2026-02-17 | Frontend types: Verdict = operational/monitor/stop, EscalationLevel type, 12 new FinalAssessment fields | ✅ Done |
+| 2026-02-17 | Mobile AssessmentScreen: 3 verdict cards with emojis, system recommendation pre-selected, verdict trail, escalation banners, reason inputs | ✅ Done |
+| 2026-02-17 | Web AssessmentPage: 3 verdict radio buttons, system recommendation alert, Steps verdict trail, escalation alerts | ✅ Done |
+| 2026-02-17 | AdminApprovalsScreen: 3 verdict options (operational/monitor/stop), shows system + engineer verdicts, fixed payload fields | ✅ Done |
+| 2026-02-17 | i18n: added 25+ assessment keys for monitor/stop/escalation/verdict in en.json + ar.json | ✅ Done |
+| 2026-02-17 | Fixed logout bug: async logout not awaited in ProfileScreen Alert.alert callback | ✅ Done |
+| 2026-02-17 | Fixed App.tsx loading screen: removed debug red background | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -214,6 +224,10 @@
 | Urgency indicator per question | ✅ Done | 4 levels (OK/Monitor/Attention/Critical), auto-predict assessment from scores |
 | Clickable answer cells + detail modal | ✅ Done | Tap any cell in answer bar → bottom sheet with question, answer, urgency, comment, photo |
 | Assessment badge near equipment | ✅ Done | Colored badge (Pass/Urgent/Monitor) next to equipment name on MyAssignments cards |
+| Multi-layer assessment system | ✅ Done | 4-layer flow (System→Inspector→Engineer→Admin), 3 verdicts (operational/monitor/stop), auto-escalation, notifications |
+| System auto-assessment | ✅ Done | Calculates verdict from urgency scores (weights 0,1,3,5), pre-selects on assessment screen |
+| Engineer review escalation | ✅ Done | Auto-escalates on disagreement, engineer can finalize or escalate to admin |
+| Assessment verdict trail | ✅ Done | Visual trail showing System→Mech→Elec→Engineer→Admin verdicts on both mobile + web |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

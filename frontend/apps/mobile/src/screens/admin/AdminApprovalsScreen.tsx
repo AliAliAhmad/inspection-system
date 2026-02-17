@@ -45,7 +45,7 @@ export default function AdminApprovalsScreen() {
   // Resolve modal state
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
   const [resolvingAssessment, setResolvingAssessment] = useState<FinalAssessment | null>(null);
-  const [resolveStatus, setResolveStatus] = useState<'operational' | 'urgent'>('operational');
+  const [resolveStatus, setResolveStatus] = useState<'operational' | 'monitor' | 'stop'>('operational');
   const [resolveNotes, setResolveNotes] = useState('');
 
   // Award bonus modal
@@ -181,7 +181,7 @@ export default function AdminApprovalsScreen() {
   });
 
   const resolveAssessment = useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: { final_status: 'operational' | 'urgent'; admin_decision_notes?: string } }) =>
+    mutationFn: ({ id, payload }: { id: number; payload: { decision: 'operational' | 'monitor' | 'stop'; notes?: string } }) =>
       assessmentsApi.adminResolve(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-assessment-conflicts'] });
@@ -291,8 +291,8 @@ export default function AdminApprovalsScreen() {
     resolveAssessment.mutate({
       id: resolvingAssessment.id,
       payload: {
-        final_status: resolveStatus,
-        admin_decision_notes: resolveNotes.trim() || undefined,
+        decision: resolveStatus,
+        notes: resolveNotes.trim() || undefined,
       },
     });
   };
@@ -421,7 +421,22 @@ export default function AdminApprovalsScreen() {
           <Text style={styles.verdictValue}>{item.elec_verdict ?? '-'}</Text>
         </View>
       </View>
-      {item.urgent_reason ? <Text style={styles.reasonText}>{item.urgent_reason}</Text> : null}
+      {item.system_verdict && (
+        <View style={styles.verdictRow}>
+          <View style={styles.verdictItem}>
+            <Text style={styles.verdictLabel}>System</Text>
+            <Text style={styles.verdictValue}>{item.system_verdict ?? '-'}</Text>
+          </View>
+          {item.engineer_verdict && (
+            <View style={styles.verdictItem}>
+              <Text style={styles.verdictLabel}>Engineer</Text>
+              <Text style={styles.verdictValue}>{item.engineer_verdict ?? '-'}</Text>
+            </View>
+          )}
+        </View>
+      )}
+      {item.escalation_reason ? <Text style={styles.reasonText}>{item.escalation_reason}</Text> : null}
+      {(item.stop_reason || item.urgent_reason) ? <Text style={[styles.reasonText, { color: '#C62828' }]}>{item.stop_reason || item.urgent_reason}</Text> : null}
       <TouchableOpacity style={styles.resolveBtn} onPress={() => handleResolveConflict(item)}>
         <Text style={styles.resolveBtnText}>{t('approvals.resolve', 'Resolve')}</Text>
       </TouchableOpacity>
@@ -643,6 +658,11 @@ export default function AdminApprovalsScreen() {
                 <Text style={styles.conflictInfoText}>
                   {t('approvals.mech_verdict', 'Mech')}: {resolvingAssessment.mech_verdict ?? '-'} | {t('approvals.elec_verdict', 'Elec')}: {resolvingAssessment.elec_verdict ?? '-'}
                 </Text>
+                {resolvingAssessment.system_verdict && (
+                  <Text style={styles.conflictInfoText}>
+                    System: {resolvingAssessment.system_verdict} | Engineer: {resolvingAssessment.engineer_verdict ?? '-'}
+                  </Text>
+                )}
               </View>
             )}
 
@@ -653,15 +673,23 @@ export default function AdminApprovalsScreen() {
                 onPress={() => setResolveStatus('operational')}
               >
                 <Text style={[styles.statusChipText, resolveStatus === 'operational' && styles.statusChipTextActive]}>
-                  {t('approvals.operational', 'Operational')}
+                  ✅ {t('status.operational', 'Operational')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.statusChip, resolveStatus === 'urgent' && styles.statusChipUrgent]}
-                onPress={() => setResolveStatus('urgent')}
+                style={[styles.statusChip, resolveStatus === 'monitor' && { backgroundColor: '#FF9800', borderColor: '#FF9800' }]}
+                onPress={() => setResolveStatus('monitor')}
               >
-                <Text style={[styles.statusChipText, resolveStatus === 'urgent' && styles.statusChipTextActive]}>
-                  {t('approvals.urgent', 'Urgent')}
+                <Text style={[styles.statusChipText, resolveStatus === 'monitor' && styles.statusChipTextActive]}>
+                  ⚠️ {t('status.monitor', 'Monitor')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.statusChip, resolveStatus === 'stop' && styles.statusChipUrgent]}
+                onPress={() => setResolveStatus('stop')}
+              >
+                <Text style={[styles.statusChipText, resolveStatus === 'stop' && styles.statusChipTextActive]}>
+                  🛑 {t('status.stop', 'Stop')}
                 </Text>
               </TouchableOpacity>
             </View>

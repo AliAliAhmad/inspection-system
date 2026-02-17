@@ -14,12 +14,19 @@ export interface AssessmentListParams extends PaginationParams {
 
 export interface VerdictPayload {
   verdict: Verdict;
-  urgent_reason?: string;
+  monitor_reason?: string;
+  stop_reason?: string;
+  urgent_reason?: string; // Legacy
+}
+
+export interface EngineerVerdictPayload {
+  verdict: Verdict;
+  notes?: string;
 }
 
 export interface AdminResolvePayload {
-  final_status: Verdict;
-  admin_decision_notes?: string;
+  decision: Verdict;
+  notes?: string;
 }
 
 export const assessmentsApi = {
@@ -44,6 +51,13 @@ export const assessmentsApi = {
     );
   },
 
+  submitEngineerVerdict(id: number, payload: EngineerVerdictPayload) {
+    return getApiClient().post<ApiResponse<FinalAssessment>>(
+      `/api/assessments/${id}/engineer-verdict`,
+      payload,
+    );
+  },
+
   adminResolve(id: number, payload: AdminResolvePayload) {
     return getApiClient().post<ApiResponse<FinalAssessment>>(
       `/api/assessments/${id}/admin-resolve`,
@@ -53,5 +67,17 @@ export const assessmentsApi = {
 
   getPending() {
     return getApiClient().get<ApiResponse<FinalAssessment[]>>('/api/assessments/pending');
+  },
+
+  getEngineerPending() {
+    return getApiClient().get<ApiResponse<FinalAssessment[]>>('/api/assessments/engineer-pending');
+  },
+
+  getAdminPending() {
+    return getApiClient().get<ApiResponse<FinalAssessment[]>>('/api/assessments/admin-pending');
+  },
+
+  getSharedAnswers(assessmentId: number) {
+    return getApiClient().get<ApiResponse<any[]>>(`/api/assessments/${assessmentId}/shared-answers`);
   },
 };

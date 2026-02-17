@@ -58,7 +58,7 @@ export default function ProfileScreen() {
       'Are you sure you want to logout?',
       [
         { text: t('common.cancel'), style: 'cancel' },
-        { text: t('auth.logout'), style: 'destructive', onPress: logout },
+        { text: t('auth.logout'), style: 'destructive', onPress: async () => { await logout(); } },
       ],
     );
   };

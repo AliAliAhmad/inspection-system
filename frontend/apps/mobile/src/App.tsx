@@ -20,30 +20,11 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 import { ActivityIndicator, View, StyleSheet, Text, TextInput } from 'react-native';
 import { useTheme } from './hooks/useTheme';
 
-// ─── Global font size boost (small text +3, large text +1) ──
-const originalTextRender = (Text as any).render;
-(Text as any).render = function (...args: any[]) {
-  const origin = originalTextRender.call(this, ...args);
-  const style = origin.props?.style;
-  const flatStyle = StyleSheet.flatten(style) || {};
-  const currentSize = flatStyle.fontSize || 14;
-  const boost = currentSize <= 13 ? 3 : currentSize <= 16 ? 2 : 1;
-  return React.cloneElement(origin, {
-    style: [style, { fontSize: currentSize + boost }],
-  });
-};
-
-const originalInputRender = (TextInput as any).render;
-(TextInput as any).render = function (...args: any[]) {
-  const origin = originalInputRender.call(this, ...args);
-  const style = origin.props?.style;
-  const flatStyle = StyleSheet.flatten(style) || {};
-  const currentSize = flatStyle.fontSize || 14;
-  const boost = currentSize <= 13 ? 3 : currentSize <= 16 ? 2 : 1;
-  return React.cloneElement(origin, {
-    style: [style, { fontSize: currentSize + boost }],
-  });
-};
+// ─── Global font defaults ────────────────────────────────────
+if (!(Text as any).defaultProps) (Text as any).defaultProps = {};
+(Text as any).defaultProps.allowFontScaling = true;
+if (!(TextInput as any).defaultProps) (TextInput as any).defaultProps = {};
+(TextInput as any).defaultProps.allowFontScaling = true;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,7 +47,7 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <View style={[styles.center, { backgroundColor: "red" }]}>
+      <View style={[styles.center, { backgroundColor: colors.background || '#fff' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
