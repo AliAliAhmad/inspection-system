@@ -5,7 +5,7 @@ from flask_jwt_extended import jwt_required
 from app import db
 from app.models.shift_handover import ShiftHandover
 from app.models.user import User
-from app.api.utils import get_current_user
+from app.utils.decorators import get_current_user
 
 bp = Blueprint('shift_handover', __name__, url_prefix='/api/shift-handover')
 
