@@ -78,6 +78,8 @@ export * from './running-hours.types';
 export * from './previous-inspection.types';
 // Answer Templates types
 export * from './templates.types';
+// Shift Handover types
+export * from './shift-handover.types';
 // Color constants (values, not types)
 export {
   RISK_COLORS,

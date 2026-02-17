@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import type { TextInputProps } from 'react-native';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getApiClient } from '@inspection/shared';
 
 interface VoiceTextInputProps extends TextInputProps {
@@ -70,19 +71,27 @@ export default function VoiceTextInput({ onTranscribed, style, ...inputProps }: 
       // Save URI for local playback
       setAudioUri(uri);
 
-      // Create FormData for React Native file upload
-      const formData = new FormData();
-      formData.append('audio', {
-        uri,
-        name: 'recording.m4a',
-        type: 'audio/m4a',
-      } as any);
+      // Read audio file as base64 (same approach as VoiceNoteRecorder)
+      let base64: string;
+      try {
+        base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+        if (!base64) throw new Error('File read returned empty result');
+      } catch (readError: any) {
+        console.error('Failed to read audio file:', readError);
+        setTranscribing(false);
+        Alert.alert('Error', `Failed to read audio: ${readError?.message || 'Unknown error'}`);
+        return;
+      }
 
-      // Upload directly via API client
+      // Upload as JSON with base64
       const response = await getApiClient().post(
         '/api/voice/transcribe',
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        {
+          audio_base64: base64,
+          file_name: 'recording.m4a',
+          file_type: 'audio/m4a',
+        },
+        { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
       );
 
       const result = (response.data as any)?.data;

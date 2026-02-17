@@ -403,9 +403,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   micButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#25D366',
     justifyContent: 'center',
     alignItems: 'center',
@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   micIcon: {
-    fontSize: 14,
+    fontSize: 22,
   },
   recordingInfo: {
     flexDirection: 'row',
@@ -442,11 +442,11 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   uploadingText: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#1677ff',
   },
   hintText: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#999',
   },
   audioPlaybackContainer: {

@@ -91,6 +91,7 @@ export default function InspectionChecklistScreen() {
   const isArabic = i18n.language === 'ar';
 
   const [localAnswers, setLocalAnswers] = useState<LocalAnswers>({});
+  const [showOnlyUnanswered, setShowOnlyUnanswered] = useState(false);
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   const {
@@ -1126,13 +1127,47 @@ export default function InspectionChecklistScreen() {
         <Text style={styles.progressPercent}>{Math.round(progressPct)}%</Text>
       </View>
 
-      {/* Checklist Items */}
-      <Text style={styles.sectionTitle}>{t('inspection.checklist')}</Text>
-      {checklistItems.length === 0 ? (
-        <Text style={styles.noItemsText}>{t('common.noData')}</Text>
-      ) : (
-        checklistItems.map(renderChecklistItem)
-      )}
+      {/* Checklist Items with filter toggle */}
+      {(() => {
+        const unansweredCount = checklistItems.filter(
+          (item) => !localAnswers[item.id]?.answer_value
+        ).length;
+        const displayItems = showOnlyUnanswered
+          ? checklistItems.filter((item) => !localAnswers[item.id]?.answer_value)
+          : checklistItems;
+
+        return (
+          <>
+            <View style={styles.checklistHeaderRow}>
+              <Text style={styles.sectionTitle}>{t('inspection.checklist')}</Text>
+              <TouchableOpacity
+                style={[styles.filterToggle, showOnlyUnanswered && styles.filterToggleActive]}
+                onPress={() => setShowOnlyUnanswered(!showOnlyUnanswered)}
+              >
+                <Text style={[styles.filterToggleText, showOnlyUnanswered && styles.filterToggleTextActive]}>
+                  {showOnlyUnanswered
+                    ? (isArabic ? 'عرض الكل' : 'Show All')
+                    : (isArabic ? 'غير مجاب' : 'Unanswered')}
+                </Text>
+                {unansweredCount > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{unansweredCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+            {displayItems.length === 0 ? (
+              <Text style={styles.noItemsText}>
+                {showOnlyUnanswered
+                  ? (isArabic ? 'تم الإجابة على جميع الأسئلة!' : 'All questions answered!')
+                  : t('common.noData')}
+              </Text>
+            ) : (
+              displayItems.map(renderChecklistItem)
+            )}
+          </>
+        );
+      })()}
 
       {/* Submit Button */}
       {inspData.status === 'draft' ? (
@@ -1240,11 +1275,50 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'right',
   },
+  checklistHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#212121',
-    marginBottom: 12,
+  },
+  filterToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
+  filterToggleActive: {
+    backgroundColor: '#FFF3E0',
+  },
+  filterToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#757575',
+  },
+  filterToggleTextActive: {
+    color: '#E65100',
+  },
+  filterBadge: {
+    backgroundColor: '#FF9800',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  filterBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   checklistCard: {
     backgroundColor: '#fff',

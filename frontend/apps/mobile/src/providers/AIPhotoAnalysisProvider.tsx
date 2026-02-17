@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useState, useEffect, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { toolkitApi } from '@inspection/shared';
+import { toolkitApi, apiClient } from '@inspection/shared';
 import { useAIPhotoAnalysis, AIPhotoAnalysisResult, InspectorDecision } from '../hooks/useAIPhotoAnalysis';
 
 interface AIPhotoAnalysisContextType {
@@ -48,6 +48,7 @@ export function AIPhotoAnalysisProvider({
   const [isFeatureEnabled, setIsFeatureEnabled] = useState(forceEnabled ?? false);
 
   // Fetch user toolkit preferences to check if AI suggestions are enabled
+  // Only run when API client is initialized (prevents race condition with AuthProvider)
   const {
     data: preferences,
     isLoading: isLoadingSettings,
@@ -62,6 +63,7 @@ export function AIPhotoAnalysisProvider({
         return null;
       }
     },
+    enabled: !!apiClient, // Wait until API client is initialized by AuthProvider
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
   });

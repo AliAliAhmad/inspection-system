@@ -284,3 +284,13 @@ export type {
   ReviewMark,
   ShowUpSummary,
 } from './job-showup.api';
+
+// Shift Handover
+export { shiftHandoverApi } from './shift-handover.api';
+export type {
+  ShiftHandover,
+  PendingItem,
+  SafetyAlert,
+  EquipmentIssue,
+  CreateHandoverPayload,
+} from '../types/shift-handover.types';

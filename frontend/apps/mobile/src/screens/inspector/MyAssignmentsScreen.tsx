@@ -65,6 +65,7 @@ export default function MyAssignmentsScreen() {
     refetchInterval: 60000,
   });
 
+  // Fetch ALL assignments and filter client-side for accurate status grouping
   const {
     data,
     isLoading,
@@ -72,15 +73,25 @@ export default function MyAssignmentsScreen() {
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ['myAssignments', activeFilter],
-    queryFn: () =>
-      inspectionAssignmentsApi.getMyAssignments(
-        activeFilter === 'all' ? undefined : { status: activeFilter },
-      ),
+    queryKey: ['myAssignments'],
+    queryFn: () => inspectionAssignmentsApi.getMyAssignments(),
     select: (res) => (res.data as any).data ?? res.data,
   });
 
-  const assignments = (Array.isArray(data) ? data : []) as InspectionAssignment[];
+  const allAssignments = (Array.isArray(data) ? data : []) as InspectionAssignment[];
+
+  // Group statuses for filtering
+  const IN_PROGRESS_STATUSES = ['in_progress', 'mech_complete', 'elec_complete', 'both_complete', 'assessment_pending'];
+  const COMPLETED_STATUSES = ['completed'];
+  const ASSIGNED_STATUSES = ['assigned', 'pending'];
+
+  const assignments = allAssignments.filter((a) => {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'assigned') return ASSIGNED_STATUSES.includes(a.status);
+    if (activeFilter === 'in_progress') return IN_PROGRESS_STATUSES.includes(a.status);
+    if (activeFilter === 'completed') return COMPLETED_STATUSES.includes(a.status);
+    return true;
+  });
 
   const handlePress = useCallback(
     (assignment: InspectionAssignment) => {
@@ -393,13 +404,14 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    padding: 16,
+    padding: 14,
     marginBottom: 10,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
+    overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -416,8 +428,10 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 12,
+    alignSelf: 'flex-start',
+    maxWidth: 140,
   },
   statusBadgeText: {
     color: '#fff',
@@ -469,13 +483,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 80,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#999',
   },
   errorText: {

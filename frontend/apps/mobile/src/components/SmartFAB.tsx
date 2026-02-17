@@ -290,28 +290,6 @@ export default function SmartFAB(props: SmartFABProps) {
     };
   });
 
-  // Animated styles for action buttons
-  const createActionStyle = (index: number) => {
-    return useAnimatedStyle(() => {
-      const translateY = interpolate(
-        menuProgress.value,
-        [0, 1],
-        [0, -(ACTION_SPACING * (index + 1))]
-      );
-      const scaleValue = interpolate(
-        menuProgress.value,
-        [0, 0.5, 1],
-        [0, 0.5, 1]
-      );
-      const opacity = menuProgress.value;
-
-      return {
-        transform: [{ translateY }, { scale: scaleValue }],
-        opacity,
-      };
-    });
-  };
-
   // Backdrop animated style
   const backdropStyle = useAnimatedStyle(() => {
     return {
@@ -341,32 +319,16 @@ export default function SmartFAB(props: SmartFABProps) {
         {...panResponder.panHandlers}
       >
         {/* Action buttons */}
-        {actions.map((action, index) => {
-          const actionStyle = createActionStyle(index);
-          return (
-            <Animated.View
-              key={action.id}
-              style={[styles.actionContainer, actionStyle]}
-            >
-              <TouchableOpacity
-                style={styles.actionLabelContainer}
-                onPress={() => handleActionPress(action)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.actionLabel}>
-                  {isArabic ? action.labelAr : action.label}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: action.color }]}
-                onPress={() => handleActionPress(action)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.actionIcon}>{action.icon}</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          );
-        })}
+        {actions.map((action, index) => (
+          <FABActionItem
+            key={action.id}
+            action={action}
+            index={index}
+            menuProgress={menuProgress}
+            isArabic={isArabic}
+            onPress={handleActionPress}
+          />
+        ))}
 
         {/* Main FAB */}
         <Pressable
@@ -381,6 +343,59 @@ export default function SmartFAB(props: SmartFABProps) {
         </Pressable>
       </Animated.View>
     </>
+  );
+}
+
+// Extracted component so useAnimatedStyle is called per-component (not in a loop)
+function FABActionItem({
+  action,
+  index,
+  menuProgress,
+  isArabic,
+  onPress,
+}: {
+  action: FABAction;
+  index: number;
+  menuProgress: Animated.SharedValue<number>;
+  isArabic: boolean;
+  onPress: (action: FABAction) => void;
+}) {
+  const animStyle = useAnimatedStyle(() => {
+    const translateY = interpolate(
+      menuProgress.value,
+      [0, 1],
+      [0, -(ACTION_SPACING * (index + 1))]
+    );
+    const scaleValue = interpolate(
+      menuProgress.value,
+      [0, 0.5, 1],
+      [0, 0.5, 1]
+    );
+    return {
+      transform: [{ translateY }, { scale: scaleValue }],
+      opacity: menuProgress.value,
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.actionContainer, animStyle]}>
+      <TouchableOpacity
+        style={styles.actionLabelContainer}
+        onPress={() => onPress(action)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.actionLabel}>
+          {isArabic ? action.labelAr : action.label}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.actionButton, { backgroundColor: action.color }]}
+        onPress={() => onPress(action)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.actionIcon}>{action.icon}</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 

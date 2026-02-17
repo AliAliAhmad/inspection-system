@@ -159,6 +159,9 @@ from app.models.answer_template import AnswerTemplate
 # Job Show Up & Challenges
 from app.models.job_showup import JobShowUpPhoto, JobChallengeVoice, JobReviewMark
 
+# Shift Handover
+from app.models.shift_handover import ShiftHandover
+
 __all__ = [
     'User',
     'Equipment',
@@ -292,4 +295,6 @@ __all__ = [
     'JobShowUpPhoto',
     'JobChallengeVoice',
     'JobReviewMark',
+    # Shift Handover
+    'ShiftHandover',
 ]

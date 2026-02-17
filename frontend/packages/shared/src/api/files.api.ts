@@ -15,9 +15,7 @@ export const filesApi = {
     if (category) {
       formData.append('category', category);
     }
-    return getApiClient().post<ApiResponse<FileRecord>>('/api/files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return getApiClient().post<ApiResponse<FileRecord>>('/api/files/upload', formData);
   },
 
   uploadMultiple(files: File[], relatedType: string, relatedId: number, category?: string) {
@@ -28,16 +26,13 @@ export const filesApi = {
     if (category) {
       formData.append('category', category);
     }
-    return getApiClient().post<ApiResponse<FileRecord[]>>('/api/files/upload-multiple', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return getApiClient().post<ApiResponse<FileRecord[]>>('/api/files/upload-multiple', formData);
   },
 
   // For React Native where FormData is pre-created with file object
+  // NOTE: Do NOT set Content-Type manually - let axios/RN set it with boundary
   uploadFormData(formData: FormData) {
-    return getApiClient().post<ApiResponse<FileRecord>>('/api/files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return getApiClient().post<ApiResponse<FileRecord>>('/api/files/upload', formData);
   },
 
   download(fileId: number) {

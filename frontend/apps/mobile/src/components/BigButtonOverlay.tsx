@@ -119,7 +119,7 @@ function BigButton({ config, onPress, disabled, isAr }: BigButtonProps) {
     Animated.spring(scaleAnim, {
       toValue: 0.9,
       useNativeDriver: true,
-      speed: 50,
+      speed: 20,
       bounciness: 4,
     }).start();
   }, [scaleAnim]);
@@ -128,7 +128,7 @@ function BigButton({ config, onPress, disabled, isAr }: BigButtonProps) {
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
-      speed: 50,
+      speed: 20,
       bounciness: 4,
     }).start();
   }, [scaleAnim]);
@@ -167,6 +167,7 @@ export default function BigButtonOverlay() {
   const { i18n } = useTranslation();
   const queryClient = useQueryClient();
   const isAr = i18n.language === 'ar';
+  const [minimized, setMinimized] = useState(false);
 
   const { isEnabled, isLoading, activeJob, refetchJobs } = useBigButtonMode();
 
@@ -329,10 +330,39 @@ export default function BigButtonOverlay() {
   // Always show help
   visibleButtons.push(BUTTONS.help);
 
+  // Minimized: show a small expand button
+  if (minimized) {
+    return (
+      <TouchableOpacity
+        style={styles.expandButton}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setMinimized(false);
+        }}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.expandIcon}>▲</Text>
+        <Text style={styles.expandLabel}>{isAr ? 'أزرار' : 'Actions'}</Text>
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <>
       {/* Main overlay container */}
       <View style={styles.container}>
+        {/* Minimize button */}
+        <TouchableOpacity
+          style={styles.minimizeButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setMinimized(true);
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+        >
+          <Text style={styles.minimizeIcon}>▼</Text>
+        </TouchableOpacity>
+
         <View style={[styles.buttonRow, isAr && styles.buttonRowRtl]}>
           {visibleButtons.map((btn) => (
             <BigButton
@@ -729,5 +759,42 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '700',
     fontSize: 16,
+  },
+  minimizeButton: {
+    alignSelf: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 24,
+    marginBottom: 4,
+  },
+  minimizeIcon: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+  },
+  expandButton: {
+    position: 'absolute',
+    bottom: 24,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 10,
+  },
+  expandIcon: {
+    fontSize: 14,
+    color: '#fff',
+  },
+  expandLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

@@ -138,6 +138,8 @@ def create_app(config_name='development'):
         answer_templates,
         # Job Show Up & Challenges
         job_showup,
+        # Shift Handover
+        shift_handover,
     )
 
     # Core
@@ -234,6 +236,9 @@ def create_app(config_name='development'):
 
     # Job Show Up & Challenges
     app.register_blueprint(job_showup.bp, url_prefix='/api/job-showup')
+
+    # Shift Handover
+    app.register_blueprint(shift_handover.bp)
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)

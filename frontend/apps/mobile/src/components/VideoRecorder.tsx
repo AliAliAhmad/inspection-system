@@ -18,10 +18,6 @@ interface VideoRecorderProps {
   onVideoDeleted?: () => void;
   existingVideoUrl?: string | null;
   disabled?: boolean;
-  /** Required for AI analysis - the inspection ID */
-  inspectionId?: number;
-  /** Required for AI analysis - the checklist item ID */
-  checklistItemId?: number;
 }
 
 export default function VideoRecorder({
@@ -29,8 +25,6 @@ export default function VideoRecorder({
   onVideoDeleted,
   existingVideoUrl,
   disabled = false,
-  inspectionId,
-  checklistItemId,
 }: VideoRecorderProps) {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
@@ -147,28 +141,16 @@ export default function VideoRecorder({
 
       console.log('Uploading video via base64...');
 
-      // Use inspection endpoint if inspectionId and checklistItemId are provided (triggers AI analysis)
-      // Otherwise fall back to generic file upload (no AI analysis)
-      const useInspectionEndpoint = inspectionId && checklistItemId;
-      const endpoint = useInspectionEndpoint
-        ? `/api/inspections/${inspectionId}/upload-media`
-        : '/api/files/upload';
+      // Always use generic file upload for videos (no AI analysis to save API credits)
+      const endpoint = '/api/files/upload';
+      const payload = {
+        file_base64: base64,
+        file_name: fileName,
+        file_type: 'video/mp4',
+        category: 'inspection_video',
+      };
 
-      const payload = useInspectionEndpoint
-        ? {
-            file_base64: base64,
-            file_name: fileName,
-            file_type: 'video/mp4',
-            checklist_item_id: checklistItemId,
-          }
-        : {
-            file_base64: base64,
-            file_name: fileName,
-            file_type: 'video/mp4',
-            category: 'inspection_video',
-          };
-
-      console.log('Using endpoint:', endpoint, 'with AI analysis:', useInspectionEndpoint);
+      console.log('Uploading video to:', endpoint);
 
       // Upload as JSON with base64
       const response = await getApiClient().post(
@@ -214,12 +196,12 @@ export default function VideoRecorder({
     } finally {
       setIsUploading(false);
     }
-  }, [onVideoRecorded, inspectionId, checklistItemId]);
+  }, [onVideoRecorded]);
 
   const handleDelete = useCallback(() => {
     Alert.alert(
-      'Delete Video',
-      'Are you sure you want to delete this video recording?',
+      t('inspection.deleteVideo', 'Delete Video'),
+      t('inspection.deleteVideoConfirm', 'Are you sure you want to delete this video recording?'),
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -270,7 +252,7 @@ export default function VideoRecorder({
         </TouchableOpacity>
 
         {isUploading ? (
-          <Text style={styles.uploadingText}>Uploading video...</Text>
+          <Text style={styles.uploadingText}>{t('inspection.uploadingVideo', 'Uploading video...')}</Text>
         ) : hasVideo ? (
           <View style={styles.videoPlaybackContainer}>
             <View style={styles.videoPreviewWrapper}>
@@ -301,7 +283,7 @@ export default function VideoRecorder({
             </TouchableOpacity>
           </View>
         ) : (
-          <Text style={styles.hintText}>Tap to record video</Text>
+          <Text style={styles.hintText}>{t('inspection.tapToRecordVideo', 'Tap to record video')}</Text>
         )}
       </View>
     </View>
@@ -323,9 +305,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   videoButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#1677ff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -339,14 +321,14 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   videoIcon: {
-    fontSize: 14,
+    fontSize: 22,
   },
   uploadingText: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#1677ff',
   },
   hintText: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#999',
   },
   videoPlaybackContainer: {

@@ -288,9 +288,87 @@ class InspectionListService:
                 related_id=assignment.id
             )
 
+        # Auto-add inspection assignments to work plan
+        try:
+            InspectionListService._sync_to_work_plan(all_assigned, assigned_by_id)
+        except Exception as e:
+            # Don't fail the assignment if work plan sync fails
+            import logging
+            logging.getLogger(__name__).warning(f'Work plan auto-sync failed: {e}')
+
         # Attach auto-assigned count for API response (not persisted)
         assignment._auto_assigned_count = len(auto_assigned)
         return assignment
+
+    @staticmethod
+    def _sync_to_work_plan(assignments, assigned_by_id):
+        """
+        Auto-create WorkPlanJob entries for assigned inspections.
+        Finds or creates the weekly WorkPlan and daily WorkPlanDay,
+        then creates inspection jobs for each assignment.
+        """
+        from app.models.work_plan import WorkPlan
+        from app.models.work_plan_day import WorkPlanDay
+        from app.models.work_plan_job import WorkPlanJob
+
+        if not assignments:
+            return
+
+        target_date = assignments[0].inspection_list.target_date
+
+        # Find or create weekly work plan
+        week_start, week_end = WorkPlan.get_week_bounds(target_date)
+        work_plan = WorkPlan.query.filter_by(week_start=week_start).first()
+        if not work_plan:
+            work_plan = WorkPlan(
+                week_start=week_start,
+                week_end=week_end,
+                status='draft',
+                created_by_id=assigned_by_id,
+            )
+            db.session.add(work_plan)
+            db.session.flush()
+
+        # Find or create day within the plan
+        work_day = WorkPlanDay.query.filter_by(
+            work_plan_id=work_plan.id, date=target_date
+        ).first()
+        if not work_day:
+            work_day = WorkPlanDay(
+                work_plan_id=work_plan.id,
+                date=target_date,
+            )
+            db.session.add(work_day)
+            db.session.flush()
+
+        # Create inspection jobs for each assignment (skip duplicates)
+        existing_ids = {
+            j.inspection_assignment_id
+            for j in WorkPlanJob.query.filter(
+                WorkPlanJob.work_plan_day_id == work_day.id,
+                WorkPlanJob.job_type == 'inspection',
+                WorkPlanJob.inspection_assignment_id.in_([a.id for a in assignments])
+            ).all()
+        }
+
+        for assignment in assignments:
+            if assignment.id in existing_ids:
+                continue
+
+            equip_name = assignment.equipment.name if assignment.equipment else 'Equipment'
+            job = WorkPlanJob(
+                work_plan_day_id=work_day.id,
+                job_type='inspection',
+                inspection_assignment_id=assignment.id,
+                equipment_id=assignment.equipment_id,
+                berth=assignment.berth,
+                description=f'Inspection: {equip_name}',
+                estimated_hours=1.0,
+                priority='normal',
+            )
+            db.session.add(job)
+
+        db.session.commit()
 
     @staticmethod
     def update_berth(assignment_id, new_berth, engineer_id):

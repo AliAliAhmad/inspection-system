@@ -257,7 +257,11 @@ export default function InspectionWizardScreen() {
 
       queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
       queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
-      navigation.replace('Assessment', { id });
+      Alert.alert(
+        t('inspection.submitted', 'Inspection Submitted'),
+        t('inspection.assessmentPending', 'Please provide your operational assessment verdict.'),
+        [{ text: 'OK', onPress: () => navigation.replace('Assessment', { id }) }]
+      );
     },
     onError: (error: any) => {
       const message = error?.response?.data?.message || error?.response?.data?.error || t('common.error');
@@ -424,14 +428,15 @@ export default function InspectionWizardScreen() {
       : item.question_text;
     const questionTextLower = questionText.toLowerCase();
 
-    // Check if it's a reading question
+    // Check if it's a reading question — ONLY exact phrases
     const isReading = questionTextLower.includes('reading') ||
                       questionTextLower.includes('قراءة') ||
                       questionTextLower.includes('عداد') ||
-                      questionTextLower.includes('rnr') ||
-                      questionTextLower.includes('running hours') ||
-                      questionTextLower.includes('twl') ||
-                      questionTextLower.includes('twistlock');
+                      questionTextLower.includes('rnr reading') ||
+                      questionTextLower.includes('running hours reading') ||
+                      questionTextLower.includes('twl count') ||
+                      questionTextLower.includes('twist lock count') ||
+                      questionTextLower.includes('twistlock count');
 
     const hasPhoto = !!(answer.photo_url || answer.photo_uri);
     const hasVoice = !!(answer.voice_note_id || answer.voice_note_url);
@@ -471,14 +476,15 @@ export default function InspectionWizardScreen() {
         : item.question_text;
       const questionTextLower = questionText.toLowerCase();
 
-      // Check if it's a reading question
+      // Check if it's a reading question — ONLY exact phrases
       const isReading = questionTextLower.includes('reading') ||
                         questionTextLower.includes('قراءة') ||
                         questionTextLower.includes('عداد') ||
-                        questionTextLower.includes('rnr') ||
-                        questionTextLower.includes('running hours') ||
-                        questionTextLower.includes('twl') ||
-                        questionTextLower.includes('twistlock');
+                        questionTextLower.includes('rnr reading') ||
+                        questionTextLower.includes('running hours reading') ||
+                        questionTextLower.includes('twl count') ||
+                        questionTextLower.includes('twist lock count') ||
+                        questionTextLower.includes('twistlock count');
 
       const hasPhoto = !!(answer.photo_url || answer.photo_uri);
       const hasVoice = !!(answer.voice_note_id || answer.voice_note_url);
@@ -501,13 +507,13 @@ export default function InspectionWizardScreen() {
 
     if (anyMissingMedia) return;
 
-    // All complete! Offer to go to submit
+    // All complete! Offer to go to submit & assess
     Alert.alert(
       t('inspection.allComplete', 'All Complete!'),
-      t('inspection.readyToSubmit', 'All questions are answered with required media. Go to submit?'),
+      t('inspection.readyToSubmit', 'All questions are answered with required media. Go to Submit & Assess?'),
       [
         {
-          text: t('inspection.goToSubmit', 'Go to Submit'),
+          text: t('inspection.goToSubmit', 'Go to Submit & Assess'),
           onPress: () => goToIndex(totalItems - 1), // Go to last question where submit button is
         },
         {
@@ -517,6 +523,39 @@ export default function InspectionWizardScreen() {
       ]
     );
   }, [allChecklistItems, skippedItems, isArabic, validateAnswer, goToIndex, totalItems, t]);
+
+  // Find next unanswered or missing-media item starting from a given index
+  const findNextIncomplete = useCallback((startFromIndex: number): number => {
+    // First check unanswered from startFromIndex onwards
+    for (let i = startFromIndex; i < allChecklistItems.length; i++) {
+      const item = allChecklistItems[i];
+      if (!localAnswers[item.id]?.answer_value || skippedItems.has(item.id)) return i;
+    }
+    // Then check missing media from startFromIndex onwards
+    for (let i = startFromIndex; i < allChecklistItems.length; i++) {
+      if (itemMissingMedia(allChecklistItems[i])) return i;
+    }
+    // Wrap around: check from beginning
+    for (let i = 0; i < startFromIndex; i++) {
+      const item = allChecklistItems[i];
+      if (!localAnswers[item.id]?.answer_value || skippedItems.has(item.id)) return i;
+    }
+    for (let i = 0; i < startFromIndex; i++) {
+      if (itemMissingMedia(allChecklistItems[i])) return i;
+    }
+    return -1; // All complete
+  }, [allChecklistItems, localAnswers, skippedItems, itemMissingMedia]);
+
+  // Navigate to next incomplete item, or go to submit if all done
+  const goToNextIncomplete = useCallback(() => {
+    const nextIndex = findNextIncomplete(currentIndex + 1);
+    if (nextIndex >= 0) {
+      goToIndex(nextIndex);
+    } else {
+      // All done — go to last question where submit button is
+      goToIndex(totalItems - 1);
+    }
+  }, [findNextIncomplete, currentIndex, goToIndex, totalItems]);
 
   // Handle submit
   const handleSubmit = useCallback(() => {
@@ -528,7 +567,7 @@ export default function InspectionWizardScreen() {
     if (unanswered.length > 0) {
       Alert.alert(
         t('common.warning', 'Warning'),
-        t('inspection.incompleteCount', `${unanswered.length} questions are not answered. Complete all questions before submitting.`),
+        `${unanswered.length} ${t('inspection.incompleteCount', 'questions are not answered. Complete all questions before submitting.')}`,
         [
           {
             text: t('inspection.goToFirst', 'Go to first unanswered'),
@@ -553,7 +592,7 @@ export default function InspectionWizardScreen() {
     if (missingMedia.length > 0) {
       Alert.alert(
         t('common.warning', 'Warning'),
-        t('inspection.missingMedia', `${missingMedia.length} questions are missing required photo/video/voice. Add media before submitting.`),
+        `${missingMedia.length} ${t('inspection.missingMedia', 'questions are missing required photo/video/voice. Add media before submitting.')}`,
         [
           {
             text: t('inspection.goToFirstMissing', 'Go to first missing'),
@@ -570,15 +609,14 @@ export default function InspectionWizardScreen() {
       return;
     }
 
-    // Step 3: All complete - confirm submit
+    // Step 3: All complete - confirm submit & assess
     Alert.alert(
-      t('common.confirm'),
-      t('inspection.submit') + '?',
+      t('inspection.submitAndAssess', 'Submit & Assess'),
+      t('inspection.submitAndAssessConfirm', 'All questions are complete. Submit inspection and proceed to assessment?'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: t('common.submit'),
-          style: 'destructive',
+          text: t('inspection.submitAndAssess', 'Submit & Assess'),
           onPress: () => submitMutation.mutate(),
         },
       ],
@@ -888,8 +926,8 @@ export default function InspectionWizardScreen() {
     if (!currentItem) return;
 
     Alert.alert(
-      'Delete Photo',
-      'Are you sure you want to delete this photo?',
+      t('inspection.deletePhoto', 'Delete Photo'),
+      t('inspection.deletePhotoConfirm', 'Are you sure you want to delete this photo?'),
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -1175,29 +1213,29 @@ export default function InspectionWizardScreen() {
   const questionTextLower = questionText.toLowerCase();
 
   // Detect "reading" questions (meter readings that need photo verification)
+  // Only exact phrases: "reading" in context, not standalone "rnr" or "twl"
   const isReadingQuestion = questionTextLower.includes('reading') ||
                             questionTextLower.includes('قراءة') ||
                             questionTextLower.includes('عداد');
 
-  // Keep RNR/TWL detection for backwards compatibility but mainly use "reading"
-  const isRNRQuestion = questionTextLower.includes('rnr') ||
-                        questionTextLower.includes('running hours') ||
-                        questionTextLower.includes('running hour') ||
-                        questionTextLower.includes('ساعات التشغيل') ||
-                        questionTextLower.includes('ساعة التشغيل');
+  // RNR (Running Hours) detection — ONLY exact phrases
+  const isRNRQuestion = questionTextLower.includes('rnr reading') ||
+                        questionTextLower.includes('running hours reading') ||
+                        questionTextLower.includes('running hour reading') ||
+                        questionTextLower.includes('ساعات التشغيل');
 
-  const isTWLQuestion = questionTextLower.includes('twl') ||
-                        questionTextLower.includes('twistlock') ||
-                        questionTextLower.includes('twist lock') ||
-                        questionTextLower.includes('تويست لوك') ||
-                        questionTextLower.includes('عدد التويست');
+  // TWL (Twistlock Count) detection — ONLY exact phrases
+  const isTWLQuestion = questionTextLower.includes('twl count') ||
+                        questionTextLower.includes('twist lock count') ||
+                        questionTextLower.includes('twistlock count') ||
+                        questionTextLower.includes('عدد التويست لوك');
 
   // Any question requiring photo verification (reading, RNR, TWL)
   const requiresPhotoVerification = isReadingQuestion || isRNRQuestion || isTWLQuestion;
   const isReadingWithoutPhoto = requiresPhotoVerification && !hasPhoto && !isUploading;
 
-  // Can proceed if: not fail without valid media combo AND not empty numeric field AND not reading without photo
-  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty && !isReadingWithoutPhoto;
+  // Can proceed if: not fail without valid media combo AND not empty numeric field AND not reading without photo AND not uploading
+  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty && !isReadingWithoutPhoto && !isUploading;
 
   // Get expected result and action if fail
   const expectedResult = isArabic
@@ -1212,6 +1250,13 @@ export default function InspectionWizardScreen() {
     localAnswers[item.id]?.answer_value && !skippedItems.has(item.id)
   ).length;
   const skippedCount = skippedItems.size;
+
+  // Check if there are incomplete items (unanswered or missing media) elsewhere
+  const hasIncompleteElsewhere = allChecklistItems.some((item, idx) => {
+    if (idx === currentIndex) return false; // Skip current
+    if (!localAnswers[item.id]?.answer_value || skippedItems.has(item.id)) return true;
+    return itemMissingMedia(item);
+  });
 
   return (
     <View style={styles.container}>
@@ -1367,7 +1412,7 @@ export default function InspectionWizardScreen() {
                     {isUploading && (
                       <View style={styles.uploadOverlay}>
                         <ActivityIndicator color="#fff" size="large" />
-                        <Text style={styles.uploadingText}>Uploading...</Text>
+                        <Text style={styles.uploadingText}>{t('inspection.uploadingPhoto', 'Uploading...')}</Text>
                       </View>
                     )}
                     {currentAnswer?.uploadFailed && currentAnswer?.photo_uri && (
@@ -1431,8 +1476,6 @@ export default function InspectionWizardScreen() {
               onVideoDeleted={handleVideoDeleted}
               existingVideoUrl={currentAnswer?.video_url}
               disabled={isUploading}
-              inspectionId={inspectionId}
-              checklistItemId={currentItem.id}
             />
 
             {/* Video AI Analysis - Full width below video */}
@@ -1523,21 +1566,40 @@ export default function InspectionWizardScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Skip button removed - user must answer all questions */}
-
         {currentIndex === totalItems - 1 ? (
-          <TouchableOpacity
-            style={[styles.submitButton, submitMutation.isPending && styles.buttonDisabled]}
-            onPress={handleSubmit}
-            disabled={submitMutation.isPending}
-          >
-            {submitMutation.isPending ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.submitButtonText}>{t('inspection.submit')}</Text>
-            )}
-          </TouchableOpacity>
+          // On the Submit page: show "Next Missing" if incomplete, else show Submit
+          (() => {
+            const incompleteIndex = findNextIncomplete(0);
+            if (incompleteIndex >= 0) {
+              // There are incomplete items — show button to jump there
+              return (
+                <TouchableOpacity
+                  style={[styles.navButton, styles.navButtonWarning]}
+                  onPress={() => goToIndex(incompleteIndex)}
+                >
+                  <Text style={[styles.navButtonText, styles.navButtonTextPrimary]}>
+                    {t('inspection.goToMissing', 'Go to Missing →')}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }
+            // All complete — show Submit button
+            return (
+              <TouchableOpacity
+                style={[styles.submitButton, submitMutation.isPending && styles.buttonDisabled]}
+                onPress={handleSubmit}
+                disabled={submitMutation.isPending}
+              >
+                {submitMutation.isPending ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.submitButtonText}>{t('inspection.submitAndAssess', 'Submit & Assess')}</Text>
+                )}
+              </TouchableOpacity>
+            );
+          })()
         ) : (
+          // During inspection: normal Next button
           <TouchableOpacity
             style={[
               styles.navButton,
@@ -1552,7 +1614,7 @@ export default function InspectionWizardScreen() {
               styles.navButtonTextPrimary,
               !canProceedToNext && styles.navButtonTextDisabled,
             ]}>
-              {isUploading ? 'Next →' : '→'}
+              →
             </Text>
           </TouchableOpacity>
         )}
@@ -1918,10 +1980,10 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   mediaButtonText: {
-    fontSize: 20,
+    fontSize: 24,
   },
   mediaHintText: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#999',
     alignSelf: 'center',
   },
@@ -2082,6 +2144,10 @@ const styles = StyleSheet.create({
   },
   navButtonPrimary: {
     backgroundColor: '#1976D2',
+  },
+  navButtonWarning: {
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 12,
   },
   navButtonDisabled: {
     borderColor: '#bdbdbd',

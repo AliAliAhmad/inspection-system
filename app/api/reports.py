@@ -18,28 +18,114 @@ bp = Blueprint('reports', __name__)
 def dashboard():
     """
     Get role-appropriate dashboard.
-    Returns different stats based on user role.
+    Returns normalized stats: total_inspections, pending_defects, active_jobs,
+    completion_rate, total_stars, incomplete_rate, plus role-specific extras.
     """
-    user = get_current_user()
+    from app.models import Inspection, Defect, SpecialistJob, EngineerJob, InspectionAssignment, InspectionList
+    from datetime import date as date_type
 
+    user = get_current_user()
+    today = date_type.today()
+
+    # Base: role-specific raw stats
     if user.role == 'admin':
-        stats = AnalyticsService.admin_dashboard()
+        raw = AnalyticsService.admin_dashboard()
     elif user.has_role('engineer'):
-        stats = AnalyticsService.engineer_dashboard(user.id)
+        raw = AnalyticsService.engineer_dashboard(user.id)
     elif user.has_role('inspector'):
-        stats = AnalyticsService.inspector_dashboard(user.id)
+        raw = AnalyticsService.inspector_dashboard(user.id)
     elif user.has_role('specialist'):
-        stats = AnalyticsService.specialist_dashboard(user.id)
+        raw = AnalyticsService.specialist_dashboard(user.id)
     elif user.has_role('quality_engineer'):
-        stats = AnalyticsService.qe_dashboard(user.id)
+        raw = AnalyticsService.qe_dashboard(user.id)
     else:
-        stats = AnalyticsService.admin_dashboard()
+        raw = AnalyticsService.admin_dashboard()
+
+    # Normalize into common dashboard format
+    data = _normalize_dashboard(user, raw, today)
 
     return jsonify({
         'status': 'success',
-        'role': user.role,
-        'stats': stats
+        'data': data
     }), 200
+
+
+def _normalize_dashboard(user, raw, today):
+    """Normalize role-specific stats into common dashboard keys."""
+    from app.models import Inspection, Defect, SpecialistJob, EngineerJob, InspectionAssignment, InspectionList, WorkPlanJob
+    from app.models.work_plan_day import WorkPlanDay
+
+    role = user.role
+    data = {**raw}  # include all role-specific data too
+
+    if role == 'inspector':
+        # Inspector: count their assignments
+        from sqlalchemy import or_
+        my_assignments = InspectionAssignment.query.filter(
+            or_(
+                InspectionAssignment.mechanical_inspector_id == user.id,
+                InspectionAssignment.electrical_inspector_id == user.id,
+            )
+        )
+        total = my_assignments.count()
+        completed = my_assignments.filter(InspectionAssignment.status.in_(['completed', 'mech_complete', 'elec_complete', 'both_complete'])).count()
+        incomplete = my_assignments.filter(InspectionAssignment.status == 'incomplete').count()
+
+        data['total_inspections'] = total
+        data['pending_defects'] = Defect.query.filter(Defect.status.in_(['open', 'in_progress'])).count()
+        data['active_jobs'] = my_assignments.filter(InspectionAssignment.status == 'assigned').count()
+        data['completion_rate'] = round((completed / total * 100) if total > 0 else 0)
+        data['incomplete_rate'] = round((incomplete / total * 100) if total > 0 else 0)
+        data['total_stars'] = user.inspector_points or 0
+
+    elif role == 'specialist':
+        my_jobs = raw.get('my_jobs', {})
+        total = my_jobs.get('total', 0)
+        completed = my_jobs.get('completed', 0)
+        incomplete = total - completed - my_jobs.get('in_progress', 0) - my_jobs.get('paused', 0)
+
+        data['total_inspections'] = total
+        data['pending_defects'] = Defect.query.filter(Defect.status.in_(['open', 'in_progress'])).count()
+        data['active_jobs'] = my_jobs.get('in_progress', 0) + my_jobs.get('paused', 0)
+        data['completion_rate'] = round((completed / total * 100) if total > 0 else 0)
+        data['incomplete_rate'] = round((incomplete / total * 100) if total > 0 else 0) if incomplete > 0 else 0
+        data['total_stars'] = user.specialist_points or 0
+
+    elif role == 'engineer':
+        my_jobs = raw.get('my_jobs', {})
+        total = my_jobs.get('total', 0)
+        completed = my_jobs.get('completed', 0)
+
+        data['total_inspections'] = raw.get('assignments_today', 0)
+        data['pending_defects'] = Defect.query.filter(Defect.status.in_(['open', 'in_progress'])).count()
+        data['active_jobs'] = my_jobs.get('in_progress', 0)
+        data['completion_rate'] = round((completed / total * 100) if total > 0 else 0)
+        data['incomplete_rate'] = round(((total - completed - my_jobs.get('in_progress', 0)) / total * 100) if total > 0 else 0)
+        data['total_stars'] = user.engineer_points if hasattr(user, 'engineer_points') and user.engineer_points else 0
+
+    elif role == 'quality_engineer':
+        total_reviews = raw.get('pending_reviews', 0) + raw.get('approved', 0) + raw.get('rejected', 0)
+        completed_reviews = raw.get('approved', 0) + raw.get('rejected', 0)
+
+        data['total_inspections'] = total_reviews
+        data['pending_defects'] = raw.get('pending_reviews', 0)
+        data['active_jobs'] = raw.get('pending_reviews', 0)
+        data['completion_rate'] = round((completed_reviews / total_reviews * 100) if total_reviews > 0 else 0)
+        data['incomplete_rate'] = round((raw.get('overdue', 0) / total_reviews * 100) if total_reviews > 0 else 0)
+        data['total_stars'] = raw.get('total_points', 0)
+
+    else:
+        # Admin fallback
+        data['total_inspections'] = Inspection.query.count()
+        data['pending_defects'] = Defect.query.filter(Defect.status.in_(['open', 'in_progress'])).count()
+        data['active_jobs'] = SpecialistJob.query.filter(SpecialistJob.status.in_(['pending', 'in_progress'])).count()
+        total_insp = Inspection.query.count()
+        completed_insp = Inspection.query.filter_by(status='completed').count()
+        data['completion_rate'] = round((completed_insp / total_insp * 100) if total_insp > 0 else 0)
+        data['incomplete_rate'] = 0
+        data['total_stars'] = 0
+
+    return data
 
 
 @bp.route('/admin-dashboard', methods=['GET'])

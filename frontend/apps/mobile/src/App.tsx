@@ -41,7 +41,7 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
+      <View style={[styles.center, { backgroundColor: "red" }]}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );

@@ -83,6 +83,9 @@ import PhotoAnnotationScreen, { PhotoAnnotationParams } from '../screens/shared/
 // Equipment screens
 import RunningHoursScreen from '../screens/equipment/RunningHoursScreen';
 
+// Shift Handover
+import CreateHandoverScreen from '../screens/shared/CreateHandoverScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
@@ -139,6 +142,8 @@ export type RootStackParamList = {
   PhotoAnnotation: PhotoAnnotationParams;
   // Equipment
   RunningHours: { equipmentId: number; equipmentName: string };
+  // Shift Handover
+  CreateHandover: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -205,6 +210,8 @@ export default function RootNavigator() {
         <Stack.Screen name="PhotoAnnotation" component={PhotoAnnotationScreen} options={{ headerShown: false, title: 'Annotate Photo' }} />
         {/* Equipment */}
         <Stack.Screen name="RunningHours" component={RunningHoursScreen} options={{ headerShown: true, title: 'Running Hours' }} />
+        {/* Shift Handover */}
+        <Stack.Screen name="CreateHandover" component={CreateHandoverScreen} options={{ headerShown: false, title: 'Create Handover' }} />
       </Stack.Navigator>
 
       {/* Global Smart FAB - wrapped in error boundary for safety */}

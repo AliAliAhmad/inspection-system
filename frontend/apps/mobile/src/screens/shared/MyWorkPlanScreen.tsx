@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -131,7 +131,7 @@ export default function MyWorkPlanScreen() {
   });
 
   const workPlan = data?.data?.work_plan;
-  const myJobs: MyWorkPlanDay[] = data?.data?.my_jobs ?? [];
+  const myJobs: MyWorkPlanDay[] = useMemo(() => data?.data?.my_jobs ?? [], [data?.data?.my_jobs]);
   const totalJobs = data?.data?.total_jobs ?? 0;
 
   // Start mutation
@@ -182,12 +182,16 @@ export default function MyWorkPlanScreen() {
     onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to complete job'),
   });
 
-  // Timer effect for running jobs
+  // Keep a ref to myJobs for the timer interval (avoids re-creating interval on data change)
+  const myJobsRef = useRef(myJobs);
+  myJobsRef.current = myJobs;
+
+  // Timer effect for running jobs — uses ref to avoid dependency on myJobs
   useEffect(() => {
-    // Calculate elapsed time for all running jobs
     const updateTimers = () => {
+      const jobs = myJobsRef.current;
       const newTimers: Record<number, number> = {};
-      myJobs.forEach(day => {
+      jobs.forEach(day => {
         day.jobs.forEach((job: any) => {
           if (job.tracking?.is_running && job.tracking?.started_at) {
             const start = new Date(job.tracking.started_at).getTime();
@@ -203,7 +207,15 @@ export default function MyWorkPlanScreen() {
           }
         });
       });
-      setActiveTimers(newTimers);
+      setActiveTimers(prev => {
+        // Only update if values actually changed to avoid unnecessary re-renders
+        const keys = Object.keys(newTimers);
+        if (keys.length !== Object.keys(prev).length) return newTimers;
+        for (const k of keys) {
+          if (prev[Number(k)] !== newTimers[Number(k)]) return newTimers;
+        }
+        return prev;
+      });
     };
 
     updateTimers();
@@ -214,7 +226,7 @@ export default function MyWorkPlanScreen() {
         clearInterval(timerIntervalRef.current);
       }
     };
-  }, [myJobs]);
+  }, []); // No dependencies — uses ref for data, runs once
 
   const formatElapsedTime = useCallback((seconds: number) => {
     const h = Math.floor(seconds / 3600);

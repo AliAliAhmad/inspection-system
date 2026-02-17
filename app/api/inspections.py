@@ -1214,12 +1214,14 @@ def upload_answer_media(inspection_id):
 
         # Check for RNR (Running Hours) reading
         is_rnr_reading = any(keyword in combined_text for keyword in [
-            'rnr', 'running hours', 'running hour', 'ساعات التشغيل', 'ساعة التشغيل'
+            'rnr reading', 'running hour reading', 'rnr', 'running hours', 'running hour',
+            'ساعات التشغيل', 'ساعة التشغيل'
         ])
 
-        # Check for TWL (Twistlock) reading
+        # Check for TWL (Twistlock Count) reading
         is_twl_reading = any(keyword in combined_text for keyword in [
-            'twl', 'twistlock', 'twist lock', 'تويست لوك', 'عدد التويست'
+            'twl count', 'twistlock count', 'twl', 'twistlock', 'twist lock',
+            'تويست لوك', 'عدد التويست'
         ])
 
         # General reading question (any meter/gauge reading)

@@ -135,6 +135,30 @@
 | 2026-02-16 | Fixed TranslationService.auto_translate: always returns both EN + AR, English fallback if translation fails | ✅ Done |
 | 2026-02-16 | Removed video AI analysis entirely: backend endpoint, frontend API, state/UI, backend auto-analysis skip | ✅ Done |
 | 2026-02-16 | Fixed mobile crash: removed useNavigationState from LiveAlertBanner (rendered outside navigator), added SafeBannerWrapper error boundary | ✅ Done |
+| 2026-02-17 | Fixed chat mic: actual recording via expo-av + base64 upload to /api/voice/transcribe + send voice message with transcription | ✅ Done |
+| 2026-02-17 | Voice messages now show playback (tap to play/stop) + EN/AR transcription text in message bubble | ✅ Done |
+| 2026-02-17 | Added user search/selection for DM conversations in ChannelListScreen (People button + search) | ✅ Done |
+| 2026-02-17 | Added back button to ChannelListScreen header | ✅ Done |
+| 2026-02-17 | Auto-add inspections to work plan: assign_team() now creates WorkPlanJob entries automatically | ✅ Done |
+| 2026-02-17 | WhatsApp-style chat mic: hold-to-record, release-to-send (onPressIn/onPressOut) | ✅ Done |
+| 2026-02-17 | Fixed dashboard numbers: backend _normalize_dashboard() returns common keys (total_inspections, completion_rate, incomplete_rate, total_stars) for all roles | ✅ Done |
+| 2026-02-17 | Added incomplete rate + total stars stat cards to mobile DashboardScreen | ✅ Done |
+| 2026-02-17 | BigButtonOverlay: slowed spring animation (speed 50→20), added minimize/expand button | ✅ Done |
+| 2026-02-17 | Fixed MyWorkPlanScreen infinite loop: memoized myJobs, moved timer to useRef-based pattern with empty dependency | ✅ Done |
+| 2026-02-17 | Added photo/video support to ChatRoomScreen: camera + gallery picker (expo-image-picker), upload via filesApi, send as photo/video message | ✅ Done |
+| 2026-02-17 | Fixed ChannelListScreen user search: prefetch all users, progressive name/role filtering, increased visible limit to 20 | ✅ Done |
+| 2026-02-17 | Rewrote NewChannelScreen: suggested quick-create channels (Job Chat=all users, role-based=filtered), auto-populate member_ids, member count preview | ✅ Done |
+| 2026-02-17 | Fixed toolkit API race condition: added `enabled: !!apiClient` guard to prevent "API client not initialized" error | ✅ Done |
+| 2026-02-17 | Fixed chat media upload Network Error: removed explicit Content-Type header from filesApi (let axios set boundary automatically) | ✅ Done |
+| 2026-02-17 | Fixed New Channel create button: improved error handling, bigger touch target, changed replace→navigate | ✅ Done |
+| 2026-02-17 | Fixed My Assignments tab filtering: client-side status grouping (assigned/in_progress includes sub-statuses), constrained card/badge sizing | ✅ Done |
+| 2026-02-17 | Fixed TWL/RNR detection: narrowed to exact phrases only ("RNR READING", "RUNNING HOURS READING", "TWL COUNT", "TWIST LOCK COUNT") | ✅ Done |
+| 2026-02-17 | Inspection wizard submit page: shows "Go to Missing" button when incomplete items exist, Submit only when all complete | ✅ Done |
+| 2026-02-17 | Added unanswered question filter toggle with count badge to InspectionChecklistScreen | ✅ Done |
+| 2026-02-17 | Built Shift Handover backend: model + migration + REST API (create/latest/pending/acknowledge) | ✅ Done |
+| 2026-02-17 | Built Shift Handover frontend types + API client in shared package | ✅ Done |
+| 2026-02-17 | Rewrote mobile DashboardScreen: 4 widgets (Assignment Summary, Quick Actions, Weekly Trend, Shift Handover) | ✅ Done |
+| 2026-02-17 | Created CreateHandoverScreen: form with shift type, notes, pending items, safety alerts, equipment issues | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -177,6 +201,12 @@
 | Job Show Up Photo | ✅ Done | Auto-notification on start, photo upload to job details, web + mobile |
 | Challenge Voice Notes | ✅ Done | Voice recording with Arabic + English transcription in job details |
 | Job Review Marks (Star/Point) | ✅ Done | Admin/Engineer/Specialist Lead can star (show up) or point (challenge) any job |
+| Chat voice recording | ✅ Done | Mic button records, transcribes (EN/AR), uploads, sends voice message |
+| Chat voice playback | ✅ Done | Tap voice message to play/stop, transcription shown below waveform |
+| Chat DM user selection | ✅ Done | People button + search to find any user and start DM conversation |
+| Work plan inspection sync | ✅ Done | Inspections auto-added to work plan when assigned to inspectors |
+| Shift Handover system | ✅ Done | Backend model + API, mobile create screen + dashboard widget |
+| Dashboard widgets (mobile) | ✅ Done | Assignment summary, quick actions, weekly trend, shift handover card |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above
