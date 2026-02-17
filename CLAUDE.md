@@ -159,6 +159,10 @@
 | 2026-02-17 | Built Shift Handover frontend types + API client in shared package | ✅ Done |
 | 2026-02-17 | Rewrote mobile DashboardScreen: 4 widgets (Assignment Summary, Quick Actions, Weekly Trend, Shift Handover) | ✅ Done |
 | 2026-02-17 | Created CreateHandoverScreen: form with shift type, notes, pending items, safety alerts, equipment issues | ✅ Done |
+| 2026-02-17 | Added urgency_level column to InspectionAnswer model + migration + API support | ✅ Done |
+| 2026-02-17 | Added urgency selector UI to InspectionWizard: 4 colored buttons (OK/Monitor/Attention/Critical) per question | ✅ Done |
+| 2026-02-17 | Upgraded MyAssignments: clickable answer cells → detail bottom sheet modal, assessment badge near equipment name, urgency border indicators, risk score | ✅ Done |
+| 2026-02-17 | Added predicted assessment scoring: urgency weights [0,1,3,5], thresholds at 5 (monitor) and 10 (urgent) | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -207,6 +211,9 @@
 | Work plan inspection sync | ✅ Done | Inspections auto-added to work plan when assigned to inspectors |
 | Shift Handover system | ✅ Done | Backend model + API, mobile create screen + dashboard widget |
 | Dashboard widgets (mobile) | ✅ Done | Assignment summary, quick actions, weekly trend, shift handover card |
+| Urgency indicator per question | ✅ Done | 4 levels (OK/Monitor/Attention/Critical), auto-predict assessment from scores |
+| Clickable answer cells + detail modal | ✅ Done | Tap any cell in answer bar → bottom sheet with question, answer, urgency, comment, photo |
+| Assessment badge near equipment | ✅ Done | Colored badge (Pass/Urgent/Monitor) next to equipment name on MyAssignments cards |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

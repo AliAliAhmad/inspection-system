@@ -187,7 +187,7 @@ class InspectionService:
         return inspection_dict
     
     @staticmethod
-    def answer_question(inspection_id, checklist_item_id, answer_value, comment=None, photo_path=None, voice_note_id=None, voice_transcription=None, current_user_id=None):
+    def answer_question(inspection_id, checklist_item_id, answer_value, comment=None, photo_path=None, voice_note_id=None, voice_transcription=None, current_user_id=None, urgency_level=None):
         """
         Record or update an answer to a checklist item.
 
@@ -256,6 +256,8 @@ class InspectionService:
                 existing_answer.voice_note_id = voice_note_id
             if voice_transcription:
                 existing_answer.voice_transcription = voice_transcription
+            if urgency_level is not None:
+                existing_answer.urgency_level = urgency_level
             existing_answer.answered_at = datetime.utcnow()
             answer = existing_answer
         else:
@@ -269,7 +271,8 @@ class InspectionService:
                 comment=comment,
                 photo_path=photo_path,
                 voice_note_id=voice_note_id,
-                voice_transcription=voice_transcription
+                voice_transcription=voice_transcription,
+                urgency_level=urgency_level or 0,
             )
             db.session.add(answer)
         

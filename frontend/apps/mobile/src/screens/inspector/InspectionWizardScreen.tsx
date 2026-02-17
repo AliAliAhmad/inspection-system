@@ -63,6 +63,7 @@ interface PhotoItem {
 interface LocalAnswer {
   answer_value: string;
   comment?: string;
+  urgency_level?: number; // 0=OK, 1=Monitor, 2=Needs Attention, 3=Critical
   // Multi-photo support (new)
   photos?: PhotoItem[];
   // Legacy single photo support (for backwards compatibility)
@@ -237,7 +238,7 @@ export default function InspectionWizardScreen() {
 
   // Answer mutation
   const answerMutation = useMutation({
-    mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string; voice_note_id?: number; voice_transcription?: { en: string; ar: string } }) =>
+    mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string; voice_note_id?: number; voice_transcription?: { en: string; ar: string }; urgency_level?: number }) =>
       inspectionsApi.answerQuestion(inspectionId!, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inspectionProgress', inspectionId] });
@@ -347,8 +348,33 @@ export default function InspectionWizardScreen() {
         checklist_item_id: currentItem.id,
         answer_value: value,
         comment: current?.comment,
+        urgency_level: current?.urgency_level ?? 0,
       });
     }, 500);
+  }, [currentItem, answerMutation, localAnswers]);
+
+  // Handle urgency level change
+  const handleUrgencyChange = useCallback((level: number) => {
+    if (!currentItem) return;
+
+    setLocalAnswers((prev) => ({
+      ...prev,
+      [currentItem.id]: {
+        ...prev[currentItem.id],
+        urgency_level: level,
+      },
+    }));
+
+    // Save urgency immediately with existing answer
+    const current = localAnswers[currentItem.id];
+    if (current?.answer_value) {
+      answerMutation.mutate({
+        checklist_item_id: currentItem.id,
+        answer_value: current.answer_value,
+        comment: current?.comment,
+        urgency_level: level,
+      });
+    }
   }, [currentItem, answerMutation, localAnswers]);
 
   // Navigate to specific index
@@ -1393,6 +1419,44 @@ export default function InspectionWizardScreen() {
           {/* Answer input */}
           {renderAnswerInput()}
 
+          {/* Urgency Level Selector */}
+          <View style={styles.urgencySection}>
+            <Text style={styles.urgencyLabel}>
+              {t('inspection.urgencyLevel', 'Urgency Level')}
+            </Text>
+            <View style={styles.urgencyRow}>
+              {([
+                { level: 0, label: t('inspection.urgencyOk', 'OK'), color: '#4CAF50', bgColor: '#E8F5E9' },
+                { level: 1, label: t('inspection.urgencyMonitor', 'Monitor'), color: '#FF9800', bgColor: '#FFF3E0' },
+                { level: 2, label: t('inspection.urgencyAttention', 'Attention'), color: '#FF5722', bgColor: '#FBE9E7' },
+                { level: 3, label: t('inspection.urgencyCritical', 'Critical'), color: '#F44336', bgColor: '#FFEBEE' },
+              ] as const).map(({ level, label, color, bgColor }) => {
+                const isActive = (currentAnswer?.urgency_level ?? 0) === level;
+                return (
+                  <TouchableOpacity
+                    key={level}
+                    style={[
+                      styles.urgencyButton,
+                      { borderColor: color },
+                      isActive && { backgroundColor: color },
+                    ]}
+                    onPress={() => handleUrgencyChange(level)}
+                  >
+                    <Text
+                      style={[
+                        styles.urgencyButtonText,
+                        { color: color },
+                        isActive && { color: '#fff' },
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
           {/* Media section - Photo, Video, Voice */}
           <View style={styles.mediaSection}>
             {/* Photo Row */}
@@ -1956,6 +2020,31 @@ const styles = StyleSheet.create({
   textInputAnswered: {
     borderColor: '#4CAF50',
     backgroundColor: '#E8F5E9',
+  },
+  // ─── Urgency Selector ───
+  urgencySection: {
+    marginBottom: 16,
+  },
+  urgencyLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#616161',
+    marginBottom: 8,
+  },
+  urgencyRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  urgencyButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 2,
+    alignItems: 'center',
+  },
+  urgencyButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   mediaSection: {
     marginBottom: 16,

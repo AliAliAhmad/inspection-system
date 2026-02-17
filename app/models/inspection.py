@@ -125,6 +125,7 @@ class InspectionAnswer(db.Model):
     voice_transcription = db.Column(db.JSON, nullable=True)  # Voice transcription {'en': '...', 'ar': '...'}
     photo_ai_analysis = db.Column(db.JSON, nullable=True)  # AI analysis result for photo
     video_ai_analysis = db.Column(db.JSON, nullable=True)  # AI analysis result for video
+    urgency_level = db.Column(db.Integer, default=0, nullable=False)  # 0=OK, 1=Monitor, 2=Needs Attention, 3=Critical
     answered_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -174,6 +175,7 @@ class InspectionAnswer(db.Model):
             'voice_note_id': self.voice_note_id,
             'voice_note': self.voice_note.to_dict() if self.voice_note else None,
             'voice_transcription': self.voice_transcription,
+            'urgency_level': self.urgency_level or 0,
             'answered_at': self.answered_at.isoformat() if self.answered_at else None
         }
     

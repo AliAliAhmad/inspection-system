@@ -557,17 +557,32 @@ def my_assignments():
     for a in assignments:
         d = a.to_dict()
 
-        # Build answers_summary
+        # Build answers_summary with urgency + question text
         answers_summary = []
+        urgency_total = 0
+        has_critical = False
+        has_fail_with_urgency = False
         insps = inspection_map.get(a.id, [])
         for insp in insps:
             for ans in answers_by_inspection.get(insp.id, []):
                 ci = item_map.get(ans.checklist_item_id)
                 if not ci:
                     continue
+                urg = getattr(ans, 'urgency_level', 0) or 0
+                urgency_total += [0, 1, 3, 5][min(urg, 3)]
+                if urg >= 3:
+                    has_critical = True
+                if urg >= 2 and ans.answer_value and ans.answer_value.lower() in ('fail', 'no'):
+                    has_fail_with_urgency = True
+
                 entry = {
                     'answer_value': ans.answer_value,
                     'answer_type': ci.answer_type,
+                    'urgency_level': urg,
+                    'question_text': ci.question_text or '',
+                    'category': ci.category,
+                    'comment': ans.comment,
+                    'has_photo': bool(ans.photo_file_id or ans.photo_path),
                 }
                 if ci.answer_type == 'numeric':
                     entry['min_value'] = ci.min_value
@@ -575,6 +590,20 @@ def my_assignments():
                     entry['numeric_rule'] = ci.numeric_rule
                 answers_summary.append(entry)
         d['answers_summary'] = answers_summary
+
+        # Predicted assessment from urgency scores
+        predicted = None
+        if answers_summary:
+            if has_critical or has_fail_with_urgency:
+                predicted = 'urgent'
+            elif urgency_total >= 10:
+                predicted = 'urgent'
+            elif urgency_total >= 5:
+                predicted = 'monitor'
+            else:
+                predicted = 'operational'
+        d['urgency_score'] = urgency_total
+        d['predicted_assessment'] = predicted
 
         # Assessment verdict
         fa = assessment_map.get(a.id)

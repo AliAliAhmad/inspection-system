@@ -23,6 +23,11 @@ export interface AnswerSummaryEntry {
   min_value?: number | null;
   max_value?: number | null;
   numeric_rule?: 'less_than' | 'greater_than' | 'between' | null;
+  urgency_level?: number; // 0=OK, 1=Monitor, 2=Needs Attention, 3=Critical
+  question_text?: string;
+  category?: string | null;
+  comment?: string | null;
+  has_photo?: boolean;
 }
 
 export interface AssessmentSummary {
@@ -51,6 +56,8 @@ export interface InspectionAssignment {
   created_at: string;
   answers_summary?: AnswerSummaryEntry[];
   assessment?: AssessmentSummary | null;
+  urgency_score?: number;
+  predicted_assessment?: 'operational' | 'urgent' | 'monitor' | null;
 }
 
 export interface InspectionList {
