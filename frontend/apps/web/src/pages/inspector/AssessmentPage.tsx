@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   Typography,
@@ -42,7 +42,7 @@ const VERDICT_COLORS: Record<string, string> = {
   urgent: 'error',
 };
 
-const VERDICT_ICONS: Record<string, JSX.Element> = {
+const VERDICT_ICONS: Record<string, React.ReactNode> = {
   operational: <CheckCircleOutlined />,
   monitor: <ExclamationCircleOutlined />,
   stop: <StopOutlined />,

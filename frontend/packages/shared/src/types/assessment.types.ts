@@ -1,5 +1,5 @@
 export type Verdict = 'operational' | 'monitor' | 'stop';
-export type EscalationLevel = 'none' | 'engineer' | 'admin';
+export type AssessmentEscalationLevel = 'none' | 'engineer' | 'admin';
 
 export interface FinalAssessment {
   id: number;
@@ -29,7 +29,7 @@ export interface FinalAssessment {
   engineer_notes: string | null;
   engineer_reviewed_at: string | null;
   // Escalation
-  escalation_level: EscalationLevel;
+  escalation_level: AssessmentEscalationLevel;
   escalation_reason: string | null;
   // Meta
   assessment_version: number;
@@ -56,7 +56,7 @@ export interface AssessmentSummary {
   elec_verdict: Verdict | null;
   system_verdict?: Verdict | null;
   engineer_verdict?: Verdict | null;
-  escalation_level?: EscalationLevel;
+  escalation_level?: AssessmentEscalationLevel;
 }
 
 export interface InspectionAssignment {
