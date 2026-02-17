@@ -1,14 +1,14 @@
 """Add shift handover model
 
 Revision ID: x2y3z4a5b6c7
-Revises: w1x2y3z4a5b6
+Revises: 8365059ee6d1
 Create Date: 2026-02-17 12:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = 'x2y3z4a5b6c7'
-down_revision = 'w1x2y3z4a5b6'
+down_revision = '8365059ee6d1'
 branch_labels = None
 depends_on = None
 
