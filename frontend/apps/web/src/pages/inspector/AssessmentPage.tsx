@@ -119,14 +119,7 @@ export default function AssessmentPage() {
 
   const handleSubmitVerdict = () => {
     if (!verdict) return;
-    if (verdict === 'monitor' && monitorReason.trim().length < 30) {
-      message.error('Monitor reason must be at least 30 characters');
-      return;
-    }
-    if (verdict === 'stop' && stopReason.trim().length < 50) {
-      message.error('Stop reason must be at least 50 characters');
-      return;
-    }
+    // No character validation — voice recording is sufficient
     verdictMutation.mutate({
       verdict,
       monitor_reason: verdict === 'monitor' ? monitorReason.trim() : undefined,

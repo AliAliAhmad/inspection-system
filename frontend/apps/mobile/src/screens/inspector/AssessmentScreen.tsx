@@ -9,7 +9,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
-import VoiceTextInput from '../../components/VoiceTextInput';
+import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -43,6 +43,8 @@ export default function AssessmentScreen() {
   const [selectedVerdict, setSelectedVerdict] = useState<Verdict | null>(null);
   const [monitorReason, setMonitorReason] = useState('');
   const [stopReason, setStopReason] = useState('');
+  const [monitorVoiceUrl, setMonitorVoiceUrl] = useState<string | null>(null);
+  const [stopVoiceUrl, setStopVoiceUrl] = useState<string | null>(null);
 
   const {
     data: assessment,
@@ -77,7 +79,7 @@ export default function AssessmentScreen() {
   }, [assessment, user?.id, selectedVerdict]);
 
   const verdictMutation = useMutation({
-    mutationFn: (payload: { verdict: Verdict; monitor_reason?: string; stop_reason?: string }) =>
+    mutationFn: (payload: { verdict: Verdict; monitor_reason?: string; stop_reason?: string; monitor_voice_url?: string; stop_voice_url?: string }) =>
       assessmentsApi.submitVerdict((assessment as FinalAssessment).id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assessment', id] });
@@ -96,14 +98,7 @@ export default function AssessmentScreen() {
   const handleSubmitVerdict = useCallback(() => {
     if (!selectedVerdict) return;
 
-    if (selectedVerdict === 'monitor' && monitorReason.trim().length < 30) {
-      Alert.alert(t('common.error'), t('assessment.monitor_reason_min'));
-      return;
-    }
-    if (selectedVerdict === 'stop' && stopReason.trim().length < 50) {
-      Alert.alert(t('common.error'), t('assessment.stop_reason_min'));
-      return;
-    }
+    // No validation needed — voice recording or text are both optional
 
     const verdictLabels: Record<Verdict, string> = {
       operational: t('assessment.operational'),
@@ -123,12 +118,14 @@ export default function AssessmentScreen() {
               verdict: selectedVerdict,
               monitor_reason: selectedVerdict === 'monitor' ? monitorReason.trim() : undefined,
               stop_reason: selectedVerdict === 'stop' ? stopReason.trim() : undefined,
+              monitor_voice_url: selectedVerdict === 'monitor' ? (monitorVoiceUrl || undefined) : undefined,
+              stop_voice_url: selectedVerdict === 'stop' ? (stopVoiceUrl || undefined) : undefined,
             });
           },
         },
       ],
     );
-  }, [selectedVerdict, monitorReason, stopReason, t, isAr, verdictMutation]);
+  }, [selectedVerdict, monitorReason, stopReason, monitorVoiceUrl, stopVoiceUrl, t, isAr, verdictMutation]);
 
   const getVerdictColor = (verdict: Verdict | string | null): string => {
     if (verdict === 'operational') return '#4CAF50';
@@ -211,12 +208,16 @@ export default function AssessmentScreen() {
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>{t('assessment.equipment_id')}:</Text>
-          <Text style={styles.infoValue}>#{data.equipment_id}</Text>
+          <Text style={styles.infoValue}>
+            {(data as any).equipment_name || (data as any).equipment?.name || `#${data.equipment_id}`}
+          </Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>{t('common.status')}:</Text>
           <Text style={[styles.infoValue, { color: data.final_status ? getVerdictColor(data.final_status) : '#9E9E9E' }]}>
-            {data.final_status ? getVerdictLabel(data.final_status) : getVerdictLabel(null)}
+            {data.final_status
+              ? getVerdictLabel(data.final_status)
+              : getVerdictLabel(null)}
           </Text>
         </View>
         {data.finalized_at && (
@@ -235,13 +236,15 @@ export default function AssessmentScreen() {
           {t('inspection.verdictTrail')}
         </Text>
 
-        {/* System */}
-        <VerdictTrailRow
-          label={t('assessment.system')}
-          verdict={data.system_verdict}
-          getColor={getVerdictColor}
-          getLabel={getVerdictLabel}
-        />
+        {/* System Verdict */}
+        {data.system_verdict && (
+          <VerdictTrailRow
+            label={t('assessment.system')}
+            verdict={data.system_verdict}
+            getColor={getVerdictColor}
+            getLabel={getVerdictLabel}
+          />
+        )}
 
         {/* Mechanical Inspector */}
         <VerdictTrailRow
@@ -311,6 +314,17 @@ export default function AssessmentScreen() {
           </View>
         )}
       </View>
+
+      {/* View Full Inspection Details */}
+      <TouchableOpacity
+        style={styles.detailsButton}
+        onPress={() => navigation.navigate('InspectionDetail', { assignmentId: data.inspection_assignment_id })}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.detailsButtonText}>
+          {t('assessment.viewFullDetails', 'View Full Details')}
+        </Text>
+      </TouchableOpacity>
 
       {/* Resolution Info */}
       {data.resolved_by && (
@@ -439,28 +453,56 @@ export default function AssessmentScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Monitor Reason Input */}
+          {/* Monitor Reason - Voice Recording */}
           {selectedVerdict === 'monitor' && (
-            <VoiceTextInput
-              style={styles.reasonInput}
-              value={monitorReason}
-              onChangeText={setMonitorReason}
-              placeholder={t('inspection.monitorReasonPlaceholder')}
-              multiline
-              numberOfLines={3}
-            />
+            <View style={styles.voiceReasonSection}>
+              <Text style={styles.voiceReasonLabel}>
+                {t('assessment.record_reason', 'Record your reason')}
+              </Text>
+              <VoiceNoteRecorder
+                onVoiceNoteRecorded={(voiceNoteId: number, transcription?: { en: string; ar: string }) => {
+                  const text = transcription ? (isAr ? transcription.ar : transcription.en) : '';
+                  setMonitorReason(text || '');
+                  setMonitorVoiceUrl(`voice-note:${voiceNoteId}`);
+                }}
+                onVoiceNoteDeleted={() => {
+                  setMonitorVoiceUrl(null);
+                }}
+                language={isAr ? 'ar' : 'en'}
+              />
+              {monitorReason ? (
+                <View style={styles.transcriptionBox}>
+                  <Text style={styles.transcriptionLabel}>{t('assessment.transcription', 'Transcription')}:</Text>
+                  <Text style={styles.transcriptionText}>{monitorReason}</Text>
+                </View>
+              ) : null}
+            </View>
           )}
 
-          {/* Stop Reason Input */}
+          {/* Stop Reason - Voice Recording */}
           {selectedVerdict === 'stop' && (
-            <VoiceTextInput
-              style={[styles.reasonInput, { borderColor: '#FFCDD2', backgroundColor: '#FFF5F5' }]}
-              value={stopReason}
-              onChangeText={setStopReason}
-              placeholder={t('inspection.stopReasonPlaceholder')}
-              multiline
-              numberOfLines={3}
-            />
+            <View style={[styles.voiceReasonSection, { backgroundColor: '#FFEBEE' }]}>
+              <Text style={[styles.voiceReasonLabel, { color: '#C62828' }]}>
+                {t('assessment.record_reason', 'Record your reason')}
+              </Text>
+              <VoiceNoteRecorder
+                onVoiceNoteRecorded={(voiceNoteId: number, transcription?: { en: string; ar: string }) => {
+                  const text = transcription ? (isAr ? transcription.ar : transcription.en) : '';
+                  setStopReason(text || '');
+                  setStopVoiceUrl(`voice-note:${voiceNoteId}`);
+                }}
+                onVoiceNoteDeleted={() => {
+                  setStopVoiceUrl(null);
+                }}
+                language={isAr ? 'ar' : 'en'}
+              />
+              {stopReason ? (
+                <View style={styles.transcriptionBox}>
+                  <Text style={styles.transcriptionLabel}>{t('assessment.transcription', 'Transcription')}:</Text>
+                  <Text style={styles.transcriptionText}>{stopReason}</Text>
+                </View>
+              ) : null}
+            </View>
           )}
 
           <TouchableOpacity
@@ -598,7 +640,25 @@ const styles = StyleSheet.create({
   },
   systemRecText: { fontSize: 11, fontWeight: '600', color: '#424242' },
 
-  // Reason input
+  // Voice reason section
+  voiceReasonSection: {
+    marginTop: 12, padding: 12, backgroundColor: '#FFF8E1', borderRadius: 10, marginBottom: 16,
+  },
+  voiceReasonLabel: {
+    fontSize: 14, fontWeight: '600', marginBottom: 8, color: '#F57F17',
+  },
+  transcriptionBox: {
+    marginTop: 10, padding: 10, backgroundColor: '#fff', borderRadius: 8,
+    borderWidth: 1, borderColor: '#E0E0E0',
+  },
+  transcriptionLabel: {
+    fontSize: 12, color: '#757575', marginBottom: 4,
+  },
+  transcriptionText: {
+    fontSize: 14, color: '#212121',
+  },
+
+  // Reason input (legacy, kept for reference)
   reasonInput: {
     borderWidth: 1, borderColor: '#FFE0B2', borderRadius: 10, padding: 12,
     fontSize: 14, minHeight: 80, textAlignVertical: 'top', marginBottom: 16,
@@ -615,6 +675,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9', borderRadius: 12, padding: 16, marginBottom: 12, alignItems: 'center',
   },
   submittedText: { fontSize: 16, fontWeight: '600', color: '#2E7D32', textTransform: 'capitalize' },
+
+  // Verdict Comparison
+  comparisonBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  comparisonBadgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  matchIndicator: {
+    flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 8, marginTop: 12, gap: 8,
+  },
+  matchIndicatorText: { fontSize: 13, fontWeight: '600', flex: 1 },
+
+  // View Full Details button
+  detailsButton: {
+    backgroundColor: '#1976D2', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 12,
+  },
+  detailsButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
   bottomSpacer: { height: 40 },
   errorText: { fontSize: 16, color: '#E53935', marginBottom: 12 },

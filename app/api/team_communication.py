@@ -6,6 +6,7 @@ from app.models.team_channel import TeamChannel
 from app.models.team_message import TeamMessage
 from app.models.channel_member import ChannelMember
 from app.models.message_read_receipt import MessageReadReceipt
+from app.models.user import User
 from datetime import datetime
 
 bp = Blueprint('team_communication', __name__)
@@ -370,3 +371,21 @@ def search_messages():
     ).order_by(TeamMessage.created_at.desc()).limit(20).all()
 
     return jsonify({'status': 'success', 'data': [m.to_dict() for m in messages]}), 200
+
+
+@bp.route('/users', methods=['GET'])
+@jwt_required()
+def list_chat_users():
+    """List all active users for chat. Any authenticated user can access."""
+    users = User.query.filter_by(is_active=True).order_by(User.full_name).all()
+    return jsonify({
+        'status': 'success',
+        'data': [{
+            'id': u.id,
+            'full_name': u.full_name,
+            'role': u.role,
+            'shift': u.shift,
+            'employee_id': u.employee_id,
+            'specialization': getattr(u, 'specialization', None),
+        } for u in users],
+    }), 200

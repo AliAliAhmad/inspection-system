@@ -243,6 +243,7 @@ class FinalAssessment(db.Model):
         return {
             'id': self.id,
             'equipment_id': self.equipment_id,
+            'equipment_name': self.equipment.name if self.equipment else None,
             'inspection_assignment_id': self.inspection_assignment_id,
             'mechanical_inspector_id': self.mechanical_inspector_id,
             'electrical_inspector_id': self.electrical_inspector_id,

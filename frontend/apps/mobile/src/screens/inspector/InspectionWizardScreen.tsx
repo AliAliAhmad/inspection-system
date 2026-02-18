@@ -25,7 +25,7 @@ import PhotoGallery from '../../components/PhotoGallery';
 import { Photo } from '../../components/PhotoThumbnailGrid';
 import { QuickFill } from '../../components/inspection/AnswerTemplates';
 import { QuickNotes } from '../../components/inspection/QuickNotes';
-import { PreviousAnswersPanel } from '../../components/inspection/PreviousAnswersPanel';
+
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -104,6 +104,7 @@ export default function InspectionWizardScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [localAnswers, setLocalAnswers] = useState<Record<number, LocalAnswer>>({});
   const [skippedItems, setSkippedItems] = useState<Set<number>>(new Set());
+  const [fixingIncomplete, setFixingIncomplete] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
@@ -236,6 +237,14 @@ export default function InspectionWizardScreen() {
           answer_value: ans.answer_value,
           comment: ans.comment ?? undefined,
           urgency_level: ans.urgency_level ?? 0,
+          // Include media from colleague
+          photo_url: ans.photo_file?.url || ans.photo_url || undefined,
+          photo_ai_analysis: ans.photo_ai_analysis ?? undefined,
+          video_url: ans.video_file?.url || ans.video_url || undefined,
+          video_ai_analysis: ans.video_ai_analysis ?? undefined,
+          voice_note_url: ans.voice_note?.url || ans.voice_note_url || undefined,
+          voice_note_id: ans.voice_note_id ?? undefined,
+          voice_transcription: ans.voice_transcription ?? undefined,
         };
         prefilledMeta[itemId] = {
           name: colleagueData.colleague!.name,
@@ -260,6 +269,42 @@ export default function InspectionWizardScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colleagueData, inspectionAnswersJson]);
+
+  // Batch-save prefilled answers to server so they count as "answered" during submit validation
+  const [prefilledSaved, setPrefilledSaved] = useState(false);
+  useEffect(() => {
+    if (prefilledSaved) return;
+    if (Object.keys(prefilledItems).length === 0 || !inspectionId) return;
+
+    const savePrefilledToServer = async () => {
+      const entries = Object.entries(localAnswers).filter(
+        ([itemId]) => prefilledItems[Number(itemId)]
+      );
+      if (entries.length === 0) return;
+
+      setPrefilledSaved(true);
+      for (const [itemId, answer] of entries) {
+        if (answer.answer_value) {
+          try {
+            await answerMutation.mutateAsync({
+              checklist_item_id: Number(itemId),
+              answer_value: answer.answer_value,
+              comment: answer.comment,
+              urgency_level: answer.urgency_level || 0,
+            });
+          } catch (err) {
+            // Silent fail - inspector can still answer manually
+            console.warn('Failed to save prefilled answer:', itemId, err);
+          }
+        }
+      }
+    };
+
+    // Small delay to let local state settle after prefill
+    const timer = setTimeout(savePrefilledToServer, 1000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefilledItems, inspectionId]);
 
   // Resume on same question - Load saved index when inspection loads
   useEffect(() => {
@@ -467,11 +512,6 @@ export default function InspectionWizardScreen() {
     });
   }, [currentIndex, totalItems, slideAnim]);
 
-  // Navigate to next item
-  const goToNext = useCallback(() => {
-    goToIndex(currentIndex + 1);
-  }, [currentIndex, goToIndex]);
-
   // Navigate to previous item
   const goToPrev = useCallback(() => {
     goToIndex(currentIndex - 1);
@@ -491,9 +531,9 @@ export default function InspectionWizardScreen() {
     }));
 
     if (currentIndex < totalItems - 1) {
-      goToNext();
+      goToIndex(currentIndex + 1);
     }
-  }, [currentItem, currentIndex, totalItems, goToNext]);
+  }, [currentItem, currentIndex, totalItems, goToIndex]);
 
   // Check if current question is answered
   const isCurrentAnswered = currentItem && localAnswers[currentItem.id]?.answer_value && !skippedItems.has(currentItem.id);
@@ -648,9 +688,19 @@ export default function InspectionWizardScreen() {
       goToIndex(nextIndex);
     } else {
       // All done — go to last question where submit button is
+      setFixingIncomplete(false);
       goToIndex(totalItems - 1);
     }
   }, [findNextIncomplete, currentIndex, goToIndex, totalItems]);
+
+  // Navigate to next item (skip to next incomplete when fixing validation issues)
+  const goToNext = useCallback(() => {
+    if (fixingIncomplete) {
+      goToNextIncomplete();
+    } else {
+      goToIndex(currentIndex + 1);
+    }
+  }, [currentIndex, goToIndex, fixingIncomplete, goToNextIncomplete]);
 
   // Handle submit
   const handleSubmit = useCallback(() => {
@@ -671,6 +721,7 @@ export default function InspectionWizardScreen() {
                 item => !localAnswers[item.id]?.answer_value || skippedItems.has(item.id)
               );
               if (firstUnansweredIndex >= 0) {
+                setFixingIncomplete(true);
                 goToIndex(firstUnansweredIndex);
               }
             }
@@ -694,6 +745,7 @@ export default function InspectionWizardScreen() {
             onPress: () => {
               const firstMissingIndex = allChecklistItems.findIndex(itemMissingMedia);
               if (firstMissingIndex >= 0) {
+                setFixingIncomplete(true);
                 goToIndex(firstMissingIndex);
               }
             }
@@ -1111,7 +1163,7 @@ export default function InspectionWizardScreen() {
             status === 'answered' && styles.progressDotAnswered,
             status === 'skipped' && styles.progressDotSkipped,
           ]}
-          onPress={() => goToIndex(i)}
+          onPress={() => { setFixingIncomplete(false); goToIndex(i); }}
         >
           {status === 'answered' && <Text style={styles.dotCheck}>✓</Text>}
           {status === 'skipped' && <Text style={styles.dotSkip}>−</Text>}
@@ -1410,24 +1462,6 @@ export default function InspectionWizardScreen() {
         </View>
       )}
 
-      {/* Previous Answers Panel - compact mode showing previous answer for current question */}
-      {inspectionId && currentItem && (
-        <PreviousAnswersPanel
-          equipmentId={inspData.equipment_id}
-          currentInspectionId={inspectionId}
-          currentItemId={currentItem.id}
-          compact={true}
-          onAnswerCopied={(itemId, value, comment) => {
-            handleAnswer(value);
-            if (comment) {
-              setLocalAnswers(prev => ({
-                ...prev,
-                [itemId]: { ...prev[itemId], comment },
-              }));
-            }
-          }}
-        />
-      )}
 
       {/* Question card with animation */}
       <Animated.View style={[styles.questionCard, { transform: [{ translateX: slideAnim }] }]}>
@@ -2046,7 +2080,8 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 10,
     marginBottom: 16,
   },
   answerButton: {
@@ -2149,18 +2184,24 @@ const styles = StyleSheet.create({
   },
   urgencyRow: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   urgencyButton: {
-    flex: 1,
+    minWidth: 70,
     paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: 8,
     borderWidth: 2,
     alignItems: 'center',
+    flexGrow: 1,
+    flexBasis: '22%',
+    marginBottom: 4,
   },
   urgencyButtonText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   mediaSection: {
     marginBottom: 16,

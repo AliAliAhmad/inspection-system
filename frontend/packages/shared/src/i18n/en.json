@@ -1669,7 +1669,13 @@
     "your_verdict_label": "Your verdict",
     "system_auto": "System",
     "engineer_role": "Engineer",
-    "admin_role": "Admin"
+    "admin_role": "Admin",
+    "viewFullDetails": "View Full Details",
+    "inspectorVerdict": "Inspector Verdict",
+    "verdictMatch": "Match",
+    "verdictMismatch": "Mismatch",
+    "comparisonTitle": "Verdict Comparison",
+    "escalated": "Escalated"
   },
   "assignments": {
     "ok": "OK",
@@ -1793,6 +1799,12 @@
     "queued_offline": "Saved offline. Will sync when connected.",
     "items_synced": "{{count}} items synced successfully",
     "items_failed": "{{count}} items failed to sync"
+  },
+  "inspection_detail": {
+    "title": "Inspection Details",
+    "no_photo": "No Photo",
+    "play_voice": "Play Voice Note",
+    "ai_analysis": "AI Analysis"
   },
   "unplanned_job": {
     "title": "Log Unplanned Work",

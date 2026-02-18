@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { workPlansApi } from '@inspection/shared';
 import type { WorkPlan, WorkPlanDay, WorkPlanJob } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 
 type BerthTab = 'east' | 'west';
 
@@ -61,11 +62,15 @@ function formatDayHeader(dateStr: string): { day: string; date: string; isToday:
 }
 
 export default function WorkPlanOverviewScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isAr = i18n.language === 'ar';
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  const isAdminOrEngineer = user?.role === 'admin' || user?.role === 'engineer';
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [berth, setBerth] = useState<BerthTab>('east');
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  const [autoExpanded, setAutoExpanded] = useState(false);
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['work-plans', weekStart],
@@ -73,7 +78,24 @@ export default function WorkPlanOverviewScreen() {
   });
 
   const workPlan: WorkPlan | undefined = data?.data?.work_plans?.[0];
-  const days = workPlan?.days || [];
+  const allDays = workPlan?.days || [];
+
+  // Inspector/Specialist: show only today + days with overdue jobs
+  // Engineer/Admin: show full week
+  const todayStr = new Date().toISOString().split('T')[0];
+  const days = isAdminOrEngineer
+    ? allDays
+    : allDays.filter(day => {
+        if (day.date === todayStr) return true;
+        // Include past days that have overdue jobs
+        const dayDate = new Date(day.date);
+        const today = new Date(todayStr);
+        if (dayDate < today) {
+          const jobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
+          return jobs.some(job => (job.overdue_value && job.overdue_value > 0));
+        }
+        return false;
+      });
 
   const getJobsForBerth = useCallback((day: WorkPlanDay): WorkPlanJob[] => {
     if (berth === 'east') {
@@ -101,6 +123,17 @@ export default function WorkPlanOverviewScreen() {
 
     return { totalJobs, assignedJobs, unassignedJobs };
   }, [days, getJobsForBerth]);
+
+  // Auto-expand today's card for inspectors/specialists
+  useEffect(() => {
+    if (!isAdminOrEngineer && !autoExpanded && days.length > 0) {
+      const todayDay = days.find(d => d.date === todayStr);
+      if (todayDay) {
+        setExpandedDay(todayDay.id);
+        setAutoExpanded(true);
+      }
+    }
+  }, [isAdminOrEngineer, autoExpanded, days, todayStr]);
 
   const handleJobPress = (job: WorkPlanJob, dayId: number) => {
     navigation.navigate('WorkPlanJobDetail', {
@@ -233,7 +266,11 @@ export default function WorkPlanOverviewScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>{t('nav.work_planning', 'Work Planning')}</Text>
+        <Text style={styles.title}>
+          {isAdminOrEngineer
+            ? t('nav.work_planning', 'Work Planning')
+            : (isAr ? 'خطة اليوم' : "Today's Plan")}
+        </Text>
         {workPlan && (
           <View style={[styles.statusBadge, workPlan.status === 'published' ? styles.statusPublished : styles.statusDraft]}>
             <Text style={styles.statusText}>{workPlan.status.toUpperCase()}</Text>
@@ -241,20 +278,22 @@ export default function WorkPlanOverviewScreen() {
         )}
       </View>
 
-      {/* Week Navigation */}
-      <View style={styles.weekNav}>
-        <TouchableOpacity style={styles.navButton} onPress={() => setWeekStart(prev => addWeeks(prev, -1))}>
-          <Text style={styles.navButtonText}>◀</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.weekDisplay} onPress={() => setWeekStart(getWeekStart(new Date()))}>
-          <Text style={styles.weekText}>
-            {workPlan ? formatWeekRange(workPlan.week_start, workPlan.week_end) : 'No Plan'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => setWeekStart(prev => addWeeks(prev, 1))}>
-          <Text style={styles.navButtonText}>▶</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Week Navigation - only for engineer/admin */}
+      {isAdminOrEngineer && (
+        <View style={styles.weekNav}>
+          <TouchableOpacity style={styles.navButton} onPress={() => setWeekStart(prev => addWeeks(prev, -1))}>
+            <Text style={styles.navButtonText}>◀</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.weekDisplay} onPress={() => setWeekStart(getWeekStart(new Date()))}>
+            <Text style={styles.weekText}>
+              {workPlan ? formatWeekRange(workPlan.week_start, workPlan.week_end) : 'No Plan'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navButton} onPress={() => setWeekStart(prev => addWeeks(prev, 1))}>
+            <Text style={styles.navButtonText}>▶</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Berth Tabs */}
       <View style={styles.berthTabs}>

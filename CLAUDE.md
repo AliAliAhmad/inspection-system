@@ -70,11 +70,24 @@
 
 | Date | What Changed | Status |
 |------|-------------|--------|
+| 2026-02-18 | Item 5a: Fixed voice recording never stops — added 120s safety timeout, try/catch around stopAndUnloadAsync, full state reset on error | ✅ Done |
+| 2026-02-18 | Item 5b: Fixed photo/video upload — added I18nManager import, Android file:// URI prefix, better network error messages | ✅ Done |
+| 2026-02-18 | Item 5c: Created UrgentAlertOverlay + UrgentAlertProvider — full-screen red pulsing alert with vibration for priority messages | ✅ Done |
+| 2026-02-18 | Items 3-13 mobile fixes: Removed Previous Answer panel (Item 6), fixed toggle overflow (Item 7), smart submit navigation (Item 11), role-scoped work plan (Item 13) | ✅ Done |
+| 2026-02-18 | Item 5a: Fixed voice recording never stops — safety timeout, robust stop, state reset on error | ✅ Done |
+| 2026-02-18 | Item 5b: Fixed chat photo/video upload — I18nManager import, Android file URI, unique filenames | ✅ Done |
+| 2026-02-18 | Item 5c: Created UrgentAlertOverlay + UrgentAlertProvider — full-screen red alert with vibration + sound for urgent messages | ✅ Done |
+| 2026-02-18 | Item 5d + 12: Fixed ChannelListScreen members button — robust user fetch with fallback, role badges, shift labels, loading/empty states, clear search, mode bar | ✅ Done |
+| 2026-02-18 | Fixed goToNext TS error in InspectionWizardScreen — replaced forward reference with direct goToIndex call in handleSkip | ✅ Done |
 | 2026-02-13 | Project setup | ✅ Done |
+| 2026-02-18 | Item 10: Voice recording for stop/monitor verdict reason — replaced VoiceTextInput with VoiceNoteRecorder, removed min-char validation, added voice URL support to backend/frontend | ✅ Done |
+| 2026-02-18 | Item 8: 2nd inspector media prefill — colleague answers now include photo/video/voice/AI analysis, added batch-save effect for prefilled answers | ✅ Done |
 | 2026-02-18 | Added missing i18n keys to en.json and ar.json — job_execution, profile, assessment, assignments, checklist, notifications sections | ✅ Done |
 | 2026-02-18 | Simplified CreateHandoverScreen — replaced 3 complex sections (12+ fields) with unified type-tagged item list | ✅ Done |
 | 2026-02-18 | Fixed LiveAlertBanner phone overlap — added SafeAreaView insets padding so banner sits below status bar | ✅ Done |
 | 2026-02-18 | Fixed LiveAlertBanner Arabic detection — switched from I18nManager.isRTL to useTranslation i18n.language | ✅ Done |
+| 2026-02-18 | Item 9: Fixed AssessmentScreen verdict display (equipment name, system verdict fallback, comparison card when both inspectors submit) | ✅ Done |
+| 2026-02-18 | Item 3: Created InspectionDetailScreen — full read-only inspection details with photo/video/voice/AI analysis, registered route, added i18n keys (en/ar) | ✅ Done |
 | 2026-02-18 | Created Unplanned Jobs API — model, POST/GET/GET-by-ID endpoints, engineer/admin notifications, registered blueprint | ✅ Done |
 | 2026-02-18 | Created reusable MonitorFollowupForm component (web) for scheduling follow-up inspections with auto-fill inspectors | ✅ Done |
 | 2026-02-16 | Fix React error #310 — moved useCallback before early return in LiveTicker.tsx | ✅ Done |
@@ -255,6 +268,8 @@
 | SambaNova integration | ✅ Done | Free vision + voice (Llama-4-Maverick, Whisper-Large-v3) |
 | OpenRouter free vision | ✅ Done | 6 free models (Llama 4 Scout, Qwen 2.5 VL, Gemma 3, Mistral) |
 | Together AI integration | ✅ Done | Vision (Llama-4-Maverick, Qwen3-VL) + voice (Whisper) |
+| Assessment verdict comparison | ✅ Done | Comparison card with match/mismatch indicators, system verdict fallback |
+| Inspection detail screen | ✅ Done | Full read-only view with photos, video, voice, AI analysis, urgency badges |
 | Mobile component integration | ✅ Done | All orphaned components wired into screens |
 | Chat tab in navigation | ✅ Done | All roles have Chat tab in bottom nav |
 | Accessibility settings | ✅ Done | High contrast, bold text, reduce motion, text scaling |
@@ -291,6 +306,8 @@
 | Shift Handover voice notes | ✅ Done | VoiceNoteRecorder with transcription added to CreateHandoverScreen |
 | Create Channel screen | ✅ Done | Admin/engineer create Group/Announcement/Shift channels with member selection |
 | Unplanned Job backend API | ✅ Done | POST/GET/GET-by-id, model, migration, notifications to admin/engineer |
+| Voice recording for verdict reason | ✅ Done | VoiceNoteRecorder replaces VoiceTextInput for monitor/stop reasons, voice URL stored in backend |
+| 2nd inspector media prefill | ✅ Done | Colleague answers now prefill photo/video/voice/AI analysis + batch-save to server |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

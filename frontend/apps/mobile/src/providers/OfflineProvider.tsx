@@ -136,7 +136,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   // Monitor network status
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
-      const online = !!(state.isConnected && state.isInternetReachable !== false);
+      // Use isConnected as primary check — isInternetReachable is unreliable on Android emulators
+      const online = !!state.isConnected;
 
       // Track if we were offline
       if (!online) {

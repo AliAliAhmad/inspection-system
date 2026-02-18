@@ -84,7 +84,9 @@ def submit_verdict(assessment_id):
         verdict=data['verdict'],
         monitor_reason=data.get('monitor_reason'),
         stop_reason=data.get('stop_reason'),
-        urgent_reason=data.get('urgent_reason')  # Legacy support
+        urgent_reason=data.get('urgent_reason'),  # Legacy support
+        monitor_voice_url=data.get('monitor_voice_url'),
+        stop_voice_url=data.get('stop_voice_url'),
     )
 
     # Auto-translate reason fields

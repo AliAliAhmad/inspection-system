@@ -100,7 +100,7 @@ function QuickActions({ isAr, colors, navigation }: { isAr: boolean; colors: any
   const actions = [
     { icon: '📋', label: isAr ? 'بدء فحص' : 'Start Inspection', screen: 'Assignments', color: '#1976D2' },
     { icon: '⚠️', label: isAr ? 'إبلاغ عيب' : 'Report Defect', screen: 'Defects', color: '#E53935' },
-    { icon: '📅', label: isAr ? 'خطة العمل' : 'Work Plan', screen: 'MyWorkPlan', color: '#7B1FA2' },
+    { icon: '📅', label: isAr ? 'خطة العمل' : 'Work Plan', screen: 'WorkPlanOverview', color: '#7B1FA2' },
     { icon: '💬', label: isAr ? 'محادثة' : 'Team Chat', screen: 'ChannelList', color: '#00897B' },
   ];
 
@@ -330,20 +330,21 @@ export default function DashboardScreen() {
   const { colors } = useTheme();
   const isAdmin = user?.role === 'admin';
   const isEngineer = user?.role === 'engineer';
+  const isAdminOrEngineer = isAdmin || isEngineer;
   const isInspector = user?.role === 'inspector' || user?.role === 'specialist';
   const isAr = i18n.language === 'ar';
 
-  // Dashboard data
+  // Dashboard data — inspectors/specialists see their own stats, admin/engineers see the full picture
   const { data: dashData, isLoading: dashLoading, refetch: dashRefetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => reportsApi.getDashboard().then(r => r.data.data ?? { total_inspections: 0, pending_defects: 0, active_jobs: 0, completion_rate: 0 }),
-    enabled: !isAdmin,
+    enabled: !isAdminOrEngineer,
   });
 
   const { data: adminData, isLoading: adminLoading, refetch: adminRefetch } = useQuery({
     queryKey: ['admin-dashboard'],
     queryFn: () => reportsApi.getAdminDashboard().then(r => r.data.data),
-    enabled: isAdmin,
+    enabled: isAdminOrEngineer,
   });
 
   // Personal assignment stats (for assignment summary + weekly trend)
@@ -353,9 +354,9 @@ export default function DashboardScreen() {
     staleTime: 60000,
   });
 
-  const loading = isAdmin ? adminLoading : dashLoading;
+  const loading = isAdminOrEngineer ? adminLoading : dashLoading;
   const refetch = () => {
-    if (isAdmin) adminRefetch();
+    if (isAdminOrEngineer) adminRefetch();
     else dashRefetch();
     refetchStats();
   };
@@ -416,7 +417,7 @@ export default function DashboardScreen() {
           )}
 
           {/* === Stats Grid === */}
-          {isAdmin && adminData ? (
+          {isAdminOrEngineer && adminData ? (
             <View style={s.grid}>
               <StatCard title={t('nav.users')} value={adminData.users_count} colors={colors} />
               <StatCard title={t('nav.equipment')} value={adminData.equipment_count} colors={colors} />
@@ -468,6 +469,11 @@ export default function DashboardScreen() {
             <>
               <Text style={[s.sectionTitle, { color: colors.text }]}>{t('nav.quick_links', 'Quick Access')}</Text>
               <QuickLink icon="⚠️" label={t('nav.defects', 'Defects')} onPress={() => navigation.navigate('Defects')} colors={colors} />
+              <QuickLink icon="⚙️" label={t('nav.equipment', 'Equipment')} onPress={() => navigation.navigate('Equipment')} colors={colors} />
+              <QuickLink icon="📊" label={t('nav.allInspections', 'All Inspections')} onPress={() => navigation.navigate('AllInspections')} colors={colors} />
+              <QuickLink icon="📅" label={t('nav.schedules', 'Schedules')} onPress={() => navigation.navigate('Schedules')} colors={colors} />
+              <QuickLink icon="👥" label={t('nav.teamRoster', 'Team Roster')} onPress={() => navigation.navigate('TeamRoster')} colors={colors} />
+              <QuickLink icon="📦" label={t('nav.backlog', 'Backlog')} onPress={() => navigation.navigate('Backlog')} colors={colors} />
               <QuickLink icon="🎯" label={t('nav.assessmentTracking', 'Assessment Tracking')} onPress={() => navigation.navigate('AssessmentTracking')} colors={colors} />
               <QuickLink icon="🔍" label={t('nav.monitorFollowups', 'Monitor Follow-Ups')} onPress={() => navigation.navigate('MonitorFollowups')} colors={colors} />
             </>

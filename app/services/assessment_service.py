@@ -80,9 +80,11 @@ class AssessmentService:
         return assessment
 
     @staticmethod
-    def submit_verdict(assessment_id, inspector_id, verdict, monitor_reason=None, stop_reason=None, urgent_reason=None):
+    def submit_verdict(assessment_id, inspector_id, verdict, monitor_reason=None, stop_reason=None, urgent_reason=None, monitor_voice_url=None, stop_voice_url=None):
         """
         Submit inspector verdict (operational, monitor, or stop).
+        Voice URLs allow inspectors to record a voice reason instead of typing.
+        If a voice URL is provided, the text reason can be shorter (transcription).
         """
         assessment = db.session.get(FinalAssessment, assessment_id)
         if not assessment:
@@ -91,13 +93,7 @@ class AssessmentService:
         if verdict not in ('operational', 'monitor', 'stop'):
             raise ValidationError("Verdict must be 'operational', 'monitor', or 'stop'")
 
-        if verdict == 'monitor':
-            if not monitor_reason or len(monitor_reason.strip()) < 30:
-                raise ValidationError("Monitor reason must be at least 30 characters")
-
-        if verdict == 'stop':
-            if not stop_reason or len(stop_reason.strip()) < 50:
-                raise ValidationError("Stop reason must be at least 50 characters")
+        # No reason validation — voice recording playback is sufficient
 
         # Legacy support: urgent_reason maps to stop_reason
         if verdict == 'stop' and urgent_reason and not stop_reason:
@@ -118,19 +114,39 @@ class AssessmentService:
         else:
             raise ForbiddenError("You are not assigned to this assessment")
 
-        # Store reasons
-        if verdict == 'monitor' and monitor_reason:
-            existing = assessment.monitor_reason or ''
-            assessment.monitor_reason = (existing + '\n---\n' + monitor_reason) if existing else monitor_reason
+        # Store reasons (prepend voice URL if provided)
+        if verdict == 'monitor':
+            reason_text = monitor_reason or ''
+            if monitor_voice_url:
+                reason_text = f'[VOICE:{monitor_voice_url}]\n{reason_text}' if reason_text else f'[VOICE:{monitor_voice_url}]'
+            if reason_text:
+                existing = assessment.monitor_reason or ''
+                assessment.monitor_reason = (existing + '\n---\n' + reason_text) if existing else reason_text
 
-        if verdict == 'stop' and stop_reason:
-            existing = assessment.stop_reason or ''
-            assessment.stop_reason = (existing + '\n---\n' + stop_reason) if existing else stop_reason
+        if verdict == 'stop':
+            reason_text = stop_reason or ''
+            if stop_voice_url:
+                reason_text = f'[VOICE:{stop_voice_url}]\n{reason_text}' if reason_text else f'[VOICE:{stop_voice_url}]'
+            if reason_text:
+                existing = assessment.stop_reason or ''
+                assessment.stop_reason = (existing + '\n---\n' + reason_text) if existing else reason_text
 
         # Legacy urgent_reason field
-        if verdict == 'stop' and stop_reason:
+        if verdict == 'stop' and (stop_reason or stop_voice_url):
+            reason_text = stop_reason or ''
+            if stop_voice_url:
+                reason_text = f'[VOICE:{stop_voice_url}]\n{reason_text}' if reason_text else f'[VOICE:{stop_voice_url}]'
             existing = assessment.urgent_reason or ''
-            assessment.urgent_reason = (existing + '\n---\n' + stop_reason) if existing else stop_reason
+            assessment.urgent_reason = (existing + '\n---\n' + reason_text) if existing else reason_text
+
+        # Recompute system verdict with latest answers
+        from app.models.inspection import Inspection
+        inspections = Inspection.query.filter_by(assignment_id=assessment.inspection_assignment_id).all()
+        all_answers = []
+        for insp in inspections:
+            all_answers.extend(InspectionAnswer.query.filter_by(inspection_id=insp.id).all())
+        if all_answers:
+            assessment.apply_system_verdict(all_answers)
 
         # Evaluate multi-layer after both verdicts are in
         if assessment.mech_verdict and assessment.elec_verdict:

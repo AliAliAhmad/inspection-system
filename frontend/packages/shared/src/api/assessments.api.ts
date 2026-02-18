@@ -18,6 +18,8 @@ export interface VerdictPayload {
   monitor_reason?: string;
   stop_reason?: string;
   urgent_reason?: string; // Legacy
+  monitor_voice_url?: string;
+  stop_voice_url?: string;
 }
 
 export interface EngineerVerdictPayload {

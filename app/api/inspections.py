@@ -690,6 +690,71 @@ def start_inspection():
     }), 201
 
 
+@bp.route('/assignment/<int:assignment_id>/details', methods=['GET'])
+@jwt_required()
+def get_assignment_full_details(assignment_id):
+    """Get full inspection details for an assignment — all inspectors' answers combined."""
+    current_user = get_current_user()
+    language = get_language(current_user)
+
+    assignment = db.session.get(InspectionAssignment, assignment_id)
+    if not assignment:
+        raise NotFoundError(f"Assignment {assignment_id} not found")
+
+    equipment = db.session.get(Equipment, assignment.equipment_id)
+
+    # Get ALL inspections for this assignment (both inspectors)
+    inspections = Inspection.query.filter_by(
+        assignment_id=assignment_id,
+    ).order_by(Inspection.started_at.desc()).all()
+
+    if not inspections:
+        raise NotFoundError("No inspections found for this assignment")
+
+    # Merge all answers from all inspectors, grouped by checklist_item_id
+    from app.models import ChecklistItem
+    template_id = inspections[0].template_id
+    template_items = ChecklistItem.query.filter_by(
+        template_id=template_id
+    ).order_by(ChecklistItem.order_index).all()
+
+    merged_answers = {}
+    inspector_names = {}
+    for insp in inspections:
+        tech = db.session.get(User, insp.technician_id)
+        inspector_names[insp.technician_id] = tech.full_name if tech else f'Inspector #{insp.technician_id}'
+        insp_dict = insp.to_dict(include_answers=True, language=language)
+        for ans in insp_dict.get('answers', []):
+            item_id = ans.get('checklist_item_id')
+            if item_id not in merged_answers:
+                merged_answers[item_id] = ans
+                merged_answers[item_id]['inspector_name'] = inspector_names[insp.technician_id]
+            else:
+                # Add as second inspector's answer
+                merged_answers[item_id]['inspector2_answer'] = ans.get('answer_value')
+                merged_answers[item_id]['inspector2_name'] = inspector_names[insp.technician_id]
+                merged_answers[item_id]['inspector2_comment'] = ans.get('comment')
+
+    primary = inspections[0]
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'id': primary.id,
+            'assignment_id': assignment_id,
+            'equipment_id': assignment.equipment_id,
+            'equipment_name': equipment.name if equipment else None,
+            'template_id': template_id,
+            'result': primary.result,
+            'status': primary.status,
+            'submitted_at': primary.submitted_at.isoformat() if primary.submitted_at else None,
+            'started_at': primary.started_at.isoformat() if primary.started_at else None,
+            'inspectors': inspector_names,
+            'answers': list(merged_answers.values()),
+            'checklist_items': [item.to_dict(language=language) for item in template_items],
+        },
+    }), 200
+
+
 @bp.route('/by-assignment/<int:assignment_id>', methods=['GET'])
 @jwt_required()
 def get_or_start_by_assignment(assignment_id):

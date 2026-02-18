@@ -1471,7 +1471,13 @@
     "your_verdict_label": "تقييمك",
     "system_auto": "النظام",
     "engineer_role": "المهندس",
-    "admin_role": "المدير"
+    "admin_role": "المدير",
+    "viewFullDetails": "عرض التفاصيل الكاملة",
+    "inspectorVerdict": "حكم المفتشين",
+    "verdictMatch": "تطابق",
+    "verdictMismatch": "عدم تطابق",
+    "comparisonTitle": "مقارنة الأحكام",
+    "escalated": "تم التصعيد"
   },
   "assignments": {
     "ok": "سليم",
@@ -1595,6 +1601,12 @@
     "queued_offline": "تم الحفظ بدون اتصال. ستتم المزامنة عند الاتصال.",
     "items_synced": "تمت مزامنة {{count}} عناصر بنجاح",
     "items_failed": "فشلت مزامنة {{count}} عناصر"
+  },
+  "inspection_detail": {
+    "title": "تفاصيل الفحص",
+    "no_photo": "لا توجد صورة",
+    "play_voice": "تشغيل الملاحظة الصوتية",
+    "ai_analysis": "تحليل الذكاء الاصطناعي"
   },
   "unplanned_job": {
     "title": "تسجيل عمل غير مخطط",

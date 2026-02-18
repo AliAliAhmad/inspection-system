@@ -139,6 +139,10 @@ export const inspectionsApi = {
     return getApiClient().get<ApiResponse<Inspection>>(`/api/inspections/by-assignment/${assignmentId}`);
   },
 
+  getAssignmentFullDetails(assignmentId: number) {
+    return getApiClient().get<ApiResponse<any>>(`/api/inspections/assignment/${assignmentId}/details`);
+  },
+
   start(payload: StartInspectionPayload) {
     return getApiClient().post<ApiResponse<Inspection>>('/api/inspections/start', payload);
   },

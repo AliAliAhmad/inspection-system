@@ -65,4 +65,9 @@ export const teamCommunicationApi = {
   searchMessages(query: string) {
     return getApiClient().get<ApiResponse<TeamMessage[]>>('/api/communication/search', { params: { q: query } });
   },
+
+  // Users - lightweight list for chat (accessible by all authenticated users)
+  getChatUsers() {
+    return getApiClient().get<ApiResponse<Array<{ id: number; full_name: string; role: string; shift: string | null; employee_id: string | null; specialization: string | null }>>>('/api/communication/users');
+  },
 };

@@ -8,8 +8,8 @@ interface Environment {
 
 const ENV: Record<string, Environment> = {
   development: {
-    // Use local server for development (change IP if needed)
-    apiUrl: 'http://192.168.1.13:5001',
+    // Android emulator uses 10.0.2.2 to reach host localhost
+    apiUrl: 'http://10.0.2.2:5000',
     appName: 'Inspection System (Dev)',
     isDev: true,
   },
@@ -26,7 +26,10 @@ const ENV: Record<string, Environment> = {
 };
 
 function getEnvironment(): Environment {
-  // Use production Render server
+  // __DEV__ is true when running in Metro dev server
+  if (__DEV__) {
+    return ENV.development;
+  }
   return ENV.production;
 }
 

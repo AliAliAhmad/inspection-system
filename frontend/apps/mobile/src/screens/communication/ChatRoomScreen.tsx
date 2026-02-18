@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Vibration,
   ActivityIndicator,
   Alert,
+  I18nManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +27,9 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { filesApi } from '@inspection/shared';
+import { UrgentAlertContext } from '../../providers/UrgentAlertProvider';
+
+const MAX_RECORDING_SECONDS = 120;
 
 export default function ChatRoomScreen() {
   const route = useRoute<any>();
@@ -37,15 +41,18 @@ export default function ChatRoomScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   const { channelId, channelName } = route.params || {};
+  const urgentAlert = useContext(UrgentAlertContext);
   const [message, setMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isVoiceUploading, setIsVoiceUploading] = useState(false);
   const [isMediaUploading, setIsMediaUploading] = useState(false);
+  const lastSeenPriorityIdRef = useRef<number>(0);
 
   // Recording refs
   const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const safetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Playback state
   const [playingMessageId, setPlayingMessageId] = useState<number | null>(null);
@@ -70,6 +77,22 @@ export default function ChatRoomScreen() {
     teamCommunicationApi.markRead(channelId).catch(() => {});
   }, [channelId]);
 
+  // Watch for incoming priority messages from other users
+  useEffect(() => {
+    if (!messages || messages.length === 0 || !urgentAlert) return;
+    const latestPriority = [...messages]
+      .reverse()
+      .find((m: TeamMessage) => m.is_priority && m.sender_id !== user?.id);
+    if (latestPriority && latestPriority.id > lastSeenPriorityIdRef.current) {
+      lastSeenPriorityIdRef.current = latestPriority.id;
+      urgentAlert.showUrgentAlert({
+        senderName: latestPriority.sender_name || 'Unknown',
+        channelName: channelName || 'Chat',
+        messagePreview: latestPriority.content || '',
+      });
+    }
+  }, [messages, user?.id, channelName, urgentAlert]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -84,6 +107,10 @@ export default function ChatRoomScreen() {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
+      }
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+        safetyTimeoutRef.current = null;
       }
     };
   }, []);
@@ -120,6 +147,25 @@ export default function ChatRoomScreen() {
     }).catch(() => {});
   }, [channelId, queryClient]);
 
+  // Helper to fully reset recording state
+  const resetRecordingState = useCallback(() => {
+    setIsRecording(false);
+    setRecordingTime(0);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
+    // Force-stop any lingering recording object
+    if (recordingRef.current) {
+      recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      recordingRef.current = null;
+    }
+  }, []);
+
   // === Voice Recording ===
   const startRecording = useCallback(async () => {
     try {
@@ -146,27 +192,63 @@ export default function ChatRoomScreen() {
       Vibration.vibrate(50);
 
       timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
+        setRecordingTime((prev) => {
+          const next = prev + 1;
+          // Safety: auto-stop at MAX_RECORDING_SECONDS is handled by safetyTimeoutRef
+          return next;
+        });
       }, 1000);
+
+      // Safety timeout: auto-stop recording after MAX_RECORDING_SECONDS
+      safetyTimeoutRef.current = setTimeout(() => {
+        console.warn(`Recording safety timeout: auto-stopping after ${MAX_RECORDING_SECONDS}s`);
+        stopRecordingInternal();
+      }, MAX_RECORDING_SECONDS * 1000);
     } catch (err) {
       console.error('Failed to start recording:', err);
+      resetRecordingState();
     }
-  }, [isAr]);
+  }, [isAr, resetRecordingState]);
 
-  const stopRecording = useCallback(async () => {
-    if (!recordingRef.current) return;
-
+  // Internal stop logic — used by both manual stop and safety timeout
+  const stopRecordingInternal = useCallback(async () => {
+    // Clear timers first
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+    if (safetyTimeoutRef.current) {
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = null;
+    }
+
+    const currentRecording = recordingRef.current;
+    if (!currentRecording) {
+      setIsRecording(false);
+      setRecordingTime(0);
+      return;
     }
 
     setIsRecording(false);
     const durationSecs = recordingTime;
 
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
+      // Attempt to get status first — if recording is already stopped, skip
+      let uri: string | null = null;
+      try {
+        const status = await currentRecording.getStatusAsync();
+        if (status.isRecording) {
+          await currentRecording.stopAndUnloadAsync();
+        }
+        uri = currentRecording.getURI();
+      } catch (stopErr) {
+        console.error('Error stopping recording, attempting getURI anyway:', stopErr);
+        try {
+          uri = currentRecording.getURI();
+        } catch {
+          uri = null;
+        }
+      }
       recordingRef.current = null;
 
       if (!uri || durationSecs < 1) return;
@@ -220,11 +302,27 @@ export default function ChatRoomScreen() {
         ? (isAr ? 'انتهت المهلة. حاول مرة أخرى.' : 'Upload timeout. Try again.')
         : (isAr ? 'فشل رفع الصوت' : 'Voice upload failed');
       Alert.alert(isAr ? 'خطأ' : 'Error', msg);
+      // Ensure recording ref is cleaned up on error
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        recordingRef.current = null;
+      }
     } finally {
       setIsVoiceUploading(false);
       setRecordingTime(0);
+      setIsRecording(false);
     }
   }, [recordingTime, isAr, sendMutation]);
+
+  // Public stop function wraps internal with try/catch to never get stuck
+  const stopRecording = useCallback(async () => {
+    try {
+      await stopRecordingInternal();
+    } catch (err) {
+      console.error('stopRecording outer catch:', err);
+      resetRecordingState();
+    }
+  }, [stopRecordingInternal, resetRecordingState]);
 
   // WhatsApp-style: hold to record, release to send
   const handleMicPressIn = useCallback(() => {
@@ -316,11 +414,17 @@ export default function ChatRoomScreen() {
 
       // Upload via FormData
       const formData = new FormData();
-      const fileName = asset.fileName || (mediaType === 'video' ? 'video.mp4' : 'photo.jpg');
+      const fileName = asset.fileName || (mediaType === 'video' ? `video_${Date.now()}.mp4` : `photo_${Date.now()}.jpg`);
       const mimeType = asset.mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
 
+      // Ensure file URI has proper prefix on Android
+      let fileUri = asset.uri;
+      if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
+        fileUri = `file://${fileUri}`;
+      }
+
       formData.append('file', {
-        uri: asset.uri,
+        uri: fileUri,
         name: fileName,
         type: mimeType,
       } as any);
@@ -328,6 +432,8 @@ export default function ChatRoomScreen() {
       formData.append('related_id', String(channelId));
       formData.append('category', mediaType);
 
+      // NOTE: Do NOT manually set Content-Type header — let RN/axios set
+      // multipart/form-data with the correct boundary automatically
       const uploadRes = await filesApi.uploadFormData(formData);
       const fileRecord = (uploadRes.data as any)?.data;
       const mediaUrl = fileRecord?.url || fileRecord?.cloudinary_url;
@@ -343,7 +449,12 @@ export default function ChatRoomScreen() {
       });
     } catch (err: any) {
       console.error('Media upload failed:', err);
-      Alert.alert(isAr ? 'خطأ' : 'Error', isAr ? 'فشل رفع الملف' : 'Media upload failed');
+      const errMsg = err?.message || '';
+      let userMsg = isAr ? 'فشل رفع الملف' : 'Media upload failed';
+      if (errMsg.includes('Network Error') || errMsg.includes('timeout')) {
+        userMsg = isAr ? 'خطأ في الشبكة. تحقق من الاتصال وحاول مرة أخرى.' : 'Network error. Check your connection and try again.';
+      }
+      Alert.alert(isAr ? 'خطأ' : 'Error', userMsg);
     } finally {
       setIsMediaUploading(false);
     }
