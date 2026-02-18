@@ -14,7 +14,7 @@ import {
 import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,6 +23,7 @@ import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAuth } from '../../providers/AuthProvider';
 import {
   inspectionsApi,
+  defectsApi,
   Inspection,
   InspectionAnswer,
   ChecklistItem,
@@ -356,7 +357,7 @@ export default function InspectionChecklistScreen() {
     async (checklistItemId: number) => {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(t('common.error'), 'Camera permission is required.');
+        Alert.alert(t('common.error'), t('checklist.camera_permission_required'));
         return;
       }
 
@@ -377,7 +378,7 @@ export default function InspectionChecklistScreen() {
     async (checklistItemId: number) => {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(t('common.error'), 'Gallery permission is required.');
+        Alert.alert(t('common.error'), t('checklist.gallery_permission_required'));
         return;
       }
 
@@ -494,7 +495,7 @@ export default function InspectionChecklistScreen() {
           onPress={() => handleAnswer(item.id, 'yes')}
         >
           <Text style={[styles.toggleBtnText, val === 'yes' && styles.toggleBtnTextActive]}>
-            Yes
+            {t('checklist.yes')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -502,7 +503,7 @@ export default function InspectionChecklistScreen() {
           onPress={() => handleAnswer(item.id, 'no')}
         >
           <Text style={[styles.toggleBtnText, val === 'no' && styles.toggleBtnTextActive]}>
-            No
+            {t('checklist.no')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -518,7 +519,7 @@ export default function InspectionChecklistScreen() {
           onPress={() => handleAnswer(item.id, 'pass')}
         >
           <Text style={[styles.toggleBtnText, val === 'pass' && styles.toggleBtnTextActive]}>
-            Pass
+            {t('checklist.pass')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -526,7 +527,7 @@ export default function InspectionChecklistScreen() {
           onPress={() => handleAnswer(item.id, 'fail')}
         >
           <Text style={[styles.toggleBtnText, val === 'fail' && styles.toggleBtnTextActive]}>
-            Fail
+            {t('checklist.fail')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -603,7 +604,7 @@ export default function InspectionChecklistScreen() {
     async (checklistItemId: number) => {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(t('common.error'), 'Camera permission is required.');
+        Alert.alert(t('common.error'), t('checklist.camera_permission_required'));
         return;
       }
 
@@ -905,7 +906,7 @@ export default function InspectionChecklistScreen() {
             {isUploading && (
               <View style={styles.uploadOverlay}>
                 <ActivityIndicator color="#fff" size="large" />
-                <Text style={styles.uploadingText}>Uploading...</Text>
+                <Text style={styles.uploadingText}>{t('checklist.uploading')}</Text>
               </View>
             )}
             {!isUploading && inspData.status === 'draft' && (
@@ -987,7 +988,7 @@ export default function InspectionChecklistScreen() {
             {isUploading && (
               <View style={styles.uploadOverlay}>
                 <ActivityIndicator color="#fff" size="large" />
-                <Text style={styles.uploadingText}>Uploading video...</Text>
+                <Text style={styles.uploadingText}>{t('checklist.uploading_video')}</Text>
               </View>
             )}
             {!isUploading && inspData.status === 'draft' && (
@@ -1065,6 +1066,24 @@ export default function InspectionChecklistScreen() {
   }
 
   const inspData = inspection as Inspection;
+  const equipmentId = (inspData as any).equipment_id ?? (inspData as any).equipment?.id;
+
+  // Query open field-reported defects for this equipment
+  const fieldReportsQuery = useQuery({
+    queryKey: ['field-reports', equipmentId],
+    queryFn: () => defectsApi.listQuickReports({ type: 'all', per_page: 10 }),
+    enabled: !!equipmentId,
+    select: (res) => {
+      const items = (res.data as any)?.data ?? [];
+      return items.filter((d: any) =>
+        d.status === 'open' &&
+        d.equipment_id === equipmentId &&
+        d.report_source &&
+        d.report_source !== 'inspection'
+      );
+    },
+  });
+  const fieldReports: any[] = fieldReportsQuery.data ?? [];
 
   // Merge checklist items from two sources:
   // 1. checklist_items array from getByAssignment response (includes all template items)
@@ -1116,6 +1135,25 @@ export default function InspectionChecklistScreen() {
         </View>
       </View>
 
+      {/* Field-reported defects banner */}
+      {fieldReports.length > 0 && (
+        <View style={styles.fieldReportsBanner}>
+          <Text style={styles.fieldReportsBannerTitle}>
+            ⚠️ {t('quick_report.pending_reports', { defaultValue: `${fieldReports.length} Field Report(s)`, count: fieldReports.length })}
+          </Text>
+          {fieldReports.slice(0, 3).map((report: any) => (
+            <Text key={report.id} style={styles.fieldReportItem} numberOfLines={1}>
+              • {report.description}
+            </Text>
+          ))}
+          {fieldReports.length > 3 && (
+            <Text style={styles.fieldReportMore}>
+              +{fieldReports.length - 3} more
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Progress */}
       <View style={styles.progressCard}>
         <Text style={styles.progressLabel}>
@@ -1146,8 +1184,8 @@ export default function InspectionChecklistScreen() {
               >
                 <Text style={[styles.filterToggleText, showOnlyUnanswered && styles.filterToggleTextActive]}>
                   {showOnlyUnanswered
-                    ? (isArabic ? 'عرض الكل' : 'Show All')
-                    : (isArabic ? 'غير مجاب' : 'Unanswered')}
+                    ? t('checklist.show_all')
+                    : t('checklist.unanswered')}
                 </Text>
                 {unansweredCount > 0 && (
                   <View style={styles.filterBadge}>
@@ -1159,7 +1197,7 @@ export default function InspectionChecklistScreen() {
             {displayItems.length === 0 ? (
               <Text style={styles.noItemsText}>
                 {showOnlyUnanswered
-                  ? (isArabic ? 'تم الإجابة على جميع الأسئلة!' : 'All questions answered!')
+                  ? t('checklist.all_answered')
                   : t('common.noData')}
               </Text>
             ) : (
@@ -1213,6 +1251,32 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
+  },
+  fieldReportsBanner: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  fieldReportsBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E65100',
+    marginBottom: 6,
+  },
+  fieldReportItem: {
+    fontSize: 13,
+    color: '#424242',
+    marginBottom: 2,
+    paddingLeft: 4,
+  },
+  fieldReportMore: {
+    fontSize: 12,
+    color: '#757575',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   headerTitle: {
     fontSize: 18,

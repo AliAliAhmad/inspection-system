@@ -25,6 +25,9 @@ import type {
   AssignSpecialistPayload,
 } from '@inspection/shared';
 import VoiceTextInput from '../../components/VoiceTextInput';
+import { useAuth } from '../../providers/AuthProvider';
+
+const ADMIN_ROLES = ['admin', 'engineer'];
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#E53935',
@@ -64,9 +67,13 @@ function Badge({ label, color }: { label: string; color: string }) {
 function DefectCard({
   defect,
   onAssign,
+  onView,
+  canAssignRole,
 }: {
   defect: Defect;
   onAssign: (d: Defect) => void;
+  onView: (d: Defect) => void;
+  canAssignRole: boolean;
 }) {
   const { t } = useTranslation();
   const severityColor = SEVERITY_COLORS[defect.severity] ?? '#757575';
@@ -78,7 +85,7 @@ function DefectCard({
     : null;
 
   const hasJob = !!(defect as any).specialist_job;
-  const canAssign = !hasJob && defect.status !== 'closed' && defect.status !== 'resolved';
+  const canAssign = canAssignRole && !hasJob && defect.status !== 'closed' && defect.status !== 'resolved';
 
   return (
     <View style={styles.card}>
@@ -118,23 +125,36 @@ function DefectCard({
           {dueDateLabel && <Text style={styles.dateText}>{dueDateLabel}</Text>}
         </View>
 
-        <TouchableOpacity
-          style={[styles.assignButton, !canAssign && styles.assignButtonDisabled]}
-          onPress={() => onAssign(defect)}
-          disabled={!canAssign}
-        >
-          <Text style={[styles.assignButtonText, !canAssign && styles.assignButtonTextDisabled]}>
-            {hasJob ? t('defects.assigned', 'Assigned') : t('defects.assign', 'Assign')}
-          </Text>
-        </TouchableOpacity>
+        {canAssignRole ? (
+          <TouchableOpacity
+            style={[styles.assignButton, !canAssign && styles.assignButtonDisabled]}
+            onPress={() => onAssign(defect)}
+            disabled={!canAssign}
+          >
+            <Text style={[styles.assignButtonText, !canAssign && styles.assignButtonTextDisabled]}>
+              {hasJob ? t('defects.assigned', 'Assigned') : t('defects.assign', 'Assign')}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.viewButton}
+            onPress={() => onView(defect)}
+          >
+            <Text style={styles.viewButtonText}>
+              {t('common.view', 'View')}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 }
 
-export default function DefectsScreen() {
+export default function DefectsScreen({ navigation }: any) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canAssignRole = ADMIN_ROLES.includes(user?.role || '');
   const [activeFilter, setActiveFilter] = useState<DefectStatus | null>(null);
   const [page, setPage] = useState(1);
 
@@ -232,6 +252,10 @@ export default function DefectsScreen() {
     setSelectedCategory(null);
     setMajorReason('');
     setAssignModalVisible(true);
+  };
+
+  const handleViewPress = (defect: Defect) => {
+    navigation?.navigate('DefectDetail', { defectId: defect.id });
   };
 
   const handleAssignSubmit = () => {
@@ -340,7 +364,7 @@ export default function DefectsScreen() {
       <FlatList
         data={defects}
         keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => <DefectCard defect={item} onAssign={handleAssignPress} />}
+        renderItem={({ item }) => <DefectCard defect={item} onAssign={handleAssignPress} onView={handleViewPress} canAssignRole={canAssignRole} />}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
@@ -652,6 +676,8 @@ const styles = StyleSheet.create({
   assignButtonDisabled: { backgroundColor: '#BDBDBD' },
   assignButtonText: { color: '#fff', fontWeight: '600', fontSize: 13 },
   assignButtonTextDisabled: { color: '#757575' },
+  viewButton: { backgroundColor: '#E3F2FD', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#90CAF9' },
+  viewButtonText: { color: '#1565C0', fontWeight: '600', fontSize: 13 },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   emptyContainer: { paddingTop: 60, alignItems: 'center' },
   emptyText: { fontSize: 15, color: '#757575' },

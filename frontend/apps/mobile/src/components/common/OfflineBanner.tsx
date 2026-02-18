@@ -208,7 +208,7 @@ export default function OfflineBanner({ onPress }: OfflineBannerProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 10,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -282,23 +282,24 @@ const styles = StyleSheet.create({
   },
   iconText: {
     color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
   },
   textContainer: {
     flex: 1,
   },
   title: {
     color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '800',
   },
   syncingTitle: {
     color: COLORS.textDark,
   },
   subtitle: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '600',
     marginTop: 2,
   },
   syncingSubtitle: {
@@ -313,8 +314,8 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   chevron: {
     paddingLeft: 4,
@@ -332,8 +333,8 @@ const styles = StyleSheet.create({
   },
   viewButtonText: {
     color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
   },
   syncingButtonText: {
     color: COLORS.textDark,
@@ -349,8 +350,8 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     color: COLORS.white,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   retryButtonTextFailed: {
     color: COLORS.offline,

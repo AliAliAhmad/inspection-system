@@ -80,6 +80,8 @@ export * from './previous-inspection.types';
 export * from './templates.types';
 // Shift Handover types
 export * from './shift-handover.types';
+// Monitor Follow-Up types
+export * from './monitor-followup.types';
 // Color constants (values, not types)
 export {
   RISK_COLORS,

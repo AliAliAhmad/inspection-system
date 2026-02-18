@@ -663,8 +663,43 @@ def init_scheduler(app):
         replace_existing=True
     )
 
+    # ── Monitor Follow-Up Jobs ──
+
+    # 21. Create follow-up assignments for today's scheduled follow-ups (1:05 PM)
+    @run_with_context
+    def create_followup_assignments():
+        from app.services.monitor_followup_service import MonitorFollowupService
+        from datetime import date
+        logger.info("Running: create_followup_assignments")
+        results = MonitorFollowupService.create_followup_assignments_for_date(date.today())
+        logger.info(f"Follow-up assignments: {results.get('created', 0)} created, {results.get('errors', 0)} errors")
+
+    # 22. Check for overdue follow-ups (8:30 AM)
+    @run_with_context
+    def check_overdue_followups():
+        from app.services.monitor_followup_service import MonitorFollowupService
+        logger.info("Running: check_overdue_followups")
+        results = MonitorFollowupService.check_overdue_followups()
+        logger.info(f"Overdue check: {results.get('newly_overdue', 0)} newly overdue, {results.get('notifications_sent', 0)} notifications")
+
+    scheduler.add_job(
+        create_followup_assignments,
+        CronTrigger(hour=13, minute=5),
+        id='create_followup_assignments',
+        name='Create follow-up inspection assignments daily at 1:05 PM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        check_overdue_followups,
+        CronTrigger(hour=8, minute=30),
+        id='check_overdue_followups',
+        name='Check overdue follow-ups daily at 8:30 AM',
+        replace_existing=True
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
-    logger.info("Background scheduler started with 20 scheduled jobs")
+    logger.info("Background scheduler started with 22 scheduled jobs")
 
     return scheduler

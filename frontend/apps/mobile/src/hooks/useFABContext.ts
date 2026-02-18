@@ -2,11 +2,10 @@
  * useFABContext Hook
  * Provides context-aware FAB actions based on current screen and state
  */
-import { useMemo, useCallback, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toolkitApi } from '@inspection/shared';
 import { navigationRef, navigate } from '../navigation/navigationRef';
-import type { RootStackParamList } from '../navigation/RootNavigator';
 
 export type FABAction = {
   id: string;
@@ -16,30 +15,38 @@ export type FABAction = {
   color: string;
   onPress: () => void;
   isPrimary?: boolean;
-  pulse?: boolean; // For important actions that need attention
+  pulse?: boolean;
 };
 
-export type FABContextType = 'dashboard' | 'job_list' | 'job_execution' | 'inspection' | 'chat' | 'default';
+export type FABContextType =
+  | 'dashboard'
+  | 'my_assignments'
+  | 'job_list'
+  | 'job_execution'
+  | 'inspection'
+  | 'work_plan'
+  | 'chat_list'
+  | 'chat_room'
+  | 'default';
 
 export type JobExecutionState = 'pending' | 'in_progress' | 'paused' | 'completed' | 'not_started';
 
 interface FABContextOptions {
-  // Job execution specific
   jobState?: JobExecutionState;
   onStartJob?: () => void;
   onPauseJob?: () => void;
   onResumeJob?: () => void;
   onCompleteJob?: () => void;
-
-  // Inspection specific
   onTakePhoto?: () => void;
-
-  // Chat specific
   onNewMessage?: () => void;
-
-  // Job list specific
   onFilter?: () => void;
   onSearch?: () => void;
+  // Chat room media
+  onSendVoice?: () => void;
+  onSendPhoto?: () => void;
+  onSendVideo?: () => void;
+  // User role for conditional actions
+  userRole?: string;
 }
 
 interface UseFABContextResult {
@@ -51,13 +58,12 @@ interface UseFABContextResult {
   mainIcon: string;
 }
 
-// Map route names to FAB context types
 const ROUTE_CONTEXT_MAP: Record<string, FABContextType> = {
-  // Dashboard screens
   'Home': 'dashboard',
   'MainTabs': 'dashboard',
 
-  // Job list screens
+  'MyAssignmentsScreen': 'my_assignments',
+
   'Jobs': 'job_list',
   'Assignments': 'job_list',
   'AllSpecialistJobs': 'job_list',
@@ -65,54 +71,54 @@ const ROUTE_CONTEXT_MAP: Record<string, FABContextType> = {
   'AllInspections': 'job_list',
   'SpecialistJobsScreen': 'job_list',
   'EngineerJobsScreen': 'job_list',
-  'MyAssignmentsScreen': 'job_list',
 
-  // Job execution screens
   'JobExecution': 'job_execution',
   'SpecialistJobDetail': 'job_execution',
   'EngineerJobDetail': 'job_execution',
 
-  // Inspection screens
   'InspectionChecklist': 'inspection',
   'InspectionWizard': 'inspection',
 
-  // Chat screens
-  'ChatRoom': 'chat',
-  'ChannelList': 'chat',
+  'WorkPlanOverview': 'work_plan',
+
+  'ChannelList': 'chat_list',
+  'ChatRoom': 'chat_room',
 };
 
-// Colors
-const COLORS = {
+const C = {
   primary: '#1677ff',
   success: '#52c41a',
   warning: '#faad14',
   danger: '#ff4d4f',
   purple: '#722ed1',
   cyan: '#13c2c2',
+  report: '#E53935',
+  voice: '#7B1FA2',
+};
+
+// Quick Report action — present in EVERY context
+const QUICK_REPORT: FABAction = {
+  id: 'quick_report',
+  label: 'Quick Report',
+  labelAr: 'تقرير سريع',
+  icon: '📸',
+  color: C.report,
+  onPress: () => navigate('QuickFieldReport'),
 };
 
 export function useFABContext(options: FABContextOptions = {}): UseFABContextResult {
-  // Use navigationRef instead of useNavigation/useRoute hooks
-  // (this hook is called from SmartFAB which renders outside the navigator)
   const [currentRouteName, setCurrentRouteName] = useState<string>('MainTabs');
 
   useEffect(() => {
     const updateRoute = () => {
       const route = navigationRef.getCurrentRoute();
-      if (route?.name) {
-        setCurrentRouteName(route.name);
-      }
+      if (route?.name) setCurrentRouteName(route.name);
     };
-
-    // Get initial route
     updateRoute();
-
-    // Listen for navigation state changes
     const unsubscribe = navigationRef.addListener('state', updateRoute);
     return () => unsubscribe();
   }, []);
 
-  // Get FAB enabled preference
   const { data: prefs } = useQuery({
     queryKey: ['toolkit-preferences'],
     queryFn: () => toolkitApi.getPreferences().then(r => r.data.data),
@@ -121,296 +127,273 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
 
   const isEnabled = prefs?.fab_enabled ?? true;
 
-  // Determine context type from route
   const contextType = useMemo<FABContextType>(() => {
     return ROUTE_CONTEXT_MAP[currentRouteName] || 'default';
   }, [currentRouteName]);
 
-  // Build actions based on context
   const { actions, mainAction, mainColor, mainIcon } = useMemo(() => {
     const {
-      jobState,
-      onStartJob,
-      onPauseJob,
-      onResumeJob,
-      onCompleteJob,
-      onTakePhoto,
-      onNewMessage,
-      onFilter,
-      onSearch,
+      jobState, onStartJob, onPauseJob, onResumeJob, onCompleteJob,
+      onTakePhoto, onNewMessage, onFilter, onSearch,
+      onSendVoice, onSendPhoto, onSendVideo,
+      userRole,
     } = options;
 
+    const isAdminOrEngineer = ['admin', 'engineer'].includes(userRole || '');
     let actions: FABAction[] = [];
     let mainAction: FABAction | null = null;
-    let mainColor = COLORS.primary;
+    let mainColor = C.primary;
     let mainIcon = '+';
 
     switch (contextType) {
+      // ─── DASHBOARD ───
       case 'dashboard':
-        // Dashboard: Add Job button with sub-actions
-        mainColor = COLORS.primary;
+        mainColor = C.primary;
         mainIcon = '+';
         mainAction = {
-          id: 'add_job',
-          label: 'Add Job',
-          labelAr: 'اضافة مهمة',
-          icon: '+',
-          color: COLORS.primary,
-          onPress: () => navigate('CreateJob'),
-          isPrimary: true,
+          id: 'add_job', label: 'Add Job', labelAr: 'اضافة مهمة',
+          icon: '+', color: C.primary,
+          onPress: () => navigate('CreateJob'), isPrimary: true,
         };
         actions = [
+          QUICK_REPORT,
           {
-            id: 'new_inspection',
-            label: 'New Inspection',
-            labelAr: 'فحص جديد',
-            icon: '📋',
-            color: COLORS.cyan,
+            id: 'my_work_plan', label: 'My Work Plan', labelAr: 'خطة عملي',
+            icon: '📅', color: C.cyan,
+            onPress: () => navigate('WorkPlanOverview'),
+          },
+          {
+            id: 'new_inspection', label: 'New Inspection', labelAr: 'فحص جديد',
+            icon: '📋', color: C.success,
             onPress: () => navigate('AllInspections'),
           },
           {
-            id: 'view_defects',
-            label: 'View Defects',
-            labelAr: 'عرض العيوب',
-            icon: '⚠️',
-            color: COLORS.warning,
-            onPress: () => navigate('Defects'),
+            id: 'voice_message', label: 'Voice Message', labelAr: 'رسالة صوتية',
+            icon: '🎙️', color: C.voice,
+            onPress: () => navigate('QuickVoiceMessage'),
           },
           {
-            id: 'team_chat',
-            label: 'Team Chat',
-            labelAr: 'محادثة الفريق',
-            icon: '💬',
-            color: COLORS.purple,
+            id: 'team_chat', label: 'Team Chat', labelAr: 'محادثة الفريق',
+            icon: '💬', color: C.purple,
             onPress: () => navigate('ChannelList'),
           },
         ];
         break;
 
-      case 'job_list':
-        // Job List: Filter/Search actions
-        mainColor = COLORS.primary;
-        mainIcon = '🔍';
+      // ─── MY ASSIGNMENTS ───
+      case 'my_assignments':
+        mainColor = C.success;
+        mainIcon = '▶️';
         mainAction = {
-          id: 'search',
-          label: 'Search',
-          labelAr: 'بحث',
-          icon: '🔍',
-          color: COLORS.primary,
-          onPress: onSearch || (() => {}),
-          isPrimary: true,
+          id: 'start_inspection', label: 'Start Inspection', labelAr: 'ابدأ الفحص',
+          icon: '▶️', color: C.success,
+          onPress: () => navigate('AllInspections'),
+          isPrimary: true, pulse: true,
         };
         actions = [
+          QUICK_REPORT,
           {
-            id: 'filter',
-            label: 'Filter',
-            labelAr: 'تصفية',
-            icon: '⚙️',
-            color: COLORS.cyan,
+            id: 'voice_message', label: 'Voice Message', labelAr: 'رسالة صوتية',
+            icon: '🎙️', color: C.voice,
+            onPress: () => navigate('QuickVoiceMessage'),
+          },
+          {
+            id: 'filter', label: 'Filter', labelAr: 'تصفية',
+            icon: '⚙️', color: C.cyan,
+            onPress: onFilter || (() => {}),
+          },
+        ];
+        break;
+
+      // ─── JOB LIST (other job screens) ───
+      case 'job_list':
+        mainColor = C.primary;
+        mainIcon = '🔍';
+        mainAction = {
+          id: 'search', label: 'Search', labelAr: 'بحث',
+          icon: '🔍', color: C.primary,
+          onPress: onSearch || (() => {}), isPrimary: true,
+        };
+        actions = [
+          QUICK_REPORT,
+          {
+            id: 'filter', label: 'Filter', labelAr: 'تصفية',
+            icon: '⚙️', color: C.cyan,
             onPress: onFilter || (() => {}),
           },
           {
-            id: 'refresh',
-            label: 'Refresh',
-            labelAr: 'تحديث',
-            icon: '🔄',
-            color: COLORS.success,
-            onPress: () => {}, // Will be handled by pull-to-refresh
+            id: 'voice_message', label: 'Voice Message', labelAr: 'رسالة صوتية',
+            icon: '🎙️', color: C.voice,
+            onPress: () => navigate('QuickVoiceMessage'),
           },
         ];
         break;
 
+      // ─── JOB EXECUTION ───
       case 'job_execution':
-        // Job Execution: State-aware actions
         switch (jobState) {
           case 'pending':
           case 'not_started':
-            mainColor = COLORS.success;
+            mainColor = C.success;
             mainIcon = '▶️';
             mainAction = {
-              id: 'start',
-              label: 'START',
-              labelAr: 'ابدأ',
-              icon: '▶️',
-              color: COLORS.success,
+              id: 'start', label: 'START', labelAr: 'ابدأ',
+              icon: '▶️', color: C.success,
               onPress: onStartJob || (() => {}),
-              isPrimary: true,
-              pulse: true, // Important action
+              isPrimary: true, pulse: true,
             };
+            actions = [QUICK_REPORT];
             break;
-
           case 'in_progress':
-            mainColor = COLORS.warning;
+            mainColor = C.warning;
             mainIcon = '⏸️';
             mainAction = {
-              id: 'pause',
-              label: 'PAUSE',
-              labelAr: 'ايقاف',
-              icon: '⏸️',
-              color: COLORS.warning,
-              onPress: onPauseJob || (() => {}),
-              isPrimary: true,
+              id: 'pause', label: 'PAUSE', labelAr: 'ايقاف',
+              icon: '⏸️', color: C.warning,
+              onPress: onPauseJob || (() => {}), isPrimary: true,
             };
             actions = [
-              {
-                id: 'complete',
-                label: 'Complete',
-                labelAr: 'انهاء',
-                icon: '✅',
-                color: COLORS.success,
-                onPress: onCompleteJob || (() => {}),
-              },
+              { id: 'complete', label: 'Complete', labelAr: 'انهاء', icon: '✅', color: C.success, onPress: onCompleteJob || (() => {}) },
+              QUICK_REPORT,
             ];
             break;
-
           case 'paused':
-            mainColor = COLORS.primary;
+            mainColor = C.primary;
             mainIcon = '▶️';
             mainAction = {
-              id: 'resume',
-              label: 'RESUME',
-              labelAr: 'استمر',
-              icon: '▶️',
-              color: COLORS.primary,
+              id: 'resume', label: 'RESUME', labelAr: 'استمر',
+              icon: '▶️', color: C.primary,
               onPress: onResumeJob || (() => {}),
-              isPrimary: true,
-              pulse: true,
+              isPrimary: true, pulse: true,
             };
             actions = [
-              {
-                id: 'complete',
-                label: 'Complete',
-                labelAr: 'انهاء',
-                icon: '✅',
-                color: COLORS.success,
-                onPress: onCompleteJob || (() => {}),
-              },
+              { id: 'complete', label: 'Complete', labelAr: 'انهاء', icon: '✅', color: C.success, onPress: onCompleteJob || (() => {}) },
+              QUICK_REPORT,
             ];
             break;
-
           case 'completed':
-            mainColor = COLORS.success;
+            mainColor = C.success;
             mainIcon = '✅';
             mainAction = {
-              id: 'completed',
-              label: 'Completed',
-              labelAr: 'مكتمل',
-              icon: '✅',
-              color: COLORS.success,
-              onPress: () => {},
-              isPrimary: true,
+              id: 'completed', label: 'Completed', labelAr: 'مكتمل',
+              icon: '✅', color: C.success, onPress: () => {}, isPrimary: true,
             };
+            actions = [QUICK_REPORT];
             break;
-
           default:
-            mainColor = COLORS.primary;
+            mainColor = C.primary;
             mainIcon = '▶️';
+            actions = [QUICK_REPORT];
         }
         break;
 
+      // ─── INSPECTION ───
       case 'inspection':
-        // Inspection: Quick photo capture
-        mainColor = COLORS.cyan;
+        mainColor = C.cyan;
         mainIcon = '📷';
         mainAction = {
-          id: 'camera',
-          label: 'CAMERA',
-          labelAr: 'كاميرا',
-          icon: '📷',
-          color: COLORS.cyan,
-          onPress: onTakePhoto || (() => {}),
-          isPrimary: true,
+          id: 'camera', label: 'CAMERA', labelAr: 'كاميرا',
+          icon: '📷', color: C.cyan,
+          onPress: onTakePhoto || (() => {}), isPrimary: true,
         };
         actions = [
+          QUICK_REPORT,
+          { id: 'gallery', label: 'Gallery', labelAr: 'معرض الصور', icon: '🖼️', color: C.purple, onPress: () => {} },
+          { id: 'video', label: 'Video', labelAr: 'فيديو', icon: '🎥', color: C.danger, onPress: () => {} },
           {
-            id: 'gallery',
-            label: 'Gallery',
-            labelAr: 'معرض الصور',
-            icon: '🖼️',
-            color: COLORS.purple,
-            onPress: () => {}, // Will be handled by parent
-          },
-          {
-            id: 'video',
-            label: 'Video',
-            labelAr: 'فيديو',
-            icon: '🎥',
-            color: COLORS.danger,
-            onPress: () => {}, // Will be handled by parent
+            id: 'voice_message', label: 'Voice Message', labelAr: 'رسالة صوتية',
+            icon: '🎙️', color: C.voice,
+            onPress: () => navigate('QuickVoiceMessage'),
           },
         ];
         break;
 
-      case 'chat':
-        // Chat: New message
-        mainColor = COLORS.primary;
-        mainIcon = '✏️';
-        mainAction = {
-          id: 'new_message',
-          label: 'New Message',
-          labelAr: 'رسالة جديدة',
-          icon: '✏️',
-          color: COLORS.primary,
-          onPress: onNewMessage || (() => {}),
-          isPrimary: true,
-        };
-        actions = [
-          {
-            id: 'voice_message',
-            label: 'Voice',
-            labelAr: 'صوت',
-            icon: '🎤',
-            color: COLORS.danger,
-            onPress: () => {},
-          },
-          {
-            id: 'photo_message',
-            label: 'Photo',
-            labelAr: 'صورة',
-            icon: '📷',
-            color: COLORS.cyan,
-            onPress: () => {},
-          },
-          {
-            id: 'location',
-            label: 'Location',
-            labelAr: 'موقع',
-            icon: '📍',
-            color: COLORS.success,
-            onPress: () => {},
-          },
-        ];
-        break;
-
-      default:
-        // Default: Generic actions
-        mainColor = COLORS.primary;
+      // ─── WORK PLAN ───
+      case 'work_plan':
+        mainColor = C.primary;
         mainIcon = '+';
         mainAction = {
-          id: 'menu',
-          label: 'Menu',
-          labelAr: 'قائمة',
-          icon: '+',
-          color: COLORS.primary,
-          onPress: () => {},
+          id: 'unplanned_job', label: 'Unplanned Job', labelAr: 'عمل غير مخطط',
+          icon: '+', color: C.primary,
+          onPress: () => navigate('UnplannedJob'),
           isPrimary: true,
         };
         actions = [
+          QUICK_REPORT,
           {
-            id: 'home',
-            label: 'Home',
-            labelAr: 'الرئيسية',
-            icon: '🏠',
-            color: COLORS.primary,
-            onPress: () => navigate('MainTabs'),
+            id: 'voice_message', label: 'Voice Message', labelAr: 'رسالة صوتية',
+            icon: '🎙️', color: C.voice,
+            onPress: () => navigate('QuickVoiceMessage'),
+          },
+        ];
+        break;
+
+      // ─── CHAT LIST (Channel List) ───
+      case 'chat_list':
+        mainColor = C.primary;
+        mainIcon = '✏️';
+        mainAction = {
+          id: 'new_dm', label: 'New Chat', labelAr: 'محادثة جديدة',
+          icon: '✏️', color: C.primary,
+          onPress: onNewMessage || (() => {}), isPrimary: true,
+        };
+        actions = [
+          QUICK_REPORT,
+          ...(isAdminOrEngineer ? [{
+            id: 'create_channel',
+            label: 'Create Channel',
+            labelAr: 'إنشاء قناة',
+            icon: '📢',
+            color: C.cyan,
+            onPress: () => navigate('CreateChannel'),
+          }] : []),
+          {
+            id: 'voice_message', label: 'Voice Message', labelAr: 'رسالة صوتية',
+            icon: '🎙️', color: C.voice,
+            onPress: () => navigate('QuickVoiceMessage'),
+          },
+        ];
+        break;
+
+      // ─── CHAT ROOM (Inside a channel) ───
+      case 'chat_room':
+        mainColor = C.voice;
+        mainIcon = '🎙️';
+        mainAction = {
+          id: 'voice', label: 'Voice', labelAr: 'صوت',
+          icon: '🎙️', color: C.voice,
+          onPress: onSendVoice || (() => {}), isPrimary: true,
+        };
+        actions = [
+          {
+            id: 'photo', label: 'Photo', labelAr: 'صورة',
+            icon: '📷', color: C.cyan,
+            onPress: onSendPhoto || (() => {}),
           },
           {
-            id: 'settings',
-            label: 'Settings',
-            labelAr: 'الإعدادات',
-            icon: '⚙️',
-            color: COLORS.cyan,
-            onPress: () => navigate('ToolkitSettings'),
+            id: 'video', label: 'Video', labelAr: 'فيديو',
+            icon: '🎥', color: C.danger,
+            onPress: onSendVideo || (() => {}),
+          },
+          QUICK_REPORT,
+        ];
+        break;
+
+      // ─── DEFAULT ───
+      default:
+        mainColor = C.primary;
+        mainIcon = '+';
+        mainAction = {
+          id: 'menu', label: 'Menu', labelAr: 'قائمة',
+          icon: '+', color: C.primary, onPress: () => {}, isPrimary: true,
+        };
+        actions = [
+          QUICK_REPORT,
+          { id: 'home', label: 'Home', labelAr: 'الرئيسية', icon: '🏠', color: C.primary, onPress: () => navigate('MainTabs') },
+          {
+            id: 'voice_message', label: 'Voice Message', labelAr: 'رسالة صوتية',
+            icon: '🎙️', color: C.voice,
+            onPress: () => navigate('QuickVoiceMessage'),
           },
         ];
         break;
@@ -419,12 +402,5 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
     return { actions, mainAction, mainColor, mainIcon };
   }, [contextType, options]);
 
-  return {
-    contextType,
-    actions,
-    mainAction,
-    isEnabled,
-    mainColor,
-    mainIcon,
-  };
+  return { contextType, actions, mainAction, isEnabled, mainColor, mainIcon };
 }

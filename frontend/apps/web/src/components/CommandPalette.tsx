@@ -151,7 +151,7 @@ export default function CommandPalette() {
   const [apiLoading, setApiLoading] = useState(false);
   const inputRef = useRef<any>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const navigate = useNavigate();
   const { user } = useAuth();
   const { i18n } = useTranslation();

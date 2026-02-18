@@ -21,6 +21,7 @@ import NotificationBadge from '../components/notifications/NotificationBadge';
 import NotificationDrawer from '../components/notifications/NotificationDrawer';
 import NotificationPreferencesModal from '../components/notifications/NotificationPreferencesModal';
 import LiveTicker from '../components/LiveTicker';
+import { ServiceAlertBadge } from '../components/equipment/ServiceAlertNotification';
 
 // ─── App Launcher Config ─────────────────────────────────────
 
@@ -86,6 +87,8 @@ const LAUNCHER_CATEGORIES: LauncherCategory[] = [
     color: '#52c41a',
     items: [
       { key: 'all-inspections', emoji: '\u{1F4CB}', label: 'All Inspections', labelAr: '\u0643\u0644 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A', path: '/admin/inspections', roles: ['admin'] },
+      { key: 'assessment-tracking', emoji: '\u{1F3AF}', label: 'Assessment Tracking', labelAr: '\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062A\u0642\u064A\u064A\u0645\u0627\u062A', path: '/admin/assessments', roles: ['admin', 'engineer'] },
+      { key: 'monitor-followups', emoji: '\u{1F50D}', label: 'Monitor Follow-Ups', labelAr: '\u0645\u062A\u0627\u0628\u0639\u0627\u062A \u0627\u0644\u0645\u0631\u0627\u0642\u0628\u0629', path: '/admin/monitor-followups', roles: ['admin', 'engineer'] },
       { key: 'quality-reviews', emoji: '\u2B50', label: 'Quality Reviews', labelAr: '\u0645\u0631\u0627\u062C\u0639\u0627\u062A \u0627\u0644\u062C\u0648\u062F\u0629', path: '/admin/quality-reviews', roles: ['admin'] },
       { key: 'specialist-jobs', emoji: '\u{1F528}', label: 'Specialist Jobs', labelAr: '\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u0645\u062A\u062E\u0635\u0635\u064A\u0646', path: '/admin/specialist-jobs', roles: ['admin'] },
       { key: 'engineer-jobs', emoji: '\u{1F6E0}\uFE0F', label: 'Engineer Jobs', labelAr: '\u0623\u0639\u0645\u0627\u0644 \u0627\u0644\u0645\u0647\u0646\u062F\u0633\u064A\u0646', path: '/admin/engineer-jobs', roles: ['admin'] },
@@ -158,6 +161,7 @@ const ROUTE_LABELS: Record<string, string> = {
   notifications: 'Notifications', leaderboard: 'Leaderboard',
   'my-work-plan': 'My Work Plan', 'equipment-dashboard': 'Equipment Dashboard',
   'running-hours': 'Running Hours', 'team-communication': 'Team Communication',
+  'monitor-followups': 'Monitor Follow-Ups',
   jobs: 'Jobs', create: 'Create', 'team-assignment': 'Team Assignment',
   'pause-approvals': 'Pause Approvals', reviews: 'Reviews',
   'bonus-requests': 'Bonus Requests',
@@ -443,6 +447,11 @@ export default function MainLayout() {
               size="small"
             />
           </Tooltip>
+
+          {/* Service Alert Badge (equipment maintenance alerts) */}
+          {(user.role === 'admin' || user.role === 'engineer') && (
+            <ServiceAlertBadge onClick={() => navigate('/admin/running-hours')} />
+          )}
 
           <NotificationBadge
             count={unreadCount}

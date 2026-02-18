@@ -62,7 +62,7 @@ const getCategoryLabel = (category: string) => {
   }
 };
 
-export const AIScheduleInsights: React.FC = () => {
+export const AIScheduleInsights: React.FC<{ compact?: boolean }> = () => {
   const {
     data: insights,
     isLoading,

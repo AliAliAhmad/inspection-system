@@ -140,6 +140,12 @@ def create_app(config_name='development'):
         job_showup,
         # Shift Handover
         shift_handover,
+        # Monitor Follow-Up
+        monitor_followups,
+        # Quick Field Reports
+        quick_reports,
+        # Unplanned Jobs
+        unplanned_jobs,
     )
 
     # Core
@@ -239,6 +245,15 @@ def create_app(config_name='development'):
 
     # Shift Handover
     app.register_blueprint(shift_handover.bp)
+
+    # Monitor Follow-Up
+    app.register_blueprint(monitor_followups.bp, url_prefix='/api/monitor-followups')
+
+    # Quick Field Reports
+    app.register_blueprint(quick_reports.bp, url_prefix='/api/quick-reports')
+
+    # Unplanned Jobs
+    app.register_blueprint(unplanned_jobs.bp, url_prefix='/api/unplanned-jobs')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)

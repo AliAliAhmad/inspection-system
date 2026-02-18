@@ -9,8 +9,9 @@ import {
 
 const { Text } = Typography;
 
-interface RiskIndicatorProps {
-  riskScore: number;
+export interface RiskIndicatorProps {
+  riskScore?: number;
+  level?: 'critical' | 'high' | 'medium' | 'low';
   showLabel?: boolean;
   showProgress?: boolean;
   size?: 'small' | 'default' | 'large';
@@ -69,13 +70,14 @@ const getRiskConfig = (level: RiskLevel) => {
 
 export const RiskIndicator: React.FC<RiskIndicatorProps> = ({
   riskScore,
+  level: levelProp,
   showLabel = true,
   showProgress = false,
   size = 'default',
   showIcon = true,
   tooltipText,
 }) => {
-  const level = getRiskLevel(riskScore);
+  const level = levelProp || getRiskLevel(riskScore ?? 0);
   const config = getRiskConfig(level);
 
   const progressWidth = size === 'small' ? 40 : size === 'large' ? 80 : 60;

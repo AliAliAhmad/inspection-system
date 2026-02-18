@@ -22,11 +22,20 @@ import {
   type CreateHandoverPayload,
 } from '@inspection/shared';
 import { useTheme } from '../../hooks/useTheme';
+import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
 
 const SHIFT_TYPES = ['day', 'night', 'morning', 'afternoon'] as const;
-const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'critical'] as const;
-const SEVERITY_OPTIONS = ['info', 'warning', 'critical'] as const;
-const ISSUE_STATUS = ['new', 'ongoing', 'resolved'] as const;
+
+type HandoverItem = {
+  text: string;
+  type: 'pending' | 'safety' | 'equipment';
+};
+
+const ITEM_TYPES = [
+  { key: 'pending' as const, emoji: '📋', en: 'Task', ar: 'مهمة', color: '#1976D2' },
+  { key: 'safety' as const, emoji: '⚠️', en: 'Safety', ar: 'أمان', color: '#E53935' },
+  { key: 'equipment' as const, emoji: '🔧', en: 'Equipment', ar: 'معدة', color: '#FF9800' },
+];
 
 export default function CreateHandoverScreen() {
   const { t, i18n } = useTranslation();
@@ -38,21 +47,13 @@ export default function CreateHandoverScreen() {
   // Form state
   const [shiftType, setShiftType] = useState<string>('day');
   const [notes, setNotes] = useState('');
-  const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
-  const [safetyAlerts, setSafetyAlerts] = useState<SafetyAlert[]>([]);
-  const [equipmentIssues, setEquipmentIssues] = useState<EquipmentIssue[]>([]);
+  const [voiceNoteId, setVoiceNoteId] = useState<number | null>(null);
+  const [voiceTranscription, setVoiceTranscription] = useState<string>('');
+  const [items, setItems] = useState<HandoverItem[]>([]);
 
-  // Inline add forms
-  const [newPendingDesc, setNewPendingDesc] = useState('');
-  const [newPendingPriority, setNewPendingPriority] = useState<PendingItem['priority']>('medium');
-  const [newPendingEquipment, setNewPendingEquipment] = useState('');
-
-  const [newAlertText, setNewAlertText] = useState('');
-  const [newAlertSeverity, setNewAlertSeverity] = useState<SafetyAlert['severity']>('warning');
-
-  const [newIssueName, setNewIssueName] = useState('');
-  const [newIssueDesc, setNewIssueDesc] = useState('');
-  const [newIssueStatus, setNewIssueStatus] = useState<EquipmentIssue['status']>('new');
+  // Inline add
+  const [newText, setNewText] = useState('');
+  const [newType, setNewType] = useState<HandoverItem['type']>('pending');
 
   const shiftLabel = (s: string) => {
     const labels: Record<string, { en: string; ar: string }> = {
@@ -64,90 +65,54 @@ export default function CreateHandoverScreen() {
     return isAr ? labels[s]?.ar ?? s : labels[s]?.en ?? s;
   };
 
-  const priorityLabel = (p: string) => {
-    const labels: Record<string, { en: string; ar: string }> = {
-      low: { en: 'Low', ar: 'منخفض' },
-      medium: { en: 'Medium', ar: 'متوسط' },
-      high: { en: 'High', ar: 'عالي' },
-      critical: { en: 'Critical', ar: 'حرج' },
-    };
-    return isAr ? labels[p]?.ar ?? p : labels[p]?.en ?? p;
-  };
+  const addItem = useCallback(() => {
+    if (!newText.trim()) return;
+    setItems(prev => [...prev, { text: newText.trim(), type: newType }]);
+    setNewText('');
+  }, [newText, newType]);
 
-  const severityLabel = (s: string) => {
-    const labels: Record<string, { en: string; ar: string }> = {
-      info: { en: 'Info', ar: 'معلومات' },
-      warning: { en: 'Warning', ar: 'تحذير' },
-      critical: { en: 'Critical', ar: 'حرج' },
-    };
-    return isAr ? labels[s]?.ar ?? s : labels[s]?.en ?? s;
-  };
-
-  const statusLabel = (s: string) => {
-    const labels: Record<string, { en: string; ar: string }> = {
-      new: { en: 'New', ar: 'جديد' },
-      ongoing: { en: 'Ongoing', ar: 'مستمر' },
-      resolved: { en: 'Resolved', ar: 'تم الحل' },
-    };
-    return isAr ? labels[s]?.ar ?? s : labels[s]?.en ?? s;
-  };
-
-  const priorityColor = (p: string) => {
-    const map: Record<string, string> = { low: '#4CAF50', medium: '#FF9800', high: '#F44336', critical: '#9C27B0' };
-    return map[p] ?? '#999';
-  };
-
-  const severityColor = (s: string) => {
-    const map: Record<string, string> = { info: '#2196F3', warning: '#FF9800', critical: '#F44336' };
-    return map[s] ?? '#999';
-  };
-
-  // Add helpers
-  const addPendingItem = useCallback(() => {
-    if (!newPendingDesc.trim()) return;
-    setPendingItems(prev => [...prev, {
-      description: newPendingDesc.trim(),
-      priority: newPendingPriority,
-      equipment_name: newPendingEquipment.trim() || undefined,
-    }]);
-    setNewPendingDesc('');
-    setNewPendingEquipment('');
-    setNewPendingPriority('medium');
-  }, [newPendingDesc, newPendingPriority, newPendingEquipment]);
-
-  const removePendingItem = useCallback((index: number) => {
-    setPendingItems(prev => prev.filter((_, i) => i !== index));
+  const removeItem = useCallback((index: number) => {
+    setItems(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const addSafetyAlert = useCallback(() => {
-    if (!newAlertText.trim()) return;
-    setSafetyAlerts(prev => [...prev, {
-      alert: newAlertText.trim(),
-      severity: newAlertSeverity,
-    }]);
-    setNewAlertText('');
-    setNewAlertSeverity('warning');
-  }, [newAlertText, newAlertSeverity]);
+  const handleVoiceNote = useCallback(
+    (noteId: number, transcription?: { en: string; ar: string }) => {
+      setVoiceNoteId(noteId);
+      if (transcription) {
+        const text = isAr
+          ? transcription.ar || transcription.en
+          : transcription.en || transcription.ar;
+        setVoiceTranscription(text);
+      }
+    },
+    [isAr]
+  );
 
-  const removeSafetyAlert = useCallback((index: number) => {
-    setSafetyAlerts(prev => prev.filter((_, i) => i !== index));
-  }, []);
+  // Convert flat items back to the API's expected shape
+  const buildPayload = (): CreateHandoverPayload => {
+    const pendingItems: PendingItem[] = items
+      .filter(i => i.type === 'pending')
+      .map(i => ({ description: i.text, priority: 'medium' as const }));
 
-  const addEquipmentIssue = useCallback(() => {
-    if (!newIssueName.trim() || !newIssueDesc.trim()) return;
-    setEquipmentIssues(prev => [...prev, {
-      equipment_name: newIssueName.trim(),
-      issue: newIssueDesc.trim(),
-      status: newIssueStatus,
-    }]);
-    setNewIssueName('');
-    setNewIssueDesc('');
-    setNewIssueStatus('new');
-  }, [newIssueName, newIssueDesc, newIssueStatus]);
+    const safetyAlerts: SafetyAlert[] = items
+      .filter(i => i.type === 'safety')
+      .map(i => ({ alert: i.text, severity: 'warning' as const }));
 
-  const removeEquipmentIssue = useCallback((index: number) => {
-    setEquipmentIssues(prev => prev.filter((_, i) => i !== index));
-  }, []);
+    const equipmentIssues: EquipmentIssue[] = items
+      .filter(i => i.type === 'equipment')
+      .map(i => ({ equipment_name: i.text, issue: i.text, status: 'new' as const }));
+
+    // Combine text notes + voice transcription
+    const allNotes = [notes.trim(), voiceTranscription].filter(Boolean).join('\n\n---\n🎙️ ');
+
+    return {
+      shift_type: shiftType,
+      notes: allNotes || undefined,
+      pending_items: pendingItems.length > 0 ? pendingItems : undefined,
+      safety_alerts: safetyAlerts.length > 0 ? safetyAlerts : undefined,
+      equipment_issues: equipmentIssues.length > 0 ? equipmentIssues : undefined,
+    };
+  };
 
   // Submit
   const submitMutation = useMutation({
@@ -169,22 +134,17 @@ export default function CreateHandoverScreen() {
   });
 
   const handleSubmit = () => {
-    if (!notes.trim() && pendingItems.length === 0 && safetyAlerts.length === 0 && equipmentIssues.length === 0) {
+    if (!notes.trim() && items.length === 0) {
       Alert.alert(
         isAr ? 'تنبيه' : 'Notice',
-        isAr ? 'يرجى إضافة ملاحظات أو عناصر معلقة' : 'Please add notes or pending items',
+        isAr ? 'يرجى إضافة ملاحظات أو عناصر' : 'Please add notes or items',
       );
       return;
     }
-
-    submitMutation.mutate({
-      shift_type: shiftType,
-      notes: notes.trim() || undefined,
-      pending_items: pendingItems.length > 0 ? pendingItems : undefined,
-      safety_alerts: safetyAlerts.length > 0 ? safetyAlerts : undefined,
-      equipment_issues: equipmentIssues.length > 0 ? equipmentIssues : undefined,
-    });
+    submitMutation.mutate(buildPayload());
   };
+
+  const typeConfig = ITEM_TYPES.find(t => t.key === newType)!;
 
   return (
     <SafeAreaView style={[st.safe, { backgroundColor: colors.background }]} edges={['top']}>
@@ -195,12 +155,10 @@ export default function CreateHandoverScreen() {
         {/* Header */}
         <View style={[st.header, { borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn}>
-            <Text style={[st.backText, { color: colors.primary }]}>
-              {isAr ? '←' : '←'}
-            </Text>
+            <Text style={[st.backText, { color: colors.primary }]}>{'←'}</Text>
           </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>
-            {isAr ? 'إنشاء تسليم وردية' : 'Create Shift Handover'}
+            {isAr ? 'تسليم وردية' : 'Shift Handover'}
           </Text>
           <View style={{ width: 40 }} />
         </View>
@@ -208,7 +166,7 @@ export default function CreateHandoverScreen() {
         <ScrollView style={st.scroll} contentContainerStyle={st.scrollContent}>
           {/* Shift Type */}
           <Text style={[st.label, { color: colors.text }]}>
-            {isAr ? 'نوع الوردية' : 'Shift Type'}
+            {isAr ? 'الوردية' : 'Shift'}
           </Text>
           <View style={st.chipRow}>
             {SHIFT_TYPES.map((s) => (
@@ -229,233 +187,99 @@ export default function CreateHandoverScreen() {
           </View>
 
           {/* Notes */}
-          <Text style={[st.label, { color: colors.text }]}>
-            {isAr ? 'ملاحظات عامة' : 'General Notes'}
+          <Text style={[st.label, { color: colors.text, marginTop: 16 }]}>
+            {isAr ? 'ملاحظات' : 'Notes'}
           </Text>
           <TextInput
             style={[st.textArea, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
             value={notes}
             onChangeText={setNotes}
-            placeholder={isAr ? 'أي ملاحظات للوردية القادمة...' : 'Any notes for the incoming shift...'}
+            placeholder={isAr ? 'ملاحظات للوردية القادمة...' : 'Notes for the incoming shift...'}
             placeholderTextColor={colors.textTertiary}
             multiline
-            numberOfLines={4}
+            numberOfLines={3}
             textAlignVertical="top"
           />
 
-          {/* ─── Pending Items Section ─── */}
-          <View style={st.sectionHeader}>
-            <Text style={[st.label, { color: colors.text, marginBottom: 0 }]}>
-              {isAr ? 'عناصر معلقة' : 'Pending Items'}
+          {/* Voice Note */}
+          <Text style={[st.label, { color: colors.text, marginTop: 16 }]}>
+            {isAr ? 'ملاحظة صوتية' : 'Voice Note'}
+          </Text>
+          <VoiceNoteRecorder
+            onVoiceNoteRecorded={handleVoiceNote}
+            language={isAr ? 'ar' : 'en'}
+          />
+          {voiceTranscription ? (
+            <Text style={[st.voiceTranscription, { color: colors.textSecondary }]}>
+              🎙️ {voiceTranscription}
             </Text>
-            <Text style={[st.countBadge, { color: colors.textSecondary }]}>
-              {pendingItems.length}
-            </Text>
-          </View>
+          ) : null}
 
-          {pendingItems.map((item, idx) => (
-            <View key={idx} style={[st.itemCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={st.itemCardContent}>
-                <View style={[st.priorityDot, { backgroundColor: priorityColor(item.priority) }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[st.itemText, { color: colors.text }]}>{item.description}</Text>
-                  {item.equipment_name && (
-                    <Text style={[st.itemSub, { color: colors.textTertiary }]}>{item.equipment_name}</Text>
-                  )}
+          {/* Items */}
+          <Text style={[st.label, { color: colors.text, marginTop: 20 }]}>
+            {isAr ? 'العناصر' : 'Items'} ({items.length})
+          </Text>
+
+          {items.map((item, idx) => {
+            const cfg = ITEM_TYPES.find(t => t.key === item.type)!;
+            return (
+              <View key={idx} style={[st.itemCard, { backgroundColor: colors.surface, borderLeftColor: cfg.color }]}>
+                <View style={st.itemRow}>
+                  <Text style={st.itemEmoji}>{cfg.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[st.itemText, { color: colors.text }]}>{item.text}</Text>
+                    <Text style={[st.itemType, { color: cfg.color }]}>
+                      {isAr ? cfg.ar : cfg.en}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeItem(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={st.removeBtn}>✕</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => removePendingItem(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={st.removeBtn}>✕</Text>
-                </TouchableOpacity>
               </View>
-            </View>
-          ))}
+            );
+          })}
 
-          <View style={[st.addForm, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TextInput
-              style={[st.input, { color: colors.text, borderColor: colors.border }]}
-              value={newPendingDesc}
-              onChangeText={setNewPendingDesc}
-              placeholder={isAr ? 'وصف العنصر المعلق...' : 'Pending item description...'}
-              placeholderTextColor={colors.textTertiary}
-            />
-            <TextInput
-              style={[st.input, st.inputSmall, { color: colors.text, borderColor: colors.border }]}
-              value={newPendingEquipment}
-              onChangeText={setNewPendingEquipment}
-              placeholder={isAr ? 'اسم المعدة (اختياري)' : 'Equipment name (optional)'}
-              placeholderTextColor={colors.textTertiary}
-            />
-            <View style={st.chipRow}>
-              {PRIORITY_OPTIONS.map((p) => (
+          {/* Add Item */}
+          <View style={[st.addSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* Type selector */}
+            <View style={st.typeRow}>
+              {ITEM_TYPES.map((tp) => (
                 <TouchableOpacity
-                  key={p}
+                  key={tp.key}
                   style={[
-                    st.miniChip,
-                    { borderColor: priorityColor(p) },
-                    newPendingPriority === p && { backgroundColor: priorityColor(p) },
+                    st.typeChip,
+                    { borderColor: tp.color },
+                    newType === tp.key && { backgroundColor: tp.color },
                   ]}
-                  onPress={() => setNewPendingPriority(p)}
+                  onPress={() => setNewType(tp.key)}
                 >
-                  <Text style={[st.miniChipText, { color: priorityColor(p) }, newPendingPriority === p && { color: '#fff' }]}>
-                    {priorityLabel(p)}
+                  <Text style={[st.typeChipText, { color: tp.color }, newType === tp.key && { color: '#fff' }]}>
+                    {tp.emoji} {isAr ? tp.ar : tp.en}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity
-              style={[st.addBtn, { backgroundColor: colors.primary, opacity: newPendingDesc.trim() ? 1 : 0.4 }]}
-              onPress={addPendingItem}
-              disabled={!newPendingDesc.trim()}
-            >
-              <Text style={st.addBtnText}>{isAr ? '+ إضافة' : '+ Add'}</Text>
-            </TouchableOpacity>
-          </View>
 
-          {/* ─── Safety Alerts Section ─── */}
-          <View style={st.sectionHeader}>
-            <Text style={[st.label, { color: colors.text, marginBottom: 0 }]}>
-              {isAr ? 'تنبيهات الأمان' : 'Safety Alerts'}
-            </Text>
-            <Text style={[st.countBadge, { color: colors.textSecondary }]}>
-              {safetyAlerts.length}
-            </Text>
-          </View>
-
-          {safetyAlerts.map((alert, idx) => (
-            <View key={idx} style={[st.itemCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={st.itemCardContent}>
-                <View style={[st.priorityDot, { backgroundColor: severityColor(alert.severity) }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[st.itemText, { color: colors.text }]}>{alert.alert}</Text>
-                  <Text style={[st.itemSub, { color: severityColor(alert.severity) }]}>{severityLabel(alert.severity)}</Text>
-                </View>
-                <TouchableOpacity onPress={() => removeSafetyAlert(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={st.removeBtn}>✕</Text>
-                </TouchableOpacity>
-              </View>
+            {/* Input + Add button */}
+            <View style={st.addRow}>
+              <TextInput
+                style={[st.addInput, { color: colors.text, borderColor: colors.border, flex: 1 }]}
+                value={newText}
+                onChangeText={setNewText}
+                placeholder={isAr ? 'اكتب هنا...' : 'Type here...'}
+                placeholderTextColor={colors.textTertiary}
+                onSubmitEditing={addItem}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={[st.addBtn, { backgroundColor: typeConfig.color, opacity: newText.trim() ? 1 : 0.4 }]}
+                onPress={addItem}
+                disabled={!newText.trim()}
+              >
+                <Text style={st.addBtnText}>+</Text>
+              </TouchableOpacity>
             </View>
-          ))}
-
-          <View style={[st.addForm, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TextInput
-              style={[st.input, { color: colors.text, borderColor: colors.border }]}
-              value={newAlertText}
-              onChangeText={setNewAlertText}
-              placeholder={isAr ? 'وصف التنبيه...' : 'Alert description...'}
-              placeholderTextColor={colors.textTertiary}
-            />
-            <View style={st.chipRow}>
-              {SEVERITY_OPTIONS.map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={[
-                    st.miniChip,
-                    { borderColor: severityColor(s) },
-                    newAlertSeverity === s && { backgroundColor: severityColor(s) },
-                  ]}
-                  onPress={() => setNewAlertSeverity(s)}
-                >
-                  <Text style={[st.miniChipText, { color: severityColor(s) }, newAlertSeverity === s && { color: '#fff' }]}>
-                    {severityLabel(s)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={[st.addBtn, { backgroundColor: '#E53935', opacity: newAlertText.trim() ? 1 : 0.4 }]}
-              onPress={addSafetyAlert}
-              disabled={!newAlertText.trim()}
-            >
-              <Text style={st.addBtnText}>{isAr ? '+ إضافة تنبيه' : '+ Add Alert'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* ─── Equipment Issues Section ─── */}
-          <View style={st.sectionHeader}>
-            <Text style={[st.label, { color: colors.text, marginBottom: 0 }]}>
-              {isAr ? 'مشاكل المعدات' : 'Equipment Issues'}
-            </Text>
-            <Text style={[st.countBadge, { color: colors.textSecondary }]}>
-              {equipmentIssues.length}
-            </Text>
-          </View>
-
-          {equipmentIssues.map((issue, idx) => (
-            <View key={idx} style={[st.itemCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={st.itemCardContent}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[st.itemText, { color: colors.text }]}>{issue.equipment_name}</Text>
-                  <Text style={[st.itemSub, { color: colors.textSecondary }]}>{issue.issue}</Text>
-                  <Text style={[st.itemTag, { color: colors.textTertiary }]}>{statusLabel(issue.status)}</Text>
-                </View>
-                <TouchableOpacity onPress={() => removeEquipmentIssue(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={st.removeBtn}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-
-          <View style={[st.addForm, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TextInput
-              style={[st.input, { color: colors.text, borderColor: colors.border }]}
-              value={newIssueName}
-              onChangeText={setNewIssueName}
-              placeholder={isAr ? 'اسم المعدة...' : 'Equipment name...'}
-              placeholderTextColor={colors.textTertiary}
-            />
-            <TextInput
-              style={[st.input, { color: colors.text, borderColor: colors.border }]}
-              value={newIssueDesc}
-              onChangeText={setNewIssueDesc}
-              placeholder={isAr ? 'وصف المشكلة...' : 'Issue description...'}
-              placeholderTextColor={colors.textTertiary}
-            />
-            <View style={st.chipRow}>
-              {ISSUE_STATUS.map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={[
-                    st.miniChip,
-                    { borderColor: colors.border },
-                    newIssueStatus === s && { backgroundColor: colors.primary, borderColor: colors.primary },
-                  ]}
-                  onPress={() => setNewIssueStatus(s)}
-                >
-                  <Text style={[st.miniChipText, { color: colors.text }, newIssueStatus === s && { color: '#fff' }]}>
-                    {statusLabel(s)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={[st.addBtn, { backgroundColor: '#FF9800', opacity: (newIssueName.trim() && newIssueDesc.trim()) ? 1 : 0.4 }]}
-              onPress={addEquipmentIssue}
-              disabled={!newIssueName.trim() || !newIssueDesc.trim()}
-            >
-              <Text style={st.addBtnText}>{isAr ? '+ إضافة مشكلة' : '+ Add Issue'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Summary */}
-          <View style={[st.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[st.summaryTitle, { color: colors.text }]}>
-              {isAr ? 'ملخص التسليم' : 'Handover Summary'}
-            </Text>
-            <Text style={[st.summaryLine, { color: colors.textSecondary }]}>
-              {isAr ? 'الوردية:' : 'Shift:'} {shiftLabel(shiftType)}
-            </Text>
-            <Text style={[st.summaryLine, { color: colors.textSecondary }]}>
-              {isAr ? 'ملاحظات:' : 'Notes:'} {notes.trim() ? (isAr ? 'نعم' : 'Yes') : (isAr ? 'لا' : 'No')}
-            </Text>
-            <Text style={[st.summaryLine, { color: colors.textSecondary }]}>
-              {isAr ? 'عناصر معلقة:' : 'Pending items:'} {pendingItems.length}
-            </Text>
-            <Text style={[st.summaryLine, { color: colors.textSecondary }]}>
-              {isAr ? 'تنبيهات أمان:' : 'Safety alerts:'} {safetyAlerts.length}
-            </Text>
-            <Text style={[st.summaryLine, { color: colors.textSecondary }]}>
-              {isAr ? 'مشاكل معدات:' : 'Equipment issues:'} {equipmentIssues.length}
-            </Text>
           </View>
 
           {/* Submit */}
@@ -467,7 +291,7 @@ export default function CreateHandoverScreen() {
             <Text style={st.submitBtnText}>
               {submitMutation.isPending
                 ? (isAr ? 'جاري الإرسال...' : 'Submitting...')
-                : (isAr ? 'إنشاء تسليم الوردية' : 'Create Shift Handover')}
+                : (isAr ? 'إنشاء التسليم' : 'Create Handover')}
             </Text>
           </TouchableOpacity>
 
@@ -490,59 +314,57 @@ const st = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: 16 },
 
-  label: { fontSize: 14, fontWeight: '700', marginBottom: 8, marginTop: 18 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 22, marginBottom: 8 },
-  countBadge: { fontSize: 13, fontWeight: '600' },
-
+  label: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1.5, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8,
   },
   chipText: { fontSize: 13, fontWeight: '600' },
-  miniChip: {
-    borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4,
-  },
-  miniChipText: { fontSize: 11, fontWeight: '600' },
 
   textArea: {
     borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 14,
-    minHeight: 90, textAlignVertical: 'top',
+    minHeight: 70, textAlignVertical: 'top',
   },
-
-  input: {
-    borderWidth: 1, borderRadius: 10, padding: 10, fontSize: 14, marginBottom: 8,
+  voiceTranscription: {
+    fontSize: 13, fontStyle: 'italic', marginTop: 6, paddingHorizontal: 4,
   },
-  inputSmall: { marginBottom: 8 },
-
-  addForm: {
-    borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 4,
-  },
-  addBtn: {
-    borderRadius: 8, paddingVertical: 8, alignItems: 'center', marginTop: 8,
-  },
-  addBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   itemCard: {
-    borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 6,
+    borderRadius: 10, padding: 12, marginBottom: 8,
+    borderLeftWidth: 4,
   },
-  itemCardContent: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+  itemRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
   },
-  priorityDot: { width: 10, height: 10, borderRadius: 5 },
-  itemText: { fontSize: 13, fontWeight: '600' },
-  itemSub: { fontSize: 11, marginTop: 2 },
-  itemTag: { fontSize: 10, marginTop: 2 },
+  itemEmoji: { fontSize: 18 },
+  itemText: { fontSize: 14, fontWeight: '600' },
+  itemType: { fontSize: 11, fontWeight: '600', marginTop: 2 },
   removeBtn: { fontSize: 16, color: '#999', fontWeight: '700', padding: 4 },
 
-  summary: {
-    borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 24,
+  addSection: {
+    borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 4,
   },
-  summaryTitle: { fontSize: 15, fontWeight: '700', marginBottom: 8 },
-  summaryLine: { fontSize: 13, marginBottom: 4 },
+  typeRow: {
+    flexDirection: 'row', gap: 8, marginBottom: 10,
+  },
+  typeChip: {
+    borderWidth: 1.5, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6,
+  },
+  typeChipText: { fontSize: 12, fontWeight: '700' },
+  addRow: {
+    flexDirection: 'row', gap: 8, alignItems: 'center',
+  },
+  addInput: {
+    borderWidth: 1, borderRadius: 10, padding: 10, fontSize: 14,
+  },
+  addBtn: {
+    width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+  },
+  addBtnText: { color: '#fff', fontSize: 22, fontWeight: '700' },
 
   submitBtn: {
     backgroundColor: '#1976D2', borderRadius: 12,
-    paddingVertical: 16, alignItems: 'center', marginTop: 20,
+    paddingVertical: 16, alignItems: 'center', marginTop: 24,
     shadowColor: '#1976D2', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },

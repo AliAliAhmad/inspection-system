@@ -52,15 +52,15 @@ export function BulkApprovalBar({
         borderRadius: 8,
         minWidth: 400,
       }}
-      bodyStyle={{ padding: '12px 24px' }}
+      bodyStyle={{ padding: '14px 24px' }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24 }}>
         <Space>
-          <Text strong>
+          <Text strong style={{ fontSize: 15 }}>
             {selectedItems.length} {t('approvals.itemsSelected', 'items selected')}
           </Text>
           {pendingSelected.length < selectedItems.length && (
-            <Text type="secondary">
+            <Text type="secondary" style={{ fontSize: 14, fontWeight: 600 }}>
               ({pendingSelected.length} {t('approvals.pending', 'pending')})
             </Text>
           )}

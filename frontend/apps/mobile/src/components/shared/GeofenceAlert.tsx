@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   alertBanner: {
     borderRadius: 10,
     borderWidth: 1.5,
-    padding: 10,
+    padding: 14,
     marginVertical: 4,
   },
   alertRow: {
@@ -319,11 +319,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   alertTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
   },
   alertDistance: {
-    fontSize: 11,
+    fontSize: 13,
+    fontWeight: '600',
     color: '#595959',
   },
   ackBtn: {
@@ -333,8 +334,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   ackBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   modalOverlay: {
     flex: 1,

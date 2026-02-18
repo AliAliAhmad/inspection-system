@@ -17,16 +17,18 @@ export function OfflineBanner() {
     return null;
   }
 
+  const bannerStyle = { marginBottom: 0, padding: '10px 16px', fontSize: 15, fontWeight: 700 } as React.CSSProperties;
+
   // Offline state
   if (!isOnline) {
     return (
       <Alert
         banner
         type="warning"
-        icon={<WifiOutlined />}
+        icon={<WifiOutlined style={{ fontSize: 18 }} />}
         message={
           <Space>
-            <span>{t('common.offline')}</span>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>{t('common.offline')}</span>
             {pendingCount > 0 && (
               <Badge
                 count={pendingCount}
@@ -36,7 +38,7 @@ export function OfflineBanner() {
             )}
           </Space>
         }
-        style={{ marginBottom: 0 }}
+        style={bannerStyle}
       />
     );
   }
@@ -47,9 +49,9 @@ export function OfflineBanner() {
       <Alert
         banner
         type="info"
-        icon={<SyncOutlined spin />}
-        message={t('common.syncing')}
-        style={{ marginBottom: 0 }}
+        icon={<SyncOutlined spin style={{ fontSize: 18 }} />}
+        message={<span style={{ fontSize: 15, fontWeight: 700 }}>{t('common.syncing')}</span>}
+        style={bannerStyle}
       />
     );
   }
@@ -60,10 +62,10 @@ export function OfflineBanner() {
       <Alert
         banner
         type="warning"
-        icon={<CloudSyncOutlined />}
+        icon={<CloudSyncOutlined style={{ fontSize: 18 }} />}
         message={
           <Space>
-            <span>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>
               {pendingCount} {t('common.unsyncedChanges')}
             </span>
             <Button size="small" type="primary" onClick={triggerSync}>
@@ -71,7 +73,7 @@ export function OfflineBanner() {
             </Button>
           </Space>
         }
-        style={{ marginBottom: 0 }}
+        style={bannerStyle}
       />
     );
   }

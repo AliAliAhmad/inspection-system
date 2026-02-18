@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    paddingTop: 8,
+    paddingTop: 12,
   },
   scrollContent: {
     paddingHorizontal: 12,
@@ -298,13 +298,14 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   tabName: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#424242',
     textAlign: 'center',
   },
   tabProgress: {
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '600',
     color: '#757575',
     marginTop: 2,
   },
@@ -332,8 +333,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   incompleteBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
     color: '#fff',
   },
   indicator: {

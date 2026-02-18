@@ -168,6 +168,29 @@ export default function InspectionChecklistPage() {
 
   const inspectionId = inspection?.id;
 
+  // Fetch colleague answers for pre-fill
+  const { data: colleagueData } = useOfflineQuery({
+    queryKey: ['colleague-answers', assignmentId],
+    queryFn: () =>
+      inspectionsApi.getColleagueAnswers(assignmentId).then((r) => (r.data as any).data as {
+        answers: any[];
+        colleague: { id: number; name: string; type: 'mechanical' | 'electrical'; inspection_status: string } | null;
+      }),
+    cacheKey: `colleague-answers-${assignmentId}`,
+    cacheTtlMs: 5 * 60 * 1000,
+  });
+
+  // Build colleague answers map
+  const colleagueAnswersMap = React.useMemo(() => {
+    const map = new Map<number, any>();
+    if (colleagueData?.answers) {
+      colleagueData.answers.forEach((ans: any) => {
+        map.set(ans.checklist_item_id, ans);
+      });
+    }
+    return map;
+  }, [colleagueData]);
+
   const { data: progress, refetch: refetchProgress } = useOfflineQuery({
     queryKey: ['inspection-progress', inspectionId],
     queryFn: () =>
@@ -192,6 +215,7 @@ export default function InspectionChecklistPage() {
       answer_value: string;
       comment?: string;
       voice_note_id?: number;
+      voice_transcription?: { en: string; ar: string };
     }) => inspectionsApi.answerQuestion(inspectionId!, payload),
     onSuccess: () => {
       refetchProgress();
@@ -327,6 +351,24 @@ export default function InspectionChecklistPage() {
         </Card>
       )}
 
+      {/* Colleague pre-fill banner */}
+      {colleagueData?.colleague && colleagueAnswersMap.size > 0 && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16, padding: '10px 16px' }}
+          message={
+            <span style={{ fontSize: 15, fontWeight: 700 }}>
+              {colleagueAnswersMap.size} {t('inspection.questionsPrefilledBy', 'questions pre-filled by')}{' '}
+              {colleagueData.colleague.type === 'mechanical'
+                ? t('inspection.mechInspector', 'Mech Inspector')
+                : t('inspection.elecInspector', 'Elec Inspector')}
+              : {colleagueData.colleague.name}
+            </span>
+          }
+        />
+      )}
+
       {progress && (
         <Card style={{ marginBottom: 16 }}>
           <Typography.Text strong>{t('inspection.progress')}</Typography.Text>
@@ -350,6 +392,8 @@ export default function InspectionChecklistPage() {
               key={item.id}
               item={item}
               existingAnswer={existingAnswer}
+              colleagueAnswer={!existingAnswer ? colleagueAnswersMap.get(item.id) : undefined}
+              colleagueInfo={colleagueData?.colleague ?? undefined}
               getQuestionText={getQuestionText}
               onAnswer={handleAnswer}
               inspectionId={inspectionId!}
@@ -400,6 +444,8 @@ export default function InspectionChecklistPage() {
 interface ChecklistItemCardProps {
   item: ChecklistItem;
   existingAnswer?: InspectionAnswer;
+  colleagueAnswer?: any;
+  colleagueInfo?: { id: number; name: string; type: 'mechanical' | 'electrical'; inspection_status: string };
   getQuestionText: (item: ChecklistItem) => string;
   onAnswer: (id: number, value: string, comment?: string, voiceNoteId?: number, voiceTranscription?: { en: string; ar: string }) => void;
   inspectionId: number;
@@ -522,6 +568,8 @@ function AnalysisBox({ title, titleAr, icon, enContent, arContent, color }: {
 function ChecklistItemCard({
   item,
   existingAnswer,
+  colleagueAnswer,
+  colleagueInfo,
   getQuestionText,
   onAnswer,
   inspectionId,
@@ -533,7 +581,12 @@ function ChecklistItemCard({
     existingAnswer?.voice_note_id ?? undefined,
   );
   const voiceNoteIdRef = useRef(voiceNoteId);
-  const [currentValue, setCurrentValue] = useState(existingAnswer?.answer_value ?? '');
+  // Pre-fill from colleague if no existing answer
+  const initialValue = existingAnswer?.answer_value ?? colleagueAnswer?.answer_value ?? '';
+  const [currentValue, setCurrentValue] = useState(initialValue);
+  const [isPrefilledFromColleague, setIsPrefilledFromColleague] = useState(
+    !existingAnswer?.answer_value && !!colleagueAnswer?.answer_value
+  );
   const [localBlobUrl, setLocalBlobUrl] = useState<string | null>(null);
   const [localPhotoUrl, setLocalPhotoUrl] = useState<string | null>(null);
   const [localVideoUrl, setLocalVideoUrl] = useState<string | null>(null);
@@ -674,6 +727,7 @@ function ChecklistItemCard({
 
   const handleAnswerChange = (value: string) => {
     setCurrentValue(value);
+    setIsPrefilledFromColleague(false); // Clear pre-fill indicator once user makes their own choice
     // Include any AI analysis/transcription in the comment for persistence
     const analysisComment = buildAnalysisComment();
     onAnswer(item.id, value, analysisComment, voiceNoteId, voiceTranscription || undefined);
@@ -992,6 +1046,28 @@ function ChecklistItemCard({
       }
     >
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        {/* Pre-filled from colleague badge */}
+        {isPrefilledFromColleague && colleagueInfo && (
+          <div style={{
+            background: '#E8F4FD',
+            border: '1px solid #91D5FF',
+            borderRadius: 6,
+            padding: '6px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <span style={{ fontSize: 14 }}>👤</span>
+            <Typography.Text style={{ fontSize: 12, color: '#1565C0', fontWeight: 600 }}>
+              {t('inspection.prefilledFrom', 'Pre-filled from')}{' '}
+              {colleagueInfo.type === 'mechanical'
+                ? t('inspection.mechInspector', 'Mech Inspector')
+                : t('inspection.elecInspector', 'Elec Inspector')}
+              : {colleagueInfo.name}
+            </Typography.Text>
+          </div>
+        )}
+
         {renderAnswerInput()}
 
         {/* Action buttons */}

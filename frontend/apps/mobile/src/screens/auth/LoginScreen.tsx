@@ -127,14 +127,14 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   title: {
-    fontSize: 24,
+    fontSize: 25,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 4,
     color: '#1a1a1a',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 16,
     textAlign: 'center',
     marginBottom: 24,
     color: '#666',
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     marginBottom: 16,
-    fontSize: 16,
+    fontSize: 18,
     backgroundColor: '#fff',
   },
   button: {
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
   langToggle: {
@@ -171,6 +171,6 @@ const styles = StyleSheet.create({
   },
   langText: {
     color: '#1677ff',
-    fontSize: 14,
+    fontSize: 16,
   },
 });

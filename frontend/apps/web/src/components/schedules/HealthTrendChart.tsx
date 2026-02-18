@@ -114,7 +114,7 @@ export const HealthTrendChart: React.FC<HealthTrendChartProps> = ({
               border: '1px solid #d9d9d9',
               borderRadius: 4,
             }}
-            formatter={(value: number, name: string) => [
+            formatter={(value: any, name: any) => [
               name === 'score' ? `${value} (Trend Score)` : value,
               name === 'score' ? 'Health Score' : name === 'defects' ? 'Recent Defects' : name,
             ]}

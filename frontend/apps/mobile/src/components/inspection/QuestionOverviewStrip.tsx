@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -163,8 +163,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   summaryCount: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: '#fff',
   },
   positionBadge: {
@@ -175,8 +175,8 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   positionBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: '#fff',
   },
   scrollView: {

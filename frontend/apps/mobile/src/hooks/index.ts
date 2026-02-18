@@ -1,6 +1,7 @@
 // Offline support hooks
 export { useOfflineQuery } from './useOfflineQuery';
 export { useOfflineMutation } from './useOfflineMutation';
+export { useOfflineMutations } from './useOfflineMutations';
 
 // Voice command hook
 export { useVoiceCommands } from './useVoiceCommands';

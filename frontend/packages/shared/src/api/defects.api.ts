@@ -21,6 +21,19 @@ export interface AssignSpecialistPayload {
   major_reason?: string;
 }
 
+export interface QuickReportPayload {
+  type: 'equipment' | 'safety';
+  severity?: string;
+  equipment_id?: number;
+  description?: string;
+  photo_url?: string;
+  voice_note_url?: string;
+  voice_transcription?: string;
+  hazard_type?: string;
+  location?: string;
+  category?: string;
+}
+
 export const defectsApi = {
   list(params?: DefectListParams) {
     return getApiClient().get<PaginatedResponse<Defect>>('/api/defects', { params });
@@ -48,5 +61,13 @@ export const defectsApi = {
 
   updateSLA(id: number, payload: { new_deadline: string; reason?: string }) {
     return getApiClient().put<ApiResponse<Defect>>(`/api/defects/${id}/sla`, payload);
+  },
+
+  createQuickReport(payload: QuickReportPayload) {
+    return getApiClient().post<ApiResponse<Defect>>('/api/quick-reports', payload);
+  },
+
+  listQuickReports(params?: { type?: 'equipment' | 'safety' | 'all'; page?: number; per_page?: number }) {
+    return getApiClient().get<PaginatedResponse<Defect>>('/api/quick-reports', { params });
   },
 };

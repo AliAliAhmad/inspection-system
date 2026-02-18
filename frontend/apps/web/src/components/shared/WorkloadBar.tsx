@@ -89,13 +89,13 @@ export function WorkloadBar({
       <Space direction="vertical" size={2} style={{ width: '100%' }}>
         {showLabel && (
           <Space size={4} style={{ justifyContent: 'space-between', width: '100%' }}>
-            <Text style={{ fontSize: size === 'small' ? 11 : 13 }}>
+            <Text strong style={{ fontSize: size === 'small' ? 12 : 14 }}>
               {scheduledHours}h
             </Text>
             {showStatus && (
               <Tag
                 color={getStatusColor()}
-                style={{ fontSize: size === 'small' ? 10 : 11, margin: 0 }}
+                style={{ fontSize: size === 'small' ? 11 : 12, fontWeight: 700, margin: 0 }}
               >
                 {getStatusLabel()}
               </Tag>
@@ -113,7 +113,7 @@ export function WorkloadBar({
         {overtimeHours > 0 && (
           <Space size={4}>
             <ThunderboltOutlined style={{ color: '#ff4d4f', fontSize: size === 'small' ? 10 : 12 }} />
-            <Text type="danger" style={{ fontSize: size === 'small' ? 10 : 11 }}>
+            <Text type="danger" style={{ fontSize: size === 'small' ? 11 : 12, fontWeight: 700 }}>
               +{overtimeHours}h {t('roster.overtimeHours', 'OT')}
             </Text>
           </Space>

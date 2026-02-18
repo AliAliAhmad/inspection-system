@@ -117,7 +117,8 @@ def submit_engineer_verdict(assessment_id):
         assessment_id=assessment_id,
         engineer_id=user.id,
         verdict=data['verdict'],
-        notes=data.get('notes')
+        notes=data.get('notes'),
+        followup_data=data.get('followup')  # Inline follow-up scheduling for 'monitor'
     )
 
     # Auto-translate engineer notes
@@ -146,7 +147,8 @@ def admin_resolve(assessment_id):
         assessment_id=assessment_id,
         admin_id=user.id,
         decision=data['decision'],
-        notes=data.get('notes')
+        notes=data.get('notes'),
+        followup_data=data.get('followup')  # Inline follow-up scheduling for 'monitor'
     )
 
     # Auto-translate admin notes

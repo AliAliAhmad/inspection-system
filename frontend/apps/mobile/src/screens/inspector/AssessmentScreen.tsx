@@ -83,8 +83,8 @@ export default function AssessmentScreen() {
       queryClient.invalidateQueries({ queryKey: ['assessment', id] });
       queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
       Alert.alert(
-        isAr ? 'تم' : 'Success',
-        isAr ? 'تم إرسال تقييمك بنجاح' : 'Your verdict has been submitted successfully'
+        t('assessment.success'),
+        t('assessment.verdict_submitted')
       );
     },
     onError: (err: any) => {
@@ -97,23 +97,23 @@ export default function AssessmentScreen() {
     if (!selectedVerdict) return;
 
     if (selectedVerdict === 'monitor' && monitorReason.trim().length < 30) {
-      Alert.alert(t('common.error'), isAr ? 'سبب المراقبة يجب أن يكون 30 حرف على الأقل' : 'Monitor reason must be at least 30 characters');
+      Alert.alert(t('common.error'), t('assessment.monitor_reason_min'));
       return;
     }
     if (selectedVerdict === 'stop' && stopReason.trim().length < 50) {
-      Alert.alert(t('common.error'), isAr ? 'سبب الإيقاف يجب أن يكون 50 حرف على الأقل' : 'Stop reason must be at least 50 characters');
+      Alert.alert(t('common.error'), t('assessment.stop_reason_min'));
       return;
     }
 
     const verdictLabels: Record<Verdict, string> = {
-      operational: isAr ? 'تشغيلي' : 'Operational',
-      monitor: isAr ? 'مراقبة' : 'Monitor',
-      stop: isAr ? 'إيقاف' : 'Stop',
+      operational: t('assessment.operational'),
+      monitor: t('assessment.monitor'),
+      stop: t('assessment.stop'),
     };
 
     Alert.alert(
       t('common.confirm'),
-      `${isAr ? 'هل تريد تقديم التقييم' : 'Submit verdict'}: "${verdictLabels[selectedVerdict]}"?`,
+      `${t('assessment.submit_verdict')}: "${verdictLabels[selectedVerdict]}"?`,
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
@@ -138,11 +138,11 @@ export default function AssessmentScreen() {
   };
 
   const getVerdictLabel = (verdict: Verdict | string | null): string => {
-    if (verdict === 'operational') return isAr ? 'تشغيلي' : 'Operational';
-    if (verdict === 'monitor') return isAr ? 'مراقبة' : 'Monitor';
-    if (verdict === 'stop') return isAr ? 'إيقاف' : 'Stop';
-    if (verdict === 'urgent') return isAr ? 'عاجل' : 'Urgent';
-    return isAr ? 'معلق' : 'Pending';
+    if (verdict === 'operational') return t('assessment.operational');
+    if (verdict === 'monitor') return t('assessment.monitor');
+    if (verdict === 'stop') return t('assessment.stop');
+    if (verdict === 'urgent') return t('assessment.urgent');
+    return t('assessment.pending');
   };
 
   if (isLoading) {
@@ -195,8 +195,8 @@ export default function AssessmentScreen() {
           </View>
           {data.system_urgency_score != null && (
             <Text style={styles.systemScore}>
-              {isAr ? 'نقاط الخطورة' : 'Urgency Score'}: {data.system_urgency_score}
-              {data.system_has_critical ? (isAr ? ' | حرج' : ' | CRITICAL') : ''}
+              {t('assessment.urgency_score')}: {data.system_urgency_score}
+              {data.system_has_critical ? ` | ${t('assessment.critical')}` : ''}
             </Text>
           )}
         </View>
@@ -206,11 +206,11 @@ export default function AssessmentScreen() {
       <View style={styles.sectionCard}>
         <Text style={styles.sectionTitle}>{t('common.details')}</Text>
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Assignment ID:</Text>
+          <Text style={styles.infoLabel}>{t('assessment.assignment_id')}:</Text>
           <Text style={styles.infoValue}>#{data.inspection_assignment_id}</Text>
         </View>
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Equipment ID:</Text>
+          <Text style={styles.infoLabel}>{t('assessment.equipment_id')}:</Text>
           <Text style={styles.infoValue}>#{data.equipment_id}</Text>
         </View>
         <View style={styles.infoRow}>
@@ -221,7 +221,7 @@ export default function AssessmentScreen() {
         </View>
         {data.finalized_at && (
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{isAr ? 'تم الإنهاء' : 'Finalized'}:</Text>
+            <Text style={styles.infoLabel}>{t('assessment.finalized')}:</Text>
             <Text style={styles.infoValue}>
               {new Date(data.finalized_at).toLocaleString()}
             </Text>
@@ -237,7 +237,7 @@ export default function AssessmentScreen() {
 
         {/* System */}
         <VerdictTrailRow
-          label={isAr ? 'النظام' : 'System'}
+          label={t('assessment.system')}
           verdict={data.system_verdict}
           getColor={getVerdictColor}
           getLabel={getVerdictLabel}
@@ -245,7 +245,7 @@ export default function AssessmentScreen() {
 
         {/* Mechanical Inspector */}
         <VerdictTrailRow
-          label={isAr ? 'مفتش ميكانيكي' : 'Mechanical Inspector'}
+          label={t('assessment.mechanical_inspector')}
           verdict={data.mech_verdict}
           getColor={getVerdictColor}
           getLabel={getVerdictLabel}
@@ -254,7 +254,7 @@ export default function AssessmentScreen() {
 
         {/* Electrical Inspector */}
         <VerdictTrailRow
-          label={isAr ? 'مفتش كهربائي' : 'Electrical Inspector'}
+          label={t('assessment.electrical_inspector')}
           verdict={data.elec_verdict}
           getColor={getVerdictColor}
           getLabel={getVerdictLabel}
@@ -264,7 +264,7 @@ export default function AssessmentScreen() {
         {/* Engineer (if escalated) */}
         {(data.escalation_level === 'engineer' || data.escalation_level === 'admin' || data.engineer_verdict) && (
           <VerdictTrailRow
-            label={isAr ? 'المهندس' : 'Engineer'}
+            label={t('assessment.engineer')}
             verdict={data.engineer_verdict}
             getColor={getVerdictColor}
             getLabel={getVerdictLabel}
@@ -274,7 +274,7 @@ export default function AssessmentScreen() {
         {/* Admin (if escalated) */}
         {(data.escalation_level === 'admin' || data.resolved_by === 'admin') && (
           <VerdictTrailRow
-            label={isAr ? 'المدير' : 'Admin'}
+            label={t('assessment.admin')}
             verdict={data.final_status}
             getColor={getVerdictColor}
             getLabel={data.resolved_by === 'admin' ? getVerdictLabel : () => getVerdictLabel(null)}
@@ -301,7 +301,7 @@ export default function AssessmentScreen() {
         {data.final_status && data.finalized_at && (
           <View style={[styles.finalStatusContainer, { borderTopColor: getVerdictColor(data.final_status) }]}>
             <Text style={styles.finalStatusLabel}>
-              {isAr ? 'الحالة النهائية' : 'Final Status'}:
+              {t('assessment.final_status')}:
             </Text>
             <View style={[styles.finalStatusBadge, { backgroundColor: getVerdictColor(data.final_status) }]}>
               <Text style={styles.finalStatusText}>
@@ -315,20 +315,20 @@ export default function AssessmentScreen() {
       {/* Resolution Info */}
       {data.resolved_by && (
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>{isAr ? 'القرار' : 'Resolution'}</Text>
+          <Text style={styles.sectionTitle}>{t('assessment.resolution')}</Text>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{isAr ? 'تم الحل بواسطة' : 'Resolved By'}:</Text>
+            <Text style={styles.infoLabel}>{t('assessment.resolved_by')}:</Text>
             <Text style={styles.infoValue}>{data.resolved_by}</Text>
           </View>
           {data.admin_decision_notes && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>{isAr ? 'ملاحظات المدير' : 'Admin Notes'}:</Text>
+              <Text style={styles.infoLabel}>{t('assessment.admin_notes')}:</Text>
               <Text style={styles.infoValue}>{data.admin_decision_notes}</Text>
             </View>
           )}
           {data.engineer_notes && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>{isAr ? 'ملاحظات المهندس' : 'Engineer Notes'}:</Text>
+              <Text style={styles.infoLabel}>{t('assessment.engineer_notes')}:</Text>
               <Text style={styles.infoValue}>{data.engineer_notes}</Text>
             </View>
           )}
@@ -353,14 +353,14 @@ export default function AssessmentScreen() {
       {(isMechInspector || isElecInspector) && !hasSubmittedVerdict && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>
-            {isAr ? 'تقييمك' : 'Your Verdict'}
+            {t('assessment.your_verdict')}
           </Text>
 
           {/* Other inspector's verdict info */}
           {otherVerdict && (
             <View style={[styles.otherVerdictBanner, { borderLeftColor: getVerdictColor(otherVerdict) }]}>
               <Text style={styles.otherVerdictText}>
-                {isAr ? 'المفتش الآخر اختار' : 'Other inspector selected'}: {getVerdictLabel(otherVerdict)}
+                {t('assessment.other_inspector_selected')}: {getVerdictLabel(otherVerdict)}
               </Text>
             </View>
           )}
@@ -385,7 +385,7 @@ export default function AssessmentScreen() {
               </Text>
               {data.system_verdict === 'operational' && (
                 <View style={styles.systemRecBadge}>
-                  <Text style={styles.systemRecText}>🤖 {isAr ? 'موصى' : 'Recommended'}</Text>
+                  <Text style={styles.systemRecText}>🤖 {t('assessment.recommended')}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -409,7 +409,7 @@ export default function AssessmentScreen() {
               </Text>
               {data.system_verdict === 'monitor' && (
                 <View style={styles.systemRecBadge}>
-                  <Text style={styles.systemRecText}>🤖 {isAr ? 'موصى' : 'Recommended'}</Text>
+                  <Text style={styles.systemRecText}>🤖 {t('assessment.recommended')}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -433,7 +433,7 @@ export default function AssessmentScreen() {
               </Text>
               {data.system_verdict === 'stop' && (
                 <View style={styles.systemRecBadge}>
-                  <Text style={styles.systemRecText}>🤖 {isAr ? 'موصى' : 'Recommended'}</Text>
+                  <Text style={styles.systemRecText}>🤖 {t('assessment.recommended')}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -485,7 +485,7 @@ export default function AssessmentScreen() {
       {(isMechInspector || isElecInspector) && hasSubmittedVerdict && (
         <View style={[styles.submittedCard, { borderLeftWidth: 4, borderLeftColor: getVerdictColor(userVerdict) }]}>
           <Text style={styles.submittedText}>
-            {isAr ? 'تقييمك' : 'Your verdict'}: {VERDICT_CONFIG[userVerdict as Verdict]?.emoji} {getVerdictLabel(userVerdict)}
+            {t('assessment.your_verdict_label')}: {VERDICT_CONFIG[userVerdict as Verdict]?.emoji} {getVerdictLabel(userVerdict)}
           </Text>
         </View>
       )}
@@ -509,6 +509,7 @@ function VerdictTrailRow({
   getLabel: (v: Verdict | string | null) => string;
   isCurrentUser?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.trailRow}>
       <View style={styles.trailDot}>
@@ -516,7 +517,7 @@ function VerdictTrailRow({
       </View>
       <View style={styles.trailContent}>
         <Text style={[styles.trailLabel, isCurrentUser && { fontWeight: '700' }]}>
-          {label} {isCurrentUser ? '(You)' : ''}
+          {label} {isCurrentUser ? t('assessment.you') : ''}
         </Text>
         <View style={[styles.trailBadge, { backgroundColor: verdict ? getColor(verdict) : '#E0E0E0' }]}>
           <Text style={styles.trailBadgeText}>{getLabel(verdict)}</Text>

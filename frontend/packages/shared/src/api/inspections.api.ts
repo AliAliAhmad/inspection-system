@@ -197,6 +197,18 @@ export const inspectionsApi = {
     });
   },
 
+  getColleagueAnswers(assignmentId: number) {
+    return getApiClient().get<ApiResponse<{
+      answers: any[];
+      colleague: {
+        id: number;
+        name: string;
+        type: 'mechanical' | 'electrical';
+        inspection_status: string;
+      } | null;
+    }>>(`/api/inspections/colleague-answers/${assignmentId}`);
+  },
+
   remove(id: number) {
     return getApiClient().delete<ApiResponse>(`/api/inspections/${id}`);
   },

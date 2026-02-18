@@ -12,10 +12,13 @@ import {
 
 const { Text, Title } = Typography;
 
-interface CapacityGaugeProps {
+export interface CapacityGaugeProps {
   showWeeklyBreakdown?: boolean;
   days?: number;
   height?: number;
+  utilization?: number;
+  title?: string;
+  showRecommendations?: boolean;
 }
 
 const getUtilizationColor = (percentage: number): string => {

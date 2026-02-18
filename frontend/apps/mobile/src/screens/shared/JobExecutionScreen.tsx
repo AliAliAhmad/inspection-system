@@ -26,20 +26,20 @@ const STATUS_COLORS: Record<TrackingStatus, string> = {
   not_started: '#607D8B',
 };
 
-const PAUSE_REASONS: { key: PauseReasonCategory; label: string }[] = [
-  { key: 'break', label: 'Break' },
-  { key: 'waiting_for_materials', label: 'Waiting for Materials' },
-  { key: 'urgent_task', label: 'Called to Urgent Task' },
-  { key: 'waiting_for_access', label: 'Waiting for Access' },
-  { key: 'other', label: 'Other' },
+const PAUSE_REASON_KEYS: { key: PauseReasonCategory; i18nKey: string }[] = [
+  { key: 'break', i18nKey: 'job_execution.pause_reason_break' },
+  { key: 'waiting_for_materials', i18nKey: 'job_execution.pause_reason_waiting_materials' },
+  { key: 'urgent_task', i18nKey: 'job_execution.pause_reason_urgent_task' },
+  { key: 'waiting_for_access', i18nKey: 'job_execution.pause_reason_waiting_access' },
+  { key: 'other', i18nKey: 'job_execution.pause_reason_other' },
 ];
 
-const INCOMPLETE_REASONS: { key: IncompleteReasonCategory; label: string }[] = [
-  { key: 'missing_parts', label: 'Missing Parts' },
-  { key: 'equipment_not_accessible', label: 'Equipment Not Accessible' },
-  { key: 'time_ran_out', label: 'Time Ran Out' },
-  { key: 'safety_concern', label: 'Safety Concern' },
-  { key: 'other', label: 'Other' },
+const INCOMPLETE_REASON_KEYS: { key: IncompleteReasonCategory; i18nKey: string }[] = [
+  { key: 'missing_parts', i18nKey: 'job_execution.incomplete_reason_missing_parts' },
+  { key: 'equipment_not_accessible', i18nKey: 'job_execution.incomplete_reason_equipment_not_accessible' },
+  { key: 'time_ran_out', i18nKey: 'job_execution.incomplete_reason_time_ran_out' },
+  { key: 'safety_concern', i18nKey: 'job_execution.incomplete_reason_safety_concern' },
+  { key: 'other', i18nKey: 'job_execution.incomplete_reason_other' },
 ];
 
 export default function JobExecutionScreen() {
@@ -112,7 +112,7 @@ export default function JobExecutionScreen() {
       queryClient.invalidateQueries({ queryKey: ['job-tracking', jobId] });
       queryClient.invalidateQueries({ queryKey: ['my-jobs'] });
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to start job'),
+    onError: (err: any) => Alert.alert(t('job_execution.error'), err?.response?.data?.message || t('job_execution.failed_to_start')),
   });
 
   const pauseMutation = useMutation({
@@ -124,7 +124,7 @@ export default function JobExecutionScreen() {
       setReasonDetails('');
       queryClient.invalidateQueries({ queryKey: ['job-tracking', jobId] });
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to pause job'),
+    onError: (err: any) => Alert.alert(t('job_execution.error'), err?.response?.data?.message || t('job_execution.failed_to_pause')),
   });
 
   const resumeMutation = useMutation({
@@ -132,7 +132,7 @@ export default function JobExecutionScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['job-tracking', jobId] });
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to resume job'),
+    onError: (err: any) => Alert.alert(t('job_execution.error'), err?.response?.data?.message || t('job_execution.failed_to_resume')),
   });
 
   const completeMutation = useMutation({
@@ -141,9 +141,9 @@ export default function JobExecutionScreen() {
       setShowCompleteModal(false);
       queryClient.invalidateQueries({ queryKey: ['job-tracking', jobId] });
       queryClient.invalidateQueries({ queryKey: ['my-jobs'] });
-      Alert.alert('Success', 'Job completed!');
+      Alert.alert(t('job_execution.success'), t('job_execution.job_completed_msg'));
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to complete job'),
+    onError: (err: any) => Alert.alert(t('job_execution.error'), err?.response?.data?.message || t('job_execution.failed_to_complete')),
   });
 
   const incompleteMutation = useMutation({
@@ -155,9 +155,9 @@ export default function JobExecutionScreen() {
       setReasonDetails('');
       queryClient.invalidateQueries({ queryKey: ['job-tracking', jobId] });
       queryClient.invalidateQueries({ queryKey: ['my-jobs'] });
-      Alert.alert('Job Incomplete', 'Job marked as incomplete. It will be carried over.');
+      Alert.alert(t('job_execution.job_incomplete_title'), t('job_execution.job_incomplete_msg'));
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed'),
+    onError: (err: any) => Alert.alert(t('job_execution.error'), err?.response?.data?.message || t('job_execution.failed')),
   });
 
   const status = tracking?.status || 'pending';
@@ -176,12 +176,12 @@ export default function JobExecutionScreen() {
       {/* Carry-over banner */}
       {carryOverFrom && (
         <View style={styles.carryOverBanner}>
-          <Text style={styles.carryOverText}>Carry-over from previous day</Text>
+          <Text style={styles.carryOverText}>{t('job_execution.carry_over')}</Text>
           {carryOverFrom.worker_transcription && (
             <Text style={styles.carryOverNote}>{carryOverFrom.worker_transcription}</Text>
           )}
           {carryOverFrom.engineer_transcription && (
-            <Text style={styles.carryOverNote}>Engineer: {carryOverFrom.engineer_transcription}</Text>
+            <Text style={styles.carryOverNote}>{t('job_execution.engineer_prefix')}{carryOverFrom.engineer_transcription}</Text>
           )}
         </View>
       )}
@@ -195,7 +195,7 @@ export default function JobExecutionScreen() {
       <View style={styles.timerContainer}>
         <Text style={styles.timerText}>{formatTime(elapsedTime)}</Text>
         {tracking?.total_paused_minutes ? (
-          <Text style={styles.pausedText}>Paused: {tracking.total_paused_minutes} min</Text>
+          <Text style={styles.pausedText}>{t('job_execution.paused_time', { minutes: tracking.total_paused_minutes })}</Text>
         ) : null}
       </View>
 
@@ -210,7 +210,7 @@ export default function JobExecutionScreen() {
             {startMutation.isPending ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.actionButtonText}>START JOB</Text>
+              <Text style={styles.actionButtonText}>{t('job_execution.start_job')}</Text>
             )}
           </TouchableOpacity>
         )}
@@ -221,21 +221,21 @@ export default function JobExecutionScreen() {
               style={[styles.actionButton, styles.pauseButton]}
               onPress={() => setShowPauseModal(true)}
             >
-              <Text style={styles.actionButtonText}>PAUSE</Text>
+              <Text style={styles.actionButtonText}>{t('job_execution.pause')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.actionButton, styles.completeButton]}
               onPress={() => setShowCompleteModal(true)}
             >
-              <Text style={styles.actionButtonText}>COMPLETE</Text>
+              <Text style={styles.actionButtonText}>{t('job_execution.complete')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.actionButton, styles.incompleteButton]}
               onPress={() => setShowIncompleteModal(true)}
             >
-              <Text style={styles.actionButtonText}>INCOMPLETE</Text>
+              <Text style={styles.actionButtonText}>{t('job_execution.incomplete')}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -250,7 +250,7 @@ export default function JobExecutionScreen() {
               {resumeMutation.isPending ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.actionButtonText}>RESUME</Text>
+                <Text style={styles.actionButtonText}>{t('job_execution.resume')}</Text>
               )}
             </TouchableOpacity>
 
@@ -258,16 +258,16 @@ export default function JobExecutionScreen() {
               style={[styles.actionButton, styles.incompleteButton]}
               onPress={() => setShowIncompleteModal(true)}
             >
-              <Text style={styles.actionButtonText}>MARK INCOMPLETE</Text>
+              <Text style={styles.actionButtonText}>{t('job_execution.mark_incomplete')}</Text>
             </TouchableOpacity>
           </>
         )}
 
         {status === 'completed' && (
           <View style={styles.completedInfo}>
-            <Text style={styles.completedText}>Job Completed</Text>
+            <Text style={styles.completedText}>{t('job_execution.job_completed_label')}</Text>
             {tracking?.actual_hours && (
-              <Text style={styles.hoursText}>Actual: {tracking.actual_hours}h</Text>
+              <Text style={styles.hoursText}>{t('job_execution.actual_hours', { hours: tracking.actual_hours })}</Text>
             )}
           </View>
         )}
@@ -276,7 +276,7 @@ export default function JobExecutionScreen() {
       {/* Event Log */}
       {logs.length > 0 && (
         <View style={styles.logSection}>
-          <Text style={styles.sectionTitle}>Activity Log</Text>
+          <Text style={styles.sectionTitle}>{t('job_execution.activity_log')}</Text>
           {logs.slice(0, 10).map((log: any) => (
             <View key={log.id} style={styles.logItem}>
               <Text style={styles.logEvent}>{log.event_type.replace(/_/g, ' ')}</Text>
@@ -293,8 +293,8 @@ export default function JobExecutionScreen() {
       <Modal visible={showPauseModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Pause Reason</Text>
-            {PAUSE_REASONS.map((reason) => (
+            <Text style={styles.modalTitle}>{t('job_execution.pause_reason')}</Text>
+            {PAUSE_REASON_KEYS.map((reason) => (
               <TouchableOpacity
                 key={reason.key}
                 style={[
@@ -307,14 +307,14 @@ export default function JobExecutionScreen() {
                   styles.reasonButtonText,
                   selectedReason === reason.key && styles.reasonButtonTextSelected,
                 ]}>
-                  {reason.label}
+                  {t(reason.i18nKey)}
                 </Text>
               </TouchableOpacity>
             ))}
             {selectedReason === 'other' && (
               <TextInput
                 style={styles.textInput}
-                placeholder="Describe reason..."
+                placeholder={t('job_execution.describe_reason')}
                 value={reasonDetails}
                 onChangeText={setReasonDetails}
                 multiline
@@ -325,7 +325,7 @@ export default function JobExecutionScreen() {
                 style={styles.modalCancel}
                 onPress={() => { setShowPauseModal(false); setSelectedReason(''); }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('job_execution.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalConfirm, !selectedReason && styles.modalConfirmDisabled]}
@@ -342,7 +342,7 @@ export default function JobExecutionScreen() {
                 {pauseMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>Pause</Text>
+                  <Text style={styles.modalConfirmText}>{t('job_execution.pause_confirm')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -354,10 +354,10 @@ export default function JobExecutionScreen() {
       <Modal visible={showCompleteModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Complete Job</Text>
+            <Text style={styles.modalTitle}>{t('job_execution.complete_job')}</Text>
             <TextInput
               style={[styles.textInput, { height: 80 }]}
-              placeholder="Work notes (optional)..."
+              placeholder={t('job_execution.work_notes_placeholder')}
               value={workNotes}
               onChangeText={setWorkNotes}
               multiline
@@ -367,7 +367,7 @@ export default function JobExecutionScreen() {
                 style={styles.modalCancel}
                 onPress={() => setShowCompleteModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('job_execution.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalConfirm}
@@ -377,7 +377,7 @@ export default function JobExecutionScreen() {
                 {completeMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>Complete</Text>
+                  <Text style={styles.modalConfirmText}>{t('job_execution.complete_confirm')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -389,9 +389,9 @@ export default function JobExecutionScreen() {
       <Modal visible={showIncompleteModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Mark Incomplete</Text>
-            <Text style={styles.modalSubtitle}>Select reason:</Text>
-            {INCOMPLETE_REASONS.map((reason) => (
+            <Text style={styles.modalTitle}>{t('job_execution.mark_incomplete_title')}</Text>
+            <Text style={styles.modalSubtitle}>{t('job_execution.select_reason')}</Text>
+            {INCOMPLETE_REASON_KEYS.map((reason) => (
               <TouchableOpacity
                 key={reason.key}
                 style={[
@@ -404,13 +404,13 @@ export default function JobExecutionScreen() {
                   styles.reasonButtonText,
                   selectedReason === reason.key && styles.reasonButtonTextSelected,
                 ]}>
-                  {reason.label}
+                  {t(reason.i18nKey)}
                 </Text>
               </TouchableOpacity>
             ))}
             <TextInput
               style={[styles.textInput, { height: 60 }]}
-              placeholder="Additional details..."
+              placeholder={t('job_execution.additional_details')}
               value={reasonDetails}
               onChangeText={setReasonDetails}
               multiline
@@ -420,7 +420,7 @@ export default function JobExecutionScreen() {
                 style={styles.modalCancel}
                 onPress={() => { setShowIncompleteModal(false); setSelectedReason(''); }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('job_execution.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalConfirm, styles.incompleteConfirm, !selectedReason && styles.modalConfirmDisabled]}
@@ -437,7 +437,7 @@ export default function JobExecutionScreen() {
                 {incompleteMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>Mark Incomplete</Text>
+                  <Text style={styles.modalConfirmText}>{t('job_execution.mark_incomplete_confirm')}</Text>
                 )}
               </TouchableOpacity>
             </View>

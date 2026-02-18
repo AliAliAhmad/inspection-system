@@ -59,6 +59,10 @@ class FinalAssessment(db.Model):
     escalation_level = db.Column(db.String(20), default='none', nullable=False)
     escalation_reason = db.Column(db.Text, nullable=True)
 
+    # Follow-up tracking
+    requires_followup = db.Column(db.Boolean, default=False, nullable=False)
+    followup_scheduled = db.Column(db.Boolean, default=False, nullable=False)
+
     # Version
     assessment_version = db.Column(db.Integer, default=2, nullable=False)
 
@@ -268,6 +272,8 @@ class FinalAssessment(db.Model):
             'escalation_reason': translated.get('escalation_reason', self.escalation_reason),
             # Meta
             'assessment_version': self.assessment_version or 1,
+            'requires_followup': self.requires_followup or False,
+            'followup_scheduled': self.followup_scheduled or False,
             'finalized_at': self.finalized_at.isoformat() if self.finalized_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

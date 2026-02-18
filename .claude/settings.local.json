@@ -141,7 +141,19 @@
       "Bash(export JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\")",
       "Bash(export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$JAVA_HOME/bin)",
       "Bash(java:*)",
-      "Bash(JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" ./gradlew:*)"
+      "Bash(JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" ./gradlew:*)",
+      "Bash(git diff:*)",
+      "Bash(git -C inspection-system status:*)",
+      "Bash(adb:*)",
+      "Bash($HOME/Library/Android/sdk/platform-tools/adb devices)",
+      "Bash($HOME/Library/Android/sdk/platform-tools/adb wait-for-device:*)",
+      "Bash($HOME/Library/Android/sdk/platform-tools/adb kill-server)",
+      "Bash($HOME/Library/Android/sdk/platform-tools/adb start-server)",
+      "Bash(./gradlew app:assembleDebug:*)",
+      "Bash(export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home)",
+      "Bash(export PATH=\"$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH\")",
+      "Bash(export PATH=\"$ANDROID_HOME/platform-tools:$PATH\":*)",
+      "Bash(export PATH=\"$PATH:$HOME/Library/Android/sdk/platform-tools\")"
     ]
   }
 }

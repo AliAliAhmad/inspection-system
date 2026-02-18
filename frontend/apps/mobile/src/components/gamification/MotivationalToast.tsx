@@ -362,8 +362,8 @@ const styles = StyleSheet.create({
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     borderRadius: 16,
     borderWidth: 1,
     shadowColor: '#000',
@@ -383,13 +383,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   message: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     flexShrink: 1,
   },
   points: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     marginLeft: 8,
     opacity: 0.8,
   },

@@ -35,7 +35,7 @@ export type {
   BulkReviewResult,
 } from './inspections.api';
 export { defectsApi } from './defects.api';
-export type { DefectListParams, AssignSpecialistPayload } from './defects.api';
+export type { DefectListParams, AssignSpecialistPayload, QuickReportPayload } from './defects.api';
 export { schedulesApi } from './schedules.api';
 export type { CreateSchedulePayload } from './schedules.api';
 export { ratingsApi } from './ratings.api';
@@ -294,3 +294,17 @@ export type {
   EquipmentIssue,
   CreateHandoverPayload,
 } from '../types/shift-handover.types';
+
+// Monitor Follow-Ups
+export { monitorFollowupsApi } from './monitor-followups.api';
+export type {
+  MonitorFollowup,
+  FollowupStatus,
+  FollowupType,
+  FollowupLocation,
+  ScheduleFollowupPayload,
+  AvailableInspector,
+  AvailableInspectorsResponse,
+  FollowupDashboardStats,
+  FollowupListParams,
+} from '../types/monitor-followup.types';

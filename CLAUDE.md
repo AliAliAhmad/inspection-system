@@ -71,8 +71,28 @@
 | Date | What Changed | Status |
 |------|-------------|--------|
 | 2026-02-13 | Project setup | ✅ Done |
+| 2026-02-18 | Added missing i18n keys to en.json and ar.json — job_execution, profile, assessment, assignments, checklist, notifications sections | ✅ Done |
+| 2026-02-18 | Simplified CreateHandoverScreen — replaced 3 complex sections (12+ fields) with unified type-tagged item list | ✅ Done |
+| 2026-02-18 | Fixed LiveAlertBanner phone overlap — added SafeAreaView insets padding so banner sits below status bar | ✅ Done |
+| 2026-02-18 | Fixed LiveAlertBanner Arabic detection — switched from I18nManager.isRTL to useTranslation i18n.language | ✅ Done |
+| 2026-02-18 | Created Unplanned Jobs API — model, POST/GET/GET-by-ID endpoints, engineer/admin notifications, registered blueprint | ✅ Done |
+| 2026-02-18 | Created reusable MonitorFollowupForm component (web) for scheduling follow-up inspections with auto-fill inspectors | ✅ Done |
 | 2026-02-16 | Fix React error #310 — moved useCallback before early return in LiveTicker.tsx | ✅ Done |
 | 2026-02-15 | Fixed FileSystem import in PhotoAnnotationScreen (both APIs) | ✅ Done |
+| 2026-02-17 | Created AssessmentTrackingScreen for mobile — pipeline overview with stats, filters, assessment cards | ✅ Done |
+| 2026-02-17 | Created AssessmentTrackingPage (web) — kanban pipeline + list view with stats, verdicts, escalation tracking | ✅ Done |
+| 2026-02-17 | Wired AssessmentTracking into mobile RootNavigator + DashboardScreen quick links (admin/engineer) | ✅ Done |
+| 2026-02-17 | Added Assessment Tracking button to web DashboardPage quick actions for engineers/admins | ✅ Done |
+| 2026-02-18 | Replaced all hardcoded strings in JobExecutionScreen, ProfileScreen, NotificationsScreen with i18n t() calls | ✅ Done |
+| 2026-02-18 | Added job_execution.* i18n keys (en/ar) for pause reasons, incomplete reasons, buttons, alerts, modals | ✅ Done |
+| 2026-02-18 | Added profile.* i18n keys (en/ar) for appearance, accessibility, quick links, theme modes, text scales | ✅ Done |
+| 2026-02-18 | Replaced ~70 hardcoded strings in AssessmentScreen, MyAssignmentsScreen, InspectionChecklistScreen with i18n t() calls | ✅ Done |
+| 2026-02-18 | Added assessment.*, assignments.*, checklist.* i18n keys (en/ar) for verdicts, roles, statuses, urgency, modal labels | ✅ Done |
+| 2026-02-18 | Built offline mutation queue system — offline-mutations.ts, useOfflineMutations hook, OfflinePendingBadge, OfflineProvider integration, i18n keys | ✅ Done |
+| 2026-02-18 | Added notifications.info/warning/urgent i18n keys (en/ar) for priority badge labels | ✅ Done |
+| 2026-02-17 | Added i18n keys (en/ar) for assessment_tracking section + nav.assessmentTracking + launcher keys | ✅ Done |
+| 2026-02-17 | Fixed MyAssignmentsScreen verdict types: urgent/stopped → monitor/stop (aligned with 3-verdict system) | ✅ Done |
+| 2026-02-17 | Added colleague-answers API endpoint for pre-filling Inspector 2 answers from Inspector 1 | ✅ Done |
 | 2026-02-15 | Added GPS auto-location hook (useLocation) + LocationTag component | ✅ Done |
 | 2026-02-15 | Added Push-to-Talk walkie-talkie component | ✅ Done |
 | 2026-02-15 | Added Trending Alerts pattern detection component | ✅ Done |
@@ -94,6 +114,8 @@
 | 2026-02-15 | Exported templates.types in shared package | ✅ Done |
 | 2026-02-15 | Rewrote web layout: Hub Card Dashboard + minimal icon sidebar | ✅ Done |
 | 2026-02-15 | Added tabbed work plan stats widget (Overview/Schedule/Team/Focus) | ✅ Done |
+| 2026-02-18 | Created MonitorFollowupsScreen (mobile) — stats row, tab filters, follow-up cards, schedule navigation | ✅ Done |
+| 2026-02-18 | Created MonitorFollowupScheduleScreen (mobile) — schedule form with type/location/shift selection, inspector pickers, auto-fill | ✅ Done |
 | 2026-02-15 | Fixed job_templates SQL error: added missing columns migration | ✅ Done |
 | 2026-02-15 | Work Planning: combined Side Tab Toggle + Auto-Hide panel layout | ✅ Done |
 | 2026-02-15 | Work Planning: rewrite layout — compact toolbar, inline team pool, always-visible jobs panel, at-risk badge | ✅ Done |
@@ -173,6 +195,35 @@
 | 2026-02-17 | i18n: added 25+ assessment keys for monitor/stop/escalation/verdict in en.json + ar.json | ✅ Done |
 | 2026-02-17 | Fixed logout bug: async logout not awaited in ProfileScreen Alert.alert callback | ✅ Done |
 | 2026-02-17 | Fixed App.tsx loading screen: removed debug red background | ✅ Done |
+| 2026-02-17 | All banners (12 total: 7 mobile + 5 web) updated: thicker padding, bigger font, bolder weight | ✅ Done |
+| 2026-02-17 | Fixed 18 TypeScript errors across 11 files: TeamPerformanceDashboard, CommandPalette, RunningHoursCard, RunningHoursDashboard, AnomalyAlert type import, HealthTrendChart, SchedulesPage props, EngineerJobDetailPage, InspectionChecklistPage | ✅ Done |
+| 2026-02-17 | Wired 3 unwired components: ServiceAlertBadge in MainLayout header, AnomalyBanner in SchedulesPage, ServiceAlertNotification in EquipmentDashboardPage | ✅ Done |
+| 2026-02-17 | Pre-fill Inspector 2 answers: new backend endpoint GET /colleague-answers/<assignment_id>, API method, mobile pre-fill with source badges, web pre-fill with colleague info | ✅ Done |
+| 2026-02-17 | Created monitor_followups API blueprint: 9 endpoints (list, detail, pending, schedule, available-inspectors, equipment-history, overdue, dashboard, cancel) | ✅ Done |
+| 2026-02-17 | Created MonitorFollowupService: 10 methods — create_pending, schedule, inline_schedule, available_inspectors, daily assignment creation, overdue check, complete, history, cancel (admin-only), dashboard stats | ✅ Done |
+| 2026-02-18 | Created MonitorFollowupsPage (web): dashboard stats, 5 status tabs, schedule modal with auto-fill inspectors | ✅ Done |
+| 2026-02-18 | Created MonitorFollowupForm (web): reusable inline form with date picker, type/location/shift, auto-fill inspectors | ✅ Done |
+| 2026-02-18 | Created MonitorFollowupsScreen + MonitorFollowupScheduleScreen (mobile) | ✅ Done |
+| 2026-02-18 | Monitor Follow-Up full stack: migration, model, service (807 lines), API (9 endpoints), scheduler (2 jobs), assessment hooks, types, i18n (en+ar), web page + form, mobile 2 screens, router + navigator + launcher | ✅ Done |
+| 2026-02-18 | Added "Start Next Inspection" card to DashboardScreen (inspector/specialist only) — queries next assigned task, shows equipment name, navigates to InspectionChecklist | ✅ Done |
+| 2026-02-18 | Added "Quick Report" action to SmartFAB in all 4 contexts (dashboard, job_list, inspection, default) — navigates to QuickFieldReport | ✅ Done |
+| 2026-02-18 | Registered QuickFieldReport screen in RootNavigator (import, param type, Stack.Screen) | ✅ Done |
+| 2026-02-18 | Added dashboard i18n keys (en/ar): start_next, next_inspection, all_caught_up, tap_to_start | ✅ Done |
+| 2026-02-18 | Created QuickFieldReportScreen (mobile): fast field reporting for equipment issues + safety hazards with camera, voice, severity/hazard chips, equipment search, i18n (en+ar), wired into RootNavigator | ✅ Done |
+| 2026-02-18 | Created QuickVoiceMessageScreen (mobile): select channel + record voice + upload + send voice message to team chat from any screen | ✅ Done |
+| 2026-02-18 | Added "Voice Message" action to SmartFAB in all contexts (dashboard, job_list, inspection, chat, default) — navigates to QuickVoiceMessage | ✅ Done |
+| 2026-02-18 | Registered QuickVoiceMessage screen in RootNavigator (import, param type, Stack.Screen) | ✅ Done |
+| 2026-02-18 | Added voice_message i18n keys (en/ar): title, select_channel, record, send, sending, sent, no_channels | ✅ Done |
+| 2026-02-18 | Fixed DefectsScreen role guard: inspectors/specialists see "View" button (navigates to DefectDetail), only admin/engineer see "Assign" button | ✅ Done |
+| 2026-02-18 | Created quick-report backend: migration (inspection_id nullable + 7 new columns), POST /api/quick-reports endpoint, notifications to all users (urgent for admin/engineer) | ✅ Done |
+| 2026-02-18 | Wired QuickFieldReportScreen to real defectsApi.createQuickReport — photo upload via filesApi, voice note, equipment/safety type, severity → real defect with full workflow | ✅ Done |
+| 2026-02-18 | Updated Defect model: new fields (reported_by_id, report_source, voice_note_url, photo_url, location_description, hazard_type, equipment_id_direct), updated to_dict with equipment from direct or inspection | ✅ Done |
+| 2026-02-18 | Created UnplannedJobScreen (mobile): log unplanned work (assist team / requested job), equipment name, description, work done, requested by, voice note, POST /api/unplanned-jobs | ✅ Done |
+| 2026-02-18 | Added VoiceNoteRecorder to CreateHandoverScreen: shift handover now supports voice recording + transcription alongside text comments | ✅ Done |
+| 2026-02-18 | Rewrote useFABContext: 9 contexts (dashboard, my_assignments, job_list, job_execution, inspection, work_plan, chat_list, chat_room, default), Quick Report in ALL contexts, role-based channel creation | ✅ Done |
+| 2026-02-18 | Created CreateChannelScreen (mobile): admin/engineer only, 3 channel types (Group/Announcement/Shift), member selection, registered in navigator | ✅ Done |
+| 2026-02-18 | Created UnplannedJob backend: model + API (POST/GET/GET-by-id) + migration + blueprint registration + engineer/admin notifications | ✅ Done |
+| 2026-02-18 | Updated SmartFAB to pass userRole to useFABContext for role-based FAB actions | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -185,6 +236,7 @@
 | UI modernization | ✅ Done | App Launcher + smart dashboard + tabbed stats |
 | Work Planning layout | ✅ Done | Compact toolbar + inline team pool + always-visible jobs panel + at-risk badge |
 | Mobile app | ✅ Done | React Native/Expo — 96+ components, now wired into screens |
+| Offline mutation queue | ✅ Done | Queue + auto-sync + badge + i18n (en/ar) |
 | GPS auto-location tagging | ✅ Done | useLocation hook + LocationTag |
 | Push-to-talk walkie-talkie | ✅ Done | Hold-to-record voice messaging |
 | Team chat UI | ✅ Done | 3 screens + 5 chat components |
@@ -224,10 +276,21 @@
 | Urgency indicator per question | ✅ Done | 4 levels (OK/Monitor/Attention/Critical), auto-predict assessment from scores |
 | Clickable answer cells + detail modal | ✅ Done | Tap any cell in answer bar → bottom sheet with question, answer, urgency, comment, photo |
 | Assessment badge near equipment | ✅ Done | Colored badge (Pass/Urgent/Monitor) next to equipment name on MyAssignments cards |
+| Monitor Follow-Up scheduling | ✅ Done | Full stack: DB + model + service + 9 API endpoints + 2 scheduler jobs + web page/form + mobile 2 screens + i18n |
 | Multi-layer assessment system | ✅ Done | 4-layer flow (System→Inspector→Engineer→Admin), 3 verdicts (operational/monitor/stop), auto-escalation, notifications |
 | System auto-assessment | ✅ Done | Calculates verdict from urgency scores (weights 0,1,3,5), pre-selects on assessment screen |
 | Engineer review escalation | ✅ Done | Auto-escalates on disagreement, engineer can finalize or escalate to admin |
 | Assessment verdict trail | ✅ Done | Visual trail showing System→Mech→Elec→Engineer→Admin verdicts on both mobile + web |
+| Assessment tracking page (web) | ✅ Done | Kanban pipeline (Inspector→Engineer→Admin→Finalized), list view table, 5 stat cards |
+| Quick Field Report (mobile) | ✅ Done | Equipment issue + safety hazard, camera/voice, severity chips, hazard type chips, equipment autocomplete |
+| Start Next Inspection card | ✅ Done | Dashboard card for inspector/specialist — queries next assigned task, navigates to InspectionChecklist |
+| Quick Report FAB action | ✅ Done | Added to all 4 SmartFAB contexts (dashboard, job_list, inspection, default) |
+| Quick Voice Message (FAB) | ✅ Done | Select channel + record + send voice message from any screen via SmartFAB, all contexts |
+| Unplanned Job logging (mobile) | ✅ Done | Assist team / requested job, equipment name, description, work done, requested by, voice note, bilingual i18n |
+| Context-aware SmartFAB | ✅ Done | 9 contexts, Quick Report everywhere, role-based actions, drag-to-reposition, long-press settings |
+| Shift Handover voice notes | ✅ Done | VoiceNoteRecorder with transcription added to CreateHandoverScreen |
+| Create Channel screen | ✅ Done | Admin/engineer create Group/Announcement/Shift channels with member selection |
+| Unplanned Job backend API | ✅ Done | POST/GET/GET-by-id, model, migration, notifications to admin/engineer |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

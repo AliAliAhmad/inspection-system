@@ -30,9 +30,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type FilterStatus = 'all' | 'assigned' | 'in_progress' | 'completed';
-type AssessmentFilter = 'all' | 'operational' | 'urgent' | 'stopped';
+type AssessmentFilter = 'all' | 'operational' | 'monitor' | 'stop';
 
-const ASSESSMENT_FILTERS: AssessmentFilter[] = ['all', 'operational', 'urgent', 'stopped'];
+const ASSESSMENT_FILTERS: AssessmentFilter[] = ['all', 'operational', 'monitor', 'stop'];
 
 const STATUS_COLORS: Record<string, string> = {
   assigned: '#2196F3',
@@ -46,16 +46,15 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const URGENCY_COLORS = ['#4CAF50', '#FF9800', '#FF5722', '#F44336'];
-const URGENCY_LABELS_EN = ['OK', 'Monitor', 'Attention', 'Critical'];
-const URGENCY_LABELS_AR = ['سليم', 'مراقبة', 'يحتاج انتباه', 'حرج'];
+const URGENCY_LABEL_KEYS = ['assignments.ok', 'assignments.monitor', 'assignments.attention', 'assignments.critical'];
 
-const PENDING_LABELS: Record<string, string> = {
-  both_inspections: 'Pending: Both inspections',
-  mechanical_inspection: 'Pending: Mechanical inspection',
-  electrical_inspection: 'Pending: Electrical inspection',
-  both_verdicts: 'Pending: Both verdicts',
-  mechanical_verdict: 'Pending: Mechanical verdict',
-  electrical_verdict: 'Pending: Electrical verdict',
+const PENDING_LABEL_KEYS: Record<string, string> = {
+  both_inspections: 'assignments.pending_both_inspections',
+  mechanical_inspection: 'assignments.pending_mechanical_inspection',
+  electrical_inspection: 'assignments.pending_electrical_inspection',
+  both_verdicts: 'assignments.pending_both_verdicts',
+  mechanical_verdict: 'assignments.pending_mechanical_verdict',
+  electrical_verdict: 'assignments.pending_electrical_verdict',
 };
 
 // ─── Numeric Validation ───────────────────────────────────
@@ -164,12 +163,11 @@ function AnswerBar({
 function AssessmentBadge({
   assessment,
   predicted,
-  isAr,
 }: {
   assessment?: AssessmentSummary | null;
-  predicted?: 'operational' | 'urgent' | 'monitor' | null;
-  isAr: boolean;
+  predicted?: 'operational' | 'monitor' | 'stop' | null;
 }) {
+  const { t } = useTranslation();
   const status = assessment?.final_status ?? predicted;
   if (!status) return null;
 
@@ -179,17 +177,17 @@ function AssessmentBadge({
   let icon = '';
 
   if (status === 'operational') {
-    label = isAr ? 'تشغيلي' : 'Pass';
+    label = t('assignments.pass');
     bgColor = '#4CAF50';
     textColor = '#fff';
     icon = '✓';
-  } else if (status === 'urgent') {
-    label = isAr ? 'صيانة عاجلة' : 'Urgent';
+  } else if (status === 'stop') {
+    label = t('assignments.stop');
     bgColor = '#F44336';
     textColor = '#fff';
-    icon = '⚠';
+    icon = '⛔';
   } else if (status === 'monitor') {
-    label = isAr ? 'مراقبة' : 'Monitor';
+    label = t('assignments.monitor');
     bgColor = '#FF9800';
     textColor = '#fff';
     icon = '👁';
@@ -204,7 +202,7 @@ function AssessmentBadge({
       </Text>
       {isPredicted && (
         <Text style={styles.assessmentPredictedTag}>
-          {isAr ? 'متوقع' : 'predicted'}
+          {t('assignments.predicted')}
         </Text>
       )}
     </View>
@@ -216,17 +214,17 @@ function AnswerDetailModal({
   visible,
   entry,
   onClose,
-  isAr,
 }: {
   visible: boolean;
   entry: AnswerSummaryEntry | null;
   onClose: () => void;
-  isAr: boolean;
+  isAr?: boolean;
 }) {
+  const { t } = useTranslation();
   if (!entry) return null;
 
   const urgency = entry.urgency_level ?? 0;
-  const urgencyLabel = isAr ? URGENCY_LABELS_AR[urgency] : URGENCY_LABELS_EN[urgency];
+  const urgencyLabel = t(URGENCY_LABEL_KEYS[urgency]);
   const urgencyColor = URGENCY_COLORS[urgency];
 
   return (
@@ -236,13 +234,13 @@ function AnswerDetailModal({
           <View style={styles.modalHandle} />
 
           <Text style={styles.modalQuestionText}>
-            {entry.question_text || (isAr ? 'سؤال' : 'Question')}
+            {entry.question_text || t('assignments.question')}
           </Text>
 
           {entry.category && (
             <View style={styles.modalCategoryRow}>
               <Text style={styles.modalCategoryLabel}>
-                {isAr ? 'الفئة' : 'Category'}:
+                {t('assignments.category')}:
               </Text>
               <View style={[
                 styles.modalCategoryBadge,
@@ -256,18 +254,18 @@ function AnswerDetailModal({
           )}
 
           <View style={styles.modalRow}>
-            <Text style={styles.modalLabel}>{isAr ? 'الإجابة' : 'Answer'}</Text>
+            <Text style={styles.modalLabel}>{t('assignments.answer')}</Text>
             <Text style={styles.modalValue}>{entry.answer_value || '—'}</Text>
           </View>
 
           <View style={styles.modalRow}>
-            <Text style={styles.modalLabel}>{isAr ? 'نوع' : 'Type'}</Text>
+            <Text style={styles.modalLabel}>{t('assignments.type')}</Text>
             <Text style={styles.modalValue}>{entry.answer_type?.replace('_', ' ')}</Text>
           </View>
 
           {entry.answer_type === 'numeric' && (entry.min_value != null || entry.max_value != null) && (
             <View style={styles.modalRow}>
-              <Text style={styles.modalLabel}>{isAr ? 'النطاق' : 'Range'}</Text>
+              <Text style={styles.modalLabel}>{t('assignments.range')}</Text>
               <Text style={styles.modalValue}>
                 {entry.numeric_rule === 'between'
                   ? `${entry.min_value} – ${entry.max_value}`
@@ -279,7 +277,7 @@ function AnswerDetailModal({
           )}
 
           <View style={styles.modalRow}>
-            <Text style={styles.modalLabel}>{isAr ? 'مستوى الطوارئ' : 'Urgency'}</Text>
+            <Text style={styles.modalLabel}>{t('assignments.urgency')}</Text>
             <View style={[styles.modalUrgencyBadge, { backgroundColor: urgencyColor }]}>
               <Text style={styles.modalUrgencyText}>{urgencyLabel}</Text>
             </View>
@@ -287,7 +285,7 @@ function AnswerDetailModal({
 
           {entry.comment && (
             <View style={styles.modalCommentSection}>
-              <Text style={styles.modalLabel}>{isAr ? 'ملاحظة' : 'Comment'}</Text>
+              <Text style={styles.modalLabel}>{t('assignments.comment')}</Text>
               <Text style={styles.modalComment}>{entry.comment}</Text>
             </View>
           )}
@@ -295,13 +293,13 @@ function AnswerDetailModal({
           {entry.has_photo && (
             <View style={styles.modalPhotoIndicator}>
               <Text style={styles.modalPhotoText}>
-                📷 {isAr ? 'يحتوي صورة' : 'Has photo attached'}
+                📷 {t('assignments.has_photo')}
               </Text>
             </View>
           )}
 
           <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-            <Text style={styles.modalCloseText}>{isAr ? 'إغلاق' : 'Close'}</Text>
+            <Text style={styles.modalCloseText}>{t('assignments.close')}</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -408,10 +406,10 @@ export default function MyAssignmentsScreen() {
 
       if (assessmentFilter === 'operational') {
         assessMatch = effective === 'operational';
-      } else if (assessmentFilter === 'urgent') {
-        assessMatch = effective === 'urgent';
-      } else if (assessmentFilter === 'stopped') {
-        assessMatch = effective === 'urgent' || effective === 'monitor';
+      } else if (assessmentFilter === 'monitor') {
+        assessMatch = effective === 'monitor';
+      } else if (assessmentFilter === 'stop') {
+        assessMatch = effective === 'stop';
       }
 
       return statusMatch && assessMatch;
@@ -445,17 +443,17 @@ export default function MyAssignmentsScreen() {
   }, []);
 
   const getAssessmentLabel = (filter: AssessmentFilter): string => {
-    if (filter === 'all') return isAr ? 'الكل' : 'All';
-    if (filter === 'operational') return isAr ? 'تشغيلي' : 'Operational';
-    if (filter === 'urgent') return isAr ? 'صيانة عاجلة' : 'Urgent';
-    if (filter === 'stopped') return isAr ? 'متوقف' : 'Stopped';
+    if (filter === 'all') return t('assignments.all');
+    if (filter === 'operational') return t('assignments.operational');
+    if (filter === 'monitor') return t('assignments.monitor');
+    if (filter === 'stop') return t('assignments.stop');
     return filter;
   };
 
   const assessmentFilterColor = (filter: AssessmentFilter): string => {
     if (filter === 'operational') return '#4CAF50';
-    if (filter === 'urgent') return '#FF9800';
-    if (filter === 'stopped') return '#F44336';
+    if (filter === 'monitor') return '#FF9800';
+    if (filter === 'stop') return '#F44336';
     return '#1976D2';
   };
 
@@ -518,15 +516,14 @@ export default function MyAssignmentsScreen() {
             <AssessmentBadge
               assessment={assessment}
               predicted={predicted}
-              isAr={isAr}
             />
           </View>
           <View>
             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
               <Text style={styles.statusBadgeText}>{item.status.replace(/_/g, ' ')}</Text>
             </View>
-            {item.pending_on && PENDING_LABELS[item.pending_on] ? (
-              <Text style={styles.pendingOnText}>{PENDING_LABELS[item.pending_on]}</Text>
+            {item.pending_on && PENDING_LABEL_KEYS[item.pending_on] ? (
+              <Text style={styles.pendingOnText}>{t(PENDING_LABEL_KEYS[item.pending_on])}</Text>
             ) : null}
           </View>
         </View>
@@ -559,7 +556,7 @@ export default function MyAssignmentsScreen() {
                   styles.urgencyScoreText,
                   { color: urgencyScore >= 10 ? '#C62828' : urgencyScore >= 5 ? '#E65100' : '#2E7D32' },
                 ]}>
-                  {isAr ? 'خطورة' : 'Risk'}: {urgencyScore}
+                  {t('assignments.risk')}: {urgencyScore}
                 </Text>
               </View>
             )}
@@ -574,7 +571,7 @@ export default function MyAssignmentsScreen() {
             ]}
           >
             <Text style={styles.shiftBadgeText}>
-              {item.shift === 'day' ? '☀ Day' : '☾ Night'}
+              {item.shift === 'day' ? `☀ ${t('assignments.day_shift')}` : `☾ ${t('assignments.night_shift')}`}
             </Text>
           </View>
 
@@ -618,13 +615,13 @@ export default function MyAssignmentsScreen() {
 
   // All stat cards in one row — tapping filters the list
   const statCards: { key: FilterStatus; label: string; value: number; icon: string; color: string; filterable: boolean }[] = [
-    { key: 'all', label: isAr ? 'الكل' : 'All', value: filterCounts.all, icon: '📋', color: '#1976D2', filterable: true },
-    { key: 'assigned', label: isAr ? 'معين' : 'Assigned', value: filterCounts.assigned, icon: '⏳', color: '#FF9800', filterable: true },
-    { key: 'in_progress', label: isAr ? 'جاري' : 'In Progress', value: filterCounts.inProgress, icon: '🔧', color: '#9C27B0', filterable: true },
-    { key: 'completed', label: isAr ? 'مكتمل' : 'Completed', value: filterCounts.completed, icon: '✅', color: '#4CAF50', filterable: true },
+    { key: 'all', label: t('assignments.all'), value: filterCounts.all, icon: '📋', color: '#1976D2', filterable: true },
+    { key: 'assigned', label: t('assignments.assigned'), value: filterCounts.assigned, icon: '⏳', color: '#FF9800', filterable: true },
+    { key: 'in_progress', label: t('assignments.in_progress'), value: filterCounts.inProgress, icon: '🔧', color: '#9C27B0', filterable: true },
+    { key: 'completed', label: t('assignments.completed'), value: filterCounts.completed, icon: '✅', color: '#4CAF50', filterable: true },
     ...(stats ? [
-      { key: 'week' as FilterStatus, label: isAr ? 'الأسبوع' : 'Week', value: stats.week?.completed ?? 0, icon: '📊', color: '#00897B', filterable: false },
-      { key: 'month' as FilterStatus, label: isAr ? 'الشهر' : 'Month', value: stats.month?.completed ?? 0, icon: '🏆', color: '#3F51B5', filterable: false },
+      { key: 'week' as FilterStatus, label: t('assignments.week'), value: stats.week?.completed ?? 0, icon: '📊', color: '#00897B', filterable: false },
+      { key: 'month' as FilterStatus, label: t('assignments.month'), value: stats.month?.completed ?? 0, icon: '🏆', color: '#3F51B5', filterable: false },
     ] : []),
   ];
 
@@ -633,7 +630,7 @@ export default function MyAssignmentsScreen() {
       {/* User greeting + star score */}
       <View style={styles.greetingRow}>
         <Text style={styles.greetingText}>
-          {user?.full_name || (isAr ? 'مفتش' : 'Inspector')}
+          {user?.full_name || t('assignments.inspector')}
         </Text>
         {userStars > 0 && (
           <View style={styles.starBadge}>
@@ -663,7 +660,7 @@ export default function MyAssignmentsScreen() {
           {stats && stats.backlog_count > 0 && (
             <StatFilterCard
               key="backlog"
-              label={isAr ? 'متأخر' : 'Backlog'}
+              label={t('assignments.backlog')}
               value={stats.backlog_count}
               icon="⚠️"
               color="#E53935"
@@ -698,7 +695,6 @@ export default function MyAssignmentsScreen() {
         visible={modalVisible}
         entry={selectedEntry}
         onClose={() => setModalVisible(false)}
-        isAr={isAr}
       />
     </View>
   );
@@ -713,12 +709,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#fff',
   },
-  greetingText: { fontSize: 17, fontWeight: '700', color: '#212121' },
+  greetingText: { fontSize: 19, fontWeight: '700', color: '#212121' },
   starBadge: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#FFF8E1', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
   },
-  starText: { fontSize: 13, fontWeight: '700', color: '#F57F17' },
+  starText: { fontSize: 16, fontWeight: '700', color: '#F57F17' },
 
   // Quick Action cards (exact copy from DashboardScreen)
   quickActionsRow: {
@@ -740,8 +736,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginBottom: 6,
   },
   quickActionEmoji: { fontSize: 18 },
-  quickActionValue: { fontSize: 17, fontWeight: '800', marginBottom: 2 },
-  quickActionLabel: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  quickActionValue: { fontSize: 19, fontWeight: '800', marginBottom: 2 },
+  quickActionLabel: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
 
   // Assessment filter row
   assessmentFilterRow: {
@@ -751,7 +747,7 @@ const styles = StyleSheet.create({
   assessmentChip: {
     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderWidth: 1.5,
   },
-  assessmentChipText: { fontSize: 12, fontWeight: '600' },
+  assessmentChipText: { fontSize: 15, fontWeight: '600' },
 
   listContent: { padding: 12 },
   emptyList: { flexGrow: 1 },
@@ -766,21 +762,21 @@ const styles = StyleSheet.create({
   cardHeaderLeft: {
     flex: 1, marginRight: 8, gap: 4,
   },
-  equipmentName: { fontSize: 16, fontWeight: '700', color: '#212121' },
+  equipmentName: { fontSize: 18, fontWeight: '700', color: '#212121' },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, alignSelf: 'flex-start', maxWidth: 140 },
-  statusBadgeText: { color: '#fff', fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
-  pendingOnText: { fontSize: 10, color: '#757575', marginTop: 3, textAlign: 'right' },
-  equipmentType: { fontSize: 13, color: '#757575', marginBottom: 2 },
-  detailText: { fontSize: 13, color: '#757575', marginBottom: 2 },
+  statusBadgeText: { color: '#fff', fontSize: 14, fontWeight: '600', textTransform: 'capitalize' },
+  pendingOnText: { fontSize: 13, color: '#757575', marginTop: 3, textAlign: 'right' },
+  equipmentType: { fontSize: 16, color: '#757575', marginBottom: 2 },
+  detailText: { fontSize: 16, color: '#757575', marginBottom: 2 },
 
   // Assessment Badge (inline)
   assessmentBadge: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, gap: 4,
   },
-  assessmentBadgeText: { fontSize: 12, fontWeight: '700' },
+  assessmentBadgeText: { fontSize: 15, fontWeight: '700' },
   assessmentPredictedTag: {
-    fontSize: 9, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic',
+    fontSize: 12, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic',
   },
 
   // Answer Bar
@@ -794,23 +790,23 @@ const styles = StyleSheet.create({
     minWidth: 26, height: 24, borderRadius: 4,
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3,
   },
-  answerCellText: { fontSize: 10, fontWeight: '800' },
+  answerCellText: { fontSize: 13, fontWeight: '800' },
 
   // Urgency score badge
   urgencyScoreBadge: {
     alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
   },
-  urgencyScoreText: { fontSize: 11, fontWeight: '600' },
+  urgencyScoreText: { fontSize: 14, fontWeight: '600' },
 
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
   shiftBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   shiftDay: { backgroundColor: '#FFF3E0' },
   shiftNight: { backgroundColor: '#E8EAF6' },
-  shiftBadgeText: { fontSize: 12, fontWeight: '500', color: '#424242' },
-  deadlineText: { fontSize: 12, color: '#E53935', fontWeight: '500' },
+  shiftBadgeText: { fontSize: 15, fontWeight: '500', color: '#424242' },
+  deadlineText: { fontSize: 15, color: '#E53935', fontWeight: '500' },
   emptyContainer: { alignItems: 'center', paddingTop: 60, paddingBottom: 40 },
-  emptyText: { fontSize: 15, color: '#999' },
-  errorText: { fontSize: 16, color: '#E53935', marginBottom: 12 },
+  emptyText: { fontSize: 17, color: '#999' },
+  errorText: { fontSize: 18, color: '#E53935', marginBottom: 12 },
   retryButton: { paddingHorizontal: 24, paddingVertical: 10, backgroundColor: '#1976D2', borderRadius: 8 },
   retryButtonText: { color: '#fff', fontWeight: '600' },
 
@@ -827,37 +823,37 @@ const styles = StyleSheet.create({
     alignSelf: 'center', marginBottom: 16,
   },
   modalQuestionText: {
-    fontSize: 17, fontWeight: '700', color: '#212121', marginBottom: 16, lineHeight: 24,
+    fontSize: 19, fontWeight: '700', color: '#212121', marginBottom: 16, lineHeight: 24,
   },
   modalCategoryRow: {
     flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8,
   },
-  modalCategoryLabel: { fontSize: 13, color: '#757575' },
+  modalCategoryLabel: { fontSize: 16, color: '#757575' },
   modalCategoryBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
-  modalCategoryText: { fontSize: 12, fontWeight: '600', color: '#424242', textTransform: 'capitalize' },
+  modalCategoryText: { fontSize: 15, fontWeight: '600', color: '#424242', textTransform: 'capitalize' },
   modalRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
   },
-  modalLabel: { fontSize: 14, color: '#757575', fontWeight: '500' },
-  modalValue: { fontSize: 14, color: '#212121', fontWeight: '600' },
+  modalLabel: { fontSize: 16, color: '#757575', fontWeight: '500' },
+  modalValue: { fontSize: 16, color: '#212121', fontWeight: '600' },
   modalUrgencyBadge: {
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
   },
-  modalUrgencyText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  modalUrgencyText: { fontSize: 15, fontWeight: '700', color: '#fff' },
   modalCommentSection: {
     marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F5F5F5',
   },
   modalComment: {
-    fontSize: 14, color: '#424242', marginTop: 6, lineHeight: 20,
+    fontSize: 16, color: '#424242', marginTop: 6, lineHeight: 20,
   },
   modalPhotoIndicator: {
     marginTop: 12, padding: 10, backgroundColor: '#E3F2FD', borderRadius: 8,
   },
-  modalPhotoText: { fontSize: 13, color: '#1565C0' },
+  modalPhotoText: { fontSize: 16, color: '#1565C0' },
   modalCloseButton: {
     marginTop: 20, backgroundColor: '#1976D2', paddingVertical: 12,
     borderRadius: 10, alignItems: 'center',
   },
-  modalCloseText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  modalCloseText: { color: '#fff', fontSize: 17, fontWeight: '600' },
 });

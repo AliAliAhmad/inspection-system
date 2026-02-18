@@ -6,6 +6,7 @@ import {
   FinalAssessment,
   Verdict,
 } from '../types';
+import { ScheduleFollowupPayload } from '../types/monitor-followup.types';
 
 export interface AssessmentListParams extends PaginationParams {
   status?: string;
@@ -22,11 +23,13 @@ export interface VerdictPayload {
 export interface EngineerVerdictPayload {
   verdict: Verdict;
   notes?: string;
+  followup?: ScheduleFollowupPayload;
 }
 
 export interface AdminResolvePayload {
   decision: Verdict;
   notes?: string;
+  followup?: ScheduleFollowupPayload;
 }
 
 export const assessmentsApi = {

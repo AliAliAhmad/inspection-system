@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     margin: 8,
-    padding: 12,
+    padding: 16,
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -126,13 +126,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   jobName: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: '#262626',
     marginBottom: 2,
   },
   equipmentName: {
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '600',
     color: '#8c8c8c',
   },
   rightInfo: {
@@ -145,13 +146,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   timer: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#595959',
   },
   actionRow: {
@@ -172,7 +173,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   actionLabel: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.5,
   },

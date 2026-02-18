@@ -86,6 +86,25 @@ import RunningHoursScreen from '../screens/equipment/RunningHoursScreen';
 // Shift Handover
 import CreateHandoverScreen from '../screens/shared/CreateHandoverScreen';
 
+// Assessment Tracking
+import AssessmentTrackingScreen from '../screens/shared/AssessmentTrackingScreen';
+
+// Monitor Follow-Ups
+import MonitorFollowupsScreen from '../screens/engineer/MonitorFollowupsScreen';
+import MonitorFollowupScheduleScreen from '../screens/engineer/MonitorFollowupScheduleScreen';
+
+// Quick Field Report
+import QuickFieldReportScreen from '../screens/inspector/QuickFieldReportScreen';
+
+// Quick Voice Message
+import QuickVoiceMessageScreen from '../screens/communication/QuickVoiceMessageScreen';
+
+// Unplanned Job
+import UnplannedJobScreen from '../screens/inspector/UnplannedJobScreen';
+
+// Create Channel (admin/engineer)
+import CreateChannelScreen from '../screens/communication/CreateChannelScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
@@ -144,6 +163,19 @@ export type RootStackParamList = {
   RunningHours: { equipmentId: number; equipmentName: string };
   // Shift Handover
   CreateHandover: undefined;
+  // Assessment Tracking
+  AssessmentTracking: undefined;
+  // Monitor Follow-Ups
+  MonitorFollowups: undefined;
+  MonitorFollowupSchedule: { followupId: number };
+  // Quick Field Report
+  QuickFieldReport: { type?: 'equipment' | 'safety' };
+  // Quick Voice Message
+  QuickVoiceMessage: undefined;
+  // Unplanned Job
+  UnplannedJob: undefined;
+  // Create Channel (admin/engineer)
+  CreateChannel: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -212,6 +244,19 @@ export default function RootNavigator() {
         <Stack.Screen name="RunningHours" component={RunningHoursScreen} options={{ headerShown: true, title: 'Running Hours' }} />
         {/* Shift Handover */}
         <Stack.Screen name="CreateHandover" component={CreateHandoverScreen} options={{ headerShown: false, title: 'Create Handover' }} />
+        {/* Assessment Tracking */}
+        <Stack.Screen name="AssessmentTracking" component={AssessmentTrackingScreen} options={{ headerShown: false, title: 'Assessment Tracking' }} />
+        {/* Monitor Follow-Ups */}
+        <Stack.Screen name="MonitorFollowups" component={MonitorFollowupsScreen} options={{ headerShown: true, title: 'Monitor Follow-Ups' }} />
+        <Stack.Screen name="MonitorFollowupSchedule" component={MonitorFollowupScheduleScreen} options={{ headerShown: true, title: 'Schedule Follow-Up' }} />
+        {/* Quick Field Report */}
+        <Stack.Screen name="QuickFieldReport" component={QuickFieldReportScreen} options={{ headerShown: false, title: 'Quick Field Report' }} />
+        {/* Quick Voice Message */}
+        <Stack.Screen name="QuickVoiceMessage" component={QuickVoiceMessageScreen} options={{ headerShown: false, title: 'Voice Message' }} />
+        {/* Unplanned Job */}
+        <Stack.Screen name="UnplannedJob" component={UnplannedJobScreen} options={{ headerShown: false, title: 'Unplanned Job' }} />
+        {/* Create Channel (admin/engineer) */}
+        <Stack.Screen name="CreateChannel" component={CreateChannelScreen} options={{ headerShown: false, title: 'Create Channel' }} />
       </Stack.Navigator>
 
       {/* Global Smart FAB - wrapped in error boundary for safety */}

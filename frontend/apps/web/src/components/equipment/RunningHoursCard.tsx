@@ -194,7 +194,7 @@ export const RunningHoursCard: React.FC<RunningHoursCardProps> = ({
                   <span>{data.service_status === 'overdue' ? 'Hours Overdue' : 'Until Service'}</span>
                 </Space>
               }
-              value={data.service_status === 'overdue' ? data.hours_overdue : data.hours_until_service}
+              value={(data.service_status === 'overdue' ? data.hours_overdue : data.hours_until_service) ?? undefined}
               suffix="hrs"
               valueStyle={{
                 fontSize: 24,

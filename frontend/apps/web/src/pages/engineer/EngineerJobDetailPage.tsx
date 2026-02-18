@@ -330,7 +330,7 @@ export default function EngineerJobDetailPage() {
       {/* Show Up & Challenges */}
       <JobShowUpSection
         jobType="engineer"
-        jobId={jobId}
+        jobId={Number(id)}
         jobOwnerId={job.engineer_id}
         jobStatus={job.status}
       />

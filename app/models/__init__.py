@@ -162,6 +162,12 @@ from app.models.job_showup import JobShowUpPhoto, JobChallengeVoice, JobReviewMa
 # Shift Handover
 from app.models.shift_handover import ShiftHandover
 
+# Monitor Follow-Up
+from app.models.monitor_followup import MonitorFollowup
+
+# Unplanned Jobs
+from app.models.unplanned_job import UnplannedJob
+
 __all__ = [
     'User',
     'Equipment',
@@ -297,4 +303,8 @@ __all__ = [
     'JobReviewMark',
     # Shift Handover
     'ShiftHandover',
+    # Monitor Follow-Up
+    'MonitorFollowup',
+    # Unplanned Jobs
+    'UnplannedJob',
 ]

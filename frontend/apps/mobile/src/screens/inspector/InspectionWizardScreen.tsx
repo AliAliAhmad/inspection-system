@@ -174,6 +174,21 @@ export default function InspectionWizardScreen() {
     : 0;
   const assemblyTotal = currentAssemblyGroup?.count || 0;
 
+  // Track pre-filled items from colleague
+  const [prefilledItems, setPrefilledItems] = useState<Record<number, { name: string; type: string }>>({});
+
+  // Fetch colleague's answers for pre-fill
+  const {
+    data: colleagueData,
+  } = useOfflineQuery<{ answers: any[]; colleague: { id: number; name: string; type: string; inspection_status: string } | null }>({
+    queryKey: ['colleague-answers', id],
+    queryFn: async () => {
+      const res = await inspectionsApi.getColleagueAnswers(id);
+      return (res.data as any).data;
+    },
+    cacheKey: `colleague-answers-${id}`,
+  });
+
   // Sync server answers into local state (only once when inspection loads)
   const inspectionAnswersJson = JSON.stringify(inspection?.answers?.map(a => a.id) || []);
   useEffect(() => {
@@ -200,6 +215,51 @@ export default function InspectionWizardScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspectionAnswersJson]);
+
+  // Pre-fill colleague's answers (only for questions the current inspector hasn't answered)
+  useEffect(() => {
+    if (!colleagueData?.answers?.length || !colleagueData?.colleague) return;
+    if (!inspection?.answers) return;
+
+    const myAnsweredIds = new Set(
+      (inspection.answers || []).map((a: InspectionAnswer) => a.checklist_item_id)
+    );
+
+    const prefilled: Record<number, LocalAnswer> = {};
+    const prefilledMeta: Record<number, { name: string; type: string }> = {};
+
+    colleagueData.answers.forEach((ans: any) => {
+      const itemId = ans.checklist_item_id;
+      // Only pre-fill if I haven't answered this question yet
+      if (!myAnsweredIds.has(itemId)) {
+        prefilled[itemId] = {
+          answer_value: ans.answer_value,
+          comment: ans.comment ?? undefined,
+          urgency_level: ans.urgency_level ?? 0,
+        };
+        prefilledMeta[itemId] = {
+          name: colleagueData.colleague!.name,
+          type: colleagueData.colleague!.type,
+        };
+      }
+    });
+
+    if (Object.keys(prefilled).length > 0) {
+      setLocalAnswers((prev) => {
+        // Don't overwrite answers the user has already modified locally
+        const merged = { ...prev };
+        Object.entries(prefilled).forEach(([key, val]) => {
+          const numKey = Number(key);
+          if (!merged[numKey]?.answer_value) {
+            merged[numKey] = val;
+          }
+        });
+        return merged;
+      });
+      setPrefilledItems(prefilledMeta);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colleagueData, inspectionAnswersJson]);
 
   // Resume on same question - Load saved index when inspection loads
   useEffect(() => {
@@ -328,6 +388,15 @@ export default function InspectionWizardScreen() {
       next.delete(currentItem.id);
       return next;
     });
+
+    // Clear pre-filled indicator when inspector makes their own answer
+    if (prefilledItems[currentItem.id]) {
+      setPrefilledItems(prev => {
+        const next = { ...prev };
+        delete next[currentItem.id];
+        return next;
+      });
+    }
 
     setLocalAnswers((prev) => ({
       ...prev,
@@ -1332,6 +1401,15 @@ export default function InspectionWizardScreen() {
         </Text>
       </View>
 
+      {/* Colleague pre-fill banner */}
+      {Object.keys(prefilledItems).length > 0 && colleagueData?.colleague && (
+        <View style={styles.colleagueBanner}>
+          <Text style={styles.colleagueBannerText}>
+            👥 {Object.keys(prefilledItems).length} {t('inspection.questionsPrefilledBy', 'questions pre-filled by')} {colleagueData.colleague.type === 'mechanical' ? t('inspection.mechInspector', 'Mech Inspector') : t('inspection.elecInspector', 'Elec Inspector')}
+          </Text>
+        </View>
+      )}
+
       {/* Previous Answers Panel - compact mode showing previous answer for current question */}
       {inspectionId && currentItem && (
         <PreviousAnswersPanel
@@ -1365,6 +1443,15 @@ export default function InspectionWizardScreen() {
               ? currentItem.question_text_ar
               : currentItem.question_text}
           </Text>
+
+          {/* Pre-filled from colleague indicator */}
+          {currentItem && prefilledItems[currentItem.id] && (
+            <View style={styles.prefilledBadge}>
+              <Text style={styles.prefilledBadgeText}>
+                👤 {t('inspection.prefilledFrom', 'Pre-filled from')} {prefilledItems[currentItem.id].type === 'mechanical' ? t('inspection.mechInspector', 'Mech Inspector') : t('inspection.elecInspector', 'Elec Inspector')}: {prefilledItems[currentItem.id].name}
+              </Text>
+            </View>
+          )}
 
           {/* Expected result hint with validation */}
           {expectedResult && (
@@ -1837,6 +1924,35 @@ const styles = StyleSheet.create({
     color: '#212121',
     lineHeight: 26,
     marginBottom: 16,
+  },
+  colleagueBanner: {
+    backgroundColor: '#E3F2FD',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#BBDEFB',
+  },
+  colleagueBannerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1565C0',
+    textAlign: 'center',
+  },
+  prefilledBadge: {
+    backgroundColor: '#E8F4FD',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#1976D2',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  prefilledBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1565C0',
   },
   hintBox: {
     backgroundColor: '#F5F5F5',

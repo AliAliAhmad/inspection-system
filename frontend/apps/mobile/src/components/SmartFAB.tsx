@@ -37,6 +37,7 @@ import { useTranslation } from 'react-i18next';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { navigate } from '../navigation/navigationRef';
 import { useFABContext, FABAction, JobExecutionState } from '../hooks/useFABContext';
+import { useAuth } from '../providers/AuthProvider';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -107,6 +108,7 @@ export default function SmartFAB(props: SmartFABProps) {
 
   const { i18n } = useTranslation();
   const isArabic = i18n.language === 'ar';
+  const { user } = useAuth();
 
   // Get context-aware actions
   const {
@@ -126,6 +128,7 @@ export default function SmartFAB(props: SmartFABProps) {
     onNewMessage,
     onFilter,
     onSearch,
+    userRole: user?.role,
   });
 
   // State

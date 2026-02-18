@@ -176,8 +176,8 @@ export const ServiceAlertNotification: React.FC<ServiceAlertNotificationProps> =
           return (
             <List.Item
               style={{
-                padding: '12px 16px',
-                borderLeft: `3px solid ${severity.color}`,
+                padding: '14px 16px',
+                borderLeft: `4px solid ${severity.color}`,
                 backgroundColor: alert.acknowledged_at ? '#fafafa' : 'white',
               }}
               actions={[
@@ -208,18 +208,18 @@ export const ServiceAlertNotification: React.FC<ServiceAlertNotificationProps> =
                   <Space>
                     <a
                       onClick={() => onEquipmentClick?.(alert.equipment_id)}
-                      style={{ fontWeight: 500 }}
+                      style={{ fontWeight: 700, fontSize: 14 }}
                     >
                       {alert.equipment_name}
                     </a>
-                    <Tag color={severity.tagColor} style={{ fontSize: 10 }}>
+                    <Tag color={severity.tagColor} style={{ fontSize: 11, fontWeight: 700 }}>
                       {alert.severity.toUpperCase()}
                     </Tag>
                   </Space>
                 }
                 description={
                   <div>
-                    <Text style={{ color: typeConfig.color, fontSize: 12 }}>
+                    <Text style={{ color: typeConfig.color, fontSize: 13, fontWeight: 600 }}>
                       {typeConfig.icon} {typeConfig.label}
                     </Text>
                     <div>

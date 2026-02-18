@@ -17,6 +17,7 @@ import {
   ScheduleOutlined,
   SafetyOutlined,
   FireOutlined,
+  AimOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -593,6 +594,15 @@ export default function DashboardPage() {
                     style={{ textAlign: 'left', height: 40, borderRadius: 8 }}
                   >
                     Daily Review
+                  </Button>
+                  <Button
+                    block
+                    type="default"
+                    icon={<AimOutlined />}
+                    onClick={() => navigate('/admin/assessments')}
+                    style={{ textAlign: 'left', height: 40, borderRadius: 8 }}
+                  >
+                    Assessment Tracking
                   </Button>
                 </>
               )}

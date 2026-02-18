@@ -52,6 +52,7 @@ import {
   HealthScoreTag,
   EquipmentAnomaliesPanel,
   NaturalLanguageSearch,
+  ServiceAlertNotification,
 } from '../components/equipment';
 
 const { Title, Text } = Typography;
@@ -455,6 +456,11 @@ export default function EquipmentDashboardPage() {
 
   return (
     <div style={{ padding: 24 }}>
+      {/* Service Alerts */}
+      <div style={{ marginBottom: 16 }}>
+        <ServiceAlertNotification limit={3} onViewAll={() => {}} />
+      </div>
+
       {/* Header with Search */}
       <Row gutter={16} align="middle" style={{ marginBottom: 24 }}>
         <Col flex="auto">

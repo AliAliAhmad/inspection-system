@@ -151,9 +151,10 @@ class AssessmentService:
         return assessment
 
     @staticmethod
-    def submit_engineer_verdict(assessment_id, engineer_id, verdict, notes=None):
+    def submit_engineer_verdict(assessment_id, engineer_id, verdict, notes=None, followup_data=None):
         """
         Engineer submits review verdict after escalation.
+        If verdict is 'monitor' and followup_data is provided, schedules inline follow-up.
         """
         assessment = db.session.get(FinalAssessment, assessment_id)
         if not assessment:
@@ -183,6 +184,15 @@ class AssessmentService:
         if assessment.finalized_at:
             # Engineer agrees with system → finalize
             AssessmentService._apply_final_status(assessment)
+            # If engineer picked 'monitor' with inline follow-up data, schedule it
+            if verdict == 'monitor' and followup_data:
+                try:
+                    from app.services.monitor_followup_service import MonitorFollowupService
+                    MonitorFollowupService.schedule_followup_inline(
+                        assessment.id, engineer_id, followup_data
+                    )
+                except Exception as e:
+                    logger.error("Failed to schedule inline followup: %s", e)
         elif assessment.escalation_level == 'admin':
             # Escalate to admin
             AssessmentService._notify_admins_for_review(assessment)
@@ -214,6 +224,12 @@ class AssessmentService:
                 "Equipment MONITOR: equipment_id=%s assessment_id=%s",
                 assessment.equipment_id, assessment.id
             )
+            # Trigger follow-up scheduling for engineers
+            try:
+                from app.services.monitor_followup_service import MonitorFollowupService
+                MonitorFollowupService.create_pending_followup(assessment.id)
+            except Exception as e:
+                logger.error("Failed to create pending followup: %s", e)
         else:
             # Operational
             if equipment.status != 'stopped':
@@ -326,10 +342,11 @@ class AssessmentService:
             assignment.elec_points_awarded = base_points
 
     @staticmethod
-    def admin_resolve(assessment_id, admin_id, decision, notes=None):
+    def admin_resolve(assessment_id, admin_id, decision, notes=None, followup_data=None):
         """
         Admin resolves escalation with final decision.
         Accepts operational/monitor/stop. Notes required.
+        If decision is 'monitor' and followup_data is provided, schedules inline follow-up.
         """
         assessment = db.session.get(FinalAssessment, assessment_id)
         if not assessment:
@@ -349,6 +366,17 @@ class AssessmentService:
         assessment.finalized_at = datetime.utcnow()
 
         AssessmentService._apply_final_status(assessment)
+
+        # If admin picked 'monitor' with inline follow-up data, schedule it
+        if decision == 'monitor' and followup_data:
+            try:
+                from app.services.monitor_followup_service import MonitorFollowupService
+                MonitorFollowupService.schedule_followup_inline(
+                    assessment.id, admin_id, followup_data
+                )
+            except Exception as e:
+                logger.error("Failed to schedule admin inline followup: %s", e)
+
         db.session.commit()
         logger.info(
             "Admin resolved: assessment=%s admin=%s decision=%s",

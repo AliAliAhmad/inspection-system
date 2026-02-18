@@ -7,8 +7,10 @@ import {
   useWindowDimensions,
   TouchableOpacity,
   useColorScheme,
-  I18nManager,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 // Navigation hooks removed — this component renders outside Stack.Navigator
 // so useNavigationState/useNavigation are not available here.
 
@@ -295,8 +297,10 @@ function PhoneCriticalAlert({ items, isDark, isAr }: { items: AlertItem[]; isDar
 export default function LiveAlertBanner() {
   const { width } = useWindowDimensions();
   const isDark = useColorScheme() === 'dark';
-  const isAr = I18nManager.isRTL;
+  const { i18n } = useTranslation();
+  const isAr = i18n.language === 'ar';
   const isTablet = width >= 768;
+  const insets = useSafeAreaInsets();
 
   const [items, setItems] = useState<AlertItem[]>([]);
 
@@ -319,7 +323,12 @@ export default function LiveAlertBanner() {
     return <TabletTicker items={sorted} isDark={isDark} isAr={isAr} />;
   }
 
-  return <PhoneCriticalAlert items={sorted} isDark={isDark} isAr={isAr} />;
+  // On phone, add top padding to push below the status bar (clock, wifi, battery)
+  return (
+    <View style={{ paddingTop: insets.top }}>
+      <PhoneCriticalAlert items={sorted} isDark={isDark} isAr={isAr} />
+    </View>
+  );
 }
 
 // ─── Styles ──────────────────────────────────────────────────
@@ -327,7 +336,7 @@ export default function LiveAlertBanner() {
 const styles = StyleSheet.create({
   // ── Tablet ticker ──
   tabletContainer: {
-    height: 30,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
@@ -350,8 +359,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#ff4d4f',
   },
   liveLabelText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
     letterSpacing: 1,
   },
   scrollArea: {
@@ -382,17 +391,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   sourceText: {
-    fontSize: 9,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   itemMessage: {
-    fontSize: 11.5,
+    fontSize: 13,
+    fontWeight: '600',
     maxWidth: 240,
   },
   itemTime: {
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: '500',
   },
   itemDivider: {
     width: 1,
@@ -409,15 +420,15 @@ const styles = StyleSheet.create({
     minWidth: 32,
   },
   countText: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '800',
   },
 
   // ── Phone critical alert ──
   phoneContainer: {
     borderBottomWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   phoneContent: {
     flexDirection: 'row',
@@ -437,15 +448,15 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   phoneCriticalTagText: {
-    fontSize: 9,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
     color: '#ff4d4f',
     textTransform: 'uppercase',
   },
   phoneMessage: {
     flex: 1,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '700',
   },
   phoneDismiss: {
     fontSize: 13,

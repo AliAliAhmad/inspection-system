@@ -5,7 +5,7 @@ Reusable pagination helper for SQLAlchemy queries.
 from flask import request
 
 
-def paginate(query, max_per_page=100):
+def paginate(query, max_per_page=500):
     """
     Apply pagination to a SQLAlchemy query.
 
@@ -20,7 +20,7 @@ def paginate(query, max_per_page=100):
         tuple: (list of items, dict with pagination metadata)
     """
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
+    per_page = request.args.get('per_page', 200, type=int)
 
     # Clamp values
     page = max(1, page)

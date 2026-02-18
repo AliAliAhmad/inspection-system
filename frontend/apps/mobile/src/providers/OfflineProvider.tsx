@@ -5,6 +5,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as Notifications from 'expo-notifications';
 import { getApiClient } from '@inspection/shared';
 import { syncManager, QueuedOperation, QueuedMedia, SyncStatus } from '../utils/sync-manager';
+import {
+  syncPendingMutations,
+  getPendingCount as getMutationPendingCount,
+} from '../utils/offline-mutations';
 
 export interface SyncDetails {
   operations: number;
@@ -109,16 +113,18 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  // Refresh pending items list
+  // Refresh pending items list (includes both sync-manager + offline-mutations queues)
   const refreshPendingItems = useCallback(async () => {
-    const [details, items, lastSync] = await Promise.all([
+    const [details, items, lastSync, mutationCount] = await Promise.all([
       syncManager.getPendingDetails(),
       buildPendingItems(),
       syncManager.getLastSyncTime(),
+      getMutationPendingCount(),
     ]);
     setPendingDetails(details);
     setPendingItems(items);
-    setPendingCount(details.total);
+    // Total count = sync-manager items + offline mutation queue items
+    setPendingCount(details.total + mutationCount);
     setLastSyncAt(lastSync);
   }, [buildPendingItems]);
 
@@ -194,11 +200,14 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
         }
       );
 
+      // Process offline mutation queue (form submissions queued while offline)
+      const mutationResult = await syncPendingMutations(client);
+
       // Refresh state
       await refreshPendingItems();
 
       // Show notification if we were offline and sync completed
-      const totalSuccess = result.success + mediaResult.success;
+      const totalSuccess = result.success + mediaResult.success + mutationResult.synced;
       if (wasOffline.current && totalSuccess > 0) {
         await Notifications.scheduleNotificationAsync({
           content: {

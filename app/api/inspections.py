@@ -768,6 +768,73 @@ def get_or_start_by_assignment(assignment_id):
     return jsonify({'status': 'success', 'data': inspection_dict}), 201
 
 
+@bp.route('/colleague-answers/<int:assignment_id>', methods=['GET'])
+@jwt_required()
+def get_colleague_answers(assignment_id):
+    """
+    Get the other inspector's answers for the same assignment.
+    Used to pre-fill Inspector 2's checklist with Inspector 1's answers.
+    Works even if the colleague's inspection is still in draft.
+    """
+    current_user = get_current_user()
+    language = get_language(current_user)
+
+    assignment = db.session.get(InspectionAssignment, assignment_id)
+    if not assignment:
+        raise NotFoundError(f"Assignment {assignment_id} not found")
+
+    # Check current user is assigned
+    if current_user.id not in (assignment.mechanical_inspector_id, assignment.electrical_inspector_id):
+        raise ForbiddenError("You are not assigned to this inspection")
+
+    # Determine the colleague's ID
+    if current_user.id == assignment.mechanical_inspector_id:
+        colleague_id = assignment.electrical_inspector_id
+        colleague_type = 'electrical'
+    else:
+        colleague_id = assignment.mechanical_inspector_id
+        colleague_type = 'mechanical'
+
+    if not colleague_id:
+        return jsonify({'status': 'success', 'data': {'answers': [], 'colleague': None}}), 200
+
+    # Get colleague's inspection for this assignment
+    colleague_inspection = Inspection.query.filter_by(
+        assignment_id=assignment_id,
+        technician_id=colleague_id,
+    ).order_by(Inspection.started_at.desc()).first()
+
+    if not colleague_inspection:
+        return jsonify({'status': 'success', 'data': {'answers': [], 'colleague': None}}), 200
+
+    # Get colleague's answers
+    colleague_answers = InspectionAnswer.query.filter_by(
+        inspection_id=colleague_inspection.id
+    ).all()
+
+    # Get colleague's name
+    colleague_user = db.session.get(User, colleague_id)
+    colleague_name = colleague_user.full_name if colleague_user else 'Inspector'
+
+    answers_list = []
+    for ans in colleague_answers:
+        ans_dict = ans.to_dict(language=language)
+        answers_list.append(ans_dict)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'answers': answers_list,
+            'colleague': {
+                'id': colleague_id,
+                'name': colleague_name,
+                'type': colleague_type,  # 'mechanical' or 'electrical'
+                'inspection_status': colleague_inspection.status,
+            }
+        }
+    }), 200
+
+
 @bp.route('/<int:inspection_id>/answer', methods=['POST'])
 @jwt_required()
 def answer_question(inspection_id):

@@ -33,6 +33,8 @@ export interface FinalAssessment {
   escalation_reason: string | null;
   // Meta
   assessment_version: number;
+  requires_followup: boolean;
+  followup_scheduled: boolean;
   finalized_at: string | null;
   created_at: string;
 }

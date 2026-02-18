@@ -50,9 +50,10 @@ const getSeverityTag = (severity: string) => {
   return <Tag color={colors[severity] || 'default'}>{severity.toUpperCase()}</Tag>;
 };
 
-interface CoverageGapsPanelProps {
+export interface CoverageGapsPanelProps {
   onScheduleInspection?: (equipmentId: number) => void;
   maxItems?: number;
+  compact?: boolean;
 }
 
 export const CoverageGapsPanel: React.FC<CoverageGapsPanelProps> = ({

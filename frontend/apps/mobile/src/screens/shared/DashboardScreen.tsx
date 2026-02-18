@@ -258,6 +258,69 @@ function ShiftHandoverCard({ isAr, colors, navigation }: { isAr: boolean; colors
   );
 }
 
+// ─── Widget: Start Next Inspection ──────────────────────────
+
+function StartNextInspectionCard({ colors, navigation, isAr }: { colors: any; navigation: any; isAr: boolean }) {
+  const { t } = useTranslation();
+
+  const { data: nextAssignment, isLoading } = useQuery({
+    queryKey: ['next-assignment'],
+    queryFn: () =>
+      inspectionAssignmentsApi
+        .getMyAssignments({ status: 'assigned', per_page: 1 })
+        .then(r => {
+          const items = (r.data as any)?.data?.items ?? (r.data as any)?.data ?? [];
+          return Array.isArray(items) && items.length > 0 ? items[0] : null;
+        }),
+    staleTime: 60000,
+  });
+
+  if (isLoading) return null;
+
+  if (!nextAssignment) {
+    return (
+      <View style={[s.nextInspectionCard, { backgroundColor: '#E8F5E9' }]}>
+        <View style={s.nextInspectionContent}>
+          <Text style={s.nextInspectionIcon}>✅</Text>
+          <Text style={[s.allCaughtUpText, { color: '#2E7D32' }]}>
+            {t('dashboard.all_caught_up')}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  const equipmentName = isAr
+    ? (nextAssignment.equipment?.name_ar || nextAssignment.equipment?.name || `#${nextAssignment.equipment_id}`)
+    : (nextAssignment.equipment?.name || `#${nextAssignment.equipment_id}`);
+
+  return (
+    <TouchableOpacity
+      style={[s.nextInspectionCard, { backgroundColor: '#1565C0' }]}
+      activeOpacity={0.85}
+      onPress={() => navigation.navigate('InspectionChecklist', { id: nextAssignment.id })}
+    >
+      <View style={s.nextInspectionContent}>
+        <View style={s.nextInspectionIconContainer}>
+          <Text style={s.nextInspectionIcon}>🔧</Text>
+        </View>
+        <View style={s.nextInspectionTextContainer}>
+          <Text style={s.nextInspectionTitle}>
+            {t('dashboard.next_inspection')}
+          </Text>
+          <Text style={s.nextInspectionEquipment} numberOfLines={1}>
+            {equipmentName}
+          </Text>
+          <Text style={s.nextInspectionTap}>
+            {t('dashboard.tap_to_start')}
+          </Text>
+        </View>
+        <Text style={s.nextInspectionArrow}>›</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Main Dashboard ────────────────────────────────────────
 
 export default function DashboardScreen() {
@@ -267,6 +330,7 @@ export default function DashboardScreen() {
   const { colors } = useTheme();
   const isAdmin = user?.role === 'admin';
   const isEngineer = user?.role === 'engineer';
+  const isInspector = user?.role === 'inspector' || user?.role === 'specialist';
   const isAr = i18n.language === 'ar';
 
   // Dashboard data
@@ -333,6 +397,11 @@ export default function DashboardScreen() {
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 32 }} />
       ) : (
         <>
+          {/* === Start Next Inspection (inspector/specialist only) === */}
+          {isInspector && (
+            <StartNextInspectionCard colors={colors} navigation={navigation} isAr={isAr} />
+          )}
+
           {/* === Widget 2: Quick Actions (always shown first) === */}
           <QuickActions isAr={isAr} colors={colors} navigation={navigation} />
 
@@ -390,6 +459,8 @@ export default function DashboardScreen() {
               <QuickLink icon="🏖️" label={t('nav.leaveApprovals', 'Leave Approvals')} onPress={() => navigation.navigate('LeaveApprovals')} colors={colors} />
               <QuickLink icon="📌" label={t('nav.inspectionAssignments', 'Assignment Lists')} onPress={() => navigation.navigate('InspectionAssignments')} colors={colors} />
               <QuickLink icon="🔍" label={t('nav.qualityReviews', 'Quality Reviews')} onPress={() => navigation.navigate('QualityReviewsAdmin')} colors={colors} />
+              <QuickLink icon="🎯" label={t('nav.assessmentTracking', 'Assessment Tracking')} onPress={() => navigation.navigate('AssessmentTracking')} colors={colors} />
+              <QuickLink icon="🔍" label={t('nav.monitorFollowups', 'Monitor Follow-Ups')} onPress={() => navigation.navigate('MonitorFollowups')} colors={colors} />
             </>
           )}
 
@@ -397,6 +468,8 @@ export default function DashboardScreen() {
             <>
               <Text style={[s.sectionTitle, { color: colors.text }]}>{t('nav.quick_links', 'Quick Access')}</Text>
               <QuickLink icon="⚠️" label={t('nav.defects', 'Defects')} onPress={() => navigation.navigate('Defects')} colors={colors} />
+              <QuickLink icon="🎯" label={t('nav.assessmentTracking', 'Assessment Tracking')} onPress={() => navigation.navigate('AssessmentTracking')} colors={colors} />
+              <QuickLink icon="🔍" label={t('nav.monitorFollowups', 'Monitor Follow-Ups')} onPress={() => navigation.navigate('MonitorFollowups')} colors={colors} />
             </>
           )}
         </>
@@ -419,14 +492,14 @@ const s = StyleSheet.create({
   },
   welcomeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   welcomeTextContainer: { flex: 1 },
-  greetingText: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
-  welcomeName: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
+  greetingText: { fontSize: 16, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
+  welcomeName: { fontSize: 23, fontWeight: 'bold', color: '#fff' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   starBadge: {
     backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14,
   },
-  starText: { fontSize: 22, fontWeight: '800', color: '#fff' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 20, marginBottom: 10 },
+  starText: { fontSize: 23, fontWeight: '800', color: '#fff' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', marginTop: 20, marginBottom: 10 },
 
   // Quick Actions grid
   quickActionsGrid: { flexDirection: 'row', gap: 10, marginBottom: 14 },
@@ -440,7 +513,7 @@ const s = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginBottom: 8,
   },
   quickActionEmoji: { fontSize: 22 },
-  quickActionLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  quickActionLabel: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
 
   // Widget card (shared)
   widgetCard: {
@@ -449,20 +522,20 @@ const s = StyleSheet.create({
     shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
   },
   widgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  widgetTitle: { fontSize: 15, fontWeight: '700' },
+  widgetTitle: { fontSize: 17, fontWeight: '700' },
   widgetArrow: { fontSize: 22 },
 
   // Assignment Summary
   assignmentRow: { flexDirection: 'row', alignItems: 'center' },
   assignmentItem: { flex: 1, alignItems: 'center' },
-  assignmentValue: { fontSize: 24, fontWeight: '800' },
-  assignmentLabel: { fontSize: 11, marginTop: 2 },
+  assignmentValue: { fontSize: 25, fontWeight: '800' },
+  assignmentLabel: { fontSize: 14, marginTop: 2 },
   assignmentDivider: { width: 1, height: 30, marginHorizontal: 4 },
   backlogBadge: {
     backgroundColor: '#FFF3E0', borderRadius: 8,
     paddingHorizontal: 10, paddingVertical: 4, marginTop: 10, alignSelf: 'flex-start',
   },
-  backlogText: { fontSize: 12, fontWeight: '600', color: '#E65100' },
+  backlogText: { fontSize: 15, fontWeight: '600', color: '#E65100' },
 
   // Stats grid
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
@@ -471,45 +544,45 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08, shadowRadius: 4, elevation: 2, marginBottom: 4,
   },
-  statValue: { fontSize: 26, fontWeight: 'bold' },
-  statTitle: { fontSize: 12, marginTop: 2 },
+  statValue: { fontSize: 27, fontWeight: 'bold' },
+  statTitle: { fontSize: 15, marginTop: 2 },
 
   // Weekly Trend
   trendContainer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', height: 80, marginBottom: 8 },
   trendDay: { alignItems: 'center', flex: 1 },
   trendBarBg: { width: 18, borderRadius: 9, justifyContent: 'flex-end', overflow: 'hidden' },
   trendBarFill: { width: '100%', borderRadius: 9 },
-  trendLabel: { fontSize: 10, fontWeight: '600', marginTop: 4 },
+  trendLabel: { fontSize: 13, fontWeight: '600', marginTop: 4 },
   todayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#1976D2', marginTop: 2 },
   trendLegend: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 4 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 10 },
+  legendText: { fontSize: 13 },
 
   // Shift Handover
   handoverContent: { marginBottom: 10 },
   handoverInfo: { marginBottom: 6 },
-  handoverFrom: { fontSize: 13, fontWeight: '500' },
-  handoverShift: { fontSize: 11, marginTop: 2 },
-  handoverPending: { fontSize: 12, fontWeight: '600', marginTop: 4 },
-  handoverAlert: { fontSize: 12, fontWeight: '700', marginTop: 2 },
-  handoverEmpty: { fontSize: 13, marginBottom: 10, textAlign: 'center', paddingVertical: 8 },
+  handoverFrom: { fontSize: 16, fontWeight: '500' },
+  handoverShift: { fontSize: 14, marginTop: 2 },
+  handoverPending: { fontSize: 15, fontWeight: '600', marginTop: 4 },
+  handoverAlert: { fontSize: 15, fontWeight: '700', marginTop: 2 },
+  handoverEmpty: { fontSize: 16, marginBottom: 10, textAlign: 'center', paddingVertical: 8 },
   handoverActions: { marginTop: 8 },
   acknowledgeBtn: {
     backgroundColor: '#1976D2', borderRadius: 8,
     paddingVertical: 8, paddingHorizontal: 16, alignSelf: 'flex-start',
   },
-  acknowledgeBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  acknowledgeBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   pendingBadge: {
     backgroundColor: '#E53935', borderRadius: 10,
     minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5,
   },
-  pendingBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  pendingBadgeText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   createHandoverBtn: {
     borderWidth: 1.5, borderRadius: 10, borderStyle: 'dashed',
     paddingVertical: 10, alignItems: 'center',
   },
-  createHandoverText: { fontSize: 13, fontWeight: '600' },
+  createHandoverText: { fontSize: 16, fontWeight: '600' },
 
   // Quick Links
   quickLink: {
@@ -518,8 +591,43 @@ const s = StyleSheet.create({
     shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
   },
   quickLinkIcon: { fontSize: 18, marginRight: 12 },
-  quickLinkText: { flex: 1, fontSize: 15, fontWeight: '600' },
+  quickLinkText: { flex: 1, fontSize: 17, fontWeight: '600' },
   quickLinkArrow: { fontSize: 22 },
 
   sectionContainer: { marginBottom: 16 },
+
+  // Start Next Inspection card
+  nextInspectionCard: {
+    borderRadius: 16, padding: 18, marginBottom: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15, shadowRadius: 6, elevation: 4,
+  },
+  nextInspectionContent: {
+    flexDirection: 'row', alignItems: 'center',
+  },
+  nextInspectionIconContainer: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+  },
+  nextInspectionIcon: { fontSize: 26 },
+  nextInspectionTextContainer: { flex: 1 },
+  nextInspectionTitle: {
+    fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.85)',
+    marginBottom: 2,
+  },
+  nextInspectionEquipment: {
+    fontSize: 18, fontWeight: '800', color: '#fff',
+    marginBottom: 2,
+  },
+  nextInspectionTap: {
+    fontSize: 13, color: 'rgba(255,255,255,0.7)',
+  },
+  nextInspectionArrow: {
+    fontSize: 32, fontWeight: '300', color: 'rgba(255,255,255,0.7)',
+    marginLeft: 8,
+  },
+  allCaughtUpText: {
+    fontSize: 16, fontWeight: '600', marginLeft: 10,
+  },
 });

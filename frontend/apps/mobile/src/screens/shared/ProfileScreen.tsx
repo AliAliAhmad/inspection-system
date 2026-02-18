@@ -19,18 +19,18 @@ import { ThemeMode } from '../../storage/theme-storage';
 import { minutesToTimeString } from '../../storage/theme-storage';
 import type { TextScale } from '../../storage/accessibility-storage';
 
-const THEME_MODE_LABELS: Record<ThemeMode, { en: string; ar: string }> = {
-  system: { en: 'System', ar: '\u0627\u0644\u0646\u0638\u0627\u0645' },
-  light: { en: 'Light', ar: '\u0641\u0627\u062A\u062D' },
-  dark: { en: 'Dark', ar: '\u062F\u0627\u0643\u0646' },
-  schedule: { en: 'Schedule', ar: '\u062C\u062F\u0648\u0644\u0629' },
+const THEME_MODE_I18N_KEYS: Record<ThemeMode, string> = {
+  system: 'profile.theme_system',
+  light: 'profile.theme_light',
+  dark: 'profile.theme_dark',
+  schedule: 'profile.theme_schedule',
 };
 
-const TEXT_SCALE_LABELS: Record<TextScale, { en: string; ar: string }> = {
-  1: { en: 'Small', ar: '\u0635\u063A\u064A\u0631' },
-  1.25: { en: 'Normal', ar: '\u0639\u0627\u062F\u064A' },
-  1.5: { en: 'Large', ar: '\u0643\u0628\u064A\u0631' },
-  2: { en: 'Extra Large', ar: '\u0643\u0628\u064A\u0631 \u062C\u062F\u0627' },
+const TEXT_SCALE_I18N_KEYS: Record<TextScale, string> = {
+  1: 'profile.text_scale_small',
+  1.25: 'profile.text_scale_normal',
+  1.5: 'profile.text_scale_large',
+  2: 'profile.text_scale_extra_large',
 };
 
 export default function ProfileScreen() {
@@ -55,7 +55,7 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     Alert.alert(
       t('auth.logout'),
-      'Are you sure you want to logout?',
+      t('profile.logout_confirm'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         { text: t('auth.logout'), style: 'destructive', onPress: async () => { await logout(); } },
@@ -95,7 +95,7 @@ export default function ProfileScreen() {
           colors={colors}
         />
         <InfoRow
-          label="Employee ID"
+          label={t('profile.employeeId')}
           value={user.employee_id}
           colors={colors}
         />
@@ -106,20 +106,20 @@ export default function ProfileScreen() {
         />
         {user.specialization && (
           <InfoRow
-            label="Specialization"
+            label={t('profile.specialization')}
             value={user.specialization}
             colors={colors}
           />
         )}
         {user.shift && (
           <InfoRow
-            label="Shift"
+            label={t('profile.shift')}
             value={user.shift}
             colors={colors}
           />
         )}
         <InfoRow
-          label="Points"
+          label={t('profile.points')}
           value={String(user.total_points)}
           colors={colors}
         />
@@ -128,7 +128,7 @@ export default function ProfileScreen() {
       {/* Theme Settings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          {language === 'ar' ? '\u0627\u0644\u0645\u0638\u0647\u0631' : 'Appearance'}
+          {t('profile.appearance')}
         </Text>
         <View style={styles.themeOptions}>
           {(['system', 'light', 'dark', 'schedule'] as ThemeMode[]).map((themeMode) => (
@@ -148,7 +148,7 @@ export default function ProfileScreen() {
                   mode === themeMode && styles.themeOptionTextActive,
                 ]}
               >
-                {THEME_MODE_LABELS[themeMode][language]}
+                {t(THEME_MODE_I18N_KEYS[themeMode])}
               </Text>
             </TouchableOpacity>
           ))}
@@ -156,16 +156,14 @@ export default function ProfileScreen() {
         {mode === 'schedule' && (
           <View style={styles.scheduleInfo}>
             <Text style={styles.scheduleText}>
-              {language === 'ar'
-                ? `\u062F\u0627\u0643\u0646 \u0645\u0646 ${minutesToTimeString(sunsetTime)} \u0625\u0644\u0649 ${minutesToTimeString(sunriseTime)}`
-                : `Dark from ${minutesToTimeString(sunsetTime)} to ${minutesToTimeString(sunriseTime)}`}
+              {t('profile.dark_from_to', { sunset: minutesToTimeString(sunsetTime), sunrise: minutesToTimeString(sunriseTime) })}
             </Text>
           </View>
         )}
         <Text style={styles.themeHint}>
           {isDark
-            ? (language === 'ar' ? '\u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u062F\u0627\u0643\u0646 \u0645\u064F\u0641\u0639\u064E\u0644' : 'Dark mode is active')
-            : (language === 'ar' ? '\u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0641\u0627\u062A\u062D \u0645\u064F\u0641\u0639\u064E\u0644' : 'Light mode is active')}
+            ? t('profile.dark_mode_active')
+            : t('profile.light_mode_active')}
         </Text>
       </View>
 
@@ -184,21 +182,21 @@ export default function ProfileScreen() {
         </View>
         <Text style={styles.dirText}>
           {isRTL
-            ? '\u0627\u0644\u0627\u062A\u062C\u0627\u0647: \u0645\u0646 \u0627\u0644\u064A\u0645\u064A\u0646 \u0625\u0644\u0649 \u0627\u0644\u064A\u0633\u0627\u0631'
-            : 'Direction: Left to Right'}
+            ? t('profile.direction_rtl')
+            : t('profile.direction_ltr')}
         </Text>
       </View>
 
       {/* Accessibility Settings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          {language === 'ar' ? '\u0625\u0645\u0643\u0627\u0646\u064A\u0629 \u0627\u0644\u0648\u0635\u0648\u0644' : 'Accessibility'}
+          {t('profile.accessibility')}
         </Text>
 
         {/* High Contrast */}
         <View style={styles.langRow}>
           <Text style={styles.langLabel}>
-            {language === 'ar' ? '\u062A\u0628\u0627\u064A\u0646 \u0639\u0627\u0644\u064A' : 'High Contrast'}
+            {t('profile.high_contrast')}
           </Text>
           <Switch
             value={isHighContrast}
@@ -211,7 +209,7 @@ export default function ProfileScreen() {
         {/* Bold Text */}
         <View style={[styles.langRow, { marginTop: 8 }]}>
           <Text style={styles.langLabel}>
-            {language === 'ar' ? '\u0646\u0635 \u0639\u0631\u064A\u0636' : 'Bold Text'}
+            {t('profile.bold_text')}
           </Text>
           <Switch
             value={isBoldText}
@@ -224,7 +222,7 @@ export default function ProfileScreen() {
         {/* Reduce Motion */}
         <View style={[styles.langRow, { marginTop: 8 }]}>
           <Text style={styles.langLabel}>
-            {language === 'ar' ? '\u062A\u0642\u0644\u064A\u0644 \u0627\u0644\u062D\u0631\u0643\u0629' : 'Reduce Motion'}
+            {t('profile.reduce_motion')}
           </Text>
           <Switch
             value={isReduceMotion}
@@ -236,7 +234,7 @@ export default function ProfileScreen() {
 
         {/* Text Scale */}
         <Text style={[styles.langLabel, { marginTop: 12, marginBottom: 8 }]}>
-          {language === 'ar' ? '\u062D\u062C\u0645 \u0627\u0644\u0646\u0635' : 'Text Size'}
+          {t('profile.text_size')}
         </Text>
         <View style={styles.themeOptions}>
           {([1, 1.25, 1.5, 2] as TextScale[]).map((scale) => (
@@ -256,7 +254,7 @@ export default function ProfileScreen() {
                   textScale === scale && styles.themeOptionTextActive,
                 ]}
               >
-                {TEXT_SCALE_LABELS[scale][language]}
+                {t(TEXT_SCALE_I18N_KEYS[scale])}
               </Text>
             </TouchableOpacity>
           ))}
@@ -266,7 +264,7 @@ export default function ProfileScreen() {
       {/* Quick Links */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>
-          {language === 'ar' ? '\u0631\u0648\u0627\u0628\u0637 \u0633\u0631\u064A\u0639\u0629' : 'Quick Links'}
+          {t('profile.quick_links')}
         </Text>
         <TouchableOpacity
           style={styles.quickLinkRow}
@@ -274,7 +272,7 @@ export default function ProfileScreen() {
         >
           <Text style={styles.quickLinkIcon}>💬</Text>
           <Text style={[styles.langLabel, { flex: 1 }]}>
-            {language === 'ar' ? '\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u0641\u0631\u064A\u0642' : 'Team Chat'}
+            {t('profile.team_chat')}
           </Text>
           <Text style={styles.quickLinkArrow}>›</Text>
         </TouchableOpacity>
@@ -284,7 +282,7 @@ export default function ProfileScreen() {
         >
           <Text style={styles.quickLinkIcon}>⚙️</Text>
           <Text style={[styles.langLabel, { flex: 1 }]}>
-            {language === 'ar' ? '\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0623\u062F\u0648\u0627\u062A' : 'Toolkit Settings'}
+            {t('profile.toolkit_settings')}
           </Text>
           <Text style={styles.quickLinkArrow}>›</Text>
         </TouchableOpacity>

@@ -30,11 +30,11 @@ const priorityColors: Record<NotificationPriority, string> = {
   critical: '#eb2f96',
 };
 
-const priorityLabels: Record<NotificationPriority, string> = {
-  info: 'Info',
-  warning: 'Warning',
-  urgent: 'Urgent',
-  critical: 'Critical',
+const PRIORITY_I18N_KEYS: Record<NotificationPriority, string> = {
+  info: 'notifications.info',
+  warning: 'notifications.warning',
+  urgent: 'notifications.urgent',
+  critical: 'notifications.critical',
 };
 
 type TabKey = 'all' | 'unread' | 'urgent';
@@ -213,7 +213,7 @@ export default function NotificationsScreen() {
     return (
       <View style={[styles.priorityBadge, { backgroundColor: priorityColors[priority] }]}>
         <Text style={styles.priorityBadgeText}>
-          {isHighPriority ? '!' : ''} {priorityLabels[priority]}
+          {isHighPriority ? '!' : ''} {t(PRIORITY_I18N_KEYS[priority])}
         </Text>
       </View>
     );

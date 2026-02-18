@@ -274,7 +274,7 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
           <EnvironmentOutlined style={{ color: '#8c8c8c' }} />
           <Text>{record.location}</Text>
           {record.berth && (
-            <Tag size="small">{record.berth}</Tag>
+            <Tag>{record.berth}</Tag>
           )}
         </Space>
       ),

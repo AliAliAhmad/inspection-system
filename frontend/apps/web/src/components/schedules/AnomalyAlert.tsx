@@ -15,7 +15,7 @@ import {
 } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { scheduleAIApi } from '@inspection/shared';
-import type { ScheduleAnomaly as ScheduleAIAnomaly } from '@inspection/shared';
+import type { ScheduleAIAnomaly } from '@inspection/shared';
 import {
   ExclamationCircleOutlined,
   WarningOutlined,
@@ -161,7 +161,7 @@ export const AnomalyAlert: React.FC<AnomalyAlertProps> = ({
     );
   }
 
-  const anomalies: ScheduleAIAnomaly[] = (anomalyData || []).slice(0, maxItems);
+  const anomalies = ((anomalyData || []) as ScheduleAIAnomaly[]).slice(0, maxItems);
   const criticalCount = anomalies.filter((a) => a.severity === 'critical').length;
   const totalAnomalies = anomalyData?.length || 0;
 
@@ -172,17 +172,17 @@ export const AnomalyAlert: React.FC<AnomalyAlertProps> = ({
           type="error"
           message={
             <Space>
-              <ExclamationCircleOutlined />
-              <Text strong>
+              <ExclamationCircleOutlined style={{ fontSize: 18 }} />
+              <Text strong style={{ fontSize: 15 }}>
                 {criticalCount} Critical Anomal{criticalCount > 1 ? 'ies' : 'y'} Detected
               </Text>
             </Space>
           }
-          description="Immediate attention required. Critical anomalies may indicate equipment failure risk or scheduling conflicts."
+          description={<span style={{ fontSize: 14, fontWeight: 600 }}>Immediate attention required. Critical anomalies may indicate equipment failure risk or scheduling conflicts.</span>}
           showIcon={false}
           banner
           closable
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 16, padding: '10px 16px' }}
         />
       )}
 
@@ -315,8 +315,8 @@ export const AnomalyBanner: React.FC<{
     queryFn: () => scheduleAIApi.detectAnomalies(days),
   });
 
-  const criticalAnomalies = (anomalyData || []).filter(
-    (a: ScheduleAIAnomaly) => a.severity === 'critical'
+  const criticalAnomalies = ((anomalyData || []) as ScheduleAIAnomaly[]).filter(
+    (a) => a.severity === 'critical'
   );
 
   if (criticalAnomalies.length === 0) {
@@ -329,8 +329,8 @@ export const AnomalyBanner: React.FC<{
       message={
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           <Space>
-            <ThunderboltOutlined />
-            <Text strong>
+            <ThunderboltOutlined style={{ fontSize: 18 }} />
+            <Text strong style={{ fontSize: 15 }}>
               {criticalAnomalies.length} Critical Anomal
               {criticalAnomalies.length > 1 ? 'ies' : 'y'} Detected
             </Text>
@@ -343,6 +343,7 @@ export const AnomalyBanner: React.FC<{
         </Space>
       }
       banner
+      style={{ padding: '10px 16px' }}
     />
   );
 };

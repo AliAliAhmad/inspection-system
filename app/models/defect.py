@@ -15,11 +15,20 @@ class Defect(db.Model):
     __tablename__ = 'defects'
 
     id = db.Column(db.Integer, primary_key=True)
-    inspection_id = db.Column(db.Integer, db.ForeignKey('inspections.id'), nullable=False)
+    inspection_id = db.Column(db.Integer, db.ForeignKey('inspections.id'), nullable=True)
     checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id'), nullable=True)
 
     # Category: mechanical or electrical (from checklist item)
     category = db.Column(db.String(20), nullable=True)  # 'mechanical' or 'electrical'
+
+    # Quick field report fields
+    reported_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    report_source = db.Column(db.String(30), nullable=True, default='inspection')  # 'inspection', 'field_report', 'safety_report'
+    voice_note_url = db.Column(db.Text, nullable=True)
+    photo_url = db.Column(db.Text, nullable=True)
+    location_description = db.Column(db.Text, nullable=True)
+    hazard_type = db.Column(db.String(30), nullable=True)
+    equipment_id_direct = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=True)
 
     severity = db.Column(db.String(20), nullable=False, default='medium')
     priority = db.Column(db.String(20), nullable=True, default='medium')  # low, medium, high, urgent
@@ -50,7 +59,9 @@ class Defect(db.Model):
     # Relationships
     inspection = db.relationship('Inspection', back_populates='defects')
     checklist_item = db.relationship('ChecklistItem', back_populates='defects')
-    assigned_to = db.relationship('User', backref='assigned_defects')
+    assigned_to = db.relationship('User', foreign_keys=[assigned_to_id], backref='assigned_defects')
+    reported_by = db.relationship('User', foreign_keys=[reported_by_id], backref='reported_defects')
+    equipment_direct = db.relationship('Equipment', foreign_keys=[equipment_id_direct])
     occurrences = db.relationship('DefectOccurrence', back_populates='defect', order_by='DefectOccurrence.occurrence_number')
 
     __table_args__ = (
@@ -93,10 +104,22 @@ class Defect(db.Model):
             'work_order_id': self.work_order_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'occurrence_count': self.occurrence_count,
+            'report_source': self.report_source,
+            'reported_by_id': self.reported_by_id,
+            'reported_by': self.reported_by.to_dict() if self.reported_by else None,
+            'photo_url': self.photo_url,
+            'voice_note_url': self.voice_note_url,
+            'location_description': self.location_description,
+            'hazard_type': self.hazard_type,
         }
 
-        # Include equipment info via inspection
-        equipment = self.inspection.equipment if self.inspection else None
+        # Include equipment info — from inspection or direct field report
+        equipment = None
+        if self.equipment_id_direct and self.equipment_direct:
+            equipment = self.equipment_direct
+        elif self.inspection:
+            equipment = self.inspection.equipment
+
         if equipment:
             data['equipment'] = {
                 'id': equipment.id,

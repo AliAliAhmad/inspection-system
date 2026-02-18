@@ -648,10 +648,10 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   backBtn: { padding: 8 },
-  backBtnText: { fontSize: 24, color: '#1677ff' },
+  backBtnText: { fontSize: 25, color: '#1677ff' },
   headerInfo: { flex: 1, marginLeft: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#262626' },
-  headerSubtitle: { fontSize: 12, color: '#8c8c8c' },
+  headerTitle: { fontSize: 19, fontWeight: '700', color: '#262626' },
+  headerSubtitle: { fontSize: 15, color: '#8c8c8c' },
   messageList: { padding: 12, paddingBottom: 8 },
   msgRow: { flexDirection: 'row', marginBottom: 8, alignItems: 'flex-end' },
   msgRowMe: { flexDirection: 'row-reverse' },
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
     width: 32, height: 32, borderRadius: 16, backgroundColor: '#e6f4ff',
     justifyContent: 'center', alignItems: 'center', marginRight: 8,
   },
-  avatarText: { fontSize: 14, fontWeight: '700', color: '#1677ff' },
+  avatarText: { fontSize: 16, fontWeight: '700', color: '#1677ff' },
   msgBubble: {
     maxWidth: '75%', borderRadius: 16, padding: 10,
     elevation: 1,
@@ -674,34 +674,34 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: '#ff4d4f',
   },
   senderName: {
-    fontSize: 12, fontWeight: '700', color: '#1677ff', marginBottom: 4,
+    fontSize: 15, fontWeight: '700', color: '#1677ff', marginBottom: 4,
   },
-  msgText: { fontSize: 15, color: '#262626', lineHeight: 20 },
+  msgText: { fontSize: 17, color: '#262626', lineHeight: 20 },
   msgTextMe: { color: '#fff' },
-  msgTime: { fontSize: 10, color: '#bfbfbf', marginTop: 4, textAlign: 'right' },
+  msgTime: { fontSize: 13, color: '#bfbfbf', marginTop: 4, textAlign: 'right' },
   msgTimeMe: { color: 'rgba(255,255,255,0.7)' },
   priorityBadge: {
-    fontSize: 11, fontWeight: '700', color: '#ff4d4f', marginTop: 4,
+    fontSize: 14, fontWeight: '700', color: '#ff4d4f', marginTop: 4,
   },
   voiceMsg: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   voiceIcon: { fontSize: 20 },
   voiceWave: { flexDirection: 'row', alignItems: 'center', gap: 2, flex: 1 },
   voiceBar: { width: 3, backgroundColor: '#91caff', borderRadius: 1.5 },
-  voiceDuration: { fontSize: 12, color: '#8c8c8c' },
+  voiceDuration: { fontSize: 15, color: '#8c8c8c' },
   voiceTranscription: {
-    fontSize: 11, color: '#595959', marginTop: 4, lineHeight: 15, fontStyle: 'italic',
+    fontSize: 14, color: '#595959', marginTop: 4, lineHeight: 15, fontStyle: 'italic',
   },
   photoMsg: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   photoIcon: { fontSize: 20 },
-  photoText: { fontSize: 14, color: '#595959' },
+  photoText: { fontSize: 16, color: '#595959' },
   locationMsg: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   locationIcon: { fontSize: 20 },
-  locationText: { fontSize: 14, color: '#1677ff' },
+  locationText: { fontSize: 16, color: '#1677ff' },
   systemMsg: {
     alignItems: 'center', paddingVertical: 8, marginBottom: 8,
   },
   systemMsgText: {
-    fontSize: 13, color: '#8c8c8c', fontWeight: '500',
+    fontSize: 16, color: '#8c8c8c', fontWeight: '500',
     backgroundColor: '#fafafa', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 6,
   },
   inputContainer: {
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
   attachBtnText: { fontSize: 22 },
   textInput: {
     flex: 1, backgroundColor: '#f5f5f5', borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10, fontSize: 15,
+    paddingHorizontal: 16, paddingVertical: 10, fontSize: 17,
     maxHeight: 100, color: '#262626',
   },
   priorityBtn: {
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
   sendBtnText: { fontSize: 20, color: '#fff' },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { fontSize: 16, color: '#bfbfbf' },
+  emptyText: { fontSize: 18, color: '#bfbfbf' },
   // Recording bar
   recordingBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -749,9 +749,9 @@ const styles = StyleSheet.create({
     width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff',
   },
   recordingBarText: {
-    color: '#fff', fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] as any,
+    color: '#fff', fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] as any,
   },
   recordingHint: {
-    color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '500',
+    color: 'rgba(255,255,255,0.7)', fontSize: 14, fontWeight: '500',
   },
 });
