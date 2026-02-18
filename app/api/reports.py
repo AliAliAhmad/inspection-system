@@ -72,20 +72,33 @@ def _normalize_dashboard(user, raw, today):
         incomplete = my_assignments.filter(InspectionAssignment.status == 'incomplete').count()
 
         data['total_inspections'] = total
-        data['pending_defects'] = Defect.query.filter(Defect.status.in_(['open', 'in_progress'])).count()
+        # Only count defects reported by this inspector or from their inspections
+        my_inspection_ids = [i.id for i in Inspection.query.filter_by(technician_id=user.id).with_entities(Inspection.id).all()]
+        data['pending_defects'] = Defect.query.filter(
+            Defect.status.in_(['open', 'in_progress']),
+            or_(
+                Defect.reported_by_id == user.id,
+                Defect.inspection_id.in_(my_inspection_ids) if my_inspection_ids else False,
+            )
+        ).count()
         data['active_jobs'] = my_assignments.filter(InspectionAssignment.status == 'assigned').count()
         data['completion_rate'] = round((completed / total * 100) if total > 0 else 0)
         data['incomplete_rate'] = round((incomplete / total * 100) if total > 0 else 0)
         data['total_stars'] = user.inspector_points or 0
 
     elif role == 'specialist':
+        from sqlalchemy import or_
         my_jobs = raw.get('my_jobs', {})
         total = my_jobs.get('total', 0)
         completed = my_jobs.get('completed', 0)
         incomplete = total - completed - my_jobs.get('in_progress', 0) - my_jobs.get('paused', 0)
 
         data['total_inspections'] = total
-        data['pending_defects'] = Defect.query.filter(Defect.status.in_(['open', 'in_progress'])).count()
+        # Only count defects assigned to this specialist
+        data['pending_defects'] = Defect.query.filter(
+            Defect.status.in_(['open', 'in_progress']),
+            Defect.assigned_to_id == user.id,
+        ).count()
         data['active_jobs'] = my_jobs.get('in_progress', 0) + my_jobs.get('paused', 0)
         data['completion_rate'] = round((completed / total * 100) if total > 0 else 0)
         data['incomplete_rate'] = round((incomplete / total * 100) if total > 0 else 0) if incomplete > 0 else 0
