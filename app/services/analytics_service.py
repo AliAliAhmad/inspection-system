@@ -115,10 +115,10 @@ class AnalyticsService:
         )
 
         return {
-            'today_assignments': mech_assignments.join(InspectionList).filter(
-                InspectionList.target_date == today
-            ).count() + elec_assignments.join(InspectionList).filter(
-                InspectionList.target_date == today
+            'today_assignments': mech_assignments.filter(
+                InspectionAssignment.status.in_(['assigned', 'in_progress'])
+            ).count() + elec_assignments.filter(
+                InspectionAssignment.status.in_(['assigned', 'in_progress'])
             ).count(),
             'pending_assessments': FinalAssessment.query.filter(
                 FinalAssessment.finalized_at.is_(None),

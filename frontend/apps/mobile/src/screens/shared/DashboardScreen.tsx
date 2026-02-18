@@ -382,7 +382,7 @@ export default function DashboardScreen() {
             <View style={s.nameRow}>
               <Text style={s.welcomeName}>{user?.full_name}</Text>
               <View style={s.starBadge}>
-                <Text style={s.starText}>⭐ {(user as any)?.total_stars ?? 0}</Text>
+                <Text style={s.starText}>⭐ {(user as any)?.inspector_points ?? (user as any)?.specialist_points ?? (user as any)?.engineer_points ?? (user as any)?.total_points ?? 0}</Text>
               </View>
             </View>
           </View>

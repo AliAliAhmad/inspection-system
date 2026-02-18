@@ -376,30 +376,27 @@ def my_stats():
         (InspectionAssignment.electrical_inspector_id == user_id)
     )
 
-    # Today's assignments
+    # Active assignments (assigned or in_progress regardless of target date)
+    # Plus today's completed
     today_lists = InspectionList.query.filter(
         InspectionList.target_date == today
     ).all()
     today_list_ids = [l.id for l in today_lists]
 
-    today_total = base_query.filter(
-        InspectionAssignment.inspection_list_id.in_(today_list_ids)
-    ).count() if today_list_ids else 0
+    today_assigned = base_query.filter(
+        InspectionAssignment.status == 'assigned'
+    ).count()
+
+    today_in_progress = base_query.filter(
+        InspectionAssignment.status == 'in_progress'
+    ).count()
 
     today_completed = base_query.filter(
         InspectionAssignment.inspection_list_id.in_(today_list_ids),
-        InspectionAssignment.status == 'completed'
+        InspectionAssignment.status.in_(['completed', 'mech_complete', 'elec_complete', 'both_complete'])
     ).count() if today_list_ids else 0
 
-    today_in_progress = base_query.filter(
-        InspectionAssignment.inspection_list_id.in_(today_list_ids),
-        InspectionAssignment.status == 'in_progress'
-    ).count() if today_list_ids else 0
-
-    today_assigned = base_query.filter(
-        InspectionAssignment.inspection_list_id.in_(today_list_ids),
-        InspectionAssignment.status == 'assigned'
-    ).count() if today_list_ids else 0
+    today_total = today_assigned + today_in_progress + today_completed
 
     # This week stats
     week_lists = InspectionList.query.filter(
