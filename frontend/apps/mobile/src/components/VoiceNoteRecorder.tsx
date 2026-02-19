@@ -16,12 +16,20 @@ import { getApiClient } from '@inspection/shared';
 // Ensures only one audio plays at a time across all VoiceNoteRecorder instances
 // and provides a way to stop playback externally (e.g., when swiping questions)
 let _activeSound: Audio.Sound | null = null;
+let _activeRecording: Audio.Recording | null = null;
 
 export function stopAllVoicePlayback() {
   if (_activeSound) {
     _activeSound.stopAsync().catch(() => {});
     _activeSound.unloadAsync().catch(() => {});
     _activeSound = null;
+  }
+}
+
+export function stopAllVoiceRecording() {
+  if (_activeRecording) {
+    _activeRecording.stopAndUnloadAsync().catch(() => {});
+    _activeRecording = null;
   }
 }
 
@@ -89,6 +97,9 @@ export default function VoiceNoteRecorder({
   // Cleanup audio resources when component unmounts
   useEffect(() => {
     return () => {
+      // Clear module-level recording ref
+      _activeRecording = null;
+
       // Stop and cleanup recording
       if (recordingRef.current) {
         recordingRef.current.stopAndUnloadAsync().catch((err) => {
@@ -140,6 +151,7 @@ export default function VoiceNoteRecorder({
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
       );
       recordingRef.current = recording;
+      _activeRecording = recording;
       setIsRecording(true);
       setRecordingTime(0);
 
@@ -168,6 +180,7 @@ export default function VoiceNoteRecorder({
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
+      _activeRecording = null;
 
       if (!uri) return;
 

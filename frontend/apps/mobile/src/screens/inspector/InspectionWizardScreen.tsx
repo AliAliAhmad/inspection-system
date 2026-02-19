@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
-import VoiceNoteRecorder, { stopAllVoicePlayback } from '../../components/VoiceNoteRecorder';
+import VoiceNoteRecorder, { stopAllVoicePlayback, stopAllVoiceRecording } from '../../components/VoiceNoteRecorder';
 import VideoRecorder from '../../components/VideoRecorder';
 import PhotoGallery from '../../components/PhotoGallery';
 import { Photo } from '../../components/PhotoThumbnailGrid';
@@ -195,25 +195,30 @@ export default function InspectionWizardScreen() {
   const inspectionAnswersJson = JSON.stringify(inspection?.answers?.map(a => a.id) || []);
   useEffect(() => {
     if (inspection?.answers && inspection.answers.length > 0) {
-      const merged: Record<number, LocalAnswer> = {};
-      inspection.answers.forEach((ans: InspectionAnswer) => {
-        const photoUrl = (ans.photo_file as any)?.url || null;
-        const videoUrl = (ans.video_file as any)?.url || null;
-        const voiceNoteUrl = (ans.voice_note as any)?.url || null;
+      setLocalAnswers((prev) => {
+        const result = { ...prev };
+        inspection.answers!.forEach((ans: InspectionAnswer) => {
+          const photoUrl = (ans.photo_file as any)?.url || null;
+          const videoUrl = (ans.video_file as any)?.url || null;
+          const voiceNoteUrl = (ans.voice_note as any)?.url || null;
 
-        merged[ans.checklist_item_id] = {
-          answer_value: ans.answer_value,
-          comment: ans.comment ?? undefined,
-          photo_url: photoUrl ?? undefined,
-          photo_ai_analysis: ans.photo_ai_analysis ?? undefined,
-          video_url: videoUrl ?? undefined,
-          video_ai_analysis: ans.video_ai_analysis ?? undefined,
-          voice_note_id: ans.voice_note_id ?? undefined,
-          voice_note_url: voiceNoteUrl ?? undefined,
-          voice_transcription: (ans as any).voice_transcription ?? undefined,
-        };
+          // Deep merge: preserve local-only fields (urgency_level, local URIs, etc.)
+          result[ans.checklist_item_id] = {
+            ...prev[ans.checklist_item_id],  // Keep existing local fields
+            answer_value: ans.answer_value,
+            comment: ans.comment ?? prev[ans.checklist_item_id]?.comment,
+            urgency_level: (ans as any).urgency_level ?? prev[ans.checklist_item_id]?.urgency_level,
+            photo_url: photoUrl ?? prev[ans.checklist_item_id]?.photo_url,
+            photo_ai_analysis: ans.photo_ai_analysis ?? prev[ans.checklist_item_id]?.photo_ai_analysis,
+            video_url: videoUrl ?? prev[ans.checklist_item_id]?.video_url,
+            video_ai_analysis: ans.video_ai_analysis ?? prev[ans.checklist_item_id]?.video_ai_analysis,
+            voice_note_id: ans.voice_note_id ?? prev[ans.checklist_item_id]?.voice_note_id,
+            voice_note_url: voiceNoteUrl ?? prev[ans.checklist_item_id]?.voice_note_url,
+            voice_transcription: (ans as any).voice_transcription ?? prev[ans.checklist_item_id]?.voice_transcription,
+          };
+        });
+        return result;
       });
-      setLocalAnswers((prev) => ({ ...prev, ...merged }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inspectionAnswersJson]);
@@ -237,7 +242,7 @@ export default function InspectionWizardScreen() {
         prefilled[itemId] = {
           answer_value: ans.answer_value,
           comment: ans.comment ?? undefined,
-          urgency_level: ans.urgency_level ?? 0,
+          urgency_level: ans.urgency_level,
           // Include media from colleague
           photo_url: ans.photo_file?.url || ans.photo_url || undefined,
           photo_ai_analysis: ans.photo_ai_analysis ?? undefined,
@@ -291,7 +296,7 @@ export default function InspectionWizardScreen() {
               checklist_item_id: Number(itemId),
               answer_value: answer.answer_value,
               comment: answer.comment,
-              urgency_level: answer.urgency_level || 0,
+              urgency_level: answer.urgency_level,
             });
           } catch (err) {
             // Silent fail - inspector can still answer manually
@@ -463,7 +468,7 @@ export default function InspectionWizardScreen() {
         checklist_item_id: currentItem.id,
         answer_value: value,
         comment: current?.comment,
-        urgency_level: current?.urgency_level ?? 0,
+        urgency_level: current?.urgency_level,
       });
     }, 500);
   }, [currentItem, answerMutation, localAnswers]);
@@ -496,8 +501,9 @@ export default function InspectionWizardScreen() {
   const goToIndex = useCallback((index: number) => {
     if (index < 0 || index >= totalItems || index === currentIndex) return;
 
-    // Stop any playing audio immediately before transitioning
+    // Stop any playing audio and active recording before transitioning
     stopAllVoicePlayback();
+    stopAllVoiceRecording();
 
     // Fade out, swap content off-screen, then slide in
     Animated.timing(cardOpacity, {
@@ -607,6 +613,14 @@ export default function InspectionWizardScreen() {
 
     if (!allAnswered) return;
 
+    // Check if any items are missing urgency level
+    const anyMissingUrgency = allChecklistItems.some(item =>
+      updatedAnswers[item.id]?.answer_value && !skippedItems.has(item.id) &&
+      updatedAnswers[item.id]?.urgency_level === undefined
+    );
+
+    if (anyMissingUrgency) return;
+
     // Check if any items are missing required media (using the updated answers)
     const anyMissingMedia = allChecklistItems.some(item => {
       const answer = updatedAnswers[item.id];
@@ -665,16 +679,22 @@ export default function InspectionWizardScreen() {
     );
   }, [allChecklistItems, skippedItems, isArabic, validateAnswer, goToIndex, totalItems, t]);
 
-  // Find next unanswered or missing-media item starting from a given index
+  // Check if an answered item is missing urgency level
+  const itemMissingUrgency = useCallback((item: ChecklistItem) => {
+    const answer = localAnswers[item.id];
+    return !!answer?.answer_value && !skippedItems.has(item.id) && answer?.urgency_level === undefined;
+  }, [localAnswers, skippedItems]);
+
+  // Find next unanswered or missing-media/urgency item starting from a given index
   const findNextIncomplete = useCallback((startFromIndex: number): number => {
     // First check unanswered from startFromIndex onwards
     for (let i = startFromIndex; i < allChecklistItems.length; i++) {
       const item = allChecklistItems[i];
       if (!localAnswers[item.id]?.answer_value || skippedItems.has(item.id)) return i;
     }
-    // Then check missing media from startFromIndex onwards
+    // Then check missing media or urgency from startFromIndex onwards
     for (let i = startFromIndex; i < allChecklistItems.length; i++) {
-      if (itemMissingMedia(allChecklistItems[i])) return i;
+      if (itemMissingMedia(allChecklistItems[i]) || itemMissingUrgency(allChecklistItems[i])) return i;
     }
     // Wrap around: check from beginning
     for (let i = 0; i < startFromIndex; i++) {
@@ -682,10 +702,10 @@ export default function InspectionWizardScreen() {
       if (!localAnswers[item.id]?.answer_value || skippedItems.has(item.id)) return i;
     }
     for (let i = 0; i < startFromIndex; i++) {
-      if (itemMissingMedia(allChecklistItems[i])) return i;
+      if (itemMissingMedia(allChecklistItems[i]) || itemMissingUrgency(allChecklistItems[i])) return i;
     }
     return -1; // All complete
-  }, [allChecklistItems, localAnswers, skippedItems, itemMissingMedia]);
+  }, [allChecklistItems, localAnswers, skippedItems, itemMissingMedia, itemMissingUrgency]);
 
   // Navigate to next incomplete item, or go to submit if all done
   const goToNextIncomplete = useCallback(() => {
@@ -729,6 +749,36 @@ export default function InspectionWizardScreen() {
               if (firstUnansweredIndex >= 0) {
                 setFixingIncomplete(true);
                 goToIndex(firstUnansweredIndex);
+              }
+            }
+          },
+          { text: t('common.cancel'), style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
+    // Step 1.5: Check for items missing urgency level
+    const missingUrgency = allChecklistItems.filter((item) =>
+      localAnswers[item.id]?.answer_value && !skippedItems.has(item.id) &&
+      localAnswers[item.id]?.urgency_level === undefined
+    );
+
+    if (missingUrgency.length > 0) {
+      Alert.alert(
+        t('common.warning', 'Warning'),
+        `${missingUrgency.length} ${t('inspection.missingUrgency', 'questions are missing urgency level. Set urgency for all questions before submitting.')}`,
+        [
+          {
+            text: t('inspection.goToFirst', 'Go to first missing'),
+            onPress: () => {
+              const firstMissingIndex = allChecklistItems.findIndex((item) =>
+                localAnswers[item.id]?.answer_value && !skippedItems.has(item.id) &&
+                localAnswers[item.id]?.urgency_level === undefined
+              );
+              if (firstMissingIndex >= 0) {
+                setFixingIncomplete(true);
+                goToIndex(firstMissingIndex);
               }
             }
           },
@@ -926,6 +976,7 @@ export default function InspectionWizardScreen() {
             answerMutation.mutate({
               checklist_item_id: checklistItemId,
               answer_value: extractedValue,
+              urgency_level: prev[checklistItemId]?.urgency_level,
             });
             console.log('Auto-filled validated reading:', extractedValue);
 
@@ -943,6 +994,7 @@ export default function InspectionWizardScreen() {
             answerMutation.mutate({
               checklist_item_id: checklistItemId,
               answer_value: 'faulty',
+              urgency_level: prev[checklistItemId]?.urgency_level,
             });
             Alert.alert(
               t('inspection.meterFaulty', 'Meter Faulty'),
@@ -958,6 +1010,7 @@ export default function InspectionWizardScreen() {
             answerMutation.mutate({
               checklist_item_id: checklistItemId,
               answer_value: extractedReading,
+              urgency_level: prev[checklistItemId]?.urgency_level,
             });
             console.log('Auto-filled reading value:', extractedReading);
           }
@@ -967,6 +1020,7 @@ export default function InspectionWizardScreen() {
           answerMutation.mutate({
             checklist_item_id: checklistItemId,
             answer_value: 'faulty',
+            urgency_level: prev[checklistItemId]?.urgency_level,
           });
           console.log('Meter detected as faulty');
         }
@@ -1047,7 +1101,8 @@ export default function InspectionWizardScreen() {
         answer_value: current.answer_value,
         comment: current.comment,
         voice_note_id: voiceNoteId,
-        voice_transcription: transcription, // Save transcription to server
+        voice_transcription: transcription,
+        urgency_level: current.urgency_level,
       });
     }
 
@@ -1389,8 +1444,11 @@ export default function InspectionWizardScreen() {
   const requiresPhotoVerification = isReadingQuestion || isRNRQuestion || isTWLQuestion;
   const isReadingWithoutPhoto = requiresPhotoVerification && !hasPhoto && !isUploading;
 
-  // Can proceed if: not fail without valid media combo AND not empty numeric field AND not reading without photo AND not uploading
-  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty && !isReadingWithoutPhoto && !isUploading;
+  // Urgency is mandatory for answered questions
+  const needsUrgency = !!currentAnswer?.answer_value && currentAnswer?.urgency_level === undefined;
+
+  // Can proceed if: not fail without valid media combo AND not empty numeric field AND not reading without photo AND not uploading AND urgency is set
+  const canProceedToNext = !isFailWithoutMedia && !isNumericFieldEmpty && !isReadingWithoutPhoto && !isUploading && !needsUrgency;
 
   // Get expected result and action if fail
   const expectedResult = isArabic
@@ -1560,7 +1618,7 @@ export default function InspectionWizardScreen() {
                 { level: 2, label: t('inspection.urgencyAttention', 'Attention'), color: '#FF5722', bgColor: '#FBE9E7' },
                 { level: 3, label: t('inspection.urgencyCritical', 'Critical'), color: '#F44336', bgColor: '#FFEBEE' },
               ] as const).map(({ level, label, color, bgColor }) => {
-                const isActive = (currentAnswer?.urgency_level ?? 0) === level;
+                const isActive = currentAnswer?.urgency_level === level;
                 return (
                   <TouchableOpacity
                     key={level}
@@ -1689,6 +1747,7 @@ export default function InspectionWizardScreen() {
 
             {/* Voice note Row */}
             <VoiceNoteRecorder
+              key={`voice-${currentItem.id}`}
               onVoiceNoteRecorded={handleVoiceNoteRecorded}
               onVoiceNoteDeleted={handleVoiceNoteDeleted}
               existingVoiceUrl={currentAnswer?.voice_note_url}
@@ -1741,6 +1800,15 @@ export default function InspectionWizardScreen() {
         <View style={styles.requiredMediaWarning}>
           <Text style={styles.requiredMediaWarningText}>
             📸 {t('inspection.reading_photo_required', 'Photo required to verify meter reading')}
+          </Text>
+        </View>
+      )}
+
+      {/* Warning if urgency not selected */}
+      {needsUrgency && (
+        <View style={styles.requiredMediaWarning}>
+          <Text style={styles.requiredMediaWarningText}>
+            ⚠️ {t('inspection.urgency_required', 'Select an urgency level before proceeding')}
           </Text>
         </View>
       )}
