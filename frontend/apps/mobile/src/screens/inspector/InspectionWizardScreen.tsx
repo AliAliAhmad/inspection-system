@@ -1027,7 +1027,7 @@ export default function InspectionWizardScreen() {
   }, [id, inspectionId, queryClient, t, answerMutation]);
 
   // Handle voice note
-  const handleVoiceNoteRecorded = useCallback((voiceNoteId: number, transcription?: { en: string; ar: string }) => {
+  const handleVoiceNoteRecorded = useCallback((voiceNoteId: number, transcription?: { en: string; ar: string }, voiceUrl?: string) => {
     if (!currentItem) return;
 
     setLocalAnswers((prev) => ({
@@ -1035,6 +1035,7 @@ export default function InspectionWizardScreen() {
       [currentItem.id]: {
         ...prev[currentItem.id],
         voice_note_id: voiceNoteId,
+        voice_note_url: voiceUrl,
         voice_transcription: transcription,
       },
     }));
@@ -1104,7 +1105,7 @@ export default function InspectionWizardScreen() {
   }, [currentItem]);
 
   // Handle video recorded
-  const handleVideoRecorded = useCallback((videoFileId: number, aiAnalysis?: { en: string; ar: string }) => {
+  const handleVideoRecorded = useCallback((videoFileId: number, aiAnalysis?: { en: string; ar: string }, videoUrl?: string) => {
     if (!currentItem) return;
 
     setLocalAnswers((prev) => ({
@@ -1112,6 +1113,7 @@ export default function InspectionWizardScreen() {
       [currentItem.id]: {
         ...prev[currentItem.id],
         video_file_id: videoFileId,
+        video_url: videoUrl,
         video_ai_analysis: aiAnalysis,
       },
     }));

@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { getApiClient } from '@inspection/shared';
 
 interface VideoRecorderProps {
-  onVideoRecorded: (videoFileId: number, aiAnalysis?: { en: string; ar: string }) => void;
+  onVideoRecorded: (videoFileId: number, aiAnalysis?: { en: string; ar: string }, videoUrl?: string) => void;
   onVideoDeleted?: () => void;
   existingVideoUrl?: string | null;
   disabled?: boolean;
@@ -180,7 +180,7 @@ export default function VideoRecorder({
 
       if (fileId) {
         setCloudinaryUrl(fileUrl || null);
-        onVideoRecorded(fileId, aiAnalysis);
+        onVideoRecorded(fileId, aiAnalysis, fileUrl || undefined);
       }
     } catch (err: any) {
       console.error('Failed to upload video:', err);
@@ -312,10 +312,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 1,
+    boxShadow: '0px 1px 1px rgba(0, 0, 0, 0.15)',
   },
   buttonDisabled: {
     opacity: 0.5,

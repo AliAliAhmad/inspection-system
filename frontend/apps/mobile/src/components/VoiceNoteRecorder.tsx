@@ -26,7 +26,7 @@ export function stopAllVoicePlayback() {
 }
 
 interface VoiceNoteRecorderProps {
-  onVoiceNoteRecorded: (voiceNoteId: number, transcription?: { en: string; ar: string }) => void;
+  onVoiceNoteRecorded: (voiceNoteId: number, transcription?: { en: string; ar: string }, voiceUrl?: string) => void;
   onVoiceNoteDeleted?: () => void;
   existingVoiceUrl?: string | null;
   existingTranscription?: { en: string; ar: string } | null;
@@ -218,10 +218,11 @@ export default function VoiceNoteRecorder({
       });
 
       if (result?.audio_file?.id) {
-        setCloudinaryUrl(result.audio_file.url || null);
+        const voiceUrl = result.audio_file.url || null;
+        setCloudinaryUrl(voiceUrl);
         const trans = { en: result.en || '', ar: result.ar || '' };
         setTranscription(trans);
-        onVoiceNoteRecorded(result.audio_file.id, trans);
+        onVoiceNoteRecorded(result.audio_file.id, trans, voiceUrl || undefined);
       } else if (result?.transcription_failed) {
         // Audio saved but transcription failed
         Alert.alert('Note', 'Voice note saved. Transcription may not be available.');
