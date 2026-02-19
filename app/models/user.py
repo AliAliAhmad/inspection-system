@@ -63,6 +63,9 @@ class User(db.Model):
     annual_leave_balance = db.Column(db.Integer, default=24, nullable=False)
     leave_coverage_for = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
+    # Push Notifications
+    expo_push_token = db.Column(db.String(255), nullable=True)
+
     # Status
     is_active = db.Column(db.Boolean, default=True)
 

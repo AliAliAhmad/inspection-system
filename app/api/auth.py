@@ -111,6 +111,80 @@ def logout():
     return jsonify({'status': 'success', 'message': 'Logged out'}), 200
 
 
+@bp.route('/push-token', methods=['POST'])
+@jwt_required()
+def register_push_token():
+    """
+    Register or update Expo push token for the current user.
+    Called by the mobile app after login to enable push notifications.
+
+    Request Body:
+        {
+            "token": "ExponentPushToken[xxxxxx]"
+        }
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Push token registered"
+        }
+    """
+    from app.models import User
+    from app.extensions import db, safe_commit
+
+    data = request.get_json()
+    if not data or not data.get('token'):
+        raise ValidationError("Push token is required")
+
+    token = data['token']
+
+    # Validate it looks like an Expo push token
+    if not token.startswith('ExponentPushToken[') and not token.startswith('ExpoPushToken['):
+        raise ValidationError("Invalid Expo push token format")
+
+    current_user_id = int(get_jwt_identity())
+    user = db.session.get(User, current_user_id)
+
+    if not user:
+        raise ValidationError("User not found")
+
+    user.expo_push_token = token
+    safe_commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Push token registered'
+    }), 200
+
+
+@bp.route('/push-token', methods=['DELETE'])
+@jwt_required()
+def remove_push_token():
+    """
+    Remove Expo push token for the current user (e.g. on logout).
+
+    Returns:
+        {
+            "status": "success",
+            "message": "Push token removed"
+        }
+    """
+    from app.models import User
+    from app.extensions import db, safe_commit
+
+    current_user_id = int(get_jwt_identity())
+    user = db.session.get(User, current_user_id)
+
+    if user:
+        user.expo_push_token = None
+        safe_commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Push token removed'
+    }), 200
+
+
 @bp.route('/change-password', methods=['POST'])
 @jwt_required()
 def change_password():

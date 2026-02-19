@@ -6,6 +6,8 @@ Supports WebSocket events and rule-based processing.
 
 import logging
 import json
+import requests
+import threading
 from app.models import Notification, User
 from app.extensions import db
 from app.exceptions.api_exceptions import NotFoundError, ForbiddenError, ValidationError
@@ -36,6 +38,77 @@ def set_socketio(socketio):
     """Set the SocketIO instance for emitting events."""
     global _socketio
     _socketio = socketio
+
+
+def _send_expo_push_notification(token, title, body, data=None):
+    """
+    Send a push notification via the Expo Push API.
+    Runs in a separate thread to avoid blocking the main request.
+
+    Args:
+        token: Expo push token (ExponentPushToken[xxx])
+        title: Notification title
+        body: Notification body/message
+        data: Optional extra data payload
+    """
+    def _send():
+        try:
+            response = requests.post(
+                'https://exp.host/--/api/v2/push/send',
+                json={
+                    'to': token,
+                    'title': title,
+                    'body': body,
+                    'data': data or {},
+                    'sound': 'default',
+                    'badge': 1,
+                },
+                headers={
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                timeout=10,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "Expo push API returned status %s for token %s: %s",
+                    response.status_code, token[:30], response.text[:200]
+                )
+            else:
+                result = response.json()
+                if result.get('data', {}).get('status') == 'error':
+                    logger.warning(
+                        "Expo push error for token %s: %s",
+                        token[:30], result['data'].get('message', 'Unknown error')
+                    )
+                else:
+                    logger.debug("Expo push sent successfully to %s", token[:30])
+        except Exception as e:
+            logger.error("Failed to send Expo push notification: %s", str(e))
+
+    thread = threading.Thread(target=_send, daemon=True)
+    thread.start()
+
+
+def _send_expo_push_for_user(user_id, title, body, data=None):
+    """
+    Look up the user's Expo push token and send a push notification.
+    Non-blocking: failures are logged but don't raise exceptions.
+
+    Args:
+        user_id: User ID to send push to
+        title: Notification title
+        body: Notification body/message
+        data: Optional extra data payload
+    """
+    try:
+        user = db.session.get(User, int(user_id))
+        if user and user.expo_push_token:
+            _send_expo_push_notification(user.expo_push_token, title, body, data)
+        else:
+            logger.debug("No Expo push token for user %s, skipping push", user_id)
+    except Exception as e:
+        logger.error("Error looking up push token for user %s: %s", user_id, str(e))
 
 
 class NotificationService:
@@ -130,6 +203,18 @@ class NotificationService:
         # Emit WebSocket event
         NotificationService._emit_notification(notification)
 
+        # Send Expo push notification (non-blocking)
+        try:
+            push_data = {
+                'notification_id': notification.id,
+                'type': type,
+                'related_type': related_type,
+                'related_id': related_id,
+            }
+            _send_expo_push_for_user(user_id, title, message, push_data)
+        except Exception as e:
+            logger.error("Failed to trigger Expo push for user %s: %s", user_id, str(e))
+
         # Auto-escalate if rules dictate
         if should_escalate:
             NotificationService._auto_escalate(notification)
@@ -203,9 +288,20 @@ class NotificationService:
         db.session.commit()
         logger.info("Bulk notifications sent: type=%s recipient_count=%s", type, len(notifications))
 
-        # Emit WebSocket events
+        # Emit WebSocket events and send Expo push notifications
         for n in notifications:
             NotificationService._emit_notification(n)
+            # Send Expo push notification (non-blocking)
+            try:
+                push_data = {
+                    'notification_id': n.id,
+                    'type': type,
+                    'related_type': kwargs.get('related_type'),
+                    'related_id': kwargs.get('related_id'),
+                }
+                _send_expo_push_for_user(n.user_id, title, message, push_data)
+            except Exception as e:
+                logger.error("Failed to trigger Expo push for user %s: %s", n.user_id, str(e))
 
         return notifications
 

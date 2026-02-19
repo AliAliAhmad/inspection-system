@@ -4,6 +4,7 @@ import { navigationRef } from './navigation/navigationRef';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
 import { LanguageProvider } from './providers/LanguageProvider';
 import { OfflineProvider } from './providers/OfflineProvider';
@@ -20,6 +21,15 @@ import LoginScreen from './screens/auth/LoginScreen';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { ActivityIndicator, View, StyleSheet, Text, TextInput } from 'react-native';
 import { useTheme } from './hooks/useTheme';
+
+// Configure how notifications are handled when the app is in the foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 // ─── Global font defaults ────────────────────────────────────
 if (!(Text as any).defaultProps) (Text as any).defaultProps = {};

@@ -84,6 +84,7 @@
 | 2026-02-18 | Item 8: 2nd inspector media prefill — colleague answers now include photo/video/voice/AI analysis, added batch-save effect for prefilled answers | ✅ Done |
 | 2026-02-18 | Added missing i18n keys to en.json and ar.json — job_execution, profile, assessment, assignments, checklist, notifications sections | ✅ Done |
 | 2026-02-18 | Simplified CreateHandoverScreen — replaced 3 complex sections (12+ fields) with unified type-tagged item list | ✅ Done |
+| 2026-02-19 | Added notification bell icon with unread badge to mobile dashboard header — auto-refreshes every 30s, navigates to Notifications screen | ✅ Done |
 | 2026-02-18 | Fixed LiveAlertBanner phone overlap — added SafeAreaView insets padding so banner sits below status bar | ✅ Done |
 | 2026-02-18 | Fixed LiveAlertBanner Arabic detection — switched from I18nManager.isRTL to useTranslation i18n.language | ✅ Done |
 | 2026-02-18 | Item 9: Fixed AssessmentScreen verdict display (equipment name, system verdict fallback, comparison card when both inspectors submit) | ✅ Done |
@@ -237,6 +238,7 @@
 | 2026-02-18 | Created CreateChannelScreen (mobile): admin/engineer only, 3 channel types (Group/Announcement/Shift), member selection, registered in navigator | ✅ Done |
 | 2026-02-18 | Created UnplannedJob backend: model + API (POST/GET/GET-by-id) + migration + blueprint registration + engineer/admin notifications | ✅ Done |
 | 2026-02-18 | Updated SmartFAB to pass userRole to useFABContext for role-based FAB actions | ✅ Done |
+| 2026-02-19 | Expo push notifications: User model expo_push_token, POST/DELETE /api/auth/push-token endpoints, notification_service sends Expo pushes (threaded), migration, mobile AuthProvider registers + sends token, App.tsx foreground handler, shared API methods | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -308,6 +310,7 @@
 | Unplanned Job backend API | ✅ Done | POST/GET/GET-by-id, model, migration, notifications to admin/engineer |
 | Voice recording for verdict reason | ✅ Done | VoiceNoteRecorder replaces VoiceTextInput for monitor/stop reasons, voice URL stored in backend |
 | 2nd inspector media prefill | ✅ Done | Colleague answers now prefill photo/video/voice/AI analysis + batch-save to server |
+| Expo push notifications | ✅ Done | Token registration on login/launch, Expo Push API via notification_service, foreground handler, logout cleanup |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

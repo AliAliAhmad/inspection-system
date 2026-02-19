@@ -17,4 +17,12 @@ export const authApi = {
   logout() {
     return getApiClient().post<ApiResponse>('/api/auth/logout');
   },
+
+  registerPushToken(token: string) {
+    return getApiClient().post<ApiResponse>('/api/auth/push-token', { token });
+  },
+
+  removePushToken() {
+    return getApiClient().delete<ApiResponse>('/api/auth/push-token');
+  },
 };

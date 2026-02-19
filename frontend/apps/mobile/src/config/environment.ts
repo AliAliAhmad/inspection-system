@@ -8,8 +8,9 @@ interface Environment {
 
 const ENV: Record<string, Environment> = {
   development: {
-    // Android emulator uses 10.0.2.2 to reach host localhost
-    apiUrl: 'http://10.0.2.2:5000',
+    // Use production API for dev testing (real data with hot reload)
+    // Switch to 'http://10.0.2.2:5000' for local Flask testing
+    apiUrl: 'https://inspection-api-o3hz.onrender.com',
     appName: 'Inspection System (Dev)',
     isDev: true,
   },

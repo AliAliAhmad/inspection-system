@@ -11,6 +11,7 @@ import {
   inspectionAssignmentsApi,
   MyAssignmentStats,
   shiftHandoverApi,
+  notificationsApi,
 } from '@inspection/shared';
 import { useTheme } from '../../hooks/useTheme';
 import { StreakIndicator } from '../../components/gamification/StreakIndicator';
@@ -298,7 +299,7 @@ function StartNextInspectionCard({ colors, navigation, isAr }: { colors: any; na
     <TouchableOpacity
       style={[s.nextInspectionCard, { backgroundColor: '#1565C0' }]}
       activeOpacity={0.85}
-      onPress={() => navigation.navigate('InspectionChecklist', { id: nextAssignment.id })}
+      onPress={() => navigation.navigate('InspectionWizard', { id: nextAssignment.id })}
     >
       <View style={s.nextInspectionContent}>
         <View style={s.nextInspectionIconContainer}>
@@ -354,6 +355,15 @@ export default function DashboardScreen() {
     staleTime: 60000,
   });
 
+  // Unread notification count — auto-refresh every 30 seconds
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications-unread-count'],
+    queryFn: () => notificationsApi.getUnreadCount().then(r => (r.data as any)?.count ?? (r.data as any)?.data?.count ?? 0),
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+  const unreadCount: number = typeof unreadData === 'number' ? unreadData : 0;
+
   const loading = isAdminOrEngineer ? adminLoading : dashLoading;
   const refetch = () => {
     if (isAdminOrEngineer) adminRefetch();
@@ -386,6 +396,20 @@ export default function DashboardScreen() {
               </View>
             </View>
           </View>
+          <TouchableOpacity
+            style={s.bellContainer}
+            onPress={() => navigation.navigate('Notifications')}
+            activeOpacity={0.7}
+          >
+            <Text style={s.bellIcon}>{'\u{1F514}'}</Text>
+            {unreadCount > 0 && (
+              <View style={s.bellBadge}>
+                <Text style={s.bellBadgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <StreakIndicator
             currentStreak={user?.total_points ? Math.min(Math.floor(user.total_points / 10), 30) : 0}
             size="compact"
@@ -505,6 +529,38 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14,
   },
   starText: { fontSize: 23, fontWeight: '800', color: '#fff' },
+
+  // Notification bell
+  bellContainer: {
+    position: 'relative',
+    marginRight: 12,
+    padding: 4,
+  },
+  bellIcon: {
+    fontSize: 24,
+    color: '#fff',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#E53935',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  bellBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
   sectionTitle: { fontSize: 18, fontWeight: '700', marginTop: 20, marginBottom: 10 },
 
   // Quick Actions grid
