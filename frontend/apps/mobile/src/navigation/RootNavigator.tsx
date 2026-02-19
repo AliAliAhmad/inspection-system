@@ -99,6 +99,9 @@ import QuickFieldReportScreen from '../screens/inspector/QuickFieldReportScreen'
 // Quick Voice Message
 import QuickVoiceMessageScreen from '../screens/communication/QuickVoiceMessageScreen';
 
+// Notifications
+import NotificationsScreen from '../screens/shared/NotificationsScreen';
+
 // Notification Preferences
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 
@@ -182,6 +185,8 @@ export type RootStackParamList = {
   UnplannedJob: undefined;
   // Create Channel (admin/engineer)
   CreateChannel: undefined;
+  // Notifications
+  Notifications: undefined;
   // Notification Preferences
   NotificationPreferences: undefined;
   // Inspection Detail (read-only)
@@ -267,6 +272,8 @@ export default function RootNavigator() {
         <Stack.Screen name="UnplannedJob" component={UnplannedJobScreen} options={{ headerShown: false, title: 'Unplanned Job' }} />
         {/* Create Channel (admin/engineer) */}
         <Stack.Screen name="CreateChannel" component={CreateChannelScreen} options={{ headerShown: false, title: 'Create Channel' }} />
+        {/* Notifications */}
+        <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false, title: 'Notifications' }} />
         {/* Notification Preferences */}
         <Stack.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} options={{ headerShown: false, title: 'Notification Preferences' }} />
         {/* Inspection Detail (read-only full details with media) */}
