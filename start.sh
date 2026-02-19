@@ -1219,6 +1219,1320 @@ with app.app_context():
         db.session.rollback()
         print('job_review_marks table already exists')
 
+    # ========== NOTIFICATION SYSTEM (7 tables) ==========
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS notification_groups (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                group_key VARCHAR(200) NOT NULL,
+                group_type VARCHAR(50) NOT NULL,
+                notification_ids JSON,
+                summary_title VARCHAR(500) NOT NULL,
+                summary_title_ar VARCHAR(500),
+                summary_message TEXT,
+                summary_message_ar TEXT,
+                is_expanded BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created notification_groups table')
+    except Exception:
+        db.session.rollback()
+        print('notification_groups table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                notification_type VARCHAR(100) NOT NULL,
+                channels JSON,
+                is_enabled BOOLEAN DEFAULT TRUE,
+                sound_type VARCHAR(20) DEFAULT 'default',
+                do_not_disturb_start TIME,
+                do_not_disturb_end TIME,
+                digest_mode VARCHAR(20) DEFAULT 'instant',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, notification_type)
+            )
+        '''))
+        db.session.commit()
+        print('Created notification_preferences table')
+    except Exception:
+        db.session.rollback()
+        print('notification_preferences table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS notification_schedules (
+                id SERIAL PRIMARY KEY,
+                notification_id INTEGER NOT NULL REFERENCES notifications(id),
+                scheduled_for TIMESTAMP,
+                snooze_until TIMESTAMP,
+                is_delivered BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created notification_schedules table')
+    except Exception:
+        db.session.rollback()
+        print('notification_schedules table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS notification_escalations (
+                id SERIAL PRIMARY KEY,
+                notification_id INTEGER NOT NULL REFERENCES notifications(id),
+                escalation_level INTEGER DEFAULT 1,
+                escalated_to_user_id INTEGER NOT NULL REFERENCES users(id),
+                escalated_at TIMESTAMP DEFAULT NOW(),
+                acknowledged_at TIMESTAMP,
+                escalation_reason VARCHAR(50)
+            )
+        '''))
+        db.session.commit()
+        print('Created notification_escalations table')
+    except Exception:
+        db.session.rollback()
+        print('notification_escalations table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS notification_rules (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                name_ar VARCHAR(200),
+                trigger_type VARCHAR(50) NOT NULL,
+                trigger_config JSON,
+                action_config JSON,
+                target_users JSON,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created notification_rules table')
+    except Exception:
+        db.session.rollback()
+        print('notification_rules table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS notification_analytics (
+                id SERIAL PRIMARY KEY,
+                notification_id INTEGER NOT NULL REFERENCES notifications(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                delivered_at TIMESTAMP DEFAULT NOW(),
+                read_at TIMESTAMP,
+                clicked_at TIMESTAMP,
+                action_taken VARCHAR(50),
+                action_taken_at TIMESTAMP,
+                response_time_seconds INTEGER,
+                channel VARCHAR(20)
+            )
+        '''))
+        db.session.commit()
+        print('Created notification_analytics table')
+    except Exception:
+        db.session.rollback()
+        print('notification_analytics table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS notification_templates (
+                id SERIAL PRIMARY KEY,
+                notification_type VARCHAR(100) UNIQUE NOT NULL,
+                title_template VARCHAR(500) NOT NULL,
+                title_template_ar VARCHAR(500),
+                message_template TEXT NOT NULL,
+                message_template_ar TEXT,
+                default_priority VARCHAR(20) DEFAULT 'info',
+                default_channels JSON,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created notification_templates table')
+    except Exception:
+        db.session.rollback()
+        print('notification_templates table already exists')
+
+    # ========== GAMIFICATION (8 tables) ==========
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS achievements (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(50) UNIQUE NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                name_ar VARCHAR(100),
+                description TEXT,
+                description_ar TEXT,
+                icon VARCHAR(50),
+                category VARCHAR(50),
+                points_reward INTEGER DEFAULT 0,
+                criteria_type VARCHAR(50),
+                criteria_target INTEGER,
+                criteria_field VARCHAR(100),
+                tier VARCHAR(20) DEFAULT 'bronze',
+                is_active BOOLEAN DEFAULT TRUE,
+                is_hidden BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created achievements table')
+    except Exception:
+        db.session.rollback()
+        print('achievements table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS user_achievements (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                achievement_id INTEGER NOT NULL REFERENCES achievements(id),
+                earned_at TIMESTAMP DEFAULT NOW(),
+                progress INTEGER DEFAULT 0,
+                is_notified BOOLEAN DEFAULT FALSE,
+                UNIQUE(user_id, achievement_id)
+            )
+        '''))
+        db.session.commit()
+        print('Created user_achievements table')
+    except Exception:
+        db.session.rollback()
+        print('user_achievements table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS user_streaks (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+                current_streak INTEGER DEFAULT 0,
+                longest_streak INTEGER DEFAULT 0,
+                last_activity_date DATE,
+                streak_start_date DATE,
+                total_active_days INTEGER DEFAULT 0
+            )
+        '''))
+        db.session.commit()
+        print('Created user_streaks table')
+    except Exception:
+        db.session.rollback()
+        print('user_streaks table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS challenges (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(50) UNIQUE NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                name_ar VARCHAR(100),
+                description TEXT,
+                description_ar TEXT,
+                challenge_type VARCHAR(20),
+                target_type VARCHAR(50),
+                target_value INTEGER NOT NULL,
+                points_reward INTEGER DEFAULT 100,
+                start_date DATE NOT NULL,
+                end_date DATE NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW(),
+                eligible_roles JSON
+            )
+        '''))
+        db.session.commit()
+        print('Created challenges table')
+    except Exception:
+        db.session.rollback()
+        print('challenges table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS user_challenges (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                challenge_id INTEGER NOT NULL REFERENCES challenges(id),
+                progress INTEGER DEFAULT 0,
+                is_completed BOOLEAN DEFAULT FALSE,
+                completed_at TIMESTAMP,
+                joined_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, challenge_id)
+            )
+        '''))
+        db.session.commit()
+        print('Created user_challenges table')
+    except Exception:
+        db.session.rollback()
+        print('user_challenges table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS user_levels (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+                level INTEGER DEFAULT 1,
+                current_xp INTEGER DEFAULT 0,
+                total_xp INTEGER DEFAULT 0,
+                tier VARCHAR(20) DEFAULT 'bronze',
+                total_points INTEGER DEFAULT 0,
+                inspections_count INTEGER DEFAULT 0,
+                jobs_count INTEGER DEFAULT 0,
+                defects_found INTEGER DEFAULT 0,
+                avg_rating FLOAT DEFAULT 0.0,
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created user_levels table')
+    except Exception:
+        db.session.rollback()
+        print('user_levels table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS point_history (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                points INTEGER NOT NULL,
+                reason VARCHAR(100) NOT NULL,
+                reason_ar VARCHAR(100),
+                source_type VARCHAR(50),
+                source_id INTEGER,
+                multiplier FLOAT DEFAULT 1.0,
+                base_points INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created point_history table')
+    except Exception:
+        db.session.rollback()
+        print('point_history table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS performance_goals (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                goal_type VARCHAR(50) NOT NULL,
+                target_value FLOAT NOT NULL,
+                current_value FLOAT DEFAULT 0,
+                start_date DATE NOT NULL,
+                end_date DATE NOT NULL,
+                status VARCHAR(20) DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                completed_at TIMESTAMP
+            )
+        '''))
+        db.session.commit()
+        print('Created performance_goals table')
+    except Exception:
+        db.session.rollback()
+        print('performance_goals table already exists')
+
+    # ========== LEAVE MANAGEMENT ENHANCEMENT (8 tables) ==========
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS leave_types (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(20) UNIQUE NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                name_ar VARCHAR(100),
+                description TEXT,
+                color VARCHAR(7) DEFAULT '#1976D2',
+                icon VARCHAR(50),
+                requires_certificate BOOLEAN DEFAULT FALSE,
+                certificate_after_days INTEGER DEFAULT 3,
+                max_consecutive_days INTEGER,
+                max_per_year INTEGER,
+                advance_notice_days INTEGER DEFAULT 0,
+                is_paid BOOLEAN DEFAULT TRUE,
+                is_active BOOLEAN DEFAULT TRUE,
+                is_system BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created leave_types table')
+    except Exception:
+        db.session.rollback()
+        print('leave_types table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS leave_policies (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                role VARCHAR(50),
+                min_tenure_months INTEGER DEFAULT 0,
+                annual_allowance INTEGER DEFAULT 24,
+                sick_allowance INTEGER DEFAULT 15,
+                emergency_allowance INTEGER DEFAULT 5,
+                carry_over_enabled BOOLEAN DEFAULT FALSE,
+                carry_over_max_days INTEGER DEFAULT 5,
+                carry_over_expiry_months INTEGER DEFAULT 3,
+                probation_months INTEGER DEFAULT 3,
+                probation_allowance INTEGER DEFAULT 0,
+                accrual_type VARCHAR(20) DEFAULT 'yearly',
+                accrual_rate FLOAT,
+                negative_balance_allowed BOOLEAN DEFAULT FALSE,
+                negative_balance_max INTEGER DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created leave_policies table')
+    except Exception:
+        db.session.rollback()
+        print('leave_policies table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS leave_calendar (
+                id SERIAL PRIMARY KEY,
+                date DATE UNIQUE NOT NULL,
+                year INTEGER NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                name_ar VARCHAR(100),
+                holiday_type VARCHAR(30),
+                is_working_day BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created leave_calendar table')
+    except Exception:
+        db.session.rollback()
+        print('leave_calendar table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS leave_blackouts (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                name_ar VARCHAR(100),
+                date_from DATE NOT NULL,
+                date_to DATE NOT NULL,
+                reason TEXT,
+                applies_to_roles JSON,
+                exception_user_ids JSON,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created leave_blackouts table')
+    except Exception:
+        db.session.rollback()
+        print('leave_blackouts table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS leave_balance_history (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                leave_type_id INTEGER REFERENCES leave_types(id),
+                change_type VARCHAR(30) NOT NULL,
+                amount FLOAT NOT NULL,
+                balance_before FLOAT,
+                balance_after FLOAT,
+                leave_id INTEGER REFERENCES leaves(id),
+                reason TEXT,
+                adjusted_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created leave_balance_history table')
+    except Exception:
+        db.session.rollback()
+        print('leave_balance_history table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS leave_approval_levels (
+                id SERIAL PRIMARY KEY,
+                leave_id INTEGER NOT NULL REFERENCES leaves(id),
+                level INTEGER NOT NULL,
+                approver_role VARCHAR(50),
+                approver_id INTEGER REFERENCES users(id),
+                status VARCHAR(20) DEFAULT 'pending',
+                decision_at TIMESTAMP,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(leave_id, level)
+            )
+        '''))
+        db.session.commit()
+        print('Created leave_approval_levels table')
+    except Exception:
+        db.session.rollback()
+        print('leave_approval_levels table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS compensatory_leaves (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                work_date DATE NOT NULL,
+                hours_worked FLOAT NOT NULL,
+                comp_days_earned FLOAT NOT NULL,
+                reason TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                approved_by_id INTEGER REFERENCES users(id),
+                approved_at TIMESTAMP,
+                used_in_leave_id INTEGER REFERENCES leaves(id),
+                expires_at DATE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created compensatory_leaves table')
+    except Exception:
+        db.session.rollback()
+        print('compensatory_leaves table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS leave_encashments (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                leave_type_id INTEGER REFERENCES leave_types(id),
+                days_encashed FLOAT NOT NULL,
+                amount_per_day FLOAT,
+                total_amount FLOAT,
+                status VARCHAR(20) DEFAULT 'pending',
+                requested_at TIMESTAMP DEFAULT NOW(),
+                approved_by_id INTEGER REFERENCES users(id),
+                approved_at TIMESTAMP,
+                paid_at TIMESTAMP,
+                notes TEXT
+            )
+        '''))
+        db.session.commit()
+        print('Created leave_encashments table')
+    except Exception:
+        db.session.rollback()
+        print('leave_encashments table already exists')
+
+    # ========== WORK PLAN TRACKING (8 tables) ==========
+    # daily_reviews must be created before job_ratings (FK dependency)
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_daily_reviews (
+                id SERIAL PRIMARY KEY,
+                engineer_id INTEGER NOT NULL REFERENCES users(id),
+                date DATE NOT NULL,
+                shift_type VARCHAR(10) NOT NULL,
+                status VARCHAR(20) DEFAULT 'open',
+                opened_at TIMESTAMP,
+                submitted_at TIMESTAMP,
+                last_saved_at TIMESTAMP,
+                total_jobs INTEGER DEFAULT 0,
+                approved_jobs INTEGER DEFAULT 0,
+                incomplete_jobs INTEGER DEFAULT 0,
+                not_started_jobs INTEGER DEFAULT 0,
+                carry_over_jobs INTEGER DEFAULT 0,
+                total_pause_requests INTEGER DEFAULT 0,
+                resolved_pause_requests INTEGER DEFAULT 0,
+                materials_reviewed BOOLEAN DEFAULT FALSE,
+                notes TEXT,
+                reminders_sent INTEGER DEFAULT 0,
+                last_reminder_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(engineer_id, date, shift_type)
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_daily_reviews table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_daily_reviews table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_job_trackings (
+                id SERIAL PRIMARY KEY,
+                work_plan_job_id INTEGER NOT NULL UNIQUE REFERENCES work_plan_jobs(id),
+                status VARCHAR(30) DEFAULT 'pending',
+                shift_type VARCHAR(10) DEFAULT 'day',
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                paused_at TIMESTAMP,
+                total_paused_minutes INTEGER DEFAULT 0,
+                actual_hours NUMERIC(5,2),
+                is_carry_over BOOLEAN DEFAULT FALSE,
+                original_job_id INTEGER REFERENCES work_plan_jobs(id),
+                carry_over_count INTEGER DEFAULT 0,
+                completion_photo_id INTEGER REFERENCES files(id),
+                work_notes TEXT,
+                handover_voice_file_id INTEGER REFERENCES files(id),
+                handover_transcription TEXT,
+                engineer_handover_voice_file_id INTEGER REFERENCES files(id),
+                engineer_handover_transcription TEXT,
+                incomplete_reason_category VARCHAR(30),
+                incomplete_reason_details TEXT,
+                auto_flagged BOOLEAN DEFAULT FALSE,
+                auto_flagged_at TIMESTAMP,
+                auto_flag_type VARCHAR(30),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_job_trackings table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_job_trackings table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_job_logs (
+                id SERIAL PRIMARY KEY,
+                work_plan_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                event_type VARCHAR(30) NOT NULL,
+                event_data JSON,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_job_logs table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_job_logs table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_pause_requests (
+                id SERIAL PRIMARY KEY,
+                work_plan_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                requested_by_id INTEGER NOT NULL REFERENCES users(id),
+                requested_at TIMESTAMP DEFAULT NOW(),
+                reason_category VARCHAR(30) NOT NULL,
+                reason_details TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                reviewed_by_id INTEGER REFERENCES users(id),
+                reviewed_at TIMESTAMP,
+                review_notes TEXT,
+                resumed_at TIMESTAMP,
+                duration_minutes INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_pause_requests table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_pause_requests table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_job_ratings (
+                id SERIAL PRIMARY KEY,
+                work_plan_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                is_lead BOOLEAN DEFAULT FALSE,
+                time_rating NUMERIC(3,1),
+                time_rating_override NUMERIC(3,1),
+                time_rating_override_reason TEXT,
+                time_rating_override_by_id INTEGER REFERENCES users(id),
+                time_rating_override_approved BOOLEAN,
+                time_rating_override_approved_by_id INTEGER REFERENCES users(id),
+                time_rating_override_approved_at TIMESTAMP,
+                qc_rating NUMERIC(3,1),
+                qc_reason TEXT,
+                qc_voice_file_id INTEGER REFERENCES files(id),
+                cleaning_rating INTEGER,
+                admin_bonus INTEGER DEFAULT 0,
+                admin_bonus_by_id INTEGER REFERENCES users(id),
+                admin_bonus_notes TEXT,
+                points_earned INTEGER DEFAULT 0,
+                is_disputed BOOLEAN DEFAULT FALSE,
+                dispute_reason TEXT,
+                dispute_filed_at TIMESTAMP,
+                dispute_resolved BOOLEAN,
+                dispute_resolved_by_id INTEGER REFERENCES users(id),
+                dispute_resolved_at TIMESTAMP,
+                dispute_resolution TEXT,
+                rated_by_id INTEGER REFERENCES users(id),
+                rated_at TIMESTAMP,
+                daily_review_id INTEGER REFERENCES work_plan_daily_reviews(id),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(work_plan_job_id, user_id)
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_job_ratings table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_job_ratings table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_carry_overs (
+                id SERIAL PRIMARY KEY,
+                original_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                new_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                reason_category VARCHAR(30) NOT NULL,
+                reason_details TEXT,
+                worker_voice_file_id INTEGER REFERENCES files(id),
+                worker_transcription TEXT,
+                engineer_voice_file_id INTEGER REFERENCES files(id),
+                engineer_transcription TEXT,
+                hours_spent_original NUMERIC(5,2),
+                carried_over_by_id INTEGER NOT NULL REFERENCES users(id),
+                carried_over_at TIMESTAMP DEFAULT NOW(),
+                daily_review_id INTEGER REFERENCES work_plan_daily_reviews(id),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_carry_overs table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_carry_overs table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_performances (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                period_type VARCHAR(10) NOT NULL,
+                period_start DATE NOT NULL,
+                period_end DATE NOT NULL,
+                total_jobs_assigned INTEGER DEFAULT 0,
+                total_jobs_completed INTEGER DEFAULT 0,
+                total_jobs_incomplete INTEGER DEFAULT 0,
+                total_jobs_not_started INTEGER DEFAULT 0,
+                total_jobs_carried_over INTEGER DEFAULT 0,
+                total_estimated_hours NUMERIC(7,2) DEFAULT 0,
+                total_actual_hours NUMERIC(7,2) DEFAULT 0,
+                avg_time_rating NUMERIC(3,1),
+                avg_qc_rating NUMERIC(3,1),
+                avg_cleaning_rating NUMERIC(3,1),
+                completion_rate NUMERIC(5,2) DEFAULT 0,
+                total_points_earned INTEGER DEFAULT 0,
+                current_streak_days INTEGER DEFAULT 0,
+                max_streak_days INTEGER DEFAULT 0,
+                total_pauses INTEGER DEFAULT 0,
+                total_pause_minutes INTEGER DEFAULT 0,
+                late_starts INTEGER DEFAULT 0,
+                materials_planned INTEGER DEFAULT 0,
+                materials_consumed INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, period_type, period_start)
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_performances table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_performances table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_versions (
+                id SERIAL PRIMARY KEY,
+                work_plan_id INTEGER NOT NULL REFERENCES work_plans(id),
+                version_number INTEGER NOT NULL,
+                snapshot_data JSON NOT NULL,
+                change_summary TEXT,
+                change_type VARCHAR(30),
+                created_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(work_plan_id, version_number)
+            )
+        '''))
+        db.session.commit()
+        print('Created work_plan_versions table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_versions table already exists')
+
+    # ========== ENHANCED WORK PLANNING (4 tables) ==========
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS job_templates (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                name_ar VARCHAR(200),
+                job_type VARCHAR(20) NOT NULL,
+                equipment_id INTEGER REFERENCES equipment(id),
+                equipment_type VARCHAR(50),
+                berth VARCHAR(10),
+                estimated_hours FLOAT NOT NULL,
+                priority VARCHAR(20) DEFAULT 'normal',
+                description TEXT,
+                description_ar TEXT,
+                recurrence_type VARCHAR(20),
+                recurrence_day INTEGER,
+                default_team_size INTEGER DEFAULT 1,
+                required_certifications JSON,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created job_templates table')
+    except Exception:
+        db.session.rollback()
+        print('job_templates table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS job_dependencies (
+                id SERIAL PRIMARY KEY,
+                job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                depends_on_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                dependency_type VARCHAR(20) DEFAULT 'finish_to_start',
+                lag_minutes INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(job_id, depends_on_job_id)
+            )
+        '''))
+        db.session.commit()
+        print('Created job_dependencies table')
+    except Exception:
+        db.session.rollback()
+        print('job_dependencies table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS capacity_configs (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                role VARCHAR(50),
+                shift VARCHAR(20),
+                max_hours_per_day FLOAT DEFAULT 8,
+                max_jobs_per_day INTEGER DEFAULT 5,
+                min_rest_hours FLOAT DEFAULT 12,
+                overtime_threshold_hours FLOAT DEFAULT 8,
+                max_overtime_hours FLOAT DEFAULT 4,
+                break_duration_minutes INTEGER DEFAULT 60,
+                break_after_hours FLOAT DEFAULT 4,
+                concurrent_jobs_allowed INTEGER DEFAULT 1,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created capacity_configs table')
+    except Exception:
+        db.session.rollback()
+        print('capacity_configs table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS worker_skills (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                skill_name VARCHAR(100) NOT NULL,
+                skill_level INTEGER DEFAULT 1,
+                certification_name VARCHAR(200),
+                certification_number VARCHAR(100),
+                issued_date DATE,
+                expiry_date DATE,
+                issuing_authority VARCHAR(200),
+                document_file_id INTEGER REFERENCES files(id),
+                is_verified BOOLEAN DEFAULT FALSE,
+                verified_by_id INTEGER REFERENCES users(id),
+                verified_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, skill_name)
+            )
+        '''))
+        db.session.commit()
+        print('Created worker_skills table')
+    except Exception:
+        db.session.rollback()
+        print('worker_skills table already exists')
+
+    # ========== EQUIPMENT ADVANCED (4 tables) ==========
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS equipment_watches (
+                id SERIAL PRIMARY KEY,
+                equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                notify_status_change BOOLEAN DEFAULT TRUE,
+                notify_high_risk BOOLEAN DEFAULT TRUE,
+                notify_anomaly BOOLEAN DEFAULT TRUE,
+                notify_maintenance BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(equipment_id, user_id)
+            )
+        '''))
+        db.session.commit()
+        print('Created equipment_watches table')
+    except Exception:
+        db.session.rollback()
+        print('equipment_watches table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS equipment_notes (
+                id SERIAL PRIMARY KEY,
+                equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                content TEXT NOT NULL,
+                content_ar TEXT,
+                is_pinned BOOLEAN DEFAULT FALSE,
+                note_type VARCHAR(50) DEFAULT 'general',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created equipment_notes table')
+    except Exception:
+        db.session.rollback()
+        print('equipment_notes table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS equipment_certifications (
+                id SERIAL PRIMARY KEY,
+                equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+                name VARCHAR(200) NOT NULL,
+                name_ar VARCHAR(200),
+                description TEXT,
+                certification_type VARCHAR(100),
+                issuing_authority VARCHAR(200),
+                certificate_number VARCHAR(100),
+                issued_date DATE NOT NULL,
+                expiry_date DATE,
+                document_url VARCHAR(500),
+                document_file_id INTEGER REFERENCES files(id),
+                status VARCHAR(30) DEFAULT 'active',
+                created_by_id INTEGER NOT NULL REFERENCES users(id),
+                last_notified_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created equipment_certifications table')
+    except Exception:
+        db.session.rollback()
+        print('equipment_certifications table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS equipment_readings (
+                id SERIAL PRIMARY KEY,
+                equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+                reading_type VARCHAR(10) NOT NULL,
+                reading_value FLOAT,
+                is_faulty BOOLEAN DEFAULT FALSE,
+                reading_date DATE DEFAULT CURRENT_DATE,
+                recorded_at TIMESTAMP DEFAULT NOW(),
+                recorded_by_id INTEGER REFERENCES users(id),
+                inspection_id INTEGER REFERENCES inspections(id),
+                checklist_item_id INTEGER REFERENCES checklist_items(id),
+                photo_file_id INTEGER REFERENCES files(id),
+                ai_analysis JSON
+            )
+        '''))
+        db.session.commit()
+        print('Created equipment_readings table')
+    except Exception:
+        db.session.rollback()
+        print('equipment_readings table already exists')
+
+    # ========== MATERIALS ENHANCEMENT (8 tables) ==========
+    # storage_locations and vendors must come before material_batches
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS storage_locations (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(50) UNIQUE NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                name_ar VARCHAR(100),
+                warehouse VARCHAR(50),
+                zone VARCHAR(50),
+                aisle VARCHAR(20),
+                shelf VARCHAR(20),
+                bin VARCHAR(20),
+                description TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                max_capacity FLOAT,
+                current_usage FLOAT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created storage_locations table')
+    except Exception:
+        db.session.rollback()
+        print('storage_locations table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS vendors (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(50) UNIQUE NOT NULL,
+                name VARCHAR(200) NOT NULL,
+                name_ar VARCHAR(200),
+                contact_person VARCHAR(100),
+                email VARCHAR(100),
+                phone VARCHAR(50),
+                address TEXT,
+                payment_terms VARCHAR(100),
+                lead_time_days INTEGER,
+                rating FLOAT,
+                notes TEXT,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created vendors table')
+    except Exception:
+        db.session.rollback()
+        print('vendors table already exists')
+
+    # Add enhanced columns to materials table
+    materials_extra_cols = [
+        ('barcode', 'VARCHAR(100)'),
+        ('qr_code', 'VARCHAR(100)'),
+        ('default_location_id', 'INTEGER REFERENCES storage_locations(id)'),
+        ('preferred_vendor_id', 'INTEGER REFERENCES vendors(id)'),
+        ('reorder_point', 'FLOAT'),
+        ('reorder_quantity', 'FLOAT'),
+        ('safety_stock', 'FLOAT'),
+        ('last_count_date', 'DATE'),
+        ('last_restock_date', 'DATE'),
+        ('avg_monthly_usage', 'FLOAT'),
+        ('avg_lead_time_days', 'INTEGER'),
+        ('cost_per_unit', 'FLOAT'),
+        ('currency', \"VARCHAR(10) DEFAULT 'USD'\"),
+        ('image_url', 'VARCHAR(500)'),
+    ]
+    for col_name, col_type in materials_extra_cols:
+        try:
+            db.session.execute(text(f'ALTER TABLE materials ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added {col_name} to materials')
+        except Exception:
+            db.session.rollback()
+            print(f'materials.{col_name} already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS material_batches (
+                id SERIAL PRIMARY KEY,
+                material_id INTEGER NOT NULL REFERENCES materials(id),
+                batch_number VARCHAR(100) NOT NULL,
+                lot_number VARCHAR(100),
+                quantity FLOAT DEFAULT 0,
+                received_date DATE,
+                expiry_date DATE,
+                manufacture_date DATE,
+                vendor_id INTEGER REFERENCES vendors(id),
+                purchase_price FLOAT,
+                location_id INTEGER REFERENCES storage_locations(id),
+                status VARCHAR(20) DEFAULT 'available',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created material_batches table')
+    except Exception:
+        db.session.rollback()
+        print('material_batches table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS stock_history (
+                id SERIAL PRIMARY KEY,
+                material_id INTEGER NOT NULL REFERENCES materials(id),
+                change_type VARCHAR(30) NOT NULL,
+                quantity_before FLOAT NOT NULL,
+                quantity_change FLOAT NOT NULL,
+                quantity_after FLOAT NOT NULL,
+                reason VARCHAR(200),
+                reason_ar VARCHAR(200),
+                source_type VARCHAR(50),
+                source_id INTEGER,
+                user_id INTEGER REFERENCES users(id),
+                batch_id INTEGER REFERENCES material_batches(id),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created stock_history table')
+    except Exception:
+        db.session.rollback()
+        print('stock_history table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS stock_reservations (
+                id SERIAL PRIMARY KEY,
+                material_id INTEGER NOT NULL REFERENCES materials(id),
+                quantity FLOAT NOT NULL,
+                reservation_type VARCHAR(50),
+                job_id INTEGER,
+                work_plan_id INTEGER,
+                reserved_by_id INTEGER REFERENCES users(id),
+                reserved_at TIMESTAMP DEFAULT NOW(),
+                needed_by_date DATE,
+                status VARCHAR(20) DEFAULT 'active',
+                fulfilled_at TIMESTAMP,
+                notes TEXT
+            )
+        '''))
+        db.session.commit()
+        print('Created stock_reservations table')
+    except Exception:
+        db.session.rollback()
+        print('stock_reservations table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS inventory_counts (
+                id SERIAL PRIMARY KEY,
+                count_date DATE NOT NULL,
+                count_type VARCHAR(30),
+                status VARCHAR(20) DEFAULT 'draft',
+                created_by_id INTEGER REFERENCES users(id),
+                approved_by_id INTEGER REFERENCES users(id),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                completed_at TIMESTAMP
+            )
+        '''))
+        db.session.commit()
+        print('Created inventory_counts table')
+    except Exception:
+        db.session.rollback()
+        print('inventory_counts table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS inventory_count_items (
+                id SERIAL PRIMARY KEY,
+                count_id INTEGER NOT NULL REFERENCES inventory_counts(id),
+                material_id INTEGER NOT NULL REFERENCES materials(id),
+                system_quantity FLOAT,
+                counted_quantity FLOAT,
+                variance FLOAT,
+                counted_by_id INTEGER REFERENCES users(id),
+                counted_at TIMESTAMP,
+                notes TEXT
+            )
+        '''))
+        db.session.commit()
+        print('Created inventory_count_items table')
+    except Exception:
+        db.session.rollback()
+        print('inventory_count_items table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS price_history (
+                id SERIAL PRIMARY KEY,
+                material_id INTEGER NOT NULL REFERENCES materials(id),
+                vendor_id INTEGER REFERENCES vendors(id),
+                old_price FLOAT,
+                new_price FLOAT NOT NULL,
+                currency VARCHAR(10) DEFAULT 'USD',
+                change_reason VARCHAR(200),
+                effective_date DATE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created price_history table')
+    except Exception:
+        db.session.rollback()
+        print('price_history table already exists')
+
+    # ========== REMAINING TABLES ==========
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS shift_swap_requests (
+                id SERIAL PRIMARY KEY,
+                requester_id INTEGER NOT NULL REFERENCES users(id),
+                requester_date DATE NOT NULL,
+                requester_shift VARCHAR(20) NOT NULL,
+                target_user_id INTEGER NOT NULL REFERENCES users(id),
+                target_date DATE NOT NULL,
+                target_shift VARCHAR(20) NOT NULL,
+                reason TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                target_response VARCHAR(20),
+                target_response_at TIMESTAMP,
+                approved_by_id INTEGER REFERENCES users(id),
+                approved_at TIMESTAMP,
+                rejection_reason TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created shift_swap_requests table')
+    except Exception:
+        db.session.rollback()
+        print('shift_swap_requests table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS toolkit_preferences (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+                simple_mode_enabled BOOLEAN DEFAULT FALSE,
+                fab_enabled BOOLEAN DEFAULT TRUE,
+                fab_position VARCHAR(20) DEFAULT 'bottom-right',
+                persistent_notification BOOLEAN DEFAULT TRUE,
+                voice_commands_enabled BOOLEAN DEFAULT FALSE,
+                voice_language VARCHAR(5) DEFAULT 'en',
+                shake_to_pause BOOLEAN DEFAULT FALSE,
+                nfc_enabled BOOLEAN DEFAULT TRUE,
+                widget_enabled BOOLEAN DEFAULT TRUE,
+                smartwatch_enabled BOOLEAN DEFAULT FALSE,
+                quick_camera_enabled BOOLEAN DEFAULT TRUE,
+                barcode_scanner_enabled BOOLEAN DEFAULT TRUE,
+                voice_checklist_enabled BOOLEAN DEFAULT FALSE,
+                auto_location_enabled BOOLEAN DEFAULT TRUE,
+                team_map_enabled BOOLEAN DEFAULT FALSE,
+                voice_review_enabled BOOLEAN DEFAULT FALSE,
+                red_zone_alerts BOOLEAN DEFAULT TRUE,
+                photo_compare_enabled BOOLEAN DEFAULT TRUE,
+                voice_rating_enabled BOOLEAN DEFAULT FALSE,
+                punch_list_enabled BOOLEAN DEFAULT TRUE,
+                morning_brief_enabled BOOLEAN DEFAULT TRUE,
+                kpi_alerts_enabled BOOLEAN DEFAULT TRUE,
+                emergency_broadcast BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created toolkit_preferences table')
+    except Exception:
+        db.session.rollback()
+        print('toolkit_preferences table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS engineer_job_voice_notes (
+                id SERIAL PRIMARY KEY,
+                engineer_job_id INTEGER NOT NULL REFERENCES engineer_jobs(id),
+                file_id INTEGER NOT NULL REFERENCES files(id),
+                duration_seconds INTEGER,
+                transcription TEXT,
+                transcription_ar TEXT,
+                note_type VARCHAR(50) DEFAULT 'general',
+                created_by INTEGER NOT NULL REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created engineer_job_voice_notes table')
+    except Exception:
+        db.session.rollback()
+        print('engineer_job_voice_notes table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS engineer_job_locations (
+                id SERIAL PRIMARY KEY,
+                engineer_job_id INTEGER NOT NULL REFERENCES engineer_jobs(id),
+                latitude NUMERIC(10,8) NOT NULL,
+                longitude NUMERIC(11,8) NOT NULL,
+                accuracy_meters FLOAT,
+                altitude_meters FLOAT,
+                location_type VARCHAR(50) DEFAULT 'tracking',
+                address VARCHAR(500),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                recorded_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created engineer_job_locations table')
+    except Exception:
+        db.session.rollback()
+        print('engineer_job_locations table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS assignment_templates (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                description TEXT,
+                shift VARCHAR(10),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created assignment_templates table')
+    except Exception:
+        db.session.rollback()
+        print('assignment_templates table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS assignment_template_items (
+                id SERIAL PRIMARY KEY,
+                template_id INTEGER NOT NULL REFERENCES assignment_templates(id),
+                equipment_id INTEGER NOT NULL REFERENCES equipment(id),
+                berth VARCHAR(50),
+                mechanical_inspector_id INTEGER REFERENCES users(id),
+                electrical_inspector_id INTEGER REFERENCES users(id)
+            )
+        '''))
+        db.session.commit()
+        print('Created assignment_template_items table')
+    except Exception:
+        db.session.rollback()
+        print('assignment_template_items table already exists')
+
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS defect_occurrences (
+                id SERIAL PRIMARY KEY,
+                defect_id INTEGER NOT NULL REFERENCES defects(id),
+                inspection_id INTEGER NOT NULL REFERENCES inspections(id),
+                occurrence_number INTEGER NOT NULL,
+                found_by_id INTEGER REFERENCES users(id),
+                found_at TIMESTAMP DEFAULT NOW(),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        '''))
+        db.session.commit()
+        print('Created defect_occurrences table')
+    except Exception:
+        db.session.rollback()
+        print('defect_occurrences table already exists')
+
     print('Schema patches complete.')
 "
 
