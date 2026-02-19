@@ -13,6 +13,7 @@ import { ThemeProvider, useThemeContext } from './providers/ThemeProvider';
 import { AccessibilityProvider } from './providers/AccessibilityProvider';
 import { AIPhotoAnalysisProvider } from './providers/AIPhotoAnalysisProvider';
 import { UrgentAlertProvider } from './providers/UrgentAlertProvider';
+import { NotificationAlertProvider } from './providers/NotificationAlertProvider';
 import OfflineBanner from './components/common/OfflineBanner';
 import VoiceCommandOverlay from './components/VoiceCommandOverlay';
 import BigButtonOverlay from './components/BigButtonOverlay';
@@ -81,19 +82,21 @@ export default function App() {
               <LanguageProvider>
                 <NavigationContainer ref={navigationRef}>
                   <AuthProvider>
-                    <AIPhotoAnalysisProvider>
-                      <UrgentAlertProvider>
-                        <VoiceCommandProvider>
-                          <ErrorBoundary>
-                            <ThemedStatusBar />
-                            <OfflineBanner />
-                            <VoiceCommandOverlay />
-                            <AppContent />
-                            <BigButtonOverlay />
-                          </ErrorBoundary>
-                        </VoiceCommandProvider>
-                      </UrgentAlertProvider>
-                    </AIPhotoAnalysisProvider>
+                    <NotificationAlertProvider>
+                      <AIPhotoAnalysisProvider>
+                        <UrgentAlertProvider>
+                          <VoiceCommandProvider>
+                            <ErrorBoundary>
+                              <ThemedStatusBar />
+                              <OfflineBanner />
+                              <VoiceCommandOverlay />
+                              <AppContent />
+                              <BigButtonOverlay />
+                            </ErrorBoundary>
+                          </VoiceCommandProvider>
+                        </UrgentAlertProvider>
+                      </AIPhotoAnalysisProvider>
+                    </NotificationAlertProvider>
                   </AuthProvider>
                 </NavigationContainer>
               </LanguageProvider>

@@ -70,6 +70,8 @@
 
 | Date | What Changed | Status |
 |------|-------------|--------|
+| 2026-02-19 | Enhanced NotificationsScreen — added stats cards, search bar, 4 tabs (All/Unread/Critical/Mentions), collapsible filter bar (type+priority chips), quick actions per notification type, grouped view toggle, AI summary section, acknowledge for persistent, app badge count, settings button | ✅ Done |
+| 2026-02-19 | Created NotificationPreferencesScreen for mobile — channels toggles (In-App/Push) by group, DND quiet hours with day picker, digest mode radio, reset to defaults, full RTL/i18n support | ✅ Done |
 | 2026-02-18 | Item 5a: Fixed voice recording never stops — added 120s safety timeout, try/catch around stopAndUnloadAsync, full state reset on error | ✅ Done |
 | 2026-02-18 | Item 5b: Fixed photo/video upload — added I18nManager import, Android file:// URI prefix, better network error messages | ✅ Done |
 | 2026-02-18 | Item 5c: Created UrgentAlertOverlay + UrgentAlertProvider — full-screen red pulsing alert with vibration for priority messages | ✅ Done |
@@ -239,6 +241,7 @@
 | 2026-02-18 | Created UnplannedJob backend: model + API (POST/GET/GET-by-id) + migration + blueprint registration + engineer/admin notifications | ✅ Done |
 | 2026-02-18 | Updated SmartFAB to pass userRole to useFABContext for role-based FAB actions | ✅ Done |
 | 2026-02-19 | Expo push notifications: User model expo_push_token, POST/DELETE /api/auth/push-token endpoints, notification_service sends Expo pushes (threaded), migration, mobile AuthProvider registers + sends token, App.tsx foreground handler, shared API methods | ✅ Done |
+| 2026-02-19 | In-app notification alert system (mobile): NotificationAlertProvider (polls 15s, tracks seen IDs, badge count), NotificationToast (animated slide-in, priority color bar, countdown, tap-to-navigate, auto-dismiss 6s), notification-sounds.ts (vibration patterns), integrated in App.tsx | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -311,6 +314,8 @@
 | Voice recording for verdict reason | ✅ Done | VoiceNoteRecorder replaces VoiceTextInput for monitor/stop reasons, voice URL stored in backend |
 | 2nd inspector media prefill | ✅ Done | Colleague answers now prefill photo/video/voice/AI analysis + batch-save to server |
 | Expo push notifications | ✅ Done | Token registration on login/launch, Expo Push API via notification_service, foreground handler, logout cleanup |
+| In-app notification toast alerts (mobile) | ✅ Done | NotificationAlertProvider + NotificationToast + vibration sounds, mirrors web useNotificationAlerts hook |
+| Notification preferences screen (mobile) | ✅ Done | Channels (In-App/Push) by group, DND quiet hours + day picker, digest mode radio, reset to defaults, full RTL/i18n |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above
