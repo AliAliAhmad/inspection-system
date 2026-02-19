@@ -11,6 +11,7 @@ import {
 import { Audio, Video, ResizeMode } from 'expo-av';
 import { useTranslation } from 'react-i18next';
 import { tokenStorage } from '../storage/token-storage';
+import { environment } from '../config/environment';
 import type { InspectionAnswer } from '@inspection/shared';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -44,6 +45,7 @@ export default function InspectionFindingDisplay({
     tokenStorage.getAccessToken().then(setToken);
     return () => {
       if (soundRef.current) {
+        soundRef.current.stopAsync().catch(() => {});
         soundRef.current.unloadAsync();
       }
     };
@@ -71,7 +73,7 @@ export default function InspectionFindingDisplay({
   const getVoiceUrl = (): string | null => {
     if (voiceUrl) return voiceUrl;
     if (answer.voice_note_id && token) {
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001';
+      const baseUrl = environment.apiUrl;
       return `${baseUrl}/api/files/${answer.voice_note_id}/stream?token=${token}`;
     }
     return null;
@@ -229,10 +231,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)',
     elevation: 2,
     borderLeftWidth: 4,
     borderLeftColor: '#FF9800',

@@ -13,6 +13,9 @@
  * - Tapping a toast navigates to the relevant screen
  * - Toasts auto-dismiss after 6 seconds
  * - Does NOT show toasts when the NotificationsScreen is focused
+ *
+ * IMPORTANT: Toast state is isolated in a separate component (ToastOverlay)
+ * so that toast show/dismiss never causes the entire app tree to re-render.
  */
 import React, {
   createContext,
@@ -65,6 +68,57 @@ export function useNotificationAlertContext() {
   return useContext(NotificationAlertContext);
 }
 
+// --- Toast Overlay (isolated from provider to prevent re-renders) ---
+
+function ToastOverlay() {
+  const { user } = useAuth();
+  const [visibleToasts, setVisibleToasts] = useState<Notification[]>([]);
+
+  // Expose setter globally so the provider can push toasts without re-rendering children
+  toastSetterRef.current = setVisibleToasts;
+
+  const handleToastPress = useCallback(
+    (notification: Notification) => {
+      setVisibleToasts((prev) => prev.filter((t) => t.id !== notification.id));
+
+      if (!user) return;
+
+      const route = getNotificationMobileRoute(notification, user.role);
+      if (route && navigationRef.isReady()) {
+        navigationRef.navigate(route.screen as any, route.params);
+      }
+    },
+    [user],
+  );
+
+  const handleToastDismiss = useCallback((id: number) => {
+    setVisibleToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  if (visibleToasts.length === 0) return null;
+
+  return (
+    <View style={styles.toastContainer} pointerEvents="box-none">
+      {visibleToasts.map((notification, index) => (
+        <View
+          key={notification.id}
+          style={{ marginTop: index * 90 }}
+          pointerEvents="box-none"
+        >
+          <NotificationToast
+            notification={notification}
+            onDismiss={handleToastDismiss}
+            onPress={handleToastPress}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// Module-level ref so the provider can push toasts to the overlay
+const toastSetterRef: { current: React.Dispatch<React.SetStateAction<Notification[]>> | null } = { current: null };
+
 // --- Provider ---
 
 interface Props {
@@ -77,9 +131,6 @@ export function NotificationAlertProvider({ children }: Props) {
   // Track notification IDs we've already shown toasts for
   const seenIdsRef = useRef<Set<number>>(new Set());
   const initialLoadRef = useRef(true);
-
-  // Active toasts (queue)
-  const [visibleToasts, setVisibleToasts] = useState<Notification[]>([]);
 
   // --- Polling ---
   const { data } = useQuery({
@@ -101,27 +152,6 @@ export function NotificationAlertProvider({ children }: Props) {
       // navigationRef may not be ready yet
     }
     return false;
-  }, []);
-
-  // --- Navigate on toast press ---
-  const handleToastPress = useCallback(
-    (notification: Notification) => {
-      // Remove from visible list first
-      setVisibleToasts((prev) => prev.filter((t) => t.id !== notification.id));
-
-      if (!user) return;
-
-      const route = getNotificationMobileRoute(notification, user.role);
-      if (route && navigationRef.isReady()) {
-        navigationRef.navigate(route.screen as any, route.params);
-      }
-    },
-    [user],
-  );
-
-  // --- Dismiss toast ---
-  const handleToastDismiss = useCallback((id: number) => {
-    setVisibleToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   // --- Detect new notifications ---
@@ -159,9 +189,9 @@ export function NotificationAlertProvider({ children }: Props) {
       }
     }
 
-    // Show toasts (max 3 visible at once)
-    if (newToasts.length > 0) {
-      setVisibleToasts((prev) => {
+    // Push toasts to the isolated overlay (does NOT re-render children)
+    if (newToasts.length > 0 && toastSetterRef.current) {
+      toastSetterRef.current((prev) => {
         const combined = [...newToasts, ...prev];
         return combined.slice(0, 3);
       });
@@ -188,7 +218,9 @@ export function NotificationAlertProvider({ children }: Props) {
     if (!isAuthenticated) {
       seenIdsRef.current = new Set();
       initialLoadRef.current = true;
-      setVisibleToasts([]);
+      if (toastSetterRef.current) {
+        toastSetterRef.current([]);
+      }
       Notifications.setBadgeCountAsync(0).catch(() => {});
     }
   }, [isAuthenticated]);
@@ -203,25 +235,7 @@ export function NotificationAlertProvider({ children }: Props) {
   return (
     <NotificationAlertContext.Provider value={contextValue}>
       {children}
-
-      {/* Toast overlay — rendered above everything */}
-      {visibleToasts.length > 0 && (
-        <View style={styles.toastContainer} pointerEvents="box-none">
-          {visibleToasts.map((notification, index) => (
-            <View
-              key={notification.id}
-              style={{ marginTop: index * 90 }}
-              pointerEvents="box-none"
-            >
-              <NotificationToast
-                notification={notification}
-                onDismiss={handleToastDismiss}
-                onPress={handleToastPress}
-              />
-            </View>
-          ))}
-        </View>
-      )}
+      <ToastOverlay />
     </NotificationAlertContext.Provider>
   );
 }

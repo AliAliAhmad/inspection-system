@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { AppState, AppStateStatus } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -121,11 +121,12 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       syncManager.getLastSyncTime(),
       getMutationPendingCount(),
     ]);
-    setPendingDetails(details);
-    setPendingItems(items);
-    // Total count = sync-manager items + offline mutation queue items
-    setPendingCount(details.total + mutationCount);
-    setLastSyncAt(lastSync);
+    const newCount = details.total + mutationCount;
+    // Only update state if values actually changed to avoid unnecessary re-renders
+    setPendingCount(prev => prev === newCount ? prev : newCount);
+    setPendingDetails(prev => JSON.stringify(prev) === JSON.stringify(details) ? prev : details);
+    setPendingItems(prev => prev.length === items.length && prev.every((p, i) => p.id === items[i]?.id) ? prev : items);
+    setLastSyncAt(prev => prev === lastSync ? prev : lastSync);
   }, [buildPendingItems]);
 
   // Load initial state
@@ -263,19 +264,26 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     await refreshPendingItems();
   }, [refreshPendingItems]);
 
-  // Auto-sync when coming back online
+  // Auto-sync when coming back online (use ref to avoid dependency loop)
+  const pendingCountRef = useRef(pendingCount);
+  pendingCountRef.current = pendingCount;
+
   useEffect(() => {
-    if (isOnline && pendingCount > 0) {
+    if (isOnline && pendingCountRef.current > 0) {
       triggerSync();
     }
-  }, [isOnline, pendingCount, triggerSync]);
+    // Only re-run when online status changes, NOT when pendingCount changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
 
   // Sync when app comes to foreground
   useEffect(() => {
     const handleAppState = async (nextState: AppStateStatus) => {
       if (nextState === 'active' && isOnline) {
         await refreshPendingItems();
-        triggerSync();
+        if (pendingCountRef.current > 0) {
+          triggerSync();
+        }
       }
     };
 
@@ -283,31 +291,48 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [isOnline, triggerSync, refreshPendingItems]);
 
-  // Update pending count periodically
+  // Update pending count periodically (only when there are pending items)
   useEffect(() => {
+    if (pendingCount === 0) return;
     const interval = setInterval(async () => {
       await refreshPendingItems();
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
-  }, [refreshPendingItems]);
+  }, [refreshPendingItems, pendingCount]);
+
+  const contextValue = useMemo(
+    () => ({
+      isOnline,
+      isSyncing,
+      pendingCount,
+      pendingDetails,
+      pendingItems,
+      lastSyncAt,
+      triggerSync,
+      retryItem,
+      retryAllFailed,
+      clearQueue,
+      clearFailed,
+      refreshPendingItems,
+    }),
+    [
+      isOnline,
+      isSyncing,
+      pendingCount,
+      pendingDetails,
+      pendingItems,
+      lastSyncAt,
+      triggerSync,
+      retryItem,
+      retryAllFailed,
+      clearQueue,
+      clearFailed,
+      refreshPendingItems,
+    ]
+  );
 
   return (
-    <OfflineContext.Provider
-      value={{
-        isOnline,
-        isSyncing,
-        pendingCount,
-        pendingDetails,
-        pendingItems,
-        lastSyncAt,
-        triggerSync,
-        retryItem,
-        retryAllFailed,
-        clearQueue,
-        clearFailed,
-        refreshPendingItems,
-      }}
-    >
+    <OfflineContext.Provider value={contextValue}>
       {children}
     </OfflineContext.Provider>
   );

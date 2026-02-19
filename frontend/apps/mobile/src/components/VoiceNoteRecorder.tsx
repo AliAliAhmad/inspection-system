@@ -12,6 +12,19 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getApiClient } from '@inspection/shared';
 
+// ─── Module-level audio singleton ─────────────────────────────
+// Ensures only one audio plays at a time across all VoiceNoteRecorder instances
+// and provides a way to stop playback externally (e.g., when swiping questions)
+let _activeSound: Audio.Sound | null = null;
+
+export function stopAllVoicePlayback() {
+  if (_activeSound) {
+    _activeSound.stopAsync().catch(() => {});
+    _activeSound.unloadAsync().catch(() => {});
+    _activeSound = null;
+  }
+}
+
 interface VoiceNoteRecorderProps {
   onVoiceNoteRecorded: (voiceNoteId: number, transcription?: { en: string; ar: string }) => void;
   onVoiceNoteDeleted?: () => void;
@@ -73,7 +86,7 @@ export default function VoiceNoteRecorder({
     }
   }, [existingTranscription]);
 
-  // Cleanup audio resources when component unmounts or question changes
+  // Cleanup audio resources when component unmounts
   useEffect(() => {
     return () => {
       // Stop and cleanup recording
@@ -84,8 +97,9 @@ export default function VoiceNoteRecorder({
         recordingRef.current = null;
       }
 
-      // Stop and cleanup sound
+      // Stop playback and cleanup sound
       if (soundRef.current) {
+        soundRef.current.stopAsync().catch(() => {});
         soundRef.current.unloadAsync().catch((err) => {
           console.error('Error cleaning up sound:', err);
         });
@@ -97,6 +111,9 @@ export default function VoiceNoteRecorder({
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
+
+      setIsPlaying(false);
+      setIsRecording(false);
     };
   }, []);
 
@@ -245,14 +262,19 @@ export default function VoiceNoteRecorder({
         playsInSilentModeIOS: true,
       });
 
+      // Stop any currently playing audio globally
+      stopAllVoicePlayback();
+
       const playUrl = audioUrl.includes('cloudinary.com') ? getAudioMp3Url(audioUrl) : audioUrl;
       const { sound } = await Audio.Sound.createAsync({ uri: playUrl });
       soundRef.current = sound;
+      _activeSound = sound;
       setIsPlaying(true);
 
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
           setIsPlaying(false);
+          _activeSound = null;
         }
       });
 
@@ -410,10 +432,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 1,
+    boxShadow: '0px 1px 1px rgba(0, 0, 0, 0.15)',
   },
   micButtonRecording: {
     backgroundColor: '#f5222d',

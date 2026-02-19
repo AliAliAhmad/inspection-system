@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
-import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
+import VoiceNoteRecorder, { stopAllVoicePlayback } from '../../components/VoiceNoteRecorder';
 import VideoRecorder from '../../components/VideoRecorder';
 import PhotoGallery from '../../components/PhotoGallery';
 import { Photo } from '../../components/PhotoThumbnailGrid';
@@ -106,6 +106,7 @@ export default function InspectionWizardScreen() {
   const [skippedItems, setSkippedItems] = useState<Set<number>>(new Set());
   const [fixingIncomplete, setFixingIncomplete] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   // Fetch inspection data
@@ -495,22 +496,27 @@ export default function InspectionWizardScreen() {
   const goToIndex = useCallback((index: number) => {
     if (index < 0 || index >= totalItems || index === currentIndex) return;
 
-    const direction = index > currentIndex ? -1 : 1;
+    // Stop any playing audio immediately before transitioning
+    stopAllVoicePlayback();
 
-    Animated.timing(slideAnim, {
-      toValue: direction * SCREEN_WIDTH,
-      duration: 150,
+    // Fade out, swap content off-screen, then slide in
+    Animated.timing(cardOpacity, {
+      toValue: 0,
+      duration: 100,
       useNativeDriver: true,
     }).start(() => {
       setCurrentIndex(index);
-      slideAnim.setValue(-direction * SCREEN_WIDTH);
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }).start();
+      slideAnim.setValue(0);
+      // Wait for React to render new content, then fade in
+      requestAnimationFrame(() => {
+        Animated.timing(cardOpacity, {
+          toValue: 1,
+          duration: 120,
+          useNativeDriver: true,
+        }).start();
+      });
     });
-  }, [currentIndex, totalItems, slideAnim]);
+  }, [currentIndex, totalItems, slideAnim, cardOpacity]);
 
   // Navigate to previous item
   const goToPrev = useCallback(() => {
@@ -1464,7 +1470,7 @@ export default function InspectionWizardScreen() {
 
 
       {/* Question card with animation */}
-      <Animated.View style={[styles.questionCard, { transform: [{ translateX: slideAnim }] }]}>
+      <Animated.View style={[styles.questionCard, { opacity: cardOpacity }]}>
         <ScrollView contentContainerStyle={styles.questionContent} showsVerticalScrollIndicator={false}>
           {/* Question number */}
           <Text style={styles.questionNumber}>
@@ -1656,7 +1662,6 @@ export default function InspectionWizardScreen() {
 
             {/* Video Row */}
             <VideoRecorder
-              key={`video-${currentItem.id}`}
               onVideoRecorded={handleVideoRecorded}
               onVideoDeleted={handleVideoDeleted}
               existingVideoUrl={currentAnswer?.video_url}
@@ -1682,7 +1687,6 @@ export default function InspectionWizardScreen() {
 
             {/* Voice note Row */}
             <VoiceNoteRecorder
-              key={currentItem.id} // Force new instance for each question
               onVoiceNoteRecorded={handleVoiceNoteRecorded}
               onVoiceNoteDeleted={handleVoiceNoteDeleted}
               existingVoiceUrl={currentAnswer?.voice_note_url}
@@ -1938,10 +1942,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
   },
   questionContent: {
     padding: 16,
@@ -2220,10 +2221,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.2)',
   },
   mediaButtonText: {
     fontSize: 24,
@@ -2266,10 +2264,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.2)',
   },
   annotateButton: {
     width: 32,
@@ -2279,10 +2274,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.2)',
   },
   annotateButtonIcon: {
     fontSize: 14,
@@ -2334,10 +2326,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.3)',
   },
   retryButtonTextSmall: {
     color: '#fff',
