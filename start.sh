@@ -2536,5 +2536,31 @@ with app.app_context():
     print('Schema patches complete.')
 "
 
+echo "Ensuring admin user exists..."
+python -c "
+from app import create_app
+from app.extensions import db
+from app.models.user import User
+app = create_app('production')
+with app.app_context():
+    admin = User.query.filter_by(email='admin@company.com').first()
+    if not admin:
+        admin = User(
+            email='admin@company.com',
+            full_name='Ahmad Al-Rashid',
+            role='admin',
+            role_id='ADM001',
+            phone='+966501234567',
+            language='en',
+            is_active=True
+        )
+        admin.set_password('admin123')
+        db.session.add(admin)
+        db.session.commit()
+        print('Admin user created: admin@company.com / admin123')
+    else:
+        print('Admin user already exists.')
+"
+
 echo "Starting gunicorn..."
 exec gunicorn -c gunicorn.conf.py "app:create_app('production')"
