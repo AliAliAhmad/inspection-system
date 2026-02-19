@@ -385,7 +385,7 @@ def list_chat_users():
             'full_name': u.full_name,
             'role': u.role,
             'shift': u.shift,
-            'employee_id': u.employee_id,
+            'employee_id': u.role_id,
             'specialization': getattr(u, 'specialization', None),
         } for u in users],
     }), 200
