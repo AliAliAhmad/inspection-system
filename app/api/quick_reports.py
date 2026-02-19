@@ -3,13 +3,17 @@ Quick Field Report endpoints.
 Allows any user to report equipment defects or safety hazards from the field.
 """
 
+import threading
+import logging
 from datetime import datetime, timedelta
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import Defect, User
 from app.extensions import db, safe_commit
 from app.utils.decorators import get_current_user, get_language
 from app.services.notification_service import NotificationService
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint('quick_reports', __name__)
 
@@ -113,15 +117,29 @@ def create_quick_report():
     db.session.add(defect)
     safe_commit()
 
-    # Send notifications
-    _send_report_notifications(defect, current_user, report_type)
-
     lang = get_language(current_user)
+    response_data = defect.to_dict(language=lang)
+
+    # Send notifications in background thread (translation calls are slow)
+    defect_id = defect.id
+    reporter_id = current_user.id
+    reporter_name = current_user.full_name
+    app = current_app._get_current_object()
+
+    def _bg_notify():
+        with app.app_context():
+            try:
+                _send_report_notifications(defect_id, reporter_id, reporter_name, report_type)
+            except Exception as e:
+                logger.error(f"Background notification failed: {e}")
+
+    thread = threading.Thread(target=_bg_notify, daemon=True)
+    thread.start()
 
     return jsonify({
         'status': 'success',
         'message': 'Report submitted',
-        'data': defect.to_dict(language=lang),
+        'data': response_data,
     }), 201
 
 
@@ -160,32 +178,42 @@ def list_quick_reports():
     }), 200
 
 
-def _send_report_notifications(defect, reporter, report_type):
-    """Send notifications about the quick report to all users."""
-    all_users = User.query.filter(User.is_active == True).all()
+def _send_report_notifications(defect_id, reporter_id, reporter_name, report_type):
+    """Send notifications about the quick report to all users (runs in background thread)."""
+    try:
+        defect = db.session.get(Defect, defect_id)
+        if not defect:
+            logger.error(f"Defect {defect_id} not found for notifications")
+            return
 
-    type_label = 'Equipment Issue' if report_type == 'equipment' else 'Safety Hazard'
-    emoji = '⚠️' if report_type == 'safety' else '🔧'
+        all_users = User.query.filter(User.is_active == True).all()
 
-    for user in all_users:
-        if user.id == reporter.id:
-            continue
+        type_label = 'Equipment Issue' if report_type == 'equipment' else 'Safety Hazard'
+        emoji = '⚠️' if report_type == 'safety' else '🔧'
 
-        # Admin and engineer get important/urgent priority
-        is_admin_or_engineer = user.role in ('admin', 'engineer')
-        priority = 'urgent' if is_admin_or_engineer else 'info'
-
-        # Build equipment info if available
+        # Build equipment info
         equip_info = ''
         if defect.equipment_id_direct and defect.equipment_direct:
             equip_info = f' — {defect.equipment_direct.name}'
 
-        NotificationService.create_notification(
-            user_id=user.id,
-            type='quick_field_report',
-            title=f'{emoji} {type_label} Reported{equip_info}',
-            message=f'{reporter.full_name} reported: {defect.description[:100]}',
-            related_type='defect',
-            related_id=defect.id,
-            priority=priority,
-        )
+        for user in all_users:
+            if user.id == reporter_id:
+                continue
+
+            is_admin_or_engineer = user.role in ('admin', 'engineer')
+            priority = 'urgent' if is_admin_or_engineer else 'info'
+
+            try:
+                NotificationService.create_notification(
+                    user_id=user.id,
+                    type='quick_field_report',
+                    title=f'{emoji} {type_label} Reported{equip_info}',
+                    message=f'{reporter_name} reported: {defect.description[:100]}',
+                    related_type='defect',
+                    related_id=defect.id,
+                    priority=priority,
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify user {user.id}: {e}")
+    except Exception as e:
+        logger.error(f"_send_report_notifications error: {e}")

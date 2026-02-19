@@ -180,7 +180,7 @@ export default function QuickFieldReportScreen() {
         : undefined;
 
       // 3. Create the quick report (becomes a real defect)
-      await defectsApi.createQuickReport({
+      await getApiClient().post('/api/quick-reports', {
         type: reportType,
         severity: isEquipment ? (severity || 'major') : 'major',
         equipment_id: isEquipment ? selectedEquipment?.id : undefined,
@@ -192,7 +192,7 @@ export default function QuickFieldReportScreen() {
         voice_transcription: voiceText,
         hazard_type: !isEquipment ? (hazardType || undefined) : undefined,
         location: !isEquipment ? locationDesc : undefined,
-      });
+      }, { timeout: 30000 });
 
       // Clear the form
       clearForm();
