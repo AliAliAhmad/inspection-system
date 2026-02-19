@@ -4,8 +4,11 @@ Handles weekly work plans, jobs, assignments, and materials.
 Enhanced with job templates, dependencies, capacity config, skills, conflicts, and AI features.
 """
 
+import logging
 from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import joinedload, selectinload
 from app.extensions import db
 from app.models import (
@@ -126,8 +129,10 @@ def detect_conflicts_for_plan(plan):
 # ==================== DIAGNOSTIC ====================
 
 @bp.route('/debug/<week_start_str>', methods=['GET'])
+@jwt_required()
+@admin_decorator()
 def debug_work_plan(week_start_str):
-    """Debug endpoint to check work plan loading (temporary)."""
+    """Debug endpoint to check work plan loading (admin only)."""
     try:
         from collections import Counter
 
@@ -170,17 +175,18 @@ def debug_work_plan(week_start_str):
         }), 200
 
     except Exception as e:
-        import traceback
+        logger.error(f'Debug work plan error: {e}')
         return jsonify({
             'status': 'error',
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 200
+            'message': 'Internal server error'
+        }), 500
 
 
 @bp.route('/cleanup/<week_start_str>', methods=['POST'])
+@jwt_required()
+@admin_decorator()
 def cleanup_duplicate_jobs(week_start_str):
-    """Remove duplicate jobs (keep first occurrence by SAP order)."""
+    """Remove duplicate jobs (keep first occurrence by SAP order). Admin only."""
     try:
         week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
         plan = WorkPlan.query.filter_by(week_start=week_date).first()
@@ -217,17 +223,18 @@ def cleanup_duplicate_jobs(week_start_str):
 
     except Exception as e:
         db.session.rollback()
-        import traceback
+        logger.error(f'Cleanup duplicate jobs error: {e}')
         return jsonify({
             'status': 'error',
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 200
+            'message': 'Internal server error'
+        }), 500
 
 
 @bp.route('/clear-jobs/<week_start_str>', methods=['POST'])
+@jwt_required()
+@admin_decorator()
 def clear_all_jobs(week_start_str):
-    """Remove ALL jobs from a plan (use with caution!)."""
+    """Remove ALL jobs from a plan. Admin only, destructive operation."""
     try:
         week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
         plan = WorkPlan.query.filter_by(week_start=week_date).first()
@@ -249,17 +256,18 @@ def clear_all_jobs(week_start_str):
 
     except Exception as e:
         db.session.rollback()
-        import traceback
+        logger.error(f'Clear all jobs error: {e}')
         return jsonify({
             'status': 'error',
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 200
+            'message': 'Internal server error'
+        }), 500
 
 
 @bp.route('/clear-pool/<week_start_str>', methods=['POST'])
+@jwt_required()
+@admin_decorator()
 def clear_sap_pool(week_start_str):
-    """Remove ALL SAP orders from the pool for a plan."""
+    """Remove ALL SAP orders from the pool for a plan. Admin only, destructive operation."""
     try:
         week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
         plan = WorkPlan.query.filter_by(week_start=week_date).first()
@@ -276,12 +284,11 @@ def clear_sap_pool(week_start_str):
 
     except Exception as e:
         db.session.rollback()
-        import traceback
+        logger.error(f'Clear SAP pool error: {e}')
         return jsonify({
             'status': 'error',
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        }), 200
+            'message': 'Internal server error'
+        }), 500
 
 
 # ==================== WORK PLANS ====================
@@ -1029,7 +1036,7 @@ def publish_plan(plan_id):
         plan.pdf_file_id = pdf_file.id if pdf_file else None
     except Exception as e:
         # Continue without PDF if generation fails
-        print(f"PDF generation failed: {e}")
+        logger.error(f"PDF generation failed: {e}")
 
     # Update status
     plan.status = 'published'
@@ -1063,7 +1070,7 @@ def publish_plan(plan_id):
             from app.services.email_service import EmailService
             email_sent = EmailService.send_work_plan_notification(plan, pdf_file)
         except Exception as e:
-            print(f"Email notification failed: {e}")
+            logger.error(f"Email notification failed: {e}")
 
     return jsonify({
         'status': 'success',

@@ -332,16 +332,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderLeftWidth: 4,
     elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.08)',
   },
   selectedJobCard: {
     backgroundColor: '#e6f4ff',
     borderColor: '#1677ff',
     elevation: 3,
-    shadowOpacity: 0.15,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.15)',
   },
   jobHeader: {
     flexDirection: 'row',

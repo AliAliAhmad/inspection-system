@@ -180,8 +180,9 @@ export default function NotificationsScreen() {
 
   // ============ DERIVED DATA ============
 
-  const unreadCount = unreadCountData?.data?.count ?? 0;
-  const priorityCounts = (unreadCountData?.data?.by_priority ?? {}) as Record<string, number>;
+  // unreadCountData comes from `.then(r => r.data)` so it's { status, count, by_priority }
+  const unreadCount = (unreadCountData as any)?.count ?? 0;
+  const priorityCounts = ((unreadCountData as any)?.by_priority ?? {}) as Record<string, number>;
 
   // Feature 9: Update app badge count
   React.useEffect(() => {
@@ -244,8 +245,14 @@ export default function NotificationsScreen() {
     const route = user ? getNotificationMobileRoute(item, user.role) : null;
     if (route) {
       navigation.navigate(route.screen, route.params);
+    } else {
+      Alert.alert(
+        item.title,
+        item.message,
+        [{ text: t('common.ok', 'OK') }]
+      );
     }
-  }, [markReadMutation, user, navigation]);
+  }, [markReadMutation, user, navigation, t]);
 
   const handleDelete = useCallback((id: number) => {
     Alert.alert(
@@ -267,7 +274,7 @@ export default function NotificationsScreen() {
     switch (action) {
       case 'start_inspection':
         if (item.related_id) {
-          navigation.navigate('InspectionWizard', { inspectionId: item.related_id });
+          navigation.navigate('InspectionWizard', { id: item.related_id });
         }
         break;
       case 'view_job':
@@ -555,7 +562,13 @@ export default function NotificationsScreen() {
 
       <TouchableOpacity
         style={[styles.statCard, { borderColor: '#f5222d' }]}
-        onPress={() => handleStatCardPress('all')}
+        onPress={() => {
+          setSelectedPriorities(['urgent']);
+          setSelectedTypes([]);
+          setActiveTab('all');
+          setShowFilters(true);
+          setPage(1);
+        }}
         activeOpacity={0.7}
       >
         <Text style={[styles.statCount, { color: '#f5222d' }]}>{priorityCounts.urgent ?? 0}</Text>
@@ -564,7 +577,13 @@ export default function NotificationsScreen() {
 
       <TouchableOpacity
         style={[styles.statCard, { borderColor: '#fa8c16' }]}
-        onPress={() => handleStatCardPress('all')}
+        onPress={() => {
+          setSelectedPriorities(['warning']);
+          setSelectedTypes([]);
+          setActiveTab('all');
+          setShowFilters(true);
+          setPage(1);
+        }}
         activeOpacity={0.7}
       >
         <Text style={[styles.statCount, { color: '#fa8c16' }]}>{priorityCounts.warning ?? 0}</Text>
@@ -788,7 +807,16 @@ export default function NotificationsScreen() {
   // ============ FEATURE 6: GROUPED VIEW ============
 
   const renderGroupItem = useCallback(({ item: group }: { item: NotificationGroup }) => (
-    <TouchableOpacity style={styles.groupItem} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={styles.groupItem}
+      activeOpacity={0.7}
+      onPress={() => {
+        // Navigate to the first notification in the group, or show group details
+        if (group.notifications && group.notifications.length > 0) {
+          handlePress(group.notifications[0]);
+        }
+      }}
+    >
       <View style={styles.groupHeader}>
         <View style={styles.groupInfo}>
           <Text style={styles.groupTitle} numberOfLines={1}>{group.summary_title}</Text>
@@ -809,7 +837,7 @@ export default function NotificationsScreen() {
         </Text>
       )}
     </TouchableOpacity>
-  ), [t]);
+  ), [t, handlePress]);
 
   // ============ SNOOZE MODAL ============
 
@@ -936,7 +964,7 @@ export default function NotificationsScreen() {
             disabled={markAllReadMutation.isPending}
           >
             <Text style={[styles.markAll, markAllReadMutation.isPending && styles.disabled]}>
-              {t('notifications.mark_all_read')}
+              {t('notifications.mark_all_read', 'Mark all read')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1152,10 +1180,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 2,
+        boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.08)',
       },
       android: {
         elevation: 1,
@@ -1347,10 +1372,7 @@ const styles = StyleSheet.create({
     padding: 12,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.1)',
       },
       android: {
         elevation: 2,
@@ -1473,10 +1495,7 @@ const styles = StyleSheet.create({
     padding: 12,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.1)',
       },
       android: {
         elevation: 2,

@@ -753,8 +753,7 @@ const styles = StyleSheet.create({
   emptyList: { flexGrow: 1 },
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10,
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1, shadowRadius: 3, overflow: 'hidden',
+    elevation: 2, boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)', overflow: 'hidden',
   },
   cardHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8,

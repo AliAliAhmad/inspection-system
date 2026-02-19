@@ -88,10 +88,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignSelf: 'center',
     marginVertical: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.15)',
     elevation: 2,
   },
   syncing: {

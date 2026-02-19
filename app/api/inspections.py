@@ -24,6 +24,8 @@ bp = Blueprint('inspections', __name__)
 # ============================================
 
 @bp.route('/debug/ai-status', methods=['GET'])
+@jwt_required()
+@admin_required()
 def check_ai_status():
     """
     Diagnostic endpoint to check ALL AI services status.
@@ -84,6 +86,8 @@ def check_ai_status():
 
 
 @bp.route('/debug/ai-test-all', methods=['GET'])
+@jwt_required()
+@admin_required()
 def test_all_ai_services():
     """
     Test ALL configured AI services and return results.
@@ -186,6 +190,8 @@ def test_all_ai_services():
 
 
 @bp.route('/debug/ai-photo-test', methods=['GET'])
+@jwt_required()
+@admin_required()
 def test_ai_photo_analysis():
     """
     Test REAL photo analysis with all configured providers.
@@ -288,6 +294,8 @@ def test_ai_photo_analysis():
 
 
 @bp.route('/debug/ai-test', methods=['GET'])
+@jwt_required()
+@admin_required()
 def test_ai_connection():
     """
     Test AI API connection.
@@ -1199,6 +1207,97 @@ def _detect_media_type(file):
     return 'image'
 
 
+def _check_stuck_meter(equipment_id, reading_type, current_value, reporter_id):
+    """
+    Check if the last 3 readings for this equipment have the same value.
+    If so, and the equipment is not stopped, auto-create a defect to repair the meter.
+    """
+    from app.models.equipment_reading import EquipmentReading
+    from app.models import Defect, Equipment
+
+    if current_value is None:
+        return
+
+    # Get last 3 readings (including the one just saved)
+    last_readings = EquipmentReading.query.filter_by(
+        equipment_id=equipment_id,
+        reading_type=reading_type,
+        is_faulty=False,
+    ).filter(
+        EquipmentReading.reading_value.isnot(None)
+    ).order_by(
+        EquipmentReading.recorded_at.desc()
+    ).limit(3).all()
+
+    if len(last_readings) < 3:
+        return  # Not enough readings yet
+
+    # Check if all 3 readings have the same value
+    values = [r.reading_value for r in last_readings]
+    if not (values[0] == values[1] == values[2]):
+        return  # Not stuck
+
+    # Check if equipment is currently stopped (assessment verdict = 'stop')
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        return
+
+    # Check if there's already an open defect for this meter
+    existing_defect = Defect.query.filter(
+        Defect.equipment_id_direct == equipment_id,
+        Defect.status.in_(['open', 'in_progress']),
+        Defect.description.ilike(f'%stuck meter%{reading_type}%'),
+    ).first()
+    if existing_defect:
+        logger.info(f"Stuck meter defect already exists for equipment #{equipment_id} ({reading_type})")
+        return
+
+    # Check equipment status — skip if equipment is stopped
+    from app.models.final_assessment import FinalAssessment
+    latest_assessment = FinalAssessment.query.filter_by(
+        equipment_id=equipment_id,
+    ).order_by(FinalAssessment.created_at.desc()).first()
+
+    if latest_assessment and latest_assessment.final_status == 'stop':
+        logger.info(f"Equipment #{equipment_id} is stopped, skipping stuck meter defect")
+        return
+
+    # Auto-create defect for stuck meter
+    from datetime import datetime, timedelta
+
+    reading_label = 'Running Hours (RNR)' if reading_type == 'rnr' else 'Twistlock Count (TWL)'
+    defect = Defect(
+        description=f'Stuck meter detected: {reading_label} for {equipment.name} has shown the same reading ({current_value}) for the last 3 inspections. The meter may need repair or replacement.',
+        severity='high',
+        priority='high',
+        status='open',
+        due_date=datetime.utcnow().date() + timedelta(days=3),
+        sla_days=3,
+        report_source='auto_stuck_meter',
+        reported_by_id=reporter_id,
+        equipment_id_direct=equipment_id,
+        category='meter_fault',
+    )
+    db.session.add(defect)
+    db.session.commit()
+    logger.info(f"Auto-created stuck meter defect #{defect.id} for equipment #{equipment_id} ({reading_type}): value={current_value} repeated 3x")
+
+    # Send notifications to admin and engineer
+    from app.services.notification_service import NotificationService
+    all_users = User.query.filter(User.is_active == True).all()
+    for user in all_users:
+        if user.role in ('admin', 'engineer'):
+            NotificationService.create_notification(
+                user_id=user.id,
+                type='defect_created',
+                title=f'⚠️ Stuck Meter: {equipment.name} ({reading_label})',
+                message=f'The {reading_label} meter shows {current_value} for 3 consecutive inspections. Auto-defect created for repair.',
+                related_type='defect',
+                related_id=defect.id,
+                priority='urgent',
+            )
+
+
 @bp.route('/<int:inspection_id>/upload-media', methods=['POST'])
 @jwt_required()
 def upload_answer_media(inspection_id):
@@ -1658,6 +1757,20 @@ def upload_answer_media(inspection_id):
                 db.session.add(equipment_reading)
                 db.session.commit()
                 logger.info(f"Saved {reading_type.upper()} reading: {reading_value} for equipment #{inspection.equipment_id}")
+
+                # === STUCK METER DETECTION ===
+                # If the last 3 readings for this equipment+type have the same value,
+                # and equipment is not stopped, auto-create a defect for meter repair.
+                try:
+                    _check_stuck_meter(
+                        equipment_id=inspection.equipment_id,
+                        reading_type=reading_type,
+                        current_value=reading_value,
+                        reporter_id=int(current_user_id),
+                    )
+                except Exception as stuck_err:
+                    logger.error(f"Stuck meter check failed: {stuck_err}")
+
             elif is_faulty:
                 # Save faulty reading for tracking
                 equipment_reading = EquipmentReading(

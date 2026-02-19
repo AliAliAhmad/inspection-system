@@ -567,8 +567,7 @@ const s = StyleSheet.create({
   quickActionsGrid: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   quickActionCard: {
     flex: 1, borderRadius: 14, padding: 14, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2,
   },
   quickActionIcon: {
     width: 44, height: 44, borderRadius: 22,
@@ -580,8 +579,7 @@ const s = StyleSheet.create({
   // Widget card (shared)
   widgetCard: {
     borderRadius: 14, padding: 16, marginBottom: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2,
   },
   widgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   widgetTitle: { fontSize: 17, fontWeight: '700' },
@@ -603,8 +601,7 @@ const s = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
   statCard: {
     width: '47%', borderRadius: 12, padding: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 2, marginBottom: 4,
+    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2, marginBottom: 4,
   },
   statValue: { fontSize: 27, fontWeight: 'bold' },
   statTitle: { fontSize: 15, marginTop: 2 },
@@ -649,8 +646,7 @@ const s = StyleSheet.create({
   // Quick Links
   quickLink: {
     borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
+    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2,
   },
   quickLinkIcon: { fontSize: 18, marginRight: 12 },
   quickLinkText: { flex: 1, fontSize: 17, fontWeight: '600' },
@@ -661,8 +657,7 @@ const s = StyleSheet.create({
   // Start Next Inspection card
   nextInspectionCard: {
     borderRadius: 16, padding: 18, marginBottom: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 6, elevation: 4,
+    boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.15)', elevation: 4,
   },
   nextInspectionContent: {
     flexDirection: 'row', alignItems: 'center',

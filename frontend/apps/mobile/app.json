@@ -16,7 +16,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.inspection.system",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to take photos of equipment during inspections.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to record voice notes during inspections.",
+        "NSLocationWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to access your location for inspection site mapping."
       }
     },
     "android": {
@@ -26,13 +29,28 @@
       },
       "package": "com.inspection.system",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "plugins": [
       "expo-secure-store",
       "expo-image-picker",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for inspection site mapping."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice notes."
+        }
+      ]
     ],
     "extra": {
       "eas": {

@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   filterChipTextActive: { color: '#fff' },
   filterChipTextInactive: { color: '#616161' },
   listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2 },
   cardDescriptionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
   cardDescription: { fontSize: 14, color: '#212121', lineHeight: 20, flex: 1, marginRight: 8 },
   occurrenceBadge: { backgroundColor: '#E53935', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, minWidth: 28, alignItems: 'center' },

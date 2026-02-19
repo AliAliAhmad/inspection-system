@@ -92,10 +92,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E8E8E8',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
   icon: {

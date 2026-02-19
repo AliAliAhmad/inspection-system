@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, useState, useEffect, useMemo, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toolkitApi, apiClient } from '@inspection/shared';
 import { useAIPhotoAnalysis, AIPhotoAnalysisResult, InspectorDecision } from '../hooks/useAIPhotoAnalysis';
@@ -112,16 +112,28 @@ export function AIPhotoAnalysisProvider({
     return recordDecisionFn(photoId, aiSuggestion, inspectorDecision);
   }, [recordDecisionFn]);
 
-  const value: AIPhotoAnalysisContextType = {
-    isFeatureEnabled,
-    isAnalyzing,
-    result,
-    error,
-    analyzePhoto,
-    recordDecision,
-    clearResult,
-    isLoadingSettings,
-  };
+  const value = useMemo<AIPhotoAnalysisContextType>(
+    () => ({
+      isFeatureEnabled,
+      isAnalyzing,
+      result,
+      error,
+      analyzePhoto,
+      recordDecision,
+      clearResult,
+      isLoadingSettings,
+    }),
+    [
+      isFeatureEnabled,
+      isAnalyzing,
+      result,
+      error,
+      analyzePhoto,
+      recordDecision,
+      clearResult,
+      isLoadingSettings,
+    ]
+  );
 
   return (
     <AIPhotoAnalysisContext.Provider value={value}>

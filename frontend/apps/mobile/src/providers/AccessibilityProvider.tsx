@@ -199,14 +199,13 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
     };
   }, [preferences.reduceMotionEnabled]);
 
-  // Update preferences
+  // Update preferences - use functional setState to avoid dependency on preferences
   const updatePreferences = useCallback(
     async (newPrefs: Partial<AccessibilityPreferences>) => {
-      const updated = { ...preferences, ...newPrefs };
-      setPreferences(updated);
+      setPreferences((prev) => ({ ...prev, ...newPrefs }));
       await setAccessibilityPreferences(newPrefs);
     },
-    [preferences]
+    []
   );
 
   // Reset preferences

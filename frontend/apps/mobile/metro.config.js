@@ -13,25 +13,53 @@ config.watchFolders = [
   rootModules,
 ];
 
-// 2. Resolve modules: local first, then monorepo root
+// 2. Resolve modules: root first to prevent duplicates, then local
 config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
   rootModules,
+  path.resolve(projectRoot, 'node_modules'),
 ];
 
 // 3. Map workspace packages + force single React from root (19.1.0 via pnpm overrides)
-config.resolver.extraNodeModules = {
-  '@inspection/shared': path.resolve(monorepoRoot, 'packages/shared'),
+const singletonPackages = {
   'react': path.resolve(rootModules, 'react'),
   'react-dom': path.resolve(rootModules, 'react-dom'),
   'react-native': path.resolve(rootModules, 'react-native'),
   'react-native-reanimated': path.resolve(rootModules, 'react-native-reanimated'),
 };
 
-// 4. Exclude web app source files
+config.resolver.extraNodeModules = {
+  '@inspection/shared': path.resolve(monorepoRoot, 'packages/shared'),
+  ...singletonPackages,
+};
+
+// 4. Force singleton resolution: intercept react/react-native imports to always
+//    resolve from root node_modules, preventing "Invalid hook call" from duplicates
+const originalResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Force these packages to always resolve from the monorepo root
+  if (singletonPackages[moduleName]) {
+    return context.resolveRequest(
+      { ...context, resolveRequest: undefined },
+      moduleName,
+      platform,
+    );
+  }
+  // Fall back to default resolution
+  if (originalResolveRequest) {
+    return originalResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
+// 5. Exclude web app source files and nested react copies (e.g. @expo/cli canary)
 const exclusionList = require('metro-config/private/defaults/exclusionList').default;
 config.resolver.blockList = exclusionList([
-  new RegExp(path.resolve(monorepoRoot, 'apps/web').replace(/[/\\]/g, '[/\\\\]') + '[/\\\\].*'),
+  // Exclude web app
+  new RegExp(
+    path.resolve(monorepoRoot, 'apps/web').replace(/[/\\]/g, '[/\\\\]') + '[/\\\\].*',
+  ),
+  // Block any nested react copies (e.g. @expo/cli/static/canary-full/node_modules/react)
+  /.*[/\\]node_modules[/\\].*[/\\]node_modules[/\\]react[/\\].*/,
 ]);
 
 module.exports = config;

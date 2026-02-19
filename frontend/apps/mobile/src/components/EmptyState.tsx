@@ -352,10 +352,7 @@ const styles = StyleSheet.create({
     padding: 20,
     marginHorizontal: 16,
     marginVertical: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
     elevation: 2,
   },
   compactIcon: {

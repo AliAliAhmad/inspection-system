@@ -270,10 +270,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.25)',
   },
   title: {
     fontSize: 20,
@@ -493,10 +490,7 @@ const floatingStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)',
   },
   buttonLeft: {
     marginRight: 8,

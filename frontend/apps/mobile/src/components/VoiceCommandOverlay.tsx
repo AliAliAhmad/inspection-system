@@ -256,10 +256,7 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.listening,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    boxShadow: '0px 4px 12px rgba(22, 119, 255, 0.4)',
     elevation: 8,
   },
   micIcon: {

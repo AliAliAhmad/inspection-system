@@ -211,6 +211,8 @@ export const SuccessPulse = forwardRef<SuccessPulseRef, SuccessPulseProps>(
       ),
     }));
 
+    // Note: shadow* props kept here because shadowOpacity uses animated shared value (glowOpacity.value)
+    // which cannot be expressed as a static boxShadow string
     const animatedGlowStyle = useAnimatedStyle(() => ({
       opacity: glowOpacity.value,
       shadowColor: colors.primary,

@@ -611,10 +611,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     // High contrast shadow for outdoor visibility
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    boxShadow: '0px -4px 8px rgba(0, 0, 0, 0.3)',
     elevation: 20,
   },
   buttonRow: {
@@ -635,10 +632,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: BUTTON_MARGIN / 2,
     // Strong shadow for depth
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.3)',
     elevation: 8,
     // Border for high contrast
     borderWidth: 3,
@@ -782,10 +776,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.3)',
     elevation: 10,
   },
   expandIcon: {

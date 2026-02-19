@@ -54,11 +54,19 @@ def create_app(config_name='development'):
     jwt.init_app(app)
     limiter.init_app(app)
 
-    # CORS configuration — allow all origins in development
+    # CORS configuration — use allowed origins from env or defaults
+    allowed_origins = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else [
+        'https://inspection-web.onrender.com',
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:8081',
+        'exp://*',
+    ]
+    allowed_origins = [o.strip() for o in allowed_origins if o.strip()]
     CORS(app,
-         resources={r"/api/*": {"origins": "*"}},
+         resources={r"/api/*": {"origins": allowed_origins}},
          supports_credentials=True,
-         allow_headers=["*"],
+         allow_headers=["Content-Type", "Authorization", "Accept", "Accept-Language"],
          methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
          expose_headers=["Content-Type", "Authorization"])
 
@@ -66,8 +74,10 @@ def create_app(config_name='development'):
     @app.before_request
     def handle_preflight():
         if request.method == 'OPTIONS':
+            origin = request.headers.get('Origin', '')
             response = jsonify({'status': 'ok'})
-            response.headers['Access-Control-Allow-Origin'] = '*'
+            if origin in allowed_origins:
+                response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
             response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, Accept-Language'
             response.headers['Access-Control-Max-Age'] = '3600'
@@ -76,8 +86,10 @@ def create_app(config_name='development'):
     # CORS + Security headers for all responses
     @app.after_request
     def add_response_headers(response):
-        # CORS
-        response.headers['Access-Control-Allow-Origin'] = '*'
+        # CORS — set origin dynamically based on request
+        origin = request.headers.get('Origin', '')
+        if origin in allowed_origins:
+            response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, Accept-Language'
         # Security headers

@@ -822,8 +822,7 @@ const styles = StyleSheet.create({
   micBtn: {
     width: 52, height: 52, borderRadius: 26, backgroundColor: '#25D366',
     justifyContent: 'center', alignItems: 'center', marginRight: 8,
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15, shadowRadius: 2,
+    elevation: 2, boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.15)',
   },
   micBtnActive: { backgroundColor: '#ff4d4f', width: 56, height: 56, borderRadius: 28 },
   micBtnText: { fontSize: 24 },

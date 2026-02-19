@@ -644,10 +644,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)',
     elevation: 4,
   },
   mainButtonIcon: {

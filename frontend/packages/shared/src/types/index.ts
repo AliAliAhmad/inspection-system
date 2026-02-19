@@ -82,6 +82,10 @@ export * from './templates.types';
 export * from './shift-handover.types';
 // Monitor Follow-Up types
 export * from './monitor-followup.types';
+// Points types
+export * from './points.types';
+// Punch List types
+export * from './punch-list.types';
 // Color constants (values, not types)
 export {
   RISK_COLORS,

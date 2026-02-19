@@ -280,10 +280,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.06)',
   },
   kpiHeader: {
     flexDirection: 'row',

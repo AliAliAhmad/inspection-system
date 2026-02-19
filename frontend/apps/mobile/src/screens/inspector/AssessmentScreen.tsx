@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
   sectionCard: {
     backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3,
+    elevation: 2, boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)',
   },
   sectionTitle: { fontSize: 17, fontWeight: '700', color: '#212121', marginBottom: 12 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

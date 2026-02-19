@@ -70,6 +70,18 @@
 
 | Date | What Changed | Status |
 |------|-------------|--------|
+| 2026-02-20 | Fix QuickFieldReport: switch from FormData to base64 upload (reliable on RN), clear form after submit, show actual error messages, better success alert | ✅ Done |
+| 2026-02-20 | AI reading extraction: updated prompts in all 6 vision services (Gemini, Groq, OpenRouter, Together, SambaNova, DeepInfra) to focus ONLY on numeric reading extraction, explicitly says "Do NOT check for defects" | ✅ Done |
+| 2026-02-20 | Stuck meter auto-defect: if same reading value appears 3 consecutive times for same equipment and equipment not stopped, auto-creates a high-priority defect for meter repair + notifies admin/engineer | ✅ Done |
+| 2026-02-20 | Fix NotificationsScreen: stat card numbers always 0 (backend /unread-count now returns by_priority, fixed data access path), navigation error on press (added 20+ mobile routes in getNotificationMobileRoute, show Alert fallback), InspectionWizard wrong param (inspectionId→id), Urgent/Warning cards now filter by priority, Mark All Read i18n fallback, group items now have onPress | ✅ Done |
+| 2026-02-20 | Fix urgency reset on photo upload (deep merge in server sync), make urgency mandatory for all questions, fix voice recording spreading across questions (key prop + stopAllVoiceRecording) | ✅ Done |
+| 2026-02-20 | Fix voice/video playback lost on navigate back: pass uploaded URL back in callbacks, store in localAnswers | ✅ Done |
+| 2026-02-20 | Fix chat users 500 error: /api/communication/users accessed u.employee_id (non-existent), changed to u.role_id | ✅ Done |
+| 2026-02-20 | Fix wizard swipe: smooth fade transition, stop voice on swipe, reduce re-renders (NotificationAlertProvider toast isolation, OfflineProvider polling optimization) | ✅ Done |
+| 2026-02-20 | Add auto-seed admin user in start.sh, register Notifications screen in RootNavigator, add ~30 remaining missing DB schema patches | ✅ Done |
+| 2026-02-19 | PRODUCTION AUDIT: 12-phase audit completed — secured 12 endpoints (auth+admin), fixed CORS wildcard, removed stack trace leaks, fixed localhost fallback, added type barrel exports, wrote PRODUCTION_READY_REPORT.md | ✅ Done |
+| 2026-02-19 | PHASE 2: Fix ALL deprecation warnings — replaced shadow* props with boxShadow in 106 files (150+ shadow groups), replaced textShadow* with textShadow shorthand in 1 file, noted expo-av needs expo-audio/expo-video migration (not installed) | ✅ Done |
+| 2026-02-19 | Fix mobile white screen / duplicate React — reordered nodeModulesPaths (root first), added resolveRequest singleton enforcer, added blockList for nested react copies (canary), verified exclusionList import | ✅ Done |
 | 2026-02-19 | Enhanced NotificationsScreen — added stats cards, search bar, 4 tabs (All/Unread/Critical/Mentions), collapsible filter bar (type+priority chips), quick actions per notification type, grouped view toggle, AI summary section, acknowledge for persistent, app badge count, settings button | ✅ Done |
 | 2026-02-19 | Created NotificationPreferencesScreen for mobile — channels toggles (In-App/Push) by group, DND quiet hours with day picker, digest mode radio, reset to defaults, full RTL/i18n support | ✅ Done |
 | 2026-02-18 | Item 5a: Fixed voice recording never stops — added 120s safety timeout, try/catch around stopAndUnloadAsync, full state reset on error | ✅ Done |
@@ -86,7 +98,10 @@
 | 2026-02-18 | Item 8: 2nd inspector media prefill — colleague answers now include photo/video/voice/AI analysis, added batch-save effect for prefilled answers | ✅ Done |
 | 2026-02-18 | Added missing i18n keys to en.json and ar.json — job_execution, profile, assessment, assignments, checklist, notifications sections | ✅ Done |
 | 2026-02-18 | Simplified CreateHandoverScreen — replaced 3 complex sections (12+ fields) with unified type-tagged item list | ✅ Done |
+| 2026-02-19 | Fix SafeAreaProvider crash on web — conditional import with Platform check, use plain View on web | ✅ Done |
+| 2026-02-19 | Fix React Error #310 infinite re-render — added useMemo to OfflineProvider/AIPhotoAnalysisProvider/LanguageProvider/AuthProvider context values, fixed OfflineProvider auto-sync dependency loop, fixed AccessibilityProvider updatePreferences callback dependency | ✅ Done |
 | 2026-02-19 | Added notification bell icon with unread badge to mobile dashboard header — auto-refreshes every 30s, navigates to Notifications screen | ✅ Done |
+| 2026-02-19 | Monorepo config audit — removed react-dom from mobile deps, added missing iOS/Android permissions (camera, location, microphone), added expo-location + expo-av plugins to app.json | ✅ Done |
 | 2026-02-18 | Fixed LiveAlertBanner phone overlap — added SafeAreaView insets padding so banner sits below status bar | ✅ Done |
 | 2026-02-18 | Fixed LiveAlertBanner Arabic detection — switched from I18nManager.isRTL to useTranslation i18n.language | ✅ Done |
 | 2026-02-18 | Item 9: Fixed AssessmentScreen verdict display (equipment name, system verdict fallback, comparison card when both inspectors submit) | ✅ Done |

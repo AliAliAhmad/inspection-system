@@ -98,10 +98,12 @@ class DeepInfraVisionService:
             # Build prompt based on question type
             if is_reading_question:
                 prompt = (
-                    "This is an industrial equipment inspection photo. "
-                    "Look for any meter readings, gauge values, or numeric displays. "
-                    "Extract any numbers you can see clearly. "
-                    "Also describe the equipment condition. "
+                    "This is a photo of a meter, gauge, counter, or numeric display on industrial equipment. "
+                    "Your ONLY task is to extract the numeric reading shown. "
+                    "Do NOT check for defects or equipment condition. "
+                    "Look carefully at all dials, digital displays, analog gauges, and counter wheels. "
+                    "Extract the exact number displayed. "
+                    "If multiple numbers visible, extract the main reading. "
                     "Format: Reading: [number if found], Description: [brief description]"
                 )
             else:

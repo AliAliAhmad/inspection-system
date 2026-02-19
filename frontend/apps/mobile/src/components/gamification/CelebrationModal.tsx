@@ -138,7 +138,7 @@ function SparkleComponent({ sparkle, isVisible }: SparkleProps) {
           width: sparkle.size,
           height: sparkle.size,
           backgroundColor: sparkle.color,
-          shadowColor: sparkle.color,
+          boxShadow: `0px 0px 8px ${sparkle.color}cc`,
         },
         animatedStyle,
       ]}
@@ -419,9 +419,7 @@ const styles = StyleSheet.create({
   sparkle: {
     position: 'absolute',
     borderRadius: 999,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
+    // Note: shadow glow uses dynamic sparkle.color set via inline style + boxShadow
   },
   content: {
     alignItems: 'center',

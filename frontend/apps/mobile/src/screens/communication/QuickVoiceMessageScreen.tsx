@@ -583,14 +583,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
-    shadowColor: '#7B1FA2',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    boxShadow: '0px 3px 6px rgba(123, 31, 162, 0.3)',
   },
   micButtonRecording: {
     backgroundColor: '#f5222d',
-    shadowColor: '#f5222d',
+    boxShadow: '0px 3px 6px rgba(242, 34, 45, 0.3)',
   },
   micButtonDisabled: {
     opacity: 0.5,

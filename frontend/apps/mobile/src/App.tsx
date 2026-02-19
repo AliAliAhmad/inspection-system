@@ -2,7 +2,6 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './navigation/navigationRef';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from './providers/AuthProvider';
@@ -20,8 +19,18 @@ import BigButtonOverlay from './components/BigButtonOverlay';
 import RootNavigator from './navigation/RootNavigator';
 import LoginScreen from './screens/auth/LoginScreen';
 import ErrorBoundary from './components/common/ErrorBoundary';
-import { ActivityIndicator, View, StyleSheet, Text, TextInput } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text, TextInput, Platform } from 'react-native';
 import { useTheme } from './hooks/useTheme';
+
+// SafeAreaProvider crashes on web ("Cannot read properties of null (reading 'useContext')")
+// Only import and use it on native platforms
+let SafeAreaProvider: React.ComponentType<{ children: React.ReactNode }>;
+if (Platform.OS !== 'web') {
+  SafeAreaProvider = require('react-native-safe-area-context').SafeAreaProvider;
+} else {
+  SafeAreaProvider = ({ children }: { children: React.ReactNode }) =>
+    React.createElement(View, { style: { flex: 1 } }, children);
+}
 
 // Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({

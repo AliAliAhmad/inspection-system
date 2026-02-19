@@ -32,7 +32,7 @@ export function HighContrastWrapper({ children, style }: HighContrastWrapperProp
   const containerStyle: ViewStyle = {
     backgroundColor: colors.background,
     ...(preferences.removeDecorativeElements && {
-      shadowOpacity: 0,
+      boxShadow: 'none',
       elevation: 0,
       borderRadius: 0,
     }),
@@ -133,16 +133,13 @@ export function HighContrastSurface({
     borderColor: colors.border,
     ...(preferences.removeDecorativeElements
       ? {
-          shadowOpacity: 0,
+          boxShadow: 'none',
           elevation: 0,
           borderRadius: 4,
         }
       : {
           borderRadius: 12,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.08,
-          shadowRadius: 4,
+          boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)',
           elevation: elevated ? 4 : 2,
         }),
     padding: 16,

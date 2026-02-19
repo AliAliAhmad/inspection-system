@@ -438,10 +438,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: SCREEN_WIDTH - 48,
     maxWidth: 320,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
+    boxShadow: '0px 10px 20px rgba(0, 0, 0, 0.25)',
     elevation: 10,
   },
   modalTitle: {

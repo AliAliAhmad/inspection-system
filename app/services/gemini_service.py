@@ -149,10 +149,13 @@ class GeminiVisionService:
             # Build prompt - respond in BOTH English and Arabic, keep SHORT
             if is_reading_question:
                 prompt = (
-                    "Industrial inspection photo. Extract meter/gauge reading. "
+                    "This is a photo of a meter, gauge, counter, or numeric display on industrial equipment. "
+                    "Your ONLY task is to extract the numeric reading shown. Do NOT check for defects. "
+                    "Look carefully at all dials, digital displays, analog gauges, and counter wheels. "
+                    "Extract the exact number displayed. If multiple numbers visible, extract the main reading.\n"
                     "Reply in this EXACT format (2 lines only):\n"
-                    "EN: Reading: [number], [condition in 5 words max]\n"
-                    "AR: القراءة: [number], [condition in Arabic 5 words max]"
+                    "EN: Reading: [number], [meter condition: working/damaged/unclear]\n"
+                    "AR: القراءة: [number], [حالة العداد: يعمل/تالف/غير واضح]"
                 )
             else:
                 prompt = (

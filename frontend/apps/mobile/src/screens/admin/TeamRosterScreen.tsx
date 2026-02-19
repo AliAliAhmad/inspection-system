@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   navCenter: { flex: 1, alignItems: 'center' },
   navDateText: { fontSize: 14, fontWeight: '600', color: '#212121' },
   listContent: { paddingHorizontal: 16, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
   userName: { fontSize: 16, fontWeight: 'bold', color: '#212121', marginBottom: 4 },
   roleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

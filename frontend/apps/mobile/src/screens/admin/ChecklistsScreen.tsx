@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
   addButton: { backgroundColor: '#1976D2', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#212121', marginBottom: 4 },
   cardDescription: { fontSize: 13, color: '#757575', marginBottom: 8 },

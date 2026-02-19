@@ -124,12 +124,27 @@ def download_file(file_id):
 
 
 @bp.route('/<int:file_id>/stream', methods=['GET'])
+@jwt_required(optional=True)
 def stream_file(file_id):
     """
     Stream a file - redirects to Cloudinary URL.
-    No auth required since Cloudinary URLs are publicly accessible.
-    Kept for backwards compatibility.
+    Accepts JWT via Authorization header or token query param.
     """
+    from flask_jwt_extended import get_jwt_identity, decode_token
+    # Check for JWT in header first (handled by @jwt_required(optional=True))
+    user_id = get_jwt_identity()
+    if not user_id:
+        # Fall back to token query parameter (used by mobile app for media URLs)
+        token = request.args.get('token')
+        if token:
+            try:
+                decoded = decode_token(token)
+                user_id = decoded.get('sub')
+            except Exception:
+                pass
+    if not user_id:
+        return jsonify({'status': 'error', 'message': 'Authentication required'}), 401
+
     file_record = File.query.get_or_404(file_id)
     url = file_record.get_url()
     if url:

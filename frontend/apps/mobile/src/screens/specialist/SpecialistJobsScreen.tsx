@@ -548,10 +548,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 10,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -644,10 +641,7 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '80%',
     elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
+    boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.25)',
   },
   modalTitle: {
     fontSize: 18,

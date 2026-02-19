@@ -17,11 +17,12 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useMutation } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
 import { useTheme } from '../../hooks/useTheme';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { equipmentApi, defectsApi, filesApi } from '@inspection/shared';
+import { equipmentApi, defectsApi, getApiClient } from '@inspection/shared';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'QuickFieldReport'>;
@@ -134,29 +135,43 @@ export default function QuickFieldReportScreen() {
     return locationDesc.trim().length > 0 && hazardType !== null;
   }, [photoUri, isEquipment, equipmentQuery, severity, locationDesc, hazardType]);
 
+  const clearForm = useCallback(() => {
+    setPhotoUri(null);
+    setEquipmentQuery('');
+    setSelectedEquipment(null);
+    setEquipmentResults([]);
+    setShowResults(false);
+    setLocationDesc('');
+    setHazardType(null);
+    setSeverity(null);
+    setVoiceNoteId(null);
+    setVoiceTranscription(null);
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     if (!photoUri) {
-      Alert.alert(t('quick_report.photo_required'));
+      Alert.alert(t('quick_report.photo_required', 'Photo required'));
       return;
     }
     setIsSubmitting(true);
     try {
-      // 1. Upload photo
+      // 1. Upload photo via base64 (reliable on React Native)
       let uploadedPhotoUrl: string | undefined;
       try {
-        const formData = new FormData();
-        formData.append('file', {
-          uri: photoUri,
-          type: 'image/jpeg',
-          name: `quick_report_${Date.now()}.jpg`,
-        } as any);
-        formData.append('related_type', 'quick_report');
-        formData.append('related_id', '0');
-        formData.append('category', 'field_report');
-        const uploadRes = await filesApi.uploadFormData(formData);
-        uploadedPhotoUrl = (uploadRes.data as any)?.data?.url || (uploadRes.data as any)?.url;
-      } catch {
-        // Photo upload failed — continue without URL
+        const base64 = await FileSystem.readAsStringAsync(photoUri, { encoding: 'base64' });
+        const uploadRes = await getApiClient().post('/api/files/upload', {
+          file_base64: base64,
+          file_name: `quick_report_${Date.now()}.jpg`,
+          file_type: 'image/jpeg',
+          category: 'field_report',
+        }, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 120000,
+        });
+        uploadedPhotoUrl = (uploadRes.data as any)?.data?.url;
+      } catch (uploadErr: any) {
+        console.error('Photo upload failed:', uploadErr?.message);
+        // Continue without photo URL
       }
 
       // 2. Build voice transcription text
@@ -167,7 +182,7 @@ export default function QuickFieldReportScreen() {
       // 3. Create the quick report (becomes a real defect)
       await defectsApi.createQuickReport({
         type: reportType,
-        severity: isEquipment ? (severity || 'major') : 'high',
+        severity: isEquipment ? (severity || 'major') : 'major',
         equipment_id: isEquipment ? selectedEquipment?.id : undefined,
         description: voiceText || (isEquipment
           ? `Equipment issue: ${equipmentQuery}`
@@ -179,15 +194,22 @@ export default function QuickFieldReportScreen() {
         location: !isEquipment ? locationDesc : undefined,
       });
 
-      Alert.alert(t('quick_report.report_submitted'), '', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } catch {
-      Alert.alert(t('quick_report.report_failed'));
+      // Clear the form
+      clearForm();
+
+      Alert.alert(
+        t('quick_report.report_submitted', 'Report Submitted'),
+        t('quick_report.report_submitted_message', 'Your report has been submitted successfully.'),
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (err: any) {
+      console.error('Quick report submission failed:', err);
+      const message = err?.response?.data?.message || err?.message || 'Failed to submit report';
+      Alert.alert(t('quick_report.report_failed', 'Submission Failed'), message);
     } finally {
       setIsSubmitting(false);
     }
-  }, [photoUri, t, navigation, reportType, isEquipment, severity, selectedEquipment, equipmentQuery, locationDesc, hazardType, voiceNoteId, voiceTranscription]);
+  }, [photoUri, t, navigation, reportType, isEquipment, severity, selectedEquipment, equipmentQuery, locationDesc, hazardType, voiceNoteId, voiceTranscription, clearForm]);
 
   // Severity chips
   const severities: Severity[] = ['minor', 'major', 'critical'];

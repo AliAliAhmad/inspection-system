@@ -573,7 +573,7 @@ const styles = StyleSheet.create({
   filterChipTextActive: { color: '#fff' },
   filterChipTextInactive: { color: '#616161' },
   listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2 },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#212121', marginBottom: 2 },
   cardSubtitle: { fontSize: 13, color: '#757575', marginBottom: 8 },
   cardRow: { flexDirection: 'row', marginBottom: 4 },

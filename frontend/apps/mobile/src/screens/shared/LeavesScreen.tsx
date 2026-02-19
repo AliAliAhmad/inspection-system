@@ -406,10 +406,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)',
     elevation: 2,
   },
   cardHeader: {
@@ -455,10 +452,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    boxShadow: '0px 3px 4px rgba(0, 0, 0, 0.3)',
   },
   fabText: { fontSize: 28, color: '#fff', fontWeight: '300', marginTop: -2 },
   modalOverlay: {

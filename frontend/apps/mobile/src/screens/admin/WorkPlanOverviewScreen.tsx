@@ -455,10 +455,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     overflow: 'hidden',
     elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.08)',
   },
   dayCardToday: { borderWidth: 2, borderColor: '#4CAF50' },
   dayHeader: {
@@ -529,10 +526,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 28,
     elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.25)',
   },
   fabText: { fontSize: 15, fontWeight: '600', color: '#fff' },
 });

@@ -464,6 +464,7 @@ def get_day_availability():
 
 
 @bp.route('/template', methods=['GET'])
+@jwt_required()
 def download_roster_template():
     """
     Download Excel template for roster import.

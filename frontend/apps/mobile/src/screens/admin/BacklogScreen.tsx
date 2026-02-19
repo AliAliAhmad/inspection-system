@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingBottom: 8, gap: 10 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#212121' },
   listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2, borderLeftWidth: 4, borderLeftColor: '#E53935' },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2, borderLeftWidth: 4, borderLeftColor: '#E53935' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   equipmentName: { fontSize: 16, fontWeight: '600', color: '#212121', flex: 1, marginRight: 10 },
   cardInfoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },

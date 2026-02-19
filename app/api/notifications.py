@@ -81,9 +81,19 @@ def get_unread_count():
     current_user_id = get_jwt_identity()
     unread_count = NotificationService.get_unread_count(int(current_user_id))
 
+    # Also get unread counts by priority for stat cards
+    by_priority = {}
+    for priority in ['critical', 'urgent', 'warning', 'info']:
+        by_priority[priority] = Notification.query.filter_by(
+            user_id=int(current_user_id),
+            is_read=False,
+            priority=priority
+        ).count()
+
     return jsonify({
         'status': 'success',
-        'count': unread_count
+        'count': unread_count,
+        'by_priority': by_priority,
     }), 200
 
 

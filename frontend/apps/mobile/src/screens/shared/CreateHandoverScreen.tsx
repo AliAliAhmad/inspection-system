@@ -365,8 +365,7 @@ const st = StyleSheet.create({
   submitBtn: {
     backgroundColor: '#1976D2', borderRadius: 12,
     paddingVertical: 16, alignItems: 'center', marginTop: 24,
-    shadowColor: '#1976D2', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+    boxShadow: '0px 4px 8px rgba(25, 118, 210, 0.3)', elevation: 4,
   },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
