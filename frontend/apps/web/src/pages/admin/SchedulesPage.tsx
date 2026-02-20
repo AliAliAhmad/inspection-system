@@ -32,7 +32,7 @@ import {
   ScheduleHeatmap,
   HealthTrendChart,
   CapacityGauge,
-  AnomalyBanner,
+  AnomalyAlert,
 } from '../../components/schedules';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -300,7 +300,7 @@ Instructions:
   return (
     <div>
       {/* Anomaly Banner (critical alerts at top) */}
-      <AnomalyBanner onViewAll={() => {}} />
+      <AnomalyAlert onViewAll={() => {}} />
 
       {/* AI Stats Cards */}
       <div style={{ marginBottom: 16 }}>
