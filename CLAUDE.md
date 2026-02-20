@@ -70,6 +70,9 @@
 
 | Date | What Changed | Status |
 |------|-------------|--------|
+| 2026-02-20 | Enhanced Dashboard: Smart Alerts row (defects/overdue/work plan 0%/draft review — conditional), 4 new stat cards (Completion Rate, Assessments Today, Follow-Up Pending, Backlog Items), Shift Overview widget (on-duty/on-leave counts + roster name tags), roster API integration | ✅ Done |
+| 2026-02-20 | Rebuilt Homepage V2: Quick Actions row (role-filtered action buttons), 3x2 Pages Grid (6 categories: Operations/Equipment/Inspections/Team/Maintenance/Settings — compact, all visible on one screen), Tools & Shortcuts strip (Dashboard/⌘K/Theme/Language/Equipment/Profile), search with keyboard shortcut (/), favorites with star toggle, bilingual AR/EN | ✅ Done |
+| 2026-02-20 | Fix 500 error on inspector assignment: (1) berth constraint violation — work_plan_jobs only allows east/west/both but inspection berths are numbered, removed berth copy, (2) missing db.session.rollback() in sync error handler, (3) added 10 missing columns to work_plan_jobs schema in start.sh | ✅ Done |
 | 2026-02-20 | Fix Generate Inspection List error: (1) cleanup script was deleting inspection_routines + inspection_schedules (imported data, not test data) — removed from delete list, (2) backend shift mismatch — imported schedules use 'day' but modal sends 'morning'/'afternoon', added cross-matching logic in generate_daily_list | ✅ Done |
 | 2026-02-20 | Fix QuickReport Network Error: notifications ran synchronously with translation API calls (30s timeout each per user), causing Render timeout. Moved to background thread so response returns immediately | ✅ Done |
 | 2026-02-20 | Fix QuickFieldReport: switch from FormData to base64 upload (reliable on RN), clear form after submit, show actual error messages, better success alert | ✅ Done |

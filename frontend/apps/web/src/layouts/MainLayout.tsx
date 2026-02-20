@@ -353,7 +353,7 @@ function AppLauncher({ userRole, language }: { userRole: string; language: strin
           onClick={() => handleNavigate('/')}
           style={{ fontSize: 12, color: '#1890ff', cursor: 'pointer' }}
         >
-          <HomeOutlined /> {isAr ? '\u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629' : 'Dashboard'}
+          <HomeOutlined /> {isAr ? '\u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629' : 'Home'}
         </span>
       </div>
     </div>

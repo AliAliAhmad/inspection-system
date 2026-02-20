@@ -18,11 +18,16 @@ import {
   SafetyOutlined,
   FireOutlined,
   AimOutlined,
+  FundProjectionScreenOutlined,
+  FieldTimeOutlined,
+  InboxOutlined,
+  UserSwitchOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../providers/AuthProvider';
-import { reportsApi, DashboardData, AdminDashboardData, WorkPlanStats } from '@inspection/shared';
+import { reportsApi, DashboardData, AdminDashboardData, WorkPlanStats, rosterApi } from '@inspection/shared';
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 import { CACHE_KEYS } from '../../utils/offline-storage';
 import { useQuery } from '@tanstack/react-query';
@@ -82,6 +87,15 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Roster availability for shift overview
+  const todayStr = new Date().toISOString().split('T')[0];
+  const { data: rosterData } = useQuery({
+    queryKey: ['roster-availability', todayStr],
+    queryFn: () => rosterApi.getDayAvailability(todayStr).then(r => r.data.data),
+    enabled: isEngineer,
+    staleTime: 10 * 60 * 1000,
+  });
+
   const loading = isAdmin ? adminLoading : dashLoading;
   const error = isAdmin ? adminError : dashError;
 
@@ -137,6 +151,90 @@ export default function DashboardPage() {
           )}
         </Text>
       </div>
+
+      {/* ─── Smart Alerts (only shows when something needs attention) ─── */}
+      {isAdmin && (kpis.openDefects > 0 || kpis.overdueJobs > 0 || kpis.completionRate === 0) && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <ThunderboltOutlined style={{ color: '#fa8c16', fontSize: 16 }} />
+            <Text strong style={{ fontSize: 13, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: 0.5 }}>Needs Your Attention</Text>
+          </div>
+          <Row gutter={[12, 12]}>
+            {kpis.openDefects > 0 && (
+              <Col xs={12} sm={6}>
+                <Card
+                  hoverable
+                  onClick={() => navigate('/admin/defects')}
+                  style={{ borderRadius: 10, borderLeft: '4px solid #ff4d4f', cursor: 'pointer' }}
+                  styles={{ body: { padding: '12px 14px' } }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <BugOutlined style={{ fontSize: 20, color: '#ff4d4f' }} />
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#ff4d4f', lineHeight: 1 }}>{kpis.openDefects}</div>
+                      <div style={{ fontSize: 11, color: '#8c8c8c' }}>Open Defects</div>
+                    </div>
+                  </div>
+                </Card>
+              </Col>
+            )}
+            {kpis.overdueJobs > 0 && (
+              <Col xs={12} sm={6}>
+                <Card
+                  hoverable
+                  onClick={() => navigate('/admin/overdue')}
+                  style={{ borderRadius: 10, borderLeft: '4px solid #fa541c', cursor: 'pointer' }}
+                  styles={{ body: { padding: '12px 14px' } }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <ClockCircleOutlined style={{ fontSize: 20, color: '#fa541c' }} />
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#fa541c', lineHeight: 1 }}>{kpis.overdueJobs}</div>
+                      <div style={{ fontSize: 11, color: '#8c8c8c' }}>Overdue Jobs</div>
+                    </div>
+                  </div>
+                </Card>
+              </Col>
+            )}
+            {workPlanStats && kpis.completionRate === 0 && workPlanStats.total_jobs > 0 && (
+              <Col xs={12} sm={6}>
+                <Card
+                  hoverable
+                  onClick={() => navigate('/admin/work-planning')}
+                  style={{ borderRadius: 10, borderLeft: '4px solid #faad14', cursor: 'pointer' }}
+                  styles={{ body: { padding: '12px 14px' } }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <CalendarOutlined style={{ fontSize: 20, color: '#faad14' }} />
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#faad14', lineHeight: 1 }}>0%</div>
+                      <div style={{ fontSize: 11, color: '#8c8c8c' }}>Work Plan</div>
+                    </div>
+                  </div>
+                </Card>
+              </Col>
+            )}
+            {workPlanStats?.plan_status === 'draft' && (
+              <Col xs={12} sm={6}>
+                <Card
+                  hoverable
+                  onClick={() => navigate('/admin/daily-review')}
+                  style={{ borderRadius: 10, borderLeft: '4px solid #597ef7', cursor: 'pointer' }}
+                  styles={{ body: { padding: '12px 14px' } }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <ScheduleOutlined style={{ fontSize: 20, color: '#597ef7' }} />
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#597ef7', lineHeight: 1 }}>Draft</div>
+                      <div style={{ fontSize: 11, color: '#8c8c8c' }}>Review Pending</div>
+                    </div>
+                  </div>
+                </Card>
+              </Col>
+            )}
+          </Row>
+        </div>
+      )}
 
       {/* ─── KPI Stat Cards ─── */}
       {isAdmin && (
@@ -209,6 +307,40 @@ export default function DashboardPage() {
               </Card>
             </Col>
           ))}
+        </Row>
+      )}
+
+      {/* ─── NEW: Extra Stat Cards ─── */}
+      {isAdmin && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={12} sm={6}>
+            <Card hoverable onClick={() => navigate('/admin/work-planning')} style={{ borderRadius: 12, textAlign: 'center' }} styles={{ body: { padding: '14px 12px' } }}>
+              <FundProjectionScreenOutlined style={{ fontSize: 24, color: '#52c41a', marginBottom: 6 }} />
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#52c41a' }}>{kpis.completionRate}%</div>
+              <div style={{ fontSize: 11, color: '#8c8c8c' }}>Completion Rate</div>
+            </Card>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Card hoverable onClick={() => navigate('/admin/assessments')} style={{ borderRadius: 12, textAlign: 'center' }} styles={{ body: { padding: '14px 12px' } }}>
+              <AimOutlined style={{ fontSize: 24, color: '#722ed1', marginBottom: 6 }} />
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#722ed1' }}>{kpis.inspectionsToday}</div>
+              <div style={{ fontSize: 11, color: '#8c8c8c' }}>Assessments Today</div>
+            </Card>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Card hoverable onClick={() => navigate('/admin/monitor-followups')} style={{ borderRadius: 12, textAlign: 'center' }} styles={{ body: { padding: '14px 12px' } }}>
+              <FieldTimeOutlined style={{ fontSize: 24, color: '#1890ff', marginBottom: 6 }} />
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#1890ff' }}>{kpis.criticalJobs}</div>
+              <div style={{ fontSize: 11, color: '#8c8c8c' }}>Follow-Up Pending</div>
+            </Card>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Card hoverable onClick={() => navigate('/admin/backlog')} style={{ borderRadius: 12, textAlign: 'center' }} styles={{ body: { padding: '14px 12px' } }}>
+              <InboxOutlined style={{ fontSize: 24, color: '#fa8c16', marginBottom: 6 }} />
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#fa8c16' }}>{kpis.overdueJobs}</div>
+              <div style={{ fontSize: 11, color: '#8c8c8c' }}>Backlog Items</div>
+            </Card>
+          </Col>
         </Row>
       )}
 
@@ -461,6 +593,56 @@ export default function DashboardPage() {
                     },
                   ]}
                 />
+              )}
+            </Card>
+          )}
+
+          {/* ─── Shift Overview ─── */}
+          {isEngineer && rosterData && (
+            <Card
+              title={
+                <Space>
+                  <UserSwitchOutlined style={{ color: '#722ed1' }} />
+                  <span>Shift Overview</span>
+                  <Tag color="purple">{new Date().toLocaleDateString('en-US', { weekday: 'short' })}</Tag>
+                </Space>
+              }
+              style={{ borderRadius: 12, marginBottom: 20 }}
+              styles={{ body: { padding: '12px 16px' } }}
+            >
+              <Row gutter={16}>
+                <Col span={8} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#52c41a' }}>
+                    {rosterData.available?.length ?? 0}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>On Duty</Text>
+                </Col>
+                <Col span={8} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#fa8c16' }}>
+                    {rosterData.on_leave?.length ?? 0}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>On Leave</Text>
+                </Col>
+                <Col span={8} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#1890ff' }}>
+                    {(rosterData.available?.length ?? 0) + (rosterData.on_leave?.length ?? 0)}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>Total Team</Text>
+                </Col>
+              </Row>
+              {rosterData.available && rosterData.available.length > 0 && (
+                <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {rosterData.available.slice(0, 12).map((u: any) => (
+                    <Tag key={u.id} style={{ borderRadius: 12, fontSize: 11 }}>
+                      {u.full_name?.split(' ')[0]} {u.shift ? `(${u.shift})` : ''}
+                    </Tag>
+                  ))}
+                  {rosterData.available.length > 12 && (
+                    <Tag style={{ borderRadius: 12, fontSize: 11, cursor: 'pointer' }} onClick={() => navigate('/admin/roster')}>
+                      +{rosterData.available.length - 12} more
+                    </Tag>
+                  )}
+                </div>
               )}
             </Card>
           )}

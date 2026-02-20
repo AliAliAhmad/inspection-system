@@ -20,6 +20,10 @@ instance/
 .DS_Store
 Thumbs.db
 
+# Testing
+.maestro/
+bugreport-*.zip
+
 # Frontend
 node_modules/
 dist/
