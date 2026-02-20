@@ -286,9 +286,11 @@ interface GenerateWizardProps {
 
 function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSelectChange, generateMutation }: GenerateWizardProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
   const [equipSearch, setEquipSearch] = useState('');
   const [autoSelected, setAutoSelected] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   // Watch form values
   const targetDate = Form.useWatch('target_date', form);
@@ -380,7 +382,7 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
     { value: 'night',     label: t('assignments.night', 'Night'),         icon: <MoonOutlined />,  color: '#722ed1', bg: '#f9f0ff', border: '#d3adf7', time: '22:00 – 06:00' },
   ];
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     const dateVal = form.getFieldValue('target_date');
     const shiftVal = form.getFieldValue('shift');
     const hasEquip = selectedEquipmentIds.length > 0;
@@ -388,16 +390,33 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
     if (!dateVal || !shiftVal || !hasEquip) {
       Modal.warning({
         title: 'Cannot Generate',
-        content: `Missing: ${!dateVal ? 'Date, ' : ''}${!shiftVal ? 'Shift, ' : ''}${!hasEquip ? 'Equipment selection' : ''}`.replace(/, $/, ''),
+        content: `Missing: ${!dateVal ? 'Date ' : ''}${!shiftVal ? 'Shift ' : ''}${!hasEquip ? 'Equipment' : ''}`,
       });
       return;
     }
 
-    const payload = {
-      target_date: dayjs(dateVal).format('YYYY-MM-DD'),
-      shift: shiftVal as 'morning' | 'afternoon' | 'night' | 'day',
-    };
-    generateMutation.mutate(payload);
+    setGenerating(true);
+    try {
+      const payload = {
+        target_date: dayjs(dateVal).format('YYYY-MM-DD'),
+        shift: shiftVal,
+      };
+      const res = await inspectionAssignmentsApi.generateList(payload);
+      const result = (res.data as any)?.data ?? res.data;
+      Modal.success({
+        title: 'Inspection List Generated',
+        content: `${result?.total_assets ?? 0} assignments created for ${shiftVal} shift on ${dayjs(dateVal).format('DD MMM YYYY')}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
+      onClose();
+    } catch (err: any) {
+      Modal.error({
+        title: 'Failed to Generate',
+        content: err?.response?.data?.message || err?.message || 'Unknown error occurred',
+      });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -715,11 +734,11 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
                 type="primary"
                 size="large"
                 icon={<ThunderboltOutlined />}
-                loading={generateMutation.isPending}
+                loading={generating}
                 onClick={handleGenerate}
                 style={{ fontWeight: 600, borderRadius: 8, minWidth: 180 }}
               >
-                {t('assignments.generateList', 'Generate List')}
+                {generating ? t('assignments.generating', 'Generating...') : t('assignments.generateList', 'Generate List')}
               </Button>
             )}
           </Space>
