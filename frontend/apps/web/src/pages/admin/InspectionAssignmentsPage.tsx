@@ -288,6 +288,7 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
   const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [equipSearch, setEquipSearch] = useState('');
+  const [autoSelected, setAutoSelected] = useState(false);
 
   // Watch form values
   const targetDate = Form.useWatch('target_date', form);
@@ -295,7 +296,7 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
 
   // Reset step when modal opens/closes
   useEffect(() => {
-    if (open) { setStep(0); setEquipSearch(''); }
+    if (open) { setStep(0); setEquipSearch(''); setAutoSelected(false); }
   }, [open]);
 
   // Day of week from date
@@ -357,12 +358,13 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [filteredEquipment]);
 
-  // Auto-select all when equipment first loads
+  // Auto-select all when equipment first loads (one-time only)
   useEffect(() => {
-    if (equipment.length > 0 && selectedEquipmentIds.length === 0) {
+    if (equipment.length > 0 && !autoSelected) {
       onSelectChange(equipment.map((eq: any) => eq.id));
+      setAutoSelected(true);
     }
-  }, [equipment.length]);
+  }, [equipment.length, autoSelected]);
 
   const canProceedStep1 = !!targetDate && !!shift;
   const canGenerate = canProceedStep1 && selectedEquipmentIds.length > 0;
