@@ -2572,19 +2572,21 @@ with app.app_context():
         print('Admin user already exists.')
 
     # Set default passwords for all imported users (password = role_id)
-    from werkzeug.security import generate_password_hash, check_password_hash
     imported_users = User.query.filter(User.email != 'admin@company.com').all()
     updated = 0
     for u in imported_users:
-        if u.role_id and (not u.password_hash or not check_password_hash(u.password_hash, u.role_id)):
-            u.set_password(u.role_id)
-            u.must_change_password = True
-            updated += 1
+        if u.role_id:
+            try:
+                u.set_password(u.role_id)
+                u.must_change_password = True
+                updated += 1
+            except Exception as e:
+                print(f'Error setting password for {u.username}: {e}')
     if updated:
         db.session.commit()
         print(f'Set default passwords (role_id) for {updated} imported users')
     else:
-        print('All users already have correct passwords.')
+        print('No users needed password update.')
 "
 
 echo "Starting gunicorn..."
