@@ -1530,46 +1530,24 @@ def workload_preview():
 def clear_all_assignments():
     """
     Clear all inspection data: answers, inspections, assessments, assignments, lists.
-    Admin only. Deletes in FK-safe order (children first).
+    Admin only. Uses TRUNCATE CASCADE for clean removal.
     """
-    from app.extensions import safe_commit
+    try:
+        # TRUNCATE CASCADE handles all FK constraints automatically
+        db.session.execute(db.text(
+            'TRUNCATE TABLE inspection_answers, inspection_ratings, '
+            'final_assessments, inspections, inspection_assignments, '
+            'inspection_lists CASCADE'
+        ))
+        db.session.commit()
 
-    # Delete everything in FK-safe order using raw SQL
-    tables_to_clear = [
-        # Leaf tables first
-        ('inspection_answers', None),
-        ('inspection_ratings', None),
-        ('defect_assessments', None),
-        ('defect_occurrences', None),
-        # Unlink references (set FK to NULL)
-        ('work_plan_jobs', 'UPDATE work_plan_jobs SET inspection_assignment_id = NULL WHERE inspection_assignment_id IS NOT NULL'),
-        ('monitor_followups', 'UPDATE monitor_followups SET inspection_assignment_id = NULL WHERE inspection_assignment_id IS NOT NULL'),
-        # Delete tables that require assignment
-        ('final_assessments', None),
-        ('inspections', None),
-        ('inspection_assignments', None),
-        ('inspection_lists', None),
-    ]
-
-    counts = {}
-    for table, custom_sql in tables_to_clear:
-        try:
-            if custom_sql:
-                result = db.session.execute(db.text(custom_sql))
-                counts[table] = f'{result.rowcount} unlinked'
-            else:
-                result = db.session.execute(db.text(f'DELETE FROM "{table}"'))
-                if result.rowcount > 0:
-                    counts[table] = result.rowcount
-        except Exception:
-            db.session.rollback()
-            continue
-
-    safe_commit()
-
-    total = sum(v for v in counts.values() if isinstance(v, int))
-    return jsonify({
-        'status': 'success',
-        'message': f'Cleared all inspection data ({total} records deleted)',
-        'details': counts,
-    }), 200
+        return jsonify({
+            'status': 'success',
+            'message': 'All inspection data cleared successfully',
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to clear: {str(e)[:200]}',
+        }), 500
