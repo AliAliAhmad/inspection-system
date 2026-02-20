@@ -306,26 +306,31 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
     return d === 0 ? 6 : d - 1;
   }, [targetDate]);
 
-  // Fetch schedules
-  const { data: allSchedulesData, isLoading: isLoadingSchedule } = useQuery({
+  // Fetch schedules — use same queryKey as SchedulesPage to share cache
+  const { data: allSchedulesData, isLoading: isLoadingSchedule, error: scheduleError } = useQuery({
     queryKey: ['inspection-schedules'],
     queryFn: async () => {
       const response = await inspectionRoutinesApi.getSchedules();
       return (response.data as any).data || [];
     },
-    staleTime: 60000,
+    staleTime: 30000,
     enabled: open,
   });
 
   // Filter equipment by day + shift
   const equipment = useMemo(() => {
-    if (!allSchedulesData || dayOfWeek === null || !shift) return [];
+    if (!allSchedulesData || !Array.isArray(allSchedulesData) || dayOfWeek === null || !shift) return [];
     return allSchedulesData
       .filter((item: any) => {
-        const dayValue = (item.days || {})[String(dayOfWeek)];
+        const days = item.days || {};
+        const dayValue = days[String(dayOfWeek)];
         if (!dayValue) return false;
+        // Match exact shift or 'both'
         if (dayValue === shift || dayValue === 'both') return true;
+        // Legacy 'day' matches 'morning' or 'afternoon'
         if (dayValue === 'day' && (shift === 'morning' || shift === 'afternoon')) return true;
+        // Legacy 'night' matches 'night'
+        if (dayValue === 'night' && shift === 'night') return true;
         return false;
       })
       .map((item: any) => ({
@@ -506,14 +511,29 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
                   <div style={{ marginTop: 12, color: '#8c8c8c' }}>{t('assignments.loadingSchedule', 'Loading equipment...')}</div>
                 </div>
               ) : equipment.length === 0 ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  icon={<ExclamationCircleOutlined />}
-                  message={t('assignments.noScheduledEquipment', 'No equipment scheduled')}
-                  description={t('assignments.noScheduledEquipmentDesc', 'No equipment is scheduled for this date and shift. Please import an inspection schedule first, or select a different date/shift.')}
-                  style={{ borderRadius: 10 }}
-                />
+                <div>
+                  <Alert
+                    type="warning"
+                    showIcon
+                    icon={<ExclamationCircleOutlined />}
+                    message={t('assignments.noScheduledEquipment', 'No equipment scheduled')}
+                    description={t('assignments.noScheduledEquipmentDesc', 'No equipment is scheduled for this date and shift. Please import an inspection schedule first, or select a different date/shift.')}
+                    style={{ borderRadius: 10, marginBottom: 12 }}
+                  />
+                  {scheduleError && (
+                    <Alert type="error" message={`API Error: ${(scheduleError as any)?.message || 'Unknown'}`} style={{ marginBottom: 8 }} />
+                  )}
+                  <Card size="small" style={{ background: '#fafafa', fontSize: 12 }}>
+                    <Text type="secondary">
+                      Debug: schedules loaded = {allSchedulesData ? allSchedulesData.length : 'null'} |
+                      dayOfWeek = {dayOfWeek} ({targetDate ? dayjs(targetDate).format('dddd') : '-'}) |
+                      shift = {shift || '-'}
+                      {allSchedulesData && allSchedulesData.length > 0 && (
+                        <span> | sample days: {JSON.stringify(allSchedulesData[0]?.days || {})}</span>
+                      )}
+                    </Text>
+                  </Card>
+                </div>
               ) : (
                 <>
                   {/* Toolbar */}
