@@ -1529,17 +1529,19 @@ def workload_preview():
 @admin_required()
 def clear_all_assignments():
     """
-    Clear all inspection assignments (for debugging/testing).
+    Clear all inspection assignments AND their parent lists (for debugging/testing).
     Admin only. Use with caution!
     """
-    from app.models import InspectionAssignment
+    from app.models import InspectionAssignment, InspectionList
     from app.extensions import safe_commit
 
-    deleted_count = InspectionAssignment.query.delete()
+    deleted_assignments = InspectionAssignment.query.delete()
+    deleted_lists = InspectionList.query.delete()
     safe_commit()
 
     return jsonify({
         'status': 'success',
-        'message': f'Deleted {deleted_count} inspection assignments',
-        'deleted': deleted_count,
+        'message': f'Deleted {deleted_assignments} assignments and {deleted_lists} lists',
+        'deleted': deleted_assignments,
+        'deleted_lists': deleted_lists,
     }), 200
