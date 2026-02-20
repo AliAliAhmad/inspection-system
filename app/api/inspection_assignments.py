@@ -1538,10 +1538,15 @@ def clear_all_assignments():
     from app.models.monitor_followup import MonitorFollowup
     from app.extensions import safe_commit
 
-    # Delete child tables that reference inspection_assignments (FK-safe order)
-    WorkPlanJob.query.filter(WorkPlanJob.inspection_assignment_id.isnot(None)).delete(synchronize_session=False)
+    # Unlink child tables that reference inspection_assignments (set FK to NULL)
+    WorkPlanJob.query.filter(WorkPlanJob.inspection_assignment_id.isnot(None)).update(
+        {WorkPlanJob.inspection_assignment_id: None}, synchronize_session=False
+    )
+    MonitorFollowup.query.filter(MonitorFollowup.inspection_assignment_id.isnot(None)).update(
+        {MonitorFollowup.inspection_assignment_id: None}, synchronize_session=False
+    )
+    # FinalAssessment requires assignment — must delete these
     FinalAssessment.query.delete(synchronize_session=False)
-    MonitorFollowup.query.filter(MonitorFollowup.inspection_assignment_id.isnot(None)).delete(synchronize_session=False)
 
     # Now delete assignments and lists
     deleted_assignments = InspectionAssignment.query.delete(synchronize_session=False)
