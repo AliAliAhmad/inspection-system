@@ -746,6 +746,16 @@ with app.app_context():
         ('planned_date', 'DATE'),
         ('start_time', 'TIME'),
         ('end_time', 'TIME'),
+        ('actual_start_time', 'TIME'),
+        ('actual_end_time', 'TIME'),
+        ('template_id', 'INTEGER REFERENCES job_templates(id)'),
+        ('checklist_required', 'BOOLEAN DEFAULT FALSE'),
+        ('checklist_completed', 'BOOLEAN DEFAULT FALSE'),
+        ('completion_photo_required', 'BOOLEAN DEFAULT FALSE'),
+        ('weather_sensitive', 'BOOLEAN DEFAULT FALSE'),
+        ('is_split', 'BOOLEAN DEFAULT FALSE'),
+        ('split_from_id', 'INTEGER REFERENCES work_plan_jobs(id)'),
+        ('split_part', 'INTEGER'),
     ]
     for col_name, col_type in work_plan_job_cols:
         try:

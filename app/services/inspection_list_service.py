@@ -323,7 +323,7 @@ class InspectionListService:
         try:
             InspectionListService._sync_to_work_plan(all_assigned, assigned_by_id)
         except Exception as e:
-            # Don't fail the assignment if work plan sync fails
+            db.session.rollback()
             import logging
             logging.getLogger(__name__).warning(f'Work plan auto-sync failed: {e}')
 
@@ -387,12 +387,13 @@ class InspectionListService:
                 continue
 
             equip_name = assignment.equipment.name if assignment.equipment else 'Equipment'
+            # Don't copy assignment berth — work_plan_jobs berth has a constraint
+            # limiting to 'east'/'west'/'both'. Berth is accessible via the linked assignment.
             job = WorkPlanJob(
                 work_plan_day_id=work_day.id,
                 job_type='inspection',
                 inspection_assignment_id=assignment.id,
                 equipment_id=assignment.equipment_id,
-                berth=assignment.berth,
                 description=f'Inspection: {equip_name}',
                 estimated_hours=1.0,
                 priority='normal',
