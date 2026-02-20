@@ -2570,6 +2570,21 @@ with app.app_context():
         print('Admin user created: admin@company.com / admin123')
     else:
         print('Admin user already exists.')
+
+    # Set default passwords for all imported users who have no password
+    from werkzeug.security import generate_password_hash
+    users_without_pw = User.query.filter(
+        User.password_hash.is_(None) | (User.password_hash == '')
+    ).all()
+    if users_without_pw:
+        for u in users_without_pw:
+            if u.role_id:
+                u.password_hash = generate_password_hash(u.role_id)
+                u.must_change_password = True
+        db.session.commit()
+        print(f'Set default passwords (role_id) for {len(users_without_pw)} imported users')
+    else:
+        print('All users already have passwords.')
 "
 
 echo "Starting gunicorn..."

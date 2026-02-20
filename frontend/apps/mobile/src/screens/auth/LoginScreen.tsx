@@ -63,6 +63,8 @@ export default function LoginScreen() {
         <Text style={styles.subtitle}>{t('auth.sign_in_prompt')}</Text>
 
         <TextInput
+          testID="login-email"
+          accessibilityLabel="Email or Username"
           style={styles.input}
           placeholder={t('auth.identifier', 'Email or Username')}
           value={username}
@@ -72,6 +74,8 @@ export default function LoginScreen() {
         />
 
         <TextInput
+          testID="login-password"
+          accessibilityLabel="Password"
           style={styles.input}
           placeholder={t('auth.password')}
           value={password}
@@ -80,6 +84,8 @@ export default function LoginScreen() {
         />
 
         <TouchableOpacity
+          testID="login-button"
+          accessibilityLabel="Login"
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleLogin}
           disabled={loading}
