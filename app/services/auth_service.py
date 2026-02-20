@@ -33,10 +33,12 @@ class AuthService:
         if not email or not password:
             raise ValidationError("Email/username and password are required")
 
-        # Try to find user by email first, then by username
+        # Try to find user by email, then username, then role_id
         user = User.query.filter_by(email=email).first()
         if not user:
             user = User.query.filter_by(username=email).first()
+        if not user:
+            user = User.query.filter_by(role_id=email).first()
 
         if not user or not user.check_password(password):
             logger.warning("Login failed for identifier=%s: invalid credentials", email)

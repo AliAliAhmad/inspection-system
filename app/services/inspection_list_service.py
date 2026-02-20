@@ -65,21 +65,6 @@ class InspectionListService:
                 asset_types.add(at)
                 asset_type_template_map[at] = routine.template_id
 
-        if not asset_types:
-            raise ValidationError(
-                f"No matching routines found for {target_date.strftime('%A')} {shift} shift. "
-                f"Found {len(routines)} active routines total but none match this shift/day. "
-                f"Please create inspection routines first."
-            )
-
-        # Find equipment matching these asset types
-        # First, get equipment that match asset types
-        equipment_candidates = Equipment.query.filter(
-            Equipment.equipment_type.in_(list(asset_types)),
-            Equipment.status.in_(['active', 'under_maintenance'])
-        ).all()
-
-        # Filter by imported schedule: only include equipment scheduled for this day/shift
         # Match shift values — imported schedules may use 'day' (legacy) which covers
         # both 'morning' and 'afternoon' in the new shift system
         shift_values = [shift]
@@ -96,26 +81,51 @@ class InspectionListService:
 
         scheduled_equipment_ids = {se.equipment_id for se in schedule_entries}
 
-        # Only include equipment that is in the imported schedule for this day/shift
-        equipment_list = [
-            eq for eq in equipment_candidates
-            if eq.id in scheduled_equipment_ids
-        ]
+        if asset_types:
+            # Routines exist — filter equipment by asset type AND schedule
+            equipment_candidates = Equipment.query.filter(
+                Equipment.equipment_type.in_(list(asset_types)),
+                Equipment.status.in_(['active', 'under_maintenance'])
+            ).all()
 
-        if not equipment_list:
-            # Provide helpful error message
-            if equipment_candidates:
+            equipment_list = [
+                eq for eq in equipment_candidates
+                if eq.id in scheduled_equipment_ids
+            ]
+
+            if not equipment_list:
+                if equipment_candidates:
+                    day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                    raise ValidationError(
+                        f"No equipment scheduled for {day_names[day_of_week]} {shift} shift. "
+                        f"Found {len(equipment_candidates)} equipment with matching asset types, "
+                        f"but none are scheduled for this day/shift in the imported schedule. "
+                        f"Please import an inspection schedule first."
+                    )
+                else:
+                    raise ValidationError(
+                        f"No equipment found matching asset types: {', '.join(asset_types)}. "
+                        f"Check that equipment exists with these types and is active."
+                    )
+        else:
+            # No routines configured — fall back to schedule-only mode.
+            # Use ALL equipment from the imported schedule for this day/shift.
+            if not scheduled_equipment_ids:
                 day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
                 raise ValidationError(
                     f"No equipment scheduled for {day_names[day_of_week]} {shift} shift. "
-                    f"Found {len(equipment_candidates)} equipment with matching asset types, "
-                    f"but none are scheduled for this day/shift in the imported schedule. "
                     f"Please import an inspection schedule first."
                 )
-            else:
+
+            equipment_list = Equipment.query.filter(
+                Equipment.id.in_(list(scheduled_equipment_ids)),
+                Equipment.status.in_(['active', 'under_maintenance'])
+            ).all()
+
+            if not equipment_list:
                 raise ValidationError(
-                    f"No equipment found matching asset types: {', '.join(asset_types)}. "
-                    f"Check that equipment exists with these types and is active."
+                    f"Scheduled equipment not found or not active. "
+                    f"Check equipment status in the system."
                 )
 
         # Create inspection list
