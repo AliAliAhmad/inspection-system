@@ -1524,6 +1524,70 @@ def workload_preview():
     }), 200
 
 
+@bp.route('/<int:assignment_id>', methods=['DELETE'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def delete_assignment(assignment_id):
+    """Delete a single unassigned inspection assignment."""
+    assignment = db.session.get(InspectionAssignment, assignment_id)
+    if not assignment:
+        return jsonify({'status': 'error', 'message': 'Assignment not found'}), 404
+
+    if assignment.status != 'unassigned':
+        return jsonify({'status': 'error', 'message': 'Only unassigned assignments can be deleted'}), 400
+
+    list_id = assignment.inspection_list_id
+    db.session.delete(assignment)
+
+    # Update list stats
+    il = db.session.get(InspectionList, list_id)
+    if il:
+        remaining = InspectionAssignment.query.filter_by(inspection_list_id=list_id).count()
+        if remaining == 0:
+            db.session.delete(il)
+        else:
+            il.total_assets = remaining
+
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': 'Assignment deleted'}), 200
+
+
+@bp.route('/delete-unassigned', methods=['DELETE'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def delete_all_unassigned():
+    """Delete all unassigned inspection assignments. Cleans up empty lists."""
+    unassigned = InspectionAssignment.query.filter_by(status='unassigned').all()
+    count = len(unassigned)
+
+    if count == 0:
+        return jsonify({'status': 'success', 'message': 'No unassigned assignments to delete', 'deleted': 0}), 200
+
+    affected_list_ids = {a.inspection_list_id for a in unassigned}
+    for a in unassigned:
+        db.session.delete(a)
+
+    db.session.flush()
+
+    # Clean up lists that now have 0 assignments, update stats for others
+    for list_id in affected_list_ids:
+        il = db.session.get(InspectionList, list_id)
+        if not il:
+            continue
+        remaining = InspectionAssignment.query.filter_by(inspection_list_id=list_id).count()
+        if remaining == 0:
+            db.session.delete(il)
+        else:
+            il.total_assets = remaining
+            il.assigned_assets = InspectionAssignment.query.filter(
+                InspectionAssignment.inspection_list_id == list_id,
+                InspectionAssignment.status != 'unassigned'
+            ).count()
+
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': f'Deleted {count} unassigned assignments', 'deleted': count}), 200
+
+
 @bp.route('/clear-all', methods=['DELETE'])
 @jwt_required()
 @admin_required()

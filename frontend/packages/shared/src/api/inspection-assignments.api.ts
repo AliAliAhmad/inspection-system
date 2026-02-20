@@ -368,6 +368,20 @@ export const inspectionAssignmentsApi = {
     );
   },
 
+  // Delete a single unassigned assignment
+  deleteAssignment(assignmentId: number) {
+    return getApiClient().delete<ApiResponse>(
+      `/api/inspection-assignments/${assignmentId}`,
+    );
+  },
+
+  // Delete all unassigned assignments
+  deleteAllUnassigned() {
+    return getApiClient().delete<ApiResponse<{ deleted: number }>>(
+      '/api/inspection-assignments/delete-unassigned',
+    );
+  },
+
   // Clear all assignments (admin only, for debugging)
   clearAllAssignments() {
     return getApiClient().delete<ApiResponse<{ deleted: number }>>(

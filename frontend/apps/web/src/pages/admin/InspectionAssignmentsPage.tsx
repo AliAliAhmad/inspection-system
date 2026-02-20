@@ -56,6 +56,7 @@ import {
   EnvironmentOutlined,
   SafetyCertificateOutlined,
   UnorderedListOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -888,12 +889,30 @@ export default function InspectionAssignmentsPage() {
 
   const clearAllMutation = useMutation({
     mutationFn: () => inspectionAssignmentsApi.clearAllAssignments(),
-    onSuccess: (res) => {
-      const result = (res.data as any).data || res.data;
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
-      message.success(`Cleared ${result.deleted || 0} assignments`);
+      message.success('All inspection data cleared');
     },
-    onError: () => message.error('Failed to clear assignments'),
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to clear'),
+  });
+
+  const deleteUnassignedMutation = useMutation({
+    mutationFn: () => inspectionAssignmentsApi.deleteAllUnassigned(),
+    onSuccess: (res) => {
+      const result = (res.data as any)?.data ?? res.data;
+      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
+      message.success(`Deleted ${result?.deleted ?? 0} unassigned assignments`);
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to delete unassigned'),
+  });
+
+  const deleteAssignmentMutation = useMutation({
+    mutationFn: (id: number) => inspectionAssignmentsApi.deleteAssignment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
+      message.success('Assignment deleted');
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to delete'),
   });
 
   // Flatten: extract all assignments from all lists
@@ -1075,6 +1094,25 @@ export default function InspectionAssignmentsPage() {
                   setSelectedAssignment(record);
                   setAiSuggestionOpen(true);
                 }}
+              />
+            </Tooltip>
+          )}
+          {record.status === 'unassigned' && (
+            <Tooltip title={t('common.delete', 'Delete')}>
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  Modal.confirm({
+                    title: t('assignments.deleteAssignment', 'Delete Assignment?'),
+                    content: `${record.equipment_name || 'This assignment'} — ${t('assignments.deleteConfirm', 'this will remove it from the list')}`,
+                    okText: t('common.delete', 'Delete'),
+                    okType: 'danger',
+                    onOk: () => deleteAssignmentMutation.mutate(record.id),
+                  });
+                }}
+                loading={deleteAssignmentMutation.isPending}
               />
             </Tooltip>
           )}
@@ -1357,19 +1395,33 @@ export default function InspectionAssignmentsPage() {
             </Button.Group>
             <Button icon={<ReloadOutlined />} onClick={() => refetch()} />
             <Button
+              onClick={() => {
+                Modal.confirm({
+                  title: t('assignments.deleteUnassigned', 'Delete Unassigned?'),
+                  content: t('assignments.deleteUnassignedConfirm', 'This will remove all unassigned inspection assignments. Assigned ones will not be affected.'),
+                  okText: t('common.yes', 'Yes'),
+                  okType: 'danger',
+                  onOk: () => deleteUnassignedMutation.mutate(),
+                });
+              }}
+              loading={deleteUnassignedMutation.isPending}
+            >
+              {t('assignments.deleteUnassigned', 'Delete Unassigned')}
+            </Button>
+            <Button
               danger
               onClick={() => {
                 Modal.confirm({
-                  title: 'Clear All Assignments?',
-                  content: 'This will delete ALL inspection assignments from the database. This cannot be undone!',
-                  okText: 'Yes, Clear All',
+                  title: t('assignments.clearAll', 'Clear All?'),
+                  content: t('assignments.clearAllConfirm', 'This will delete ALL inspection data (assignments, lists, inspections). This cannot be undone!'),
+                  okText: t('assignments.yesClearAll', 'Yes, Clear All'),
                   okType: 'danger',
                   onOk: () => clearAllMutation.mutate(),
                 });
               }}
               loading={clearAllMutation.isPending}
             >
-              🗑️ Clear All
+              {t('assignments.clearAll', 'Clear All')}
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateOpen(true)}>
               {t('assignments.generate', 'Generate List')}
