@@ -1530,13 +1530,22 @@ def workload_preview():
 def clear_all_assignments():
     """
     Clear all inspection assignments AND their parent lists (for debugging/testing).
-    Admin only. Use with caution!
+    Admin only. Deletes child records first to respect FK constraints.
     """
     from app.models import InspectionAssignment, InspectionList
+    from app.models.work_plan_job import WorkPlanJob
+    from app.models.final_assessment import FinalAssessment
+    from app.models.monitor_followup import MonitorFollowup
     from app.extensions import safe_commit
 
-    deleted_assignments = InspectionAssignment.query.delete()
-    deleted_lists = InspectionList.query.delete()
+    # Delete child tables that reference inspection_assignments (FK-safe order)
+    WorkPlanJob.query.filter(WorkPlanJob.inspection_assignment_id.isnot(None)).delete(synchronize_session=False)
+    FinalAssessment.query.delete(synchronize_session=False)
+    MonitorFollowup.query.filter(MonitorFollowup.inspection_assignment_id.isnot(None)).delete(synchronize_session=False)
+
+    # Now delete assignments and lists
+    deleted_assignments = InspectionAssignment.query.delete(synchronize_session=False)
+    deleted_lists = InspectionList.query.delete(synchronize_session=False)
     safe_commit()
 
     return jsonify({
