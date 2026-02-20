@@ -29,6 +29,7 @@ import {
   Radio,
   Steps,
   Input,
+  Popconfirm,
 } from 'antd';
 import {
   PlusOutlined,
@@ -1089,23 +1090,14 @@ export default function InspectionAssignmentsPage() {
             </Tooltip>
           )}
           {record.status === 'unassigned' && (
-            <Tooltip title={t('common.delete', 'Delete')}>
-              <Button
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => {
-                  Modal.confirm({
-                    title: t('assignments.deleteAssignment', 'Delete Assignment?'),
-                    content: `${record.equipment_name || 'This assignment'} — ${t('assignments.deleteConfirm', 'this will remove it from the list')}`,
-                    okText: t('common.delete', 'Delete'),
-                    okType: 'danger',
-                    onOk: () => deleteAssignmentMutation.mutate(record.id),
-                  });
-                }}
-                loading={deleteAssignmentMutation.isPending}
-              />
-            </Tooltip>
+            <Popconfirm
+              title={t('assignments.deleteAssignment', 'Delete this assignment?')}
+              onConfirm={() => deleteAssignmentMutation.mutate(record.id)}
+              okText={t('common.yes', 'Yes')}
+              cancelText={t('common.no', 'No')}
+            >
+              <Button size="small" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
           )}
         </Space>
       ),
@@ -1385,20 +1377,16 @@ export default function InspectionAssignmentsPage() {
               />
             </Button.Group>
             <Button icon={<ReloadOutlined />} onClick={() => refetch()} />
-            <Button
-              onClick={() => {
-                Modal.confirm({
-                  title: t('assignments.deleteUnassigned', 'Delete Unassigned?'),
-                  content: t('assignments.deleteUnassignedConfirm', 'This will remove all unassigned inspection assignments. Assigned ones will not be affected.'),
-                  okText: t('common.yes', 'Yes'),
-                  okType: 'danger',
-                  onOk: () => deleteUnassignedMutation.mutate(),
-                });
-              }}
-              loading={deleteUnassignedMutation.isPending}
+            <Popconfirm
+              title={t('assignments.deleteUnassignedConfirm', 'Delete all unassigned assignments?')}
+              onConfirm={() => deleteUnassignedMutation.mutate()}
+              okText={t('common.yes', 'Yes')}
+              cancelText={t('common.no', 'No')}
             >
-              {t('assignments.deleteUnassigned', 'Delete Unassigned')}
-            </Button>
+              <Button danger icon={<DeleteOutlined />} loading={deleteUnassignedMutation.isPending}>
+                {t('assignments.deleteUnassigned', 'Delete Unassigned')}
+              </Button>
+            </Popconfirm>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateOpen(true)}>
               {t('assignments.generate', 'Generate List')}
             </Button>
