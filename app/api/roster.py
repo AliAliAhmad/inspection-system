@@ -440,17 +440,25 @@ def get_day_availability():
         elif roster_shift == 'leave':
             on_leave.append(user_info)
         elif roster_shift in ('day', 'night'):
-            # If shift filter is specified, only include matching shifts
-            if shift_filter and roster_shift != shift_filter:
-                continue
+            # Shift matching: 'day' covers morning/afternoon, 'night' covers night
+            if shift_filter:
+                matches = False
+                if roster_shift == shift_filter:
+                    matches = True
+                elif roster_shift == 'day' and shift_filter in ('morning', 'afternoon', 'day'):
+                    matches = True
+                elif roster_shift == 'night' and shift_filter == 'night':
+                    matches = True
+                elif shift_filter == 'day' and roster_shift in ('day',):
+                    matches = True
+                if not matches:
+                    continue
             user_info['shift'] = roster_shift
             available.append(user_info)
         else:
-            # No roster entry -- user has no assignment for this date
-            # Include them as available if no shift filter, or skip
-            if not shift_filter:
-                user_info['shift'] = None
-                available.append(user_info)
+            # No roster entry — include user as available (default shift from profile)
+            user_info['shift'] = u.shift or None
+            available.append(user_info)
 
     return jsonify({
         'status': 'success',

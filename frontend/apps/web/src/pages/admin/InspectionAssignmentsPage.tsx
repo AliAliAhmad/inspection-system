@@ -941,15 +941,17 @@ export default function InspectionAssignmentsPage() {
   const availableUsers: any[] = availData?.available ?? [];
   const onLeaveUsers: any[] = availData?.on_leave ?? [];
 
+  // Filter inspectors by specialization — also include inspectors without specialization in both lists
+  const isInspectorRole = (u: any) => u.role === 'inspector' || u.role === 'specialist';
   const mechAvailable = availableUsers.filter(
-    (u: any) => u.specialization === 'mechanical' && (u.role === 'inspector' || (u.role === 'specialist' && u.covering_for)),
+    (u: any) => isInspectorRole(u) && (u.specialization === 'mechanical' || !u.specialization),
   );
   const elecAvailable = availableUsers.filter(
-    (u: any) => u.specialization === 'electrical' && (u.role === 'inspector' || (u.role === 'specialist' && u.covering_for)),
+    (u: any) => isInspectorRole(u) && (u.specialization === 'electrical' || !u.specialization),
   );
 
-  const mechOnLeave = onLeaveUsers.filter((u: any) => u.role === 'inspector' && u.specialization === 'mechanical');
-  const elecOnLeave = onLeaveUsers.filter((u: any) => u.role === 'inspector' && u.specialization === 'electrical');
+  const mechOnLeave = onLeaveUsers.filter((u: any) => isInspectorRole(u) && (u.specialization === 'mechanical' || !u.specialization));
+  const elecOnLeave = onLeaveUsers.filter((u: any) => isInspectorRole(u) && (u.specialization === 'electrical' || !u.specialization));
 
   const mechOptions = [...mechAvailable, ...mechOnLeave];
   const elecOptions = [...elecAvailable, ...elecOnLeave];

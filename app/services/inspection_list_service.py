@@ -206,10 +206,10 @@ class InspectionListService:
 
         # Validate mechanical inspector
         mech = db.session.get(User, mechanical_inspector_id)
-        if not mech or not mech.has_role('inspector'):
-            raise ValidationError("Invalid mechanical inspector")
-        if mech.specialization != 'mechanical':
-            raise ValidationError("Inspector must have mechanical specialization")
+        if not mech:
+            raise ValidationError("Mechanical inspector not found")
+        if not (mech.has_role('inspector') or mech.has_role('specialist')):
+            raise ValidationError("User is not an inspector or specialist")
         # Check leave for the assignment date, not today
         mech_leave = Leave.query.filter(
             Leave.user_id == mechanical_inspector_id,
@@ -222,10 +222,10 @@ class InspectionListService:
 
         # Validate electrical inspector
         elec = db.session.get(User, electrical_inspector_id)
-        if not elec or not elec.has_role('inspector'):
-            raise ValidationError("Invalid electrical inspector")
-        if elec.specialization != 'electrical':
-            raise ValidationError("Inspector must have electrical specialization")
+        if not elec:
+            raise ValidationError("Electrical inspector not found")
+        if not (elec.has_role('inspector') or elec.has_role('specialist')):
+            raise ValidationError("User is not an inspector or specialist")
         elec_leave = Leave.query.filter(
             Leave.user_id == electrical_inspector_id,
             Leave.status == 'approved',
@@ -236,11 +236,23 @@ class InspectionListService:
             raise ValidationError(f"{elec.full_name} is on leave on {target_date}")
 
         # Validate same shift using roster for the assignment date
+        # Cross-match: 'day' roster covers 'morning'/'afternoon' assignments
+        def shifts_compatible(user_shift, assignment_shift):
+            if not user_shift:
+                return True  # No roster = allow assignment
+            if user_shift == assignment_shift:
+                return True
+            if user_shift == 'day' and assignment_shift in ('morning', 'afternoon', 'day'):
+                return True
+            if assignment_shift == 'day' and user_shift in ('morning', 'afternoon', 'day'):
+                return True
+            return False
+
         mech_roster = RosterEntry.query.filter_by(user_id=mechanical_inspector_id, date=target_date).first()
         elec_roster = RosterEntry.query.filter_by(user_id=electrical_inspector_id, date=target_date).first()
         mech_shift = mech_roster.shift if mech_roster else mech.shift
         elec_shift = elec_roster.shift if elec_roster else elec.shift
-        if mech_shift != assignment.shift or elec_shift != assignment.shift:
+        if not shifts_compatible(mech_shift, assignment.shift) or not shifts_compatible(elec_shift, assignment.shift):
             raise ValidationError(
                 f"Both inspectors must be on the {assignment.shift} shift for {target_date}. "
                 f"Mechanical inspector is on '{mech_shift or 'unknown'}', "
@@ -248,10 +260,9 @@ class InspectionListService:
             )
 
         # Calculate deadline (30 hours from shift start)
-        if assignment.shift == 'day':
-            shift_start = datetime.combine(assignment.inspection_list.target_date, datetime.min.time().replace(hour=7))
-        else:
-            shift_start = datetime.combine(assignment.inspection_list.target_date, datetime.min.time().replace(hour=19))
+        shift_hours = {'morning': 6, 'day': 7, 'afternoon': 14, 'night': 22}
+        start_hour = shift_hours.get(assignment.shift, 7)
+        shift_start = datetime.combine(assignment.inspection_list.target_date, datetime.min.time().replace(hour=start_hour))
         deadline = shift_start + timedelta(hours=30)
 
         # Assign
