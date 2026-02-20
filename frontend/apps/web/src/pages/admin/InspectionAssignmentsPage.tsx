@@ -381,11 +381,15 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
   ];
 
   const handleGenerate = () => {
-    if (!canGenerate) return;
-    generateMutation.mutate({
+    if (!canGenerate) {
+      message.warning('Please select a date, shift, and at least one equipment');
+      return;
+    }
+    const payload = {
       target_date: dayjs(targetDate).format('YYYY-MM-DD'),
-      shift,
-    });
+      shift: shift as 'morning' | 'afternoon' | 'night' | 'day',
+    };
+    generateMutation.mutate(payload);
   };
 
   return (
@@ -813,7 +817,11 @@ export default function InspectionAssignmentsPage() {
       setSelectedEquipmentIds([]);
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.message || t('assignments.generateError', 'Failed to generate list'));
+      const errMsg = err?.response?.data?.message || err?.message || t('assignments.generateError', 'Failed to generate list');
+      Modal.error({
+        title: t('assignments.generateError', 'Failed to generate list'),
+        content: errMsg,
+      });
     },
   });
 
