@@ -381,13 +381,21 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
   ];
 
   const handleGenerate = () => {
-    if (!canGenerate) {
-      message.warning('Please select a date, shift, and at least one equipment');
+    const dateVal = form.getFieldValue('target_date');
+    const shiftVal = form.getFieldValue('shift');
+    const hasEquip = selectedEquipmentIds.length > 0;
+
+    if (!dateVal || !shiftVal || !hasEquip) {
+      Modal.warning({
+        title: 'Cannot Generate',
+        content: `Missing: ${!dateVal ? 'Date, ' : ''}${!shiftVal ? 'Shift, ' : ''}${!hasEquip ? 'Equipment selection' : ''}`.replace(/, $/, ''),
+      });
       return;
     }
+
     const payload = {
-      target_date: dayjs(targetDate).format('YYYY-MM-DD'),
-      shift: shift as 'morning' | 'afternoon' | 'night' | 'day',
+      target_date: dayjs(dateVal).format('YYYY-MM-DD'),
+      shift: shiftVal as 'morning' | 'afternoon' | 'night' | 'day',
     };
     generateMutation.mutate(payload);
   };
@@ -708,7 +716,6 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
                 size="large"
                 icon={<ThunderboltOutlined />}
                 loading={generateMutation.isPending}
-                disabled={!canGenerate}
                 onClick={handleGenerate}
                 style={{ fontWeight: 600, borderRadius: 8, minWidth: 180 }}
               >
