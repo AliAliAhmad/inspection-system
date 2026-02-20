@@ -1529,33 +1529,47 @@ def workload_preview():
 @admin_required()
 def clear_all_assignments():
     """
-    Clear all inspection assignments AND their parent lists (for debugging/testing).
-    Admin only. Deletes child records first to respect FK constraints.
+    Clear all inspection data: answers, inspections, assessments, assignments, lists.
+    Admin only. Deletes in FK-safe order (children first).
     """
-    from app.models import InspectionAssignment, InspectionList
-    from app.models.work_plan_job import WorkPlanJob
-    from app.models.final_assessment import FinalAssessment
-    from app.models.monitor_followup import MonitorFollowup
     from app.extensions import safe_commit
 
-    # Unlink child tables that reference inspection_assignments (set FK to NULL)
-    WorkPlanJob.query.filter(WorkPlanJob.inspection_assignment_id.isnot(None)).update(
-        {WorkPlanJob.inspection_assignment_id: None}, synchronize_session=False
-    )
-    MonitorFollowup.query.filter(MonitorFollowup.inspection_assignment_id.isnot(None)).update(
-        {MonitorFollowup.inspection_assignment_id: None}, synchronize_session=False
-    )
-    # FinalAssessment requires assignment — must delete these
-    FinalAssessment.query.delete(synchronize_session=False)
+    # Delete everything in FK-safe order using raw SQL
+    tables_to_clear = [
+        # Leaf tables first
+        ('inspection_answers', None),
+        ('inspection_ratings', None),
+        ('defect_assessments', None),
+        ('defect_occurrences', None),
+        # Unlink references (set FK to NULL)
+        ('work_plan_jobs', 'UPDATE work_plan_jobs SET inspection_assignment_id = NULL WHERE inspection_assignment_id IS NOT NULL'),
+        ('monitor_followups', 'UPDATE monitor_followups SET inspection_assignment_id = NULL WHERE inspection_assignment_id IS NOT NULL'),
+        # Delete tables that require assignment
+        ('final_assessments', None),
+        ('inspections', None),
+        ('inspection_assignments', None),
+        ('inspection_lists', None),
+    ]
 
-    # Now delete assignments and lists
-    deleted_assignments = InspectionAssignment.query.delete(synchronize_session=False)
-    deleted_lists = InspectionList.query.delete(synchronize_session=False)
+    counts = {}
+    for table, custom_sql in tables_to_clear:
+        try:
+            if custom_sql:
+                result = db.session.execute(db.text(custom_sql))
+                counts[table] = f'{result.rowcount} unlinked'
+            else:
+                result = db.session.execute(db.text(f'DELETE FROM "{table}"'))
+                if result.rowcount > 0:
+                    counts[table] = result.rowcount
+        except Exception:
+            db.session.rollback()
+            continue
+
     safe_commit()
 
+    total = sum(v for v in counts.values() if isinstance(v, int))
     return jsonify({
         'status': 'success',
-        'message': f'Deleted {deleted_assignments} assignments and {deleted_lists} lists',
-        'deleted': deleted_assignments,
-        'deleted_lists': deleted_lists,
+        'message': f'Cleared all inspection data ({total} records deleted)',
+        'details': counts,
     }), 200
