@@ -887,15 +887,6 @@ export default function InspectionAssignmentsPage() {
     },
   });
 
-  const clearAllMutation = useMutation({
-    mutationFn: () => inspectionAssignmentsApi.clearAllAssignments(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
-      message.success('All inspection data cleared');
-    },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to clear'),
-  });
-
   const deleteUnassignedMutation = useMutation({
     mutationFn: () => inspectionAssignmentsApi.deleteAllUnassigned(),
     onSuccess: (res) => {
@@ -1407,21 +1398,6 @@ export default function InspectionAssignmentsPage() {
               loading={deleteUnassignedMutation.isPending}
             >
               {t('assignments.deleteUnassigned', 'Delete Unassigned')}
-            </Button>
-            <Button
-              danger
-              onClick={() => {
-                Modal.confirm({
-                  title: t('assignments.clearAll', 'Clear All?'),
-                  content: t('assignments.clearAllConfirm', 'This will delete ALL inspection data (assignments, lists, inspections). This cannot be undone!'),
-                  okText: t('assignments.yesClearAll', 'Yes, Clear All'),
-                  okType: 'danger',
-                  onOk: () => clearAllMutation.mutate(),
-                });
-              }}
-              loading={clearAllMutation.isPending}
-            >
-              {t('assignments.clearAll', 'Clear All')}
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setGenerateOpen(true)}>
               {t('assignments.generate', 'Generate List')}
