@@ -2572,7 +2572,7 @@ with app.app_context():
         print('Admin user already exists.')
 
     # Set default passwords for all imported users (password = role_id)
-    imported_users = User.query.filter(User.email != 'admin@company.com').all()
+    imported_users = User.query.filter(db.or_(User.email.is_(None), User.email != 'admin@company.com')).all()
     updated = 0
     for u in imported_users:
         if u.role_id:
