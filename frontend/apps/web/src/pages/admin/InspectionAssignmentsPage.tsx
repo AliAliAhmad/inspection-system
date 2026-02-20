@@ -307,7 +307,7 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
   }, [targetDate]);
 
   // Fetch schedules — use same queryKey as SchedulesPage to share cache
-  const { data: allSchedulesData, isLoading: isLoadingSchedule, error: scheduleError } = useQuery({
+  const { data: allSchedulesData, isLoading: isLoadingSchedule } = useQuery({
     queryKey: ['inspection-schedules'],
     queryFn: async () => {
       const response = await inspectionRoutinesApi.getSchedules();
@@ -438,9 +438,8 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
       <div style={{ padding: '24px 28px 20px' }}>
         <Form form={form} layout="vertical">
 
-          {/* ── STEP 1: Date & Shift ── */}
-          {step === 0 && (
-            <div>
+          {/* ── STEP 1: Date & Shift (kept mounted so Form.useWatch works) ── */}
+          <div style={{ display: step === 0 ? 'block' : 'none' }}>
               <Form.Item
                 name="target_date"
                 label={<Text strong style={{ fontSize: 14 }}><CalendarOutlined style={{ marginRight: 6 }} />{t('assignments.targetDate', 'Target Date')}</Text>}
@@ -499,8 +498,7 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
                   })}
                 </div>
               </Form.Item>
-            </div>
-          )}
+          </div>
 
           {/* ── STEP 2: Equipment Selection ── */}
           {step === 1 && (
@@ -511,29 +509,14 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
                   <div style={{ marginTop: 12, color: '#8c8c8c' }}>{t('assignments.loadingSchedule', 'Loading equipment...')}</div>
                 </div>
               ) : equipment.length === 0 ? (
-                <div>
-                  <Alert
-                    type="warning"
-                    showIcon
-                    icon={<ExclamationCircleOutlined />}
-                    message={t('assignments.noScheduledEquipment', 'No equipment scheduled')}
-                    description={t('assignments.noScheduledEquipmentDesc', 'No equipment is scheduled for this date and shift. Please import an inspection schedule first, or select a different date/shift.')}
-                    style={{ borderRadius: 10, marginBottom: 12 }}
-                  />
-                  {scheduleError && (
-                    <Alert type="error" message={`API Error: ${(scheduleError as any)?.message || 'Unknown'}`} style={{ marginBottom: 8 }} />
-                  )}
-                  <Card size="small" style={{ background: '#fafafa', fontSize: 12 }}>
-                    <Text type="secondary">
-                      Debug: schedules loaded = {allSchedulesData ? allSchedulesData.length : 'null'} |
-                      dayOfWeek = {dayOfWeek} ({targetDate ? dayjs(targetDate).format('dddd') : '-'}) |
-                      shift = {shift || '-'}
-                      {allSchedulesData && allSchedulesData.length > 0 && (
-                        <span> | sample days: {JSON.stringify(allSchedulesData[0]?.days || {})}</span>
-                      )}
-                    </Text>
-                  </Card>
-                </div>
+                <Alert
+                  type="warning"
+                  showIcon
+                  icon={<ExclamationCircleOutlined />}
+                  message={t('assignments.noScheduledEquipment', 'No equipment scheduled')}
+                  description={t('assignments.noScheduledEquipmentDesc', 'No equipment is scheduled for this date and shift. Please import an inspection schedule first, or select a different date/shift.')}
+                  style={{ borderRadius: 10 }}
+                />
               ) : (
                 <>
                   {/* Toolbar */}
