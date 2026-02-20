@@ -70,6 +70,8 @@
 
 | Date | What Changed | Status |
 |------|-------------|--------|
+| 2026-02-20 | Fix Generate Inspection List error: (1) cleanup script was deleting inspection_routines + inspection_schedules (imported data, not test data) — removed from delete list, (2) backend shift mismatch — imported schedules use 'day' but modal sends 'morning'/'afternoon', added cross-matching logic in generate_daily_list | ✅ Done |
+| 2026-02-20 | Fix QuickReport Network Error: notifications ran synchronously with translation API calls (30s timeout each per user), causing Render timeout. Moved to background thread so response returns immediately | ✅ Done |
 | 2026-02-20 | Fix QuickFieldReport: switch from FormData to base64 upload (reliable on RN), clear form after submit, show actual error messages, better success alert | ✅ Done |
 | 2026-02-20 | AI reading extraction: updated prompts in all 6 vision services (Gemini, Groq, OpenRouter, Together, SambaNova, DeepInfra) to focus ONLY on numeric reading extraction, explicitly says "Do NOT check for defects" | ✅ Done |
 | 2026-02-20 | Stuck meter auto-defect: if same reading value appears 3 consecutive times for same equipment and equipment not stopped, auto-creates a high-priority defect for meter repair + notifies admin/engineer | ✅ Done |

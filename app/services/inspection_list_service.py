@@ -46,8 +46,11 @@ class InspectionListService:
         applicable_routines = []
         for routine in routines:
             # Shift filter: match if routine shift equals requested shift, or routine has no shift
+            # Also match 'day' routines for 'morning'/'afternoon' and vice versa
             if routine.shift and routine.shift != shift:
-                continue
+                if not (routine.shift == 'day' and shift in ('morning', 'afternoon')):
+                    if not (shift == 'day' and routine.shift in ('morning', 'afternoon')):
+                        continue
             # Day filter: match if routine includes this day, or routine has no days_of_week set (every day)
             days = routine.days_of_week
             if days and day_of_week not in days:
@@ -77,11 +80,18 @@ class InspectionListService:
         ).all()
 
         # Filter by imported schedule: only include equipment scheduled for this day/shift
-        # Get schedule entries for this day and shift
-        schedule_entries = InspectionSchedule.query.filter_by(
-            day_of_week=day_of_week,
-            shift=shift,
-            is_active=True
+        # Match shift values — imported schedules may use 'day' (legacy) which covers
+        # both 'morning' and 'afternoon' in the new shift system
+        shift_values = [shift]
+        if shift in ('morning', 'afternoon'):
+            shift_values.append('day')
+        elif shift == 'day':
+            shift_values.extend(['morning', 'afternoon'])
+
+        schedule_entries = InspectionSchedule.query.filter(
+            InspectionSchedule.day_of_week == day_of_week,
+            InspectionSchedule.shift.in_(shift_values),
+            InspectionSchedule.is_active == True
         ).all()
 
         scheduled_equipment_ids = {se.equipment_id for se in schedule_entries}

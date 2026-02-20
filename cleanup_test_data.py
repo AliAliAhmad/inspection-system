@@ -38,8 +38,8 @@ def cleanup():
         'import_logs',
         'inspection_answers',
         'inspection_ratings',
-        'inspection_routines',
-        'inspection_schedules',
+        # 'inspection_routines',  # KEEP — admin-configured routine definitions
+        # 'inspection_schedules',  # KEEP — imported weekly equipment schedule
         'inventory_count_items',
         'job_challenge_voices',
         'job_checklist_responses',
@@ -143,6 +143,8 @@ def cleanup():
     # - checklist_templates
     # - checklist_items
     # - inspection_lists
+    # - inspection_routines  (admin-configured routine definitions)
+    # - inspection_schedules (imported weekly equipment schedule)
     # - job_templates
     # - leave_types
     # - maintenance_cycles

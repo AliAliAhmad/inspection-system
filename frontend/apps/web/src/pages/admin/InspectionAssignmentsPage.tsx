@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Card,
   Table,
@@ -27,6 +27,8 @@ import {
   Divider,
   Empty,
   Radio,
+  Steps,
+  Input,
 } from 'antd';
 import {
   PlusOutlined,
@@ -50,6 +52,10 @@ import {
   CloudOutlined,
   MoonOutlined,
   AppstoreOutlined,
+  SearchOutlined,
+  EnvironmentOutlined,
+  SafetyCertificateOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -267,28 +273,39 @@ function SLAMonitorView() {
   );
 }
 
-// Equipment Preview Component for Generate Modal
-interface ScheduledEquipmentPreviewProps {
+// ─── Generate Inspection List Modal (Wizard) ────────────────────────────────
+
+interface GenerateWizardProps {
+  open: boolean;
+  onClose: () => void;
   form: any;
   selectedEquipmentIds: number[];
   onSelectChange: (ids: number[]) => void;
+  generateMutation: any;
 }
 
-function ScheduledEquipmentPreview({ form, selectedEquipmentIds, onSelectChange }: ScheduledEquipmentPreviewProps) {
+function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSelectChange, generateMutation }: GenerateWizardProps) {
   const { t } = useTranslation();
+  const [step, setStep] = useState(0);
+  const [equipSearch, setEquipSearch] = useState('');
 
   // Watch form values
   const targetDate = Form.useWatch('target_date', form);
   const shift = Form.useWatch('shift', form);
 
-  // Calculate day of week from target date
+  // Reset step when modal opens/closes
+  useEffect(() => {
+    if (open) { setStep(0); setEquipSearch(''); }
+  }, [open]);
+
+  // Day of week from date
   const dayOfWeek = useMemo(() => {
     if (!targetDate) return null;
-    const day = dayjs(targetDate).day(); // 0=Sunday, 1=Monday, ...
-    return day === 0 ? 6 : day - 1; // Convert to 0=Monday, 6=Sunday
+    const d = dayjs(targetDate).day();
+    return d === 0 ? 6 : d - 1;
   }, [targetDate]);
 
-  // Fetch all schedules
+  // Fetch schedules
   const { data: allSchedulesData, isLoading: isLoadingSchedule } = useQuery({
     queryKey: ['inspection-schedules'],
     queryFn: async () => {
@@ -296,318 +313,403 @@ function ScheduledEquipmentPreview({ form, selectedEquipmentIds, onSelectChange 
       return (response.data as any).data || [];
     },
     staleTime: 60000,
+    enabled: open,
   });
 
-  // Filter schedules by day_of_week and shift
+  // Filter equipment by day + shift
   const equipment = useMemo(() => {
     if (!allSchedulesData || dayOfWeek === null || !shift) return [];
-
-    const filtered = allSchedulesData.filter((item: any) => {
-      const days = item.days || {};
-      const dayKey = String(dayOfWeek);
-      const dayValue = days[dayKey];
-
-      // Check if this equipment is scheduled for the selected day and shift
-      // Support new shift values (morning, afternoon, night) and legacy 'day' value
-      // For backward compatibility: 'day' in schedule matches 'morning' or 'afternoon' shift
-      if (dayValue === shift) return true;
-      if (dayValue === 'both') return true;
-      if (dayValue === 'day' && (shift === 'morning' || shift === 'afternoon')) return true;
-
-      return false;
-    });
-
-    return filtered.map((item: any) => ({
-      id: item.equipment_id,
-      name: item.equipment_name,
-      equipment_type: item.equipment_type,
-      berth: item.berth,
-      location: item.location,
-      serial_number: item.equipment_name, // Use name as serial for display
-    }));
+    return allSchedulesData
+      .filter((item: any) => {
+        const dayValue = (item.days || {})[String(dayOfWeek)];
+        if (!dayValue) return false;
+        if (dayValue === shift || dayValue === 'both') return true;
+        if (dayValue === 'day' && (shift === 'morning' || shift === 'afternoon')) return true;
+        return false;
+      })
+      .map((item: any) => ({
+        id: item.equipment_id,
+        name: item.equipment_name,
+        equipment_type: item.equipment_type,
+        berth: item.berth,
+      }));
   }, [allSchedulesData, dayOfWeek, shift]);
 
-  // Auto-select all equipment when data loads
-  useMemo(() => {
+  // Search filter
+  const filteredEquipment = useMemo(() => {
+    if (!equipSearch.trim()) return equipment;
+    const q = equipSearch.toLowerCase();
+    return equipment.filter((eq: any) =>
+      eq.name?.toLowerCase().includes(q) ||
+      eq.equipment_type?.toLowerCase().includes(q) ||
+      eq.berth?.toLowerCase().includes(q)
+    );
+  }, [equipment, equipSearch]);
+
+  // Group by berth
+  const berthGroups = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const eq of filteredEquipment) {
+      const key = eq.berth || 'Unassigned';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(eq);
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredEquipment]);
+
+  // Auto-select all when equipment first loads
+  useEffect(() => {
     if (equipment.length > 0 && selectedEquipmentIds.length === 0) {
       onSelectChange(equipment.map((eq: any) => eq.id));
     }
-  }, [equipment, selectedEquipmentIds.length, onSelectChange]);
+  }, [equipment.length]);
 
-  if (!targetDate || !shift) {
-    return (
-      <Alert
-        type="info"
-        message={t('assignments.selectDateShift', 'Please select a date and shift to preview equipment')}
-        icon={<CalendarOutlined />}
-        style={{ marginTop: 16 }}
-      />
-    );
-  }
+  const canProceedStep1 = !!targetDate && !!shift;
+  const canGenerate = canProceedStep1 && selectedEquipmentIds.length > 0;
 
-  if (isLoadingSchedule) {
-    return (
-      <div style={{ textAlign: 'center', padding: 40 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }}>
-          {t('assignments.loadingSchedule', 'Loading scheduled equipment...')}
+  const shiftOptions = [
+    { value: 'morning',   label: t('assignments.morning', 'Morning'),     icon: <SunOutlined />,   color: '#fa8c16', bg: '#fff7e6', border: '#ffd591', time: '06:00 – 14:00' },
+    { value: 'afternoon', label: t('assignments.afternoon', 'Afternoon'), icon: <CloudOutlined />, color: '#1890ff', bg: '#e6f7ff', border: '#91d5ff', time: '14:00 – 22:00' },
+    { value: 'night',     label: t('assignments.night', 'Night'),         icon: <MoonOutlined />,  color: '#722ed1', bg: '#f9f0ff', border: '#d3adf7', time: '22:00 – 06:00' },
+  ];
+
+  const handleGenerate = () => {
+    if (!canGenerate) return;
+    generateMutation.mutate({
+      target_date: dayjs(targetDate).format('YYYY-MM-DD'),
+      shift,
+    });
+  };
+
+  return (
+    <Modal
+      title={null}
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      destroyOnClose
+      width={720}
+      styles={{ body: { padding: 0 } }}
+      style={{ top: 40 }}
+    >
+      {/* Header */}
+      <div style={{
+        padding: '20px 28px 16px',
+        background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+        borderRadius: '8px 8px 0 0',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: 'rgba(255,255,255,0.2)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <SafetyCertificateOutlined style={{ fontSize: 22, color: '#fff' }} />
+          </div>
+          <div>
+            <Title level={4} style={{ color: '#fff', margin: 0, lineHeight: 1.2 }}>
+              {t('assignments.generate', 'Generate Inspection List')}
+            </Title>
+            <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>
+              {t('assignments.generateDesc', 'Select date, shift, and review equipment')}
+            </Text>
+          </div>
+        </div>
+        <Steps
+          current={step}
+          size="small"
+          onChange={(s) => { if (s === 0 || canProceedStep1) setStep(s); }}
+          items={[
+            { title: <span style={{ color: '#fff' }}>{t('assignments.dateShift', 'Date & Shift')}</span>, icon: <CalendarOutlined style={{ color: step >= 0 ? '#fff' : 'rgba(255,255,255,0.5)' }} /> },
+            { title: <span style={{ color: '#fff' }}>{t('assignments.equipment', 'Equipment')}</span>, icon: <AppstoreOutlined style={{ color: step >= 1 ? '#fff' : 'rgba(255,255,255,0.5)' }} /> },
+            { title: <span style={{ color: '#fff' }}>{t('assignments.confirm', 'Confirm')}</span>, icon: <CheckCircleOutlined style={{ color: step >= 2 ? '#fff' : 'rgba(255,255,255,0.5)' }} /> },
+          ]}
+          style={{ maxWidth: 480 }}
+        />
+      </div>
+
+      <div style={{ padding: '24px 28px 20px' }}>
+        <Form form={form} layout="vertical">
+
+          {/* ── STEP 1: Date & Shift ── */}
+          {step === 0 && (
+            <div>
+              <Form.Item
+                name="target_date"
+                label={<Text strong style={{ fontSize: 14 }}><CalendarOutlined style={{ marginRight: 6 }} />{t('assignments.targetDate', 'Target Date')}</Text>}
+                rules={[{ required: true, message: t('assignments.selectDate', 'Select a date') }]}
+              >
+                <DatePicker
+                  style={{ width: '100%' }}
+                  format="DD/MM/YYYY"
+                  size="large"
+                  placeholder={t('assignments.pickDate', 'Pick inspection date')}
+                />
+              </Form.Item>
+
+              {targetDate && (
+                <div style={{
+                  background: '#f0f5ff', borderRadius: 8, padding: '8px 14px',
+                  marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <CalendarOutlined style={{ color: '#1890ff' }} />
+                  <Text style={{ color: '#1890ff', fontWeight: 500 }}>
+                    {dayjs(targetDate).format('dddd, DD MMMM YYYY')}
+                  </Text>
+                </div>
+              )}
+
+              <Form.Item
+                name="shift"
+                label={<Text strong style={{ fontSize: 14 }}><ClockCircleOutlined style={{ marginRight: 6 }} />{t('assignments.selectShift', 'Shift')}</Text>}
+                rules={[{ required: true, message: t('assignments.selectShiftMsg', 'Select a shift') }]}
+              >
+                <div style={{ display: 'flex', gap: 12 }}>
+                  {shiftOptions.map((opt) => {
+                    const isActive = shift === opt.value;
+                    return (
+                      <div
+                        key={opt.value}
+                        onClick={() => form.setFieldValue('shift', opt.value)}
+                        style={{
+                          flex: 1, cursor: 'pointer', borderRadius: 12, padding: '16px 12px',
+                          textAlign: 'center', transition: 'all 0.25s',
+                          background: isActive ? opt.bg : '#fafafa',
+                          border: `2px solid ${isActive ? opt.color : '#e8e8e8'}`,
+                          boxShadow: isActive ? `0 2px 8px ${opt.color}33` : 'none',
+                          transform: isActive ? 'scale(1.03)' : 'scale(1)',
+                        }}
+                      >
+                        <div style={{ fontSize: 28, marginBottom: 6, color: isActive ? opt.color : '#bfbfbf' }}>
+                          {opt.icon}
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: isActive ? opt.color : '#595959' }}>
+                          {opt.label}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{opt.time}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Form.Item>
+            </div>
+          )}
+
+          {/* ── STEP 2: Equipment Selection ── */}
+          {step === 1 && (
+            <div>
+              {isLoadingSchedule ? (
+                <div style={{ textAlign: 'center', padding: 48 }}>
+                  <Spin size="large" />
+                  <div style={{ marginTop: 12, color: '#8c8c8c' }}>{t('assignments.loadingSchedule', 'Loading equipment...')}</div>
+                </div>
+              ) : equipment.length === 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  icon={<ExclamationCircleOutlined />}
+                  message={t('assignments.noScheduledEquipment', 'No equipment scheduled')}
+                  description={t('assignments.noScheduledEquipmentDesc', 'No equipment is scheduled for this date and shift. Please import an inspection schedule first, or select a different date/shift.')}
+                  style={{ borderRadius: 10 }}
+                />
+              ) : (
+                <>
+                  {/* Toolbar */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                    <Input
+                      placeholder={t('assignments.searchEquipment', 'Search equipment...')}
+                      prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                      value={equipSearch}
+                      onChange={(e) => setEquipSearch(e.target.value)}
+                      allowClear
+                      style={{ width: 240, borderRadius: 8 }}
+                    />
+                    <Space size={8}>
+                      <Tag color="blue" style={{ margin: 0, borderRadius: 6, padding: '2px 10px' }}>
+                        {selectedEquipmentIds.length} / {equipment.length} {t('assignments.selected', 'selected')}
+                      </Tag>
+                      <Button size="small" type="link" onClick={() => onSelectChange(equipment.map((eq: any) => eq.id))}>
+                        {t('assignments.selectAll', 'Select All')}
+                      </Button>
+                      <Button size="small" type="link" onClick={() => onSelectChange([])}>
+                        {t('assignments.deselectAll', 'Deselect All')}
+                      </Button>
+                    </Space>
+                  </div>
+
+                  {/* Equipment list grouped by berth */}
+                  <div style={{ maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
+                    <Checkbox.Group
+                      value={selectedEquipmentIds}
+                      onChange={onSelectChange as any}
+                      style={{ width: '100%' }}
+                    >
+                      {berthGroups.map(([berth, items]) => (
+                        <div key={berth} style={{ marginBottom: 16 }}>
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            marginBottom: 8, padding: '4px 0',
+                            borderBottom: '1px solid #f0f0f0',
+                          }}>
+                            <EnvironmentOutlined style={{ color: '#52c41a', fontSize: 13 }} />
+                            <Text strong style={{ fontSize: 13, color: '#389e0d' }}>{berth}</Text>
+                            <Badge count={items.length} style={{ backgroundColor: '#d9d9d9', color: '#595959', fontSize: 11 }} />
+                          </div>
+                          <Row gutter={[8, 8]}>
+                            {items.map((eq: any) => {
+                              const isChecked = selectedEquipmentIds.includes(eq.id);
+                              return (
+                                <Col xs={24} sm={12} key={eq.id}>
+                                  <div
+                                    onClick={() => {
+                                      if (isChecked) onSelectChange(selectedEquipmentIds.filter(id => id !== eq.id));
+                                      else onSelectChange([...selectedEquipmentIds, eq.id]);
+                                    }}
+                                    style={{
+                                      padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                                      transition: 'all 0.2s',
+                                      background: isChecked ? '#f6ffed' : '#fafafa',
+                                      border: `1.5px solid ${isChecked ? '#b7eb8f' : '#e8e8e8'}`,
+                                    }}
+                                  >
+                                    <Checkbox value={eq.id} onClick={(e) => e.stopPropagation()} style={{ width: '100%' }}>
+                                      <div>
+                                        <Text strong style={{ fontSize: 13 }}>{eq.name}</Text>
+                                        {eq.equipment_type && (
+                                          <Tag color="processing" style={{ fontSize: 10, margin: '0 0 0 6px', padding: '0 5px', borderRadius: 4 }}>
+                                            {eq.equipment_type}
+                                          </Tag>
+                                        )}
+                                      </div>
+                                    </Checkbox>
+                                  </div>
+                                </Col>
+                              );
+                            })}
+                          </Row>
+                        </div>
+                      ))}
+                    </Checkbox.Group>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── STEP 3: Confirm ── */}
+          {step === 2 && (
+            <div>
+              <div style={{
+                background: 'linear-gradient(135deg, #f6ffed 0%, #e6f7ff 100%)',
+                borderRadius: 12, padding: 24, textAlign: 'center', marginBottom: 20,
+              }}>
+                <CheckCircleOutlined style={{ fontSize: 48, color: '#52c41a', marginBottom: 12 }} />
+                <Title level={3} style={{ margin: 0, color: '#237804' }}>
+                  {t('assignments.readyToGenerate', 'Ready to Generate')}
+                </Title>
+                <Text type="secondary" style={{ fontSize: 14 }}>
+                  {t('assignments.reviewBelow', 'Review the details below and click Generate')}
+                </Text>
+              </div>
+
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+                    <CalendarOutlined style={{ fontSize: 24, color: '#1890ff', marginBottom: 8 }} />
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c' }}>
+                      {t('assignments.date', 'Date')}
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 16, marginTop: 4 }}>
+                      {dayjs(targetDate).format('DD MMM YYYY')}
+                    </div>
+                    <div style={{ color: '#8c8c8c', fontSize: 12 }}>
+                      {dayjs(targetDate).format('dddd')}
+                    </div>
+                  </Card>
+                </Col>
+                <Col span={8}>
+                  <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+                    {(shiftOptions.find(s => s.value === shift)?.icon) &&
+                      <span style={{ fontSize: 24, color: shiftOptions.find(s => s.value === shift)?.color }}>
+                        {shiftOptions.find(s => s.value === shift)?.icon}
+                      </span>
+                    }
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c', marginTop: 8 }}>
+                      {t('assignments.shift', 'Shift')}
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 16, marginTop: 4, textTransform: 'capitalize' }}>
+                      {shift}
+                    </div>
+                    <div style={{ color: '#8c8c8c', fontSize: 12 }}>
+                      {shiftOptions.find(s => s.value === shift)?.time}
+                    </div>
+                  </Card>
+                </Col>
+                <Col span={8}>
+                  <Card size="small" style={{ borderRadius: 10, textAlign: 'center' }}>
+                    <AppstoreOutlined style={{ fontSize: 24, color: '#52c41a', marginBottom: 8 }} />
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#8c8c8c' }}>
+                      {t('assignments.equipment', 'Equipment')}
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 22, marginTop: 4, color: '#52c41a' }}>
+                      {selectedEquipmentIds.length}
+                    </div>
+                    <div style={{ color: '#8c8c8c', fontSize: 12 }}>
+                      {t('assignments.assignments', 'assignments')}
+                    </div>
+                  </Card>
+                </Col>
+              </Row>
+
+              <Alert
+                type="info"
+                showIcon
+                icon={<BulbOutlined />}
+                message={t('assignments.afterGenerate', 'After generation, assignments will be in "unassigned" status. You can assign inspector teams from the main table.')}
+                style={{ marginTop: 16, borderRadius: 8 }}
+              />
+            </div>
+          )}
+        </Form>
+
+        {/* Footer Buttons */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginTop: 24, paddingTop: 16, borderTop: '1px solid #f0f0f0',
+        }}>
+          <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
+          <Space>
+            {step > 0 && (
+              <Button onClick={() => setStep(step - 1)}>
+                {t('common.back', 'Back')}
+              </Button>
+            )}
+            {step < 2 ? (
+              <Button
+                type="primary"
+                disabled={step === 0 ? !canProceedStep1 : equipment.length === 0 || selectedEquipmentIds.length === 0}
+                onClick={() => setStep(step + 1)}
+                style={{ minWidth: 120 }}
+              >
+                {t('common.next', 'Next')}
+              </Button>
+            ) : (
+              <Button
+                type="primary"
+                size="large"
+                icon={<ThunderboltOutlined />}
+                loading={generateMutation.isPending}
+                disabled={!canGenerate}
+                onClick={handleGenerate}
+                style={{ fontWeight: 600, borderRadius: 8, minWidth: 180 }}
+              >
+                {t('assignments.generateList', 'Generate List')}
+              </Button>
+            )}
+          </Space>
         </div>
       </div>
-    );
-  }
-
-  if (equipment.length === 0) {
-    return (
-      <Alert
-        type="warning"
-        message={t('assignments.noScheduledEquipment', 'No equipment scheduled')}
-        description={t(
-          'assignments.noScheduledEquipmentDesc',
-          'No equipment is scheduled for this date and shift in the imported inspection schedule. Please check the schedule or select a different date/shift.'
-        )}
-        icon={<ExclamationCircleOutlined />}
-        style={{ marginTop: 16 }}
-      />
-    );
-  }
-
-  return (
-    <Card
-      size="small"
-      title={
-        <Space>
-          <AppstoreOutlined />
-          <Text strong>Equipment List</Text>
-          <Badge count={selectedEquipmentIds.length} style={{ backgroundColor: '#52c41a' }} />
-          <Text type="secondary">/ {equipment.length}</Text>
-        </Space>
-      }
-      extra={
-        <Space size={4}>
-          <Button
-            size="small"
-            type="text"
-            onClick={() => onSelectChange(equipment.map((eq: any) => eq.id))}
-            style={{ fontSize: 12 }}
-          >
-            All
-          </Button>
-          <Button
-            size="small"
-            type="text"
-            onClick={() => onSelectChange([])}
-            style={{ fontSize: 12 }}
-          >
-            None
-          </Button>
-        </Space>
-      }
-      style={{ height: '100%' }}
-    >
-      {equipment.length > 0 && (
-        <Alert
-          type="info"
-          message={`${equipment.length} equipment scheduled for this date/shift`}
-          style={{ marginBottom: 12, fontSize: 12 }}
-          showIcon
-        />
-      )}
-
-      <div style={{ maxHeight: 420, overflowY: 'auto', paddingRight: 8 }}>
-        <Checkbox.Group
-          value={selectedEquipmentIds}
-          onChange={onSelectChange as any}
-          style={{ width: '100%' }}
-        >
-          <Space direction="vertical" style={{ width: '100%' }} size={6}>
-            {equipment.map((eq: any) => (
-              <div
-                key={eq.id}
-                style={{
-                  padding: '8px 12px',
-                  backgroundColor: selectedEquipmentIds.includes(eq.id) ? '#f6ffed' : '#fafafa',
-                  borderRadius: 6,
-                  border: selectedEquipmentIds.includes(eq.id) ? '1px solid #b7eb8f' : '1px solid #d9d9d9',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onClick={() => {
-                  if (selectedEquipmentIds.includes(eq.id)) {
-                    onSelectChange(selectedEquipmentIds.filter(id => id !== eq.id));
-                  } else {
-                    onSelectChange([...selectedEquipmentIds, eq.id]);
-                  }
-                }}
-              >
-                <Checkbox value={eq.id} style={{ width: '100%' }}>
-                  <Space size={4} wrap>
-                    <Text strong style={{ fontSize: 13 }}>{eq.name}</Text>
-                    {eq.equipment_type && (
-                      <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>{eq.equipment_type}</Tag>
-                    )}
-                    {eq.berth && (
-                      <Tag color="green" style={{ fontSize: 11, margin: 0 }}>{eq.berth}</Tag>
-                    )}
-                  </Space>
-                </Checkbox>
-              </div>
-            ))}
-          </Space>
-        </Checkbox.Group>
-      </div>
-    </Card>
-  );
-}
-
-// Preview Panel Component for Generate Modal
-interface GeneratePreviewPanelProps {
-  form: any;
-}
-
-function GeneratePreviewPanel({ form }: GeneratePreviewPanelProps) {
-  const { t } = useTranslation();
-
-  // Watch form values
-  const targetDate = Form.useWatch('target_date', form);
-  const shift = Form.useWatch('shift', form);
-
-  // Calculate day of week
-  const dayInfo = useMemo(() => {
-    if (!targetDate) return null;
-    const day = dayjs(targetDate);
-    return {
-      dayName: day.format('dddd'),
-      dayShort: day.format('ddd'),
-      date: day.format('DD MMM YYYY'),
-      dayOfWeek: day.day() === 0 ? 6 : day.day() - 1, // Convert to 0=Monday
-    };
-  }, [targetDate]);
-
-  const shiftConfig = useMemo(() => {
-    if (shift === 'day') {
-      return {
-        icon: <SunOutlined style={{ fontSize: 32, color: '#faad14' }} />,
-        label: 'Day Shift',
-        color: '#faad14',
-        time: '06:00 - 18:00',
-      };
-    } else if (shift === 'night') {
-      return {
-        icon: <MoonOutlined style={{ fontSize: 32, color: '#722ed1' }} />,
-        label: 'Night Shift',
-        color: '#722ed1',
-        time: '18:00 - 06:00',
-      };
-    }
-    return null;
-  }, [shift]);
-
-  return (
-    <div>
-      <Card size="small" title="📊 Generation Summary" style={{ marginBottom: 16 }}>
-        {!targetDate || !shift ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <Text type="secondary">Select date and shift to see preview</Text>
-            }
-            style={{ padding: 20 }}
-          />
-        ) : (
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
-            {/* Date Card */}
-            <Card
-              size="small"
-              style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none',
-              }}
-            >
-              <Space direction="vertical" style={{ width: '100%' }} size={4}>
-                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
-                  Target Date
-                </Text>
-                <Title level={4} style={{ color: '#fff', margin: 0 }}>
-                  {dayInfo?.dayName}
-                </Title>
-                <Text style={{ color: '#fff', fontSize: 16 }}>
-                  {dayInfo?.date}
-                </Text>
-              </Space>
-            </Card>
-
-            {/* Shift Card */}
-            <Card
-              size="small"
-              style={{
-                background: `linear-gradient(135deg, ${shiftConfig?.color}22 0%, ${shiftConfig?.color}44 100%)`,
-                border: `2px solid ${shiftConfig?.color}`,
-              }}
-            >
-              <Space direction="vertical" style={{ width: '100%' }} align="center" size={8}>
-                {shiftConfig?.icon}
-                <Title level={4} style={{ margin: 0, color: shiftConfig?.color }}>
-                  {shiftConfig?.label}
-                </Title>
-                <Text type="secondary">{shiftConfig?.time}</Text>
-              </Space>
-            </Card>
-
-            {/* Info Cards */}
-            <Row gutter={8}>
-              <Col span={12}>
-                <Card size="small" bodyStyle={{ padding: 12 }}>
-                  <Statistic
-                    title="Equipment"
-                    value={0}
-                    prefix={<AppstoreOutlined />}
-                    valueStyle={{ fontSize: 20 }}
-                  />
-                </Card>
-              </Col>
-              <Col span={12}>
-                <Card size="small" bodyStyle={{ padding: 12 }}>
-                  <Statistic
-                    title="Inspectors"
-                    value="TBD"
-                    prefix={<TeamOutlined />}
-                    valueStyle={{ fontSize: 20 }}
-                  />
-                </Card>
-              </Col>
-            </Row>
-
-            <Alert
-              type="info"
-              message="Ready to Generate"
-              description="Click OK to create inspection assignments for the selected date and shift."
-              icon={<CheckCircleOutlined />}
-              showIcon
-            />
-          </Space>
-        )}
-      </Card>
-
-      <Card size="small" title="ℹ️ Important Notes">
-        <List size="small">
-          <List.Item>
-            <Text type="secondary">
-              • Equipment will be assigned from the imported inspection schedule
-            </Text>
-          </List.Item>
-          <List.Item>
-            <Text type="secondary">
-              • Assignments will be created in 'unassigned' status
-            </Text>
-          </List.Item>
-          <List.Item>
-            <Text type="secondary">
-              • You can assign inspectors after generation
-            </Text>
-          </List.Item>
-        </List>
-      </Card>
-    </div>
+    </Modal>
   );
 }
 
@@ -1405,217 +1507,15 @@ export default function InspectionAssignmentsPage() {
       </Card>
       )}
 
-      {/* Generate List Modal - ENHANCED */}
-      <Modal
-        title={
-          <Space>
-            <CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />
-            <span style={{ fontSize: 18, fontWeight: 600 }}>
-              {t('assignments.generate', 'Generate Inspection List')}
-            </span>
-          </Space>
-        }
+      {/* Generate List Wizard Modal */}
+      <GenerateWizardModal
         open={generateOpen}
-        onCancel={() => {
-          setGenerateOpen(false);
-          generateForm.resetFields();
-          setSelectedEquipmentIds([]);
-        }}
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              {Form.useWatch('shift', generateForm) && Form.useWatch('target_date', generateForm) && selectedEquipmentIds.length > 0 && (
-                <Space>
-                  <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
-                  <Text type="secondary">
-                    {selectedEquipmentIds.length} equipment &middot; {Form.useWatch('shift', generateForm)} shift &middot; {Form.useWatch('target_date', generateForm)?.format('DD MMM YYYY')}
-                  </Text>
-                </Space>
-              )}
-            </div>
-            <Space>
-              <Button onClick={() => { setGenerateOpen(false); generateForm.resetFields(); setSelectedEquipmentIds([]); }}>
-                Cancel
-              </Button>
-              <Button
-                type="primary"
-                size="large"
-                icon={<ThunderboltOutlined />}
-                loading={generateMutation.isPending}
-                onClick={() => generateForm.submit()}
-                disabled={!Form.useWatch('shift', generateForm) || !Form.useWatch('target_date', generateForm) || selectedEquipmentIds.length === 0}
-                style={{ fontWeight: 600, borderRadius: 8, minWidth: 160 }}
-              >
-                Generate List
-              </Button>
-            </Space>
-          </div>
-        }
-        destroyOnClose
-        width={960}
-        styles={{ body: { padding: '16px 24px' } }}
-      >
-        <Form
-          form={generateForm}
-          layout="vertical"
-          onFinish={(values: any) =>
-            generateMutation.mutate({
-              target_date: values.target_date.format('YYYY-MM-DD'),
-              shift: values.shift,
-            })
-          }
-        >
-          {/* STEP 1: Date + Shift in one row */}
-          <Card
-            size="small"
-            style={{ marginBottom: 16, borderRadius: 10, background: 'linear-gradient(135deg, #f0f5ff 0%, #e6f7ff 100%)' }}
-            bodyStyle={{ padding: '16px 20px' }}
-          >
-            <Row gutter={24} align="middle">
-              <Col span={8}>
-                <Form.Item
-                  name="target_date"
-                  label={<Text strong>📅 Date</Text>}
-                  rules={[{ required: true, message: 'Select date' }]}
-                  style={{ marginBottom: 0 }}
-                >
-                  <DatePicker
-                    style={{ width: '100%' }}
-                    format="DD/MM/YYYY"
-                    size="large"
-                    placeholder="Pick date"
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={16}>
-                <Form.Item
-                  name="shift"
-                  label={<Text strong>⏰ Shift</Text>}
-                  rules={[{ required: true, message: 'Select shift' }]}
-                  style={{ marginBottom: 0 }}
-                >
-                  <Radio.Group style={{ width: '100%' }}>
-                    <Row gutter={8}>
-                      <Col span={8}>
-                        <Radio.Button value="morning" style={{ width: '100%', height: 60, padding: 0, borderRadius: 8, overflow: 'hidden' }}>
-                          <div style={{
-                            textAlign: 'center', paddingTop: 8,
-                            background: Form.useWatch('shift', generateForm) === 'morning' ? 'linear-gradient(135deg, #fff7e6, #ffe7ba)' : undefined,
-                            height: '100%',
-                          }}>
-                            <SunOutlined style={{ fontSize: 22, color: '#faad14' }} />
-                            <div style={{ fontWeight: 600, color: '#d48806', fontSize: 13 }}>Morning</div>
-                            <div style={{ fontSize: 10, color: '#999' }}>06:00 - 14:00</div>
-                          </div>
-                        </Radio.Button>
-                      </Col>
-                      <Col span={8}>
-                        <Radio.Button value="afternoon" style={{ width: '100%', height: 60, padding: 0, borderRadius: 8, overflow: 'hidden' }}>
-                          <div style={{
-                            textAlign: 'center', paddingTop: 8,
-                            background: Form.useWatch('shift', generateForm) === 'afternoon' ? 'linear-gradient(135deg, #e6f7ff, #bae7ff)' : undefined,
-                            height: '100%',
-                          }}>
-                            <CloudOutlined style={{ fontSize: 22, color: '#1890ff' }} />
-                            <div style={{ fontWeight: 600, color: '#096dd9', fontSize: 13 }}>Afternoon</div>
-                            <div style={{ fontSize: 10, color: '#999' }}>14:00 - 22:00</div>
-                          </div>
-                        </Radio.Button>
-                      </Col>
-                      <Col span={8}>
-                        <Radio.Button value="night" style={{ width: '100%', height: 60, padding: 0, borderRadius: 8, overflow: 'hidden' }}>
-                          <div style={{
-                            textAlign: 'center', paddingTop: 8,
-                            background: Form.useWatch('shift', generateForm) === 'night' ? 'linear-gradient(135deg, #f9f0ff, #efdbff)' : undefined,
-                            height: '100%',
-                          }}>
-                            <MoonOutlined style={{ fontSize: 22, color: '#722ed1' }} />
-                            <div style={{ fontWeight: 600, color: '#531dab', fontSize: 13 }}>Night</div>
-                            <div style={{ fontSize: 10, color: '#999' }}>22:00 - 06:00</div>
-                          </div>
-                        </Radio.Button>
-                      </Col>
-                    </Row>
-                  </Radio.Group>
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
-
-          {/* STEP 2: Equipment List + Summary Side by Side */}
-          <Row gutter={16}>
-            <Col span={15}>
-              <ScheduledEquipmentPreview
-                form={generateForm}
-                selectedEquipmentIds={selectedEquipmentIds}
-                onSelectChange={setSelectedEquipmentIds}
-              />
-            </Col>
-            <Col span={9}>
-              <Card
-                size="small"
-                style={{ borderRadius: 10, height: '100%' }}
-                bodyStyle={{ padding: 16 }}
-              >
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                  <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                    {selectedEquipmentIds.length > 0 ? (
-                      <>
-                        <div style={{ fontSize: 48, marginBottom: 4 }}>✅</div>
-                        <Title level={2} style={{ margin: 0, color: '#52c41a' }}>
-                          {selectedEquipmentIds.length}
-                        </Title>
-                        <Text type="secondary">Equipment Selected</Text>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: 48, marginBottom: 4 }}>📋</div>
-                        <Title level={4} style={{ margin: 0, color: '#999' }}>
-                          Select Date & Shift
-                        </Title>
-                        <Text type="secondary">to preview equipment</Text>
-                      </>
-                    )}
-                  </div>
-
-                  <Divider style={{ margin: '4px 0' }} />
-
-                  <div>
-                    <Space direction="vertical" style={{ width: '100%' }} size={8}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Text type="secondary">📅 Date</Text>
-                        <Text strong>
-                          {Form.useWatch('target_date', generateForm)?.format('DD MMM YYYY') || '—'}
-                        </Text>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Text type="secondary">⏰ Shift</Text>
-                        <Text strong style={{ textTransform: 'capitalize' }}>
-                          {Form.useWatch('shift', generateForm) || '—'}
-                        </Text>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Text type="secondary">🔧 Equipment</Text>
-                        <Text strong>{selectedEquipmentIds.length || '—'}</Text>
-                      </div>
-                    </Space>
-                  </div>
-
-                  {selectedEquipmentIds.length > 0 && (
-                    <Alert
-                      type="success"
-                      message="Ready to Generate"
-                      description={`${selectedEquipmentIds.length} inspection assignments will be created`}
-                      showIcon
-                      style={{ borderRadius: 8 }}
-                    />
-                  )}
-                </Space>
-              </Card>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
+        onClose={() => { setGenerateOpen(false); generateForm.resetFields(); setSelectedEquipmentIds([]); }}
+        form={generateForm}
+        selectedEquipmentIds={selectedEquipmentIds}
+        onSelectChange={setSelectedEquipmentIds}
+        generateMutation={generateMutation}
+      />
 
       {/* Assign Team Modal */}
       <Modal
