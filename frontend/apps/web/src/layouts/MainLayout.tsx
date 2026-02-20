@@ -159,7 +159,7 @@ const ROUTE_LABELS: Record<string, string> = {
   'leave-settings': 'Leave Settings', 'notification-rules': 'Notification Rules',
   'notification-analytics': 'Notification Analytics', profile: 'Profile',
   notifications: 'Notifications', leaderboard: 'Leaderboard',
-  'my-work-plan': 'My Work Plan', 'equipment-dashboard': 'Equipment Dashboard',
+  dashboard: 'Dashboard', 'my-work-plan': 'My Work Plan', 'equipment-dashboard': 'Equipment Dashboard',
   'running-hours': 'Running Hours', 'team-communication': 'Team Communication',
   'monitor-followups': 'Monitor Follow-Ups',
   jobs: 'Jobs', create: 'Create', 'team-assignment': 'Team Assignment',
@@ -168,7 +168,7 @@ const ROUTE_LABELS: Record<string, string> = {
 };
 
 // Pages that should NOT show the auto page header (they handle their own)
-const NO_HEADER_PAGES = ['/admin/work-planning', '/admin/work-plan/'];
+const NO_HEADER_PAGES = ['/', '/admin/work-planning', '/admin/work-plan/'];
 
 // ─── Auto Page Header ─────────────────────────────────────────
 
@@ -429,6 +429,13 @@ export default function MainLayout() {
         </Space>
 
         <Space size="middle" align="center">
+          <Tooltip title="Dashboard">
+            <HomeOutlined
+              style={{ fontSize: 18, cursor: 'pointer', color: isDark ? '#8c8c8c' : '#595959' }}
+              onClick={() => navigate('/dashboard')}
+            />
+          </Tooltip>
+
           <Tooltip title={`${navigator.platform.includes('Mac') ? '\u2318' : 'Ctrl+'}K`}>
             <SearchOutlined
               style={{ fontSize: 18, cursor: 'pointer', color: isDark ? '#8c8c8c' : '#595959' }}

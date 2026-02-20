@@ -8,6 +8,7 @@ import { canAccess, UserRole } from '@inspection/shared';
 // Lazy-loaded pages for code splitting
 // Shared pages
 const DashboardPage = lazy(() => import('../pages/shared/DashboardPage'));
+const HomePage = lazy(() => import('../pages/shared/HomePage'));
 const NotificationsPage = lazy(() => import('../pages/shared/NotificationsPage'));
 const LeaderboardPage = lazy(() => import('../pages/shared/LeaderboardPage'));
 const LeavesPage = lazy(() => import('../pages/shared/LeavesPage'));
@@ -94,7 +95,8 @@ export default function AppRouter() {
       <Routes>
         <Route element={<MainLayout />}>
           {/* Shared routes - all roles */}
-          <Route index element={<DashboardPage />} />
+          <Route index element={<HomePage />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
           <Route path="leaves" element={<LeavesPage />} />
