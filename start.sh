@@ -2587,6 +2587,13 @@ with app.app_context():
         print(f'Set default passwords (role_id) for {updated} imported users')
     else:
         print('No users needed password update.')
+
+    # Override: set khalid.m.i password to his SAP ID
+    khalid = User.query.filter_by(username='khalid.m.i').first()
+    if khalid:
+        khalid.set_password('500749')
+        db.session.commit()
+        print('Set khalid.m.i password to SAP ID (500749)')
 "
 
 echo "Starting gunicorn..."
