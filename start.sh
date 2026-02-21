@@ -2571,29 +2571,22 @@ with app.app_context():
     else:
         print('Admin user already exists.')
 
-    # Set default passwords for all imported users (password = role_id)
+    # Set default passwords for all imported users (password = sap_id)
     imported_users = User.query.filter(db.or_(User.email.is_(None), User.email != 'admin@company.com')).all()
     updated = 0
     for u in imported_users:
-        if u.role_id:
+        if u.sap_id:
             try:
-                u.set_password(u.role_id)
+                u.set_password(u.sap_id)
                 u.must_change_password = True
                 updated += 1
             except Exception as e:
                 print(f'Error setting password for {u.username}: {e}')
     if updated:
         db.session.commit()
-        print(f'Set default passwords (role_id) for {updated} imported users')
+        print(f'Set default passwords (sap_id) for {updated} imported users')
     else:
         print('No users needed password update.')
-
-    # Override: set khalid.m.i password to his SAP ID
-    khalid = User.query.filter_by(username='khalid.m.i').first()
-    if khalid:
-        khalid.set_password('500749')
-        db.session.commit()
-        print('Set khalid.m.i password to SAP ID (500749)')
 "
 
 echo "Starting gunicorn..."
