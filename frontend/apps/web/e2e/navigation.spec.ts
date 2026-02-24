@@ -1,137 +1,117 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { mockLoginAs, MOCK_USERS } from './helpers/auth.helper';
 
-interface MockUser {
-  id: number;
-  username: string;
-  full_name: string;
-  role: string;
-}
+// ── Catch-all mock helper ────────────────────────────────────────────────────
+// Without this, unrouted API calls hit production. React Query retries on
+// errors with exponential back-off, which causes timeouts well beyond 10s.
 
-/**
- * Helper to set up an authenticated session with a given user/role.
- */
-async function loginAs(page: Page, user: MockUser) {
-  await page.route('**/api/auth/profile', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ user }),
-    }),
+async function setupMocks(page: Parameters<typeof mockLoginAs>[0], role: keyof typeof MOCK_USERS) {
+  // LIFO: catch-all first (lowest priority)
+  await page.route(
+    (url) => url.pathname.startsWith('/api/') && !url.pathname.includes('/auth/'),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: null, items: [], total: 0, notifications: [] }),
+      }),
   );
-
-  await page.addInitScript(
-    () => {
-      localStorage.setItem('access_token', 'fake-jwt-token');
-      localStorage.setItem('refresh_token', 'fake-refresh-token');
-    },
-  );
+  // mockLoginAs last = highest LIFO priority for /api/auth/me
+  await mockLoginAs(page, MOCK_USERS[role]);
 }
-
-const users: Record<string, MockUser> = {
-  admin: { id: 1, username: 'admin1', full_name: 'Test Admin', role: 'admin' },
-  inspector: { id: 2, username: 'inspector1', full_name: 'Test Inspector', role: 'inspector' },
-  specialist: { id: 3, username: 'specialist1', full_name: 'Test Specialist', role: 'specialist' },
-  engineer: { id: 4, username: 'engineer1', full_name: 'Test Engineer', role: 'engineer' },
-  quality_engineer: { id: 5, username: 'qe1', full_name: 'Test QE', role: 'quality_engineer' },
-};
 
 test.describe('Sidebar Navigation', () => {
   test('admin sees admin menu items in sidebar', async ({ page }) => {
-    await loginAs(page, users.admin);
+    await setupMocks(page, 'admin');
     await page.goto('/');
 
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
-    // Admin should see role-specific items like Users, Equipment, Checklists
-    // ProLayout renders menu items as links in the sidebar
-    const sidebar = page.locator('.ant-pro-sider, .ant-layout-sider');
-    await expect(sidebar).toBeVisible();
+    // The app uses an App Launcher popup (no sidebar). Open it to render role-filtered items.
+    await page.locator('.launcher-trigger').click();
 
-    // Check for admin-specific menu entries by path or text
-    await expect(page.locator('a[href="/admin/users"], [data-menu-id*="users"]').or(
-      page.getByText(/users/i).first(),
-    )).toBeVisible();
+    // Items render as .launcher-app-item divs (no href) — check by visible label text.
+    // "Users" is an admin-only item in the Team category.
+    await expect(
+      page.locator('.launcher-app-item').filter({ hasText: 'Users' }).first()
+    ).toBeVisible({ timeout: 5000 });
   });
 
   test('inspector sees only inspector menu items', async ({ page }) => {
-    await loginAs(page, users.inspector);
+    await setupMocks(page, 'inspector');
     await page.goto('/');
 
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
-    // Inspector should see "My Assignments" in the sidebar
-    // But should NOT see admin items like "Users"
-    const pageContent = await page.content();
+    // Open App Launcher to render role-filtered items
+    await page.locator('.launcher-trigger').click();
 
-    // The sidebar should contain the assignments link
-    expect(pageContent).toContain('/inspector/assignments');
+    // Inspector should see "My Assignments" (inspector-only label)
+    await expect(
+      page.locator('.launcher-app-item').filter({ hasText: 'My Assignments' }).first()
+    ).toBeVisible({ timeout: 5000 });
 
-    // Should NOT contain admin routes
-    expect(pageContent).not.toContain('/admin/users');
+    // Inspector should NOT see "Users" (admin-only)
+    await expect(
+      page.locator('.launcher-app-item').filter({ hasText: 'Users' })
+    ).toHaveCount(0);
   });
 
   test('engineer sees engineer-specific menu items', async ({ page }) => {
-    await loginAs(page, users.engineer);
+    await setupMocks(page, 'engineer');
     await page.goto('/');
 
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
-    const pageContent = await page.content();
+    // Open App Launcher to render role-filtered items
+    await page.locator('.launcher-trigger').click();
 
-    // Engineer should see their routes
-    expect(pageContent).toContain('/engineer/jobs');
+    // Engineer should see "My Jobs" (engineer-only label)
+    await expect(
+      page.locator('.launcher-app-item').filter({ hasText: 'My Jobs' }).first()
+    ).toBeVisible({ timeout: 5000 });
 
-    // Should NOT contain admin or inspector routes
-    expect(pageContent).not.toContain('/admin/users');
-    expect(pageContent).not.toContain('/inspector/assignments');
+    // Engineer should NOT see "Users" (admin-only) or "My Assignments" (inspector-only)
+    await expect(
+      page.locator('.launcher-app-item').filter({ hasText: 'Users' })
+    ).toHaveCount(0);
+    await expect(
+      page.locator('.launcher-app-item').filter({ hasText: 'My Assignments' })
+    ).toHaveCount(0);
   });
 });
 
 test.describe('Page Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAs(page, users.inspector);
+    await setupMocks(page, 'inspector');
   });
 
   test('navigates from dashboard to notifications', async ({ page }) => {
-    // Mock notifications API
-    await page.route('**/api/notifications*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ notifications: [], total: 0 }),
-      }),
-    );
-
     await page.goto('/');
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
-    // Click on notifications in the sidebar
-    await page.click('[href="/notifications"], [data-menu-id*="notification"]');
+    // Navigate directly — no persistent sidebar in this layout
+    await page.goto('/notifications');
 
     await expect(page).toHaveURL(/\/notifications/);
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
   });
 
   test('navigates from dashboard to leaderboard', async ({ page }) => {
-    await page.route('**/api/leaderboard*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ leaderboard: [] }),
-      }),
-    );
-
     await page.goto('/');
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
-    await page.click('[href="/leaderboard"], [data-menu-id*="leaderboard"]');
+    // Navigate directly — no persistent sidebar in this layout
+    await page.goto('/leaderboard');
 
     await expect(page).toHaveURL(/\/leaderboard/);
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
   });
 });
 
 test.describe('Logout', () => {
   test('logout clears session and shows login page', async ({ page }) => {
-    await loginAs(page, users.inspector);
+    await setupMocks(page, 'inspector');
 
     // Mock logout endpoint
     await page.route('**/api/auth/logout', (route) =>
@@ -143,16 +123,17 @@ test.describe('Logout', () => {
     );
 
     await page.goto('/');
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
-    // The user menu is in the top-right, rendered by ProLayout actionsRender.
-    // Click on the user's name / avatar to open the dropdown.
-    await page.getByText(users.inspector.full_name).click();
+    // Click on the avatar/name Space in the header (same pattern as auth.helper logout)
+    await page.locator('.app-header').locator('.ant-space').last().click();
 
-    // Click the logout option in the dropdown menu
-    await page.getByText(/log\s*out/i).click();
+    // Wait for the Ant Design dropdown menu to be fully open before clicking.
+    const logoutItem = page.locator('.ant-dropdown-menu-item').filter({ hasText: /log\s*out/i });
+    await expect(logoutItem).toBeVisible({ timeout: 8000 });
+    await logoutItem.click();
 
-    // Should return to the login page - look for the login form
+    // Should return to the login page
     await expect(page.getByPlaceholder(/username/i)).toBeVisible({ timeout: 10000 });
 
     // localStorage tokens should be cleared

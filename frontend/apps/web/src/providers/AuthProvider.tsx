@@ -18,7 +18,7 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, isLoading, setUser, setLoading } = useAuthState();
+  const { user, isAuthenticated, isLoading, setUser } = useAuthState();
 
   // Initialize API client with token storage
   useEffect(() => {
@@ -52,18 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      setLoading(true);
-      try {
-        const res = await authApi.login({ email, password });
-        const data = res.data;
-        await tokenStorage.setAccessToken(data.access_token);
-        await tokenStorage.setRefreshToken(data.refresh_token);
-        setUser(data.user);
-      } finally {
-        setLoading(false);
-      }
+      const res = await authApi.login({ email, password });
+      const data = res.data;
+      await tokenStorage.setAccessToken(data.access_token);
+      await tokenStorage.setRefreshToken(data.refresh_token);
+      setUser(data.user);
     },
-    [setUser, setLoading],
+    [setUser],
   );
 
   const logout = useCallback(async () => {

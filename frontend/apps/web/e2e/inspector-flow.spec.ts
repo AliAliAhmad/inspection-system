@@ -1,36 +1,22 @@
-import { test, expect, Page } from '@playwright/test';
-
-const MOCK_INSPECTOR = {
-  id: 1,
-  username: 'inspector1',
-  full_name: 'Test Inspector',
-  role: 'inspector',
-};
-
-/**
- * Helper to authenticate as an inspector by injecting tokens into localStorage
- * and mocking the profile API so the app recognizes the session.
- */
-async function loginAsInspector(page: Page) {
-  // Mock the profile endpoint so AuthProvider restores the session
-  await page.route('**/api/auth/profile', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ user: MOCK_INSPECTOR }),
-    }),
-  );
-
-  // Set tokens in localStorage before navigating so AuthProvider picks them up
-  await page.addInitScript(() => {
-    localStorage.setItem('access_token', 'fake-jwt-token');
-    localStorage.setItem('refresh_token', 'fake-refresh-token');
-  });
-}
+import { test, expect } from '@playwright/test';
+import { mockLoginAs, MOCK_USERS } from './helpers/auth.helper';
 
 test.describe('Inspector Flow', () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsInspector(page);
+    // LIFO: catch-all first (lowest priority).
+    // data: null prevents MyAssignmentsPage stats crash and avoids slow
+    // production calls that cause React Query retry back-off.
+    await page.route(
+      (url) => url.pathname.startsWith('/api/') && !url.pathname.includes('/auth/'),
+      (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ data: null, assignments: [], items: [], total: 0 }),
+        }),
+    );
+    // mockLoginAs last = highest LIFO priority for /api/auth/me
+    await mockLoginAs(page, MOCK_USERS.inspector);
   });
 
   test('navigates to assignments page', async ({ page }) => {
@@ -46,7 +32,7 @@ test.describe('Inspector Flow', () => {
     await page.goto('/inspector/assignments');
 
     // The page should load within the ProLayout
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
     // The URL should reflect the assignments route
     await expect(page).toHaveURL(/\/inspector\/assignments/);
@@ -99,7 +85,7 @@ test.describe('Inspector Flow', () => {
     await page.goto('/inspector/inspection/42');
 
     // Should be inside the main layout
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
     // Look for a progress bar (Ant Design Progress component)
     // The checklist page typically shows completion progress
@@ -162,7 +148,7 @@ test.describe('Inspector Flow', () => {
     );
 
     await page.goto('/inspector/inspection/42');
-    await expect(page.locator('.ant-pro-layout')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 10000 });
 
     // Look for Yes/No buttons or radio options
     // Ant Design renders radio buttons or regular buttons for yes/no questions

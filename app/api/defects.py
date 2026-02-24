@@ -37,8 +37,8 @@ def list_defects():
     
     query = Defect.query
     
-    # Filter by role — admin and engineer see all, technician sees only assigned
-    if current_user.role == 'technician':
+    # Filter by role — admin and engineer see all, others see only assigned
+    if current_user.role in ('technician', 'inspector'):
         query = query.filter_by(assigned_to_id=current_user.id)
     elif current_user.role == 'specialist':
         # Specialists see defects assigned to them via specialist jobs
@@ -677,4 +677,61 @@ def assess_defect(id):
             'assessed_by': current_user.id,
             'assessed_at': datetime.utcnow().isoformat(),
         }
+    }), 200
+
+
+@bp.route('/<int:defect_id>/assign-inspector', methods=['POST'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def assign_inspector(defect_id):
+    """
+    Assign a defect directly to an inspector. Admin and Engineer only.
+
+    Request Body:
+        {
+            "inspector_id": 5   // required: user ID of the inspector
+        }
+
+    Returns:
+        { "status": "success", "data": defect_dict }
+    """
+    defect = db.session.get(Defect, defect_id)
+    if not defect:
+        raise NotFoundError(f"Defect {defect_id} not found")
+
+    data = request.get_json()
+    if not data or not data.get('inspector_id'):
+        raise ValidationError("inspector_id is required")
+
+    inspector = db.session.get(User, data['inspector_id'])
+    if not inspector or inspector.role != 'inspector':
+        raise ValidationError("Invalid inspector user")
+
+    defect.assigned_to_id = inspector.id
+    if defect.status == 'open':
+        defect.status = 'in_progress'
+
+    safe_commit()
+
+    # Notify inspector
+    try:
+        from app.services.notification_service import NotificationService
+        NotificationService.create_notification(
+            user_id=inspector.id,
+            title='Defect Assigned to You',
+            message=f'A defect has been assigned to you for inspection.',
+            notification_type='defect_assignment',
+            priority='warning',
+            related_id=defect.id,
+            related_type='defect',
+        )
+    except Exception:
+        pass
+
+    current_user = get_current_user()
+    lang = get_language(current_user)
+    return jsonify({
+        'status': 'success',
+        'message': f'Defect assigned to inspector {inspector.name}',
+        'data': defect.to_dict(language=lang),
     }), 200

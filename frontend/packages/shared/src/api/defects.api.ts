@@ -55,6 +55,10 @@ export const defectsApi = {
     return getApiClient().post<ApiResponse<any>>(`/api/defects/${id}/assign-specialist`, payload);
   },
 
+  assignInspector(id: number, payload: { inspector_id: number }) {
+    return getApiClient().post<ApiResponse<Defect>>(`/api/defects/${id}/assign-inspector`, payload);
+  },
+
   escalate(id: number, payload: { reason: string }) {
     return getApiClient().post<ApiResponse<Defect>>(`/api/defects/${id}/escalate`, payload);
   },

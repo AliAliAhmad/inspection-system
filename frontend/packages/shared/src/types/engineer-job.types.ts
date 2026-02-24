@@ -26,6 +26,21 @@ export interface EngineerJob {
   is_running?: boolean;
   has_pending_pause?: boolean;
   created_at: string;
+  equipment?: {
+    id: number;
+    name: string;
+    serial_number?: string;
+    equipment_type?: string;
+  } | null;
+  defect?: {
+    equipment?: {
+      id: number;
+      name: string;
+      serial_number?: string;
+      equipment_type?: string;
+    } | null;
+    [key: string]: any;
+  } | null;
 }
 
 export interface CreateEngineerJobPayload {

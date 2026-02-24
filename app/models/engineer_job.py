@@ -149,7 +149,24 @@ class EngineerJob(db.Model):
             'has_pending_pause': self.has_pending_pause(),
             'created_at': (self.created_at.isoformat() + 'Z') if self.created_at else None,
             'defect': self._get_defect_dict(language),
+            'equipment': self._get_equipment_dict(language),
         }
+
+    def _get_equipment_dict(self, language='en'):
+        """Get related equipment info for this job."""
+        if self.equipment_id and self.equipment:
+            eq = self.equipment
+            return {
+                'id': eq.id,
+                'name': eq.name_ar if language == 'ar' and getattr(eq, 'name_ar', None) else eq.name,
+                'serial_number': eq.serial_number,
+                'equipment_type': getattr(eq, 'equipment_type', None),
+            }
+        # Fallback: get equipment via defect link
+        defect_dict = self._get_defect_dict(language)
+        if defect_dict and defect_dict.get('equipment'):
+            return defect_dict['equipment']
+        return None
 
     def _get_defect_dict(self, language='en'):
         """Get related defect with inspection answer if this is a defect-related job."""
