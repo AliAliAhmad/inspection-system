@@ -1,0 +1,55 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Defect Status Filter Chips (All Roles)
+# Precondition: Logged in, on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Defects ───────────────────────────────────
+- tapOn:
+    id: "quick-action-Defects"
+- extendedWaitUntil:
+    visible: "Defects"
+    timeout: 10000
+- assertVisible:
+    id: "defects-screen"
+- assertVisible:
+    id: "defects-filter-scroll"
+
+# ── Tap "Open" filter chip ────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Open"
+    timeout: 5000
+- tapOn:
+    text: "Open"
+
+# ── Tap "In Progress" filter chip ─────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "In Progress"
+    timeout: 5000
+- tapOn:
+    text: "In Progress"
+
+# ── Tap "Resolved" filter chip ───────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Resolved"
+    timeout: 5000
+- tapOn:
+    text: "Resolved"
+
+# ── Reset to All ──────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "All"
+    timeout: 5000
+- tapOn:
+    text: "All"
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

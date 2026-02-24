@@ -1,0 +1,35 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: QE View Overdue Reviews (Quality Engineer)
+# Precondition: Logged in as quality_engineer, on Dashboard
+# NOTE: QE user may not exist on production — login_qe.yaml may fail
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Dashboard Overdue Reviews quick link ──────
+- scrollUntilVisible:
+    element:
+      text: "Overdue Reviews"
+    timeout: 10000
+- tapOn:
+    text: "Overdue Reviews"
+- extendedWaitUntil:
+    visible:
+      id: "overdue-reviews-screen"
+    timeout: 12000
+- assertVisible:
+    id: "overdue-reviews-screen"
+
+# ── Verify list renders (empty or with items) ─────────────
+- assertVisible:
+    id: "overdue-reviews-list"
+
+# ── Scroll through list ───────────────────────────────────
+- scroll
+- scroll
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

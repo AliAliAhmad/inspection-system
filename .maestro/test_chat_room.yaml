@@ -1,0 +1,44 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Chat Room Navigation (All Roles)
+# Precondition: User is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Go to Chat tab ───────────────────────────────────────
+- tapOn:
+    text: "Chat"
+- extendedWaitUntil:
+    visible: "Team Chat"
+    timeout: 15000
+- assertVisible:
+    id: "channel-list-screen"
+
+# ── Wait for channels to load ─────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "channel-card-0"
+    timeout: 15000
+
+# ── Tap the first channel card ────────────────────────────
+- tapOn:
+    id: "channel-card-0"
+- extendedWaitUntil:
+    visible:
+      id: "chat-room-screen"
+    timeout: 12000
+- assertVisible:
+    id: "chat-room-screen"
+
+# ── Go back to channel list ───────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Team Chat"
+    timeout: 10000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

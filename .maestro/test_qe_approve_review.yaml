@@ -1,0 +1,65 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: QE Approve Pending Review (Quality Engineer)
+# Precondition: Logged in as quality_engineer, on Dashboard
+# Requires: at least one pending quality review
+# NOTE: QE user may not exist on production — login_qe.yaml may fail
+# ═══════════════════════════════════════════════════════════
+
+# ── Go to Pending Reviews tab ─────────────────────────────
+- tapOn:
+    text: "Pending Reviews"
+- extendedWaitUntil:
+    visible:
+      id: "pending-reviews-screen"
+    timeout: 12000
+- assertVisible:
+    id: "pending-reviews-screen"
+
+# ── Try to find first pending review card ─────────────────
+- scrollUntilVisible:
+    element:
+      id: "pending-reviews-list"
+    timeout: 8000
+
+# ── Tap first review card to open detail ─────────────────
+- scrollUntilVisible:
+    element:
+      text: "Review"
+    timeout: 8000
+- tapOn:
+    text: "Review"
+- extendedWaitUntil:
+    visible:
+      id: "review-detail-screen"
+    timeout: 10000
+- assertVisible:
+    id: "review-detail-screen"
+
+# ── Verify approve/reject buttons visible ────────────────
+- scrollUntilVisible:
+    element:
+      id: "review-approve-btn"
+    timeout: 8000
+- assertVisible:
+    id: "review-approve-btn"
+- assertVisible:
+    id: "review-reject-btn"
+
+# ── Tap Approve ───────────────────────────────────────────
+- tapOn:
+    id: "review-approve-btn"
+
+# ── Verify navigated back (after approve) ────────────────
+- extendedWaitUntil:
+    visible:
+      id: "pending-reviews-screen"
+    timeout: 15000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

@@ -1,0 +1,41 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Assessment Verdict Flow
+# Precondition: Logged in as inspector on Dashboard
+# NOTE: Does NOT submit verdict (safe — won't change data)
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Assignments via quick action ─────────────
+- tapOn:
+    id: "quick-action-Assignments"
+- assertVisible:
+    id: "assignments-screen"
+
+# ── Filter to completed assignments ─────────────────────
+- scrollUntilVisible:
+    element:
+      id: "filter-completed"
+    timeout: 5000
+- tapOn:
+    id: "filter-completed"
+
+# ── Verify filter cards are tappable ───────────────────
+- scrollUntilVisible:
+    element:
+      id: "filter-assigned"
+    timeout: 5000
+- tapOn:
+    id: "filter-assigned"
+- scrollUntilVisible:
+    element:
+      id: "filter-completed"
+    timeout: 5000
+- tapOn:
+    id: "filter-completed"
+
+# ── Navigate back to Dashboard ───────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

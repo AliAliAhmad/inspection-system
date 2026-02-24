@@ -1,0 +1,44 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Defect Detail Navigation (Inspector + Specialist)
+# Precondition: User logged in, on Dashboard
+# Note: Inspector/Specialist see "View" button on defect cards
+# ═══════════════════════════════════════════════════════════
+
+# ── Open Defects screen ───────────────────────────────────
+- assertVisible:
+    text: "Dashboard"
+- tapOn:
+    id: "quick-action-Defects"
+- extendedWaitUntil:
+    visible: "Defects"
+    timeout: 10000
+- assertVisible:
+    id: "defects-screen"
+
+# ── Tap View on first defect ─────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "View"
+    timeout: 8000
+- tapOn:
+    text: "View"
+- extendedWaitUntil:
+    visible:
+      id: "defect-detail-screen"
+    timeout: 10000
+- assertVisible:
+    id: "defect-detail-screen"
+
+# ── Back to defects list ─────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Defects"
+    timeout: 10000
+
+# ── Return to Dashboard ──────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

@@ -1,0 +1,21 @@
+appId: com.inspection.system
+---
+# One-time initial login (app is on login screen, fields empty)
+- tapOn:
+    id: "login-email"
+- tapOn:
+    id: "login-email"
+- eraseText: 50
+- inputText: "ali.k.a"
+- tapOn:
+    id: "login-password"
+- tapOn:
+    id: "login-password"
+- eraseText: 50
+- inputText: "500628"
+- back
+- tapOn:
+    id: "login-button"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 30000

@@ -1,0 +1,71 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Inspection Assignment Management (Admin)
+# Precondition: Logged in as admin, on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to AdminMore tab ─────────────────────────────
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 10000
+
+# ── Scroll to top first (More screen preserves scroll state) ─
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 5000
+# ── Tap Assignments ───────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "more-assignments"
+    timeout: 10000
+    visibilityPercentage: 50
+    direction: UP
+- tapOn:
+    id: "more-assignments"
+- extendedWaitUntil:
+    visible:
+      id: "inspection-assignments-screen"
+    timeout: 10000
+- assertVisible:
+    id: "inspection-assignments-screen"
+
+# ── Verify list loaded ────────────────────────────────────
+- assertVisible:
+    id: "inspection-assignments-list"
+
+# ── Test Generate List button ─────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "inspection-generate-btn"
+    timeout: 5000
+- assertVisible:
+    id: "inspection-generate-btn"
+
+# ── Test Auto-Assign button ───────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "inspection-auto-assign-btn"
+    timeout: 5000
+- assertVisible:
+    id: "inspection-auto-assign-btn"
+
+# ── Back to More screen ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 10000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

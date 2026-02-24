@@ -1,0 +1,30 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Defects Screen (via Dashboard Quick Action - All Roles)
+# Precondition: User is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Verify Dashboard loaded ──────────────────────────────
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 15000
+
+# ── Tap Quick Action: Report Defect → Defects ───────────
+- tapOn:
+    id: "quick-action-Defects"
+- extendedWaitUntil:
+    visible: "Defects"
+    timeout: 10000
+- assertVisible:
+    id: "defects-screen"
+
+# ── Verify filter bar is present ─────────────────────────
+- assertVisible:
+    id: "defects-filter-scroll"
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

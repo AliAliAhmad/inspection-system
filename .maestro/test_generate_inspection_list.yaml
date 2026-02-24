@@ -1,0 +1,76 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Generate Inspection List (Admin)
+# Precondition: Logged in as admin, on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Inspection Assignments ───────────────────
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 10000
+# Tap More again to scroll to top (More screen preserves scroll state)
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: "more-assignments"
+    timeout: 10000
+    visibilityPercentage: 50
+    direction: UP
+- tapOn:
+    id: "more-assignments"
+- extendedWaitUntil:
+    visible:
+      id: "inspection-assignments-screen"
+    timeout: 10000
+
+# ── Tap Generate List button ──────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "inspection-generate-btn"
+    timeout: 5000
+- tapOn:
+    id: "inspection-generate-btn"
+- extendedWaitUntil:
+    visible:
+      id: "inspection-generate-date-input"
+    timeout: 8000
+
+# ── Select shift: Day and verify submit button ────────────
+- tapOn:
+    id: "inspection-generate-shift-day"
+- extendedWaitUntil:
+    visible:
+      id: "inspection-generate-modal-submit"
+    timeout: 8000
+
+# ── Close modal (cancel — don't submit, list may already exist for today) ──
+# The submit functionality is verified by backend tests; here we verify
+# the modal opens correctly with all required elements
+- tapOn:
+    text: "Cancel"
+- extendedWaitUntil:
+    visible:
+      id: "inspection-assignments-screen"
+    timeout: 8000
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 10000
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000

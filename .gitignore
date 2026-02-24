@@ -21,7 +21,6 @@ instance/
 Thumbs.db
 
 # Testing
-.maestro/
 bugreport-*.zip
 
 # Frontend

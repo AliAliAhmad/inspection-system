@@ -1,0 +1,62 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Create Shift Handover (Inspector / All Roles)
+# Precondition: Logged in, on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Ensure Dashboard is settled and all widgets loaded ─────
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 15000
+# Wait for loading spinner to finish (quick-action is inside the {!loading} block)
+- extendedWaitUntil:
+    visible:
+      id: "quick-action-Assignments"
+    timeout: 15000
+
+# ── Scroll to Shift Handover widget on Dashboard ──────────
+- scrollUntilVisible:
+    element:
+      id: "create-handover-btn"
+    timeout: 40000
+    visibilityPercentage: 50
+    waitToSettleTimeoutMs: 1000
+    centerElement: true
+- tapOn:
+    id: "create-handover-btn"
+- extendedWaitUntil:
+    visible:
+      id: "create-handover-screen"
+    timeout: 10000
+- assertVisible:
+    id: "create-handover-screen"
+
+# ── Select shift type ─────────────────────────────────────
+- tapOn:
+    id: "create-handover-shift-day"
+
+# ── Fill in handover notes ────────────────────────────────
+- tapOn:
+    id: "create-handover-notes-input"
+- inputText: "Test handover: all systems checked, equipment operational"
+- hideKeyboard
+
+# ── Submit handover ───────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "create-handover-submit-btn"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    id: "create-handover-submit-btn"
+
+# ── Dismiss success alert and return to Dashboard ─────────
+- extendedWaitUntil:
+    visible: "OK"
+    timeout: 10000
+- tapOn:
+    text: "OK"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 15000

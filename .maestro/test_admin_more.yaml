@@ -1,0 +1,107 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Admin More Tab + Sub-screens
+# Precondition: User (admin) is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Verify Dashboard loaded ──────────────────────────────
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 15000
+
+# ── Tap "More" tab + reset scroll to top ─────────────────
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 10000
+- assertVisible:
+    id: "admin-more-screen"
+# Tap More again — triggers useScrollToTop, resets list to top
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 5000
+
+# ── Equipment → verify screen ────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "more-equipment"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    id: "more-equipment"
+- extendedWaitUntil:
+    visible:
+      id: "equipment-screen"
+    timeout: 10000
+- assertVisible:
+    id: "equipment-screen"
+- back
+- assertVisible:
+    id: "admin-more-screen"
+
+# ── Reset scroll to top before next scroll ───────────────
+# (prevents scroll-swipe from hitting bottom nav bar)
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 5000
+
+# ── Engineer Jobs → verify screen ────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "more-engineer-jobs"
+    timeout: 15000
+    visibilityPercentage: 20
+- tapOn:
+    id: "more-engineer-jobs"
+- extendedWaitUntil:
+    visible:
+      id: "all-engineer-jobs-screen"
+    timeout: 10000
+- assertVisible:
+    id: "all-engineer-jobs-screen"
+- back
+- assertVisible:
+    id: "admin-more-screen"
+
+# ── Reset scroll to top before next scroll ───────────────
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 5000
+
+# ── All Inspections → verify screen ─────────────────────
+- scrollUntilVisible:
+    element:
+      id: "more-all-inspections"
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "more-all-inspections"
+- extendedWaitUntil:
+    visible:
+      id: "all-inspections-screen"
+    timeout: 10000
+- assertVisible:
+    id: "all-inspections-screen"
+- back
+- assertVisible:
+    id: "admin-more-screen"
+
+# ── Return to Dashboard tab ──────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000

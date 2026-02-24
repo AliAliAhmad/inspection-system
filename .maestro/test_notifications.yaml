@@ -1,0 +1,26 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Notifications Screen (All Roles)
+# Precondition: User is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Verify Dashboard loaded ──────────────────────────────
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 15000
+
+# ── Tap Notification Bell → Notifications ────────────────
+- tapOn:
+    id: "notification-bell"
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 10000
+- assertVisible:
+    id: "notifications-screen"
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

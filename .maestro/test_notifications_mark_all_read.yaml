@@ -1,0 +1,29 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Mark All Notifications as Read (All Roles)
+# Precondition: Logged in, on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Tap notification bell ─────────────────────────────────
+- tapOn:
+    id: "notification-bell"
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 10000
+- assertVisible:
+    id: "notifications-screen"
+
+# ── Tap Mark All Read button ──────────────────────────────
+- tapOn:
+    id: "notifications-mark-all-read-btn"
+
+# ── Verify still on notifications screen ─────────────────
+- assertVisible:
+    id: "notifications-screen"
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

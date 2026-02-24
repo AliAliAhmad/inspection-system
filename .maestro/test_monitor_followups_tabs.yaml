@@ -1,0 +1,53 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Monitor Follow-Ups Tab Switching (Engineer)
+# Precondition: Logged in as engineer, on Dashboard
+# Tabs: pending, scheduled, overdue, completed
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Monitor Follow-Ups ───────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Monitor Follow-Ups"
+    timeout: 10000
+- tapOn:
+    text: "Monitor Follow-Ups"
+- extendedWaitUntil:
+    visible:
+      id: "monitor-followups-screen"
+    timeout: 12000
+- assertVisible:
+    id: "monitor-followups-screen"
+
+# ── Switch to Scheduled tab ───────────────────────────────
+- tapOn:
+    id: "monitor-followups-tab-scheduled"
+- assertVisible:
+    id: "monitor-followups-screen"
+
+# ── Switch to Overdue tab ─────────────────────────────────
+- tapOn:
+    id: "monitor-followups-tab-overdue"
+- assertVisible:
+    id: "monitor-followups-screen"
+
+# ── Switch to Completed tab ───────────────────────────────
+- tapOn:
+    id: "monitor-followups-tab-completed"
+- assertVisible:
+    id: "monitor-followups-screen"
+
+# ── Return to Pending tab ─────────────────────────────────
+- tapOn:
+    id: "monitor-followups-tab-pending"
+- assertVisible:
+    id: "monitor-followups-screen"
+- assertVisible:
+    id: "monitor-followups-list"
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

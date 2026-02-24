@@ -1,0 +1,43 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Approve Bonus Request (Admin)
+# Precondition: Logged in as admin, on Dashboard
+# Requires: at least one pending bonus request in DB
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to AdminMore tab ─────────────────────────────
+- tapOn:
+    text: "More"
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 10000
+
+# ── Tap Bonus Approvals ───────────────────────────────────
+- tapOn:
+    id: "more-bonus-approvals"
+- extendedWaitUntil:
+    visible:
+      id: "bonus-approvals-screen"
+    timeout: 10000
+- assertVisible:
+    id: "bonus-approvals-screen"
+
+# ── Verify list loads ─────────────────────────────────────
+- assertVisible:
+    id: "bonus-approvals-list"
+
+# ── Back to More screen ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible:
+      id: "admin-more-screen"
+    timeout: 10000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

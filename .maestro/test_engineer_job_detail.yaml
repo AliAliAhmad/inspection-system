@@ -1,0 +1,44 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Engineer Job Detail Navigation
+# Precondition: Engineer logged in, on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Go to My Jobs tab ────────────────────────────────────
+- assertVisible:
+    text: "Dashboard"
+- tapOn:
+    text: "My Jobs"
+- extendedWaitUntil:
+    visible: "My Jobs"
+    timeout: 10000
+- assertVisible:
+    id: "engineer-jobs-screen"
+
+# ── Wait for jobs to load then tap first card ────────────
+- extendedWaitUntil:
+    visible:
+      id: "engineer-job-card-0"
+    timeout: 15000
+- tapOn:
+    id: "engineer-job-card-0"
+- extendedWaitUntil:
+    visible:
+      id: "engineer-job-detail-screen"
+    timeout: 12000
+- assertVisible:
+    id: "engineer-job-detail-screen"
+
+# ── Back to jobs list ────────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "My Jobs"
+    timeout: 10000
+
+# ── Return to Dashboard ──────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

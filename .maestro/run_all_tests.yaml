@@ -1,0 +1,130 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# MASTER TEST SUITE — All Roles E2E Tests
+# Usage: maestro test .maestro/run_all_tests.yaml
+# Roles: Inspector, Admin, Engineer, Specialist, QE, Test/Admin
+# Total tests: ~69 (44 original + 25 new workflow tests)
+#
+# Legend: [shared] = same behavior across roles, run once
+#         [data]   = requires specific DB data to pass
+#         [nav]    = navigation/screen verification only
+# ═══════════════════════════════════════════════════════════
+
+# ── Launch app and handle Expo Dev Launcher if showing ─────
+- launchApp
+# If Expo Dev Launcher appears, tap the dev server to connect
+- tapOn:
+    text: "http://10.0.2.2:8081"
+    optional: true
+# login_inspector.yaml handles all startup states (dev menu, Dashboard, login screen)
+
+# ═══════════════════════════════════════════════════════════
+# ROLE 1: INSPECTOR (19 tests)
+# Tests shared behaviors (FAB, chat send, notifications)
+# + inspector-specific workflows (wizard, handover, report)
+# ═══════════════════════════════════════════════════════════
+- runFlow: login_inspector.yaml
+- runFlow: test_dashboard.yaml
+- runFlow: test_inspection_flow.yaml
+- runFlow: test_assessment.yaml
+- runFlow: test_notifications.yaml
+- runFlow: test_defects.yaml
+- runFlow: test_defect_detail.yaml
+- runFlow: test_defect_filter.yaml              # [shared] new: filter chips
+- runFlow: test_my_work_plan.yaml
+- runFlow: test_chat.yaml
+- runFlow: test_chat_room.yaml
+- runFlow: test_chat_send_message.yaml          # [shared] new: send text message
+- runFlow: test_notifications_mark_all_read.yaml  # [shared] new: mark all read button
+- runFlow: test_create_handover.yaml            # new: shift handover form
+# NOTE: test_unplanned_job requires rebuild — FAB context map updated in useFABContext.ts
+# - runFlow: test_unplanned_job.yaml            # new: unplanned job via FAB [needs rebuild]
+- runFlow: test_quick_field_report.yaml         # [shared] new: quick report via FAB
+- runFlow: test_voice_msg_fab.yaml              # [shared] new: voice msg via FAB
+# NOTE: test_inspection_wizard requires assigned inspection in DB for hazem.h.k
+# - runFlow: test_inspection_wizard.yaml       # [data] new: wizard nav + answer
+- runFlow: test_profile.yaml
+
+# ═══════════════════════════════════════════════════════════
+# ROLE 2: ADMIN (19 tests)
+# Note: test_chat_room skipped — admin has no channel memberships by default
+# ═══════════════════════════════════════════════════════════
+- runFlow: login_admin.yaml
+- runFlow: test_dashboard_common.yaml
+- runFlow: test_notifications.yaml
+- runFlow: test_defects.yaml
+- runFlow: test_defect_ai_search.yaml           # new: AI search modal
+- runFlow: test_work_plan_overview.yaml
+- runFlow: test_admin_more.yaml
+- runFlow: test_admin_more_extended.yaml
+- runFlow: test_admin_quick_links.yaml
+- runFlow: test_admin_quick_links_extended.yaml
+- runFlow: test_approve_leave.yaml              # [nav] new: leave approvals screen
+- runFlow: test_approve_bonus.yaml              # [nav] new: bonus approvals screen
+- runFlow: test_quality_validate.yaml           # [data] new: validate quality review
+- runFlow: test_assign_inspection.yaml          # new: verify generate+auto-assign btns
+- runFlow: test_generate_inspection_list.yaml   # new: generate inspection list modal
+- runFlow: test_assign_defect.yaml              # [data] new: assign defect modal
+- runFlow: test_auto_assign.yaml                # [data] new: auto-assign inspectors
+- runFlow: test_chat.yaml
+- runFlow: test_profile.yaml
+
+# ═══════════════════════════════════════════════════════════
+# ROLE 3: ENGINEER (15 tests)
+# Note: test_engineer_job_detail moved to test_engineer_job_workflow (extended)
+# ═══════════════════════════════════════════════════════════
+- runFlow: login_engineer.yaml
+- runFlow: test_dashboard_common.yaml
+- runFlow: test_notifications.yaml
+- runFlow: test_defects.yaml
+- runFlow: test_engineer_jobs.yaml
+- runFlow: test_work_plan_overview.yaml
+- runFlow: test_engineer_quick_links.yaml
+- runFlow: test_engineer_quick_links_extended.yaml
+- runFlow: test_engineer_job_workflow.yaml      # [data] new: start/pause job
+- runFlow: test_monitor_followup_schedule.yaml  # [nav] new: monitor followups screen
+- runFlow: test_monitor_followups_tabs.yaml     # new: switch all 4 tabs
+- runFlow: test_running_hours.yaml              # [data] new: record hours via equipment
+- runFlow: test_chat.yaml
+- runFlow: test_chat_room.yaml
+- runFlow: test_profile.yaml
+
+# ═══════════════════════════════════════════════════════════
+# ROLE 4: SPECIALIST (11 tests)
+# Note: test_defect_detail skipped — specialist user has no defects by default
+# ═══════════════════════════════════════════════════════════
+- runFlow: login_specialist.yaml
+- runFlow: test_dashboard_common.yaml
+- runFlow: test_notifications.yaml
+- runFlow: test_defects.yaml
+- runFlow: test_specialist_jobs.yaml
+- runFlow: test_specialist_job_workflow.yaml    # [data] new: job detail verification
+- runFlow: test_my_work_plan.yaml
+- runFlow: test_chat.yaml
+- runFlow: test_chat_room.yaml
+- runFlow: test_profile.yaml
+
+# ═══════════════════════════════════════════════════════════
+# ROLE 5: QUALITY ENGINEER — QE (4 tests)
+# NOTE: QE user (qe1@company.com) does NOT exist on this environment
+# login_qe.yaml itself says "this will fail" — entire section commented out
+# ═══════════════════════════════════════════════════════════
+# - runFlow: login_qe.yaml
+# - runFlow: test_qe_reviews.yaml
+# - runFlow: test_qe_overdue_reviews.yaml         # new: overdue reviews screen
+# - runFlow: test_qe_approve_review.yaml          # [data] new: approve a review
+# - runFlow: test_qe_reject_review.yaml           # [data] new: reject review w/ category
+
+# ═══════════════════════════════════════════════════════════
+# ROLE 6: TEST / ADMIN (4 tests)
+# Note: test_chat_room skipped — test/admin has no channel memberships by default
+# ═══════════════════════════════════════════════════════════
+- runFlow: login_test.yaml
+- runFlow: test_dashboard_common.yaml
+- runFlow: test_chat.yaml
+- runFlow: test_profile.yaml
+
+# ═══════════════════════════════════════════════════════════
+# All roles tested! Total: ~70 flows
+# ═══════════════════════════════════════════════════════════

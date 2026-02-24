@@ -1,0 +1,88 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Engineer Dashboard Quick Links
+# Precondition: Engineer is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Verify Dashboard loaded and reset scroll to top ──────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 15000
+
+# ── All Inspections ──────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "All Inspections"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "All Inspections"
+- extendedWaitUntil:
+    visible:
+      id: "all-inspections-screen"
+    timeout: 10000
+- assertVisible:
+    id: "all-inspections-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top before next item
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 5000
+
+# ── Assessment Tracking ──────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Assessment Tracking"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Assessment Tracking"
+- extendedWaitUntil:
+    visible:
+      id: "assessment-tracking-screen"
+    timeout: 10000
+- assertVisible:
+    id: "assessment-tracking-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top before next item
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 5000
+
+# ── Monitor Follow-Ups ───────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Monitor Follow-Ups"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Monitor Follow-Ups"
+- extendedWaitUntil:
+    visible:
+      id: "monitor-followups-screen"
+    timeout: 10000
+- assertVisible:
+    id: "monitor-followups-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000

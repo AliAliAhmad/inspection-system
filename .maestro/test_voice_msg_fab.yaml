@@ -1,0 +1,32 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Voice Message FAB Action (All Roles)
+# Precondition: Logged in, on Dashboard
+# NOTE: FAB action items use testID fab-action-{id} after rebuild.
+#       Until rebuild, this test verifies FAB menu shows Voice Message.
+# ═══════════════════════════════════════════════════════════
+
+# ── Ensure on Dashboard ────────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 20000
+
+# ── Open FAB menu ─────────────────────────────────────────
+- tapOn:
+    id: "fab-btn"
+- extendedWaitUntil:
+    visible: "Voice Message"
+    timeout: 8000
+- assertVisible:
+    text: "Voice Message"
+
+# ── Close menu (tap FAB again to toggle closed) ───────────
+- tapOn:
+    id: "fab-btn"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 5000

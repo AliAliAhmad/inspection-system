@@ -1,0 +1,56 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Assign Defect to Engineer (Admin)
+# Precondition: Logged in as admin, on Dashboard
+# Requires: at least one open defect without a job assigned
+# ═══════════════════════════════════════════════════════════
+
+# ── Ensure on Dashboard at top, then find Defects quick action ─────
+# tapOn active tab triggers useScrollToTop animation back to top
+- tapOn:
+    text: "Dashboard"
+# notification-bell is in the header (outside loading block) — visible only when at top
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 20000
+# Wait for scroll animation to fully stop before checking content
+- waitForAnimationToEnd
+# Now wait for QuickActions to render (loading block cleared)
+- extendedWaitUntil:
+    visible:
+      id: "quick-action-Defects"
+    timeout: 10000
+
+# ── Navigate to Defects ───────────────────────────────────
+- tapOn:
+    id: "quick-action-Defects"
+- extendedWaitUntil:
+    visible: "Defects"
+    timeout: 10000
+- assertVisible:
+    id: "defects-screen"
+
+# ── Try to find assign button (requires unassigned defect) ─
+- scrollUntilVisible:
+    element:
+      text: "Assign"
+    timeout: 8000
+- tapOn:
+    text: "Assign"
+
+# ── Wait for assign modal (use cancel-btn testID — more reliable than Modal container) ──
+- extendedWaitUntil:
+    visible:
+      id: "defects-assign-modal-cancel"
+    timeout: 8000
+
+# ── Dismiss modal ─────────────────────────────────────────
+- back
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

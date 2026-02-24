@@ -1,0 +1,17 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# UTILITY: Logout current user
+# Called optionally — if already on login screen this flow
+# will fail and the parent flow continues (optional: true)
+# ═══════════════════════════════════════════════════════════
+- tapOn: "Profile"
+- scrollUntilVisible:
+    element: "Logout"
+    timeout: 10000
+    visibilityPercentage: 50
+- tapOn: "Logout"
+- tapOn: "LOGOUT"
+- extendedWaitUntil:
+    visible: "Sign in to your account"
+    timeout: 20000

@@ -1,0 +1,6 @@
+appId: com.inspection.system
+---
+- extendedWaitUntil:
+    visible: "Development Build"
+    timeout: 5000
+- tapOn: "http://10.0.2.2:8081"
