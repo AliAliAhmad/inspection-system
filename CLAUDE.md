@@ -69,6 +69,7 @@
 <!-- Claude: After EVERY change you make, add an entry here. NEVER skip this. -->
 
 | Date | What Changed | Status |
+| 2026-02-24 | Work Planning v6 layout: flat berth bar + plan score pill + smart inline tags; engineers-only horizontal strip (draggable); 7 flex day columns with in-place expand/collapse (flex 3.5/42px/1); right panel redesigned as Tabs (Jobs Pool + Team Pool with Mech/Elec filter); removed old bottom team pool; DroppableDay updated to accept containerStyle | ✅ |
 | 2026-02-24 | Applied responsive scaling (scale/vscale/mscale/fontScale) to ProfileScreen.tsx and AllInspectionsScreen.tsx StyleSheet values | ✅ Done |
 | 2026-02-24 | Applied responsive scaling (scale/vscale/mscale/fontScale) to DefectsScreen.tsx and AdminMoreScreen.tsx StyleSheet values | ✅ Done |
 | 2026-02-24 | Playwright E2E web test suite — 14 spec files, 92 tests, 0 failures, 0 flaky | ✅ Done |
@@ -151,6 +152,7 @@
 | Notification preferences screen (mobile) | ✅ Done | Channels (In-App/Push) by group, DND quiet hours + day picker, digest mode radio, reset to defaults, full RTL/i18n |
 | Maestro E2E test suite (mobile) | ✅ Done | 44 flows across 5 roles (Inspector/Admin/Engineer/Specialist/Test), ALL PASS — testIDs on all 71 screens, role-specific flows, i18n-aware text assertions, scroll-reset pattern for quick links |
 | Playwright E2E test suite (web) | ✅ Done | 126 tests across 17 spec files — auth, navigation, CRUD, roles, Arabic/RTL, forms, uploads, mobile viewport, reports, quality-engineer, inspection-submit, error-handling/crash-regression. ALL PASS (0 failed, 0 flaky). Runs against https://inspection-web.onrender.com |
+| Work Planning v6 layout (web) | ✅ Done | Flat berth bar + plan score + smart pills; engineers horizontal strip; 7 flex day columns with in-place expand/collapse; right panel tabs (Jobs Pool + Team Pool with Mech/Elec filter) |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

@@ -1,0 +1,72 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: QE Reject Review with Category (Quality Engineer)
+# Precondition: Logged in as quality_engineer, on Dashboard
+# Requires: at least one pending quality review
+# NOTE: QE user may not exist on production — login_qe.yaml may fail
+# ═══════════════════════════════════════════════════════════
+
+# ── Go to Pending Reviews tab ─────────────────────────────
+- tapOn:
+    text: "Pending Reviews"
+- extendedWaitUntil:
+    visible:
+      id: "pending-reviews-screen"
+    timeout: 12000
+- assertVisible:
+    id: "pending-reviews-screen"
+
+# ── Tap first review card ─────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Review"
+    timeout: 8000
+- tapOn:
+    text: "Review"
+- extendedWaitUntil:
+    visible:
+      id: "review-detail-screen"
+    timeout: 10000
+- assertVisible:
+    id: "review-detail-screen"
+
+# ── Tap Reject button ─────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "review-reject-btn"
+    timeout: 8000
+- tapOn:
+    id: "review-reject-btn"
+
+# ── Wait for reject modal ─────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "review-reject-category-incomplete_work"
+    timeout: 8000
+
+# ── Select rejection category ─────────────────────────────
+- tapOn:
+    id: "review-reject-category-incomplete_work"
+
+# ── Cancel reject (don't actually reject) ────────────────
+- tapOn:
+    id: "review-reject-cancel-btn"
+
+# ── Verify back on detail screen ─────────────────────────
+- assertVisible:
+    id: "review-detail-screen"
+
+# ── Back to Pending Reviews ───────────────────────────────
+- back
+- extendedWaitUntil:
+    visible:
+      id: "pending-reviews-screen"
+    timeout: 10000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

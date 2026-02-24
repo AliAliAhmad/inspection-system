@@ -1,0 +1,13 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# HELPER: Tap Expo Dev Launcher server URL if screen appears
+# Run with optional:true — fails silently if login screen loads directly
+# ═══════════════════════════════════════════════════════════
+# Wait up to 8s for Dev Launcher to appear
+- extendedWaitUntil:
+    visible: "http://10.0.2.2:8081"
+    timeout: 8000
+# Tap the dev server to connect and load the app
+- tapOn:
+    text: "http://10.0.2.2:8081"

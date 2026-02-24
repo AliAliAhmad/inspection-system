@@ -1,0 +1,9 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# UTILITY: Dismiss Expo Developer Menu
+# Called optionally — if no dev menu is showing, tapOn fails
+# and the parent runFlow (with optional: true) continues
+# ═══════════════════════════════════════════════════════════
+- tapOn: "Continue"
+- back

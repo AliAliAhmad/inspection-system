@@ -1,0 +1,41 @@
+appId: com.inspection.system
+---
+# Force-stop + clear state to always start fresh at login screen
+- stopApp:
+    appId: "com.inspection.system"
+- launchApp:
+    appId: "com.inspection.system"
+    clearState: true
+    clearKeychain: false
+# Handle Expo Dev Launcher if it appears
+- tapOn:
+    text: "http://10.0.2.2:8081"
+    optional: true
+# Dismiss dev menu if showing
+- runFlow:
+    file: dismiss_dev_menu.yaml
+    optional: true
+# Wait for login screen
+- extendedWaitUntil:
+    visible: "Sign in to your account"
+    timeout: 120000
+# Login as maintenance
+- tapOn:
+    id: "login-email"
+- tapOn:
+    id: "login-email"
+- eraseText: 50
+- inputText: "mohamed.l.y"
+- tapOn:
+    id: "login-password"
+- tapOn:
+    id: "login-password"
+- eraseText: 50
+- inputText: "500242"
+- tapOn: "Inspection System"
+- hideKeyboard
+- tapOn:
+    id: "login-button"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 30000

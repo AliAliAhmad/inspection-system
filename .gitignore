@@ -21,7 +21,6 @@ instance/
 Thumbs.db
 
 # Testing
-.maestro/
 bugreport-*.zip
 
 # Frontend
@@ -51,3 +50,4 @@ inspection-system/
 report.xml
 testsprite_tests/
 frontend/testsprite_tests/
+frontend/apps/web/e2e/screenshots/

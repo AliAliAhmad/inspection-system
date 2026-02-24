@@ -1,0 +1,177 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Admin Dashboard Quick Links
+# Precondition: Admin is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Verify Dashboard loaded and reset scroll to top ──────
+# tapOn active tab triggers useScrollToTop animation to top
+- tapOn:
+    text: "Dashboard"
+# notification-bell is in header (always rendered) — visible only when at/near top
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 15000
+- waitForAnimationToEnd
+
+# ── Inspection Routines ──────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Inspection Routines"
+    timeout: 12000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Inspection Routines"
+- extendedWaitUntil:
+    visible:
+      id: "inspection-routines-screen"
+    timeout: 10000
+- assertVisible:
+    id: "inspection-routines-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top — wait for notification-bell to confirm animation done
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Checklists ───────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Checklists"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Checklists"
+- extendedWaitUntil:
+    visible:
+      id: "checklists-screen"
+    timeout: 10000
+- assertVisible:
+    id: "checklists-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── All Inspections ──────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "All Inspections"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "All Inspections"
+- extendedWaitUntil:
+    visible:
+      id: "all-inspections-screen"
+    timeout: 10000
+- assertVisible:
+    id: "all-inspections-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Team Roster ──────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Team Roster"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Team Roster"
+- extendedWaitUntil:
+    visible:
+      id: "team-roster-screen"
+    timeout: 10000
+- assertVisible:
+    id: "team-roster-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Backlog (shown as "Overdue Inspections" via i18n) ────
+- scrollUntilVisible:
+    element:
+      text: "Overdue Inspections"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Overdue Inspections"
+- extendedWaitUntil:
+    visible:
+      id: "backlog-screen"
+    timeout: 10000
+- assertVisible:
+    id: "backlog-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Assessment Tracking ──────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Assessment Tracking"
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Assessment Tracking"
+- extendedWaitUntil:
+    visible:
+      id: "assessment-tracking-screen"
+    timeout: 10000
+- assertVisible:
+    id: "assessment-tracking-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000

@@ -1,0 +1,96 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Profile Settings Flow
+# Precondition: User is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Profile tab ──────────────────────────────
+- tapOn: "Profile"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 15000
+- assertVisible:
+    id: "profile-screen"
+- assertVisible:
+    id: "language-toggle"
+
+# ── Test theme switching ─────────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "theme-light"
+    timeout: 10000
+    visibilityPercentage: 50
+- tapOn:
+    id: "theme-light"
+- tapOn:
+    id: "theme-dark"
+- tapOn:
+    id: "theme-system"
+
+# ── Test language toggle (EN → AR → EN) ─────────────────
+- tapOn:
+    id: "language-toggle"
+- extendedWaitUntil:
+    visible: "الملف الشخصي"
+    timeout: 8000
+    optional: true
+- tapOn:
+    id: "language-toggle"
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 8000
+    optional: true
+
+# ── Test accessibility options ───────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "high-contrast-toggle"
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    id: "high-contrast-toggle"
+- tapOn:
+    id: "high-contrast-toggle"
+- tapOn:
+    id: "bold-text-toggle"
+- tapOn:
+    id: "bold-text-toggle"
+
+# ── Test text scale options ──────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "text-scale-1.25"
+    timeout: 10000
+    visibilityPercentage: 50
+- tapOn:
+    id: "text-scale-1.25"
+- tapOn:
+    id: "text-scale-1"
+
+# ── Test notification preferences link ───────────────────
+- scrollUntilVisible:
+    element:
+      id: "notification-prefs-link"
+    timeout: 10000
+    visibilityPercentage: 50
+- tapOn:
+    id: "notification-prefs-link"
+- extendedWaitUntil:
+    visible:
+      id: "notification-preferences-screen"
+    timeout: 10000
+- assertVisible:
+    id: "notification-preferences-screen"
+- back
+- extendedWaitUntil:
+    visible: "Profile"
+    timeout: 10000
+
+# ── Return to Dashboard ─────────────────────────────────
+# NOTE: logout-btn check removed — logout is already tested by every
+# login flow (each role starts by logging out the previous user)
+- tapOn: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

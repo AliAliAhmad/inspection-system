@@ -1,0 +1,66 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Log Unplanned Job (Inspector via Work Plan FAB)
+# Precondition: Logged in as inspector, on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to My Work Plan tab ─────────────────────────
+- tapOn:
+    text: "My Work Plan"
+- extendedWaitUntil:
+    visible:
+      id: "my-work-plan-screen"
+    timeout: 12000
+
+# ── Open FAB menu, then tap Unplanned Job ──────────────────
+- tapOn:
+    id: "fab-btn"
+- extendedWaitUntil:
+    visible:
+      id: "fab-action-unplanned_job"
+    timeout: 5000
+- tapOn:
+    id: "fab-action-unplanned_job"
+- extendedWaitUntil:
+    visible:
+      id: "unplanned-job-screen"
+    timeout: 10000
+- assertVisible:
+    id: "unplanned-job-screen"
+
+# ── Select job type: Assist Team ──────────────────────────
+- tapOn:
+    id: "unplanned-job-type-assist-btn"
+
+# ── Fill equipment name ───────────────────────────────────
+- tapOn:
+    id: "unplanned-job-equipment-input"
+- inputText: "Crane 01"
+
+# ── Fill description ──────────────────────────────────────
+- tapOn:
+    id: "unplanned-job-description-input"
+- inputText: "Assisted with routine check and calibration"
+
+# ── Fill work done ────────────────────────────────────────
+- tapOn:
+    id: "unplanned-job-work-done-input"
+- inputText: "Calibrated pressure sensor, tested emergency stop"
+
+# ── Submit unplanned job ──────────────────────────────────
+- tapOn:
+    id: "unplanned-job-submit-btn"
+
+# ── Verify navigation back ────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "my-work-plan-screen"
+    timeout: 15000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

@@ -1,0 +1,57 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Dashboard Navigation & Widgets
+# Precondition: User is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Verify Dashboard loaded ──────────────────────────────
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 15000
+
+- assertVisible:
+    id: "assignment-summary"
+
+# ── Tap Notification Bell → Notifications screen ────────
+- tapOn:
+    id: "notification-bell"
+- extendedWaitUntil:
+    visible: "Notifications"
+    timeout: 10000
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000
+
+# ── Tap Quick Action: Start Inspection → Assignments ────
+- tapOn:
+    id: "quick-action-Assignments"
+- assertVisible:
+    id: "assignments-screen"
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000
+
+# ── Tap Quick Action: Report Defect → Defects ───────────
+- tapOn:
+    id: "quick-action-Defects"
+- extendedWaitUntil:
+    visible: "Defects"
+    timeout: 10000
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000
+
+# ── Tap Quick Action: Team Chat → Channel List ──────────
+- tapOn:
+    id: "quick-action-ChannelList"
+- extendedWaitUntil:
+    visible: "Team Chat"
+    timeout: 10000
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

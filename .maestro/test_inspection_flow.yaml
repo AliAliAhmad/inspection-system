@@ -1,0 +1,52 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Inspector Inspection Flow
+# Precondition: Logged in as inspector on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Assignments via quick action ─────────────
+- tapOn:
+    id: "quick-action-Assignments"
+- assertVisible:
+    id: "assignments-screen"
+- assertVisible:
+    id: "assignments-list"
+
+# ── Test status filter cards ─────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "filter-assigned"
+    timeout: 5000
+- tapOn:
+    id: "filter-assigned"
+
+- scrollUntilVisible:
+    element:
+      id: "filter-in-progress"
+    timeout: 5000
+- tapOn:
+    id: "filter-in-progress"
+
+- scrollUntilVisible:
+    element:
+      id: "filter-all"
+    timeout: 5000
+- tapOn:
+    id: "filter-all"
+
+# ── Test assessment filter chips ─────────────────────────
+- tapOn:
+    id: "assessment-filter-operational"
+- tapOn:
+    id: "assessment-filter-monitor"
+- tapOn:
+    id: "assessment-filter-stop"
+- tapOn:
+    id: "assessment-filter-all"
+
+# ── Return to Dashboard ─────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

@@ -1,0 +1,77 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Inspection Wizard Navigation (Inspector)
+# Precondition: Logged in as inspector, on Dashboard
+# Requires: at least one active (not completed) assignment
+# ═══════════════════════════════════════════════════════════
+
+# ── Tap Start Next Inspection card ────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "start-next-inspection"
+    timeout: 10000
+- tapOn:
+    id: "start-next-inspection"
+- extendedWaitUntil:
+    visible:
+      id: "inspection-wizard-screen"
+    timeout: 15000
+- assertVisible:
+    id: "inspection-wizard-screen"
+
+# ── Verify wizard navigation buttons visible ──────────────
+- assertVisible:
+    id: "wizard-next-btn"
+- assertVisible:
+    id: "wizard-prev-btn"
+
+# ── Answer first question: tap Yes ────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "wizard-yes-btn"
+    timeout: 8000
+- tapOn:
+    id: "wizard-yes-btn"
+
+# ── Select urgency: OK (level 0) ──────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "urgency-btn-0"
+    timeout: 8000
+- tapOn:
+    id: "urgency-btn-0"
+
+# ── Navigate to next question ─────────────────────────────
+- tapOn:
+    id: "wizard-next-btn"
+- assertVisible:
+    id: "inspection-wizard-screen"
+
+# ── Answer second question: tap No ────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "wizard-no-btn"
+    timeout: 8000
+- tapOn:
+    id: "wizard-no-btn"
+
+# ── Select urgency: Monitor (level 1) ────────────────────
+- scrollUntilVisible:
+    element:
+      id: "urgency-btn-1"
+    timeout: 8000
+- tapOn:
+    id: "urgency-btn-1"
+
+# ── Navigate back to first question ──────────────────────
+- tapOn:
+    id: "wizard-prev-btn"
+- assertVisible:
+    id: "inspection-wizard-screen"
+
+# ── Back to Dashboard ─────────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

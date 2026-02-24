@@ -1,0 +1,78 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Engineer Job Workflow - Start/Pause (Engineer)
+# Precondition: Logged in as engineer, on Dashboard
+# Requires: at least one engineer job (not yet started)
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to My Jobs tab ───────────────────────────────
+- tapOn:
+    text: "My Jobs"
+- extendedWaitUntil:
+    visible:
+      id: "engineer-jobs-screen"
+    timeout: 12000
+- assertVisible:
+    id: "engineer-jobs-screen"
+- assertVisible:
+    id: "engineer-jobs-list"
+
+# ── Tap first job card ────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "engineer-job-card-0"
+    timeout: 8000
+- tapOn:
+    id: "engineer-job-card-0"
+- extendedWaitUntil:
+    visible:
+      id: "engineer-job-detail-screen"
+    timeout: 10000
+- assertVisible:
+    id: "engineer-job-detail-screen"
+
+# ── Start the job ─────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      id: "engineer-start-job-btn"
+    timeout: 8000
+- tapOn:
+    id: "engineer-start-job-btn"
+- extendedWaitUntil:
+    visible:
+      id: "engineer-pause-btn"
+    timeout: 10000
+
+# ── Open pause modal ──────────────────────────────────────
+- tapOn:
+    id: "engineer-pause-btn"
+- extendedWaitUntil:
+    visible:
+      id: "engineer-pause-cancel-btn"
+    timeout: 8000
+
+# ── Select pause reason ───────────────────────────────────
+- tapOn:
+    id: "engineer-pause-category-parts"
+
+# ── Cancel pause (revert) ─────────────────────────────────
+- tapOn:
+    id: "engineer-pause-cancel-btn"
+- assertVisible:
+    id: "engineer-pause-btn"
+
+# ── Return to Jobs list ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible:
+      id: "engineer-jobs-screen"
+    timeout: 10000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000
+

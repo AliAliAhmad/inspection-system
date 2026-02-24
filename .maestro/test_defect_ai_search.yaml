@@ -1,0 +1,32 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Defect AI Search Button Presence (Admin + Engineer)
+# Precondition: Logged in as admin/engineer, on Dashboard
+#
+# NOTE: The AI search modal uses React Native <Modal> which
+#       renders in a separate Android overlay Window. Maestro
+#       cannot detect text inside RN Modal overlays via
+#       extendedWaitUntil/assertVisible. Full modal E2E test
+#       deferred to post-rebuild (add testIDs + onRequestClose).
+#       Until then: verify button is present on defects screen.
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Defects ───────────────────────────────────
+- tapOn:
+    id: "quick-action-Defects"
+- extendedWaitUntil:
+    visible: "Defects"
+    timeout: 10000
+- assertVisible:
+    id: "defects-screen"
+
+# ── Verify AI Search button is present ───────────────────
+- assertVisible:
+    id: "defects-ai-search-btn"
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

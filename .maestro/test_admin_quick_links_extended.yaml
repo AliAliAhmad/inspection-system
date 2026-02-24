@@ -1,0 +1,210 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Admin Quick Links — Extended
+# Precondition: Admin logged in, on Dashboard
+# Tests: Specialist Jobs, Engineer Jobs, Schedules,
+#        Leave Approvals, Assignment Lists, Quality Reviews,
+#        Monitor Follow-Ups
+# ═══════════════════════════════════════════════════════════
+
+- assertVisible:
+    id: "dashboard-screen"
+
+# ── Tap Dashboard tab again to scroll to top ─────────────
+- tapOn:
+    text: "Dashboard"
+# notification-bell in header — visible once scroll animation finishes at top
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 10000
+- waitForAnimationToEnd
+
+# ── Specialist Jobs ──────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Specialist Jobs"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Specialist Jobs"
+- extendedWaitUntil:
+    visible:
+      id: "all-specialist-jobs-screen"
+    timeout: 10000
+- assertVisible:
+    id: "all-specialist-jobs-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Engineer Jobs ────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Engineer Jobs"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Engineer Jobs"
+- extendedWaitUntil:
+    visible:
+      id: "all-engineer-jobs-screen"
+    timeout: 10000
+- assertVisible:
+    id: "all-engineer-jobs-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Schedules ────────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Schedules"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Schedules"
+- extendedWaitUntil:
+    visible:
+      id: "schedules-screen"
+    timeout: 10000
+- assertVisible:
+    id: "schedules-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Leave Approvals ──────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Leave Approvals"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Leave Approvals"
+- extendedWaitUntil:
+    visible:
+      id: "leave-approvals-screen"
+    timeout: 10000
+- assertVisible:
+    id: "leave-approvals-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Assignment Lists ─────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Assignment Lists"
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Assignment Lists"
+- extendedWaitUntil:
+    visible:
+      id: "inspection-assignments-screen"
+    timeout: 10000
+- assertVisible:
+    id: "inspection-assignments-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Quality Reviews ──────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Quality Reviews"
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Quality Reviews"
+- extendedWaitUntil:
+    visible:
+      id: "quality-reviews-admin-screen"
+    timeout: 10000
+- assertVisible:
+    id: "quality-reviews-admin-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000
+# Reset scroll to top
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible:
+      id: "notification-bell"
+    timeout: 8000
+- waitForAnimationToEnd
+
+# ── Monitor Follow-Ups ───────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Monitor Follow-Ups"
+    timeout: 15000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Monitor Follow-Ups"
+- extendedWaitUntil:
+    visible:
+      id: "monitor-followups-screen"
+    timeout: 10000
+- assertVisible:
+    id: "monitor-followups-screen"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "dashboard-screen"
+    timeout: 10000

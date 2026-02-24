@@ -1,0 +1,53 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Send Chat Message (All Roles)
+# Precondition: Logged in, on Dashboard
+# Requires: at least one channel membership
+# ═══════════════════════════════════════════════════════════
+
+# ── Go to Chat tab ────────────────────────────────────────
+- tapOn:
+    text: "Chat"
+- extendedWaitUntil:
+    visible: "Team Chat"
+    timeout: 15000
+
+# ── Open first channel ────────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "channel-card-0"
+    timeout: 10000
+- tapOn:
+    id: "channel-card-0"
+- extendedWaitUntil:
+    visible:
+      id: "chat-room-screen"
+    timeout: 12000
+- assertVisible:
+    id: "chat-room-screen"
+
+# ── Type and send a message ───────────────────────────────
+- tapOn:
+    id: "chat-message-input"
+- inputText: "Test message from Maestro E2E"
+- hideKeyboard
+- tapOn:
+    id: "chat-send-btn"
+
+# ── Verify still in chat room (message sent) ─────────────
+- assertVisible:
+    id: "chat-room-screen"
+
+# ── Back to channel list ──────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Team Chat"
+    timeout: 10000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

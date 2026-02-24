@@ -1,0 +1,37 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Schedule Monitor Follow-Up (Engineer)
+# Precondition: Logged in as engineer, on Dashboard
+# Requires: at least one monitor follow-up in "pending" status
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Monitor Follow-Ups via quick links ───────
+- scrollUntilVisible:
+    element:
+      text: "Monitor Follow-Ups"
+    timeout: 10000
+- tapOn:
+    text: "Monitor Follow-Ups"
+- extendedWaitUntil:
+    visible:
+      id: "monitor-followups-screen"
+    timeout: 12000
+- assertVisible:
+    id: "monitor-followups-screen"
+
+# ── Switch to Pending tab ─────────────────────────────────
+- tapOn:
+    id: "monitor-followups-tab-pending"
+- assertVisible:
+    id: "monitor-followups-screen"
+
+# ── Verify list loads ─────────────────────────────────────
+- assertVisible:
+    id: "monitor-followups-list"
+
+# ── Return to Dashboard ───────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

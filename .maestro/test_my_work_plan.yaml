@@ -1,0 +1,27 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: My Work Plan Tab (Inspector / Specialist / QE)
+# Precondition: User is logged in and on Dashboard
+# ═══════════════════════════════════════════════════════════
+
+# ── Verify Dashboard loaded ──────────────────────────────
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 15000
+
+# ── Tap "My Work Plan" tab ───────────────────────────────
+- tapOn:
+    text: "My Work Plan"
+- extendedWaitUntil:
+    visible: "My Work Plan"
+    timeout: 10000
+- assertVisible:
+    id: "my-work-plan-screen"
+
+# ── Return to Dashboard tab ──────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

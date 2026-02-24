@@ -1,0 +1,75 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Engineer Quick Links — Extended
+# Precondition: Engineer logged in, on Dashboard
+# Tests: Schedules, Team Roster, Overdue Inspections
+# (Equipment skipped — text ambiguous with stat cards)
+# ═══════════════════════════════════════════════════════════
+
+- assertVisible:
+    text: "Dashboard"
+
+# ── Tap Dashboard tab again to scroll to top ─────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 8000
+
+# ── Schedules ────────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Schedules"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Schedules"
+- extendedWaitUntil:
+    visible:
+      id: "schedules-screen"
+    timeout: 10000
+- assertVisible:
+    id: "schedules-screen"
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000
+
+# ── Team Roster ──────────────────────────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Team Roster"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Team Roster"
+- extendedWaitUntil:
+    visible:
+      id: "team-roster-screen"
+    timeout: 10000
+- assertVisible:
+    id: "team-roster-screen"
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000
+
+# ── Overdue Inspections (nav.backlog) ─────────────────────
+- scrollUntilVisible:
+    element:
+      text: "Overdue Inspections"
+    timeout: 8000
+    visibilityPercentage: 50
+- tapOn:
+    text: "Overdue Inspections"
+- extendedWaitUntil:
+    visible:
+      id: "backlog-screen"
+    timeout: 10000
+- assertVisible:
+    id: "backlog-screen"
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

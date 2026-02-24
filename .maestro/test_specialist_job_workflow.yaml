@@ -1,0 +1,62 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Specialist Job Detail (Specialist)
+# Precondition: Logged in as specialist, on Dashboard
+# Requires: at least one specialist job assigned
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to My Jobs tab ────────────────────────────────
+- tapOn:
+    text: "My Jobs"
+- extendedWaitUntil:
+    visible:
+      id: "specialist-jobs-screen"
+    timeout: 12000
+- assertVisible:
+    id: "specialist-jobs-screen"
+
+# ── Wait for list to load ─────────────────────────────────
+- extendedWaitUntil:
+    visible:
+      id: "specialist-jobs-list"
+    timeout: 8000
+
+# ── Scroll down to find a job card ────────────────────────
+- scroll
+
+# ── Tap on first visible job card (by status badge text) ──
+- scrollUntilVisible:
+    element:
+      text: "Pending"
+    timeout: 8000
+- tapOn:
+    text: "Pending"
+- extendedWaitUntil:
+    visible:
+      id: "specialist-job-detail-screen"
+    timeout: 10000
+- assertVisible:
+    id: "specialist-job-detail-screen"
+
+# ── Verify Start Job button visible ──────────────────────
+- scrollUntilVisible:
+    element:
+      id: "start-job-btn"
+    timeout: 8000
+- assertVisible:
+    id: "start-job-btn"
+
+# ── Back to jobs list ─────────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible:
+      id: "specialist-jobs-screen"
+    timeout: 10000
+
+# ── Return to Dashboard ───────────────────────────────────
+- tapOn:
+    text: "Dashboard"
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000

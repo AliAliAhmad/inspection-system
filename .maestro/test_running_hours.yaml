@@ -1,0 +1,67 @@
+appId: com.inspection.system
+---
+# ═══════════════════════════════════════════════════════════
+# TEST: Record Running Hours (Engineer via Equipment)
+# Precondition: Logged in as engineer, on Dashboard
+# Requires: at least one piece of equipment in DB
+# ═══════════════════════════════════════════════════════════
+
+# ── Navigate to Equipment from quick links ───────────────
+- scrollUntilVisible:
+    element:
+      text: "Equipment"
+    timeout: 10000
+- tapOn:
+    text: "Equipment"
+- extendedWaitUntil:
+    visible:
+      id: "equipment-screen"
+    timeout: 12000
+- assertVisible:
+    id: "equipment-screen"
+
+# ── Scroll to find first Running Hours button ─────────────
+- scrollUntilVisible:
+    element:
+      text: "⏱️ Hours"
+    timeout: 10000
+- tapOn:
+    text: "⏱️ Hours"
+- extendedWaitUntil:
+    visible:
+      id: "running-hours-screen"
+    timeout: 10000
+- assertVisible:
+    id: "running-hours-screen"
+
+# ── Tap Record button ─────────────────────────────────────
+- tapOn:
+    id: "running-hours-record-btn"
+- extendedWaitUntil:
+    visible:
+      id: "running-hours-input"
+    timeout: 8000
+
+# ── Enter running hours value ─────────────────────────────
+- tapOn:
+    id: "running-hours-input"
+- inputText: "1250"
+
+# ── Submit ────────────────────────────────────────────────
+- tapOn:
+    id: "running-hours-submit-btn"
+
+# ── Verify back on running hours screen ───────────────────
+- assertVisible:
+    id: "running-hours-screen"
+
+# ── Back to Dashboard ─────────────────────────────────────
+- back
+- extendedWaitUntil:
+    visible:
+      id: "equipment-screen"
+    timeout: 10000
+- back
+- extendedWaitUntil:
+    visible: "Dashboard"
+    timeout: 10000
