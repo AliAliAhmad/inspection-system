@@ -1,3 +1,4 @@
+# Inspection System - Production App
 # Industrial Inspection System
 
 A full-stack inspection management platform for industrial equipment. Supports five user roles with dedicated workflows, bilingual UI (English/Arabic with RTL), offline-capable mobile app, and a PWA-enabled web dashboard.
