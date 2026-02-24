@@ -26,6 +26,7 @@ import {
   Popconfirm,
   Drawer,
   Switch,
+  Tag,
 } from 'antd';
 import {
   PlusOutlined,
@@ -103,7 +104,8 @@ const DroppableDay: React.FC<{
   day: WorkPlanDay;
   berth: BerthTab;
   children: React.ReactNode;
-}> = ({ day, berth, children }) => {
+  containerStyle?: React.CSSProperties;
+}> = ({ day, berth, children, containerStyle }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `day-${day.id}-${berth}`,
     data: { type: 'day', day, berth },
@@ -112,7 +114,12 @@ const DroppableDay: React.FC<{
   return (
     <div
       ref={setNodeRef}
-      style={{
+      style={containerStyle ? {
+        ...containerStyle,
+        backgroundColor: isOver ? '#e6f7ff' : containerStyle.backgroundColor,
+        outline: isOver ? '2px dashed #1890ff' : undefined,
+        outlineOffset: isOver ? '-2px' : undefined,
+      } : {
         backgroundColor: isOver ? '#e6f7ff' : undefined,
         border: isOver ? '2px dashed #1890ff' : '2px solid transparent',
         borderRadius: 8,
@@ -191,7 +198,9 @@ export default function WorkPlanningPage() {
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [conflictPanelOpen, setConflictPanelOpen] = useState(false);
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
-  const [teamExpanded, setTeamExpanded] = useState(false);
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [rightPanelTab, setRightPanelTab] = useState<'jobs' | 'team'>('jobs');
+  const [teamPoolDisc, setTeamPoolDisc] = useState<'all' | 'mechanical' | 'electrical'>('all');
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
 
@@ -612,6 +621,13 @@ export default function WorkPlanningPage() {
     return { totalJobs, unassigned, noSAP, totalHours };
   }, [currentPlan]);
 
+  // Plan confidence score (% of jobs with at least one person assigned)
+  const planScore = useMemo(() => {
+    if (!weekStats || weekStats.totalJobs === 0) return 0;
+    const assigned = weekStats.totalJobs - weekStats.unassigned;
+    return Math.min(100, Math.round((assigned / weekStats.totalJobs) * 100));
+  }, [weekStats]);
+
   // At-risk jobs computation
   const atRiskJobs = useMemo(() => {
     if (!currentPlan?.days) return [];
@@ -672,6 +688,15 @@ export default function WorkPlanningPage() {
     });
     return cols;
   }, [teamUsersData]);
+
+  // Free non-engineer team members by discipline (for smart berth-bar pills)
+  const discTeamFree = useMemo(() => {
+    const mechFree = [...(teamColumns.specMech || []), ...(teamColumns.inspMech || [])]
+      .filter((u: any) => !leaveUserIds.has(u.id)).length;
+    const elecFree = [...(teamColumns.specElec || []), ...(teamColumns.inspElec || [])]
+      .filter((u: any) => !leaveUserIds.has(u.id)).length;
+    return { mechFree, elecFree };
+  }, [teamColumns, leaveUserIds]);
 
   // Leave details for team pool
   const leaveDetails = useMemo(() => {
@@ -1041,46 +1066,102 @@ export default function WorkPlanningPage() {
           </div>
         </div>
 
-        {/* Berth Tabs */}
-        <Tabs
-          activeKey={berth}
-          onChange={(k) => setBerth(k as BerthTab)}
-          type="card"
-          size="small"
-          style={{ marginBottom: 0, paddingLeft: 16, paddingRight: 16 }}
-          items={[
-            {
-              key: 'east',
-              label: (
-                <Space>
-                  <span>East Berth</span>
-                  {currentPlan && (
-                    <Badge
-                      count={(currentPlan.days || []).reduce((sum, d) => sum + (d.jobs_east?.length || 0) + (d.jobs_both?.length || 0), 0)}
-                      size="small"
-                      style={{ backgroundColor: '#1890ff' }}
-                    />
-                  )}
-                </Space>
-              ),
-            },
-            {
-              key: 'west',
-              label: (
-                <Space>
-                  <span>West Berth</span>
-                  {currentPlan && (
-                    <Badge
-                      count={(currentPlan.days || []).reduce((sum, d) => sum + (d.jobs_west?.length || 0) + (d.jobs_both?.length || 0), 0)}
-                      size="small"
-                      style={{ backgroundColor: '#52c41a' }}
-                    />
-                  )}
-                </Space>
-              ),
-            },
-          ]}
-        />
+        {/* BERTH BAR: toggle + plan score + smart pills */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '6px 16px',
+          borderBottom: '1px solid #f0f0f0',
+          background: '#fff',
+          flexShrink: 0,
+          flexWrap: 'wrap',
+        }}>
+          {/* Berth Toggle Buttons */}
+          <div style={{ display: 'flex', gap: 0, border: '1px solid #d9d9d9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+            <Button
+              type={berth === 'east' ? 'primary' : 'default'}
+              size="small"
+              style={{ borderRadius: 0, borderRight: '1px solid #d9d9d9', minWidth: 100 }}
+              onClick={() => setBerth('east')}
+            >
+              East Berth&nbsp;
+              {currentPlan && (
+                <Badge
+                  count={(currentPlan.days || []).reduce((sum, d) => sum + (d.jobs_east?.length || 0) + (d.jobs_both?.length || 0), 0)}
+                  size="small"
+                  style={{ backgroundColor: berth === 'east' ? 'rgba(255,255,255,0.35)' : '#1890ff' }}
+                />
+              )}
+            </Button>
+            <Button
+              type={berth === 'west' ? 'primary' : 'default'}
+              size="small"
+              style={{ borderRadius: 0, minWidth: 100 }}
+              onClick={() => setBerth('west')}
+            >
+              West Berth&nbsp;
+              {currentPlan && (
+                <Badge
+                  count={(currentPlan.days || []).reduce((sum, d) => sum + (d.jobs_west?.length || 0) + (d.jobs_both?.length || 0), 0)}
+                  size="small"
+                  style={{ backgroundColor: berth === 'west' ? 'rgba(255,255,255,0.35)' : '#52c41a' }}
+                />
+              )}
+            </Button>
+          </div>
+
+          {/* Plan Confidence Score */}
+          {currentPlan && weekStats && weekStats.totalJobs > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '3px 10px',
+              background: planScore >= 80 ? '#f6ffed' : planScore >= 50 ? '#fff7e6' : '#fff2f0',
+              border: `1px solid ${planScore >= 80 ? '#b7eb8f' : planScore >= 50 ? '#ffd591' : '#ffccc7'}`,
+              borderRadius: 12,
+              flexShrink: 0,
+            }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: planScore >= 80 ? '#52c41a' : planScore >= 50 ? '#fa8c16' : '#ff4d4f' }} />
+              <Text style={{ fontSize: 11, fontWeight: 700, color: planScore >= 80 ? '#52c41a' : planScore >= 50 ? '#fa8c16' : '#ff4d4f' }}>{planScore}%</Text>
+              <Text type="secondary" style={{ fontSize: 10 }}>Plan Score</Text>
+            </div>
+          )}
+
+          {/* Smart Inline Pills */}
+          {currentPlan && (
+            <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+              {weekStats && weekStats.unassigned > 0 && (
+                <Tag color="error" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
+                  ⚠ {weekStats.unassigned} unassigned
+                </Tag>
+              )}
+              {discTeamFree.mechFree > 0 && (
+                <Tag color="orange" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
+                  🔧 Mech: {discTeamFree.mechFree} free
+                </Tag>
+              )}
+              {discTeamFree.elecFree > 0 && (
+                <Tag color="purple" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
+                  ⚡ Elec: {discTeamFree.elecFree} free
+                </Tag>
+              )}
+              {weekStats && weekStats.noSAP > 0 && (
+                <Tag color="red" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
+                  📋 {weekStats.noSAP} no SAP
+                </Tag>
+              )}
+            </div>
+          )}
+
+          {/* Collapse expanded day hint */}
+          {expandedDay && (
+            <Button type="text" size="small" onClick={() => setExpandedDay(null)} style={{ fontSize: 11, color: '#8c8c8c', flexShrink: 0 }}>
+              ✕ Collapse
+            </Button>
+          )}
+        </div>
 
         {/* ── Smart Week Health Strip ─────────────────────────────── */}
         {weekStats && (() => {
@@ -1288,14 +1369,49 @@ export default function WorkPlanningPage() {
           </Card>
         )}
 
-        {/* MAIN CONTENT: Calendar+TeamPool | JobsPool */}
+        {/* MAIN LAYOUT: Left Area (Engineers Strip + Day Columns) | Right Panel (Jobs/Team Tabs) */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-          {/* Left: Calendar + Team Pool */}
+          {/* ── LEFT AREA ── */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-            {/* Calendar Area (scrollable) */}
-            <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+            {/* ENGINEERS STRIP (horizontal, scroll) */}
+            {currentPlan && viewMode === 'calendar' && (
+              <div style={{
+                borderBottom: '1px solid #d6e4ff',
+                padding: '5px 12px',
+                flexShrink: 0,
+                background: 'linear-gradient(90deg, #f0f5ff 0%, #fafafa 100%)',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 'max-content' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, paddingRight: 10, borderRight: '1px solid #d6e4ff', flexShrink: 0 }}>
+                    <span style={{ fontSize: 14 }}>👷</span>
+                    <Text style={{ fontSize: 11, fontWeight: 700, color: '#1890ff', whiteSpace: 'nowrap' }}>Engineers</Text>
+                    <Badge
+                      count={teamColumns.engineers.filter((u: any) => !leaveUserIds.has(u.id)).length}
+                      size="small"
+                      style={{ backgroundColor: '#1890ff' }}
+                    />
+                  </div>
+                  {teamColumns.engineers.length === 0
+                    ? <Text type="secondary" style={{ fontSize: 11 }}>No engineers found</Text>
+                    : (teamColumns.engineers as any[]).map((user: any) => (
+                        <DraggableTeamMember
+                          key={user.id}
+                          user={user}
+                          isOnLeave={leaveUserIds.has(user.id)}
+                          leaveInfo={leaveDetails.find(l => l.userId === user.id)?.dates.map(d => dayjs(d).format('ddd')).join(',')}
+                        />
+                      ))
+                  }
+                </div>
+              </div>
+            )}
+
+            {/* CALENDAR / VIEW AREA */}
+            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               {isLoading ? (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Spin size="large" />
@@ -1312,15 +1428,13 @@ export default function WorkPlanningPage() {
                 </div>
               ) : currentPlan ? (
                 viewMode === 'analytics' ? (
-                  <div style={{ overflow: 'auto' }}>
+                  <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
                     {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
                       <IncompleteJobsWarning
                         jobs={incompleteJobPredictions}
                         compact
                         maxItems={5}
-                        onTakeAction={(jobId, action) => {
-                          message.info(`Recommended action for job ${jobId}: ${action}`);
-                        }}
+                        onTakeAction={(jobId, action) => { message.info(`Recommended action for job ${jobId}: ${action}`); }}
                       />
                     )}
                     <AnalyticsView plan={currentPlan} weekStart={weekStartStr} />
@@ -1358,32 +1472,20 @@ export default function WorkPlanningPage() {
                     readOnly={!isDraft}
                   />
                 ) : (
-                  <>
+                  // CALENDAR VIEW: flex day columns with expand/collapse
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
-                      <IncompleteJobsWarning
-                        jobs={incompleteJobPredictions}
-                        compact
-                        maxItems={3}
-                        onTakeAction={(jobId, action) => {
-                          message.info(`Recommended action for job ${jobId}: ${action}`);
-                        }}
-                      />
+                      <div style={{ flexShrink: 0, padding: '0 8px' }}>
+                        <IncompleteJobsWarning
+                          jobs={incompleteJobPredictions}
+                          compact
+                          maxItems={3}
+                          onTakeAction={(jobId, action) => { message.info(`Recommended action for job ${jobId}: ${action}`); }}
+                        />
+                      </div>
                     )}
-                    {/* Legend */}
-                    <div style={{ marginBottom: 12, display: 'flex', gap: 16, fontSize: 12, color: '#595959' }}>
-                      <span><strong>Legend:</strong></span>
-                      <span>PM</span>
-                      <span>Defect</span>
-                      <span>Inspection</span>
-                      <span>|</span>
-                      <span style={{ color: '#52c41a' }}>On time</span>
-                      <span style={{ color: '#fa8c16' }}>Overdue</span>
-                      <span style={{ color: '#ff4d4f' }}>Critical</span>
-                      {isDraft && <span style={{ color: '#1890ff' }}>| Drag jobs from the right panel</span>}
-                    </div>
-
-                    {/* Calendar Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+                    {/* 7 Flex Day Columns */}
+                    <div style={{ flex: 1, display: 'flex', gap: 5, padding: '6px 8px 8px', overflow: 'hidden' }}>
                       {(currentPlan.days || [])
                         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                         .map((day) => {
@@ -1391,135 +1493,191 @@ export default function WorkPlanningPage() {
                           const isToday = day.date === dayjs().format('YYYY-MM-DD');
                           const jobs = getJobsForBerth(day);
                           const totalHours = jobs.reduce((sum, job) => sum + job.estimated_hours, 0);
-                          // Workload indicator: green ≤6h, yellow ≤10h, red >10h
-                          const workloadColor = isToday
-                            ? '#52c41a'
-                            : totalHours > 10
-                            ? '#ff4d4f'
-                            : totalHours > 6
-                            ? '#fa8c16'
-                            : totalHours > 0
-                            ? '#52c41a'
-                            : undefined;
+                          const workloadColor = totalHours > 10 ? '#ff4d4f' : totalHours > 6 ? '#fa8c16' : totalHours > 0 ? '#52c41a' : undefined;
+                          const isExpanded = expandedDay === day.date;
+                          const isCollapsed = expandedDay !== null && expandedDay !== day.date;
 
                           return (
-                            <DroppableDay key={day.id} day={day} berth={berth}>
-                              <Card
-                                size="small"
-                                style={{
-                                  minHeight: 320,
-                                  backgroundColor: isToday ? '#f6ffed' : undefined,
-                                  borderColor: workloadColor,
-                                  borderWidth: workloadColor ? 2 : undefined,
+                            <div
+                              key={day.id}
+                              style={{
+                                flex: isExpanded ? '3.5 3.5 0' : isCollapsed ? '0 0 42px' : '1 1 0',
+                                transition: 'flex 0.3s ease',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                overflow: 'hidden',
+                                minWidth: 42,
+                              }}
+                            >
+                              <DroppableDay
+                                day={day}
+                                berth={berth}
+                                containerStyle={{
+                                  flex: 1,
                                   display: 'flex',
                                   flexDirection: 'column',
                                   overflow: 'hidden',
+                                  borderRadius: 8,
+                                  border: `1.5px solid ${isToday ? '#52c41a' : workloadColor || '#e8e8e8'}`,
+                                  background: isToday ? '#f6ffed' : '#fff',
+                                  transition: 'all 0.2s',
                                 }}
-                                styles={{ body: { flex: 1, display: 'flex', flexDirection: 'column', padding: '8px' } }}
-                                title={
-                                  <div style={{ textAlign: 'center' }}>
-                                    <div style={{ fontSize: 10, fontWeight: 600, color: isToday ? '#52c41a' : '#8c8c8c', textTransform: 'uppercase', letterSpacing: 1 }}>
-                                      {date.format('ddd')}
-                                    </div>
-                                    <div style={{
-                                      fontSize: 20, fontWeight: 700,
-                                      color: isToday ? '#fff' : workloadColor || '#262626',
-                                      width: 32, height: 32,
-                                      borderRadius: '50%',
-                                      background: isToday ? '#52c41a' : 'transparent',
-                                      display: 'inline-flex',
+                              >
+                                {isCollapsed ? (
+                                  // Mini collapsed column — click to expand
+                                  <div
+                                    onClick={() => setExpandedDay(day.date)}
+                                    style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
                                       alignItems: 'center',
                                       justifyContent: 'center',
-                                      margin: '0 auto',
+                                      height: '100%',
+                                      gap: 6,
+                                      cursor: 'pointer',
+                                      padding: 4,
+                                    }}
+                                  >
+                                    <div style={{
+                                      writingMode: 'vertical-rl',
+                                      textOrientation: 'mixed',
+                                      transform: 'rotate(180deg)',
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      color: isToday ? '#52c41a' : workloadColor || '#8c8c8c',
+                                      letterSpacing: 1,
                                     }}>
-                                      {date.format('D')}
+                                      {date.format('ddd D')}
                                     </div>
-                                  </div>
-                                }
-                                extra={
-                                  <Badge count={jobs.length} showZero style={{ backgroundColor: jobs.length > 0 ? (workloadColor || '#1890ff') : '#d9d9d9' }} />
-                                }
-                              >
-                                <div style={{ fontSize: 11, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <span style={{ color: workloadColor || '#8c8c8c', fontWeight: totalHours > 6 ? 600 : 400 }}>
-                                    {totalHours}h
-                                  </span>
-                                  {totalHours > 10 && <Text style={{ fontSize: 10, color: '#ff4d4f' }}>⚠ Overloaded</Text>}
-                                  {totalHours > 6 && totalHours <= 10 && <Text style={{ fontSize: 10, color: '#fa8c16' }}>Busy</Text>}
-                                </div>
-                                {jobs.length === 0 ? (
-                                  <div style={{
-                                    textAlign: 'center',
-                                    padding: 24,
-                                    color: '#bfbfbf',
-                                    border: isDraft ? '2px dashed #d9d9d9' : undefined,
-                                    borderRadius: 6,
-                                    background: isDraft ? '#fafafa' : undefined,
-                                  }}>
-                                    {isDraft ? (
-                                      <>
-                                        <div style={{ fontSize: 20, marginBottom: 4 }}>＋</div>
-                                        <div style={{ fontSize: 11 }}>Drag a job here</div>
-                                      </>
-                                    ) : 'No jobs'}
+                                    {jobs.length > 0 && (
+                                      <Badge
+                                        count={jobs.length}
+                                        size="small"
+                                        style={{ backgroundColor: workloadColor || '#1890ff' }}
+                                      />
+                                    )}
                                   </div>
                                 ) : (
-                                  <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-                                    {jobs.map((job) => (
-                                      <TimelineJobBlock
-                                        key={job.id}
-                                        job={job}
-                                        onClick={() => handleJobClick(job)}
-                                        compact
-                                        showTeam
-                                        selectable={isDraft}
-                                        selected={selectedJobIds.has(job.id)}
-                                        onSelect={(jobId, sel) => {
-                                          if (sel) {
-                                            setSelectedJobIds(prev => new Set([...prev, jobId]));
-                                          } else {
-                                            setSelectedJobIds(prev => {
-                                              const next = new Set(prev);
-                                              next.delete(jobId);
-                                              return next;
-                                            });
+                                  <>
+                                    {/* Column Header — click to expand/collapse */}
+                                    <div
+                                      onClick={() => setExpandedDay(isExpanded ? null : day.date)}
+                                      style={{
+                                        padding: '6px 8px',
+                                        borderBottom: '1px solid #f0f0f0',
+                                        background: isToday ? '#f0fff4' : '#fafafa',
+                                        flexShrink: 0,
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <div>
+                                          <div style={{ fontSize: 9, fontWeight: 600, color: isToday ? '#52c41a' : '#8c8c8c', textTransform: 'uppercase', letterSpacing: 1 }}>
+                                            {date.format('ddd')}
+                                          </div>
+                                          <div style={{ fontSize: 18, fontWeight: 700, color: isToday ? '#52c41a' : workloadColor || '#262626', lineHeight: 1.1 }}>
+                                            {date.format('D')}
+                                          </div>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                          <Badge
+                                            count={jobs.length}
+                                            showZero
+                                            size="small"
+                                            style={{ backgroundColor: jobs.length > 0 ? (workloadColor || '#1890ff') : '#d9d9d9' }}
+                                          />
+                                          {totalHours > 0 && (
+                                            <Text style={{ fontSize: 9, color: workloadColor || '#8c8c8c', fontWeight: totalHours > 6 ? 600 : 400 }}>
+                                              {totalHours}h
+                                            </Text>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {isExpanded && totalHours > 6 && (
+                                        <div style={{ marginTop: 3 }}>
+                                          {totalHours > 10
+                                            ? <Tag color="error" style={{ fontSize: 9, margin: 0 }}>⚠ Overloaded</Tag>
+                                            : <Tag color="warning" style={{ fontSize: 9, margin: 0 }}>Busy</Tag>
                                           }
-                                        }}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
+                                        </div>
+                                      )}
+                                    </div>
 
-                                {/* ── Workload capacity bar ── */}
-                                <div style={{ marginTop: 'auto', paddingTop: 8 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                                    <Text style={{ fontSize: 9, color: '#8c8c8c' }}>
-                                      {jobs.length} job{jobs.length !== 1 ? 's' : ''}
-                                    </Text>
-                                    <Text style={{ fontSize: 9, color: workloadColor || '#8c8c8c', fontWeight: totalHours > 0 ? 600 : 400 }}>
-                                      {totalHours > 0 ? `${totalHours}h / 8h` : '—'}
-                                    </Text>
-                                  </div>
-                                  <div style={{ height: 5, background: '#f0f0f0', borderRadius: 3, overflow: 'hidden' }}>
-                                    <div style={{
-                                      height: '100%',
-                                      borderRadius: 3,
-                                      width: `${Math.min(100, (totalHours / 8) * 100)}%`,
-                                      background: totalHours > 10
-                                        ? 'linear-gradient(90deg, #ff4d4f, #ff7875)'
-                                        : totalHours > 6
-                                        ? 'linear-gradient(90deg, #fa8c16, #ffc53d)'
-                                        : 'linear-gradient(90deg, #52c41a, #95de64)',
-                                      transition: 'width 0.5s ease',
-                                    }} />
-                                  </div>
-                                </div>
-                              </Card>
-                            </DroppableDay>
+                                    {/* Jobs List */}
+                                    <div style={{ flex: 1, overflowY: 'auto', padding: '4px 5px' }}>
+                                      {jobs.length === 0 ? (
+                                        <div style={{
+                                          textAlign: 'center',
+                                          padding: 16,
+                                          color: '#bfbfbf',
+                                          border: isDraft ? '2px dashed #d9d9d9' : undefined,
+                                          borderRadius: 6,
+                                          margin: '4px 0',
+                                        }}>
+                                          {isDraft ? (
+                                            <>
+                                              <div style={{ fontSize: 16 }}>＋</div>
+                                              <div style={{ fontSize: 10 }}>Drag job here</div>
+                                            </>
+                                          ) : 'No jobs'}
+                                        </div>
+                                      ) : (
+                                        jobs.map((job) => (
+                                          <TimelineJobBlock
+                                            key={job.id}
+                                            job={job}
+                                            onClick={() => handleJobClick(job)}
+                                            compact
+                                            showTeam
+                                            selectable={isDraft}
+                                            selected={selectedJobIds.has(job.id)}
+                                            onSelect={(jobId, sel) => {
+                                              if (sel) {
+                                                setSelectedJobIds(prev => new Set([...prev, jobId]));
+                                              } else {
+                                                setSelectedJobIds(prev => {
+                                                  const next = new Set(prev);
+                                                  next.delete(jobId);
+                                                  return next;
+                                                });
+                                              }
+                                            }}
+                                          />
+                                        ))
+                                      )}
+                                    </div>
+
+                                    {/* Capacity Bar */}
+                                    <div style={{ padding: '4px 8px', borderTop: '1px solid #f0f0f0', flexShrink: 0 }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                                        <Text style={{ fontSize: 9, color: '#8c8c8c' }}>{jobs.length} job{jobs.length !== 1 ? 's' : ''}</Text>
+                                        <Text style={{ fontSize: 9, color: workloadColor || '#8c8c8c', fontWeight: totalHours > 0 ? 600 : 400 }}>
+                                          {totalHours > 0 ? `${totalHours}h / 8h` : '—'}
+                                        </Text>
+                                      </div>
+                                      <div style={{ height: 4, background: '#f0f0f0', borderRadius: 2, overflow: 'hidden' }}>
+                                        <div style={{
+                                          height: '100%',
+                                          borderRadius: 2,
+                                          width: `${Math.min(100, (totalHours / 8) * 100)}%`,
+                                          background: totalHours > 10
+                                            ? 'linear-gradient(90deg, #ff4d4f, #ff7875)'
+                                            : totalHours > 6
+                                            ? 'linear-gradient(90deg, #fa8c16, #ffc53d)'
+                                            : 'linear-gradient(90deg, #52c41a, #95de64)',
+                                          transition: 'width 0.5s ease',
+                                        }} />
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </DroppableDay>
+                            </div>
                           );
                         })}
                     </div>
-                  </>
+                  </div>
                 )
               ) : (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1533,127 +1691,150 @@ export default function WorkPlanningPage() {
                 </div>
               )}
             </div>
-
-            {/* COMPACT TEAM POOL */}
-            {currentPlan && viewMode === 'calendar' && (
-              <div style={{ borderTop: '1px solid #f0f0f0', padding: '8px 12px', flexShrink: 0, background: '#fafafa' }}>
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text strong style={{ fontSize: 12, color: '#595959' }}>Team Pool -- Drag to assign</Text>
-                  <Space size={8}>
-                    {leaveDetails.length > 0 && (
-                      <Tooltip title={leaveDetails.map(l => `${l.name}: ${l.dates.map(d => dayjs(d).format('ddd')).join(', ')}`).join(' | ')}>
-                        <Badge count={leaveDetails.length} size="small" style={{ backgroundColor: '#fa8c16' }}>
-                          <Text style={{ fontSize: 11, color: '#fa8c16', cursor: 'pointer' }}>On Leave</Text>
-                        </Badge>
-                      </Tooltip>
-                    )}
-                    <Button type="text" size="small" onClick={() => setTeamExpanded(!teamExpanded)} style={{ fontSize: 11 }}>
-                      {teamExpanded ? 'Collapse' : 'Expand'}
-                    </Button>
-                  </Space>
-                </div>
-
-                {/* Columns */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-                  {teamColumnConfig.map(col => {
-                    const availableUsers = col.users.filter(u => !leaveUserIds.has(u.id));
-                    const onLeaveUsers = col.users.filter(u => leaveUserIds.has(u.id));
-                    const displayUsers = teamExpanded ? availableUsers : availableUsers.slice(0, 4);
-
-                    return (
-                      <div key={col.key} style={{ background: '#fff', border: '1px solid #e8e8e8', borderRadius: 6, padding: 6 }}>
-                        {/* Column Header */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, borderBottom: '1px solid #f0f0f0', paddingBottom: 4 }}>
-                          <span style={{ fontSize: 11 }}>{col.emoji}</span>
-                          <Text style={{ fontSize: 11, fontWeight: 600, color: col.color }}>{col.label}</Text>
-                          <Badge count={availableUsers.length} size="small" style={{ backgroundColor: col.color, fontSize: 9 }} />
-                        </div>
-
-                        {/* Members */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: teamExpanded ? 200 : 80, overflowY: 'auto' }}>
-                          {displayUsers.map(user => (
-                            <DraggableTeamMember
-                              key={user.id}
-                              user={user}
-                              isOnLeave={false}
-                            />
-                          ))}
-                          {!teamExpanded && availableUsers.length > 4 && (
-                            <Text type="secondary" style={{ fontSize: 10, textAlign: 'center' }}>+{availableUsers.length - 4} more</Text>
-                          )}
-                          {onLeaveUsers.length > 0 && teamExpanded && (
-                            <>
-                              <div style={{ borderTop: '1px dashed #d9d9d9', margin: '2px 0' }} />
-                              {onLeaveUsers.map(user => {
-                                const info = leaveDetails.find(l => l.userId === user.id);
-                                const leaveStr = info?.dates.map(d => dayjs(d).format('ddd')).join(',');
-                                return (
-                                  <DraggableTeamMember
-                                    key={user.id}
-                                    user={user}
-                                    isOnLeave={true}
-                                    leaveInfo={leaveStr}
-                                  />
-                                );
-                              })}
-                            </>
-                          )}
-                          {availableUsers.length === 0 && onLeaveUsers.length === 0 && (
-                            <Text type="secondary" style={{ fontSize: 10, textAlign: 'center', padding: 4 }}>None</Text>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Leave Info Strip */}
-                {leaveDetails.length > 0 && !teamExpanded && (
-                  <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', fontSize: 11 }}>
-                    <WarningOutlined style={{ color: '#fa8c16', fontSize: 12 }} />
-                    <Text type="secondary" style={{ fontSize: 11 }}>
-                      <strong>Leave:</strong>{' '}
-                      {leaveDetails.slice(0, 3).map(l => `${l.name.split(' ')[0]} (${l.dates.map(d => dayjs(d).format('ddd')).join(',')})`).join(' | ')}
-                      {leaveDetails.length > 3 && ` +${leaveDetails.length - 3} more`}
-                    </Text>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* Right: Jobs Pool (always visible, full height) */}
-          <div className="wp-right-panel" style={{ width: 280, minWidth: 280, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
-            <JobsPool
-              embedded
-              berth={berth}
-              planId={currentPlan?.id}
-              days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
-              onAddJob={() => setAddJobModalOpen(true)}
-              onJobClick={(job, type) => {
-                setSelectedJob({ ...job, job_type: type as JobType } as any);
-                setJobDetailsModalOpen(true);
-              }}
-              onImportSAP={() => setImportModalOpen(true)}
-              onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
-              onQuickSchedule={(job, jobType, dayId) => {
-                if (!currentPlan || !isDraft) return;
-                if (jobType === 'sap' && job.id) {
-                  scheduleSAPMutation.mutate({ planId: currentPlan.id, sapOrderId: job.id, dayId });
-                } else {
-                  addJobMutation.mutate({
-                    planId: currentPlan.id,
-                    dayId,
-                    jobType: jobType as JobType,
-                    berth: berth as Berth,
-                    equipmentId: job.equipment?.id,
-                    defectId: job.defect?.id,
-                    inspectionAssignmentId: job.assignment?.id,
-                    estimatedHours: job.estimated_hours || 4,
-                  });
-                }
-              }}
+          {/* ── RIGHT PANEL: Tabbed Jobs + Team ── */}
+          <div className="wp-right-panel" style={{ width: 300, minWidth: 300, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
+            <Tabs
+              activeKey={rightPanelTab}
+              onChange={(k) => setRightPanelTab(k as 'jobs' | 'team')}
+              size="small"
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              tabBarStyle={{ margin: 0, padding: '0 8px', flexShrink: 0, borderBottom: '1px solid #f0f0f0' }}
+              items={[
+                {
+                  key: 'jobs',
+                  label: (
+                    <span>
+                      Jobs Pool
+                      {weekStats && weekStats.unassigned > 0 && (
+                        <Badge count={weekStats.unassigned} size="small" style={{ marginLeft: 4, backgroundColor: '#fa8c16' }} />
+                      )}
+                    </span>
+                  ),
+                  children: (
+                    <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <JobsPool
+                        embedded
+                        berth={berth}
+                        planId={currentPlan?.id}
+                        days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
+                        onAddJob={() => setAddJobModalOpen(true)}
+                        onJobClick={(job, type) => {
+                          setSelectedJob({ ...job, job_type: type as JobType } as any);
+                          setJobDetailsModalOpen(true);
+                        }}
+                        onImportSAP={() => setImportModalOpen(true)}
+                        onClearPool={async () => { await clearPoolMutation.mutateAsync(); }}
+                        onQuickSchedule={(job, jobType, dayId) => {
+                          if (!currentPlan || !isDraft) return;
+                          if (jobType === 'sap' && job.id) {
+                            scheduleSAPMutation.mutate({ planId: currentPlan.id, sapOrderId: job.id, dayId });
+                          } else {
+                            addJobMutation.mutate({
+                              planId: currentPlan.id,
+                              dayId,
+                              jobType: jobType as JobType,
+                              berth: berth as Berth,
+                              equipmentId: job.equipment?.id,
+                              defectId: job.defect?.id,
+                              inspectionAssignmentId: job.assignment?.id,
+                              estimatedHours: job.estimated_hours || 4,
+                            });
+                          }
+                        }}
+                      />
+                    </div>
+                  ),
+                },
+                {
+                  key: 'team',
+                  label: (
+                    <span>
+                      Team Pool
+                      {currentPlan && (
+                        <Badge
+                          count={[...teamColumns.specMech, ...teamColumns.specElec, ...teamColumns.inspMech, ...teamColumns.inspElec]
+                            .filter((u: any) => !leaveUserIds.has(u.id)).length}
+                          size="small"
+                          style={{ marginLeft: 4, backgroundColor: '#52c41a' }}
+                        />
+                      )}
+                    </span>
+                  ),
+                  children: (
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 8 }}>
+                      {/* Discipline Filter */}
+                      <Space size={4} style={{ marginBottom: 8, flexShrink: 0 }}>
+                        {(['all', 'mechanical', 'electrical'] as const).map(d => (
+                          <Button
+                            key={d}
+                            size="small"
+                            type={teamPoolDisc === d ? 'primary' : 'default'}
+                            onClick={() => setTeamPoolDisc(d)}
+                            style={{ fontSize: 11 }}
+                          >
+                            {d === 'all' ? 'All' : d === 'mechanical' ? '🔧 Mech' : '⚡ Elec'}
+                          </Button>
+                        ))}
+                      </Space>
+
+                      {/* Leave summary */}
+                      {leaveDetails.length > 0 && (
+                        <div style={{ marginBottom: 8, padding: '4px 8px', background: '#fff7e6', borderRadius: 4, flexShrink: 0 }}>
+                          <WarningOutlined style={{ color: '#fa8c16', marginRight: 4, fontSize: 11 }} />
+                          <Text style={{ fontSize: 11, color: '#fa8c16' }}>
+                            {leaveDetails.length} on leave this week
+                          </Text>
+                        </div>
+                      )}
+
+                      {/* Non-engineer team groups */}
+                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                        {teamColumnConfig
+                          .filter(col => col.key !== 'engineers')
+                          .filter(col => {
+                            if (teamPoolDisc === 'all') return true;
+                            if (teamPoolDisc === 'mechanical') return ['specMech', 'inspMech'].includes(col.key);
+                            return ['specElec', 'inspElec'].includes(col.key);
+                          })
+                          .map(col => {
+                            const availableUsers = col.users.filter((u: any) => !leaveUserIds.has(u.id));
+                            const onLeaveUsers = col.users.filter((u: any) => leaveUserIds.has(u.id));
+                            return (
+                              <div key={col.key} style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, paddingBottom: 4, borderBottom: `2px solid ${col.color}30` }}>
+                                  <span style={{ fontSize: 12 }}>{col.emoji}</span>
+                                  <Text style={{ fontSize: 11, fontWeight: 600, color: col.color }}>{col.label}</Text>
+                                  <Badge count={availableUsers.length} size="small" style={{ backgroundColor: col.color }} />
+                                  {onLeaveUsers.length > 0 && (
+                                    <Text type="secondary" style={{ fontSize: 10 }}>({onLeaveUsers.length} on leave)</Text>
+                                  )}
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {availableUsers.map((user: any) => (
+                                    <DraggableTeamMember key={user.id} user={user} isOnLeave={false} />
+                                  ))}
+                                  {onLeaveUsers.map((user: any) => (
+                                    <DraggableTeamMember
+                                      key={user.id}
+                                      user={user}
+                                      isOnLeave={true}
+                                      leaveInfo={leaveDetails.find(l => l.userId === user.id)?.dates.map(d => dayjs(d).format('ddd')).join(',')}
+                                    />
+                                  ))}
+                                  {availableUsers.length === 0 && onLeaveUsers.length === 0 && (
+                                    <Text type="secondary" style={{ fontSize: 10, padding: 4 }}>None</Text>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ),
+                },
+              ]}
             />
           </div>
         </div>
