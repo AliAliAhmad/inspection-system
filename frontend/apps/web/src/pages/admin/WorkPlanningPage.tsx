@@ -595,6 +595,23 @@ export default function WorkPlanningPage() {
     return calculateTimeAccuracy(allJobs as any);
   }, [allJobs, aiAssistanceEnabled]);
 
+  // Week summary stats
+  const weekStats = useMemo(() => {
+    if (!currentPlan) return null;
+    let totalJobs = 0;
+    let unassigned = 0;
+    let noSAP = 0;
+    let totalHours = 0;
+    currentPlan.days?.forEach((day) => {
+      const jobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
+      totalJobs += jobs.length;
+      unassigned += jobs.filter((j) => !(j.assignments?.length)).length;
+      noSAP += jobs.filter((j) => !(j as any).sap_order_number).length;
+      totalHours += jobs.reduce((s, j) => s + (j.estimated_hours || 0), 0);
+    });
+    return { totalJobs, unassigned, noSAP, totalHours };
+  }, [currentPlan]);
+
   // At-risk jobs computation
   const atRiskJobs = useMemo(() => {
     if (!currentPlan?.days) return [];
@@ -1065,6 +1082,145 @@ export default function WorkPlanningPage() {
           ]}
         />
 
+        {/* ── Smart Week Health Strip ─────────────────────────────── */}
+        {weekStats && (() => {
+          const assigned = weekStats.totalJobs - weekStats.unassigned;
+          const assignedPct = weekStats.totalJobs > 0 ? Math.round((assigned / weekStats.totalJobs) * 100) : 100;
+          const sapPct = weekStats.totalJobs > 0 ? Math.round(((weekStats.totalJobs - weekStats.noSAP) / weekStats.totalJobs) * 100) : 100;
+          const avgHours = weekStats.totalHours / 5;
+          // Health score: weighted penalty for unassigned + no-SAP + overload
+          const healthScore = Math.max(0, Math.round(
+            100
+            - (weekStats.unassigned / Math.max(weekStats.totalJobs, 1)) * 45
+            - (weekStats.noSAP / Math.max(weekStats.totalJobs, 1)) * 35
+            - (avgHours > 10 ? 20 : avgHours > 8 ? 10 : 0)
+          ));
+          const health = healthScore >= 80
+            ? { label: 'Plan Healthy', color: '#52c41a', bg: '#f6ffed', glow: 'rgba(82,196,26,0.3)' }
+            : healthScore >= 50
+            ? { label: 'Needs Attention', color: '#fa8c16', bg: '#fff7e6', glow: 'rgba(250,140,22,0.3)' }
+            : { label: 'Action Required', color: '#ff4d4f', bg: '#fff2f0', glow: 'rgba(255,77,79,0.3)' };
+
+          return (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0,
+              padding: '0 16px',
+              borderBottom: '1px solid #f0f0f0',
+              background: `linear-gradient(135deg, ${health.bg} 0%, #fff 60%)`,
+              flexShrink: 0,
+              height: 52,
+            }}>
+              {/* Health Pill */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '5px 12px',
+                background: '#fff',
+                borderRadius: 20,
+                border: `1.5px solid ${health.color}`,
+                boxShadow: `0 0 10px ${health.glow}`,
+                marginRight: 16,
+                whiteSpace: 'nowrap',
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: health.color,
+                  boxShadow: `0 0 6px ${health.color}`,
+                }} />
+                <Text style={{ fontSize: 11, fontWeight: 600, color: health.color }}>{health.label}</Text>
+                <Text style={{ fontSize: 11, color: '#8c8c8c' }}>{healthScore}%</Text>
+              </div>
+
+              {/* Vertical divider */}
+              <div style={{ width: 1, height: 32, background: '#e8e8e8', marginRight: 16, flexShrink: 0 }} />
+
+              {/* Stat: Jobs */}
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 70, marginRight: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <Text style={{ fontSize: 20, fontWeight: 700, color: '#262626', lineHeight: 1 }}>{weekStats.totalJobs}</Text>
+                  <Text type="secondary" style={{ fontSize: 10 }}>jobs</Text>
+                </div>
+                <Text type="secondary" style={{ fontSize: 10, marginTop: 1 }}>This week</Text>
+              </div>
+
+              {/* Stat: Assigned (with bar) */}
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 90, marginRight: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <Text style={{ fontSize: 20, fontWeight: 700, color: weekStats.unassigned > 0 ? '#fa8c16' : '#52c41a', lineHeight: 1 }}>
+                    {assigned}
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 10 }}>/ {weekStats.totalJobs} assigned</Text>
+                </div>
+                <div style={{ height: 4, background: '#f0f0f0', borderRadius: 2, marginTop: 4, width: 80 }}>
+                  <div style={{
+                    height: 4, borderRadius: 2,
+                    width: `${assignedPct}%`,
+                    background: weekStats.unassigned > 0
+                      ? 'linear-gradient(90deg, #fa8c16, #ffc53d)'
+                      : 'linear-gradient(90deg, #52c41a, #95de64)',
+                    transition: 'width 0.6s ease',
+                  }} />
+                </div>
+              </div>
+
+              {/* Stat: SAP coverage (with bar) */}
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 90, marginRight: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <Text style={{ fontSize: 20, fontWeight: 700, color: weekStats.noSAP > 0 ? '#ff4d4f' : '#52c41a', lineHeight: 1 }}>
+                    {weekStats.noSAP > 0 ? weekStats.noSAP : '✓'}
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 10 }}>{weekStats.noSAP > 0 ? 'no SAP #' : 'all SAP ok'}</Text>
+                </div>
+                <div style={{ height: 4, background: '#f0f0f0', borderRadius: 2, marginTop: 4, width: 80 }}>
+                  <div style={{
+                    height: 4, borderRadius: 2,
+                    width: `${sapPct}%`,
+                    background: weekStats.noSAP > 0
+                      ? 'linear-gradient(90deg, #ff4d4f, #ff7875)'
+                      : 'linear-gradient(90deg, #52c41a, #95de64)',
+                    transition: 'width 0.6s ease',
+                  }} />
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div style={{ width: 1, height: 32, background: '#e8e8e8', marginRight: 16, flexShrink: 0 }} />
+
+              {/* Stat: Hours */}
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 80, marginRight: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <Text style={{ fontSize: 20, fontWeight: 700, color: '#595959', lineHeight: 1 }}>{weekStats.totalHours}</Text>
+                  <Text type="secondary" style={{ fontSize: 10 }}>hrs total</Text>
+                </div>
+                <Text type="secondary" style={{ fontSize: 10, marginTop: 1 }}>
+                  {avgHours > 10
+                    ? <span style={{ color: '#ff4d4f' }}>↑ Overloaded ({avgHours.toFixed(1)}h/day)</span>
+                    : avgHours > 8
+                    ? <span style={{ color: '#fa8c16' }}>~{avgHours.toFixed(1)}h / day</span>
+                    : <span style={{ color: '#52c41a' }}>~{avgHours.toFixed(1)}h / day ✓</span>
+                  }
+                </Text>
+              </div>
+
+              {/* Contextual message (right-aligned) */}
+              <div style={{ flex: 1 }} />
+              <Text type="secondary" style={{ fontSize: 11, fontStyle: 'italic' }}>
+                {weekStats.totalJobs === 0
+                  ? 'Drag jobs from the right panel to schedule them'
+                  : weekStats.unassigned === 0 && weekStats.noSAP === 0
+                  ? '✓ Week is fully planned'
+                  : weekStats.unassigned > 0
+                  ? `${weekStats.unassigned} job${weekStats.unassigned > 1 ? 's' : ''} need a team`
+                  : `${weekStats.noSAP} job${weekStats.noSAP > 1 ? 's' : ''} missing SAP order`
+                }
+              </Text>
+            </div>
+          );
+        })()}
+
         {/* Bulk Actions Toolbar */}
         {selectedJobIds.size > 0 && isDraft && (
           <Card
@@ -1235,6 +1391,16 @@ export default function WorkPlanningPage() {
                           const isToday = day.date === dayjs().format('YYYY-MM-DD');
                           const jobs = getJobsForBerth(day);
                           const totalHours = jobs.reduce((sum, job) => sum + job.estimated_hours, 0);
+                          // Workload indicator: green ≤6h, yellow ≤10h, red >10h
+                          const workloadColor = isToday
+                            ? '#52c41a'
+                            : totalHours > 10
+                            ? '#ff4d4f'
+                            : totalHours > 6
+                            ? '#fa8c16'
+                            : totalHours > 0
+                            ? '#52c41a'
+                            : undefined;
 
                           return (
                             <DroppableDay key={day.id} day={day} berth={berth}>
@@ -1243,28 +1409,59 @@ export default function WorkPlanningPage() {
                                 style={{
                                   minHeight: 320,
                                   backgroundColor: isToday ? '#f6ffed' : undefined,
-                                  borderColor: isToday ? '#52c41a' : undefined,
+                                  borderColor: workloadColor,
+                                  borderWidth: workloadColor ? 2 : undefined,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  overflow: 'hidden',
                                 }}
+                                styles={{ body: { flex: 1, display: 'flex', flexDirection: 'column', padding: '8px' } }}
                                 title={
                                   <div style={{ textAlign: 'center' }}>
-                                    <div style={{ fontWeight: 600, color: isToday ? '#52c41a' : undefined }}>
+                                    <div style={{ fontSize: 10, fontWeight: 600, color: isToday ? '#52c41a' : '#8c8c8c', textTransform: 'uppercase', letterSpacing: 1 }}>
                                       {date.format('ddd')}
                                     </div>
-                                    <div style={{ fontSize: 18, fontWeight: 700, color: isToday ? '#52c41a' : undefined }}>
+                                    <div style={{
+                                      fontSize: 20, fontWeight: 700,
+                                      color: isToday ? '#fff' : workloadColor || '#262626',
+                                      width: 32, height: 32,
+                                      borderRadius: '50%',
+                                      background: isToday ? '#52c41a' : 'transparent',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      margin: '0 auto',
+                                    }}>
                                       {date.format('D')}
                                     </div>
                                   </div>
                                 }
                                 extra={
-                                  <Badge count={jobs.length} showZero style={{ backgroundColor: jobs.length > 0 ? '#1890ff' : '#d9d9d9' }} />
+                                  <Badge count={jobs.length} showZero style={{ backgroundColor: jobs.length > 0 ? (workloadColor || '#1890ff') : '#d9d9d9' }} />
                                 }
                               >
-                                <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 8 }}>
-                                  {totalHours}h total
+                                <div style={{ fontSize: 11, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ color: workloadColor || '#8c8c8c', fontWeight: totalHours > 6 ? 600 : 400 }}>
+                                    {totalHours}h
+                                  </span>
+                                  {totalHours > 10 && <Text style={{ fontSize: 10, color: '#ff4d4f' }}>⚠ Overloaded</Text>}
+                                  {totalHours > 6 && totalHours <= 10 && <Text style={{ fontSize: 10, color: '#fa8c16' }}>Busy</Text>}
                                 </div>
                                 {jobs.length === 0 ? (
-                                  <div style={{ textAlign: 'center', padding: 20, color: '#bfbfbf' }}>
-                                    {isDraft ? 'Drop jobs here' : 'No jobs'}
+                                  <div style={{
+                                    textAlign: 'center',
+                                    padding: 24,
+                                    color: '#bfbfbf',
+                                    border: isDraft ? '2px dashed #d9d9d9' : undefined,
+                                    borderRadius: 6,
+                                    background: isDraft ? '#fafafa' : undefined,
+                                  }}>
+                                    {isDraft ? (
+                                      <>
+                                        <div style={{ fontSize: 20, marginBottom: 4 }}>＋</div>
+                                        <div style={{ fontSize: 11 }}>Drag a job here</div>
+                                      </>
+                                    ) : 'No jobs'}
                                   </div>
                                 ) : (
                                   <div style={{ maxHeight: 280, overflowY: 'auto' }}>
@@ -1292,6 +1489,31 @@ export default function WorkPlanningPage() {
                                     ))}
                                   </div>
                                 )}
+
+                                {/* ── Workload capacity bar ── */}
+                                <div style={{ marginTop: 'auto', paddingTop: 8 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <Text style={{ fontSize: 9, color: '#8c8c8c' }}>
+                                      {jobs.length} job{jobs.length !== 1 ? 's' : ''}
+                                    </Text>
+                                    <Text style={{ fontSize: 9, color: workloadColor || '#8c8c8c', fontWeight: totalHours > 0 ? 600 : 400 }}>
+                                      {totalHours > 0 ? `${totalHours}h / 8h` : '—'}
+                                    </Text>
+                                  </div>
+                                  <div style={{ height: 5, background: '#f0f0f0', borderRadius: 3, overflow: 'hidden' }}>
+                                    <div style={{
+                                      height: '100%',
+                                      borderRadius: 3,
+                                      width: `${Math.min(100, (totalHours / 8) * 100)}%`,
+                                      background: totalHours > 10
+                                        ? 'linear-gradient(90deg, #ff4d4f, #ff7875)'
+                                        : totalHours > 6
+                                        ? 'linear-gradient(90deg, #fa8c16, #ffc53d)'
+                                        : 'linear-gradient(90deg, #52c41a, #95de64)',
+                                      transition: 'width 0.5s ease',
+                                    }} />
+                                  </div>
+                                </div>
                               </Card>
                             </DroppableDay>
                           );
@@ -1350,16 +1572,13 @@ export default function WorkPlanningPage() {
 
                         {/* Members */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: teamExpanded ? 200 : 80, overflowY: 'auto' }}>
-                          {displayUsers.map(user => {
-                            const leaveInfo = leaveDetails.find(l => l.userId === user.id);
-                            return (
-                              <DraggableTeamMember
-                                key={user.id}
-                                user={user}
-                                isOnLeave={false}
-                              />
-                            );
-                          })}
+                          {displayUsers.map(user => (
+                            <DraggableTeamMember
+                              key={user.id}
+                              user={user}
+                              isOnLeave={false}
+                            />
+                          ))}
                           {!teamExpanded && availableUsers.length > 4 && (
                             <Text type="secondary" style={{ fontSize: 10, textAlign: 'center' }}>+{availableUsers.length - 4} more</Text>
                           )}

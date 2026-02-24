@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Work Planning — Mockup v6</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;background:#f0f2f5;color:#1a1a2e;height:100vh;overflow:hidden}
+
+/* ── TOP BAR ─────────────────────────────────── */
+.topbar{display:flex;align-items:center;gap:7px;padding:0 12px;background:#fff;border-bottom:1px solid #e8eaed;height:44px;z-index:10}
+.topbar .wlabel{font-weight:700;font-size:13px;color:#1a1a2e}
+.topbar .nav-btn{width:24px;height:24px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;font-size:12px;display:inline-flex;align-items:center;justify-content:center}
+.spacer{flex:1}
+.pill{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.pill-warn{background:#fff3cd;color:#856404}
+.pill-info{background:#e0f2fe;color:#0369a1}
+.pill-ok{background:#d1fae5;color:#065f46}
+.abtn{padding:4px 10px;border-radius:6px;border:none;cursor:pointer;font-size:11px;font-weight:600}
+.abtn-primary{background:#2563eb;color:#fff}
+.abtn-ghost{background:#f3f4f6;color:#374151;border:1px solid #ddd}
+.abtn-ai{background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff}
+.abtn-green{background:#16a34a;color:#fff}
+.abtn-red{background:#ef4444;color:#fff}
+.tag-berth{font-size:10px;padding:2px 5px;border-radius:4px;font-weight:600}
+.tag-east{background:#dbeafe;color:#1d4ed8}
+.tag-west{background:#fff7ed;color:#c2410c}
+.mock-note{font-size:10px;color:#888;border:1px solid #e2e8f0;padding:2px 6px;border-radius:5px}
+
+/* ── BERTH BAR ───────────────────────────────── */
+.berth-bar{display:flex;align-items:center;gap:6px;padding:4px 12px;background:#fff;border-bottom:1px solid #e8eaed;flex-wrap:wrap;min-height:36px}
+/* Smart inline pills */
+.smart-inline{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.si-pill{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap}
+.si-red{background:#fee2e2;color:#b91c1c}
+.si-amber{background:#fef3c7;color:#92400e}
+.si-purple{background:#ede9fe;color:#6d28d9}
+.si-orange{background:#fff3cd;color:#92400e;border:1px solid #fbbf24}
+.bberth{display:flex;align-items:center;gap:5px;padding:3px 12px;border-radius:18px;border:2px solid transparent;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.bberth.east{border-color:#93c5fd;background:#eff6ff;color:#1d4ed8}
+.bberth.east.active{background:#2563eb;color:#fff;border-color:#2563eb}
+.bberth.west{border-color:#fdba74;background:#fff7ed;color:#c2410c}
+.bberth.west.active{background:#ea580c;color:#fff;border-color:#ea580c}
+.berth-desc{font-size:11px;color:#888}
+.bb-smart{margin-left:auto;display:flex;gap:5px;align-items:center}
+.ai-chip{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:10px;background:linear-gradient(135deg,#ede9fe,#dbeafe);color:#5b21b6;font-size:11px;font-weight:600;cursor:pointer}
+.ai-chip:hover{opacity:.85}
+.ai-chip.green{background:linear-gradient(135deg,#d1fae5,#dbeafe);color:#065f46}
+.ai-chip.amber{background:linear-gradient(135deg,#fef3c7,#fed7aa);color:#92400e}
+
+/* ── MAIN LAYOUT ─────────────────────────────── */
+.main-layout{display:flex;height:calc(100vh - 44px - 36px);overflow:hidden}
+.left-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ── STATS STRIP ─────────────────────────────── */
+.stats-strip{display:flex;gap:6px;padding:6px 10px;background:#fff;border-bottom:1px solid #e8eaed;overflow-x:auto}
+.stats-strip::-webkit-scrollbar{height:0}
+.stat-card{background:#f8faff;border-radius:8px;padding:7px 10px;display:flex;align-items:center;gap:7px;flex-shrink:0;min-width:130px}
+.stat-ring{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:3px solid;flex-shrink:0}
+.ring-red{border-color:#ef4444;color:#ef4444;background:#fff5f5}
+.ring-blue{border-color:#3b82f6;color:#3b82f6;background:#eff6ff}
+.ring-amber{border-color:#f59e0b;color:#f59e0b;background:#fffbeb}
+.ring-green{border-color:#22c55e;color:#22c55e;background:#f0fdf4}
+.ring-purple{border-color:#8b5cf6;color:#8b5cf6;background:#f5f3ff}
+.stat-val{font-size:16px;font-weight:700;line-height:1}
+.stat-lbl{font-size:10px;color:#888;margin-top:1px}
+.stat-sub{font-size:10px;color:#555;margin-top:1px}
+/* Plan score card special */
+.score-card{background:linear-gradient(135deg,#f5f3ff,#eff6ff);border:1px solid #c4b5fd;min-width:145px}
+.score-big{font-size:22px;font-weight:800;color:#7c3aed}
+.score-bar-wrap{width:70px;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin-top:3px}
+.score-bar-fill{height:100%;border-radius:3px;background:#ef4444;transition:width .5s,background .5s}
+
+/* ── ENGINEERS STRIP ─────────────────────────── */
+.eng-strip{display:flex;align-items:center;gap:5px;padding:5px 10px;background:#fff;border-bottom:1px solid #e8eaed;overflow-x:auto;min-height:54px}
+.eng-strip::-webkit-scrollbar{height:3px}
+.eng-strip::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+.eng-lbl{font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;margin-right:3px}
+.eng-card{display:flex;align-items:center;gap:5px;padding:4px 8px;background:#f8faff;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:border-color .12s}
+.eng-card:hover{border-color:#93c5fd}
+.eng-av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+.eng-nm{font-size:11px;font-weight:600;color:#1e293b}
+.eng-rl{font-size:9px;color:#64748b;display:flex;align-items:center;gap:2px}
+.skill-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-mech{background:#f59e0b}
+.dot-elec{background:#8b5cf6}
+.dot-maint{background:#06b6d4}
+.eng-load{display:flex;align-items:center;gap:3px;margin-left:3px}
+.eng-lb{width:30px;height:3px;background:#e2e8f0;border-radius:2px;overflow:hidden}
+.eng-lf{height:100%;border-radius:2px}
+.eng-lp{font-size:9px;color:#64748b}
+
+/* ── WEEK / DAY AREA ────────────────────────── */
+.grid-area{flex:1;overflow:hidden;padding:5px 8px;display:flex;gap:4px}
+
+/* DAY COLUMNS — flex-based, expand/collapse in place */
+.day-col{
+  flex:1;
+  min-width:0;
+  background:#fff;
+  border:1.5px solid #e2e8f0;
+  border-radius:10px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  cursor:pointer;
+  transition:flex .3s ease, border-color .15s;
+}
+.day-col:hover{border-color:#93c5fd}
+.day-col.today-ring{border-color:#3b82f6;box-shadow:0 0 0 2px #bfdbfe}
+.day-col.dragover{border-color:#22c55e !important;background:#f0fdf4 !important}
+.day-col.expanded{flex:3.5;cursor:default}
+.day-col.collapsed{flex:0 0 42px;cursor:pointer}
+
+/* Day header — always visible */
+.day-hdr{padding:5px 6px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.day-col.collapsed .day-hdr{flex-direction:column;align-items:center;padding:4px 3px;gap:2px}
+.d-name{font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af}
+.d-num{font-size:14px;font-weight:800;color:#1a1a2e;line-height:1}
+.d-load{font-size:9px;color:#888}
+.d-btn-x{background:none;border:none;cursor:pointer;font-size:14px;color:#9ca3af;padding:0 2px;margin-left:2px}
+.d-btn-x:hover{color:#374151}
+
+/* Day body — hidden when collapsed */
+.day-col.collapsed .day-body{display:none}
+.day-col.collapsed .cap-bar-wrap{display:none}
+.day-col.collapsed .day-mini-bar{display:flex}
+.day-mini-bar{display:none;flex-direction:column;align-items:center;padding:4px 3px;gap:3px;flex:1}
+.mini-pip{width:6px;height:6px;border-radius:50%;background:#e2e8f0}
+.mini-cap{width:32px;height:3px;background:#e2e8f0;border-radius:2px;overflow:hidden}
+.mini-cap-fill{height:100%;border-radius:2px;background:#22c55e}
+
+/* Day body */
+.day-body{flex:1;overflow-y:auto;padding:4px 5px;display:flex;flex-direction:column;gap:2px}
+.day-body::-webkit-scrollbar{width:2px}
+.day-body::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+
+/* Expanded day body — shows 2-column layout */
+.day-col.expanded .day-body{flex-direction:row;gap:8px;padding:6px}
+.day-col.expanded .day-body .day-jobs-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.day-col.expanded .day-body .day-team-col{width:160px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;border-left:1px solid #f0f0f0;padding-left:6px}
+.day-team-col{display:none}
+.day-jobs-col{flex:1}
+
+/* Job chip */
+.job-chip{padding:4px 6px;border-radius:6px;background:#f8faff;border:1px solid #e2e8f0;font-size:11px;cursor:default;position:relative}
+.job-chip.drop-target-active{border-color:#22c55e !important;background:#f0fdf4 !important}
+.chip-eqt{font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip-meta{display:flex;align-items:center;gap:3px;margin-top:2px;flex-wrap:wrap}
+.chip-tag{font-size:9px;padding:1px 4px;border-radius:3px;font-weight:600;white-space:nowrap}
+.tag-pm{background:#d1fae5;color:#065f46}
+.tag-insp{background:#dbeafe;color:#1e40af}
+.tag-defect{background:#fee2e2;color:#991b1b}
+.tag-mech{background:#fef3c7;color:#92400e}
+.tag-elec{background:#ede9fe;color:#5b21b6}
+.tag-maint{background:#e0f2fe;color:#0369a1}
+.chip-hrs{font-size:9px;color:#64748b}
+.chip-unassigned{font-size:9px;color:#ef4444;font-weight:600}
+.chip-assigned{font-size:9px;color:#22c55e;font-weight:600}
+.chip-suggest{font-size:9px;color:#7c3aed}
+.drop-hint{border:1.5px dashed #c7d2fe;border-radius:6px;padding:5px;text-align:center;color:#a5b4fc;font-size:10px;margin-top:2px}
+
+/* Capacity bar */
+.cap-bar-wrap{padding:3px 6px;border-top:1px solid #f0f0f0;flex-shrink:0}
+.cap-label{font-size:8px;color:#888;display:flex;justify-content:space-between;margin-bottom:2px}
+.cap-bar{height:3px;background:#e2e8f0;border-radius:2px;overflow:hidden}
+.cap-fill{height:100%;border-radius:2px;background:#22c55e;transition:width .3s,background .3s}
+
+/* Bottleneck warning */
+.bottleneck-warn{font-size:9px;color:#92400e;background:#fef3c7;padding:2px 5px;border-radius:4px;margin-bottom:2px;display:flex;align-items:center;gap:3px}
+
+/* Smart suggest hover overlay */
+.smart-hover{display:none;position:absolute;bottom:calc(100% + 4px);left:0;right:0;background:#1e293b;border-radius:8px;padding:6px 8px;color:#fff;font-size:10px;z-index:20;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.smart-hover.visible{display:block}
+.sh-title{font-weight:700;margin-bottom:4px;color:#a5b4fc}
+.sh-person{display:flex;align-items:center;gap:5px;padding:2px 0;cursor:pointer}
+.sh-person:hover .sh-name{color:#93c5fd}
+.sh-av{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0}
+.sh-name{color:#e2e8f0;font-size:10px}
+.sh-match{font-size:9px;padding:1px 4px;border-radius:3px}
+.match-ok{background:#22c55e;color:#fff}
+.match-warn{background:#f59e0b;color:#fff}
+
+/* ── RIGHT PANEL ─────────────────────────────── */
+.right-panel{width:286px;flex-shrink:0;background:#fff;border-left:1px solid #e8eaed;display:flex;flex-direction:column;overflow:hidden}
+
+/* Smart summary top */
+.smart-top{padding:8px 10px;background:linear-gradient(135deg,#f5f3ff,#eff6ff);border-bottom:1px solid #c4b5fd}
+.smart-top-title{font-size:11px;font-weight:700;color:#5b21b6;display:flex;align-items:center;gap:4px;margin-bottom:4px}
+.smart-row{display:flex;align-items:center;gap:5px;font-size:11px;color:#374151;padding:1px 0}
+.smart-row-btn{padding:1px 6px;border-radius:5px;background:#7c3aed;color:#fff;font-size:10px;font-weight:600;border:none;cursor:pointer;margin-left:auto}
+.smart-row-btn:hover{background:#6d28d9}
+.gap-warn{padding:4px 10px;background:#fff3cd;border-bottom:1px solid #fbbf24;font-size:11px;color:#92400e;display:flex;align-items:center;gap:4px}
+.notify-bar{padding:4px 10px;background:#dcfce7;border-bottom:1px solid #86efac;font-size:11px;color:#14532d;display:flex;align-items:center;gap:4px}
+
+/* Tabs */
+.rp-tabs{display:flex;border-bottom:1px solid #e8eaed}
+.rp-tab{flex:1;padding:8px 0;text-align:center;font-size:12px;font-weight:600;color:#888;cursor:pointer;border-bottom:2px solid transparent}
+.rp-tab.active{color:#2563eb;border-bottom-color:#2563eb;background:#f8faff}
+.rp-cnt{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+/* Search */
+.rp-srch{padding:6px 8px 2px;position:relative}
+.rp-srch input{width:100%;padding:5px 8px 5px 24px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;outline:none;background:#f8faff}
+.rp-srch input:focus{border-color:#93c5fd}
+.srch-ic{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:11px;color:#9ca3af}
+
+/* Filter rows */
+.rp-filters{display:flex;gap:3px;padding:2px 8px;flex-wrap:wrap}
+.fb{padding:2px 7px;border-radius:10px;border:1px solid #e2e8f0;font-size:11px;font-weight:600;cursor:pointer;background:#f9fafb;color:#555;transition:all .12s;white-space:nowrap}
+.fb.active{background:#2563eb;color:#fff;border-color:#2563eb}
+.fb.mech.active{background:#f59e0b;border-color:#f59e0b;color:#fff}
+.fb.elec.active{background:#8b5cf6;border-color:#8b5cf6;color:#fff}
+
+/* List */
+.rp-list{flex:1;overflow-y:auto;padding:3px 8px 8px}
+.rp-list::-webkit-scrollbar{width:3px}
+.rp-list::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+
+/* Pool card */
+.pool-card{border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;margin-bottom:4px;background:#fff;cursor:grab;transition:all .15s;position:relative}
+.pool-card:hover{border-color:#93c5fd;box-shadow:0 2px 6px rgba(37,99,235,.08);transform:translateY(-1px)}
+.pool-card:active{cursor:grabbing;opacity:.85}
+.pool-card.hidden{display:none}
+.pc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:4px}
+.pc-eqt{font-size:12px;font-weight:700;color:#1e293b}
+.pc-badges{display:flex;gap:3px;align-items:center;flex-shrink:0}
+.pc-id{font-size:10px;color:#9ca3af;margin-top:1px}
+.pc-tags{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap;align-items:center}
+.pc-suggest{font-size:10px;color:#7c3aed;margin-top:3px}
+.pc-pattern{font-size:10px;color:#0891b2;margin-top:2px}
+.pc-hrs{font-size:10px;color:#64748b}
+.urg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-urgent{background:#ef4444}
+.dot-high{background:#f97316}
+.dot-normal{background:#22c55e}
+.overdue-badge{font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:700}
+
+/* Team card */
+.team-card{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:3px;background:#fff;cursor:grab;transition:all .12s}
+.team-card:hover{border-color:#93c5fd;background:#f8fbff}
+.team-card:active{cursor:grabbing;opacity:.85}
+.tc-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.tc-nm{font-size:12px;font-weight:600;color:#1e293b}
+.tc-rl{font-size:10px;color:#64748b;display:flex;align-items:center;gap:3px}
+.tc-right{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.tc-lb{width:34px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden}
+.tc-lf{height:100%;border-radius:2px}
+.tc-hrs{font-size:9px;color:#64748b}
+.fatigue-badge{font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 4px;border-radius:4px;font-weight:600;display:flex;align-items:center;gap:2px}
+.eff-stars{font-size:10px;color:#f59e0b;letter-spacing:-1px}
+.team-sec-hdr{font-size:10px;font-weight:700;text-transform:uppercase;color:#9ca3af;padding:5px 2px 2px;letter-spacing:.4px;display:flex;align-items:center;gap:3px}
+</style>
+</head>
+<body>
+
+<!-- ── TOP BAR ────────────────────────────────────── -->
+<div class="topbar">
+  <span style="color:#888;font-size:11px">admin /</span>
+  <span class="wlabel" id="top-label">Work Planning — Feb 23–Mar 1, 2026</span>
+  <button class="nav-btn">‹</button>
+  <button class="nav-btn">›</button>
+  <span class="pill pill-warn">⚠ Action Required</span>
+  <div class="spacer"></div>
+  <span class="mock-note">🔗 MOCKUP — Click day · Drag jobs/team · Switch tabs</span>
+  <button class="abtn abtn-ghost">📊 Gantt</button>
+  <button class="abtn abtn-ghost" onclick="togglePlanVsActual()">📈 Plan vs Actual</button>
+  <button class="abtn abtn-ai">✨ AI</button>
+  <button class="abtn abtn-ghost" style="color:#ef4444">⚠ At Risk</button>
+  <button class="abtn abtn-primary">⚡ Auto-Schedule</button>
+  <span style="font-size:11px;color:#888">Viewing: <span class="tag-berth tag-east" id="viewing-tag">East Berth</span></span>
+</div>
+
+<!-- ── BERTH BAR ──────────────────────────────────── -->
+<div class="berth-bar">
+  <button class="bberth east active" id="berth-east" onclick="switchBerth('east')">🔵 East Berth</button>
+  <button class="bberth west" id="berth-west" onclick="switchBerth('west')">🟠 West Berth</button>
+  <span style="color:#d1d5db;margin:0 2px">|</span>
+  <!-- Smart inline status pills — live context at a glance -->
+  <div class="smart-inline">
+    <span class="si-pill si-red">⚠ 8 unassigned</span>
+    <span class="si-pill si-amber">🔧 Mech: 5 jobs · 7 free</span>
+    <span class="si-pill si-purple">⚡ Elec: 3 jobs · 4 free</span>
+    <span class="si-pill si-orange">⚡ Fri: Elec gap — Haidar free</span>
+  </div>
+  <div class="bb-smart">
+    <span class="ai-chip amber" onclick="dupLastWeek()">📋 Copy Last Week</span>
+    <span class="ai-chip" onclick="autoAssign()">⚡ Auto-Assign All</span>
+    <span class="ai-chip green" onclick="gapCheck()">🔍 Gap Check</span>
+  </div>
+</div>
+
+<!-- ── MAIN LAYOUT ────────────────────────────────── -->
+<div class="main-layout">
+
+  <!-- ── LEFT ────────────────────────────────────── -->
+  <div class="left-area">
+
+    <!-- STATS STRIP -->
+    <div class="stats-strip">
+      <div class="stat-card">
+        <div class="stat-ring ring-red" style="font-size:9px">24%</div>
+        <div>
+          <div class="stat-lbl">Week Health</div>
+          <div class="stat-sub" style="color:#ef4444;font-weight:700">Action Required</div>
+          <div class="stat-sub">8 of 10 need team</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-ring ring-blue">10</div>
+        <div>
+          <div class="stat-val">10</div>
+          <div class="stat-lbl">Jobs This Week</div>
+          <div class="stat-sub">2 assigned · 8 pending</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-ring ring-amber" style="font-size:9px">2/10</div>
+        <div>
+          <div class="stat-val">2/10</div>
+          <div class="stat-lbl">SAP Coverage</div>
+          <div class="stat-sub">8 missing SAP #</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-ring ring-amber" style="font-size:9px">19h</div>
+        <div>
+          <div class="stat-val">19 hrs</div>
+          <div class="stat-lbl">Total Workload</div>
+          <div class="stat-sub">~2.7h/day · overloaded</div>
+        </div>
+      </div>
+      <!-- Plan Confidence Score -->
+      <div class="stat-card score-card">
+        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+          <span class="score-big" id="plan-score-num">42</span>
+          <div class="score-bar-wrap"><div class="score-bar-fill" id="plan-score-bar" style="width:42%"></div></div>
+        </div>
+        <div>
+          <div class="stat-lbl" style="color:#7c3aed;font-weight:700">Plan Score</div>
+          <div class="stat-sub" id="plan-score-label" style="color:#ef4444">Poor — Assign more</div>
+          <div class="stat-sub">↑ Assign to improve</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENGINEERS STRIP (Engineers only) -->
+    <div class="eng-strip">
+      <span class="eng-lbl">👷 Engineers</span>
+      <div class="eng-card">
+        <div class="eng-av" style="background:#1d4ed8">KA</div>
+        <div><div class="eng-nm">Khalid Al-A.</div><div class="eng-rl"><span class="skill-dot dot-mech"></span>Mech · Sr.Eng</div></div>
+        <div class="eng-load"><div class="eng-lb"><div class="eng-lf" style="width:70%;background:#f59e0b"></div></div><span class="eng-lp">70%</span></div>
+      </div>
+      <div class="eng-card">
+        <div class="eng-av" style="background:#7c3aed">SM</div>
+        <div><div class="eng-nm">Sami M.</div><div class="eng-rl"><span class="skill-dot dot-elec"></span>Elec · Eng</div></div>
+        <div class="eng-load"><div class="eng-lb"><div class="eng-lf" style="width:45%;background:#22c55e"></div></div><span class="eng-lp">45%</span></div>
+      </div>
+      <div class="eng-card">
+        <div class="eng-av" style="background:#dc2626">RH</div>
+        <div><div class="eng-nm">Rami H.</div><div class="eng-rl"><span class="skill-dot dot-mech"></span>Mech · Eng</div></div>
+        <div class="eng-load"><div class="eng-lb"><div class="eng-lf" style="width:90%;background:#ef4444"></div></div><span class="eng-lp" style="color:#ef4444">90%</span></div>
+      </div>
+      <div class="eng-card">
+        <div class="eng-av" style="background:#059669">NA</div>
+        <div><div class="eng-nm">Nour A.</div><div class="eng-rl"><span class="skill-dot dot-elec"></span>Elec · Eng</div></div>
+        <div class="eng-load"><div class="eng-lb"><div class="eng-lf" style="width:30%;background:#22c55e"></div></div><span class="eng-lp">30%</span></div>
+      </div>
+      <div class="eng-card">
+        <div class="eng-av" style="background:#d97706">YK</div>
+        <div><div class="eng-nm">Yousef K.</div><div class="eng-rl"><span class="skill-dot dot-mech"></span>Mech · Eng</div></div>
+        <div class="eng-load"><div class="eng-lb"><div class="eng-lf" style="width:55%;background:#f59e0b"></div></div><span class="eng-lp">55%</span></div>
+      </div>
+      <div class="eng-card" style="background:#f0fdf4;border-color:#86efac">
+        <div class="eng-av" style="background:#16a34a;font-size:9px">+3</div>
+        <div><div class="eng-nm" style="color:#16a34a">+3 engineers</div></div>
+      </div>
+    </div>
+
+    <!-- WEEK VIEW — all 7 days, expand in place -->
+    <div class="grid-area" id="week-view">
+
+      <!-- MON -->
+      <div class="day-col today-ring" id="col-mon"
+        ondragover="onDayOver(event,'mon')" ondragleave="onDayLeave(event,'mon')" ondrop="onDayDrop(event,'mon')"
+        onclick="handleDayClick(event,'mon')">
+        <div class="day-hdr">
+          <div><div class="d-name">MON</div><div class="d-num">23</div></div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="d-load" id="load-mon">7h</span>
+            <button class="d-btn-x" id="x-mon" style="display:none" onclick="collapseDay(event,'mon')">✕</button>
+          </div>
+        </div>
+        <div class="day-mini-bar" id="mini-mon">
+          <div class="mini-pip" style="background:#f59e0b"></div>
+          <div class="mini-pip" style="background:#ef4444"></div>
+          <div class="mini-cap"><div class="mini-cap-fill" style="width:88%;background:#f59e0b"></div></div>
+        </div>
+        <div class="day-body" id="body-mon">
+          <div class="day-jobs-col">
+            <div class="bottleneck-warn">⚠ 2 Mech jobs — risk if inspector absent</div>
+            <div class="job-chip" data-job-id="j1" data-disc="mech"
+              ondragover="onJobOver(event,this)" ondragleave="onJobLeave(event,this)" ondrop="onJobDrop(event,this)">
+              <div class="chip-eqt">Generator G01</div>
+              <div class="chip-meta">
+                <span class="chip-tag tag-pm">PM</span>
+                <span class="chip-tag tag-mech">Mech</span>
+                <span class="chip-tag tag-east">East</span>
+                <span class="chip-hrs">4h</span>
+                <span class="chip-unassigned">⚠ No team</span>
+              </div>
+              <div class="chip-suggest">💡 Best: Emad R., Akram S.</div>
+              <div class="smart-hover" id="sh-j1">
+                <div class="sh-title">⚡ Drop inspector here</div>
+                <div class="sh-person"><div class="sh-av" style="background:#16a34a">E</div><span class="sh-name">Emad R.</span><span class="sh-match match-ok">Mech ✓</span></div>
+                <div class="sh-person"><div class="sh-av" style="background:#0891b2">A</div><span class="sh-name">Akram S.</span><span class="sh-match match-ok">Mech ✓</span></div>
+                <div class="sh-person"><div class="sh-av" style="background:#2563eb">H</div><span class="sh-name">Haidar M.</span><span class="sh-match match-warn">Elec ⚠</span></div>
+              </div>
+            </div>
+            <div class="job-chip" data-job-id="j2" data-disc="mech"
+              ondragover="onJobOver(event,this)" ondragleave="onJobLeave(event,this)" ondrop="onJobDrop(event,this)">
+              <div class="chip-eqt">Pump Station A2</div>
+              <div class="chip-meta">
+                <span class="chip-tag tag-insp">Insp</span>
+                <span class="chip-tag tag-mech">Mech</span>
+                <span class="chip-tag tag-west">West</span>
+                <span class="chip-hrs">3h</span>
+                <span class="chip-assigned" id="assign-j2">✓ Haidar</span>
+              </div>
+            </div>
+            <div class="drop-hint">+ Drop job here</div>
+          </div>
+          <div class="day-team-col" id="team-col-mon">
+            <div style="font-size:10px;font-weight:700;color:#888;margin-bottom:4px">TEAM TODAY</div>
+            <div style="font-size:11px;color:#374151;padding:3px 0;border-bottom:1px solid #f0f0f0">
+              <span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:#2563eb;color:#fff;font-size:8px;font-weight:700;text-align:center;line-height:18px;margin-right:4px">H</span>
+              Haidar M. — 4h
+            </div>
+          </div>
+        </div>
+        <div class="cap-bar-wrap">
+          <div class="cap-label"><span>CAPACITY</span><span id="cap-mon">7h/8h</span></div>
+          <div class="cap-bar"><div class="cap-fill" id="cf-mon" style="width:88%;background:#f59e0b"></div></div>
+        </div>
+      </div>
+
+      <!-- TUE -->
+      <div class="day-col today-ring" id="col-tue"
+        ondragover="onDayOver(event,'tue')" ondragleave="onDayLeave(event,'tue')" ondrop="onDayDrop(event,'tue')"
+        onclick="handleDayClick(event,'tue')">
+        <div class="day-hdr">
+          <div><div class="d-name">TUE</div><div class="d-num" style="color:#2563eb">24</div></div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="pill pill-info" style="font-size:8px;padding:1px 4px">TODAY</span>
+            <button class="d-btn-x" id="x-tue" style="display:none" onclick="collapseDay(event,'tue')">✕</button>
+          </div>
+        </div>
+        <div class="day-mini-bar" id="mini-tue">
+          <div class="mini-cap"><div class="mini-cap-fill" style="width:0%"></div></div>
+        </div>
+        <div class="day-body" id="body-tue">
+          <div class="day-jobs-col">
+            <div class="drop-hint">+ Drop job here</div>
+          </div>
+          <div class="day-team-col" id="team-col-tue">
+            <div style="font-size:10px;font-weight:700;color:#888;margin-bottom:4px">TEAM TODAY</div>
+            <div style="font-size:11px;color:#9ca3af">No assignments</div>
+          </div>
+        </div>
+        <div class="cap-bar-wrap">
+          <div class="cap-label"><span>CAPACITY</span><span id="cap-tue">0h/8h</span></div>
+          <div class="cap-bar"><div class="cap-fill" id="cf-tue" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- WED -->
+      <div class="day-col" id="col-wed"
+        ondragover="onDayOver(event,'wed')" ondragleave="onDayLeave(event,'wed')" ondrop="onDayDrop(event,'wed')"
+        onclick="handleDayClick(event,'wed')">
+        <div class="day-hdr">
+          <div><div class="d-name">WED</div><div class="d-num">25</div></div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="d-load" id="load-wed">0h</span>
+            <button class="d-btn-x" id="x-wed" style="display:none" onclick="collapseDay(event,'wed')">✕</button>
+          </div>
+        </div>
+        <div class="day-mini-bar" id="mini-wed">
+          <div class="mini-cap"><div class="mini-cap-fill" style="width:0%"></div></div>
+        </div>
+        <div class="day-body" id="body-wed">
+          <div class="day-jobs-col"><div class="drop-hint">+ Drop job here</div></div>
+          <div class="day-team-col" id="team-col-wed"><div style="font-size:10px;font-weight:700;color:#888;margin-bottom:4px">TEAM TODAY</div><div style="font-size:11px;color:#9ca3af">No assignments</div></div>
+        </div>
+        <div class="cap-bar-wrap">
+          <div class="cap-label"><span>CAP</span><span id="cap-wed">0h/8h</span></div>
+          <div class="cap-bar"><div class="cap-fill" id="cf-wed" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- THU -->
+      <div class="day-col" id="col-thu"
+        ondragover="onDayOver(event,'thu')" ondragleave="onDayLeave(event,'thu')" ondrop="onDayDrop(event,'thu')"
+        onclick="handleDayClick(event,'thu')">
+        <div class="day-hdr">
+          <div><div class="d-name">THU</div><div class="d-num">26</div></div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="d-load" id="load-thu">0h</span>
+            <button class="d-btn-x" id="x-thu" style="display:none" onclick="collapseDay(event,'thu')">✕</button>
+          </div>
+        </div>
+        <div class="day-mini-bar" id="mini-thu">
+          <div class="mini-cap"><div class="mini-cap-fill" style="width:0%"></div></div>
+        </div>
+        <div class="day-body" id="body-thu">
+          <div class="day-jobs-col"><div class="drop-hint">+ Drop job here</div></div>
+          <div class="day-team-col" id="team-col-thu"><div style="font-size:10px;font-weight:700;color:#888;margin-bottom:4px">TEAM TODAY</div><div style="font-size:11px;color:#9ca3af">No assignments</div></div>
+        </div>
+        <div class="cap-bar-wrap">
+          <div class="cap-label"><span>CAP</span><span id="cap-thu">0h/8h</span></div>
+          <div class="cap-bar"><div class="cap-fill" id="cf-thu" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <!-- FRI -->
+      <div class="day-col" id="col-fri"
+        ondragover="onDayOver(event,'fri')" ondragleave="onDayLeave(event,'fri')" ondrop="onDayDrop(event,'fri')"
+        onclick="handleDayClick(event,'fri')">
+        <div class="day-hdr">
+          <div><div class="d-name">FRI</div><div class="d-num">27</div></div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="pill pill-info" style="font-size:8px;padding:1px 4px">LIGHT</span>
+            <button class="d-btn-x" id="x-fri" style="display:none" onclick="collapseDay(event,'fri')">✕</button>
+          </div>
+        </div>
+        <div class="day-mini-bar" id="mini-fri">
+          <div class="mini-pip" style="background:#22c55e"></div>
+          <div class="mini-pip" style="background:#ef4444"></div>
+          <div class="mini-cap"><div class="mini-cap-fill" style="width:75%;background:#22c55e"></div></div>
+        </div>
+        <div class="day-body" id="body-fri">
+          <div class="day-jobs-col">
+            <div class="job-chip" data-job-id="j3" data-disc="mech"
+              ondragover="onJobOver(event,this)" ondragleave="onJobLeave(event,this)" ondrop="onJobDrop(event,this)">
+              <div class="chip-eqt">East Crane #3</div>
+              <div class="chip-meta">
+                <span class="chip-tag tag-insp">Insp</span>
+                <span class="chip-tag tag-mech">Mech</span>
+                <span class="chip-tag tag-east">East</span>
+                <span class="chip-hrs">4h</span>
+                <span class="chip-assigned">✓ Emad</span>
+              </div>
+            </div>
+            <div class="job-chip" data-job-id="j4" data-disc="elec"
+              ondragover="onJobOver(event,this)" ondragleave="onJobLeave(event,this)" ondrop="onJobDrop(event,this)">
+              <div class="chip-eqt">West Comp. B1</div>
+              <div class="chip-meta">
+                <span class="chip-tag tag-defect">Defect</span>
+                <span class="chip-tag tag-elec">Elec</span>
+                <span class="chip-tag tag-west">West</span>
+                <span class="chip-hrs">2h</span>
+                <span class="chip-unassigned">⚠ No team</span>
+              </div>
+              <div class="chip-suggest">💡 Best: Haidar M.</div>
+              <div class="smart-hover" id="sh-j4">
+                <div class="sh-title">⚡ Drop inspector here</div>
+                <div class="sh-person"><div class="sh-av" style="background:#2563eb">H</div><span class="sh-name">Haidar M.</span><span class="sh-match match-ok">Elec ✓</span></div>
+                <div class="sh-person"><div class="sh-av" style="background:#9333ea">F</div><span class="sh-name">Firas K.</span><span class="sh-match match-ok">Elec ✓</span></div>
+              </div>
+            </div>
+            <div class="drop-hint">+ Drop job here</div>
+          </div>
+          <div class="day-team-col" id="team-col-fri">
+            <div style="font-size:10px;font-weight:700;color:#888;margin-bottom:4px">TEAM TODAY</div>
+            <div style="font-size:11px;color:#374151;padding:3px 0">
+              <span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:#16a34a;color:#fff;font-size:8px;font-weight:700;text-align:center;line-height:18px;margin-right:4px">E</span>
+              Emad R. — 4h
+            </div>
+          </div>
+        </div>
+        <div class="cap-bar-wrap">
+          <div class="cap-label"><span>CAP</span><span id="cap-fri">6h/8h</span></div>
+          <div class="cap-bar"><div class="cap-fill" id="cf-fri" style="width:75%"></div></div>
+        </div>
+      </div>
+
+      <!-- SAT -->
+      <div class="day-col" id="col-sat"
+        ondragover="onDayOver(event,'sat')" ondragleave="onDayLeave(event,'sat')" ondrop="onDayDrop(event,'sat')"
+        onclick="handleDayClick(event,'sat')">
+        <div class="day-hdr">
+          <div><div class="d-name">SAT</div><div class="d-num">28</div></div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="d-load" id="load-sat">2h</span>
+            <button class="d-btn-x" id="x-sat" style="display:none" onclick="collapseDay(event,'sat')">✕</button>
+          </div>
+        </div>
+        <div class="day-mini-bar" id="mini-sat">
+          <div class="mini-pip" style="background:#22c55e"></div>
+          <div class="mini-cap"><div class="mini-cap-fill" style="width:25%;background:#22c55e"></div></div>
+        </div>
+        <div class="day-body" id="body-sat">
+          <div class="day-jobs-col"><div class="drop-hint">+ Drop job here</div></div>
+          <div class="day-team-col" id="team-col-sat"><div style="font-size:10px;font-weight:700;color:#888;margin-bottom:4px">TEAM TODAY</div><div style="font-size:11px;color:#9ca3af">No assignments</div></div>
+        </div>
+        <div class="cap-bar-wrap">
+          <div class="cap-label"><span>CAP</span><span id="cap-sat">2h/8h</span></div>
+          <div class="cap-bar"><div class="cap-fill" id="cf-sat" style="width:25%"></div></div>
+        </div>
+      </div>
+
+      <!-- SUN -->
+      <div class="day-col" id="col-sun"
+        ondragover="onDayOver(event,'sun')" ondragleave="onDayLeave(event,'sun')" ondrop="onDayDrop(event,'sun')"
+        onclick="handleDayClick(event,'sun')">
+        <div class="day-hdr">
+          <div><div class="d-name">SUN</div><div class="d-num">1</div></div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span class="d-load" id="load-sun">0h</span>
+            <button class="d-btn-x" id="x-sun" style="display:none" onclick="collapseDay(event,'sun')">✕</button>
+          </div>
+        </div>
+        <div class="day-mini-bar" id="mini-sun">
+          <div class="mini-cap"><div class="mini-cap-fill" style="width:0%"></div></div>
+        </div>
+        <div class="day-body" id="body-sun">
+          <div class="day-jobs-col"><div class="drop-hint">+ Drop job here</div></div>
+          <div class="day-team-col" id="team-col-sun"><div style="font-size:10px;font-weight:700;color:#888;margin-bottom:4px">TEAM TODAY</div><div style="font-size:11px;color:#9ca3af">No assignments</div></div>
+        </div>
+        <div class="cap-bar-wrap">
+          <div class="cap-label"><span>CAP</span><span id="cap-sun">0h/8h</span></div>
+          <div class="cap-bar"><div class="cap-fill" id="cf-sun" style="width:0%"></div></div>
+        </div>
+      </div>
+
+    </div><!-- end week-view -->
+  </div><!-- end left-area -->
+
+  <!-- ── RIGHT PANEL (full height) ─────────────────── -->
+  <div class="right-panel">
+
+    <!-- Notify bar (shows when plan score ≥ 80) -->
+    <div class="notify-bar" id="notify-bar" style="display:none">
+      ✅ Plan ready! <button class="abtn abtn-green" style="font-size:10px;padding:2px 8px;margin-left:auto" onclick="notifyTeam()">📲 Notify Team</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="rp-tabs">
+      <div class="rp-tab active" id="tab-jobs" onclick="switchTab('jobs')">
+        🗂 Jobs <span style="background:#2563eb;color:#fff;border-radius:8px;padding:1px 5px;font-size:10px;margin-left:2px">12</span>
+      </div>
+      <div class="rp-tab" id="tab-team" onclick="switchTab('team')">
+        👷 Team <span style="background:#e5e7eb;color:#374151;border-radius:8px;padding:1px 5px;font-size:10px;margin-left:2px">60</span>
+      </div>
+    </div>
+
+    <!-- JOBS TAB -->
+    <div class="rp-cnt" id="cnt-jobs">
+      <div class="rp-srch"><span class="srch-ic">🔍</span><input type="text" id="job-srch" placeholder="Search equipment..." oninput="applyJobFilters()"></div>
+      <div class="rp-filters" id="jf-type">
+        <button class="fb active" onclick="setJF('type','all',this)">All</button>
+        <button class="fb" onclick="setJF('type','pm',this)">PM</button>
+        <button class="fb" onclick="setJF('type','insp',this)">Insp</button>
+        <button class="fb" onclick="setJF('type','defect',this)">Defect</button>
+        <button class="fb" onclick="setJF('type','maint',this)">Maint</button>
+      </div>
+      <div class="rp-filters" id="jf-disc">
+        <button class="fb active" onclick="setJF('disc','all',this)">All Disc.</button>
+        <button class="fb mech" onclick="setJF('disc','mech',this)">🔧 Mech</button>
+        <button class="fb elec" onclick="setJF('disc','elec',this)">⚡ Elec</button>
+      </div>
+      <div class="rp-filters" id="jf-urg">
+        <button class="fb active" onclick="setJF('urg','all',this)">All</button>
+        <button class="fb" style="color:#ef4444" onclick="setJF('urg','urgent',this)">● Urgent</button>
+        <button class="fb" style="color:#f97316" onclick="setJF('urg','high',this)">● High</button>
+        <button class="fb" style="color:#22c55e" onclick="setJF('urg','normal',this)">● Normal</button>
+      </div>
+      <div class="rp-list" id="pool-list">
+
+        <div class="pool-card" draggable="true" data-type="pm" data-disc="mech" data-urg="urgent" data-id="pc1" ondragstart="onPoolDrag(event,this)">
+          <div class="pc-head"><div class="pc-eqt">Generator G01</div><div class="pc-badges"><span class="overdue-badge">OVERDUE</span><span class="urg-dot dot-urgent"></span></div></div>
+          <div class="pc-id">T1048 · East Berth · Last insp: 95d ago</div>
+          <div class="pc-tags"><span class="chip-tag tag-pm">PM</span><span class="chip-tag tag-mech">Mech</span><span class="pc-hrs">· 2h</span></div>
+          <div class="pc-suggest">💡 Best: Emad R. ⭐⭐⭐ · Akram S. ⭐⭐</div>
+          <div class="pc-pattern">🔗 Usually paired with: East Crane #3</div>
+        </div>
+
+        <div class="pool-card" draggable="true" data-type="defect" data-disc="elec" data-urg="urgent" data-id="pc2" ondragstart="onPoolDrag(event,this)">
+          <div class="pc-head"><div class="pc-eqt">Transformer TR-02</div><div class="pc-badges"><span class="overdue-badge">OVERDUE</span><span class="urg-dot dot-urgent"></span></div></div>
+          <div class="pc-id">DEF-014 · East Berth · Last insp: 72d ago</div>
+          <div class="pc-tags"><span class="chip-tag tag-defect">Defect</span><span class="chip-tag tag-elec">Elec</span><span class="pc-hrs">· 4h</span></div>
+          <div class="pc-suggest">💡 Best: Firas K. ⭐⭐⭐ · Haidar M. ⭐⭐</div>
+        </div>
+
+        <div class="pool-card" draggable="true" data-type="insp" data-disc="elec" data-urg="high" data-id="pc3" ondragstart="onPoolDrag(event,this)">
+          <div class="pc-head"><div class="pc-eqt">East Crane #3</div><div class="pc-badges"><span class="urg-dot dot-high"></span></div></div>
+          <div class="pc-id">TI-045 · East Berth</div>
+          <div class="pc-tags"><span class="chip-tag tag-insp">Insp</span><span class="chip-tag tag-elec">Elec</span><span class="pc-hrs">· 3h</span></div>
+          <div class="pc-suggest">💡 Best: Haidar M. ⭐⭐⭐ · Firas K. ⭐⭐</div>
+          <div class="pc-pattern">🔗 Usually paired with: Generator G01</div>
+        </div>
+
+        <div class="pool-card" draggable="true" data-type="insp" data-disc="mech" data-urg="high" data-id="pc4" ondragstart="onPoolDrag(event,this)">
+          <div class="pc-head"><div class="pc-eqt">Pump Station A2</div><div class="pc-badges"><span class="urg-dot dot-high"></span></div></div>
+          <div class="pc-id">TI-082 · West Berth</div>
+          <div class="pc-tags"><span class="chip-tag tag-insp">Insp</span><span class="chip-tag tag-mech">Mech</span><span class="pc-hrs">· 3h</span></div>
+          <div class="pc-suggest">💡 Best: Abdullah F. ⭐⭐⭐</div>
+        </div>
+
+        <div class="pool-card" draggable="true" data-type="defect" data-disc="mech" data-urg="high" data-id="pc5" ondragstart="onPoolDrag(event,this)">
+          <div class="pc-head"><div class="pc-eqt">Boom Crane BC-05</div><div class="pc-badges"><span class="urg-dot dot-high"></span></div></div>
+          <div class="pc-id">DEF-007 · West Berth</div>
+          <div class="pc-tags"><span class="chip-tag tag-defect">Defect</span><span class="chip-tag tag-mech">Mech</span><span class="pc-hrs">· 2h</span></div>
+          <div class="pc-suggest">💡 Best: Akram S. ⭐⭐ · Abdullah F. ⭐⭐</div>
+        </div>
+
+        <div class="pool-card" draggable="true" data-type="maint" data-disc="mech" data-urg="normal" data-id="pc6" ondragstart="onPoolDrag(event,this)">
+          <div class="pc-head"><div class="pc-eqt">Crane Runway W2</div><div class="pc-badges"><span class="urg-dot dot-normal"></span></div></div>
+          <div class="pc-id">PM-009 · West Berth</div>
+          <div class="pc-tags"><span class="chip-tag tag-maint">Maint</span><span class="chip-tag tag-mech">Mech</span><span class="pc-hrs">· 5h</span></div>
+          <div class="pc-suggest">💡 Best: Emad R. ⭐⭐⭐</div>
+        </div>
+
+        <div class="pool-card" draggable="true" data-type="insp" data-disc="elec" data-urg="normal" data-id="pc7" ondragstart="onPoolDrag(event,this)">
+          <div class="pc-head"><div class="pc-eqt">MCC Panel #4</div><div class="pc-badges"><span class="urg-dot dot-normal"></span></div></div>
+          <div class="pc-id">TI-034 · East Berth</div>
+          <div class="pc-tags"><span class="chip-tag tag-insp">Insp</span><span class="chip-tag tag-elec">Elec</span><span class="pc-hrs">· 2h</span></div>
+          <div class="pc-suggest">💡 Best: Haidar M. ⭐⭐⭐</div>
+        </div>
+
+      </div>
+    </div><!-- end cnt-jobs -->
+
+    <!-- TEAM TAB — all non-engineers: Inspector, Specialist, Maintenance -->
+    <div class="rp-cnt" id="cnt-team" style="display:none">
+      <div class="rp-srch"><span class="srch-ic">🔍</span><input type="text" placeholder="Search team member..."></div>
+      <div class="rp-filters" id="tf-role">
+        <button class="fb active" onclick="filterTeam('all',this)">All</button>
+        <button class="fb" onclick="filterTeam('inspector',this)">Inspector</button>
+        <button class="fb" onclick="filterTeam('specialist',this)">Specialist</button>
+        <button class="fb" onclick="filterTeam('maintenance',this)">Maint</button>
+      </div>
+      <div class="rp-filters" id="tf-disc">
+        <button class="fb active" onclick="filterTeamDisc('all',this)">All Disc.</button>
+        <button class="fb mech" onclick="filterTeamDisc('mech',this)">🔧 Mech</button>
+        <button class="fb elec" onclick="filterTeamDisc('elec',this)">⚡ Elec</button>
+      </div>
+      <div class="rp-list" id="team-list">
+
+        <div class="team-sec-hdr"><span style="width:7px;height:7px;background:#22c55e;border-radius:50%;display:inline-block"></span>Free (8)</div>
+
+        <div class="team-card" draggable="true" data-role="inspector" data-disc="mech" data-person="Emad R." ondragstart="onTeamDrag(event,this)">
+          <div class="tc-av" style="background:#16a34a">E</div>
+          <div>
+            <div class="tc-nm">Emad R.</div>
+            <div class="tc-rl"><span class="skill-dot dot-mech"></span>Inspector · Mech</div>
+            <div class="eff-stars">⭐⭐⭐</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:0%;background:#22c55e"></div></div>
+            <span class="tc-hrs">0/8h</span>
+          </div>
+        </div>
+
+        <div class="team-card" draggable="true" data-role="specialist" data-disc="elec" data-person="Firas K." ondragstart="onTeamDrag(event,this)">
+          <div class="tc-av" style="background:#9333ea">F</div>
+          <div>
+            <div class="tc-nm">Firas K.</div>
+            <div class="tc-rl"><span class="skill-dot dot-elec"></span>Specialist · Elec</div>
+            <div class="eff-stars">⭐⭐⭐</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:0%;background:#22c55e"></div></div>
+            <span class="tc-hrs">0/8h</span>
+          </div>
+        </div>
+
+        <div class="team-card" draggable="true" data-role="inspector" data-disc="mech" data-person="Akram S." ondragstart="onTeamDrag(event,this)">
+          <div class="tc-av" style="background:#0891b2">A</div>
+          <div>
+            <div class="tc-nm">Akram S.</div>
+            <div class="tc-rl"><span class="skill-dot dot-mech"></span>Inspector · Mech</div>
+            <div class="eff-stars">⭐⭐</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:0%;background:#22c55e"></div></div>
+            <span class="tc-hrs">0/8h</span>
+          </div>
+        </div>
+
+        <div class="team-card" draggable="true" data-role="specialist" data-disc="mech" data-person="Abdullah F." ondragstart="onTeamDrag(event,this)">
+          <div class="tc-av" style="background:#d97706">Ab</div>
+          <div>
+            <div class="tc-nm">Abdullah F.</div>
+            <div class="tc-rl"><span class="skill-dot dot-mech"></span>Specialist · Mech</div>
+            <div class="eff-stars">⭐⭐⭐</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:0%;background:#22c55e"></div></div>
+            <span class="tc-hrs">0/8h</span>
+          </div>
+        </div>
+
+        <div class="team-card" draggable="true" data-role="inspector" data-disc="elec" data-person="Nadia W." ondragstart="onTeamDrag(event,this)">
+          <div class="tc-av" style="background:#be185d">N</div>
+          <div>
+            <div class="tc-nm">Nadia W.</div>
+            <div class="tc-rl"><span class="skill-dot dot-elec"></span>Inspector · Elec</div>
+            <div class="eff-stars">⭐⭐</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:0%;background:#22c55e"></div></div>
+            <span class="tc-hrs">0/8h</span>
+          </div>
+        </div>
+
+        <div class="team-card" draggable="true" data-role="maintenance" data-disc="mech" data-person="Omar T." ondragstart="onTeamDrag(event,this)">
+          <div class="tc-av" style="background:#0891b2">O</div>
+          <div>
+            <div class="tc-nm">Omar T.</div>
+            <div class="tc-rl"><span class="skill-dot dot-maint"></span>Maintenance · Mech</div>
+            <div class="eff-stars">⭐⭐</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:0%;background:#22c55e"></div></div>
+            <span class="tc-hrs">0/8h</span>
+          </div>
+        </div>
+
+        <div class="team-sec-hdr"><span style="width:7px;height:7px;background:#f59e0b;border-radius:50%;display:inline-block"></span>Partially Busy (3)</div>
+
+        <div class="team-card" draggable="true" data-role="inspector" data-disc="elec" data-person="Haidar M." ondragstart="onTeamDrag(event,this)">
+          <div class="tc-av" style="background:#2563eb">H</div>
+          <div>
+            <div class="tc-nm">Haidar M.</div>
+            <div class="tc-rl"><span class="skill-dot dot-elec"></span>Inspector · Elec</div>
+            <div class="eff-stars">⭐⭐</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:55%;background:#f59e0b"></div></div>
+            <span class="tc-hrs">4/8h</span>
+          </div>
+        </div>
+
+        <div class="team-card" draggable="true" data-role="specialist" data-disc="mech" data-person="Sara T." ondragstart="onTeamDrag(event,this)">
+          <div class="tc-av" style="background:#be185d">S</div>
+          <div>
+            <div class="tc-nm">Sara T.</div>
+            <div class="tc-rl"><span class="skill-dot dot-mech"></span>Specialist · Mech</div>
+            <div class="eff-stars">⭐⭐⭐</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:30%;background:#f59e0b"></div></div>
+            <span class="tc-hrs">2/8h</span>
+          </div>
+        </div>
+
+        <div class="team-sec-hdr"><span style="width:7px;height:7px;background:#ef4444;border-radius:50%;display:inline-block"></span>Full / Fatigue (4)</div>
+
+        <div class="team-card" draggable="true" data-role="inspector" data-disc="mech" data-person="Rami Y." ondragstart="onTeamDrag(event,this)" style="opacity:.6">
+          <div class="tc-av" style="background:#64748b">R</div>
+          <div>
+            <div class="tc-nm">Rami Y.</div>
+            <div class="tc-rl"><span class="skill-dot dot-mech"></span>Inspector · Mech</div>
+            <div class="fatigue-badge">⚠ 6-day streak</div>
+          </div>
+          <div class="tc-right">
+            <div class="tc-lb"><div class="tc-lf" style="width:100%;background:#ef4444"></div></div>
+            <span class="tc-hrs">8/8h</span>
+          </div>
+        </div>
+
+        <div class="team-sec-hdr"><span style="width:7px;height:7px;background:#9ca3af;border-radius:50%;display:inline-block"></span>Leave / Off (45)</div>
+        <div style="font-size:11px;color:#9ca3af;padding:8px 4px;text-align:center;border:1px dashed #e2e8f0;border-radius:7px">45 more team members…<br><span style="font-size:10px">Use filters to find by role or discipline</span></div>
+
+      </div>
+    </div><!-- end cnt-team -->
+
+  </div><!-- end right-panel -->
+</div><!-- end main-layout -->
+
+<script>
+/* ── STATE ─────────────────────────────── */
+let currentBerth = 'east';
+let expandedDay = null;
+let dragType = null; // 'pool' or 'team'
+let dragData = {};
+const jFilters = {type:'all', disc:'all', urg:'all'};
+const days = ['mon','tue','wed','thu','fri','sat','sun'];
+let assignedCount = 1; // Haidar already assigned on mon
+const totalJobs = 10;
+
+/* ── BERTH ──────────────────────────────── */
+function switchBerth(b) {
+  currentBerth = b;
+  document.getElementById('berth-east').classList.toggle('active', b==='east');
+  document.getElementById('berth-west').classList.toggle('active', b==='west');
+  document.getElementById('berth-desc').textContent = b==='east'
+    ? 'East Berth — 10 jobs this week' : 'West Berth — 7 jobs this week';
+  const vt = document.getElementById('viewing-tag');
+  vt.textContent = b==='east' ? 'East Berth' : 'West Berth';
+  vt.className = 'tag-berth ' + (b==='east' ? 'tag-east' : 'tag-west');
+}
+
+/* ── TAB ────────────────────────────────── */
+function switchTab(tab) {
+  document.getElementById('tab-jobs').classList.toggle('active', tab==='jobs');
+  document.getElementById('tab-team').classList.toggle('active', tab==='team');
+  document.getElementById('cnt-jobs').style.display = tab==='jobs' ? 'flex' : 'none';
+  document.getElementById('cnt-team').style.display = tab==='team' ? 'flex' : 'none';
+}
+
+/* ── DAY EXPAND / COLLAPSE ──────────────── */
+function expandDay(day) {
+  if (expandedDay && expandedDay !== day) collapseDay(null, expandedDay);
+  expandedDay = day;
+  const col = document.getElementById('col-'+day);
+  col.classList.add('expanded');
+  col.classList.remove('collapsed');
+  document.getElementById('x-'+day).style.display = 'inline-flex';
+  document.getElementById('mini-'+day).style.display = 'none';
+  // Show team column inside
+  const tc = document.getElementById('team-col-'+day);
+  if (tc) tc.style.display = 'flex';
+  // Collapse all others
+  days.forEach(d => {
+    if (d !== day) {
+      const c = document.getElementById('col-'+d);
+      c.classList.add('collapsed');
+      c.classList.remove('expanded');
+      document.getElementById('x-'+d).style.display = 'none';
+      document.getElementById('mini-'+d).style.display = 'flex';
+    }
+  });
+}
+function collapseDay(e, day) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  expandedDay = null;
+  days.forEach(d => {
+    const col = document.getElementById('col-'+d);
+    col.classList.remove('expanded','collapsed');
+    document.getElementById('x-'+d).style.display = 'none';
+    document.getElementById('mini-'+d).style.display = 'none';
+    const tc = document.getElementById('team-col-'+d);
+    if (tc) tc.style.display = 'none';
+  });
+}
+function handleDayClick(e, day) {
+  if (e.target.closest('.job-chip')) return;
+  if (e.target.closest('.drop-hint')) return;
+  if (e.target.closest('.d-btn-x')) return;
+  if (expandedDay === day) { collapseDay(e, day); return; }
+  expandDay(day);
+}
+
+/* ── POOL DRAG (job pool → day) ─────────── */
+function onPoolDrag(e, el) {
+  dragType = 'pool';
+  dragData = { id: el.dataset.id, disc: el.dataset.disc, type: el.dataset.type };
+  const eqt = el.querySelector('.pc-eqt').textContent;
+  dragData.eqt = eqt;
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDayOver(e, day) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('col-'+day).classList.add('dragover');
+}
+function onDayLeave(e, day) {
+  document.getElementById('col-'+day).classList.remove('dragover');
+}
+function onDayDrop(e, day) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('col-'+day).classList.remove('dragover');
+  if (dragType !== 'pool' || !dragData.id) return;
+
+  const card = document.querySelector('[data-id="'+dragData.id+'"]');
+  if (!card) return;
+
+  const body = document.getElementById('body-'+day);
+  const jobsCol = body.querySelector('.day-jobs-col') || body;
+  const chip = createJobChip(dragData.eqt, dragData.type, dragData.disc);
+  const hints = jobsCol.querySelectorAll('.drop-hint');
+  if (hints.length > 0) jobsCol.insertBefore(chip, hints[0]);
+  else jobsCol.appendChild(chip);
+
+  card.classList.add('hidden');
+  dragData = {};
+  dragType = null;
+  updateCap(day);
+  updatePlanScore();
+}
+
+function createJobChip(eqt, type, disc) {
+  const chip = document.createElement('div');
+  chip.className = 'job-chip';
+  chip.setAttribute('data-disc', disc);
+  chip.setAttribute('ondragover', "onJobOver(event,this)");
+  chip.setAttribute('ondragleave', "onJobLeave(event,this)");
+  chip.setAttribute('ondrop', "onJobDrop(event,this)");
+
+  const eqtDiv = document.createElement('div');
+  eqtDiv.className = 'chip-eqt';
+  eqtDiv.textContent = eqt;
+
+  const meta = document.createElement('div');
+  meta.className = 'chip-meta';
+
+  const typeSpan = document.createElement('span');
+  typeSpan.className = 'chip-tag tag-' + type;
+  typeSpan.textContent = {pm:'PM',insp:'Insp',defect:'Defect',maint:'Maint'}[type] || type.toUpperCase();
+
+  const discSpan = document.createElement('span');
+  discSpan.className = 'chip-tag ' + (disc==='mech' ? 'tag-mech' : 'tag-elec');
+  discSpan.textContent = disc==='mech' ? 'Mech' : 'Elec';
+
+  const noAssign = document.createElement('span');
+  noAssign.className = 'chip-unassigned';
+  noAssign.textContent = '⚠ No team';
+
+  meta.appendChild(typeSpan);
+  meta.appendChild(discSpan);
+  meta.appendChild(noAssign);
+  chip.appendChild(eqtDiv);
+  chip.appendChild(meta);
+  return chip;
+}
+
+/* ── TEAM DRAG (team → job chip) ─────────── */
+function onTeamDrag(e, el) {
+  dragType = 'team';
+  dragData = { person: el.dataset.person, disc: el.dataset.disc, role: el.dataset.role };
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onJobOver(e, chip) {
+  e.preventDefault(); e.stopPropagation();
+  chip.classList.add('drop-target-active');
+  // Show smart suggest overlay if exists
+  const sh = chip.querySelector('.smart-hover');
+  if (sh) sh.classList.add('visible');
+}
+function onJobLeave(e, chip) {
+  chip.classList.remove('drop-target-active');
+  const sh = chip.querySelector('.smart-hover');
+  if (sh) sh.classList.remove('visible');
+}
+function onJobDrop(e, chip) {
+  e.preventDefault(); e.stopPropagation();
+  chip.classList.remove('drop-target-active');
+  const sh = chip.querySelector('.smart-hover');
+  if (sh) sh.classList.remove('visible');
+
+  if (dragType !== 'team' || !dragData.person) return;
+
+  // Update the chip: replace "⚠ No team" with assignee
+  const unassign = chip.querySelector('.chip-unassigned');
+  const suggest = chip.querySelector('.chip-suggest');
+  if (unassign) {
+    const jobDisc = chip.dataset.disc;
+    const personDisc = dragData.disc;
+    const matchIcon = jobDisc === personDisc ? '✓' : '⚠';
+    const matchStyle = jobDisc === personDisc ? 'chip-assigned' : 'chip-unassigned';
+    unassign.className = matchStyle;
+    unassign.textContent = matchIcon + ' ' + dragData.person;
+  }
+  if (suggest) suggest.remove();
+
+  assignedCount++;
+  dragData = {};
+  dragType = null;
+  updatePlanScore();
+}
+
+/* ── CAPACITY ───────────────────────────── */
+function updateCap(day) {
+  const body = document.getElementById('body-'+day);
+  const chips = body.querySelectorAll('.job-chip').length;
+  const hrs = chips * 2;
+  const pct = Math.min(100,(hrs/8)*100);
+  const capEl = document.getElementById('cap-'+day);
+  if (capEl) capEl.textContent = hrs+'h/8h';
+  const fill = document.getElementById('cf-'+day);
+  if (fill) {
+    fill.style.width = pct+'%';
+    fill.style.background = pct > 80 ? '#ef4444' : pct > 60 ? '#f59e0b' : '#22c55e';
+  }
+}
+
+/* ── PLAN SCORE ─────────────────────────── */
+function updatePlanScore() {
+  const score = Math.min(100, Math.round((assignedCount / totalJobs) * 100));
+  document.getElementById('plan-score-num').textContent = score;
+  const bar = document.getElementById('plan-score-bar');
+  bar.style.width = score + '%';
+  bar.style.background = score >= 80 ? '#22c55e' : score >= 60 ? '#f59e0b' : '#ef4444';
+  const lbl = document.getElementById('plan-score-label');
+  if (score >= 80) {
+    lbl.textContent = 'Good — Almost there';
+    lbl.style.color = '#22c55e';
+    document.getElementById('notify-bar').style.display = 'flex';
+  } else if (score >= 60) {
+    lbl.textContent = 'Fair — Keep assigning';
+    lbl.style.color = '#f59e0b';
+  } else {
+    lbl.textContent = 'Poor — Assign more';
+    lbl.style.color = '#ef4444';
+  }
+}
+
+/* ── JOB FILTERS ────────────────────────── */
+function setJF(key, val, btn) {
+  jFilters[key] = val;
+  const rowMap = {type:'jf-type', disc:'jf-disc', urg:'jf-urg'};
+  document.getElementById(rowMap[key]).querySelectorAll('.fb').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyJobFilters();
+}
+function applyJobFilters() {
+  const search = (document.getElementById('job-srch')||{value:''}).value.toLowerCase();
+  document.querySelectorAll('#pool-list .pool-card').forEach(c => {
+    if (c.classList.contains('hidden')) { c.style.display='none'; return; }
+    const eqt = (c.querySelector('.pc-eqt')||{textContent:''}).textContent.toLowerCase();
+    const ok = (jFilters.type==='all'||c.dataset.type===jFilters.type)
+      && (jFilters.disc==='all'||c.dataset.disc===jFilters.disc)
+      && (jFilters.urg==='all'||c.dataset.urg===jFilters.urg)
+      && (search===''||eqt.includes(search));
+    c.style.display = ok ? '' : 'none';
+  });
+}
+
+/* ── TEAM FILTERS ───────────────────────── */
+function filterTeam(role, btn) {
+  document.getElementById('tf-role').querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  applyTeamFilters();
+}
+function filterTeamDisc(disc, btn) {
+  document.getElementById('tf-disc').querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  applyTeamFilters();
+}
+function applyTeamFilters() {
+  const ra = document.querySelector('#tf-role .fb.active');
+  const da = document.querySelector('#tf-disc .fb.active');
+  const role = ra ? ra.textContent.toLowerCase() : 'all';
+  const disc = da ? da.textContent.toLowerCase() : 'all';
+  document.querySelectorAll('#team-list .team-card').forEach(c => {
+    const rm = role.includes('all') || c.dataset.role === role.replace('maint','maintenance').trim();
+    const dm = disc.includes('all') || disc.includes('disc') ||
+      (disc.includes('mech') ? c.dataset.disc==='mech' : c.dataset.disc==='elec');
+    c.style.display = (rm && dm) ? '' : 'none';
+  });
+}
+
+/* ── SMART ACTIONS ──────────────────────── */
+function autoAssign() {
+  alert('✨ Smart Auto-Assign\n\n→ Scanning all unassigned jobs...\n→ Matching by discipline (Mech↔Elec)\n→ Balancing weekly load (max 8h/day)\n→ Prioritizing: Urgent → High → Normal\n→ Checking fatigue streaks (no 7-day workers)\n→ Avoiding leave conflicts\n\n[Production: calls AI scheduling API]');
+}
+function gapCheck() {
+  alert('🔍 Gap Check Complete\n\n⚠ GAPS FOUND:\n• Monday: Generator G01 — unassigned Mech job\n• Friday: West Comp B1 — unassigned Elec job\n• No Mech coverage Thursday\n\n✅ OK:\n• Team fatigue: 1 warning (Rami Y.)\n• Elec coverage: Mon, Fri\n• SAP jobs: 2 linked');
+}
+function dupLastWeek() {
+  alert('📋 Copy Last Week\n\nWould copy:\n• 8 recurring jobs from last week plan\n• Keep same team assignments where possible\n• Flag: 2 members on leave this week (need reassign)\n• Flag: 1 new SAP job added since last week\n\n[Click OK to apply as draft]');
+}
+function notifyTeam() {
+  alert('📲 Notify Team\n\nPush notifications sent to:\n• Emad R. — East Crane #3, Friday 4h\n• Haidar M. — Pump Station A2, Monday 3h\n• (and all other assigned inspectors)\n\nEach inspector receives:\n• Job name + location + time\n• Safety checklist link\n• Equipment history link');
+}
+function togglePlanVsActual() {
+  alert('📈 Plan vs Actual\n\nLast week comparison:\n• Generator G01 — Planned 2h · Actual 3.5h (⚠ +75%)\n• Pump Station A2 — Planned 3h · Actual 2.8h (✓)\n• East Crane #3 — Planned 4h · Actual 4h (✓)\n• Transformer TR-02 — NOT COMPLETED (⚠)\n\nInsight: Generator jobs always run 50% longer — update estimates for next week.');
+}
+
+/* ── INIT ─────────────────────────────── */
+// Ensure day-team-cols start hidden
+days.forEach(d => {
+  const tc = document.getElementById('team-col-'+d);
+  if (tc) tc.style.display = 'none';
+});
+</script>
+</body>
+</html>

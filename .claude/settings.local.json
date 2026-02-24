@@ -159,7 +159,15 @@
       "Bash(~/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell monkey -p host.exp.exponent -c android.intent.category.LAUNCHER 1)",
       "Bash($ANDROID_HOME/platform-tools/adb:*)",
       "Bash(/tmp/notification_audit.md:*)",
-      "Bash(/tmp/fix_shadows.py:*)"
+      "Bash(/tmp/fix_shadows.py:*)",
+      "mcp__testsprite__testsprite_bootstrap",
+      "mcp__testsprite__testsprite_generate_code_summary",
+      "mcp__testsprite__testsprite_generate_standardized_prd",
+      "mcp__testsprite__testsprite_generate_frontend_test_plan",
+      "mcp__testsprite__testsprite_generate_code_and_execute",
+      "mcp__testsprite__testsprite_open_test_result_dashboard",
+      "mcp__testsprite__testsprite_rerun_tests",
+      "Bash(cd \"/Users/AliAliAhmad_1_2/Desktop/inspection_system/frontend/apps/web/test-results/navigation-Page-Navigation-784c7--dashboard-to-notifications-chromium/\" && unzip -l trace.zip | head -30)"
     ]
   }
 }

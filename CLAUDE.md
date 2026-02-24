@@ -69,199 +69,12 @@
 <!-- Claude: After EVERY change you make, add an entry here. NEVER skip this. -->
 
 | Date | What Changed | Status |
-|------|-------------|--------|
-| 2026-02-20 | Enhanced Dashboard: Smart Alerts row (defects/overdue/work plan 0%/draft review — conditional), 4 new stat cards (Completion Rate, Assessments Today, Follow-Up Pending, Backlog Items), Shift Overview widget (on-duty/on-leave counts + roster name tags), roster API integration | ✅ Done |
-| 2026-02-20 | Rebuilt Homepage V2: Quick Actions row (role-filtered action buttons), 3x2 Pages Grid (6 categories: Operations/Equipment/Inspections/Team/Maintenance/Settings — compact, all visible on one screen), Tools & Shortcuts strip (Dashboard/⌘K/Theme/Language/Equipment/Profile), search with keyboard shortcut (/), favorites with star toggle, bilingual AR/EN | ✅ Done |
-| 2026-02-20 | Fix 500 error on inspector assignment: (1) berth constraint violation — work_plan_jobs only allows east/west/both but inspection berths are numbered, removed berth copy, (2) missing db.session.rollback() in sync error handler, (3) added 10 missing columns to work_plan_jobs schema in start.sh | ✅ Done |
-| 2026-02-20 | Fix Generate Inspection List error: (1) cleanup script was deleting inspection_routines + inspection_schedules (imported data, not test data) — removed from delete list, (2) backend shift mismatch — imported schedules use 'day' but modal sends 'morning'/'afternoon', added cross-matching logic in generate_daily_list | ✅ Done |
-| 2026-02-20 | Fix QuickReport Network Error: notifications ran synchronously with translation API calls (30s timeout each per user), causing Render timeout. Moved to background thread so response returns immediately | ✅ Done |
-| 2026-02-20 | Fix QuickFieldReport: switch from FormData to base64 upload (reliable on RN), clear form after submit, show actual error messages, better success alert | ✅ Done |
-| 2026-02-20 | AI reading extraction: updated prompts in all 6 vision services (Gemini, Groq, OpenRouter, Together, SambaNova, DeepInfra) to focus ONLY on numeric reading extraction, explicitly says "Do NOT check for defects" | ✅ Done |
-| 2026-02-20 | Stuck meter auto-defect: if same reading value appears 3 consecutive times for same equipment and equipment not stopped, auto-creates a high-priority defect for meter repair + notifies admin/engineer | ✅ Done |
-| 2026-02-20 | Fix NotificationsScreen: stat card numbers always 0 (backend /unread-count now returns by_priority, fixed data access path), navigation error on press (added 20+ mobile routes in getNotificationMobileRoute, show Alert fallback), InspectionWizard wrong param (inspectionId→id), Urgent/Warning cards now filter by priority, Mark All Read i18n fallback, group items now have onPress | ✅ Done |
-| 2026-02-20 | Fix urgency reset on photo upload (deep merge in server sync), make urgency mandatory for all questions, fix voice recording spreading across questions (key prop + stopAllVoiceRecording) | ✅ Done |
-| 2026-02-20 | Fix voice/video playback lost on navigate back: pass uploaded URL back in callbacks, store in localAnswers | ✅ Done |
-| 2026-02-20 | Fix chat users 500 error: /api/communication/users accessed u.employee_id (non-existent), changed to u.role_id | ✅ Done |
-| 2026-02-20 | Fix wizard swipe: smooth fade transition, stop voice on swipe, reduce re-renders (NotificationAlertProvider toast isolation, OfflineProvider polling optimization) | ✅ Done |
-| 2026-02-20 | Add auto-seed admin user in start.sh, register Notifications screen in RootNavigator, add ~30 remaining missing DB schema patches | ✅ Done |
-| 2026-02-19 | PRODUCTION AUDIT: 12-phase audit completed — secured 12 endpoints (auth+admin), fixed CORS wildcard, removed stack trace leaks, fixed localhost fallback, added type barrel exports, wrote PRODUCTION_READY_REPORT.md | ✅ Done |
-| 2026-02-19 | PHASE 2: Fix ALL deprecation warnings — replaced shadow* props with boxShadow in 106 files (150+ shadow groups), replaced textShadow* with textShadow shorthand in 1 file, noted expo-av needs expo-audio/expo-video migration (not installed) | ✅ Done |
-| 2026-02-19 | Fix mobile white screen / duplicate React — reordered nodeModulesPaths (root first), added resolveRequest singleton enforcer, added blockList for nested react copies (canary), verified exclusionList import | ✅ Done |
-| 2026-02-19 | Enhanced NotificationsScreen — added stats cards, search bar, 4 tabs (All/Unread/Critical/Mentions), collapsible filter bar (type+priority chips), quick actions per notification type, grouped view toggle, AI summary section, acknowledge for persistent, app badge count, settings button | ✅ Done |
-| 2026-02-19 | Created NotificationPreferencesScreen for mobile — channels toggles (In-App/Push) by group, DND quiet hours with day picker, digest mode radio, reset to defaults, full RTL/i18n support | ✅ Done |
-| 2026-02-18 | Item 5a: Fixed voice recording never stops — added 120s safety timeout, try/catch around stopAndUnloadAsync, full state reset on error | ✅ Done |
-| 2026-02-18 | Item 5b: Fixed photo/video upload — added I18nManager import, Android file:// URI prefix, better network error messages | ✅ Done |
-| 2026-02-18 | Item 5c: Created UrgentAlertOverlay + UrgentAlertProvider — full-screen red pulsing alert with vibration for priority messages | ✅ Done |
-| 2026-02-18 | Items 3-13 mobile fixes: Removed Previous Answer panel (Item 6), fixed toggle overflow (Item 7), smart submit navigation (Item 11), role-scoped work plan (Item 13) | ✅ Done |
-| 2026-02-18 | Item 5a: Fixed voice recording never stops — safety timeout, robust stop, state reset on error | ✅ Done |
-| 2026-02-18 | Item 5b: Fixed chat photo/video upload — I18nManager import, Android file URI, unique filenames | ✅ Done |
-| 2026-02-18 | Item 5c: Created UrgentAlertOverlay + UrgentAlertProvider — full-screen red alert with vibration + sound for urgent messages | ✅ Done |
-| 2026-02-18 | Item 5d + 12: Fixed ChannelListScreen members button — robust user fetch with fallback, role badges, shift labels, loading/empty states, clear search, mode bar | ✅ Done |
-| 2026-02-18 | Fixed goToNext TS error in InspectionWizardScreen — replaced forward reference with direct goToIndex call in handleSkip | ✅ Done |
-| 2026-02-13 | Project setup | ✅ Done |
-| 2026-02-18 | Item 10: Voice recording for stop/monitor verdict reason — replaced VoiceTextInput with VoiceNoteRecorder, removed min-char validation, added voice URL support to backend/frontend | ✅ Done |
-| 2026-02-18 | Item 8: 2nd inspector media prefill — colleague answers now include photo/video/voice/AI analysis, added batch-save effect for prefilled answers | ✅ Done |
-| 2026-02-18 | Added missing i18n keys to en.json and ar.json — job_execution, profile, assessment, assignments, checklist, notifications sections | ✅ Done |
-| 2026-02-18 | Simplified CreateHandoverScreen — replaced 3 complex sections (12+ fields) with unified type-tagged item list | ✅ Done |
-| 2026-02-19 | Fix SafeAreaProvider crash on web — conditional import with Platform check, use plain View on web | ✅ Done |
-| 2026-02-19 | Fix React Error #310 infinite re-render — added useMemo to OfflineProvider/AIPhotoAnalysisProvider/LanguageProvider/AuthProvider context values, fixed OfflineProvider auto-sync dependency loop, fixed AccessibilityProvider updatePreferences callback dependency | ✅ Done |
-| 2026-02-19 | Added notification bell icon with unread badge to mobile dashboard header — auto-refreshes every 30s, navigates to Notifications screen | ✅ Done |
-| 2026-02-19 | Monorepo config audit — removed react-dom from mobile deps, added missing iOS/Android permissions (camera, location, microphone), added expo-location + expo-av plugins to app.json | ✅ Done |
-| 2026-02-18 | Fixed LiveAlertBanner phone overlap — added SafeAreaView insets padding so banner sits below status bar | ✅ Done |
-| 2026-02-18 | Fixed LiveAlertBanner Arabic detection — switched from I18nManager.isRTL to useTranslation i18n.language | ✅ Done |
-| 2026-02-18 | Item 9: Fixed AssessmentScreen verdict display (equipment name, system verdict fallback, comparison card when both inspectors submit) | ✅ Done |
-| 2026-02-18 | Item 3: Created InspectionDetailScreen — full read-only inspection details with photo/video/voice/AI analysis, registered route, added i18n keys (en/ar) | ✅ Done |
-| 2026-02-18 | Created Unplanned Jobs API — model, POST/GET/GET-by-ID endpoints, engineer/admin notifications, registered blueprint | ✅ Done |
-| 2026-02-18 | Created reusable MonitorFollowupForm component (web) for scheduling follow-up inspections with auto-fill inspectors | ✅ Done |
-| 2026-02-16 | Fix React error #310 — moved useCallback before early return in LiveTicker.tsx | ✅ Done |
-| 2026-02-15 | Fixed FileSystem import in PhotoAnnotationScreen (both APIs) | ✅ Done |
-| 2026-02-17 | Created AssessmentTrackingScreen for mobile — pipeline overview with stats, filters, assessment cards | ✅ Done |
-| 2026-02-17 | Created AssessmentTrackingPage (web) — kanban pipeline + list view with stats, verdicts, escalation tracking | ✅ Done |
-| 2026-02-17 | Wired AssessmentTracking into mobile RootNavigator + DashboardScreen quick links (admin/engineer) | ✅ Done |
-| 2026-02-17 | Added Assessment Tracking button to web DashboardPage quick actions for engineers/admins | ✅ Done |
-| 2026-02-18 | Replaced all hardcoded strings in JobExecutionScreen, ProfileScreen, NotificationsScreen with i18n t() calls | ✅ Done |
-| 2026-02-18 | Added job_execution.* i18n keys (en/ar) for pause reasons, incomplete reasons, buttons, alerts, modals | ✅ Done |
-| 2026-02-18 | Added profile.* i18n keys (en/ar) for appearance, accessibility, quick links, theme modes, text scales | ✅ Done |
-| 2026-02-18 | Replaced ~70 hardcoded strings in AssessmentScreen, MyAssignmentsScreen, InspectionChecklistScreen with i18n t() calls | ✅ Done |
-| 2026-02-18 | Added assessment.*, assignments.*, checklist.* i18n keys (en/ar) for verdicts, roles, statuses, urgency, modal labels | ✅ Done |
-| 2026-02-18 | Built offline mutation queue system — offline-mutations.ts, useOfflineMutations hook, OfflinePendingBadge, OfflineProvider integration, i18n keys | ✅ Done |
-| 2026-02-18 | Added notifications.info/warning/urgent i18n keys (en/ar) for priority badge labels | ✅ Done |
-| 2026-02-17 | Added i18n keys (en/ar) for assessment_tracking section + nav.assessmentTracking + launcher keys | ✅ Done |
-| 2026-02-17 | Fixed MyAssignmentsScreen verdict types: urgent/stopped → monitor/stop (aligned with 3-verdict system) | ✅ Done |
-| 2026-02-17 | Added colleague-answers API endpoint for pre-filling Inspector 2 answers from Inspector 1 | ✅ Done |
-| 2026-02-15 | Added GPS auto-location hook (useLocation) + LocationTag component | ✅ Done |
-| 2026-02-15 | Added Push-to-Talk walkie-talkie component | ✅ Done |
-| 2026-02-15 | Added Trending Alerts pattern detection component | ✅ Done |
-| 2026-02-15 | Added Batch Approval Widget for review queue | ✅ Done |
-| 2026-02-15 | Added Dashboard Widget (team status + system health) | ✅ Done |
-| 2026-02-15 | Added Drag-Drop Job Assignment component | ✅ Done |
-| 2026-02-15 | Added Team Location Map with distance + open-in-maps | ✅ Done |
-| 2026-02-15 | Added Geofence Alert (red zone / restricted area warnings) | ✅ Done |
-| 2026-02-15 | Added KPI Alerts with threshold monitoring | ✅ Done |
-| 2026-02-15 | Added Morning Brief (daily AI summary) component | ✅ Done |
-| 2026-02-15 | Created index files for chat/, quality/ component folders | ✅ Done |
-| 2026-02-15 | Updated hooks/index.ts and shared/index.ts with all new exports | ✅ Done |
-| 2026-02-15 | Built Running Hours backend: 3 models + full REST API + migration | ✅ Done |
-| 2026-02-15 | Built Answer Templates backend: CRUD API + model registration | ✅ Done |
-| 2026-02-15 | Built PreviousAnswersPanel mobile component (copy from previous) | ✅ Done |
-| 2026-02-15 | Built RunningHoursScreen mobile screen (view/enter hours) | ✅ Done |
-| 2026-02-15 | Wired RunningHoursScreen into RootNavigator | ✅ Done |
-| 2026-02-15 | Exported previous-inspection API + types in shared package | ✅ Done |
-| 2026-02-15 | Exported templates.types in shared package | ✅ Done |
-| 2026-02-15 | Rewrote web layout: Hub Card Dashboard + minimal icon sidebar | ✅ Done |
-| 2026-02-15 | Added tabbed work plan stats widget (Overview/Schedule/Team/Focus) | ✅ Done |
-| 2026-02-18 | Created MonitorFollowupsScreen (mobile) — stats row, tab filters, follow-up cards, schedule navigation | ✅ Done |
-| 2026-02-18 | Created MonitorFollowupScheduleScreen (mobile) — schedule form with type/location/shift selection, inspector pickers, auto-fill | ✅ Done |
-| 2026-02-15 | Fixed job_templates SQL error: added missing columns migration | ✅ Done |
-| 2026-02-15 | Work Planning: combined Side Tab Toggle + Auto-Hide panel layout | ✅ Done |
-| 2026-02-15 | Work Planning: rewrite layout — compact toolbar, inline team pool, always-visible jobs panel, at-risk badge | ✅ Done |
-| 2026-02-15 | Replaced icon sidebar with App Launcher (waffle menu popup) in MainLayout | ✅ Done |
-| 2026-02-15 | Rewrote DashboardPage: gradient KPI cards, work plan tabs, alerts, quick actions | ✅ Done |
-| 2026-02-15 | Redesigned WorkPlanningPage: jobs pool right, team pool below, at-risk toolbar badge | ✅ Done |
-| 2026-02-15 | Updated index.css: launcher, dashboard, team pool, at-risk styles | ✅ Done |
-| 2026-02-16 | Fixed Gemini 1.5-flash 404: changed API URL from v1beta to v1 | ✅ Done |
-| 2026-02-16 | Fixed HuggingFace 410 Gone: switched whisper-large-v3 to distil-whisper/distil-large-v3 | ✅ Done |
-| 2026-02-16 | Updated OpenRouter: added 6 free vision models (Llama 4 Scout, Qwen 2.5 VL, Gemma 3, Mistral) | ✅ Done |
-| 2026-02-16 | Created SambaNova service: free vision (Llama-4-Maverick) + voice (Whisper-Large-v3) | ✅ Done |
-| 2026-02-16 | Fixed Together AI: corrected API URL (api.together.xyz), updated to Llama-4-Maverick + Qwen3-VL models | ✅ Done |
-| 2026-02-16 | Removed Ollama from all fallback chains (local-only, not usable on Render) | ✅ Done |
-| 2026-02-16 | Updated photo fallback chain: Gemini→Groq→OpenRouter→HuggingFace→Together→SambaNova→DeepInfra→OpenAI | ✅ Done |
-| 2026-02-16 | Updated voice fallback chain: Gemini→Groq→HuggingFace→Together→SambaNova→OpenAI | ✅ Done |
-| 2026-02-15 | Integrated orphaned mobile components: wired providers, dashboard, inspection, chat, profile, navigation | ✅ Done |
-| 2026-02-15 | Added AccessibilityProvider + AIPhotoAnalysisProvider to App.tsx | ✅ Done |
-| 2026-02-15 | DashboardScreen: added KPIAlerts, StreakIndicator, themed UI, communication link | ✅ Done |
-| 2026-02-15 | InspectionWizardScreen: integrated QuickFill templates, QuickNotes, PreviousAnswersPanel | ✅ Done |
-| 2026-02-15 | ChatRoomScreen: integrated MessageReactions, TranslatedMessage, MediaAttachment | ✅ Done |
-| 2026-02-15 | ProfileScreen: added accessibility settings (high contrast, bold text, reduce motion, text scale) | ✅ Done |
-| 2026-02-15 | MainTabNavigator: added Chat tab for all roles (Inspector, Specialist, Engineer, QE, Admin) | ✅ Done |
-| 2026-02-16 | Fixed 13 duplicate index definitions across 9 model files (crashed SQLite test DB) | ✅ Done |
-| 2026-02-16 | Fixed all 18 failing tests: response keys, required fields, voice notes, API error handling | ✅ Done |
-| 2026-02-16 | Added IntegrityError handling in checklists API for duplicate templates | ✅ Done |
-| 2026-02-16 | All 121 backend tests passing (0 failures, 16 skipped remote tests) | ✅ Done |
-| 2026-02-16 | Fixed 16 skipped tests: mocked Cloudinary for file upload, created local smoke tests, excluded remote-only tests via pytest marker | ✅ Done |
-| 2026-02-16 | Added Live Ticker: web scrolling news bar (all pages except Work Planning) | ✅ Done |
-| 2026-02-16 | Added mobile LiveAlertBanner: tablet full ticker + phone critical-only popup | ✅ Done |
-| 2026-02-16 | Integrated ticker into MainLayout (web) and RootNavigator (mobile) | ✅ Done |
-| 2026-02-16 | Built Job Show Up & Challenges: 3 models (ShowUpPhoto, ChallengeVoice, ReviewMark) + migration | ✅ Done |
-| 2026-02-16 | Built Show Up API: photo upload, challenge voice with AR/EN transcription, star/point marks | ✅ Done |
-| 2026-02-16 | Auto-notification on job start: "Take show-up photo + record challenges" (specialist + engineer) | ✅ Done |
-| 2026-02-16 | Web JobShowUpSection: photo gallery, voice player with transcriptions, star/point buttons | ✅ Done |
-| 2026-02-16 | Mobile JobShowUpSection: camera capture, voice recorder, audio playback, review marks | ✅ Done |
-| 2026-02-16 | Integrated ShowUp into SpecialistJobDetail + EngineerJobDetail (web + mobile) | ✅ Done |
-| 2026-02-16 | Fixed Arabic analysis: bilingual EN/AR prompts for all 6 vision providers (Gemini, Groq, OpenRouter, Together, SambaNova, HuggingFace) | ✅ Done |
-| 2026-02-16 | Updated master photo analysis prompt with explicit bilingual JSON output + Arabic example | ✅ Done |
-| 2026-02-16 | Fixed TranslationService.auto_translate: always returns both EN + AR, English fallback if translation fails | ✅ Done |
-| 2026-02-16 | Removed video AI analysis entirely: backend endpoint, frontend API, state/UI, backend auto-analysis skip | ✅ Done |
-| 2026-02-16 | Fixed mobile crash: removed useNavigationState from LiveAlertBanner (rendered outside navigator), added SafeBannerWrapper error boundary | ✅ Done |
-| 2026-02-17 | Fixed chat mic: actual recording via expo-av + base64 upload to /api/voice/transcribe + send voice message with transcription | ✅ Done |
-| 2026-02-17 | Voice messages now show playback (tap to play/stop) + EN/AR transcription text in message bubble | ✅ Done |
-| 2026-02-17 | Added user search/selection for DM conversations in ChannelListScreen (People button + search) | ✅ Done |
-| 2026-02-17 | Added back button to ChannelListScreen header | ✅ Done |
-| 2026-02-17 | Auto-add inspections to work plan: assign_team() now creates WorkPlanJob entries automatically | ✅ Done |
-| 2026-02-17 | WhatsApp-style chat mic: hold-to-record, release-to-send (onPressIn/onPressOut) | ✅ Done |
-| 2026-02-17 | Fixed dashboard numbers: backend _normalize_dashboard() returns common keys (total_inspections, completion_rate, incomplete_rate, total_stars) for all roles | ✅ Done |
-| 2026-02-17 | Added incomplete rate + total stars stat cards to mobile DashboardScreen | ✅ Done |
-| 2026-02-17 | BigButtonOverlay: slowed spring animation (speed 50→20), added minimize/expand button | ✅ Done |
-| 2026-02-17 | Fixed MyWorkPlanScreen infinite loop: memoized myJobs, moved timer to useRef-based pattern with empty dependency | ✅ Done |
-| 2026-02-17 | Added photo/video support to ChatRoomScreen: camera + gallery picker (expo-image-picker), upload via filesApi, send as photo/video message | ✅ Done |
-| 2026-02-17 | Fixed ChannelListScreen user search: prefetch all users, progressive name/role filtering, increased visible limit to 20 | ✅ Done |
-| 2026-02-17 | Rewrote NewChannelScreen: suggested quick-create channels (Job Chat=all users, role-based=filtered), auto-populate member_ids, member count preview | ✅ Done |
-| 2026-02-17 | Fixed toolkit API race condition: added `enabled: !!apiClient` guard to prevent "API client not initialized" error | ✅ Done |
-| 2026-02-17 | Fixed chat media upload Network Error: removed explicit Content-Type header from filesApi (let axios set boundary automatically) | ✅ Done |
-| 2026-02-17 | Fixed New Channel create button: improved error handling, bigger touch target, changed replace→navigate | ✅ Done |
-| 2026-02-17 | Fixed My Assignments tab filtering: client-side status grouping (assigned/in_progress includes sub-statuses), constrained card/badge sizing | ✅ Done |
-| 2026-02-17 | Fixed TWL/RNR detection: narrowed to exact phrases only ("RNR READING", "RUNNING HOURS READING", "TWL COUNT", "TWIST LOCK COUNT") | ✅ Done |
-| 2026-02-17 | Inspection wizard submit page: shows "Go to Missing" button when incomplete items exist, Submit only when all complete | ✅ Done |
-| 2026-02-17 | Added unanswered question filter toggle with count badge to InspectionChecklistScreen | ✅ Done |
-| 2026-02-17 | Built Shift Handover backend: model + migration + REST API (create/latest/pending/acknowledge) | ✅ Done |
-| 2026-02-17 | Built Shift Handover frontend types + API client in shared package | ✅ Done |
-| 2026-02-17 | Rewrote mobile DashboardScreen: 4 widgets (Assignment Summary, Quick Actions, Weekly Trend, Shift Handover) | ✅ Done |
-| 2026-02-17 | Created CreateHandoverScreen: form with shift type, notes, pending items, safety alerts, equipment issues | ✅ Done |
-| 2026-02-17 | Added urgency_level column to InspectionAnswer model + migration + API support | ✅ Done |
-| 2026-02-17 | Added urgency selector UI to InspectionWizard: 4 colored buttons (OK/Monitor/Attention/Critical) per question | ✅ Done |
-| 2026-02-17 | Upgraded MyAssignments: clickable answer cells → detail bottom sheet modal, assessment badge near equipment name, urgency border indicators, risk score | ✅ Done |
-| 2026-02-17 | Added predicted assessment scoring: urgency weights [0,1,3,5], thresholds at 5 (monitor) and 10 (urgent) | ✅ Done |
-| 2026-02-17 | Increased all fontSize values in 5 mobile screens (Dashboard, MyAssignments, ChannelList, ChatRoom, Login) for better readability | ✅ Done |
-| 2026-02-17 | Multi-layer assessment: migration (12 new columns), model (system auto-verdict, evaluate_multi_layer, evaluate_engineer_review), service (submit_engineer_verdict, notifications, escalation) | ✅ Done |
-| 2026-02-17 | Assessment API: 4 new endpoints (engineer-verdict, engineer-pending, admin-pending, shared-answers), updated verdict for 3 options | ✅ Done |
-| 2026-02-17 | Frontend types: Verdict = operational/monitor/stop, EscalationLevel type, 12 new FinalAssessment fields | ✅ Done |
-| 2026-02-17 | Mobile AssessmentScreen: 3 verdict cards with emojis, system recommendation pre-selected, verdict trail, escalation banners, reason inputs | ✅ Done |
-| 2026-02-17 | Web AssessmentPage: 3 verdict radio buttons, system recommendation alert, Steps verdict trail, escalation alerts | ✅ Done |
-| 2026-02-17 | AdminApprovalsScreen: 3 verdict options (operational/monitor/stop), shows system + engineer verdicts, fixed payload fields | ✅ Done |
-| 2026-02-17 | i18n: added 25+ assessment keys for monitor/stop/escalation/verdict in en.json + ar.json | ✅ Done |
-| 2026-02-17 | Fixed logout bug: async logout not awaited in ProfileScreen Alert.alert callback | ✅ Done |
-| 2026-02-17 | Fixed App.tsx loading screen: removed debug red background | ✅ Done |
-| 2026-02-17 | All banners (12 total: 7 mobile + 5 web) updated: thicker padding, bigger font, bolder weight | ✅ Done |
-| 2026-02-17 | Fixed 18 TypeScript errors across 11 files: TeamPerformanceDashboard, CommandPalette, RunningHoursCard, RunningHoursDashboard, AnomalyAlert type import, HealthTrendChart, SchedulesPage props, EngineerJobDetailPage, InspectionChecklistPage | ✅ Done |
-| 2026-02-17 | Wired 3 unwired components: ServiceAlertBadge in MainLayout header, AnomalyBanner in SchedulesPage, ServiceAlertNotification in EquipmentDashboardPage | ✅ Done |
-| 2026-02-17 | Pre-fill Inspector 2 answers: new backend endpoint GET /colleague-answers/<assignment_id>, API method, mobile pre-fill with source badges, web pre-fill with colleague info | ✅ Done |
-| 2026-02-17 | Created monitor_followups API blueprint: 9 endpoints (list, detail, pending, schedule, available-inspectors, equipment-history, overdue, dashboard, cancel) | ✅ Done |
-| 2026-02-17 | Created MonitorFollowupService: 10 methods — create_pending, schedule, inline_schedule, available_inspectors, daily assignment creation, overdue check, complete, history, cancel (admin-only), dashboard stats | ✅ Done |
-| 2026-02-18 | Created MonitorFollowupsPage (web): dashboard stats, 5 status tabs, schedule modal with auto-fill inspectors | ✅ Done |
-| 2026-02-18 | Created MonitorFollowupForm (web): reusable inline form with date picker, type/location/shift, auto-fill inspectors | ✅ Done |
-| 2026-02-18 | Created MonitorFollowupsScreen + MonitorFollowupScheduleScreen (mobile) | ✅ Done |
-| 2026-02-18 | Monitor Follow-Up full stack: migration, model, service (807 lines), API (9 endpoints), scheduler (2 jobs), assessment hooks, types, i18n (en+ar), web page + form, mobile 2 screens, router + navigator + launcher | ✅ Done |
-| 2026-02-18 | Added "Start Next Inspection" card to DashboardScreen (inspector/specialist only) — queries next assigned task, shows equipment name, navigates to InspectionChecklist | ✅ Done |
-| 2026-02-18 | Added "Quick Report" action to SmartFAB in all 4 contexts (dashboard, job_list, inspection, default) — navigates to QuickFieldReport | ✅ Done |
-| 2026-02-18 | Registered QuickFieldReport screen in RootNavigator (import, param type, Stack.Screen) | ✅ Done |
-| 2026-02-18 | Added dashboard i18n keys (en/ar): start_next, next_inspection, all_caught_up, tap_to_start | ✅ Done |
-| 2026-02-18 | Created QuickFieldReportScreen (mobile): fast field reporting for equipment issues + safety hazards with camera, voice, severity/hazard chips, equipment search, i18n (en+ar), wired into RootNavigator | ✅ Done |
-| 2026-02-18 | Created QuickVoiceMessageScreen (mobile): select channel + record voice + upload + send voice message to team chat from any screen | ✅ Done |
-| 2026-02-18 | Added "Voice Message" action to SmartFAB in all contexts (dashboard, job_list, inspection, chat, default) — navigates to QuickVoiceMessage | ✅ Done |
-| 2026-02-18 | Registered QuickVoiceMessage screen in RootNavigator (import, param type, Stack.Screen) | ✅ Done |
-| 2026-02-18 | Added voice_message i18n keys (en/ar): title, select_channel, record, send, sending, sent, no_channels | ✅ Done |
-| 2026-02-18 | Fixed DefectsScreen role guard: inspectors/specialists see "View" button (navigates to DefectDetail), only admin/engineer see "Assign" button | ✅ Done |
-| 2026-02-18 | Created quick-report backend: migration (inspection_id nullable + 7 new columns), POST /api/quick-reports endpoint, notifications to all users (urgent for admin/engineer) | ✅ Done |
-| 2026-02-18 | Wired QuickFieldReportScreen to real defectsApi.createQuickReport — photo upload via filesApi, voice note, equipment/safety type, severity → real defect with full workflow | ✅ Done |
-| 2026-02-18 | Updated Defect model: new fields (reported_by_id, report_source, voice_note_url, photo_url, location_description, hazard_type, equipment_id_direct), updated to_dict with equipment from direct or inspection | ✅ Done |
-| 2026-02-18 | Created UnplannedJobScreen (mobile): log unplanned work (assist team / requested job), equipment name, description, work done, requested by, voice note, POST /api/unplanned-jobs | ✅ Done |
-| 2026-02-18 | Added VoiceNoteRecorder to CreateHandoverScreen: shift handover now supports voice recording + transcription alongside text comments | ✅ Done |
-| 2026-02-18 | Rewrote useFABContext: 9 contexts (dashboard, my_assignments, job_list, job_execution, inspection, work_plan, chat_list, chat_room, default), Quick Report in ALL contexts, role-based channel creation | ✅ Done |
-| 2026-02-18 | Created CreateChannelScreen (mobile): admin/engineer only, 3 channel types (Group/Announcement/Shift), member selection, registered in navigator | ✅ Done |
-| 2026-02-18 | Created UnplannedJob backend: model + API (POST/GET/GET-by-id) + migration + blueprint registration + engineer/admin notifications | ✅ Done |
-| 2026-02-18 | Updated SmartFAB to pass userRole to useFABContext for role-based FAB actions | ✅ Done |
-| 2026-02-19 | Expo push notifications: User model expo_push_token, POST/DELETE /api/auth/push-token endpoints, notification_service sends Expo pushes (threaded), migration, mobile AuthProvider registers + sends token, App.tsx foreground handler, shared API methods | ✅ Done |
-| 2026-02-19 | In-app notification alert system (mobile): NotificationAlertProvider (polls 15s, tracks seen IDs, badge count), NotificationToast (animated slide-in, priority color bar, countdown, tap-to-navigate, auto-dismiss 6s), notification-sounds.ts (vibration patterns), integrated in App.tsx | ✅ Done |
+| 2026-02-24 | Applied responsive scaling (scale/vscale/mscale/fontScale) to ProfileScreen.tsx and AllInspectionsScreen.tsx StyleSheet values | ✅ Done |
+| 2026-02-24 | Applied responsive scaling (scale/vscale/mscale/fontScale) to DefectsScreen.tsx and AdminMoreScreen.tsx StyleSheet values | ✅ Done |
+| 2026-02-24 | Playwright E2E web test suite — 14 spec files, 92 tests, 0 failures, 0 flaky | ✅ Done |
+| 2026-02-24 | Fixed LIFO mock ordering across all mock-based specs (catch-all first, mockLoginAs last) | ✅ Done |
+| 2026-02-24 | Fixed truthy empty array crash: `data: null` in reports/arabic/crud mocks ([] bypasses null checks) | ✅ Done |
+| 2026-02-24 | Fixed flaky logout test: wait for Ant Design dropdown item visibility before click | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
@@ -336,6 +149,8 @@
 | Expo push notifications | ✅ Done | Token registration on login/launch, Expo Push API via notification_service, foreground handler, logout cleanup |
 | In-app notification toast alerts (mobile) | ✅ Done | NotificationAlertProvider + NotificationToast + vibration sounds, mirrors web useNotificationAlerts hook |
 | Notification preferences screen (mobile) | ✅ Done | Channels (In-App/Push) by group, DND quiet hours + day picker, digest mode radio, reset to defaults, full RTL/i18n |
+| Maestro E2E test suite (mobile) | ✅ Done | 44 flows across 5 roles (Inspector/Admin/Engineer/Specialist/Test), ALL PASS — testIDs on all 71 screens, role-specific flows, i18n-aware text assertions, scroll-reset pattern for quick links |
+| Playwright E2E test suite (web) | ✅ Done | 126 tests across 17 spec files — auth, navigation, CRUD, roles, Arabic/RTL, forms, uploads, mobile viewport, reports, quality-engineer, inspection-submit, error-handling/crash-regression. ALL PASS (0 failed, 0 flaky). Runs against https://inspection-web.onrender.com |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above
@@ -345,3 +160,6 @@
 - If you discover a new issue, add it to "What Needs Work" section
 - If you fix an issue, move it to "What's Working" section
 - Keep this file always up to date — it IS your memory
+
+## History
+Full change log and feature tracker is in HISTORY.md — read it when you need past context about what was built, fixed, or changed.

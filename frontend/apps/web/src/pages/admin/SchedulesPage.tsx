@@ -300,7 +300,7 @@ Instructions:
   return (
     <div>
       {/* Anomaly Banner (critical alerts at top) */}
-      <AnomalyAlert onViewAll={() => {}} />
+      <AnomalyAlert />
 
       {/* AI Stats Cards */}
       <div style={{ marginBottom: 16 }}>

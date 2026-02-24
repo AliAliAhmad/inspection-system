@@ -44,3 +44,10 @@ frontend/packages/shared/src/**/*.js
 frontend/packages/shared/src/**/*.js.map
 frontend/packages/shared/src/**/*.d.ts
 frontend/packages/shared/src/**/*.d.ts.map
+# Nested project copy (local only — remove manually from Desktop/inspection_system/inspection-system/)
+inspection-system/
+
+# Temp / test output
+report.xml
+testsprite_tests/
+frontend/testsprite_tests/

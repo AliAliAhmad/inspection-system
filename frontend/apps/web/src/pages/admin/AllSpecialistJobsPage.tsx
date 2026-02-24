@@ -154,6 +154,23 @@ export default function AllSpecialistJobsPage() {
   const columns: ColumnsType<SpecialistJob> = [
     { title: t('specialistJobs.jobId', 'Job ID'), dataIndex: 'job_id', key: 'job_id' },
     {
+      title: t('specialistJobs.equipment', 'Equipment'),
+      key: 'equipment',
+      width: 180,
+      render: (_: unknown, record: SpecialistJob) => {
+        const eq = record.defect?.equipment;
+        if (!eq) return '-';
+        return (
+          <div>
+            <div style={{ fontWeight: 500 }}>{eq.name}</div>
+            {eq.serial_number && (
+              <div style={{ fontSize: 12, color: '#888' }}>{eq.serial_number}</div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       title: t('specialistJobs.specialist', 'Specialist'),
       dataIndex: 'specialist_id',
       key: 'specialist_id',
