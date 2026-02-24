@@ -1,17 +1,35 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MainTabNavigator from './MainTabNavigator';
+import { navigationRef } from './navigationRef';
 import SmartFAB from '../components/SmartFAB';
 import LiveAlertBanner from '../components/LiveAlertBanner';
 
-// Safe wrappers — these components may use navigation hooks that fail outside a screen
-class SafeBannerWrapper extends React.Component<{}, { hasError: boolean }> {
-  state = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  render() { return this.state.hasError ? null : <LiveAlertBanner />; }
+// Hide banner during focused inspection screens — uses navigationRef (no hook needed)
+function BannerWithRouteCheck() {
+  const [hidden, setHidden] = useState(false);
+
+  const checkRoute = useCallback(() => {
+    if (navigationRef.isReady()) {
+      const name = navigationRef.getCurrentRoute()?.name;
+      setHidden(name === 'InspectionWizard' || name === 'InspectionChecklist');
+    }
+  }, []);
+
+  useEffect(() => {
+    // Check on mount
+    checkRoute();
+    // Listen for every navigation state change
+    const unsubscribe = navigationRef.addListener('state', checkRoute);
+    return unsubscribe;
+  }, [checkRoute]);
+
+  if (hidden) return null;
+  return <LiveAlertBanner />;
 }
 
+// Safe wrapper for FAB — may use navigation hooks internally
 class SafeFABWrapper extends React.Component<{}, { hasError: boolean }> {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
@@ -199,7 +217,7 @@ export default function RootNavigator() {
   return (
     <View style={styles.container}>
       {/* Live Alert Banner — tablet: full ticker, phone: critical alerts only */}
-      <SafeBannerWrapper />
+      <BannerWithRouteCheck />
 
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />

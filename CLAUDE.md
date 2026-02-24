@@ -72,6 +72,10 @@
 | 2026-02-24 | Work Planning v6 layout: flat berth bar + plan score pill + smart inline tags; engineers-only horizontal strip (draggable); 7 flex day columns with in-place expand/collapse (flex 3.5/42px/1); right panel redesigned as Tabs (Jobs Pool + Team Pool with Mech/Elec filter); removed old bottom team pool; DroppableDay updated to accept containerStyle | ✅ |
 | 2026-02-24 | Applied responsive scaling (scale/vscale/mscale/fontScale) to ProfileScreen.tsx and AllInspectionsScreen.tsx StyleSheet values | ✅ Done |
 | 2026-02-24 | Applied responsive scaling (scale/vscale/mscale/fontScale) to DefectsScreen.tsx and AdminMoreScreen.tsx StyleSheet values | ✅ Done |
+| 2026-02-24 | Inspection Wizard UX optimization — hid LiveAlertBanner during inspection, removed progress dots, slimmed header with count badge, assembly bar→chip, question text 22px hero, urgency→compact segmented control, collapsible media icon row, red warnings→subtle hint pills, nav bar minimized (40px buttons) | ✅ Done |
+| 2026-02-24 | Inspection Wizard font bump (+2-3pt) + Arabic/RTL fix — all text +2-3 points, added 17 missing i18n keys (ar+en), full RTL support (row-reverse headers/nav/chips, right-aligned question text, flipped chevrons, RTL hint boxes with right border, writingDirection on inputs) | ✅ Done |
+| 2026-02-24 | Fixed "Couldn't get navigation state" crash — replaced `useNavigationState` hook (fails outside navigator) with `navigationRef.addListener('state')` + `getCurrentRoute()` in BannerWithRouteCheck; removed unnecessary SafeBannerWrapper error boundary | ✅ Done |
+| 2026-02-24 | Media icon yellow highlight for mandatory items — 📷 yellow bg when reading/RNR/TWL or fail answer, 🎥 yellow when fail + no photo (alternative), 🎙️ yellow when fail; yellow dot badge replaces green ✓ until captured; clears once media provided | ✅ Done |
 | 2026-02-24 | Playwright E2E web test suite — 14 spec files, 92 tests, 0 failures, 0 flaky | ✅ Done |
 | 2026-02-24 | Fixed LIFO mock ordering across all mock-based specs (catch-all first, mockLoginAs last) | ✅ Done |
 | 2026-02-24 | Fixed truthy empty array crash: `data: null` in reports/arabic/crud mocks ([] bypasses null checks) | ✅ Done |
@@ -153,6 +157,7 @@
 | Maestro E2E test suite (mobile) | ✅ Done | 44 flows across 5 roles (Inspector/Admin/Engineer/Specialist/Test), ALL PASS — testIDs on all 71 screens, role-specific flows, i18n-aware text assertions, scroll-reset pattern for quick links |
 | Playwright E2E test suite (web) | ✅ Done | 126 tests across 17 spec files — auth, navigation, CRUD, roles, Arabic/RTL, forms, uploads, mobile viewport, reports, quality-engineer, inspection-submit, error-handling/crash-regression. ALL PASS (0 failed, 0 flaky). Runs against https://inspection-web.onrender.com |
 | Work Planning v6 layout (web) | ✅ Done | Flat berth bar + plan score + smart pills; engineers horizontal strip; 7 flex day columns with in-place expand/collapse; right panel tabs (Jobs Pool + Team Pool with Mech/Elec filter) |
+| Inspection Wizard UX optimization | ✅ Done | Question-first layout, no banner/dots, collapsible media, segmented urgency, hint pills, minimized nav |
 
 ## Auto-Memory Rules
 - After EVERY code change, update the Change Log above

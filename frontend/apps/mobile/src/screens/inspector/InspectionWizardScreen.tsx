@@ -105,6 +105,7 @@ export default function InspectionWizardScreen() {
   const [localAnswers, setLocalAnswers] = useState<Record<number, LocalAnswer>>({});
   const [skippedItems, setSkippedItems] = useState<Set<number>>(new Set());
   const [fixingIncomplete, setFixingIncomplete] = useState(false);
+  const [mediaExpanded, setMediaExpanded] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(1)).current;
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
@@ -512,6 +513,7 @@ export default function InspectionWizardScreen() {
       useNativeDriver: true,
     }).start(() => {
       setCurrentIndex(index);
+      setMediaExpanded(false);
       slideAnim.setValue(0);
       // Wait for React to render new content, then fade in
       requestAnimationFrame(() => {
@@ -1198,52 +1200,6 @@ export default function InspectionWizardScreen() {
     }));
   }, [currentItem]);
 
-  // Render progress dots
-  const renderProgressDots = () => {
-    // Show max 10 dots, with current in center if possible
-    const maxDots = 10;
-    let startIndex = 0;
-    let endIndex = Math.min(totalItems, maxDots);
-
-    if (totalItems > maxDots) {
-      const halfDots = Math.floor(maxDots / 2);
-      startIndex = Math.max(0, currentIndex - halfDots);
-      endIndex = Math.min(totalItems, startIndex + maxDots);
-      if (endIndex === totalItems) {
-        startIndex = Math.max(0, totalItems - maxDots);
-      }
-    }
-
-    const dots = [];
-    for (let i = startIndex; i < endIndex; i++) {
-      const status = getItemStatus(i);
-      dots.push(
-        <TouchableOpacity
-          key={i}
-          testID={`progress-dot-${i}`}
-          style={[
-            styles.progressDot,
-            status === 'current' && styles.progressDotCurrent,
-            status === 'answered' && styles.progressDotAnswered,
-            status === 'skipped' && styles.progressDotSkipped,
-          ]}
-          onPress={() => { setFixingIncomplete(false); goToIndex(i); }}
-        >
-          {status === 'answered' && <Text style={styles.dotCheck}>✓</Text>}
-          {status === 'skipped' && <Text style={styles.dotSkip}>−</Text>}
-        </TouchableOpacity>
-      );
-    }
-
-    return (
-      <View style={styles.progressDotsContainer}>
-        {startIndex > 0 && <Text style={styles.dotsEllipsis}>...</Text>}
-        {dots}
-        {endIndex < totalItems && <Text style={styles.dotsEllipsis}>...</Text>}
-      </View>
-    );
-  };
-
   // Render answer input based on type with validation colors
   const renderAnswerInput = () => {
     if (!currentItem) return null;
@@ -1325,7 +1281,7 @@ export default function InspectionWizardScreen() {
               val && validation === 'fail' && styles.inputFailed,
             ]}>
               <TextInput
-                style={styles.numericInput}
+                style={[styles.numericInput, isArabic && { textAlign: 'right' }]}
                 value={val}
                 onChangeText={handleAnswer}
                 placeholder={t('inspection.enterValue', 'Enter value')}
@@ -1354,7 +1310,7 @@ export default function InspectionWizardScreen() {
         return (
           <View>
             <VoiceTextInput
-              style={[styles.textInput, val && styles.textInputAnswered]}
+              style={[styles.textInput, val && styles.textInputAnswered, isArabic && { textAlign: 'right', writingDirection: 'rtl' }]}
               value={val}
               onChangeText={handleAnswer}
               placeholder={t('inspection.answer')}
@@ -1476,11 +1432,14 @@ export default function InspectionWizardScreen() {
     return itemMissingMedia(item);
   });
 
+  // Auto-expand media when validation is fail (inspector needs to add evidence)
+  const shouldShowMedia = mediaExpanded || validation === 'fail';
+
   return (
     <View style={styles.container} testID="inspection-wizard-screen">
-      {/* Header with equipment info and buttons */}
+      {/* Slim header — single row */}
       <View style={styles.header} testID="wizard-header">
-        <View style={styles.headerTop}>
+        <View style={[styles.headerTop, isArabic && { flexDirection: 'row-reverse' }]}>
           <TouchableOpacity
             testID="wizard-exit-btn"
             style={styles.exitButton}
@@ -1499,36 +1458,24 @@ export default function InspectionWizardScreen() {
               );
             }}
           >
-            <Text style={styles.exitButtonText}>← {t('inspection.exit', 'Exit')}</Text>
+            <Text style={styles.exitButtonText}>{isArabic ? '→' : '←'} {t('inspection.exit', 'Exit')}</Text>
           </TouchableOpacity>
           <Text style={styles.equipmentName} numberOfLines={1}>
             {inspData.equipment?.name ?? `Equipment #${inspData.equipment_id}`}
           </Text>
+          <View style={styles.headerCountBadge}>
+            <Text style={styles.headerCountText}>{answeredCount}/{totalItems}</Text>
+          </View>
           <TouchableOpacity testID="wizard-switch-list-btn" style={styles.switchButton} onPress={switchToListMode}>
             <Text style={styles.switchButtonText}>☰ {t('inspection.listMode', 'List')}</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.progressText}>
-          {answeredCount}/{totalItems} {t('inspection.answered', 'answered')}
-          {skippedCount > 0 && ` • ${skippedCount} ${t('inspection.skipped', 'skipped')}`}
-        </Text>
-      </View>
-
-      {/* Progress dots */}
-      {renderProgressDots()}
-
-      {/* Assembly/Part indicator */}
-      <View style={styles.assemblyIndicator}>
-        <Text style={styles.assemblyText}>
-          📦 {currentAssembly} ({itemInAssembly}/{assemblyTotal})
-          {currentPart && ` → ${currentPart}`}
-        </Text>
       </View>
 
       {/* Colleague pre-fill banner */}
       {Object.keys(prefilledItems).length > 0 && colleagueData?.colleague && (
         <View style={styles.colleagueBanner}>
-          <Text style={styles.colleagueBannerText}>
+          <Text style={[styles.colleagueBannerText, isArabic && { textAlign: 'right', writingDirection: 'rtl' }]}>
             👥 {Object.keys(prefilledItems).length} {t('inspection.questionsPrefilledBy', 'questions pre-filled by')} {colleagueData.colleague.type === 'mechanical' ? t('inspection.mechInspector', 'Mech Inspector') : t('inspection.elecInspector', 'Elec Inspector')}
           </Text>
         </View>
@@ -1538,57 +1485,17 @@ export default function InspectionWizardScreen() {
       {/* Question card with animation */}
       <Animated.View style={[styles.questionCard, { opacity: cardOpacity }]}>
 
-        {/* ── PINNED QUESTION — always visible while scrolling ──────── */}
+        {/* ── PINNED QUESTION — always visible, the hero ──────── */}
         <View style={styles.questionSticky}>
-          {/* Question number + total */}
-          <Text style={styles.questionNumber}>
-            Q {currentIndex + 1} / {totalItems}
-          </Text>
-
-          {/* Question text — large and always visible */}
-          <Text style={styles.questionText}>
-            {isArabic && currentItem.question_text_ar
-              ? currentItem.question_text_ar
-              : currentItem.question_text}
-          </Text>
-
-          {/* Pre-filled from colleague indicator */}
-          {currentItem && prefilledItems[currentItem.id] && (
-            <View style={styles.prefilledBadge}>
-              <Text style={styles.prefilledBadgeText}>
-                👤 {t('inspection.prefilledFrom', 'Pre-filled from')} {prefilledItems[currentItem.id].type === 'mechanical' ? t('inspection.mechInspector', 'Mech Inspector') : t('inspection.elecInspector', 'Elec Inspector')}: {prefilledItems[currentItem.id].name}
-              </Text>
-            </View>
-          )}
-
-          {/* Expected result hint with validation */}
-          {expectedResult && (
-            <View style={[
-              styles.hintBox,
-              currentAnswer?.answer_value && validation === 'pass' && styles.hintBoxPass,
-              currentAnswer?.answer_value && validation === 'fail' && styles.hintBoxFail,
-            ]}>
-              <View style={styles.hintHeader}>
-                <Text style={[
-                  styles.hintLabel,
-                  validation === 'pass' && styles.hintLabelPass,
-                  validation === 'fail' && styles.hintLabelFail,
-                ]}>
-                  {t('inspection.expectedResult', 'Expected Result')}:
+          {/* Assembly chip + category/critical badges — single row */}
+          <View style={[styles.chipRow, isArabic && { flexDirection: 'row-reverse' }]}>
+            {currentAssembly && currentAssembly !== 'General' && (
+              <View style={styles.assemblyChip}>
+                <Text style={styles.assemblyChipText}>
+                  {currentAssembly} ({itemInAssembly}/{assemblyTotal}){currentPart ? ` → ${currentPart}` : ''}
                 </Text>
-                {currentAnswer?.answer_value && validation === 'pass' && (
-                  <Text style={styles.validationBadgePass}>✓ {t('inspection.withinRange', 'OK')}</Text>
-                )}
-                {currentAnswer?.answer_value && validation === 'fail' && (
-                  <Text style={styles.validationBadgeFail}>✗ {t('inspection.outOfRange', 'Out of range')}</Text>
-                )}
               </View>
-              <Text style={styles.hintText}>{expectedResult}</Text>
-            </View>
-          )}
-
-          {/* Category and critical badges */}
-          <View style={styles.badgeRow}>
+            )}
             {currentItem.category && (
               <View style={[styles.badge, currentItem.category === 'mechanical' ? styles.badgeMechanical : styles.badgeElectrical]}>
                 <Text style={styles.badgeText}>{currentItem.category}</Text>
@@ -1600,233 +1507,251 @@ export default function InspectionWizardScreen() {
               </View>
             )}
           </View>
+
+          {/* Question number */}
+          <Text style={[styles.questionNumber, isArabic && { textAlign: 'right' }]}>
+            {isArabic ? `${totalItems} / ${currentIndex + 1} س` : `Q ${currentIndex + 1} / ${totalItems}`}
+          </Text>
+
+          {/* Question text — THE HERO */}
+          <Text style={[styles.questionText, isArabic && { textAlign: 'right', writingDirection: 'rtl' }]}>
+            {isArabic && currentItem.question_text_ar
+              ? currentItem.question_text_ar
+              : currentItem.question_text}
+          </Text>
+
+          {/* Pre-filled from colleague indicator */}
+          {currentItem && prefilledItems[currentItem.id] && (
+            <View style={[styles.prefilledBadge, isArabic && { flexDirection: 'row-reverse', borderLeftWidth: 0, borderRightWidth: 4, borderRightColor: '#1976D2' }]}>
+              <Text style={[styles.prefilledBadgeText, isArabic && { textAlign: 'right', writingDirection: 'rtl' }]}>
+                👤 {t('inspection.prefilledFrom', 'Pre-filled from')} {prefilledItems[currentItem.id].type === 'mechanical' ? t('inspection.mechInspector', 'Mech Inspector') : t('inspection.elecInspector', 'Elec Inspector')}: {prefilledItems[currentItem.id].name}
+              </Text>
+            </View>
+          )}
+
+          {/* Expected result hint with validation */}
+          {expectedResult && (
+            <View style={[
+              styles.hintBox,
+              currentAnswer?.answer_value && validation === 'pass' && styles.hintBoxPass,
+              currentAnswer?.answer_value && validation === 'fail' && styles.hintBoxFail,
+              isArabic && { borderLeftWidth: 0, borderRightWidth: 4, borderRightColor: '#9E9E9E' },
+              isArabic && currentAnswer?.answer_value && validation === 'pass' && { borderRightColor: '#4CAF50' },
+              isArabic && currentAnswer?.answer_value && validation === 'fail' && { borderRightColor: '#F44336' },
+            ]}>
+              <View style={[styles.hintHeader, isArabic && { flexDirection: 'row-reverse' }]}>
+                <Text style={[
+                  styles.hintLabel,
+                  validation === 'pass' && styles.hintLabelPass,
+                  validation === 'fail' && styles.hintLabelFail,
+                  isArabic && { textAlign: 'right' },
+                ]}>
+                  {t('inspection.expectedResult', 'Expected Result')}:
+                </Text>
+                {currentAnswer?.answer_value && validation === 'pass' && (
+                  <Text style={styles.validationBadgePass}>✓ {t('inspection.withinRange', 'OK')}</Text>
+                )}
+                {currentAnswer?.answer_value && validation === 'fail' && (
+                  <Text style={styles.validationBadgeFail}>✗ {t('inspection.outOfRange', 'Out of range')}</Text>
+                )}
+              </View>
+              <Text style={[styles.hintText, isArabic && { textAlign: 'right', writingDirection: 'rtl' }]}>{expectedResult}</Text>
+            </View>
+          )}
         </View>
 
         {/* ── SCROLLABLE ANSWER SECTION ─────────────────────────────── */}
         <ScrollView contentContainerStyle={styles.questionContent} showsVerticalScrollIndicator={false}>
           {/* Action if fail hint */}
           {actionIfFail && validation === 'fail' && (
-            <View style={[styles.hintBox, styles.warningBox]}>
-              <Text style={[styles.hintLabel, styles.warningLabel]}>
+            <View style={[styles.hintBox, styles.warningBox, isArabic && { borderLeftWidth: 0, borderRightWidth: 4, borderRightColor: '#FF9800' }]}>
+              <Text style={[styles.hintLabel, styles.warningLabel, isArabic && { textAlign: 'right' }]}>
                 ⚠️ {t('inspection.actionIfFail', 'Action Required')}:
               </Text>
-              <Text style={styles.hintText}>{actionIfFail}</Text>
+              <Text style={[styles.hintText, isArabic && { textAlign: 'right', writingDirection: 'rtl' }]}>{actionIfFail}</Text>
             </View>
           )}
 
           {/* Answer input */}
           {renderAnswerInput()}
 
-          {/* Urgency Level Selector */}
-          <View style={styles.urgencySection}>
-            <Text style={styles.urgencyLabel}>
-              {t('inspection.urgencyLevel', 'Urgency Level')}
-            </Text>
-            <View style={styles.urgencyRow}>
-              {([
-                { level: 0, label: t('inspection.urgencyOk', 'OK'), color: '#4CAF50', bgColor: '#E8F5E9' },
-                { level: 1, label: t('inspection.urgencyMonitor', 'Monitor'), color: '#FF9800', bgColor: '#FFF3E0' },
-                { level: 2, label: t('inspection.urgencyAttention', 'Attention'), color: '#FF5722', bgColor: '#FBE9E7' },
-                { level: 3, label: t('inspection.urgencyCritical', 'Critical'), color: '#F44336', bgColor: '#FFEBEE' },
-              ] as const).map(({ level, label, color, bgColor }) => {
-                const isActive = currentAnswer?.urgency_level === level;
-                return (
-                  <TouchableOpacity
-                    key={level}
-                    testID={`urgency-btn-${level}`}
+          {/* Urgency — compact segmented control */}
+          <View style={styles.urgencySegmented}>
+            {([
+              { level: 0, label: t('inspection.urgencyOk', 'OK'), color: '#4CAF50' },
+              { level: 1, label: t('inspection.urgencyMonitor', 'Monitor'), color: '#FF9800' },
+              { level: 2, label: t('inspection.urgencyAttention', 'Attn'), color: '#FF5722' },
+              { level: 3, label: t('inspection.urgencyCritical', 'Crit'), color: '#F44336' },
+            ] as const).map(({ level, label, color }, idx, arr) => {
+              const isActive = currentAnswer?.urgency_level === level;
+              return (
+                <TouchableOpacity
+                  key={level}
+                  testID={`urgency-btn-${level}`}
+                  style={[
+                    styles.segButton,
+                    idx < arr.length - 1 && styles.segButtonBorder,
+                    isActive && { backgroundColor: color },
+                  ]}
+                  onPress={() => handleUrgencyChange(level)}
+                >
+                  <Text
                     style={[
-                      styles.urgencyButton,
-                      { borderColor: color },
-                      isActive && { backgroundColor: color },
+                      styles.segButtonText,
+                      { color },
+                      isActive && { color: '#fff' },
                     ]}
-                    onPress={() => handleUrgencyChange(level)}
                   >
-                    <Text
-                      style={[
-                        styles.urgencyButtonText,
-                        { color: color },
-                        isActive && { color: '#fff' },
-                      ]}
-                    >
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
-          {/* Media section - Photo, Video, Voice */}
-          <View style={styles.mediaSection}>
-            {/* Photo Row */}
-            <View style={styles.mediaSectionRow}>
-              <TouchableOpacity
-                style={[styles.mediaButton, isUploading && styles.buttonDisabled]}
-                onPress={handleTakePhoto}
-                disabled={isUploading}
-              >
-                <Text style={styles.mediaButtonText}>📷</Text>
-              </TouchableOpacity>
+          {/* Media — collapsible icon row */}
+          <TouchableOpacity
+            style={[styles.mediaToggle, isArabic && { flexDirection: 'row-reverse' }]}
+            onPress={() => setMediaExpanded(!shouldShowMedia)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.mediaIconRow}>
+              <View style={[styles.mediaIconItem, !hasPhoto && (requiresPhotoVerification || validation === 'fail') && styles.mediaIconRequired]}>
+                <Text style={styles.mediaIconEmoji}>📷</Text>
+                {hasPhoto
+                  ? <View style={styles.mediaCheckBadge}><Text style={styles.mediaCheckText}>✓</Text></View>
+                  : (requiresPhotoVerification || validation === 'fail') && <View style={styles.mediaRequiredDot} />}
+              </View>
+              <View style={[styles.mediaIconItem, !hasVideo && validation === 'fail' && !hasPhoto && styles.mediaIconRequired]}>
+                <Text style={styles.mediaIconEmoji}>🎥</Text>
+                {hasVideo
+                  ? <View style={styles.mediaCheckBadge}><Text style={styles.mediaCheckText}>✓</Text></View>
+                  : validation === 'fail' && !hasPhoto && <View style={styles.mediaRequiredDot} />}
+              </View>
+              <View style={[styles.mediaIconItem, !hasVoiceNote && validation === 'fail' && styles.mediaIconRequired]}>
+                <Text style={styles.mediaIconEmoji}>🎙️</Text>
+                {hasVoiceNote
+                  ? <View style={styles.mediaCheckBadge}><Text style={styles.mediaCheckText}>✓</Text></View>
+                  : validation === 'fail' && <View style={styles.mediaRequiredDot} />}
+              </View>
+            </View>
+            <Text style={styles.mediaToggleLabel}>
+              {(hasPhoto || hasVideo || hasVoiceNote)
+                ? t('inspection.mediaAttached', 'Media attached')
+                : t('inspection.addMedia', 'Add media')}
+            </Text>
+            <Text style={styles.mediaToggleArrow}>{shouldShowMedia ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
 
-              {photoSource && (
-                <View style={styles.mediaPreviewContainer}>
-                  <View style={styles.photoContainer}>
-                    <Image source={{ uri: photoSource }} style={styles.photoPreview} resizeMode="cover" />
-                    {isUploading && (
-                      <View style={styles.uploadOverlay}>
-                        <ActivityIndicator color="#fff" size="large" />
-                        <Text style={styles.uploadingText}>{t('inspection.uploadingPhoto', 'Uploading...')}</Text>
-                      </View>
-                    )}
-                    {currentAnswer?.uploadFailed && currentAnswer?.photo_uri && (
-                      <TouchableOpacity
-                        style={styles.retryButtonSmall}
-                        onPress={() => uploadPhoto(currentItem.id, currentAnswer.photo_uri!, currentItem.id + '.jpg')}
-                      >
-                        <Text style={styles.retryButtonTextSmall}>🔄</Text>
-                      </TouchableOpacity>
-                    )}
+          {/* Expanded media content */}
+          {shouldShowMedia && (
+            <View style={styles.mediaSection}>
+              {/* Photo Row */}
+              <View style={styles.mediaSectionRow}>
+                <TouchableOpacity
+                  style={[styles.mediaButton, isUploading && styles.buttonDisabled]}
+                  onPress={handleTakePhoto}
+                  disabled={isUploading}
+                >
+                  <Text style={styles.mediaButtonText}>📷</Text>
+                </TouchableOpacity>
+
+                {photoSource && (
+                  <View style={styles.mediaPreviewContainer}>
+                    <View style={styles.photoContainer}>
+                      <Image source={{ uri: photoSource }} style={styles.photoPreview} resizeMode="cover" />
+                      {isUploading && (
+                        <View style={styles.uploadOverlay}>
+                          <ActivityIndicator color="#fff" size="large" />
+                          <Text style={styles.uploadingText}>{t('inspection.uploadingPhoto', 'Uploading...')}</Text>
+                        </View>
+                      )}
+                      {currentAnswer?.uploadFailed && currentAnswer?.photo_uri && (
+                        <TouchableOpacity
+                          style={styles.retryButtonSmall}
+                          onPress={() => uploadPhoto(currentItem.id, currentAnswer.photo_uri!, currentItem.id + '.jpg')}
+                        >
+                          <Text style={styles.retryButtonTextSmall}>🔄</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.annotateButton}
+                      onPress={() => {
+                        navigation.navigate('PhotoAnnotation', {
+                          imageUri: photoSource,
+                          returnScreen: 'InspectionWizard',
+                          returnParams: { id },
+                        });
+                      }}
+                      disabled={isUploading}
+                    >
+                      <Text style={styles.annotateButtonIcon}>✏️</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.mediaDeleteButton}
+                      onPress={handlePhotoDelete}
+                    >
+                      <Text style={styles.deleteIconSmall}>🗑️</Text>
+                    </TouchableOpacity>
                   </View>
-                  {/* Annotate button */}
-                  <TouchableOpacity
-                    style={styles.annotateButton}
-                    onPress={() => {
-                      navigation.navigate('PhotoAnnotation', {
-                        imageUri: photoSource,
-                        returnScreen: 'InspectionWizard',
-                        returnParams: { id },
-                      });
-                    }}
-                    disabled={isUploading}
-                  >
-                    <Text style={styles.annotateButtonIcon}>✏️</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.mediaDeleteButton}
-                    onPress={handlePhotoDelete}
-                  >
-                    <Text style={styles.deleteIconSmall}>🗑️</Text>
-                  </TouchableOpacity>
+                )}
+
+                {!photoSource && !isUploading && (
+                  <Text style={styles.mediaHintText}>{t('inspection.tapToAddPhoto', 'Tap to add photo')}</Text>
+                )}
+              </View>
+
+              {/* Photo AI Analysis */}
+              {currentAnswer?.photo_ai_analysis && (
+                <View style={styles.aiAnalysisBox}>
+                  <Text style={styles.aiAnalysisLabel}>🤖 {t('inspection.photoAiAnalysis', 'Photo AI Analysis')}:</Text>
+                  {currentAnswer.photo_ai_analysis.en && (
+                    <Text style={styles.aiAnalysisText}>{currentAnswer.photo_ai_analysis.en}</Text>
+                  )}
+                  {currentAnswer.photo_ai_analysis.ar && (
+                    <Text style={[styles.aiAnalysisText, styles.aiAnalysisTextAr]}>{currentAnswer.photo_ai_analysis.ar}</Text>
+                  )}
                 </View>
               )}
 
-              {!photoSource && !isUploading && (
-                <Text style={styles.mediaHintText}>{t('inspection.tapToAddPhoto', 'Tap to add photo')}</Text>
+              {/* Video */}
+              <VideoRecorder
+                onVideoRecorded={handleVideoRecorded}
+                onVideoDeleted={handleVideoDeleted}
+                existingVideoUrl={currentAnswer?.video_url}
+                disabled={isUploading}
+              />
+
+              {currentAnswer?.video_ai_analysis && (
+                <View style={styles.aiAnalysisBox}>
+                  <Text style={styles.aiAnalysisLabel}>🎥 {t('inspection.videoAiAnalysis', 'Video AI Analysis')}:</Text>
+                  {currentAnswer.video_ai_analysis.en && (
+                    <Text style={styles.aiAnalysisText}>{currentAnswer.video_ai_analysis.en}</Text>
+                  )}
+                  {currentAnswer.video_ai_analysis.ar && (
+                    <Text style={[styles.aiAnalysisText, styles.aiAnalysisTextAr]}>{currentAnswer.video_ai_analysis.ar}</Text>
+                  )}
+                </View>
               )}
-            </View>
 
-            {/* Photo AI Analysis - OUTSIDE the row for full width */}
-            {currentAnswer?.photo_ai_analysis && (
-              <View style={styles.aiAnalysisBox}>
-                <Text style={styles.aiAnalysisLabel}>🤖 {t('inspection.photoAiAnalysis', 'Photo AI Analysis')}:</Text>
-                {currentAnswer.photo_ai_analysis.en && (
-                  <Text style={styles.aiAnalysisText}>
-                    {currentAnswer.photo_ai_analysis.en}
-                  </Text>
-                )}
-                {currentAnswer.photo_ai_analysis.ar && (
-                  <Text style={[styles.aiAnalysisText, styles.aiAnalysisTextAr]}>
-                    {currentAnswer.photo_ai_analysis.ar}
-                  </Text>
-                )}
-              </View>
-            )}
-
-            {/* Video Row */}
-            <VideoRecorder
-              onVideoRecorded={handleVideoRecorded}
-              onVideoDeleted={handleVideoDeleted}
-              existingVideoUrl={currentAnswer?.video_url}
-              disabled={isUploading}
-            />
-
-            {/* Video AI Analysis - Full width below video */}
-            {currentAnswer?.video_ai_analysis && (
-              <View style={styles.aiAnalysisBox}>
-                <Text style={styles.aiAnalysisLabel}>🎥 {t('inspection.videoAiAnalysis', 'Video AI Analysis')}:</Text>
-                {currentAnswer.video_ai_analysis.en && (
-                  <Text style={styles.aiAnalysisText}>
-                    {currentAnswer.video_ai_analysis.en}
-                  </Text>
-                )}
-                {currentAnswer.video_ai_analysis.ar && (
-                  <Text style={[styles.aiAnalysisText, styles.aiAnalysisTextAr]}>
-                    {currentAnswer.video_ai_analysis.ar}
-                  </Text>
-                )}
-              </View>
-            )}
-
-            {/* Voice note Row */}
-            <VoiceNoteRecorder
-              key={`voice-${currentItem.id}`}
-              onVoiceNoteRecorded={handleVoiceNoteRecorded}
-              onVoiceNoteDeleted={handleVoiceNoteDeleted}
-              existingVoiceUrl={currentAnswer?.voice_note_url}
-              existingTranscription={currentAnswer?.voice_transcription}
-              disabled={isUploading}
-              language={i18n.language}
-            />
-          </View>
-
-          {/* Validation warning for failed items - need (photo+voice) or (video+voice) */}
-          {validation === 'fail' && !hasValidMediaCombo && (
-            <View style={styles.validationWarning}>
-              <Text style={styles.warningText}>
-                ⚠️ {t('inspection.fail_requires_media_combo', 'Failed items require (Photo + Voice) or (Video + Voice)')}
-              </Text>
-            </View>
-          )}
-
-          {/* Validation warning for reading questions without photo */}
-          {requiresPhotoVerification && !hasPhoto && (
-            <View style={styles.validationWarning}>
-              <Text style={styles.warningText}>
-                📸 {t('inspection.reading_requires_photo', 'Photo required to verify meter reading')}
-              </Text>
+              {/* Voice note */}
+              <VoiceNoteRecorder
+                key={`voice-${currentItem.id}`}
+                onVoiceNoteRecorded={handleVoiceNoteRecorded}
+                onVoiceNoteDeleted={handleVoiceNoteDeleted}
+                existingVoiceUrl={currentAnswer?.voice_note_url}
+                existingTranscription={currentAnswer?.voice_transcription}
+                disabled={isUploading}
+                language={i18n.language}
+              />
             </View>
           )}
         </ScrollView>
       </Animated.View>
 
-      {/* Warning if fail without valid media combo */}
-      {isFailWithoutMedia && (
-        <View style={styles.requiredMediaWarning}>
-          <Text style={styles.requiredMediaWarningText}>
-            ⚠️ {t('inspection.fail_requires_media_combo_proceed', 'Failed items require (Photo + Voice) or (Video + Voice) to proceed')}
-          </Text>
-        </View>
-      )}
-
-      {/* Warning if numeric field is empty */}
-      {isNumericFieldEmpty && (
-        <View style={styles.requiredMediaWarning}>
-          <Text style={styles.requiredMediaWarningText}>
-            ⚠️ {t('inspection.numeric_required', 'Enter a number or type "faulty" if meter is broken')}
-          </Text>
-        </View>
-      )}
-
-      {/* Warning if reading question without photo */}
-      {isReadingWithoutPhoto && (
-        <View style={styles.requiredMediaWarning}>
-          <Text style={styles.requiredMediaWarningText}>
-            📸 {t('inspection.reading_photo_required', 'Photo required to verify meter reading')}
-          </Text>
-        </View>
-      )}
-
-      {/* Warning if urgency not selected */}
-      {needsUrgency && (
-        <View style={styles.requiredMediaWarning}>
-          <Text style={styles.requiredMediaWarningText}>
-            ⚠️ {t('inspection.urgency_required', 'Select an urgency level before proceeding')}
-          </Text>
-        </View>
-      )}
-
-      {/* Navigation buttons */}
-      <View style={styles.navButtonRow}>
+      {/* Slim navigation bar with inline hint */}
+      <View style={[styles.navButtonRow, isArabic && { flexDirection: 'row-reverse' }]}>
         {/* ← Previous */}
         <TouchableOpacity
           testID="wizard-prev-btn"
@@ -1836,18 +1761,32 @@ export default function InspectionWizardScreen() {
           activeOpacity={0.7}
         >
           <Text style={[styles.navButtonChevron, currentIndex === 0 && styles.navButtonTextDisabled]}>
-            ‹
+            {isArabic ? '›' : '‹'}
           </Text>
         </TouchableOpacity>
 
-        {/* Center: progress */}
+        {/* Center: mini progress + hint pill */}
         <View style={styles.navCenter}>
-          <Text style={styles.navProgressText}>
-            {currentIndex + 1} <Text style={styles.navProgressOf}>of</Text> {totalItems}
-          </Text>
+          <View style={styles.navTopRow}>
+            <Text style={styles.navProgressText}>
+              {currentIndex + 1} <Text style={styles.navProgressOf}>{t('inspection.of', 'of')}</Text> {totalItems}
+            </Text>
+          </View>
           <View style={styles.navProgressBar}>
             <View style={[styles.navProgressFill, { width: `${Math.round(((currentIndex + 1) / totalItems) * 100)}%` as any }]} />
           </View>
+          {/* Subtle hint pill — replaces big red warning boxes */}
+          {!canProceedToNext && (
+            <View style={styles.hintPill}>
+              <Text style={styles.hintPillText}>
+                {isFailWithoutMedia ? '📸+🎙️ ' + t('inspection.mediaNeeded', 'Media needed')
+                  : isNumericFieldEmpty ? '🔢 ' + t('inspection.enterValue', 'Enter value')
+                  : isReadingWithoutPhoto ? '📸 ' + t('inspection.photoNeeded', 'Photo needed')
+                  : needsUrgency ? '⚡ ' + t('inspection.setUrgency', 'Set urgency')
+                  : ''}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* → Next / Go to Missing / Submit */}
@@ -1863,7 +1802,7 @@ export default function InspectionWizardScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={styles.navButtonActionText}>
-                    {t('inspection.goToMissing', 'Go to Missing')} ›
+                    {isArabic ? '‹ ' : ''}{t('inspection.goToMissing', 'Go to Missing')}{isArabic ? '' : ' ›'}
                   </Text>
                 </TouchableOpacity>
               );
@@ -1901,7 +1840,7 @@ export default function InspectionWizardScreen() {
               styles.navButtonChevronPrimary,
               !canProceedToNext && styles.navButtonTextDisabled,
             ]}>
-              ›
+              {isArabic ? '‹' : '›'}
             </Text>
           </TouchableOpacity>
         )}
@@ -1937,19 +1876,31 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#1976D2',
-    padding: 16,
-    paddingTop: 50,
+    paddingHorizontal: 14,
+    paddingTop: 48,
+    paddingBottom: 10,
   },
   headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   equipmentName: {
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
     flex: 1,
+  },
+  headerCountBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  headerCountText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   exitButton: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -1960,7 +1911,7 @@ const styles = StyleSheet.create({
   },
   exitButtonText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
   },
   switchButton: {
@@ -1971,7 +1922,7 @@ const styles = StyleSheet.create({
   },
   switchButtonText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
   },
   progressText: {
@@ -1979,58 +1930,21 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     marginTop: 6,
   },
-  progressDotsContainer: {
+  // ─── Chip row (assembly + category + critical in one line) ───
+  chipRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    flexWrap: 'wrap',
     gap: 6,
+    marginBottom: 6,
   },
-  progressDot: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#e0e0e0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressDotCurrent: {
-    backgroundColor: '#1976D2',
-    transform: [{ scale: 1.2 }],
-  },
-  progressDotAnswered: {
-    backgroundColor: '#4CAF50',
-  },
-  progressDotSkipped: {
-    backgroundColor: '#FF9800',
-  },
-  dotCheck: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  dotSkip: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  dotsEllipsis: {
-    color: '#999',
-    fontSize: 12,
-  },
-  assemblyIndicator: {
+  assemblyChip: {
     backgroundColor: '#E3F2FD',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#BBDEFB',
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
-  assemblyText: {
-    fontSize: 13,
+  assemblyChipText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#1565C0',
   },
@@ -2058,18 +1972,18 @@ const styles = StyleSheet.create({
     paddingTop: 14,
   },
   questionNumber: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1976D2',
     marginBottom: 6,
     letterSpacing: 0.3,
   },
   questionText: {
-    fontSize: 20,
+    fontSize: 25,
     fontWeight: '700',
     color: '#1a1a1a',
-    lineHeight: 28,
-    marginBottom: 12,
+    lineHeight: 34,
+    marginBottom: 10,
   },
   colleagueBanner: {
     backgroundColor: '#E3F2FD',
@@ -2164,8 +2078,8 @@ const styles = StyleSheet.create({
   },
   badgeRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: 6,
+    marginBottom: 6,
   },
   badge: {
     paddingHorizontal: 10,
@@ -2221,7 +2135,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
   },
   answerButtonText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     color: '#424242',
     letterSpacing: 0.5,
@@ -2285,41 +2199,94 @@ const styles = StyleSheet.create({
     borderColor: '#4CAF50',
     backgroundColor: '#E8F5E9',
   },
-  // ─── Urgency Selector ───
-  urgencySection: {
-    marginBottom: 16,
-    backgroundColor: '#FAFAFA',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  urgencyLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#424242',
-    marginBottom: 10,
-  },
-  urgencyRow: {
+  // ─── Urgency — compact segmented control ───
+  urgencySegmented: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  urgencyButton: {
-    minWidth: 70,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
     borderRadius: 10,
-    borderWidth: 2,
-    alignItems: 'center',
-    flexGrow: 1,
-    flexBasis: '22%',
-    marginBottom: 4,
+    overflow: 'hidden',
+    marginBottom: 12,
   },
-  urgencyButtonText: {
+  segButton: {
+    flex: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  segButtonBorder: {
+    borderRightWidth: 1,
+    borderRightColor: '#E0E0E0',
+  },
+  segButtonText: {
     fontSize: 13,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  // ─── Media toggle (collapsed icon row) ───
+  mediaToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 10,
+  },
+  mediaIconRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  mediaIconItem: {
+    position: 'relative',
+  },
+  mediaIconRequired: {
+    backgroundColor: '#FFF9C4',
+    borderRadius: 8,
+    padding: 2,
+  },
+  mediaRequiredDot: {
+    position: 'absolute',
+    top: -2,
+    right: -6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFD600',
+  },
+  mediaIconEmoji: {
+    fontSize: 20,
+  },
+  mediaCheckBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4CAF50',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaCheckText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+  mediaToggleLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#999',
+  },
+  mediaToggleArrow: {
+    fontSize: 11,
+    color: '#999',
   },
   mediaSection: {
     marginBottom: 16,
@@ -2477,19 +2444,19 @@ const styles = StyleSheet.create({
   },
   navButtonRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingBottom: 24,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e8e8e8',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   navButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: '#1976D2',
     alignItems: 'center',
@@ -2511,11 +2478,11 @@ const styles = StyleSheet.create({
     boxShadow: 'none',
   },
   navButtonChevron: {
-    fontSize: 30,
+    fontSize: 22,
     fontWeight: '400',
     color: '#1976D2',
-    lineHeight: 36,
-    marginTop: -2,
+    lineHeight: 26,
+    marginTop: -1,
   },
   navButtonChevronPrimary: {
     color: '#fff',
@@ -2534,7 +2501,11 @@ const styles = StyleSheet.create({
   navCenter: {
     flex: 1,
     alignItems: 'center',
-    gap: 6,
+    gap: 3,
+  },
+  navTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   navProgressText: {
     fontSize: 14,
@@ -2555,9 +2526,25 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   navProgressFill: {
-    height: 4,
+    height: 3,
     backgroundColor: '#1976D2',
     borderRadius: 2,
+  },
+  // ─── Hint pill (replaces red warning boxes) ───
+  hintPill: {
+    backgroundColor: '#FFF3E0',
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    marginTop: 2,
+  },
+  hintPillText: {
+    fontSize: 12,
+    color: '#E65100',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   navButtonAction: {
     backgroundColor: '#FF9800',
