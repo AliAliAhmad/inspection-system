@@ -1220,6 +1220,7 @@ export default function InspectionWizardScreen() {
       dots.push(
         <TouchableOpacity
           key={i}
+          testID={`progress-dot-${i}`}
           style={[
             styles.progressDot,
             status === 'current' && styles.progressDotCurrent,
@@ -1255,6 +1256,7 @@ export default function InspectionWizardScreen() {
         return (
           <View style={styles.buttonRow}>
             <TouchableOpacity
+              testID="wizard-yes-btn"
               style={[
                 styles.answerButton,
                 val === 'yes' && styles.answerButtonActiveGreen,
@@ -1267,6 +1269,7 @@ export default function InspectionWizardScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="wizard-no-btn"
               style={[
                 styles.answerButton,
                 val === 'no' && styles.answerButtonActiveRed,
@@ -1285,6 +1288,7 @@ export default function InspectionWizardScreen() {
         return (
           <View style={styles.buttonRow}>
             <TouchableOpacity
+              testID="wizard-pass-btn"
               style={[
                 styles.answerButton,
                 val === 'pass' && styles.answerButtonActiveGreen,
@@ -1297,6 +1301,7 @@ export default function InspectionWizardScreen() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="wizard-fail-btn"
               style={[
                 styles.answerButton,
                 val === 'fail' && styles.answerButtonActiveRed,
@@ -1472,11 +1477,12 @@ export default function InspectionWizardScreen() {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="inspection-wizard-screen">
       {/* Header with equipment info and buttons */}
-      <View style={styles.header}>
+      <View style={styles.header} testID="wizard-header">
         <View style={styles.headerTop}>
           <TouchableOpacity
+            testID="wizard-exit-btn"
             style={styles.exitButton}
             onPress={() => {
               Alert.alert(
@@ -1498,7 +1504,7 @@ export default function InspectionWizardScreen() {
           <Text style={styles.equipmentName} numberOfLines={1}>
             {inspData.equipment?.name ?? `Equipment #${inspData.equipment_id}`}
           </Text>
-          <TouchableOpacity style={styles.switchButton} onPress={switchToListMode}>
+          <TouchableOpacity testID="wizard-switch-list-btn" style={styles.switchButton} onPress={switchToListMode}>
             <Text style={styles.switchButtonText}>☰ {t('inspection.listMode', 'List')}</Text>
           </TouchableOpacity>
         </View>
@@ -1531,13 +1537,15 @@ export default function InspectionWizardScreen() {
 
       {/* Question card with animation */}
       <Animated.View style={[styles.questionCard, { opacity: cardOpacity }]}>
-        <ScrollView contentContainerStyle={styles.questionContent} showsVerticalScrollIndicator={false}>
-          {/* Question number */}
+
+        {/* ── PINNED QUESTION — always visible while scrolling ──────── */}
+        <View style={styles.questionSticky}>
+          {/* Question number + total */}
           <Text style={styles.questionNumber}>
-            {t('inspection.question', 'Question')} {currentIndex + 1}
+            Q {currentIndex + 1} / {totalItems}
           </Text>
 
-          {/* Question text */}
+          {/* Question text — large and always visible */}
           <Text style={styles.questionText}>
             {isArabic && currentItem.question_text_ar
               ? currentItem.question_text_ar
@@ -1579,16 +1587,6 @@ export default function InspectionWizardScreen() {
             </View>
           )}
 
-          {/* Action if fail hint */}
-          {actionIfFail && validation === 'fail' && (
-            <View style={[styles.hintBox, styles.warningBox]}>
-              <Text style={[styles.hintLabel, styles.warningLabel]}>
-                ⚠️ {t('inspection.actionIfFail', 'Action Required')}:
-              </Text>
-              <Text style={styles.hintText}>{actionIfFail}</Text>
-            </View>
-          )}
-
           {/* Category and critical badges */}
           <View style={styles.badgeRow}>
             {currentItem.category && (
@@ -1602,6 +1600,19 @@ export default function InspectionWizardScreen() {
               </View>
             )}
           </View>
+        </View>
+
+        {/* ── SCROLLABLE ANSWER SECTION ─────────────────────────────── */}
+        <ScrollView contentContainerStyle={styles.questionContent} showsVerticalScrollIndicator={false}>
+          {/* Action if fail hint */}
+          {actionIfFail && validation === 'fail' && (
+            <View style={[styles.hintBox, styles.warningBox]}>
+              <Text style={[styles.hintLabel, styles.warningLabel]}>
+                ⚠️ {t('inspection.actionIfFail', 'Action Required')}:
+              </Text>
+              <Text style={styles.hintText}>{actionIfFail}</Text>
+            </View>
+          )}
 
           {/* Answer input */}
           {renderAnswerInput()}
@@ -1622,6 +1633,7 @@ export default function InspectionWizardScreen() {
                 return (
                   <TouchableOpacity
                     key={level}
+                    testID={`urgency-btn-${level}`}
                     style={[
                       styles.urgencyButton,
                       { borderColor: color },
@@ -1815,51 +1827,66 @@ export default function InspectionWizardScreen() {
 
       {/* Navigation buttons */}
       <View style={styles.navButtonRow}>
+        {/* ← Previous */}
         <TouchableOpacity
+          testID="wizard-prev-btn"
           style={[styles.navButton, currentIndex === 0 && styles.navButtonDisabled]}
           onPress={goToPrev}
           disabled={currentIndex === 0}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.navButtonText, currentIndex === 0 && styles.navButtonTextDisabled]}>
-            ←
+          <Text style={[styles.navButtonChevron, currentIndex === 0 && styles.navButtonTextDisabled]}>
+            ‹
           </Text>
         </TouchableOpacity>
 
+        {/* Center: progress */}
+        <View style={styles.navCenter}>
+          <Text style={styles.navProgressText}>
+            {currentIndex + 1} <Text style={styles.navProgressOf}>of</Text> {totalItems}
+          </Text>
+          <View style={styles.navProgressBar}>
+            <View style={[styles.navProgressFill, { width: `${Math.round(((currentIndex + 1) / totalItems) * 100)}%` as any }]} />
+          </View>
+        </View>
+
+        {/* → Next / Go to Missing / Submit */}
         {currentIndex === totalItems - 1 ? (
-          // On the Submit page: show "Next Missing" if incomplete, else show Submit
           (() => {
             const incompleteIndex = findNextIncomplete(0);
             if (incompleteIndex >= 0) {
-              // There are incomplete items — show button to jump there
               return (
                 <TouchableOpacity
-                  style={[styles.navButton, styles.navButtonWarning]}
+                  testID="wizard-go-to-missing-btn"
+                  style={styles.navButtonAction}
                   onPress={() => goToIndex(incompleteIndex)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.navButtonText, styles.navButtonTextPrimary]}>
-                    {t('inspection.goToMissing', 'Go to Missing →')}
+                  <Text style={styles.navButtonActionText}>
+                    {t('inspection.goToMissing', 'Go to Missing')} ›
                   </Text>
                 </TouchableOpacity>
               );
             }
-            // All complete — show Submit button
             return (
               <TouchableOpacity
-                style={[styles.submitButton, submitMutation.isPending && styles.buttonDisabled]}
+                testID="wizard-submit-btn"
+                style={[styles.navButtonSubmit, submitMutation.isPending && styles.buttonDisabled]}
                 onPress={handleSubmit}
                 disabled={submitMutation.isPending}
+                activeOpacity={0.8}
               >
                 {submitMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.submitButtonText}>{t('inspection.submitAndAssess', 'Submit & Assess')}</Text>
+                  <Text style={styles.navButtonSubmitText}>{t('inspection.submitAndAssess', 'Submit & Assess')}</Text>
                 )}
               </TouchableOpacity>
             );
           })()
         ) : (
-          // During inspection: normal Next button
           <TouchableOpacity
+            testID="wizard-next-btn"
             style={[
               styles.navButton,
               styles.navButtonPrimary,
@@ -1867,13 +1894,14 @@ export default function InspectionWizardScreen() {
             ]}
             onPress={goToNext}
             disabled={!canProceedToNext}
+            activeOpacity={0.7}
           >
             <Text style={[
-              styles.navButtonText,
-              styles.navButtonTextPrimary,
+              styles.navButtonChevron,
+              styles.navButtonChevronPrimary,
               !canProceedToNext && styles.navButtonTextDisabled,
             ]}>
-              →
+              ›
             </Text>
           </TouchableOpacity>
         )}
@@ -2013,22 +2041,35 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     elevation: 3,
     boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    overflow: 'hidden',
   },
+  // Pinned question section — always visible, never scrolls away
+  questionSticky: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: '#E3F2FD',
+  },
+  // Scrollable answer section below the pinned question
   questionContent: {
     padding: 16,
+    paddingTop: 14,
   },
   questionNumber: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#1976D2',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: 0.3,
   },
   questionText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#212121',
-    lineHeight: 26,
-    marginBottom: 16,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    lineHeight: 28,
+    marginBottom: 12,
   },
   colleagueBanner: {
     backgroundColor: '#E3F2FD',
@@ -2157,8 +2198,8 @@ const styles = StyleSheet.create({
   },
   answerButton: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 10,
+    paddingVertical: 20,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: '#bdbdbd',
     alignItems: 'center',
@@ -2180,9 +2221,10 @@ const styles = StyleSheet.create({
     borderWidth: 3,
   },
   answerButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#616161',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#424242',
+    letterSpacing: 0.5,
   },
   answerButtonTextActive: {
     color: '#fff',
@@ -2246,23 +2288,28 @@ const styles = StyleSheet.create({
   // ─── Urgency Selector ───
   urgencySection: {
     marginBottom: 16,
+    backgroundColor: '#FAFAFA',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   urgencyLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#616161',
-    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#424242',
+    marginBottom: 10,
   },
   urgencyRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
   },
   urgencyButton: {
     minWidth: 70,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 8,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 2,
     alignItems: 'center',
     flexGrow: 1,
@@ -2270,8 +2317,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   urgencyButtonText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     textAlign: 'center',
   },
   mediaSection: {
@@ -2430,33 +2477,48 @@ const styles = StyleSheet.create({
   },
   navButtonRow: {
     flexDirection: 'row',
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     paddingBottom: 30,
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    gap: 12,
+    borderTopColor: '#e8e8e8',
     alignItems: 'center',
+    gap: 12,
   },
   navButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 2,
     borderColor: '#1976D2',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#fff',
+    elevation: 2,
+    boxShadow: '0px 2px 6px rgba(25, 118, 210, 0.18)',
   },
   navButtonPrimary: {
     backgroundColor: '#1976D2',
-  },
-  navButtonWarning: {
-    backgroundColor: '#FF9800',
-    paddingHorizontal: 12,
+    borderColor: '#1565C0',
+    elevation: 4,
+    boxShadow: '0px 4px 10px rgba(25, 118, 210, 0.35)',
   },
   navButtonDisabled: {
-    borderColor: '#bdbdbd',
+    borderColor: '#e0e0e0',
     backgroundColor: '#f5f5f5',
+    elevation: 0,
+    boxShadow: 'none',
+  },
+  navButtonChevron: {
+    fontSize: 30,
+    fontWeight: '400',
+    color: '#1976D2',
+    lineHeight: 36,
+    marginTop: -2,
+  },
+  navButtonChevronPrimary: {
+    color: '#fff',
   },
   navButtonText: {
     fontSize: 20,
@@ -2468,6 +2530,67 @@ const styles = StyleSheet.create({
   },
   navButtonTextDisabled: {
     color: '#bdbdbd',
+  },
+  navCenter: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  navProgressText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#424242',
+    letterSpacing: 0.3,
+  },
+  navProgressOf: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#9e9e9e',
+  },
+  navProgressBar: {
+    width: '100%',
+    height: 4,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  navProgressFill: {
+    height: 4,
+    backgroundColor: '#1976D2',
+    borderRadius: 2,
+  },
+  navButtonAction: {
+    backgroundColor: '#FF9800',
+    borderRadius: 28,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    boxShadow: '0px 3px 8px rgba(255, 152, 0, 0.3)',
+    minWidth: 56,
+  },
+  navButtonActionText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  navButtonSubmit: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 28,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    boxShadow: '0px 4px 10px rgba(46, 125, 50, 0.35)',
+    minWidth: 56,
+  },
+  navButtonSubmitText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
   skipButton: {
     flex: 1,
@@ -2484,18 +2607,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#757575',
     fontWeight: '500',
-  },
-  submitButton: {
-    flex: 1,
-    backgroundColor: '#4CAF50',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
   },
   buttonDisabled: {
     opacity: 0.5,

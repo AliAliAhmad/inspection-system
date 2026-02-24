@@ -403,7 +403,7 @@ export default function NotificationPreferencesScreen() {
 
   // ── Render ─────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
+    <View testID="notification-preferences-screen" style={styles.container}>
       {/* Header */}
       <View style={[styles.header, isRTL && styles.headerRTL]}>
         <TouchableOpacity

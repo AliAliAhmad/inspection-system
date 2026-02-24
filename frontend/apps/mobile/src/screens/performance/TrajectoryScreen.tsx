@@ -133,6 +133,7 @@ export default function TrajectoryScreen() {
 
   return (
     <ScrollView
+      testID="trajectory-screen"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}

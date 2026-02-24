@@ -161,7 +161,7 @@ export default function TeamRosterScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="team-roster-screen">
       <Text style={styles.title}>{t('nav.roster', 'Team Roster')}</Text>
 
       {/* Week Navigation */}
@@ -181,6 +181,7 @@ export default function TeamRosterScreen() {
 
       {/* User List */}
       <FlatList
+        testID="team-roster-list"
         data={sortedUsers}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (

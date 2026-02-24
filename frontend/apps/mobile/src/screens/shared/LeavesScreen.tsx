@@ -207,12 +207,13 @@ export default function LeavesScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="leaves-screen" style={styles.container}>
       <Text style={styles.title}>{t('nav.leaves', 'My Leaves')}</Text>
 
       {renderFilterChips()}
 
       <FlatList
+        testID="leaves-list"
         data={leaves}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderLeaveCard}

@@ -196,11 +196,12 @@ export default function ChannelListScreen() {
     if (showUsers) refetchUsers();
   }, [refetchChannels, refetchUsers, showUsers]);
 
-  const renderChannel = ({ item }: { item: TeamChannel }) => (
+  const renderChannel = ({ item, index }: { item: TeamChannel; index: number }) => (
     <TouchableOpacity
       style={styles.channelCard}
       onPress={() => navigation.navigate('ChatRoom', { channelId: item.id, channelName: item.name })}
       activeOpacity={0.7}
+      testID={`channel-card-${index}`}
     >
       <View style={styles.channelIcon}>
         <Text style={styles.channelIconText}>
@@ -291,10 +292,10 @@ export default function ChannelListScreen() {
   const isShowingPeopleView = showUsers || search.trim().length > 0;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="channel-list-screen">
       {/* Header with back button */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} testID="channel-list-back-btn">
           <Text style={styles.backBtnText}>{'<'}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
@@ -304,6 +305,7 @@ export default function ChannelListScreen() {
           <TouchableOpacity
             style={[styles.peopleBtn, showUsers && styles.peopleBtnActive]}
             onPress={handleToggleUsers}
+            testID="channel-list-people-btn"
           >
             <Text style={styles.peopleBtnText}>👥</Text>
             {showUsers && <View style={styles.peopleBtnDot} />}
@@ -311,6 +313,7 @@ export default function ChannelListScreen() {
           <TouchableOpacity
             style={styles.newBtn}
             onPress={() => navigation.navigate('NewChannel')}
+            testID="channel-list-new-btn"
           >
             <Text style={styles.newBtnText}>+</Text>
           </TouchableOpacity>
@@ -329,11 +332,13 @@ export default function ChannelListScreen() {
             if (text.length > 0 && !showUsers) setShowUsers(true);
           }}
           placeholderTextColor="#bfbfbf"
+          testID="channel-list-search-input"
         />
         {search.length > 0 && (
           <TouchableOpacity
             style={styles.clearSearch}
             onPress={() => { setSearch(''); }}
+            testID="channel-list-clear-search-btn"
           >
             <Text style={styles.clearSearchText}>✕</Text>
           </TouchableOpacity>
@@ -346,7 +351,7 @@ export default function ChannelListScreen() {
           <Text style={styles.modeBarText}>
             {isAr ? `👥 عرض الأشخاص (${otherUsers.length})` : `👥 People View (${otherUsers.length})`}
           </Text>
-          <TouchableOpacity onPress={() => { setShowUsers(false); setSearch(''); }}>
+          <TouchableOpacity onPress={() => { setShowUsers(false); setSearch(''); }} testID="channel-list-close-people-btn">
             <Text style={styles.modeBarClose}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -354,6 +359,7 @@ export default function ChannelListScreen() {
 
       <ScrollView
         style={styles.mainScroll}
+        testID="channel-list-scroll"
         refreshControl={
           <RefreshControl
             refreshing={isChannelsLoading || isUsersLoading}
@@ -403,6 +409,7 @@ export default function ChannelListScreen() {
                 renderItem={renderUser}
                 keyExtractor={(item) => `user-${item.id}`}
                 scrollEnabled={false}
+                testID="channel-list-users-list"
               />
             )}
           </View>
@@ -432,6 +439,7 @@ export default function ChannelListScreen() {
             renderItem={renderChannel}
             keyExtractor={(item) => String(item.id)}
             scrollEnabled={false}
+            testID="channel-list-channels-list"
           />
         ) : !isShowingPeopleView ? (
           <View style={styles.empty}>

@@ -314,12 +314,14 @@ export default function AdminApprovalsScreen() {
       showsHorizontalScrollIndicator={false}
       style={styles.tabBarScroll}
       contentContainerStyle={styles.tabBar}
+      testID="approvals-tab-bar"
     >
       {TABS.map((tab) => (
         <TouchableOpacity
           key={tab}
           style={[styles.tab, activeTab === tab && styles.tabActive]}
           onPress={() => setActiveTab(tab)}
+          testID={`approvals-tab-${tab}`}
         >
           <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
             {t(TAB_LABELS[tab], tab)}
@@ -344,13 +346,13 @@ export default function AdminApprovalsScreen() {
       </Text>
       {item.reason ? <Text style={styles.reasonText} numberOfLines={2}>{item.reason}</Text> : null}
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveLeave(item.id)}>
+        <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveLeave(item.id)} testID={`leave-approve-btn-${item.id}`}>
           <Text style={styles.approveBtnText}>{t('common.approve', 'Approve')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleRejectLeave(item.id)}>
+        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleRejectLeave(item.id)} testID={`leave-reject-btn-${item.id}`}>
           <Text style={styles.rejectBtnText}>{t('common.reject', 'Reject')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.coverageBtn} onPress={() => handleOpenCoverage(item.id)}>
+        <TouchableOpacity style={styles.coverageBtn} onPress={() => handleOpenCoverage(item.id)} testID={`leave-coverage-btn-${item.id}`}>
           <Text style={styles.coverageBtnText}>{t('approvals.coverage', 'Coverage')}</Text>
         </TouchableOpacity>
       </View>
@@ -370,10 +372,10 @@ export default function AdminApprovalsScreen() {
       {item.reason_details ? <Text style={styles.reasonText} numberOfLines={2}>{item.reason_details}</Text> : null}
       <Text style={styles.cardSubtext}>{t('common.requested', 'Requested')}: {formatDateTime(item.requested_at)}</Text>
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.approveBtn} onPress={() => handleApprovePause(item.id)}>
+        <TouchableOpacity style={styles.approveBtn} onPress={() => handleApprovePause(item.id)} testID={`pause-approve-btn-${item.id}`}>
           <Text style={styles.approveBtnText}>{t('common.approve', 'Approve')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleDenyPause(item.id)}>
+        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleDenyPause(item.id)} testID={`pause-deny-btn-${item.id}`}>
           <Text style={styles.rejectBtnText}>{t('common.deny', 'Deny')}</Text>
         </TouchableOpacity>
       </View>
@@ -392,10 +394,10 @@ export default function AdminApprovalsScreen() {
       <Text style={styles.cardTitle}>{t('users.user', 'User')} #{item.user_id}</Text>
       <Text style={styles.reasonText}>{item.reason}</Text>
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveBonus(item.id)}>
+        <TouchableOpacity style={styles.approveBtn} onPress={() => handleApproveBonus(item.id)} testID={`bonus-approve-btn-${item.id}`}>
           <Text style={styles.approveBtnText}>{t('common.approve', 'Approve')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleDenyBonus(item.id)}>
+        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleDenyBonus(item.id)} testID={`bonus-deny-btn-${item.id}`}>
           <Text style={styles.rejectBtnText}>{t('common.deny', 'Deny')}</Text>
         </TouchableOpacity>
       </View>
@@ -437,7 +439,7 @@ export default function AdminApprovalsScreen() {
       )}
       {item.escalation_reason ? <Text style={styles.reasonText}>{item.escalation_reason}</Text> : null}
       {(item.stop_reason || item.urgent_reason) ? <Text style={[styles.reasonText, { color: '#C62828' }]}>{item.stop_reason || item.urgent_reason}</Text> : null}
-      <TouchableOpacity style={styles.resolveBtn} onPress={() => handleResolveConflict(item)}>
+      <TouchableOpacity style={styles.resolveBtn} onPress={() => handleResolveConflict(item)} testID={`conflict-resolve-btn-${item.id}`}>
         <Text style={styles.resolveBtnText}>{t('approvals.resolve', 'Resolve')}</Text>
       </TouchableOpacity>
     </View>
@@ -484,11 +486,11 @@ export default function AdminApprovalsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="admin-approvals-screen">
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('nav.approvals', 'Approvals')}</Text>
         {activeTab === 'bonus' && (
-          <TouchableOpacity style={styles.awardBtn} onPress={() => setAwardModalVisible(true)}>
+          <TouchableOpacity style={styles.awardBtn} onPress={() => setAwardModalVisible(true)} testID="award-bonus-btn">
             <Text style={styles.awardBtnText}>{t('approvals.award_bonus', 'Award Bonus')}</Text>
           </TouchableOpacity>
         )}
@@ -502,6 +504,7 @@ export default function AdminApprovalsScreen() {
         </View>
       ) : (
         <FlatList
+          testID="approvals-list"
           data={activeData as any[]}
           keyExtractor={(item: any) => String(item.id)}
           renderItem={getRenderItem()}

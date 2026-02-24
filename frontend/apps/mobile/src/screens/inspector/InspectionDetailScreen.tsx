@@ -211,7 +211,7 @@ export default function InspectionDetailScreen() {
   const answers = data.answers || [];
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
+    <View testID="inspection-detail-screen" style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>

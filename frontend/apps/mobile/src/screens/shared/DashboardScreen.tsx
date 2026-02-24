@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useRef, useMemo } from 'react';
+import { scale, vscale, mscale, fontScale } from '../../utils/scale';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { useScrollToTop } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -48,7 +50,7 @@ function QuickLink({ label, icon, onPress, colors }: { label: string; icon: stri
 function AssignmentSummary({ stats, isAr, colors, onPress }: { stats: MyAssignmentStats; isAr: boolean; colors: any; onPress: () => void }) {
   const { today } = stats;
   return (
-    <TouchableOpacity style={[s.widgetCard, { backgroundColor: colors.surface }]} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity testID="assignment-summary" style={[s.widgetCard, { backgroundColor: colors.surface }]} onPress={onPress} activeOpacity={0.7}>
       <View style={s.widgetHeader}>
         <Text style={[s.widgetTitle, { color: colors.text }]}>
           {isAr ? 'مهام اليوم' : "Today's Assignments"}
@@ -110,6 +112,7 @@ function QuickActions({ isAr, colors, navigation }: { isAr: boolean; colors: any
       {actions.map((a) => (
         <TouchableOpacity
           key={a.screen}
+          testID={`quick-action-${a.screen}`}
           style={[s.quickActionCard, { backgroundColor: colors.surface }]}
           onPress={() => navigation.navigate(a.screen)}
           activeOpacity={0.7}
@@ -226,6 +229,7 @@ function ShiftHandoverCard({ isAr, colors, navigation }: { isAr: boolean; colors
           {!latestHandover.acknowledged_by_id && (
             <View style={s.handoverActions}>
               <TouchableOpacity
+                testID="acknowledge-handover-btn"
                 style={s.acknowledgeBtn}
                 onPress={() => {
                   shiftHandoverApi.acknowledge(latestHandover.id).then(() => {
@@ -248,6 +252,7 @@ function ShiftHandoverCard({ isAr, colors, navigation }: { isAr: boolean; colors
       )}
 
       <TouchableOpacity
+        testID="create-handover-btn"
         style={[s.createHandoverBtn, { borderColor: colors.border }]}
         onPress={() => navigation.navigate('CreateHandover')}
       >
@@ -297,6 +302,7 @@ function StartNextInspectionCard({ colors, navigation, isAr }: { colors: any; na
 
   return (
     <TouchableOpacity
+      testID="start-next-inspection"
       style={[s.nextInspectionCard, { backgroundColor: '#1565C0' }]}
       activeOpacity={0.85}
       onPress={() => navigation.navigate('InspectionWizard', { id: nextAssignment.id })}
@@ -371,6 +377,10 @@ export default function DashboardScreen() {
     refetchStats();
   };
 
+  // Scroll-to-top when tab is tapped (React Navigation standard hook)
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
+
   // Greeting
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -381,35 +391,40 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
+      testID="dashboard-screen"
       style={[s.container, { backgroundColor: colors.backgroundSecondary }]}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} />}
     >
       {/* Welcome header */}
       <View style={[s.welcomeHeader, { backgroundColor: colors.primary }]}>
+        {/* Bell — top-right corner, above the name row */}
+        <TouchableOpacity
+          testID="notification-bell"
+          style={s.bellContainer}
+          onPress={() => navigation.navigate('Notifications')}
+          activeOpacity={0.7}
+        >
+          <Text style={s.bellIcon}>{'\u{1F514}'}</Text>
+          {unreadCount > 0 && (
+            <View style={s.bellBadge}>
+              <Text style={s.bellBadgeText}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
         <View style={s.welcomeRow}>
           <View style={s.welcomeTextContainer}>
             <Text style={s.greetingText}>{greeting}</Text>
             <View style={s.nameRow}>
-              <Text style={s.welcomeName}>{user?.full_name}</Text>
+              <Text style={s.welcomeName} numberOfLines={1}>{user?.full_name}</Text>
               <View style={s.starBadge}>
                 <Text style={s.starText}>⭐ {(user as any)?.inspector_points ?? (user as any)?.specialist_points ?? (user as any)?.engineer_points ?? (user as any)?.total_points ?? 0}</Text>
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            style={s.bellContainer}
-            onPress={() => navigation.navigate('Notifications')}
-            activeOpacity={0.7}
-          >
-            <Text style={s.bellIcon}>{'\u{1F514}'}</Text>
-            {unreadCount > 0 && (
-              <View style={s.bellBadge}>
-                <Text style={s.bellBadgeText}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
           <StreakIndicator
             currentStreak={user?.total_points ? Math.min(Math.floor(user.total_points / 10), 30) : 0}
             size="compact"
@@ -502,6 +517,16 @@ export default function DashboardScreen() {
               <QuickLink icon="🔍" label={t('nav.monitorFollowups', 'Monitor Follow-Ups')} onPress={() => navigation.navigate('MonitorFollowups')} colors={colors} />
             </>
           )}
+
+          {user?.role === 'quality_engineer' && (
+            <>
+              <Text style={[s.sectionTitle, { color: colors.text }]}>{t('nav.quick_links', 'Quick Access')}</Text>
+              <QuickLink icon="⭐" label={t('nav.pendingReviews', 'Pending Reviews')} onPress={() => navigation.navigate('PendingReviews')} colors={colors} />
+              <QuickLink icon="⏰" label={t('nav.overdueReviews', 'Overdue Reviews')} onPress={() => navigation.navigate('OverdueReviews')} colors={colors} />
+              <QuickLink icon="📊" label={t('nav.allInspections', 'All Inspections')} onPress={() => navigation.navigate('AllInspections')} colors={colors} />
+              <QuickLink icon="⚠️" label={t('nav.defects', 'Defects')} onPress={() => navigation.navigate('Defects')} colors={colors} />
+            </>
+          )}
         </>
       )}
 
@@ -513,31 +538,33 @@ export default function DashboardScreen() {
 // ─── Styles ────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
+  container: { flex: 1, padding: scale(16) },
   welcomeHeader: {
-    marginHorizontal: -16, marginTop: -16,
-    paddingHorizontal: 20, paddingTop: 30, paddingBottom: 10,
-    borderBottomLeftRadius: 20, borderBottomRightRadius: 20,
-    marginBottom: 16,
+    marginHorizontal: -scale(16), marginTop: -scale(16),
+    paddingHorizontal: scale(20), paddingTop: vscale(30), paddingBottom: vscale(10),
+    borderBottomLeftRadius: mscale(20), borderBottomRightRadius: mscale(20),
+    marginBottom: scale(16),
   },
   welcomeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   welcomeTextContainer: { flex: 1 },
-  greetingText: { fontSize: 16, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
-  welcomeName: { fontSize: 23, fontWeight: 'bold', color: '#fff' },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  greetingText: { fontSize: fontScale(16), color: 'rgba(255,255,255,0.8)', marginBottom: vscale(4) },
+  welcomeName: { fontSize: fontScale(23), fontWeight: 'bold', color: '#fff' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: scale(8) },
   starBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: scale(12), paddingVertical: vscale(5), borderRadius: mscale(14),
   },
-  starText: { fontSize: 23, fontWeight: '800', color: '#fff' },
+  starText: { fontSize: fontScale(23), fontWeight: '800', color: '#fff' },
 
-  // Notification bell
+  // Notification bell — absolutely positioned at top-right of welcome header
   bellContainer: {
-    position: 'relative',
-    marginRight: 12,
-    padding: 4,
+    position: 'absolute',
+    top: vscale(10),
+    right: scale(16),
+    padding: scale(6),
+    zIndex: 10,
   },
   bellIcon: {
-    fontSize: 24,
+    fontSize: fontScale(24),
     color: '#fff',
   },
   bellBadge: {
@@ -545,146 +572,146 @@ const s = StyleSheet.create({
     top: 0,
     right: 0,
     backgroundColor: '#E53935',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
+    borderRadius: mscale(10),
+    minWidth: scale(18),
+    height: scale(18),
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: scale(4),
     borderWidth: 1.5,
     borderColor: '#fff',
   },
   bellBadgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: fontScale(11),
     fontWeight: '700',
     textAlign: 'center',
   },
 
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginTop: 20, marginBottom: 10 },
+  sectionTitle: { fontSize: fontScale(18), fontWeight: '700', marginTop: vscale(20), marginBottom: vscale(10) },
 
   // Quick Actions grid
-  quickActionsGrid: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  quickActionsGrid: { flexDirection: 'row', gap: scale(10), marginBottom: vscale(14) },
   quickActionCard: {
-    flex: 1, borderRadius: 14, padding: 14, alignItems: 'center',
+    flex: 1, borderRadius: mscale(14), padding: scale(14), alignItems: 'center',
     boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2,
   },
   quickActionIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+    width: scale(44), height: scale(44), borderRadius: scale(22),
+    justifyContent: 'center', alignItems: 'center', marginBottom: vscale(8),
   },
-  quickActionEmoji: { fontSize: 22 },
-  quickActionLabel: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  quickActionEmoji: { fontSize: fontScale(22) },
+  quickActionLabel: { fontSize: fontScale(14), fontWeight: '600', textAlign: 'center' },
 
   // Widget card (shared)
   widgetCard: {
-    borderRadius: 14, padding: 16, marginBottom: 14,
+    borderRadius: mscale(14), padding: scale(16), marginBottom: vscale(14),
     boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2,
   },
-  widgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  widgetTitle: { fontSize: 17, fontWeight: '700' },
-  widgetArrow: { fontSize: 22 },
+  widgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: vscale(12) },
+  widgetTitle: { fontSize: fontScale(17), fontWeight: '700' },
+  widgetArrow: { fontSize: fontScale(22) },
 
   // Assignment Summary
   assignmentRow: { flexDirection: 'row', alignItems: 'center' },
   assignmentItem: { flex: 1, alignItems: 'center' },
-  assignmentValue: { fontSize: 25, fontWeight: '800' },
-  assignmentLabel: { fontSize: 14, marginTop: 2 },
-  assignmentDivider: { width: 1, height: 30, marginHorizontal: 4 },
+  assignmentValue: { fontSize: fontScale(25), fontWeight: '800' },
+  assignmentLabel: { fontSize: fontScale(14), marginTop: vscale(2) },
+  assignmentDivider: { width: 1, height: vscale(30), marginHorizontal: scale(4) },
   backlogBadge: {
-    backgroundColor: '#FFF3E0', borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 4, marginTop: 10, alignSelf: 'flex-start',
+    backgroundColor: '#FFF3E0', borderRadius: mscale(8),
+    paddingHorizontal: scale(10), paddingVertical: vscale(4), marginTop: vscale(10), alignSelf: 'flex-start',
   },
-  backlogText: { fontSize: 15, fontWeight: '600', color: '#E65100' },
+  backlogText: { fontSize: fontScale(15), fontWeight: '600', color: '#E65100' },
 
   // Stats grid
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(10), marginBottom: vscale(8) },
   statCard: {
-    width: '47%', borderRadius: 12, padding: 14,
-    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2, marginBottom: 4,
+    width: '47%', borderRadius: mscale(12), padding: scale(14),
+    boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2, marginBottom: vscale(4),
   },
-  statValue: { fontSize: 27, fontWeight: 'bold' },
-  statTitle: { fontSize: 15, marginTop: 2 },
+  statValue: { fontSize: fontScale(27), fontWeight: 'bold' },
+  statTitle: { fontSize: fontScale(15), marginTop: vscale(2) },
 
   // Weekly Trend
-  trendContainer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', height: 80, marginBottom: 8 },
+  trendContainer: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', height: vscale(80), marginBottom: vscale(8) },
   trendDay: { alignItems: 'center', flex: 1 },
-  trendBarBg: { width: 18, borderRadius: 9, justifyContent: 'flex-end', overflow: 'hidden' },
-  trendBarFill: { width: '100%', borderRadius: 9 },
-  trendLabel: { fontSize: 13, fontWeight: '600', marginTop: 4 },
-  todayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#1976D2', marginTop: 2 },
-  trendLegend: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 4 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 13 },
+  trendBarBg: { width: scale(18), borderRadius: mscale(9), justifyContent: 'flex-end', overflow: 'hidden' },
+  trendBarFill: { width: '100%', borderRadius: mscale(9) },
+  trendLabel: { fontSize: fontScale(13), fontWeight: '600', marginTop: vscale(4) },
+  todayDot: { width: scale(4), height: scale(4), borderRadius: scale(2), backgroundColor: '#1976D2', marginTop: vscale(2) },
+  trendLegend: { flexDirection: 'row', justifyContent: 'center', gap: scale(16), marginTop: vscale(4) },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: scale(4) },
+  legendDot: { width: scale(8), height: scale(8), borderRadius: scale(4) },
+  legendText: { fontSize: fontScale(13) },
 
   // Shift Handover
-  handoverContent: { marginBottom: 10 },
-  handoverInfo: { marginBottom: 6 },
-  handoverFrom: { fontSize: 16, fontWeight: '500' },
-  handoverShift: { fontSize: 14, marginTop: 2 },
-  handoverPending: { fontSize: 15, fontWeight: '600', marginTop: 4 },
-  handoverAlert: { fontSize: 15, fontWeight: '700', marginTop: 2 },
-  handoverEmpty: { fontSize: 16, marginBottom: 10, textAlign: 'center', paddingVertical: 8 },
-  handoverActions: { marginTop: 8 },
+  handoverContent: { marginBottom: vscale(10) },
+  handoverInfo: { marginBottom: vscale(6) },
+  handoverFrom: { fontSize: fontScale(16), fontWeight: '500' },
+  handoverShift: { fontSize: fontScale(14), marginTop: vscale(2) },
+  handoverPending: { fontSize: fontScale(15), fontWeight: '600', marginTop: vscale(4) },
+  handoverAlert: { fontSize: fontScale(15), fontWeight: '700', marginTop: vscale(2) },
+  handoverEmpty: { fontSize: fontScale(16), marginBottom: vscale(10), textAlign: 'center', paddingVertical: vscale(8) },
+  handoverActions: { marginTop: vscale(8) },
   acknowledgeBtn: {
-    backgroundColor: '#1976D2', borderRadius: 8,
-    paddingVertical: 8, paddingHorizontal: 16, alignSelf: 'flex-start',
+    backgroundColor: '#1976D2', borderRadius: mscale(8),
+    paddingVertical: vscale(8), paddingHorizontal: scale(16), alignSelf: 'flex-start',
   },
-  acknowledgeBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  acknowledgeBtnText: { color: '#fff', fontSize: fontScale(16), fontWeight: '600' },
   pendingBadge: {
-    backgroundColor: '#E53935', borderRadius: 10,
-    minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5,
+    backgroundColor: '#E53935', borderRadius: mscale(10),
+    minWidth: scale(20), height: scale(20), justifyContent: 'center', alignItems: 'center', paddingHorizontal: scale(5),
   },
-  pendingBadgeText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  pendingBadgeText: { color: '#fff', fontSize: fontScale(14), fontWeight: '700' },
   createHandoverBtn: {
-    borderWidth: 1.5, borderRadius: 10, borderStyle: 'dashed',
-    paddingVertical: 10, alignItems: 'center',
+    borderWidth: 1.5, borderRadius: mscale(10), borderStyle: 'dashed',
+    paddingVertical: vscale(10), alignItems: 'center',
   },
-  createHandoverText: { fontSize: 16, fontWeight: '600' },
+  createHandoverText: { fontSize: fontScale(16), fontWeight: '600' },
 
   // Quick Links
   quickLink: {
-    borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 8,
+    borderRadius: mscale(12), padding: scale(14), flexDirection: 'row', alignItems: 'center', marginBottom: vscale(8),
     boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2,
   },
-  quickLinkIcon: { fontSize: 18, marginRight: 12 },
-  quickLinkText: { flex: 1, fontSize: 17, fontWeight: '600' },
-  quickLinkArrow: { fontSize: 22 },
+  quickLinkIcon: { fontSize: fontScale(18), marginRight: scale(12) },
+  quickLinkText: { flex: 1, fontSize: fontScale(17), fontWeight: '600' },
+  quickLinkArrow: { fontSize: fontScale(22) },
 
-  sectionContainer: { marginBottom: 16 },
+  sectionContainer: { marginBottom: vscale(16) },
 
   // Start Next Inspection card
   nextInspectionCard: {
-    borderRadius: 16, padding: 18, marginBottom: 14,
+    borderRadius: mscale(16), padding: scale(18), marginBottom: vscale(14),
     boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.15)', elevation: 4,
   },
   nextInspectionContent: {
     flexDirection: 'row', alignItems: 'center',
   },
   nextInspectionIconContainer: {
-    width: 48, height: 48, borderRadius: 24,
+    width: scale(48), height: scale(48), borderRadius: scale(24),
     backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+    justifyContent: 'center', alignItems: 'center', marginRight: scale(14),
   },
-  nextInspectionIcon: { fontSize: 26 },
+  nextInspectionIcon: { fontSize: fontScale(26) },
   nextInspectionTextContainer: { flex: 1 },
   nextInspectionTitle: {
-    fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.85)',
-    marginBottom: 2,
+    fontSize: fontScale(14), fontWeight: '600', color: 'rgba(255,255,255,0.85)',
+    marginBottom: vscale(2),
   },
   nextInspectionEquipment: {
-    fontSize: 18, fontWeight: '800', color: '#fff',
-    marginBottom: 2,
+    fontSize: fontScale(18), fontWeight: '800', color: '#fff',
+    marginBottom: vscale(2),
   },
   nextInspectionTap: {
-    fontSize: 13, color: 'rgba(255,255,255,0.7)',
+    fontSize: fontScale(13), color: 'rgba(255,255,255,0.7)',
   },
   nextInspectionArrow: {
-    fontSize: 32, fontWeight: '300', color: 'rgba(255,255,255,0.7)',
-    marginLeft: 8,
+    fontSize: fontScale(32), fontWeight: '300', color: 'rgba(255,255,255,0.7)',
+    marginLeft: scale(8),
   },
   allCaughtUpText: {
-    fontSize: 16, fontWeight: '600', marginLeft: 10,
+    fontSize: fontScale(16), fontWeight: '600', marginLeft: scale(10),
   },
 });

@@ -1103,6 +1103,7 @@ export default function InspectionChecklistScreen() {
 
   return (
     <ScrollView
+      testID="inspection-checklist-screen"
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       refreshControl={
@@ -1179,6 +1180,7 @@ export default function InspectionChecklistScreen() {
             <View style={styles.checklistHeaderRow}>
               <Text style={styles.sectionTitle}>{t('inspection.checklist')}</Text>
               <TouchableOpacity
+                testID="checklist-filter-unanswered-btn"
                 style={[styles.filterToggle, showOnlyUnanswered && styles.filterToggleActive]}
                 onPress={() => setShowOnlyUnanswered(!showOnlyUnanswered)}
               >
@@ -1210,6 +1212,7 @@ export default function InspectionChecklistScreen() {
       {/* Submit Button */}
       {inspData.status === 'draft' ? (
         <TouchableOpacity
+          testID="checklist-submit-btn"
           style={[styles.submitButton, submitMutation.isPending && styles.submitButtonDisabled]}
           onPress={handleSubmit}
           disabled={submitMutation.isPending}

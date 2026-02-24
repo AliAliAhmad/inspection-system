@@ -117,6 +117,7 @@ export default function EquipmentRiskListScreen() {
 
     return (
       <TouchableOpacity
+        testID={`equipment-risk-item-${item.equipment_id}`}
         style={styles.equipmentCard}
         onPress={() => handleEquipmentPress(item.equipment_id)}
         activeOpacity={0.7}
@@ -164,6 +165,7 @@ export default function EquipmentRiskListScreen() {
   const renderHeader = () => (
     <View style={styles.header}>
       <Searchbar
+        testID="equipment-risk-search-bar"
         placeholder="Search equipment..."
         onChangeText={setSearchQuery}
         value={searchQuery}
@@ -174,6 +176,7 @@ export default function EquipmentRiskListScreen() {
         {RISK_FILTERS.map((filter) => (
           <Chip
             key={filter.value}
+            testID={`equipment-risk-filter-${filter.value}`}
             selected={selectedFilter === filter.value}
             onPress={() => setSelectedFilter(filter.value)}
             style={styles.filterChip}
@@ -192,14 +195,14 @@ export default function EquipmentRiskListScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.centered}>
+      <View style={styles.centered} testID="equipment-risk-list-loading">
         <ActivityIndicator size="large" color="#1976D2" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="equipment-risk-list-screen">
       <FlatList
         data={filteredEquipment}
         renderItem={renderEquipmentItem}

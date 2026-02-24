@@ -280,7 +280,7 @@ export default function TeamAssignmentScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View testID="team-assignment-screen" style={styles.container}>
       <ScrollView
         style={styles.scrollContainer}
         refreshControl={

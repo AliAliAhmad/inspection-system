@@ -427,7 +427,7 @@ export default function SpecialistJobDetailScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{t('common.error')}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
+        <TouchableOpacity testID="retry-btn" style={styles.retryButton} onPress={() => refetch()}>
           <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       </View>
@@ -439,6 +439,7 @@ export default function SpecialistJobDetailScreen() {
 
   return (
     <ScrollView
+      testID="specialist-job-detail-screen"
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       refreshControl={
@@ -546,6 +547,7 @@ export default function SpecialistJobDetailScreen() {
         {/* Assigned: Start (with or without planned time) */}
         {jobData.status === 'assigned' && (
           <TouchableOpacity
+            testID="start-job-btn"
             style={[styles.actionButton, styles.startButton, startMutation.isPending && styles.buttonDisabled]}
             onPress={handleStart}
             disabled={startMutation.isPending}
@@ -574,6 +576,7 @@ export default function SpecialistJobDetailScreen() {
         {jobData.status === 'in_progress' && !jobData.has_pending_pause && (
           <>
             <TouchableOpacity
+              testID="pause-job-btn"
               style={[styles.actionButton, styles.pauseButton]}
               onPress={() => setPauseModalVisible(true)}
             >
@@ -581,6 +584,7 @@ export default function SpecialistJobDetailScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              testID="complete-job-btn"
               style={[styles.actionButton, styles.completeButton]}
               onPress={() => {
                 setWorkNotesInput('');

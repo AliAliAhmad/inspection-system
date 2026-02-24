@@ -65,7 +65,7 @@ export default function LeaderboardScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View testID="leaderboard-screen" style={styles.container}>
       <Text style={styles.title}>{t('nav.leaderboard')}</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar}>
@@ -86,6 +86,7 @@ export default function LeaderboardScreen() {
         <ActivityIndicator size="large" color="#1677ff" style={{ marginTop: 32 }} />
       ) : (
         <FlatList
+          testID="leaderboard-list"
           data={data ?? []}
           keyExtractor={(item) => item.user_id.toString()}
           renderItem={renderItem}

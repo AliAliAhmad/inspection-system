@@ -171,10 +171,12 @@ export default function BonusRequestsScreen() {
 
   return (
     <KeyboardAvoidingView
+      testID="bonus-requests-screen"
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <FlatList
+        testID="bonus-requests-list"
         data={bonuses}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderBonus}

@@ -115,7 +115,7 @@ export default function RouteOptimizerScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView testID="route-optimizer-screen" style={styles.container} contentContainerStyle={styles.content}>
       {!optimizedRoute ? (
         <>
           {/* Equipment Selection */}

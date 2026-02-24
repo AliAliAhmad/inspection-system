@@ -142,6 +142,7 @@ export default function ReviewDetailScreen() {
 
   return (
     <ScrollView
+      testID="review-detail-screen"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
@@ -272,6 +273,7 @@ export default function ReviewDetailScreen() {
       {review.status === 'pending' && (
         <View style={styles.actionsSection}>
           <TouchableOpacity
+            testID="review-approve-btn"
             style={[styles.actionButton, styles.approveButton]}
             onPress={handleApprove}
             disabled={approveMutation.isPending}
@@ -283,6 +285,7 @@ export default function ReviewDetailScreen() {
             )}
           </TouchableOpacity>
           <TouchableOpacity
+            testID="review-reject-btn"
             style={[styles.actionButton, styles.rejectButton]}
             onPress={() => setRejectModalVisible(true)}
           >
@@ -302,6 +305,7 @@ export default function ReviewDetailScreen() {
               {REJECTION_CATEGORIES.map((cat) => (
                 <TouchableOpacity
                   key={cat}
+                  testID={`review-reject-category-${cat}`}
                   style={[styles.categoryChip, rejectionCategory === cat && styles.categoryChipActive]}
                   onPress={() => setRejectionCategory(cat)}
                 >
@@ -336,12 +340,14 @@ export default function ReviewDetailScreen() {
 
             <View style={styles.modalActions}>
               <TouchableOpacity
+                testID="review-reject-cancel-btn"
                 style={[styles.modalButton, styles.modalCancelButton]}
                 onPress={() => setRejectModalVisible(false)}
               >
                 <Text style={styles.modalCancelText}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="review-reject-submit-btn"
                 style={[styles.modalButton, styles.modalRejectButton]}
                 onPress={handleRejectSubmit}
                 disabled={rejectMutation.isPending}

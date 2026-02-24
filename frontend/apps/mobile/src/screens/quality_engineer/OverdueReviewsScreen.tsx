@@ -72,6 +72,7 @@ export default function OverdueReviewsScreen() {
 
     return (
       <TouchableOpacity
+        testID={`overdue-review-card-${item.id}`}
         style={[styles.card, { backgroundColor: urgencyStyle.bg }]}
         onPress={() => navigation.navigate('ReviewDetail', { id: item.id })}
         activeOpacity={0.7}
@@ -156,7 +157,7 @@ export default function OverdueReviewsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="overdue-reviews-screen" style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('quality.overdue_reviews', 'Overdue Reviews')}</Text>
         {reviews.length > 0 && (
@@ -167,6 +168,7 @@ export default function OverdueReviewsScreen() {
       </View>
 
       <FlatList
+        testID="overdue-reviews-list"
         data={reviews}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderReviewCard}

@@ -106,6 +106,7 @@ function ReviewCard({
       {needsValidation && (
         <TouchableOpacity
           style={styles.validateButton}
+          testID={`quality-review-validate-btn-${review.id}`}
           onPress={() => onValidate(review)}
         >
           <Text style={styles.validateButtonText}>Validate Review</Text>
@@ -212,7 +213,7 @@ export default function QualityReviewsAdminScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="quality-reviews-admin-screen">
       <Text style={styles.title}>{t('nav.qualityReviews', 'Quality Reviews')}</Text>
 
       {/* Filter Chips */}
@@ -249,6 +250,7 @@ export default function QualityReviewsAdminScreen() {
 
       {/* Reviews List */}
       <FlatList
+        testID="quality-reviews-admin-list"
         data={reviews}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
@@ -295,6 +297,7 @@ export default function QualityReviewsAdminScreen() {
               {t('qualityReviews.validateReview', 'Validate Review')}
             </Text>
             <TouchableOpacity
+              testID="quality-review-submit-btn"
               onPress={handleSubmitValidation}
               disabled={!validationResult || validateMutation.isPending}
             >
@@ -320,6 +323,7 @@ export default function QualityReviewsAdminScreen() {
             <Text style={styles.fieldLabel}>{t('qualityReviews.validation', 'Validation')}</Text>
             <View style={styles.validationRow}>
               <TouchableOpacity
+                testID="quality-review-valid-btn"
                 style={[
                   styles.validationButton,
                   validationResult === 'valid' && styles.validationButtonActiveValid,
@@ -336,6 +340,7 @@ export default function QualityReviewsAdminScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="quality-review-invalid-btn"
                 style={[
                   styles.validationButton,
                   validationResult === 'wrong' && styles.validationButtonActiveWrong,

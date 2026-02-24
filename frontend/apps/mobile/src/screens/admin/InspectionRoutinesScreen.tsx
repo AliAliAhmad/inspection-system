@@ -120,10 +120,11 @@ export default function InspectionRoutinesScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="inspection-routines-screen">
       <Text style={styles.title}>{t('routines.title', 'Inspection Routines')}</Text>
 
       <FlatList
+        testID="inspection-routines-list"
         data={routines}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (

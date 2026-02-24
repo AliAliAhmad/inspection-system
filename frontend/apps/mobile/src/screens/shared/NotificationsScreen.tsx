@@ -621,6 +621,7 @@ export default function NotificationsScreen() {
     <View style={styles.tabContainer}>
       {tabs.map((tab) => (
         <TouchableOpacity
+          testID={`notifications-tab-${tab.key}`}
           key={tab.key}
           style={[styles.tab, activeTab === tab.key && styles.tabActive]}
           onPress={() => {
@@ -933,7 +934,7 @@ export default function NotificationsScreen() {
   // ============ MAIN RENDER ============
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <GestureHandlerRootView testID="notifications-screen" style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.notifications')}</Text>
@@ -960,6 +961,7 @@ export default function NotificationsScreen() {
 
           {/* Mark all read */}
           <TouchableOpacity
+            testID="notifications-mark-all-read-btn"
             onPress={() => markAllReadMutation.mutate()}
             disabled={markAllReadMutation.isPending}
           >
@@ -978,6 +980,7 @@ export default function NotificationsScreen() {
       ) : isGroupedView ? (
         // GROUPED VIEW
         <FlatList
+          testID="notifications-list"
           data={groups}
           keyExtractor={(item) => item.group_key || item.id.toString()}
           renderItem={renderGroupItem}

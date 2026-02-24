@@ -435,7 +435,7 @@ export default function AdminUsersScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="admin-users-screen">
       <View style={styles.headerRow}>
         <Text style={styles.title}>{t('nav.users', 'Users')}</Text>
         <View style={styles.headerButtons}>

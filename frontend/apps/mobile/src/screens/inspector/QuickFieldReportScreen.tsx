@@ -227,10 +227,10 @@ export default function QuickFieldReportScreen() {
   const styles = useMemo(() => createStyles(colors, isDark, accentColor, accentBg, isAr), [colors, isDark, accentColor, accentBg, isAr]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView testID="quick-report-screen" style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity testID="back-btn" onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons
             name={isAr ? 'chevron-forward' : 'chevron-back'}
             size={28}
@@ -251,6 +251,7 @@ export default function QuickFieldReportScreen() {
         {/* Type Toggle */}
         <View style={styles.toggleRow}>
           <TouchableOpacity
+            testID="toggle-equipment"
             style={[
               styles.toggleBtn,
               { borderColor: '#1677ff' },
@@ -275,6 +276,7 @@ export default function QuickFieldReportScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            testID="toggle-safety"
             style={[
               styles.toggleBtn,
               { borderColor: '#f5222d' },
@@ -301,6 +303,7 @@ export default function QuickFieldReportScreen() {
 
         {/* Photo Button -- prominent center */}
         <TouchableOpacity
+          testID="take-photo-btn"
           style={[styles.photoBtn, { borderColor: accentColor, backgroundColor: accentBg }]}
           onPress={takePhoto}
           activeOpacity={0.7}
@@ -332,6 +335,7 @@ export default function QuickFieldReportScreen() {
               {t('quick_report.equipment_number')}
             </Text>
             <TextInput
+              testID="equipment-search-input"
               style={[
                 styles.input,
                 {
@@ -351,6 +355,7 @@ export default function QuickFieldReportScreen() {
                 {equipmentResults.map((item) => (
                   <TouchableOpacity
                     key={item.id}
+                    testID={`equipment-result-${item.id}`}
                     style={[styles.resultItem, { borderBottomColor: colors.divider }]}
                     onPress={() => selectEquipment(item)}
                   >
@@ -373,6 +378,7 @@ export default function QuickFieldReportScreen() {
               {severities.map((sev) => (
                 <TouchableOpacity
                   key={sev}
+                  testID={`severity-${sev}`}
                   style={[
                     styles.chip,
                     {
@@ -404,6 +410,7 @@ export default function QuickFieldReportScreen() {
               {t('quick_report.location')}
             </Text>
             <TextInput
+              testID="location-input"
               style={[
                 styles.input,
                 {
@@ -427,6 +434,7 @@ export default function QuickFieldReportScreen() {
               {hazardTypes.map((ht) => (
                 <TouchableOpacity
                   key={ht}
+                  testID={`hazard-${ht}`}
                   style={[
                     styles.chip,
                     {
@@ -464,6 +472,7 @@ export default function QuickFieldReportScreen() {
 
         {/* Submit */}
         <TouchableOpacity
+          testID="submit-report-btn"
           style={[
             styles.submitBtn,
             { backgroundColor: canSubmit ? accentColor : colors.disabled },

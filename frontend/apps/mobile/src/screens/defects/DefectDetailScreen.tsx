@@ -20,6 +20,7 @@ import {
   Alert,
   Modal,
   FlatList,
+  TextInput,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -27,8 +28,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
-import { defectsApi, aiApi } from '@inspection/shared';
+import { defectsApi, aiApi, usersApi } from '@inspection/shared';
 import type { Defect } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 
 import RiskGauge from '../../components/RiskGauge';
 import SLABadge from '../../components/SLABadge';
@@ -66,12 +68,16 @@ export default function DefectDetailScreen() {
   const route = useRoute<ScreenRoute>();
   const queryClient = useQueryClient();
   const { defectId: id } = route.params;
+  const { user } = useAuth();
 
   const [aiPanelExpanded, setAiPanelExpanded] = useState(true);
   const [showEscalateModal, setShowEscalateModal] = useState(false);
   const [escalateReason, setEscalateReason] = useState('');
   const [similarDefects, setSimilarDefects] = useState<SimilarDefect[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
+  const [showAssignInspectorModal, setShowAssignInspectorModal] = useState(false);
+  const [inspectorSearch, setInspectorSearch] = useState('');
+  const [inspectors, setInspectors] = useState<any[]>([]);
 
   // Fetch defect details
   const { data, isLoading, refetch, isRefetching } = useQuery({
@@ -108,6 +114,31 @@ export default function DefectDetailScreen() {
       Alert.alert(t('common.error'), err?.response?.data?.message || 'Failed to escalate');
     },
   });
+
+  // Assign inspector mutation
+  const assignInspectorMutation = useMutation({
+    mutationFn: (inspectorId: number) =>
+      (defectsApi as any).assignInspector(id, { inspector_id: inspectorId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['defect', id] });
+      setShowAssignInspectorModal(false);
+      setInspectorSearch('');
+      Alert.alert(t('common.success'), 'Defect assigned to inspector');
+    },
+    onError: (err: any) => {
+      Alert.alert(t('common.error'), err?.response?.data?.message || 'Failed to assign inspector');
+    },
+  });
+
+  const handleOpenAssignInspector = useCallback(async () => {
+    try {
+      const res = await usersApi.list({ role: 'inspector' });
+      setInspectors((res?.data as any)?.data ?? (res?.data as any) ?? []);
+    } catch {
+      setInspectors([]);
+    }
+    setShowAssignInspectorModal(true);
+  }, []);
 
   // Load similar defects
   const handleLoadSimilar = useCallback(async () => {
@@ -167,6 +198,7 @@ export default function DefectDetailScreen() {
 
   return (
     <ScrollView
+      testID="defect-detail-screen"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
@@ -348,6 +380,18 @@ export default function DefectDetailScreen() {
             <Text style={styles.infoValue}>{(defect as any).assigned_to.full_name}</Text>
           </View>
         )}
+
+        {/* Assign to Inspector button — admin/engineer only */}
+        {(user?.role === 'admin' || user?.role === 'engineer') && (
+          <TouchableOpacity
+            style={styles.assignInspectorButton}
+            onPress={handleOpenAssignInspector}
+          >
+            <Text style={styles.assignInspectorButtonText}>
+              {(defect as any).assigned_to ? 'Reassign to Inspector' : 'Assign to Inspector'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Notes/History Section */}
@@ -422,6 +466,49 @@ export default function DefectDetailScreen() {
         </View>
       </Modal>
 
+      {/* Assign Inspector Modal */}
+      <Modal visible={showAssignInspectorModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Assign to Inspector</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search inspectors..."
+              value={inspectorSearch}
+              onChangeText={setInspectorSearch}
+              autoCapitalize="none"
+            />
+            <FlatList
+              data={inspectors.filter((ins: any) =>
+                (ins.name || ins.full_name || '').toLowerCase().includes(inspectorSearch.toLowerCase())
+              )}
+              keyExtractor={(item: any) => String(item.id)}
+              style={{ maxHeight: 200 }}
+              renderItem={({ item }: { item: any }) => (
+                <TouchableOpacity
+                  style={styles.inspectorItem}
+                  onPress={() => assignInspectorMutation.mutate(item.id)}
+                  disabled={assignInspectorMutation.isPending}
+                >
+                  <Text style={styles.inspectorItemText}>{item.name || item.full_name}</Text>
+                  <Text style={styles.inspectorItemRole}>{item.role}</Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={<Text style={styles.emptyText}>No inspectors found</Text>}
+            />
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => {
+                setShowAssignInspectorModal(false);
+                setInspectorSearch('');
+              }}
+            >
+              <Text style={styles.modalCancelText}>{t('common.cancel', 'Cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.bottomSpacer} />
     </ScrollView>
   );
@@ -434,6 +521,13 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 16, color: '#E53935', marginBottom: 12 },
   retryButton: { paddingHorizontal: 24, paddingVertical: 10, backgroundColor: '#1976D2', borderRadius: 8 },
   retryButtonText: { color: '#fff', fontWeight: '600' },
+  assignInspectorButton: { marginTop: 12, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#4CAF50', borderRadius: 8, alignSelf: 'flex-start' },
+  assignInspectorButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  searchInput: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, marginBottom: 8, fontSize: 14 },
+  inspectorItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  inspectorItemText: { fontSize: 15, color: '#212121', fontWeight: '500' },
+  inspectorItemRole: { fontSize: 12, color: '#757575' },
+  emptyText: { textAlign: 'center', color: '#757575', padding: 16 },
 
   // Header
   headerCard: {

@@ -279,7 +279,7 @@ export default function ChecklistsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="checklists-screen">
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.checklists', 'Checklists')}</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => setTemplateModalVisible(true)}>
@@ -288,6 +288,7 @@ export default function ChecklistsScreen() {
       </View>
 
       <FlatList
+        testID="checklists-list"
         data={templates}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (

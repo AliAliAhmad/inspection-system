@@ -229,6 +229,7 @@ export default function EngineerJobDetailScreen() {
 
   return (
     <ScrollView
+      testID="engineer-job-detail-screen"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
@@ -365,6 +366,7 @@ export default function EngineerJobDetailScreen() {
             )}
           </TouchableOpacity>
           <TouchableOpacity
+            testID="engineer-start-job-btn"
             style={[styles.actionButton, styles.primaryButton]}
             onPress={handleStart}
             disabled={startMutation.isPending}
@@ -394,12 +396,14 @@ export default function EngineerJobDetailScreen() {
       {job.status === 'in_progress' && !job.has_pending_pause && (
         <View style={styles.actionsSection}>
           <TouchableOpacity
+            testID="engineer-pause-btn"
             style={[styles.actionButton, styles.secondaryButton]}
             onPress={() => setPauseModalVisible(true)}
           >
             <Text style={styles.secondaryButtonText}>{t('jobs.pause', 'Pause')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            testID="engineer-complete-btn"
             style={[styles.actionButton, styles.primaryButton, { backgroundColor: '#4CAF50' }]}
             onPress={() => setCompleteModalVisible(true)}
           >
@@ -419,6 +423,7 @@ export default function EngineerJobDetailScreen() {
               {PAUSE_CATEGORIES.map((cat) => (
                 <TouchableOpacity
                   key={cat}
+                  testID={`engineer-pause-category-${cat}`}
                   style={[
                     styles.categoryChip,
                     pauseCategory === cat && styles.categoryChipActive,
@@ -450,6 +455,7 @@ export default function EngineerJobDetailScreen() {
 
             <View style={styles.modalActions}>
               <TouchableOpacity
+                testID="engineer-pause-cancel-btn"
                 style={[styles.actionButton, styles.secondaryButton]}
                 onPress={() => {
                   setPauseModalVisible(false);
@@ -460,6 +466,7 @@ export default function EngineerJobDetailScreen() {
                 <Text style={styles.secondaryButtonText}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="engineer-pause-submit-btn"
                 style={[styles.actionButton, styles.primaryButton]}
                 onPress={() =>
                   pauseMutation.mutate({
@@ -500,6 +507,7 @@ export default function EngineerJobDetailScreen() {
             <Text style={styles.inputLabel}>{t('common.completion_status', 'Completion Status')}</Text>
             <View style={styles.toggleRow}>
               <TouchableOpacity
+                testID="engineer-complete-pass-btn"
                 style={[styles.toggleButton, completionStatus === 'pass' && styles.toggleActive]}
                 onPress={() => setCompletionStatus('pass')}
               >
@@ -508,6 +516,7 @@ export default function EngineerJobDetailScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="engineer-complete-incomplete-btn"
                 style={[styles.toggleButton, completionStatus === 'incomplete' && styles.toggleActiveRed]}
                 onPress={() => setCompletionStatus('incomplete')}
               >
@@ -519,12 +528,14 @@ export default function EngineerJobDetailScreen() {
 
             <View style={styles.modalActions}>
               <TouchableOpacity
+                testID="engineer-complete-cancel-btn"
                 style={[styles.actionButton, styles.secondaryButton]}
                 onPress={() => setCompleteModalVisible(false)}
               >
                 <Text style={styles.secondaryButtonText}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="engineer-complete-confirm-btn"
                 style={[styles.actionButton, styles.primaryButton, { backgroundColor: '#4CAF50' }]}
                 onPress={handleComplete}
                 disabled={completeMutation.isPending}

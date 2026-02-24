@@ -610,7 +610,7 @@ export default function MyWorkPlanScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="my-work-plan-screen" style={styles.container}>
       <Text style={styles.title}>{t('nav.my_work_plan', 'My Work Plan')}</Text>
 
       {/* Week Navigation */}
@@ -649,6 +649,7 @@ export default function MyWorkPlanScreen() {
         renderEmpty()
       ) : (
         <FlatList
+          testID="my-work-plan-list"
           data={myJobs}
           keyExtractor={(item) => item.date}
           renderItem={renderDaySection}

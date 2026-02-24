@@ -143,6 +143,7 @@ function FilterTabs({
         return (
           <TouchableOpacity
             key={tab.key}
+            testID={`assessment-tracking-filter-${tab.key}`}
             style={[
               s.filterTab,
               isActive && { backgroundColor: colors.primary },
@@ -189,6 +190,7 @@ function AssessmentCard({
 
   return (
     <TouchableOpacity
+      testID={`assessment-card-${assessment.id}`}
       style={[s.card, { backgroundColor: colors.surface }]}
       onPress={onPress}
       activeOpacity={0.7}
@@ -343,10 +345,11 @@ export default function AssessmentTrackingScreen() {
   }, [refetch]);
 
   return (
-    <View style={[s.container, { backgroundColor: colors.backgroundSecondary ?? '#f5f5f5' }]}>
+    <View testID="assessment-tracking-screen" style={[s.container, { backgroundColor: colors.backgroundSecondary ?? '#f5f5f5' }]}>
       {/* Header */}
       <View style={[s.header, { backgroundColor: colors.primary }]}>
         <TouchableOpacity
+          testID="assessment-tracking-back-btn"
           style={s.backButton}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
@@ -360,6 +363,7 @@ export default function AssessmentTrackingScreen() {
       </View>
 
       <ScrollView
+        testID="assessment-tracking-scroll"
         style={s.scrollView}
         contentContainerStyle={s.scrollContent}
         refreshControl={
@@ -373,6 +377,7 @@ export default function AssessmentTrackingScreen() {
       >
         {/* Stat cards — horizontal scroll */}
         <ScrollView
+          testID="assessment-tracking-stats-scroll"
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.statsRow}

@@ -125,6 +125,7 @@ export default function SkillGapsScreen() {
 
   return (
     <ScrollView
+      testID="skill-gaps-screen"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}

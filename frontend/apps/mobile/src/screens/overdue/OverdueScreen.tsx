@@ -267,7 +267,7 @@ export default function OverdueScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="overdue-screen" style={styles.container}>
       {/* Summary Cards */}
       <View style={styles.summaryContainer}>
         <ScrollView
@@ -329,6 +329,7 @@ export default function OverdueScreen() {
 
       {/* List */}
       <FlatList
+        testID="overdue-list"
         data={currentItems}
         keyExtractor={(item) => `${item.type}-${item.id}`}
         renderItem={renderItem}

@@ -88,11 +88,12 @@ export default function EngineerJobsScreen() {
     }
   };
 
-  const renderJob = useCallback(({ item }: { item: EngineerJob }) => (
+  const renderJob = useCallback(({ item, index }: { item: EngineerJob; index: number }) => (
     <TouchableOpacity
       style={styles.card}
       onPress={() => navigation.navigate('EngineerJobDetail', { jobId: item.id })}
       activeOpacity={0.7}
+      testID={`engineer-job-card-${index}`}
     >
       <View style={styles.cardHeader}>
         <View style={styles.cardTitleRow}>
@@ -155,7 +156,7 @@ export default function EngineerJobsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="engineer-jobs-screen" style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.my_jobs', 'My Jobs')}</Text>
         <TouchableOpacity
@@ -176,6 +177,7 @@ export default function EngineerJobsScreen() {
       </View>
 
       <FlatList
+        testID="engineer-jobs-list"
         data={filteredJobs}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderJob}

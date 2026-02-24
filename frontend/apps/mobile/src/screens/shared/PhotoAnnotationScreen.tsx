@@ -146,7 +146,7 @@ export default function PhotoAnnotationScreen() {
   }, [imageUri, navigation, onAnnotationComplete, returnParams, returnScreen, t]);
 
   return (
-    <View style={styles.container}>
+    <View testID="photo-annotation-screen" style={styles.container}>
       <PhotoAnnotation
         imageUri={imageUri}
         onSave={handleSave}

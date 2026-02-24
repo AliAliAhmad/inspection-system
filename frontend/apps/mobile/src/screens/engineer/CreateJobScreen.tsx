@@ -93,7 +93,7 @@ export default function CreateJobScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ScrollView testID="create-job-screen" style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>{t('nav.create_job', 'Create Job')}</Text>
 
       {/* Job Type */}
@@ -102,6 +102,7 @@ export default function CreateJobScreen() {
         {JOB_TYPES.map(({ key, icon }) => (
           <TouchableOpacity
             key={key}
+            testID={`job-type-${key}-btn`}
             style={[styles.typeCard, jobType === key && styles.typeCardActive]}
             onPress={() => setJobType(key)}
           >
@@ -116,6 +117,7 @@ export default function CreateJobScreen() {
       {/* Title */}
       <Text style={styles.label}>{t('common.title', 'Title')}</Text>
       <TextInput
+        testID="job-title-input"
         style={styles.input}
         value={title}
         onChangeText={setTitle}
@@ -126,6 +128,7 @@ export default function CreateJobScreen() {
       {/* Description */}
       <Text style={styles.label}>{t('common.description', 'Description')}</Text>
       <VoiceTextInput
+        testID="job-description-input"
         style={[styles.input, styles.textArea]}
         value={description}
         onChangeText={setDescription}
@@ -139,6 +142,7 @@ export default function CreateJobScreen() {
       <Text style={styles.label}>{t('common.category', 'Category')}</Text>
       <View style={styles.categoryRow}>
         <TouchableOpacity
+          testID="category-major-btn"
           style={[styles.categoryButton, category === 'major' && styles.categoryMajorActive]}
           onPress={() => setCategory(category === 'major' ? null : 'major')}
         >
@@ -147,6 +151,7 @@ export default function CreateJobScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          testID="category-minor-btn"
           style={[styles.categoryButton, category === 'minor' && styles.categoryMinorActive]}
           onPress={() => setCategory(category === 'minor' ? null : 'minor')}
         >
@@ -161,6 +166,7 @@ export default function CreateJobScreen() {
         <>
           <Text style={styles.label}>{t('common.major_reason', 'Major Reason')}</Text>
           <VoiceTextInput
+            testID="major-reason-input"
             style={[styles.input, styles.textArea]}
             value={majorReason}
             onChangeText={setMajorReason}
@@ -175,6 +181,7 @@ export default function CreateJobScreen() {
       {/* Actions */}
       <View style={styles.actions}>
         <TouchableOpacity
+          testID="cancel-btn"
           style={[styles.actionButton, styles.cancelButton]}
           onPress={() => navigation.goBack()}
         >

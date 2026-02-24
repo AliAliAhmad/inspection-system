@@ -12,6 +12,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import * as DocumentPicker from 'expo-document-picker';
@@ -42,6 +43,7 @@ function Badge({ label, color }: { label: string; color: string }) {
 }
 
 function EquipmentCard({ equipment, onEdit }: { equipment: Equipment; onEdit: (e: Equipment) => void }) {
+  const navigation = useNavigation<any>();
   const statusColor = STATUS_COLORS[equipment.status] ?? '#757575';
 
   return (
@@ -68,6 +70,17 @@ function EquipmentCard({ equipment, onEdit }: { equipment: Equipment; onEdit: (e
 
       <View style={styles.badgeRow}>
         <Badge label={equipment.status} color={statusColor} />
+        <TouchableOpacity
+          testID={`equipment-running-hours-btn-${equipment.id}`}
+          style={styles.hoursButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate('RunningHours', { equipmentId: equipment.id, equipmentName: equipment.name });
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.hoursButtonText}>⏱️ Hours</Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -285,7 +298,7 @@ export default function EquipmentScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="equipment-screen">
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.equipment', 'Equipment')}</Text>
         <View style={styles.headerButtons}>
@@ -368,6 +381,7 @@ export default function EquipmentScreen() {
 
       {/* Equipment List */}
       <FlatList
+        testID="equipment-list"
         data={items}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <EquipmentCard equipment={item} onEdit={handleOpenEdit} />}
@@ -579,9 +593,11 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', marginBottom: 4 },
   cardLabel: { fontSize: 13, color: '#757575' },
   cardValue: { fontSize: 13, color: '#424242', fontWeight: '500' },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 11, fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
+  hoursButton: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#E3F2FD', marginLeft: 'auto' as any },
+  hoursButtonText: { fontSize: 11, fontWeight: '600', color: '#1976D2' },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   emptyContainer: { paddingTop: 60, alignItems: 'center' },
   emptyText: { fontSize: 15, color: '#757575' },

@@ -147,7 +147,7 @@ export default function CreateHandoverScreen() {
   const typeConfig = ITEM_TYPES.find(t => t.key === newType)!;
 
   return (
-    <SafeAreaView style={[st.safe, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView testID="create-handover-screen" style={[st.safe, { backgroundColor: colors.background }]} edges={['top']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -172,6 +172,7 @@ export default function CreateHandoverScreen() {
             {SHIFT_TYPES.map((s) => (
               <TouchableOpacity
                 key={s}
+                testID={`create-handover-shift-${s}`}
                 style={[
                   st.chip,
                   { borderColor: colors.border },
@@ -191,6 +192,7 @@ export default function CreateHandoverScreen() {
             {isAr ? 'ملاحظات' : 'Notes'}
           </Text>
           <TextInput
+            testID="create-handover-notes-input"
             style={[st.textArea, { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border }]}
             value={notes}
             onChangeText={setNotes}
@@ -273,6 +275,7 @@ export default function CreateHandoverScreen() {
                 returnKeyType="done"
               />
               <TouchableOpacity
+                testID="create-handover-add-item-btn"
                 style={[st.addBtn, { backgroundColor: typeConfig.color, opacity: newText.trim() ? 1 : 0.4 }]}
                 onPress={addItem}
                 disabled={!newText.trim()}
@@ -284,6 +287,7 @@ export default function CreateHandoverScreen() {
 
           {/* Submit */}
           <TouchableOpacity
+            testID="create-handover-submit-btn"
             style={[st.submitBtn, submitMutation.isPending && { opacity: 0.6 }]}
             onPress={handleSubmit}
             disabled={submitMutation.isPending}

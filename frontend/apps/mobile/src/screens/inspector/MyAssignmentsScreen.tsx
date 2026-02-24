@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import { scale, vscale, mscale, fontScale } from '../../utils/scale';
 import {
   View,
   Text,
@@ -298,7 +299,7 @@ function AnswerDetailModal({
             </View>
           )}
 
-          <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
+          <TouchableOpacity testID="modal-close-btn" style={styles.modalCloseButton} onPress={onClose}>
             <Text style={styles.modalCloseText}>{t('assignments.close')}</Text>
           </TouchableOpacity>
         </View>
@@ -325,6 +326,7 @@ function StatFilterCard({
 }) {
   return (
     <TouchableOpacity
+      testID={`filter-${label.toLowerCase().replace(/\s/g, '-')}`}
       style={[
         styles.quickActionCard,
         isActive && styles.quickActionCardActive,
@@ -468,6 +470,7 @@ export default function MyAssignmentsScreen() {
         return (
           <TouchableOpacity
             key={filter}
+            testID={`assessment-filter-${filter}`}
             style={[
               styles.assessmentChip,
               { borderColor: color },
@@ -503,6 +506,7 @@ export default function MyAssignmentsScreen() {
 
     return (
       <TouchableOpacity
+        testID={`assignment-card-${item.id}`}
         style={styles.card}
         onPress={() => handlePress(item)}
         activeOpacity={0.7}
@@ -588,7 +592,7 @@ export default function MyAssignmentsScreen() {
   const renderEmpty = () => {
     if (isLoading) return null;
     return (
-      <View style={styles.emptyContainer}>
+      <View testID="empty-state" style={styles.emptyContainer}>
         <Text style={styles.emptyText}>{t('common.noData')}</Text>
       </View>
     );
@@ -606,7 +610,7 @@ export default function MyAssignmentsScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{t('common.error')}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
+        <TouchableOpacity testID="retry-button" style={styles.retryButton} onPress={() => refetch()}>
           <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       </View>
@@ -626,7 +630,7 @@ export default function MyAssignmentsScreen() {
   ];
 
   return (
-    <View style={styles.container}>
+    <View testID="assignments-screen" style={styles.container}>
       {/* User greeting + star score */}
       <View style={styles.greetingRow}>
         <Text style={styles.greetingText}>
@@ -676,6 +680,7 @@ export default function MyAssignmentsScreen() {
 
       {/* Assignment list */}
       <FlatList
+        testID="assignments-list"
         data={assignments}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderAssignmentCard}
@@ -707,106 +712,106 @@ const styles = StyleSheet.create({
   // Greeting row
   greetingRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#fff',
+    paddingHorizontal: scale(16), paddingTop: vscale(12), paddingBottom: vscale(8), backgroundColor: '#fff',
   },
-  greetingText: { fontSize: 19, fontWeight: '700', color: '#212121' },
+  greetingText: { fontSize: fontScale(19), fontWeight: '700', color: '#212121' },
   starBadge: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#FFF8E1', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
+    backgroundColor: '#FFF8E1', paddingHorizontal: scale(10), paddingVertical: vscale(4), borderRadius: mscale(12),
   },
-  starText: { fontSize: 16, fontWeight: '700', color: '#F57F17' },
+  starText: { fontSize: fontScale(16), fontWeight: '700', color: '#F57F17' },
 
-  // Quick Action cards (exact copy from DashboardScreen)
+  // Quick Action cards
   quickActionsRow: {
-    backgroundColor: '#fff', paddingBottom: 4,
+    backgroundColor: '#fff', paddingBottom: vscale(4),
   },
   quickActionsContent: {
-    paddingHorizontal: 16, paddingVertical: 10, gap: 10,
+    paddingHorizontal: scale(16), paddingVertical: vscale(10), gap: scale(10),
   },
   quickActionCard: {
-    width: (SCREEN_WIDTH - 32 - 40) / 4,
-    backgroundColor: '#fff', borderRadius: 18, padding: 10, alignItems: 'center',
+    width: (SCREEN_WIDTH - scale(32) - scale(40)) / 4,
+    backgroundColor: '#fff', borderRadius: mscale(18), padding: scale(10), alignItems: 'center',
     borderWidth: 1, borderColor: '#E0E0E0',
   },
   quickActionCardActive: {
     borderBottomWidth: 3, borderBottomColor: '#1976D2',
   },
   quickActionIcon: {
-    width: 36, height: 36, borderRadius: 18,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 6,
+    width: scale(36), height: scale(36), borderRadius: scale(18),
+    justifyContent: 'center', alignItems: 'center', marginBottom: vscale(6),
   },
-  quickActionEmoji: { fontSize: 18 },
-  quickActionValue: { fontSize: 19, fontWeight: '800', marginBottom: 2 },
-  quickActionLabel: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  quickActionEmoji: { fontSize: fontScale(18) },
+  quickActionValue: { fontSize: fontScale(19), fontWeight: '800', marginBottom: vscale(2) },
+  quickActionLabel: { fontSize: fontScale(13), fontWeight: '600', textAlign: 'center' },
 
   // Assessment filter row
   assessmentFilterRow: {
-    flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 8,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0', gap: 6,
+    flexDirection: 'row', paddingHorizontal: scale(12), paddingVertical: vscale(8),
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0', gap: scale(6),
   },
   assessmentChip: {
-    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderWidth: 1.5,
+    paddingHorizontal: scale(12), paddingVertical: vscale(5), borderRadius: mscale(14), borderWidth: 1.5,
   },
-  assessmentChipText: { fontSize: 15, fontWeight: '600' },
+  assessmentChipText: { fontSize: fontScale(15), fontWeight: '600' },
 
-  listContent: { padding: 12 },
+  listContent: { padding: scale(12) },
   emptyList: { flexGrow: 1 },
   card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10,
+    backgroundColor: '#fff', borderRadius: mscale(12), padding: scale(14), marginBottom: vscale(10),
     elevation: 2, boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.1)', overflow: 'hidden',
   },
   cardHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: vscale(8),
   },
   cardHeaderLeft: {
-    flex: 1, marginRight: 8, gap: 4,
+    flex: 1, marginRight: scale(8), gap: vscale(4),
   },
-  equipmentName: { fontSize: 18, fontWeight: '700', color: '#212121' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, alignSelf: 'flex-start', maxWidth: 140 },
-  statusBadgeText: { color: '#fff', fontSize: 14, fontWeight: '600', textTransform: 'capitalize' },
-  pendingOnText: { fontSize: 13, color: '#757575', marginTop: 3, textAlign: 'right' },
-  equipmentType: { fontSize: 16, color: '#757575', marginBottom: 2 },
-  detailText: { fontSize: 16, color: '#757575', marginBottom: 2 },
+  equipmentName: { fontSize: fontScale(18), fontWeight: '700', color: '#212121' },
+  statusBadge: { paddingHorizontal: scale(10), paddingVertical: vscale(3), borderRadius: mscale(12), alignSelf: 'flex-start', maxWidth: scale(140) },
+  statusBadgeText: { color: '#fff', fontSize: fontScale(14), fontWeight: '600', textTransform: 'capitalize' },
+  pendingOnText: { fontSize: fontScale(13), color: '#757575', marginTop: vscale(3), textAlign: 'right' },
+  equipmentType: { fontSize: fontScale(16), color: '#757575', marginBottom: vscale(2) },
+  detailText: { fontSize: fontScale(16), color: '#757575', marginBottom: vscale(2) },
 
   // Assessment Badge (inline)
   assessmentBadge: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, gap: 4,
+    paddingHorizontal: scale(10), paddingVertical: vscale(4), borderRadius: mscale(6), gap: scale(4),
   },
-  assessmentBadgeText: { fontSize: 15, fontWeight: '700' },
+  assessmentBadgeText: { fontSize: fontScale(15), fontWeight: '700' },
   assessmentPredictedTag: {
-    fontSize: 12, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic',
+    fontSize: fontScale(12), color: 'rgba(255,255,255,0.8)', fontStyle: 'italic',
   },
 
   // Answer Bar
   answerSection: {
-    marginTop: 10, marginBottom: 4, gap: 6,
+    marginTop: vscale(10), marginBottom: vscale(4), gap: vscale(6),
   },
   answerBar: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 3,
+    flexDirection: 'row', flexWrap: 'wrap', gap: scale(3),
   },
   answerCell: {
-    minWidth: 26, height: 24, borderRadius: 4,
-    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3,
+    minWidth: scale(26), height: vscale(24), borderRadius: mscale(4),
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: scale(3),
   },
-  answerCellText: { fontSize: 13, fontWeight: '800' },
+  answerCellText: { fontSize: fontScale(13), fontWeight: '800' },
 
   // Urgency score badge
   urgencyScoreBadge: {
-    alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+    alignSelf: 'flex-start', paddingHorizontal: scale(8), paddingVertical: vscale(3), borderRadius: mscale(8),
   },
-  urgencyScoreText: { fontSize: 14, fontWeight: '600' },
+  urgencyScoreText: { fontSize: fontScale(14), fontWeight: '600' },
 
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  shiftBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: vscale(10) },
+  shiftBadge: { paddingHorizontal: scale(10), paddingVertical: vscale(4), borderRadius: mscale(12) },
   shiftDay: { backgroundColor: '#FFF3E0' },
   shiftNight: { backgroundColor: '#E8EAF6' },
-  shiftBadgeText: { fontSize: 15, fontWeight: '500', color: '#424242' },
-  deadlineText: { fontSize: 15, color: '#E53935', fontWeight: '500' },
-  emptyContainer: { alignItems: 'center', paddingTop: 60, paddingBottom: 40 },
-  emptyText: { fontSize: 17, color: '#999' },
-  errorText: { fontSize: 18, color: '#E53935', marginBottom: 12 },
-  retryButton: { paddingHorizontal: 24, paddingVertical: 10, backgroundColor: '#1976D2', borderRadius: 8 },
+  shiftBadgeText: { fontSize: fontScale(15), fontWeight: '500', color: '#424242' },
+  deadlineText: { fontSize: fontScale(15), color: '#E53935', fontWeight: '500' },
+  emptyContainer: { alignItems: 'center', paddingTop: vscale(60), paddingBottom: vscale(40) },
+  emptyText: { fontSize: fontScale(17), color: '#999' },
+  errorText: { fontSize: fontScale(18), color: '#E53935', marginBottom: vscale(12) },
+  retryButton: { paddingHorizontal: scale(24), paddingVertical: vscale(10), backgroundColor: '#1976D2', borderRadius: mscale(8) },
   retryButtonText: { color: '#fff', fontWeight: '600' },
 
   // Modal
@@ -814,45 +819,45 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 20, paddingBottom: 36, maxHeight: '70%',
+    backgroundColor: '#fff', borderTopLeftRadius: mscale(20), borderTopRightRadius: mscale(20),
+    padding: scale(20), paddingBottom: vscale(36), maxHeight: '70%',
   },
   modalHandle: {
-    width: 40, height: 4, backgroundColor: '#DDD', borderRadius: 2,
-    alignSelf: 'center', marginBottom: 16,
+    width: scale(40), height: vscale(4), backgroundColor: '#DDD', borderRadius: mscale(2),
+    alignSelf: 'center', marginBottom: vscale(16),
   },
   modalQuestionText: {
-    fontSize: 19, fontWeight: '700', color: '#212121', marginBottom: 16, lineHeight: 24,
+    fontSize: fontScale(19), fontWeight: '700', color: '#212121', marginBottom: vscale(16), lineHeight: fontScale(24),
   },
   modalCategoryRow: {
-    flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8,
+    flexDirection: 'row', alignItems: 'center', marginBottom: vscale(12), gap: scale(8),
   },
-  modalCategoryLabel: { fontSize: 16, color: '#757575' },
-  modalCategoryBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
-  modalCategoryText: { fontSize: 15, fontWeight: '600', color: '#424242', textTransform: 'capitalize' },
+  modalCategoryLabel: { fontSize: fontScale(16), color: '#757575' },
+  modalCategoryBadge: { paddingHorizontal: scale(10), paddingVertical: vscale(3), borderRadius: mscale(10) },
+  modalCategoryText: { fontSize: fontScale(15), fontWeight: '600', color: '#424242', textTransform: 'capitalize' },
   modalRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
+    paddingVertical: vscale(10), borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
   },
-  modalLabel: { fontSize: 16, color: '#757575', fontWeight: '500' },
-  modalValue: { fontSize: 16, color: '#212121', fontWeight: '600' },
+  modalLabel: { fontSize: fontScale(16), color: '#757575', fontWeight: '500' },
+  modalValue: { fontSize: fontScale(16), color: '#212121', fontWeight: '600' },
   modalUrgencyBadge: {
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
+    paddingHorizontal: scale(10), paddingVertical: vscale(4), borderRadius: mscale(6),
   },
-  modalUrgencyText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  modalUrgencyText: { fontSize: fontScale(15), fontWeight: '700', color: '#fff' },
   modalCommentSection: {
-    marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F5F5F5',
+    marginTop: vscale(12), paddingTop: vscale(12), borderTopWidth: 1, borderTopColor: '#F5F5F5',
   },
   modalComment: {
-    fontSize: 16, color: '#424242', marginTop: 6, lineHeight: 20,
+    fontSize: fontScale(16), color: '#424242', marginTop: vscale(6), lineHeight: fontScale(20),
   },
   modalPhotoIndicator: {
-    marginTop: 12, padding: 10, backgroundColor: '#E3F2FD', borderRadius: 8,
+    marginTop: vscale(12), padding: scale(10), backgroundColor: '#E3F2FD', borderRadius: mscale(8),
   },
-  modalPhotoText: { fontSize: 16, color: '#1565C0' },
+  modalPhotoText: { fontSize: fontScale(16), color: '#1565C0' },
   modalCloseButton: {
-    marginTop: 20, backgroundColor: '#1976D2', paddingVertical: 12,
-    borderRadius: 10, alignItems: 'center',
+    marginTop: vscale(20), backgroundColor: '#1976D2', paddingVertical: vscale(12),
+    borderRadius: mscale(10), alignItems: 'center',
   },
-  modalCloseText: { color: '#fff', fontSize: 17, fontWeight: '600' },
+  modalCloseText: { color: '#fff', fontSize: fontScale(17), fontWeight: '600' },
 });

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
+import { scale, vscale, mscale, fontScale } from '../../utils/scale';
 import { useAuth } from '../../providers/AuthProvider';
 import { useLanguage } from '../../providers/LanguageProvider';
 import { useThemeContext } from '../../providers/ThemeProvider';
@@ -70,7 +71,7 @@ export default function ProfileScreen() {
   const roleColor = getRoleColor(user.role, isDark);
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView testID="profile-screen" style={styles.container}>
       {/* Avatar */}
       <View style={styles.avatarSection}>
         <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
@@ -134,6 +135,7 @@ export default function ProfileScreen() {
           {(['system', 'light', 'dark', 'schedule'] as ThemeMode[]).map((themeMode) => (
             <TouchableOpacity
               key={themeMode}
+              testID={`theme-${themeMode}`}
               style={[
                 styles.themeOption,
                 mode === themeMode && styles.themeOptionActive,
@@ -173,6 +175,7 @@ export default function ProfileScreen() {
         <View style={styles.langRow}>
           <Text style={styles.langLabel}>English</Text>
           <Switch
+            testID="language-toggle"
             value={language === 'ar'}
             onValueChange={(checked) => setLanguage(checked ? 'ar' : 'en')}
             trackColor={{ false: colors.border, true: colors.primary }}
@@ -199,6 +202,7 @@ export default function ProfileScreen() {
             {t('profile.high_contrast')}
           </Text>
           <Switch
+            testID="high-contrast-toggle"
             value={isHighContrast}
             onValueChange={(checked) => updatePreferences({ highContrastEnabled: checked })}
             trackColor={{ false: colors.border, true: colors.primary }}
@@ -207,11 +211,12 @@ export default function ProfileScreen() {
         </View>
 
         {/* Bold Text */}
-        <View style={[styles.langRow, { marginTop: 8 }]}>
+        <View style={[styles.langRow, { marginTop: vscale(8) }]}>
           <Text style={styles.langLabel}>
             {t('profile.bold_text')}
           </Text>
           <Switch
+            testID="bold-text-toggle"
             value={isBoldText}
             onValueChange={(checked) => updatePreferences({ boldTextEnabled: checked })}
             trackColor={{ false: colors.border, true: colors.primary }}
@@ -220,11 +225,12 @@ export default function ProfileScreen() {
         </View>
 
         {/* Reduce Motion */}
-        <View style={[styles.langRow, { marginTop: 8 }]}>
+        <View style={[styles.langRow, { marginTop: vscale(8) }]}>
           <Text style={styles.langLabel}>
             {t('profile.reduce_motion')}
           </Text>
           <Switch
+            testID="reduce-motion-toggle"
             value={isReduceMotion}
             onValueChange={(checked) => updatePreferences({ reduceMotionEnabled: checked })}
             trackColor={{ false: colors.border, true: colors.primary }}
@@ -233,13 +239,14 @@ export default function ProfileScreen() {
         </View>
 
         {/* Text Scale */}
-        <Text style={[styles.langLabel, { marginTop: 12, marginBottom: 8 }]}>
+        <Text style={[styles.langLabel, { marginTop: vscale(12), marginBottom: vscale(8) }]}>
           {t('profile.text_size')}
         </Text>
         <View style={styles.themeOptions}>
           {([1, 1.25, 1.5, 2] as TextScale[]).map((scale) => (
             <TouchableOpacity
               key={scale}
+              testID={`text-scale-${scale}`}
               style={[
                 styles.themeOption,
                 textScale === scale && styles.themeOptionActive,
@@ -286,10 +293,21 @@ export default function ProfileScreen() {
           </Text>
           <Text style={styles.quickLinkArrow}>›</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          testID="notification-prefs-link"
+          style={styles.quickLinkRow}
+          onPress={() => navigation.navigate('NotificationPreferences')}
+        >
+          <Text style={styles.quickLinkIcon}>🔔</Text>
+          <Text style={[styles.langLabel, { flex: 1 }]}>
+            {t('profile.notification_preferences', 'Notification Preferences')}
+          </Text>
+          <Text style={styles.quickLinkArrow}>›</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+      <TouchableOpacity testID="logout-btn" style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>{t('auth.logout')}</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -308,13 +326,13 @@ function InfoRow({ label, value, colors }: InfoRowProps) {
       style={{
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingVertical: 10,
+        paddingVertical: vscale(10),
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
       }}
     >
-      <Text style={{ fontSize: 14, color: colors.textSecondary }}>{label}</Text>
-      <Text style={{ fontSize: 14, color: colors.text, fontWeight: '500' }}>{value}</Text>
+      <Text style={{ fontSize: fontScale(14), color: colors.textSecondary }}>{label}</Text>
+      <Text style={{ fontSize: fontScale(14), color: colors.text, fontWeight: '500' }}>{value}</Text>
     </View>
   );
 }
@@ -326,59 +344,59 @@ const useStyles = createThemedStyles((colors, isDark) => ({
   },
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: vscale(24),
     backgroundColor: colors.surface,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: scale(80),
+    height: vscale(80),
+    borderRadius: mscale(40),
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: vscale(12),
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: fontScale(32),
     fontWeight: 'bold',
     color: colors.textInverse,
   },
   name: {
-    fontSize: 20,
+    fontSize: fontScale(20),
     fontWeight: 'bold',
     color: colors.text,
   },
   roleBadge: {
-    marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    marginTop: vscale(8),
+    paddingHorizontal: scale(12),
+    paddingVertical: vscale(4),
+    borderRadius: mscale(12),
   },
   roleText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: fontScale(12),
     fontWeight: '600',
   },
   section: {
     backgroundColor: colors.surface,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    marginTop: vscale(12),
+    paddingHorizontal: scale(16),
+    paddingVertical: vscale(12),
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: fontScale(16),
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: vscale(12),
     color: colors.text,
   },
   themeOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: scale(8),
   },
   themeOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: scale(16),
+    paddingVertical: vscale(10),
+    borderRadius: mscale(8),
     backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
     borderColor: colors.border,
@@ -388,7 +406,7 @@ const useStyles = createThemedStyles((colors, isDark) => ({
     borderColor: colors.primary,
   },
   themeOptionText: {
-    fontSize: 14,
+    fontSize: fontScale(14),
     color: colors.textSecondary,
   },
   themeOptionTextActive: {
@@ -396,62 +414,62 @@ const useStyles = createThemedStyles((colors, isDark) => ({
     fontWeight: '600',
   },
   scheduleInfo: {
-    marginTop: 12,
-    padding: 12,
+    marginTop: vscale(12),
+    padding: scale(12),
     backgroundColor: colors.backgroundSecondary,
-    borderRadius: 8,
+    borderRadius: mscale(8),
   },
   scheduleText: {
-    fontSize: 13,
+    fontSize: fontScale(13),
     color: colors.textSecondary,
     textAlign: 'center',
   },
   themeHint: {
-    fontSize: 12,
+    fontSize: fontScale(12),
     color: colors.textTertiary,
-    marginTop: 8,
+    marginTop: vscale(8),
   },
   langRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: scale(12),
   },
   langLabel: {
-    fontSize: 14,
+    fontSize: fontScale(14),
     color: colors.text,
   },
   dirText: {
-    fontSize: 12,
+    fontSize: fontScale(12),
     color: colors.textTertiary,
-    marginTop: 8,
+    marginTop: vscale(8),
   },
   quickLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: vscale(12),
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
   quickLinkIcon: {
-    fontSize: 18,
-    marginRight: 12,
+    fontSize: fontScale(18),
+    marginRight: scale(12),
   },
   quickLinkArrow: {
-    fontSize: 20,
+    fontSize: fontScale(20),
     color: colors.textTertiary,
   },
   logoutButton: {
-    margin: 16,
+    margin: scale(16),
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.error,
-    borderRadius: 8,
-    paddingVertical: 14,
+    borderRadius: mscale(8),
+    paddingVertical: vscale(14),
     alignItems: 'center',
   },
   logoutText: {
     color: colors.error,
-    fontSize: 16,
+    fontSize: fontScale(16),
     fontWeight: '600',
   },
 }));

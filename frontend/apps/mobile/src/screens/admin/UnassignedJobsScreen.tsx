@@ -182,7 +182,7 @@ export default function UnassignedJobsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="unassigned-jobs-screen">
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Unassigned Jobs</Text>
@@ -197,6 +197,7 @@ export default function UnassignedJobsScreen() {
 
       {/* Jobs List */}
       <FlatList
+        testID="unassigned-jobs-list"
         data={unassignedJobs}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderJob}

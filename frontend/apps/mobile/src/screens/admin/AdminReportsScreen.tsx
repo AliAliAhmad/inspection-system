@@ -117,6 +117,7 @@ export default function AdminReportsScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
+      testID="admin-reports-screen"
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} />}
     >
       <Text style={styles.title}>{t('nav.reports', 'Reports & Analytics')}</Text>

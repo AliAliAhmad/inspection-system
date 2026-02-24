@@ -157,6 +157,7 @@ export default function WorkPlanOverviewScreen() {
     return (
       <TouchableOpacity
         key={job.id}
+        testID={`work-plan-job-card-${job.id}`}
         style={[styles.jobCard, hasNoSAP && styles.jobCardNoSAP]}
         onPress={() => handleJobPress(job, dayId)}
         activeOpacity={0.7}
@@ -263,7 +264,7 @@ export default function WorkPlanOverviewScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="work-plan-overview-screen">
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>
@@ -346,6 +347,7 @@ export default function WorkPlanOverviewScreen() {
         </View>
       ) : (
         <FlatList
+          testID="work-plan-overview-list"
           data={days.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderDayCard}

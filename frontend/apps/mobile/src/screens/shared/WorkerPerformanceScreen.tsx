@@ -91,6 +91,7 @@ export default function WorkerPerformanceScreen() {
 
   return (
     <ScrollView
+      testID="worker-performance-screen"
       style={styles.container}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
     >

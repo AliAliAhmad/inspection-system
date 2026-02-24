@@ -237,6 +237,7 @@ export default function QuickVoiceMessageScreen() {
         style={[styles.channelCard, isSelected && styles.channelCardSelected]}
         onPress={() => setSelectedChannel(item)}
         activeOpacity={0.7}
+        testID={`qvm-channel-card-${item.id}`}
       >
         <View style={[styles.channelIcon, isSelected && styles.channelIconSelected]}>
           <Text style={styles.channelIconText}>
@@ -263,7 +264,7 @@ export default function QuickVoiceMessageScreen() {
   const hasRecording = !!recordedAudioUri;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView testID="quick-voice-message-screen" style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -291,6 +292,7 @@ export default function QuickVoiceMessageScreen() {
         </View>
       ) : (
         <FlatList
+          testID="quick-voice-message-list"
           data={channels}
           renderItem={renderChannel}
           keyExtractor={(item) => String(item.id)}
@@ -340,6 +342,7 @@ export default function QuickVoiceMessageScreen() {
               ]}
               onPress={handleMicPress}
               disabled={isSending || isUploading}
+              testID="qvm-record-btn"
             >
               {isUploading ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -355,6 +358,7 @@ export default function QuickVoiceMessageScreen() {
               style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
               onPress={handleSend}
               disabled={isSending}
+              testID="qvm-send-btn"
             >
               {isSending ? (
                 <View style={styles.sendingRow}>

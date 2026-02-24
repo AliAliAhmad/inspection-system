@@ -117,7 +117,7 @@ export default function BacklogScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="backlog-screen">
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.backlog', 'Overdue Inspections')}</Text>
         {assignments.length > 0 && (
@@ -126,6 +126,7 @@ export default function BacklogScreen() {
       </View>
 
       <FlatList
+        testID="backlog-list"
         data={assignments}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <BacklogCard item={item} />}

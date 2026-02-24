@@ -11,6 +11,8 @@ import {
   ScrollView,
   Alert,
   TextInput,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -148,6 +150,7 @@ function AssignmentCard({
 
       <View style={styles.cardActions}>
         <TouchableOpacity
+          testID={`inspection-assign-btn-${assignment.id}`}
           style={[styles.assignButton, isCompleted && styles.assignButtonDisabled]}
           onPress={() => onAssign(assignment)}
           disabled={isCompleted}
@@ -477,10 +480,10 @@ export default function InspectionAssignmentsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="inspection-assignments-screen">
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.inspectionAssignments', 'Assignments')}</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setGenerateModalVisible(true)}>
+        <TouchableOpacity testID="inspection-generate-btn" style={styles.addButton} onPress={() => setGenerateModalVisible(true)}>
           <Text style={styles.addButtonText}>+ {t('assignments.generate', 'Generate')}</Text>
         </TouchableOpacity>
       </View>
@@ -574,6 +577,7 @@ export default function InspectionAssignmentsScreen() {
           {/* Bulk Action Button */}
           {unassignedCount > 0 && !selectionMode && (
             <TouchableOpacity
+              testID="inspection-auto-assign-btn"
               style={styles.bulkButton}
               onPress={handleBulkAutoAssign}
               disabled={bulkAssignMutation.isPending}
@@ -589,6 +593,7 @@ export default function InspectionAssignmentsScreen() {
           )}
 
           <FlatList
+            testID="inspection-assignments-list"
             data={allAssignments}
             keyExtractor={(item) => String(item.id)}
             renderItem={({ item }) => (
@@ -648,7 +653,7 @@ export default function InspectionAssignmentsScreen() {
               <Text style={styles.modalCancel}>{t('common.cancel', 'Cancel')}</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>{t('assignments.generate', 'Generate List')}</Text>
-            <TouchableOpacity onPress={handleGenerate} disabled={generateMutation.isPending}>
+            <TouchableOpacity testID="inspection-generate-modal-submit" onPress={handleGenerate} disabled={generateMutation.isPending}>
               {generateMutation.isPending ? (
                 <ActivityIndicator size="small" color="#1976D2" />
               ) : (
@@ -660,6 +665,7 @@ export default function InspectionAssignmentsScreen() {
           <ScrollView style={styles.modalContent}>
             <Text style={styles.fieldLabel}>{t('assignments.targetDate', 'Target Date')}</Text>
             <TextInput
+              testID="inspection-generate-date-input"
               style={styles.dateInput}
               value={targetDateStr}
               onChangeText={setTargetDateStr}
@@ -670,6 +676,7 @@ export default function InspectionAssignmentsScreen() {
             <Text style={styles.fieldLabel}>{t('assignments.shift', 'Shift')}</Text>
             <View style={styles.shiftRow}>
               <TouchableOpacity
+                testID="inspection-generate-shift-day"
                 style={[styles.shiftButton, selectedShift === 'day' && styles.shiftButtonActive]}
                 onPress={() => setSelectedShift('day')}
               >
@@ -683,6 +690,7 @@ export default function InspectionAssignmentsScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="inspection-generate-shift-night"
                 style={[
                   styles.shiftButton,
                   selectedShift === 'night' && styles.shiftButtonActiveNight,
@@ -708,6 +716,7 @@ export default function InspectionAssignmentsScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
+              testID="inspection-assign-modal-cancel"
               onPress={() => {
                 setAssignModalVisible(false);
                 setSelectedAssignment(null);
@@ -716,7 +725,7 @@ export default function InspectionAssignmentsScreen() {
               <Text style={styles.modalCancel}>{t('common.cancel', 'Cancel')}</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>{t('assignments.assignTeam', 'Assign Team')}</Text>
-            <TouchableOpacity onPress={handleAssignSubmit} disabled={assignMutation.isPending}>
+            <TouchableOpacity testID="inspection-assign-modal-submit" onPress={handleAssignSubmit} disabled={assignMutation.isPending}>
               {assignMutation.isPending ? (
                 <ActivityIndicator size="small" color="#1976D2" />
               ) : (
@@ -1019,7 +1028,7 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
   emptyContainer: { paddingTop: 60, alignItems: 'center' },
   emptyText: { fontSize: 15, color: '#757575', textAlign: 'center', paddingHorizontal: 32 },
-  modalContainer: { flex: 1, backgroundColor: '#f5f5f5' },
+  modalContainer: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0 },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

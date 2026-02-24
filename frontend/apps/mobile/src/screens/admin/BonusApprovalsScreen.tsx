@@ -94,6 +94,7 @@ function BonusCard({
             style={[styles.actionButton, styles.rejectButton]}
             onPress={() => onReject(request.id)}
             disabled={isActioning}
+            testID={`bonus-reject-btn-${request.id}`}
           >
             <Text style={styles.rejectButtonText}>Reject</Text>
           </TouchableOpacity>
@@ -101,6 +102,7 @@ function BonusCard({
             style={[styles.actionButton, styles.approveButton]}
             onPress={() => onApprove(request.id)}
             disabled={isActioning}
+            testID={`bonus-approve-btn-${request.id}`}
           >
             <Text style={styles.approveButtonText}>Approve</Text>
           </TouchableOpacity>
@@ -212,10 +214,11 @@ export default function BonusApprovalsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="bonus-approvals-screen">
       <Text style={styles.title}>{t('nav.bonusApprovals', 'Bonus Approvals')}</Text>
 
       <FlatList
+        testID="bonus-approvals-list"
         data={requests}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (

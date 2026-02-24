@@ -140,7 +140,7 @@ export default function RunningHoursScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView testID="running-hours-screen" style={styles.container}>
       {/* Header */}
       <View style={[styles.header, isAr && styles.rtlRow]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -206,6 +206,7 @@ export default function RunningHoursScreen() {
         {/* Record New Reading Button */}
         {!showInput && (
           <TouchableOpacity
+            testID="running-hours-record-btn"
             style={styles.recordBtn}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -226,6 +227,7 @@ export default function RunningHoursScreen() {
             </Text>
 
             <TextInput
+              testID="running-hours-input"
               style={[styles.hoursInput, isAr && styles.rtlText]}
               placeholder={isAr ? 'أدخل الساعات' : 'Enter hours'}
               value={newHours}
@@ -273,6 +275,7 @@ export default function RunningHoursScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="running-hours-submit-btn"
                 style={[styles.submitBtn, submitMutation.isPending && styles.disabledBtn]}
                 onPress={handleSubmit}
                 disabled={submitMutation.isPending}

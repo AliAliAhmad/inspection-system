@@ -172,7 +172,7 @@ export default function JobExecutionScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} testID="job-execution-screen">
       {/* Carry-over banner */}
       {carryOverFrom && (
         <View style={styles.carryOverBanner}>
@@ -187,13 +187,13 @@ export default function JobExecutionScreen() {
       )}
 
       {/* Status badge */}
-      <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+      <View style={[styles.statusBadge, { backgroundColor: statusColor }]} testID="job-status-badge">
         <Text style={styles.statusText}>{status.replace('_', ' ').toUpperCase()}</Text>
       </View>
 
       {/* Timer */}
       <View style={styles.timerContainer}>
-        <Text style={styles.timerText}>{formatTime(elapsedTime)}</Text>
+        <Text style={styles.timerText} testID="job-timer">{formatTime(elapsedTime)}</Text>
         {tracking?.total_paused_minutes ? (
           <Text style={styles.pausedText}>{t('job_execution.paused_time', { minutes: tracking.total_paused_minutes })}</Text>
         ) : null}
@@ -206,6 +206,7 @@ export default function JobExecutionScreen() {
             style={[styles.actionButton, styles.startButton]}
             onPress={() => startMutation.mutate()}
             disabled={startMutation.isPending}
+            testID="start-job-btn"
           >
             {startMutation.isPending ? (
               <ActivityIndicator color="#fff" />
@@ -220,6 +221,7 @@ export default function JobExecutionScreen() {
             <TouchableOpacity
               style={[styles.actionButton, styles.pauseButton]}
               onPress={() => setShowPauseModal(true)}
+              testID="pause-job-btn"
             >
               <Text style={styles.actionButtonText}>{t('job_execution.pause')}</Text>
             </TouchableOpacity>
@@ -227,6 +229,7 @@ export default function JobExecutionScreen() {
             <TouchableOpacity
               style={[styles.actionButton, styles.completeButton]}
               onPress={() => setShowCompleteModal(true)}
+              testID="complete-job-btn"
             >
               <Text style={styles.actionButtonText}>{t('job_execution.complete')}</Text>
             </TouchableOpacity>
@@ -234,6 +237,7 @@ export default function JobExecutionScreen() {
             <TouchableOpacity
               style={[styles.actionButton, styles.incompleteButton]}
               onPress={() => setShowIncompleteModal(true)}
+              testID="incomplete-job-btn"
             >
               <Text style={styles.actionButtonText}>{t('job_execution.incomplete')}</Text>
             </TouchableOpacity>
@@ -246,6 +250,7 @@ export default function JobExecutionScreen() {
               style={[styles.actionButton, styles.resumeButton]}
               onPress={() => resumeMutation.mutate()}
               disabled={resumeMutation.isPending}
+              testID="resume-job-btn"
             >
               {resumeMutation.isPending ? (
                 <ActivityIndicator color="#fff" />
@@ -257,6 +262,7 @@ export default function JobExecutionScreen() {
             <TouchableOpacity
               style={[styles.actionButton, styles.incompleteButton]}
               onPress={() => setShowIncompleteModal(true)}
+              testID="mark-incomplete-btn"
             >
               <Text style={styles.actionButtonText}>{t('job_execution.mark_incomplete')}</Text>
             </TouchableOpacity>
@@ -302,6 +308,7 @@ export default function JobExecutionScreen() {
                   selectedReason === reason.key && styles.reasonButtonSelected,
                 ]}
                 onPress={() => setSelectedReason(reason.key)}
+                testID={`pause-reason-${reason.key}`}
               >
                 <Text style={[
                   styles.reasonButtonText,
@@ -324,6 +331,7 @@ export default function JobExecutionScreen() {
               <TouchableOpacity
                 style={styles.modalCancel}
                 onPress={() => { setShowPauseModal(false); setSelectedReason(''); }}
+                testID="pause-cancel-btn"
               >
                 <Text style={styles.modalCancelText}>{t('job_execution.cancel')}</Text>
               </TouchableOpacity>
@@ -338,6 +346,7 @@ export default function JobExecutionScreen() {
                   }
                 }}
                 disabled={!selectedReason || pauseMutation.isPending}
+                testID="pause-confirm-btn"
               >
                 {pauseMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -361,6 +370,7 @@ export default function JobExecutionScreen() {
               value={workNotes}
               onChangeText={setWorkNotes}
               multiline
+              testID="work-notes-input"
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -373,6 +383,7 @@ export default function JobExecutionScreen() {
                 style={styles.modalConfirm}
                 onPress={() => completeMutation.mutate({ work_notes: workNotes || undefined })}
                 disabled={completeMutation.isPending}
+                testID="complete-confirm-btn"
               >
                 {completeMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -399,6 +410,7 @@ export default function JobExecutionScreen() {
                   selectedReason === reason.key && styles.reasonButtonSelected,
                 ]}
                 onPress={() => setSelectedReason(reason.key)}
+                testID={`incomplete-reason-${reason.key}`}
               >
                 <Text style={[
                   styles.reasonButtonText,
@@ -433,6 +445,7 @@ export default function JobExecutionScreen() {
                   }
                 }}
                 disabled={!selectedReason || incompleteMutation.isPending}
+                testID="incomplete-confirm-btn"
               >
                 {incompleteMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />

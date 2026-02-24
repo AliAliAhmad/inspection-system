@@ -166,6 +166,7 @@ export default function MyPerformanceScreen() {
 
   return (
     <ScrollView
+      testID="my-performance-screen"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
@@ -334,6 +335,7 @@ export default function MyPerformanceScreen() {
           <Text style={styles.sectionTitle}>Coaching Tips</Text>
 
           <FlatList
+            testID="my-performance-list"
             ref={tipListRef}
             data={tips}
             keyExtractor={(item) => String(item.id)}

@@ -137,9 +137,10 @@ export default function PauseApprovalsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="pause-approvals-screen" style={styles.container}>
       <Text style={styles.title}>{t('nav.pause_approvals', 'Pause Approvals')}</Text>
       <FlatList
+        testID="pause-approvals-list"
         data={pauses}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderPause}

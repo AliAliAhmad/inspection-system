@@ -105,6 +105,7 @@ function LeaveCard({
             style={[styles.actionButton, styles.rejectButton]}
             onPress={() => onReject(request.id)}
             disabled={isActioning}
+            testID={`leave-reject-btn-${request.id}`}
           >
             <Text style={styles.rejectButtonText}>Reject</Text>
           </TouchableOpacity>
@@ -112,6 +113,7 @@ function LeaveCard({
             style={[styles.actionButton, styles.approveButton]}
             onPress={() => onApprove(request.id)}
             disabled={isActioning}
+            testID={`leave-approve-btn-${request.id}`}
           >
             <Text style={styles.approveButtonText}>Approve</Text>
           </TouchableOpacity>
@@ -220,10 +222,11 @@ export default function LeaveApprovalsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="leave-approvals-screen">
       <Text style={styles.title}>{t('nav.leaveApprovals', 'Leave Approvals')}</Text>
 
       <FlatList
+        testID="leave-approvals-list"
         data={requests}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (

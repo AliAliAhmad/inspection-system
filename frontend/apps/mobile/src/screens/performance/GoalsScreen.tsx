@@ -378,7 +378,7 @@ export default function GoalsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="goals-screen" style={styles.container}>
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         {filterOptions.map((option) => (

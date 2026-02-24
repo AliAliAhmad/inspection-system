@@ -330,7 +330,7 @@ export default function MonitorFollowupsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="monitor-followups-screen" style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
@@ -379,6 +379,7 @@ export default function MonitorFollowupsScreen() {
           return (
             <TouchableOpacity
               key={tab}
+              testID={`monitor-followups-tab-${tab}`}
               style={[
                 styles.tabBtn,
                 isActive && { backgroundColor: color },
@@ -403,6 +404,7 @@ export default function MonitorFollowupsScreen() {
 
       {/* List */}
       <FlatList
+        testID="monitor-followups-list"
         data={followups}
         keyExtractor={keyExtractor}
         renderItem={renderItem}

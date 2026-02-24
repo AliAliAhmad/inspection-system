@@ -111,6 +111,7 @@ export default function InspectorStatsScreen() {
 
   return (
     <ScrollView
+      testID="inspector-stats-screen"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}

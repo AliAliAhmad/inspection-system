@@ -95,7 +95,7 @@ export default function UnplannedJobScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView testID="unplanned-job-screen" style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -126,6 +126,7 @@ export default function UnplannedJobScreen() {
             ]}
             onPress={() => setJobType('assist_team')}
             activeOpacity={0.7}
+            testID="unplanned-job-type-assist-btn"
           >
             <Ionicons
               name="people"
@@ -150,6 +151,7 @@ export default function UnplannedJobScreen() {
             ]}
             onPress={() => setJobType('requested_job')}
             activeOpacity={0.7}
+            testID="unplanned-job-type-requested-btn"
           >
             <Ionicons
               name="document-text"
@@ -186,6 +188,7 @@ export default function UnplannedJobScreen() {
             placeholderTextColor={colors.textTertiary}
             value={equipmentName}
             onChangeText={setEquipmentName}
+            testID="unplanned-job-equipment-input"
           />
         </View>
 
@@ -208,6 +211,7 @@ export default function UnplannedJobScreen() {
             placeholderTextColor={colors.textTertiary}
             value={description}
             onChangeText={setDescription}
+            testID="unplanned-job-description-input"
             multiline
             numberOfLines={4}
             textAlignVertical="top"
@@ -233,6 +237,7 @@ export default function UnplannedJobScreen() {
             placeholderTextColor={colors.textTertiary}
             value={workDone}
             onChangeText={setWorkDone}
+            testID="unplanned-job-work-done-input"
             multiline
             numberOfLines={4}
             textAlignVertical="top"
@@ -283,6 +288,7 @@ export default function UnplannedJobScreen() {
           onPress={handleSubmit}
           disabled={!canSubmit || isSubmitting}
           activeOpacity={0.7}
+          testID="unplanned-job-submit-btn"
         >
           {isSubmitting ? (
             <ActivityIndicator color="#fff" />

@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { List, Divider } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { scale, vscale, mscale, fontScale } from '../../utils/scale';
 
 export default function AdminMoreScreen() {
   const navigation = useNavigation<any>();
   const { t } = useTranslation();
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView ref={scrollRef} style={styles.container} testID="admin-more-screen">
       <List.Section>
         <List.Subheader>🆕 New Features</List.Subheader>
 
@@ -25,6 +28,7 @@ export default function AdminMoreScreen() {
           description="Review daily work & AI suggestions"
           left={(props) => <List.Icon {...props} icon="clipboard-check" />}
           onPress={() => navigation.navigate('DailyReview')}
+          testID="more-daily-review"
         />
 
         <List.Item
@@ -32,6 +36,7 @@ export default function AdminMoreScreen() {
           description="Overdue items & SLA tracking"
           left={(props) => <List.Icon {...props} icon="clock-alert" />}
           onPress={() => navigation.navigate('Overdue')}
+          testID="more-overdue"
         />
 
         <List.Item
@@ -39,6 +44,7 @@ export default function AdminMoreScreen() {
           description="Team metrics & goals"
           left={(props) => <List.Icon {...props} icon="chart-line" />}
           onPress={() => navigation.navigate('MyPerformance')}
+          testID="more-performance"
         />
 
         <List.Item
@@ -56,6 +62,7 @@ export default function AdminMoreScreen() {
           description="Manage equipment"
           left={(props) => <List.Icon {...props} icon="cog" />}
           onPress={() => navigation.navigate('Equipment')}
+          testID="more-equipment"
         />
 
         <List.Item
@@ -70,6 +77,7 @@ export default function AdminMoreScreen() {
           description="Inspection schedules"
           left={(props) => <List.Icon {...props} icon="calendar" />}
           onPress={() => navigation.navigate('Schedules')}
+          testID="more-schedules"
         />
 
         <List.Item
@@ -77,6 +85,7 @@ export default function AdminMoreScreen() {
           description="Inspection assignments"
           left={(props) => <List.Icon {...props} icon="clipboard-list" />}
           onPress={() => navigation.navigate('InspectionAssignments')}
+          testID="more-assignments"
         />
 
         <List.Item
@@ -94,6 +103,22 @@ export default function AdminMoreScreen() {
         />
 
         <List.Item
+          title="🏖️ Leave Approvals"
+          description="Approve or reject leave requests"
+          left={(props) => <List.Icon {...props} icon="calendar-check" />}
+          onPress={() => navigation.navigate('LeaveApprovals')}
+          testID="more-leave-approvals"
+        />
+
+        <List.Item
+          title="🎁 Bonus Approvals"
+          description="Approve or reject bonus requests"
+          left={(props) => <List.Icon {...props} icon="gift" />}
+          onPress={() => navigation.navigate('BonusApprovals')}
+          testID="more-bonus-approvals"
+        />
+
+        <List.Item
           title="📊 Reports"
           description="Analytics & reports"
           left={(props) => <List.Icon {...props} icon="chart-bar" />}
@@ -108,6 +133,7 @@ export default function AdminMoreScreen() {
           description="All specialist jobs"
           left={(props) => <List.Icon {...props} icon="tools" />}
           onPress={() => navigation.navigate('AllSpecialistJobs')}
+          testID="more-specialist-jobs"
         />
 
         <List.Item
@@ -115,6 +141,7 @@ export default function AdminMoreScreen() {
           description="All engineer jobs"
           left={(props) => <List.Icon {...props} icon="wrench" />}
           onPress={() => navigation.navigate('AllEngineerJobs')}
+          testID="more-engineer-jobs"
         />
 
         <List.Item
@@ -122,6 +149,7 @@ export default function AdminMoreScreen() {
           description="View all inspections"
           left={(props) => <List.Icon {...props} icon="magnify" />}
           onPress={() => navigation.navigate('AllInspections')}
+          testID="more-all-inspections"
         />
 
         <List.Item
@@ -129,6 +157,7 @@ export default function AdminMoreScreen() {
           description="Quality review admin"
           left={(props) => <List.Icon {...props} icon="star" />}
           onPress={() => navigation.navigate('QualityReviewsAdmin')}
+          testID="more-quality-reviews"
         />
 
         <Divider />

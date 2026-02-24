@@ -223,7 +223,7 @@ export default function SchedulesScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="schedules-screen">
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.schedules', 'Inspection Schedules')}</Text>
         <TouchableOpacity
@@ -280,6 +280,7 @@ export default function SchedulesScreen() {
         </ScrollView>
       ) : (
         <FlatList
+          testID="schedules-list"
           data={schedules}
           keyExtractor={(item) => String(item.equipment_id)}
           renderItem={({ item }) => <ScheduleCard schedule={item} />}

@@ -146,6 +146,7 @@ export default function ScheduleAIScreen() {
 
   return (
     <ScrollView
+      testID="schedule-ai-screen"
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}

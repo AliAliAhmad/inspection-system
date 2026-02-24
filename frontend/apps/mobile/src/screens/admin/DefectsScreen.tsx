@@ -26,6 +26,7 @@ import type {
 } from '@inspection/shared';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import { useAuth } from '../../providers/AuthProvider';
+import { scale, vscale, mscale, fontScale } from '../../utils/scale';
 
 const ADMIN_ROLES = ['admin', 'engineer'];
 
@@ -88,7 +89,7 @@ function DefectCard({
   const canAssign = canAssignRole && !hasJob && defect.status !== 'closed' && defect.status !== 'resolved';
 
   return (
-    <View style={styles.card}>
+    <View style={styles.card} testID={`defect-card-${defect.id}`}>
       <View style={styles.cardDescriptionRow}>
         <Text style={styles.cardDescription} numberOfLines={2}>
           {defect.description}
@@ -127,6 +128,7 @@ function DefectCard({
 
         {canAssignRole ? (
           <TouchableOpacity
+            testID={`defect-assign-btn-${defect.id}`}
             style={[styles.assignButton, !canAssign && styles.assignButtonDisabled]}
             onPress={() => onAssign(defect)}
             disabled={!canAssign}
@@ -137,6 +139,7 @@ function DefectCard({
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
+            testID={`defect-view-btn-${defect.id}`}
             style={styles.viewButton}
             onPress={() => onView(defect)}
           >
@@ -317,10 +320,11 @@ export default function DefectsScreen({ navigation }: any) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="defects-screen">
       <View style={styles.header}>
         <Text style={styles.title}>{t('defects.title', 'Defects')}</Text>
         <TouchableOpacity
+          testID="defects-ai-search-btn"
           style={styles.aiSearchButton}
           onPress={() => setSearchModalVisible(true)}
         >
@@ -334,12 +338,14 @@ export default function DefectsScreen({ navigation }: any) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
         style={styles.filterScroll}
+        testID="defects-filter-scroll"
       >
         {filters.map((filter) => {
           const isActive = activeFilter === filter.value;
           return (
             <TouchableOpacity
               key={filter.label}
+              testID={`defects-filter-${filter.value ?? 'all'}`}
               style={[
                 styles.filterChip,
                 isActive ? styles.filterChipActive : styles.filterChipInactive,
@@ -362,6 +368,7 @@ export default function DefectsScreen({ navigation }: any) {
 
       {/* Defect List */}
       <FlatList
+        testID="defects-list"
         data={defects}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <DefectCard defect={item} onAssign={handleAssignPress} onView={handleViewPress} canAssignRole={canAssignRole} />}
@@ -391,10 +398,11 @@ export default function DefectsScreen({ navigation }: any) {
       />
 
       {/* Assign Specialist Modal */}
-      <Modal visible={assignModalVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={assignModalVisible} animationType="slide" presentationStyle="pageSheet" testID="defects-assign-modal">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
+              testID="defects-assign-modal-cancel"
               onPress={() => {
                 setAssignModalVisible(false);
                 setSelectedDefect(null);
@@ -404,7 +412,7 @@ export default function DefectsScreen({ navigation }: any) {
               <Text style={styles.modalCancel}>{t('common.cancel', 'Cancel')}</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>{t('defects.assignSpecialist', 'Assign Specialist')}</Text>
-            <TouchableOpacity onPress={handleAssignSubmit} disabled={assignMutation.isPending}>
+            <TouchableOpacity testID="defects-assign-modal-submit" onPress={handleAssignSubmit} disabled={assignMutation.isPending}>
               {assignMutation.isPending ? (
                 <ActivityIndicator size="small" color="#1976D2" />
               ) : (
@@ -435,6 +443,7 @@ export default function DefectsScreen({ navigation }: any) {
               <ActivityIndicator size="small" color="#1976D2" style={{ marginVertical: 16 }} />
             ) : (
               <TouchableOpacity
+                testID="defects-specialist-picker-btn"
                 style={styles.pickerButton}
                 onPress={() => setSpecialistPickerVisible(true)}
               >
@@ -453,7 +462,7 @@ export default function DefectsScreen({ navigation }: any) {
                 {selectedSpecialists.map((s) => (
                   <View key={s.id} style={styles.chip}>
                     <Text style={styles.chipText}>{s.full_name}</Text>
-                    <TouchableOpacity onPress={() => removeSpecialist(s.id)} style={styles.chipRemove}>
+                    <TouchableOpacity testID={`defects-remove-specialist-${s.id}`} onPress={() => removeSpecialist(s.id)} style={styles.chipRemove}>
                       <Text style={styles.chipRemoveText}>✕</Text>
                     </TouchableOpacity>
                   </View>
@@ -557,10 +566,17 @@ export default function DefectsScreen({ navigation }: any) {
       </Modal>
 
       {/* AI Search Modal */}
-      <Modal visible={searchModalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modalContainer}>
+      <Modal
+        visible={searchModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { setSearchModalVisible(false); setSearchQuery(''); setSearchResults([]); }}
+        testID="defects-ai-search-modal"
+      >
+        <View style={styles.modalContainer} testID="defects-ai-search-modal-content">
           <View style={styles.modalHeader}>
             <TouchableOpacity
+              testID="defects-ai-search-modal-close"
               onPress={() => {
                 setSearchModalVisible(false);
                 setSearchQuery('');
@@ -646,96 +662,96 @@ export default function DefectsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingBottom: 8 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#212121' },
-  aiSearchButton: { backgroundColor: '#9C27B0', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  aiSearchButtonText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-  filterScroll: { maxHeight: 48, paddingBottom: 4 },
-  filterRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: scale(16), paddingBottom: vscale(8) },
+  title: { fontSize: fontScale(22), fontWeight: 'bold', color: '#212121' },
+  aiSearchButton: { backgroundColor: '#9C27B0', paddingHorizontal: scale(14), paddingVertical: vscale(8), borderRadius: mscale(20) },
+  aiSearchButtonText: { color: '#fff', fontWeight: '600', fontSize: fontScale(13) },
+  filterScroll: { maxHeight: vscale(48), paddingBottom: vscale(4) },
+  filterRow: { paddingHorizontal: scale(16), gap: scale(8), alignItems: 'center' },
+  filterChip: { paddingHorizontal: scale(14), paddingVertical: vscale(7), borderRadius: mscale(20), borderWidth: 1 },
   filterChipActive: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
   filterChipInactive: { backgroundColor: '#fff', borderColor: '#BDBDBD' },
-  filterChipText: { fontSize: 13, fontWeight: '600' },
+  filterChipText: { fontSize: fontScale(13), fontWeight: '600' },
   filterChipTextActive: { color: '#fff' },
   filterChipTextInactive: { color: '#616161' },
-  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2 },
-  cardDescriptionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
-  cardDescription: { fontSize: 14, color: '#212121', lineHeight: 20, flex: 1, marginRight: 8 },
-  occurrenceBadge: { backgroundColor: '#E53935', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, minWidth: 28, alignItems: 'center' },
-  occurrenceBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  equipmentText: { fontSize: 13, color: '#1565C0', fontWeight: '500', marginBottom: 8 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  badgeText: { fontSize: 11, fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
+  listContent: { paddingHorizontal: scale(16), paddingTop: vscale(12), paddingBottom: vscale(32) },
+  card: { backgroundColor: '#fff', borderRadius: mscale(12), padding: scale(16), marginBottom: vscale(12), boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2 },
+  cardDescriptionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: vscale(10) },
+  cardDescription: { fontSize: fontScale(14), color: '#212121', lineHeight: vscale(20), flex: 1, marginRight: scale(8) },
+  occurrenceBadge: { backgroundColor: '#E53935', borderRadius: mscale(10), paddingHorizontal: scale(8), paddingVertical: vscale(2), minWidth: scale(28), alignItems: 'center' },
+  occurrenceBadgeText: { color: '#fff', fontSize: fontScale(11), fontWeight: '700' },
+  equipmentText: { fontSize: fontScale(13), color: '#1565C0', fontWeight: '500', marginBottom: vscale(8) },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(6), marginBottom: vscale(10) },
+  badge: { paddingHorizontal: scale(10), paddingVertical: vscale(4), borderRadius: mscale(12) },
+  badgeText: { fontSize: fontScale(11), fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  priorityText: { fontSize: 12, color: '#757575' },
+  priorityText: { fontSize: fontScale(12), color: '#757575' },
   priorityValue: { fontWeight: '600', color: '#424242', textTransform: 'capitalize' },
-  dateText: { fontSize: 12, color: '#757575' },
-  assignButton: { backgroundColor: '#1976D2', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  dateText: { fontSize: fontScale(12), color: '#757575' },
+  assignButton: { backgroundColor: '#1976D2', paddingHorizontal: scale(14), paddingVertical: vscale(8), borderRadius: mscale(8) },
   assignButtonDisabled: { backgroundColor: '#BDBDBD' },
-  assignButtonText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  assignButtonText: { color: '#fff', fontWeight: '600', fontSize: fontScale(13) },
   assignButtonTextDisabled: { color: '#757575' },
-  viewButton: { backgroundColor: '#E3F2FD', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#90CAF9' },
-  viewButtonText: { color: '#1565C0', fontWeight: '600', fontSize: 13 },
-  footerLoader: { paddingVertical: 16, alignItems: 'center' },
-  emptyContainer: { paddingTop: 60, alignItems: 'center' },
-  emptyText: { fontSize: 15, color: '#757575' },
+  viewButton: { backgroundColor: '#E3F2FD', paddingHorizontal: scale(14), paddingVertical: vscale(8), borderRadius: mscale(8), borderWidth: 1, borderColor: '#90CAF9' },
+  viewButtonText: { color: '#1565C0', fontWeight: '600', fontSize: fontScale(13) },
+  footerLoader: { paddingVertical: vscale(16), alignItems: 'center' },
+  emptyContainer: { paddingTop: vscale(60), alignItems: 'center' },
+  emptyText: { fontSize: fontScale(15), color: '#757575' },
   modalContainer: { flex: 1, backgroundColor: '#f5f5f5' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
-  modalCancel: { fontSize: 16, color: '#757575' },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: '#212121' },
-  modalSave: { fontSize: 16, color: '#1976D2', fontWeight: '600' },
-  modalContent: { padding: 16, flex: 1 },
-  defectInfo: { backgroundColor: '#E3F2FD', padding: 14, borderRadius: 10, marginBottom: 16 },
-  defectInfoTitle: { fontSize: 16, fontWeight: '700', color: '#1976D2', marginBottom: 6 },
-  defectInfoDescription: { fontSize: 14, color: '#424242', marginBottom: 8 },
-  defectInfoBadges: { flexDirection: 'row', gap: 8 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#424242', marginBottom: 6, marginTop: 16 },
-  pickerButton: { backgroundColor: '#fff', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: '#E0E0E0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  pickerButtonText: { fontSize: 15, color: '#212121', flex: 1 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: scale(16), backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e0e0e0' },
+  modalCancel: { fontSize: fontScale(16), color: '#757575' },
+  modalTitle: { fontSize: fontScale(17), fontWeight: '600', color: '#212121' },
+  modalSave: { fontSize: fontScale(16), color: '#1976D2', fontWeight: '600' },
+  modalContent: { padding: scale(16), flex: 1 },
+  defectInfo: { backgroundColor: '#E3F2FD', padding: scale(14), borderRadius: mscale(10), marginBottom: vscale(16) },
+  defectInfoTitle: { fontSize: fontScale(16), fontWeight: '700', color: '#1976D2', marginBottom: vscale(6) },
+  defectInfoDescription: { fontSize: fontScale(14), color: '#424242', marginBottom: vscale(8) },
+  defectInfoBadges: { flexDirection: 'row', gap: scale(8) },
+  fieldLabel: { fontSize: fontScale(13), fontWeight: '600', color: '#424242', marginBottom: vscale(6), marginTop: vscale(16) },
+  pickerButton: { backgroundColor: '#fff', paddingVertical: vscale(14), paddingHorizontal: scale(16), borderRadius: mscale(8), borderWidth: 1, borderColor: '#E0E0E0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  pickerButtonText: { fontSize: fontScale(15), color: '#212121', flex: 1 },
   placeholderText: { color: '#999' },
-  chevron: { fontSize: 12, color: '#757575', marginLeft: 8 },
-  categoryRow: { flexDirection: 'row', gap: 10 },
-  categoryButton: { flex: 1, paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: '#BDBDBD', alignItems: 'center', backgroundColor: '#fff' },
+  chevron: { fontSize: fontScale(12), color: '#757575', marginLeft: scale(8) },
+  categoryRow: { flexDirection: 'row', gap: scale(10) },
+  categoryButton: { flex: 1, paddingVertical: vscale(12), borderRadius: mscale(8), borderWidth: 1, borderColor: '#BDBDBD', alignItems: 'center', backgroundColor: '#fff' },
   categoryButtonActive: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
   categoryButtonActiveMajor: { backgroundColor: '#E53935', borderColor: '#E53935' },
-  categoryButtonText: { fontSize: 14, fontWeight: '600', color: '#616161' },
+  categoryButtonText: { fontSize: fontScale(14), fontWeight: '600', color: '#616161' },
   categoryButtonTextActive: { color: '#fff' },
-  textArea: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 12, fontSize: 15, color: '#212121', textAlignVertical: 'top', minHeight: 100 },
+  textArea: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: mscale(8), padding: scale(12), fontSize: fontScale(15), color: '#212121', textAlignVertical: 'top', minHeight: vscale(100) },
   pickerModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  pickerModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%' },
-  pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
-  pickerModalTitle: { fontSize: 17, fontWeight: '600', color: '#212121' },
-  pickerModalClose: { fontSize: 20, color: '#757575', paddingHorizontal: 8 },
-  pickerModalDone: { fontSize: 16, color: '#1976D2', fontWeight: '600' },
-  specialistList: { padding: 8 },
-  specialistOption: { padding: 14, backgroundColor: '#f5f5f5', borderRadius: 8, marginBottom: 8 },
+  pickerModalContent: { backgroundColor: '#fff', borderTopLeftRadius: mscale(20), borderTopRightRadius: mscale(20), maxHeight: '70%' },
+  pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: scale(16), borderBottomWidth: 1, borderBottomColor: '#E0E0E0' },
+  pickerModalTitle: { fontSize: fontScale(17), fontWeight: '600', color: '#212121' },
+  pickerModalClose: { fontSize: fontScale(20), color: '#757575', paddingHorizontal: scale(8) },
+  pickerModalDone: { fontSize: fontScale(16), color: '#1976D2', fontWeight: '600' },
+  specialistList: { padding: scale(8) },
+  specialistOption: { padding: scale(14), backgroundColor: '#f5f5f5', borderRadius: mscale(8), marginBottom: vscale(8) },
   specialistOptionSelected: { backgroundColor: '#E3F2FD', borderWidth: 1, borderColor: '#1976D2' },
   specialistOptionRow: { flexDirection: 'row', alignItems: 'center' },
-  checkMark: { fontSize: 18, color: '#1976D2', fontWeight: '700', marginLeft: 8 },
-  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E3F2FD', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#90CAF9' },
-  chipText: { fontSize: 13, color: '#1565C0', fontWeight: '500' },
-  chipRemove: { marginLeft: 6, paddingHorizontal: 2 },
-  chipRemoveText: { fontSize: 14, color: '#1565C0', fontWeight: '600' },
-  specialistName: { fontSize: 15, fontWeight: '600', color: '#212121' },
-  specialistDetail: { fontSize: 13, color: '#757575', marginTop: 2 },
-  noSpecialistsText: { fontSize: 14, color: '#757575', textAlign: 'center', padding: 24 },
-  searchHint: { fontSize: 14, color: '#757575', marginBottom: 16 },
-  searchRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  searchInput: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#212121' },
-  searchButton: { backgroundColor: '#9C27B0', paddingHorizontal: 20, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  checkMark: { fontSize: fontScale(18), color: '#1976D2', fontWeight: '700', marginLeft: scale(8) },
+  chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), marginTop: vscale(8) },
+  chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E3F2FD', paddingHorizontal: scale(10), paddingVertical: vscale(6), borderRadius: mscale(16), borderWidth: 1, borderColor: '#90CAF9' },
+  chipText: { fontSize: fontScale(13), color: '#1565C0', fontWeight: '500' },
+  chipRemove: { marginLeft: scale(6), paddingHorizontal: scale(2) },
+  chipRemoveText: { fontSize: fontScale(14), color: '#1565C0', fontWeight: '600' },
+  specialistName: { fontSize: fontScale(15), fontWeight: '600', color: '#212121' },
+  specialistDetail: { fontSize: fontScale(13), color: '#757575', marginTop: vscale(2) },
+  noSpecialistsText: { fontSize: fontScale(14), color: '#757575', textAlign: 'center', padding: scale(24) },
+  searchHint: { fontSize: fontScale(14), color: '#757575', marginBottom: vscale(16) },
+  searchRow: { flexDirection: 'row', gap: scale(10), marginBottom: vscale(16) },
+  searchInput: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E0E0E0', borderRadius: mscale(8), paddingHorizontal: scale(14), paddingVertical: vscale(12), fontSize: fontScale(15), color: '#212121' },
+  searchButton: { backgroundColor: '#9C27B0', paddingHorizontal: scale(20), borderRadius: mscale(8), justifyContent: 'center', alignItems: 'center' },
   searchButtonDisabled: { opacity: 0.6 },
-  searchButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-  searchingContainer: { alignItems: 'center', paddingVertical: 40 },
-  searchingText: { fontSize: 14, color: '#757575', marginTop: 12 },
+  searchButtonText: { color: '#fff', fontWeight: '600', fontSize: fontScale(15) },
+  searchingContainer: { alignItems: 'center', paddingVertical: vscale(40) },
+  searchingText: { fontSize: fontScale(14), color: '#757575', marginTop: vscale(12) },
   searchResultsList: { flex: 1 },
-  searchResultCard: { backgroundColor: '#fff', borderRadius: 10, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E0E0E0' },
-  searchResultHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
-  searchResultId: { fontSize: 14, fontWeight: '700', color: '#212121' },
-  similarityText: { fontSize: 12, color: '#757575' },
-  searchResultDescription: { fontSize: 14, color: '#424242', lineHeight: 20 },
-  noResultsContainer: { alignItems: 'center', paddingVertical: 40 },
-  noResultsText: { fontSize: 15, color: '#757575' },
+  searchResultCard: { backgroundColor: '#fff', borderRadius: mscale(10), padding: scale(14), marginBottom: vscale(10), borderWidth: 1, borderColor: '#E0E0E0' },
+  searchResultHeader: { flexDirection: 'row', alignItems: 'center', gap: scale(8), marginBottom: vscale(8), flexWrap: 'wrap' },
+  searchResultId: { fontSize: fontScale(14), fontWeight: '700', color: '#212121' },
+  similarityText: { fontSize: fontScale(12), color: '#757575' },
+  searchResultDescription: { fontSize: fontScale(14), color: '#424242', lineHeight: vscale(20) },
+  noResultsContainer: { alignItems: 'center', paddingVertical: vscale(40) },
+  noResultsText: { fontSize: fontScale(15), color: '#757575' },
 });

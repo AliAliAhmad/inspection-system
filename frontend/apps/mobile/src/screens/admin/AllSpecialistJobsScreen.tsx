@@ -55,6 +55,7 @@ function JobCard({
 
   return (
     <TouchableOpacity
+      testID={`admin-specialist-job-card-${job.id}`}
       style={[styles.card, needsAck && styles.cardWarning]}
       onPress={() => onPress(job)}
       activeOpacity={0.7}
@@ -63,6 +64,13 @@ function JobCard({
         <Text style={styles.cardId}>Job #{job.job_id || job.id}</Text>
         <Badge label={job.status} color={statusColor} />
       </View>
+
+      {/* Equipment name */}
+      {job.defect?.equipment?.name && (
+        <Text style={styles.equipmentName} numberOfLines={1}>
+          ⚙️ {job.defect.equipment.name}
+        </Text>
+      )}
 
       {job.defect?.description && (
         <Text style={styles.cardTitle} numberOfLines={2}>
@@ -291,7 +299,7 @@ export default function AllSpecialistJobsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="all-specialist-jobs-screen">
       <Text style={styles.title}>{t('nav.allSpecialistJobs', 'All Specialist Jobs')}</Text>
 
       {/* Stats Row */}
@@ -454,6 +462,7 @@ const styles = StyleSheet.create({
   cardWarning: { borderLeftWidth: 4, borderLeftColor: '#FF9800' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   cardId: { fontSize: 14, fontWeight: '600', color: '#757575' },
+  equipmentName: { fontSize: 13, fontWeight: '600', color: '#1565C0', marginBottom: 4 },
   cardTitle: { fontSize: 15, fontWeight: '600', color: '#212121', marginBottom: 8 },
   cardInfoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   cardLabel: { fontSize: 13, color: '#757575' },

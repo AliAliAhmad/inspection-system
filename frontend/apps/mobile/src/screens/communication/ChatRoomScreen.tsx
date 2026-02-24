@@ -627,7 +627,7 @@ export default function ChatRoomScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView testID="chat-room-screen" style={styles.container} edges={['bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -643,6 +643,7 @@ export default function ChatRoomScreen() {
 
       {/* Messages */}
       <FlatList
+        testID="chat-room-list"
         ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
@@ -694,6 +695,7 @@ export default function ChatRoomScreen() {
             disabled={isVoiceUploading}
             activeOpacity={0.7}
             delayPressIn={0}
+            testID="chat-mic-btn"
           >
             {isVoiceUploading ? (
               <ActivityIndicator size="small" color="#1677ff" />
@@ -723,6 +725,7 @@ export default function ChatRoomScreen() {
             placeholderTextColor="#bfbfbf"
             multiline
             maxLength={2000}
+            testID="chat-message-input"
           />
 
           {/* Priority send */}
@@ -740,6 +743,7 @@ export default function ChatRoomScreen() {
             style={[styles.sendBtn, !message.trim() && styles.sendBtnDisabled]}
             onPress={handleSend}
             disabled={!message.trim()}
+            testID="chat-send-btn"
           >
             <Text style={styles.sendBtnText}>
               {isAr ? '↩️' : '➤'}

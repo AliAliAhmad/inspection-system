@@ -197,6 +197,7 @@ export default function SpecialistJobsScreen() {
     return (
       <TouchableOpacity
         style={styles.card}
+        testID={`specialist-job-card-${item.id}`}
         onPress={() => handleCardPress(item)}
         activeOpacity={0.7}
       >
@@ -210,6 +211,13 @@ export default function SpecialistJobsScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Equipment name */}
+        {item.defect?.equipment?.name && (
+          <Text style={styles.equipmentName} numberOfLines={1}>
+            ⚙️ {item.defect.equipment.name}
+          </Text>
+        )}
 
         <View style={styles.badgeRow}>
           {categoryStyle && (
@@ -348,10 +356,11 @@ export default function SpecialistJobsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View testID="specialist-jobs-screen" style={styles.container}>
       {renderStatsSection()}
       {renderFilterTabs()}
       <FlatList
+        testID="specialist-jobs-list"
         data={filteredJobs}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderJobCard}
@@ -556,6 +565,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  equipmentName: { fontSize: 13, fontWeight: '600', color: '#1565C0', marginBottom: 4 },
   jobIdText: {
     fontSize: 16,
     fontWeight: '700',

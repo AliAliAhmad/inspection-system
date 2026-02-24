@@ -167,6 +167,7 @@ export default function DailyReviewScreen() {
 
   return (
     <ScrollView
+      testID="daily-review-screen"
       style={styles.container}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
     >

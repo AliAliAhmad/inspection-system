@@ -154,7 +154,7 @@ export default function AssessmentScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{t('common.error')}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
+        <TouchableOpacity testID="retry-button" style={styles.retryButton} onPress={() => refetch()}>
           <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
         </TouchableOpacity>
       </View>
@@ -170,6 +170,7 @@ export default function AssessmentScreen() {
 
   return (
     <ScrollView
+      testID="assessment-screen"
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       refreshControl={
@@ -178,7 +179,7 @@ export default function AssessmentScreen() {
     >
       {/* System Recommendation Banner */}
       {data.system_verdict && (
-        <View style={[styles.systemBanner, { borderLeftColor: getVerdictColor(data.system_verdict) }]}>
+        <View testID="system-verdict-banner" style={[styles.systemBanner, { borderLeftColor: getVerdictColor(data.system_verdict) }]}>
           <Text style={styles.systemBannerTitle}>
             🤖 {t('inspection.systemVerdict')}
           </Text>
@@ -317,6 +318,7 @@ export default function AssessmentScreen() {
 
       {/* View Full Inspection Details */}
       <TouchableOpacity
+        testID="view-details-btn"
         style={styles.detailsButton}
         onPress={() => navigation.navigate('InspectionDetail', { assignmentId: data.inspection_assignment_id })}
         activeOpacity={0.7}
@@ -382,6 +384,7 @@ export default function AssessmentScreen() {
           <View style={styles.verdictSelection}>
             {/* Operational Card */}
             <TouchableOpacity
+              testID="verdict-operational"
               style={[
                 styles.verdictCard,
                 { borderColor: VERDICT_CONFIG.operational.borderColor, backgroundColor: VERDICT_CONFIG.operational.bgColor },
@@ -406,6 +409,7 @@ export default function AssessmentScreen() {
 
             {/* Monitor Card */}
             <TouchableOpacity
+              testID="verdict-monitor"
               style={[
                 styles.verdictCard,
                 { borderColor: VERDICT_CONFIG.monitor.borderColor, backgroundColor: VERDICT_CONFIG.monitor.bgColor },
@@ -430,6 +434,7 @@ export default function AssessmentScreen() {
 
             {/* Stop Card */}
             <TouchableOpacity
+              testID="verdict-stop"
               style={[
                 styles.verdictCard,
                 { borderColor: VERDICT_CONFIG.stop.borderColor, backgroundColor: VERDICT_CONFIG.stop.bgColor },
@@ -506,6 +511,7 @@ export default function AssessmentScreen() {
           )}
 
           <TouchableOpacity
+            testID="submit-verdict-btn"
             style={[
               styles.submitButton,
               selectedVerdict && { backgroundColor: getVerdictColor(selectedVerdict) },

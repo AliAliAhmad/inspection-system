@@ -189,7 +189,7 @@ export default function NewChannelScreen() {
     : '';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView testID="new-channel-screen" style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.cancelText}>{isAr ? 'إلغاء' : 'Cancel'}</Text>

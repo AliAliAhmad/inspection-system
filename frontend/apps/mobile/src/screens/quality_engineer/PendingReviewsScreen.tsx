@@ -47,6 +47,7 @@ export default function PendingReviewsScreen() {
 
     return (
       <TouchableOpacity
+        testID={`pending-review-card-${item.id}`}
         style={styles.card}
         onPress={() => navigation.navigate('ReviewDetail', { id: item.id })}
         activeOpacity={0.7}
@@ -93,9 +94,10 @@ export default function PendingReviewsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="pending-reviews-screen" style={styles.container}>
       <Text style={styles.title}>{t('nav.pending_reviews', 'Pending Reviews')}</Text>
       <FlatList
+        testID="pending-reviews-list"
         data={reviews}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderReview}

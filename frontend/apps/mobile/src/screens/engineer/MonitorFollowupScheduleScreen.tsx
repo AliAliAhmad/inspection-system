@@ -358,6 +358,7 @@ export default function MonitorFollowupScheduleScreen() {
 
   return (
     <ScrollView
+      testID="monitor-followup-schedule-screen"
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       keyboardShouldPersistTaps="handled"
@@ -390,6 +391,7 @@ export default function MonitorFollowupScheduleScreen() {
           {t('monitor_followup.date', 'Date')} *
         </Text>
         <TextInput
+          testID="monitor-followup-date-input"
           style={styles.dateInput}
           value={dateText}
           onChangeText={handleDateTextChange}
@@ -411,6 +413,7 @@ export default function MonitorFollowupScheduleScreen() {
         <View style={styles.cardOptionsRow}>
           {FOLLOWUP_TYPES.map((ft) => (
             <SelectableCard
+              testID={`monitor-followup-type-${ft.key}`}
               key={ft.key}
               label={getTypeLabel(ft.key)}
               icon={ft.icon}
@@ -536,6 +539,7 @@ export default function MonitorFollowupScheduleScreen() {
 
       {/* Submit Button */}
       <TouchableOpacity
+        testID="monitor-followup-submit-btn"
         style={[
           styles.submitBtn,
           scheduleMutation.isPending && styles.submitBtnDisabled,

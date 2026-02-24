@@ -80,6 +80,7 @@ const ROUTE_CONTEXT_MAP: Record<string, FABContextType> = {
   'InspectionWizard': 'inspection',
 
   'WorkPlanOverview': 'work_plan',
+  'MyWorkPlan': 'work_plan',
 
   'ChannelList': 'chat_list',
   'ChatRoom': 'chat_room',
@@ -319,6 +320,11 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
           isPrimary: true,
         };
         actions = [
+          {
+            id: 'unplanned_job', label: 'Unplanned Job', labelAr: 'عمل غير مخطط',
+            icon: '➕', color: C.primary,
+            onPress: () => navigate('UnplannedJob'),
+          },
           QUICK_REPORT,
           {
             id: 'voice_message', label: 'Voice Message', labelAr: 'رسالة صوتية',

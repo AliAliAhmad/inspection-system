@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { engineerJobsApi } from '@inspection/shared';
 import type { EngineerJob } from '@inspection/shared';
+import { scale, vscale, mscale, fontScale } from '../../utils/scale';
 
 const STATUS_COLORS: Record<string, string> = {
   assigned: '#1976D2',
@@ -45,46 +46,37 @@ function JobCard({
   onPress: (j: EngineerJob) => void;
 }) {
   const statusColor = STATUS_COLORS[job.status] ?? '#757575';
-
   return (
     <TouchableOpacity style={styles.card} onPress={() => onPress(job)} activeOpacity={0.7}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardId}>Job #{job.job_id || job.id}</Text>
         <Badge label={job.status} color={statusColor} />
       </View>
-
-      <Text style={styles.cardTitle} numberOfLines={2}>
-        {job.title || 'No title'}
-      </Text>
-
-      {job.description && (
-        <Text style={styles.cardDescription} numberOfLines={2}>
-          {job.description}
+      {(job.equipment?.name || job.defect?.equipment?.name) && (
+        <Text style={styles.equipmentName} numberOfLines={1}>
+          ⚙️ {job.equipment?.name || job.defect?.equipment?.name}
         </Text>
       )}
-
+      <Text style={styles.cardTitle} numberOfLines={2}>{job.title || 'No title'}</Text>
+      {job.description && (
+        <Text style={styles.cardDescription} numberOfLines={2}>{job.description}</Text>
+      )}
       <View style={styles.cardInfoRow}>
         <Text style={styles.cardLabel}>Type: </Text>
         <Text style={styles.cardValue}>{job.job_type || '-'}</Text>
       </View>
-
       {job.category && (
         <View style={styles.cardInfoRow}>
           <Text style={styles.cardLabel}>Category: </Text>
           <Text style={styles.cardValue}>{job.category}</Text>
         </View>
       )}
-
       <View style={styles.cardFooter}>
         {job.started_at && (
-          <Text style={styles.dateText}>
-            Started: {new Date(job.started_at).toLocaleDateString()}
-          </Text>
+          <Text style={styles.dateText}>Started: {new Date(job.started_at).toLocaleDateString()}</Text>
         )}
         {job.completed_at && (
-          <Text style={styles.completedText}>
-            Completed: {new Date(job.completed_at).toLocaleDateString()}
-          </Text>
+          <Text style={styles.completedText}>Completed: {new Date(job.completed_at).toLocaleDateString()}</Text>
         )}
       </View>
     </TouchableOpacity>
@@ -108,11 +100,7 @@ export default function AllEngineerJobsScreen() {
   const jobsQuery = useQuery({
     queryKey: ['all-engineer-jobs', activeFilter, page],
     queryFn: () =>
-      engineerJobsApi.list({
-        page,
-        per_page: 20,
-        ...(activeFilter ? { status: activeFilter } : {}),
-      }),
+      engineerJobsApi.list({ page, per_page: 20, ...(activeFilter ? { status: activeFilter } : {}) }),
   });
 
   const responseData = (jobsQuery.data?.data as any) ?? jobsQuery.data;
@@ -120,96 +108,46 @@ export default function AllEngineerJobsScreen() {
   const pagination = responseData?.pagination ?? null;
   const hasNextPage = pagination?.has_next ?? false;
 
-  const handleFilterChange = useCallback((value: string | null) => {
-    setActiveFilter(value);
-    setPage(1);
-  }, []);
-
-  const handleRefresh = useCallback(() => {
-    setPage(1);
-    jobsQuery.refetch();
-  }, [jobsQuery]);
-
+  const handleFilterChange = useCallback((value: string | null) => { setActiveFilter(value); setPage(1); }, []);
+  const handleRefresh = useCallback(() => { setPage(1); jobsQuery.refetch(); }, [jobsQuery]);
   const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !jobsQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
+    if (hasNextPage && !jobsQuery.isFetching) setPage((prev) => prev + 1);
   }, [hasNextPage, jobsQuery.isFetching]);
-
-  const handleJobPress = (job: EngineerJob) => {
-    navigation.navigate('EngineerJobDetail', { jobId: job.id });
-  };
+  const handleJobPress = (job: EngineerJob) => navigation.navigate('EngineerJobDetail', { jobId: job.id });
 
   if (jobsQuery.isLoading && page === 1) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#1976D2" />
-      </View>
-    );
+    return <View style={styles.centered}><ActivityIndicator size="large" color="#1976D2" /></View>;
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="all-engineer-jobs-screen">
       <Text style={styles.title}>{t('nav.allEngineerJobs', 'All Engineer Jobs')}</Text>
-
-      {/* Filter Chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-        style={styles.filterScroll}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={styles.filterScroll}>
         {filters.map((filter) => {
           const isActive = activeFilter === filter.value;
           return (
             <TouchableOpacity
               key={filter.label}
-              style={[
-                styles.filterChip,
-                isActive ? styles.filterChipActive : styles.filterChipInactive,
-              ]}
-              onPress={() => handleFilterChange(filter.value)}
-              activeOpacity={0.7}
+              style={[styles.filterChip, isActive ? styles.filterChipActive : styles.filterChipInactive]}
+              onPress={() => handleFilterChange(filter.value)} activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  isActive ? styles.filterChipTextActive : styles.filterChipTextInactive,
-                ]}
-              >
+              <Text style={[styles.filterChipText, isActive ? styles.filterChipTextActive : styles.filterChipTextInactive]}>
                 {filter.label}
               </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-
-      {/* Jobs List */}
       <FlatList
         data={jobs}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <JobCard job={item} onPress={handleJobPress} />}
         contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={jobsQuery.isRefetching && page === 1}
-            onRefresh={handleRefresh}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={jobsQuery.isRefetching && page === 1} onRefresh={handleRefresh} />}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
-        ListFooterComponent={
-          jobsQuery.isFetching && page > 1 ? (
-            <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color="#1976D2" />
-            </View>
-          ) : null
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{t('jobs.empty', 'No jobs found.')}</Text>
-          </View>
-        }
+        ListFooterComponent={jobsQuery.isFetching && page > 1 ? <View style={styles.footerLoader}><ActivityIndicator size="small" color="#1976D2" /></View> : null}
+        ListEmptyComponent={<View style={styles.emptyContainer}><Text style={styles.emptyText}>{t('jobs.empty', 'No jobs found.')}</Text></View>}
       />
     </View>
   );
@@ -218,30 +156,31 @@ export default function AllEngineerJobsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#212121', padding: 16, paddingBottom: 8 },
-  filterScroll: { maxHeight: 48, paddingBottom: 4 },
-  filterRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
+  title: { fontSize: fontScale(22), fontWeight: 'bold', color: '#212121', padding: scale(16), paddingBottom: vscale(8) },
+  filterScroll: { maxHeight: vscale(48), paddingBottom: vscale(4) },
+  filterRow: { paddingHorizontal: scale(16), gap: scale(8), alignItems: 'center' },
+  filterChip: { paddingHorizontal: scale(14), paddingVertical: vscale(7), borderRadius: mscale(20), borderWidth: 1 },
   filterChipActive: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
   filterChipInactive: { backgroundColor: '#fff', borderColor: '#BDBDBD' },
-  filterChipText: { fontSize: 13, fontWeight: '600' },
+  filterChipText: { fontSize: fontScale(13), fontWeight: '600' },
   filterChipTextActive: { color: '#fff' },
   filterChipTextInactive: { color: '#616161' },
-  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.08)', elevation: 2 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardId: { fontSize: 14, fontWeight: '600', color: '#757575' },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#212121', marginBottom: 4 },
-  cardDescription: { fontSize: 13, color: '#616161', marginBottom: 8 },
-  cardInfoRow: { flexDirection: 'row', marginBottom: 4 },
-  cardLabel: { fontSize: 13, color: '#757575' },
-  cardValue: { fontSize: 13, color: '#424242', fontWeight: '500', flex: 1, textTransform: 'capitalize' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  dateText: { fontSize: 12, color: '#757575' },
-  completedText: { fontSize: 12, color: '#4CAF50', fontWeight: '500' },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  badgeText: { fontSize: 11, fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
-  footerLoader: { paddingVertical: 16, alignItems: 'center' },
-  emptyContainer: { paddingTop: 60, alignItems: 'center' },
-  emptyText: { fontSize: 15, color: '#757575' },
+  listContent: { paddingHorizontal: scale(16), paddingTop: vscale(12), paddingBottom: vscale(32) },
+  card: { backgroundColor: '#fff', borderRadius: mscale(12), padding: scale(16), marginBottom: vscale(12), elevation: 2 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: vscale(8) },
+  cardId: { fontSize: fontScale(14), fontWeight: '600', color: '#757575' },
+  equipmentName: { fontSize: fontScale(13), fontWeight: '600', color: '#1565C0', marginBottom: vscale(4) },
+  cardTitle: { fontSize: fontScale(15), fontWeight: '600', color: '#212121', marginBottom: vscale(4) },
+  cardDescription: { fontSize: fontScale(13), color: '#616161', marginBottom: vscale(8) },
+  cardInfoRow: { flexDirection: 'row', marginBottom: vscale(4) },
+  cardLabel: { fontSize: fontScale(13), color: '#757575' },
+  cardValue: { fontSize: fontScale(13), color: '#424242', fontWeight: '500', flex: 1, textTransform: 'capitalize' },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: vscale(8), paddingTop: vscale(8), borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  dateText: { fontSize: fontScale(12), color: '#757575' },
+  completedText: { fontSize: fontScale(12), color: '#4CAF50', fontWeight: '500' },
+  badge: { paddingHorizontal: scale(10), paddingVertical: vscale(4), borderRadius: mscale(12) },
+  badgeText: { fontSize: fontScale(11), fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
+  footerLoader: { paddingVertical: vscale(16), alignItems: 'center' },
+  emptyContainer: { paddingTop: vscale(60), alignItems: 'center' },
+  emptyText: { fontSize: fontScale(15), color: '#757575' },
 });

@@ -159,7 +159,7 @@ export default function WorkPlanJobDetailScreen() {
   const priorityConfig = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.normal;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="work-plan-job-detail-screen">
       <ScrollView style={styles.scrollView}>
         {/* Header Card */}
         <View style={[styles.headerCard, { borderLeftColor: typeConfig.color }]}>

@@ -31,6 +31,7 @@ import Animated, {
   Easing,
   runOnJS,
   cancelAnimation,
+  useDerivedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
@@ -143,6 +144,10 @@ export default function SmartFAB(props: SmartFABProps) {
   const pulseScale = useSharedValue(1);
   const positionX = useSharedValue(initialPosition?.x ?? SCREEN_WIDTH - FAB_SIZE - EDGE_PADDING);
   const positionY = useSharedValue(initialPosition?.y ?? SCREEN_HEIGHT - FAB_SIZE - BOTTOM_OFFSET);
+
+  // Derived direction values — actions expand away from the edge the FAB is near
+  const isOnLeft = useDerivedValue(() => positionX.value < SCREEN_WIDTH / 2);
+  const isOnTop = useDerivedValue(() => positionY.value < SCREEN_HEIGHT / 2);
 
   // Pulse animation for important actions
   useEffect(() => {
@@ -329,12 +334,15 @@ export default function SmartFAB(props: SmartFABProps) {
             index={index}
             menuProgress={menuProgress}
             isArabic={isArabic}
+            isOnLeft={isOnLeft}
+            isOnTop={isOnTop}
             onPress={handleActionPress}
           />
         ))}
 
         {/* Main FAB */}
         <Pressable
+          testID="fab-btn"
           style={[styles.mainButton, { backgroundColor: mainColor }]}
           onPress={handleMainPress}
           onPressIn={handlePressIn}
@@ -355,34 +363,50 @@ function FABActionItem({
   index,
   menuProgress,
   isArabic,
+  isOnLeft,
+  isOnTop,
   onPress,
 }: {
   action: FABAction;
   index: number;
   menuProgress: Animated.SharedValue<number>;
   isArabic: boolean;
+  isOnLeft: Animated.SharedValue<boolean>;
+  isOnTop: Animated.SharedValue<boolean>;
   onPress: (action: FABAction) => void;
 }) {
+  // Transform animation: direction-aware vertical movement + scale
   const animStyle = useAnimatedStyle(() => {
+    'worklet';
+    // Expand downward when FAB is near top, upward when near bottom
+    const vertDir = isOnTop.value ? 1 : -1;
     const translateY = interpolate(
       menuProgress.value,
       [0, 1],
-      [0, -(ACTION_SPACING * (index + 1))]
+      [0, vertDir * ACTION_SPACING * (index + 1)]
     );
-    const scaleValue = interpolate(
-      menuProgress.value,
-      [0, 0.5, 1],
-      [0, 0.5, 1]
-    );
+    const scaleValue = interpolate(menuProgress.value, [0, 0.5, 1], [0, 0.5, 1]);
     return {
       transform: [{ translateY }, { scale: scaleValue }],
       opacity: menuProgress.value,
     };
   });
 
+  // Layout style: flip row direction and anchor side based on horizontal position
+  const layoutStyle = useAnimatedStyle(() => {
+    'worklet';
+    if (isOnLeft.value) {
+      // FAB is on left side — button on left, label extends right
+      return { flexDirection: 'row-reverse' as const, left: 0, right: undefined };
+    }
+    // FAB is on right side (default) — label extends left, button on right
+    return { flexDirection: 'row' as const, right: 0, left: undefined };
+  });
+
   return (
-    <Animated.View style={[styles.actionContainer, animStyle]}>
+    <Animated.View style={[styles.actionContainer, layoutStyle, animStyle]}>
       <TouchableOpacity
+        testID={`fab-action-label-${action.id}`}
         style={styles.actionLabelContainer}
         onPress={() => onPress(action)}
         activeOpacity={0.8}
@@ -392,6 +416,7 @@ function FABActionItem({
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
+        testID={`fab-action-${action.id}`}
         style={[styles.actionButton, { backgroundColor: action.color }]}
         onPress={() => onPress(action)}
         activeOpacity={0.8}
