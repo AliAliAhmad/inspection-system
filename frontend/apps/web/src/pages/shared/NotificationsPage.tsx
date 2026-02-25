@@ -217,7 +217,7 @@ export default function NotificationsPage() {
       <NotificationAISummary
         onActionClick={(actionId, actionType) => {
           // Navigate to the action
-          console.log('Action clicked:', actionId, actionType);
+          if (import.meta.env.DEV) console.log('Action clicked:', actionId, actionType);
         }}
         showPredictions
         showTips

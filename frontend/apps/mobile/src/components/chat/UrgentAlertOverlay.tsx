@@ -99,7 +99,7 @@ export function UrgentAlertOverlay({
         } catch {
           // Alert sound asset not found - vibration alone will serve as alert
           // This is acceptable; the visual + vibration is the primary alert
-          console.log('UrgentAlert: No alert sound asset, using vibration only');
+          if (__DEV__) console.log('UrgentAlert: No alert sound asset, using vibration only');
         }
       } catch (err) {
         console.error('UrgentAlert sound setup failed:', err);

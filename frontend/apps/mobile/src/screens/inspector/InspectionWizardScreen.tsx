@@ -898,7 +898,7 @@ export default function InspectionWizardScreen() {
 
     try {
       // Read file as base64
-      console.log('Reading photo as base64...', uri);
+      if (__DEV__) console.log('Reading photo as base64...', uri);
       let base64: string;
       try {
         base64 = await FileSystem.readAsStringAsync(uri, {
@@ -912,7 +912,7 @@ export default function InspectionWizardScreen() {
         throw new Error(`Could not read photo file: ${readError?.message || 'Unknown error'}`);
       }
 
-      console.log('Uploading photo via base64... length:', base64.length);
+      if (__DEV__) console.log('Uploading photo via base64... length:', base64.length);
 
       // Upload as JSON with base64
       const response = await getApiClient().post(
@@ -937,7 +937,7 @@ export default function InspectionWizardScreen() {
       const readingValidation = result?.reading_validation;
 
       // Log the response for debugging
-      console.log('Photo upload response:', {
+      if (__DEV__) console.log('Photo upload response:', {
         cloudinaryUrl,
         hasAiAnalysis: !!aiAnalysis,
         analysisFailed: result?.analysis_failed,
@@ -980,7 +980,7 @@ export default function InspectionWizardScreen() {
               answer_value: extractedValue,
               urgency_level: prev[checklistItemId]?.urgency_level,
             });
-            console.log('Auto-filled validated reading:', extractedValue);
+            if (__DEV__) console.log('Auto-filled validated reading:', extractedValue);
 
             // Show confirmation with previous value
             if (readingValidation.last_reading) {
@@ -1014,7 +1014,7 @@ export default function InspectionWizardScreen() {
               answer_value: extractedReading,
               urgency_level: prev[checklistItemId]?.urgency_level,
             });
-            console.log('Auto-filled reading value:', extractedReading);
+            if (__DEV__) console.log('Auto-filled reading value:', extractedReading);
           }
         } else if (extractedReading === 'faulty') {
           // If meter is faulty, set value to 'faulty'
@@ -1024,7 +1024,7 @@ export default function InspectionWizardScreen() {
             answer_value: 'faulty',
             urgency_level: prev[checklistItemId]?.urgency_level,
           });
-          console.log('Meter detected as faulty');
+          if (__DEV__) console.log('Meter detected as faulty');
         }
 
         return updated;
@@ -1032,9 +1032,9 @@ export default function InspectionWizardScreen() {
 
       // Log analysis status
       if (aiAnalysis) {
-        console.log('Photo AI analysis received:', aiAnalysis);
+        if (__DEV__) console.log('Photo AI analysis received:', aiAnalysis);
       } else if (result?.analysis_failed) {
-        console.log('Photo uploaded but AI analysis not available');
+        if (__DEV__) console.log('Photo uploaded but AI analysis not available');
       }
 
       queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
@@ -1055,7 +1055,7 @@ export default function InspectionWizardScreen() {
         !error?.response;
 
       if (isRetryableError && retryCount < MAX_RETRIES) {
-        console.log(`Upload failed, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+        if (__DEV__) console.log(`Upload failed, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
         // Wait 2 seconds before retry
         await new Promise(resolve => setTimeout(resolve, 2000));
         return uploadPhoto(checklistItemId, uri, fileName, retryCount + 1);

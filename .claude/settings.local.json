@@ -167,7 +167,13 @@
       "mcp__testsprite__testsprite_generate_code_and_execute",
       "mcp__testsprite__testsprite_open_test_result_dashboard",
       "mcp__testsprite__testsprite_rerun_tests",
-      "Bash(cd \"/Users/AliAliAhmad_1_2/Desktop/inspection_system/frontend/apps/web/test-results/navigation-Page-Navigation-784c7--dashboard-to-notifications-chromium/\" && unzip -l trace.zip | head -30)"
+      "Bash(cd \"/Users/AliAliAhmad_1_2/Desktop/inspection_system/frontend/apps/web/test-results/navigation-Page-Navigation-784c7--dashboard-to-notifications-chromium/\" && unzip -l trace.zip | head -30)",
+      "mcp__filesystem__list_directory",
+      "mcp__filesystem__read_text_file",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_fill_form"
     ]
   }
 }

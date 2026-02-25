@@ -179,7 +179,7 @@ export default function DefectsPage() {
   // Handle defect escalation from AI panel
   const handleEscalate = (defectId: number, level: number) => {
     // In production, this would trigger escalation notifications
-    console.log(`Defect ${defectId} escalated to level ${level}`);
+    if (import.meta.env.DEV) console.log(`Defect ${defectId} escalated to level ${level}`);
     queryClient.invalidateQueries({ queryKey: ['defects'] });
   };
 

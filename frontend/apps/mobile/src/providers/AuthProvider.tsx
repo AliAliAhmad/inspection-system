@@ -22,7 +22,7 @@ async function registerForPushNotifications(): Promise<string | null> {
   try {
     // Push notifications only work on physical devices
     if (!Constants.isDevice) {
-      console.log('Push notifications: skipping (not a physical device)');
+      if (__DEV__) console.log('Push notifications: skipping (not a physical device)');
       return null;
     }
 
@@ -37,7 +37,7 @@ async function registerForPushNotifications(): Promise<string | null> {
     }
 
     if (finalStatus !== 'granted') {
-      console.log('Push notifications: permission denied');
+      if (__DEV__) console.log('Push notifications: permission denied');
       return null;
     }
 
@@ -57,7 +57,7 @@ async function registerForPushNotifications(): Promise<string | null> {
       });
     }
 
-    console.log('Push notifications: registered token', token);
+    if (__DEV__) console.log('Push notifications: token registered (length=' + token.length + ')');
     return token;
   } catch (error) {
     console.warn('Push notifications: registration failed', error);
@@ -71,7 +71,7 @@ async function registerForPushNotifications(): Promise<string | null> {
 async function sendPushTokenToBackend(token: string): Promise<void> {
   try {
     await authApi.registerPushToken(token);
-    console.log('Push notifications: token sent to backend');
+    if (__DEV__) console.log('Push notifications: token sent to backend');
   } catch (error) {
     console.warn('Push notifications: failed to send token to backend', error);
   }

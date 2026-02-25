@@ -123,7 +123,7 @@ export default function VideoRecorder({
 
     try {
       // Read video file as base64
-      console.log('Reading video as base64...', uri);
+      if (__DEV__) console.log('Reading video as base64...', uri);
       let base64: string;
       try {
         base64 = await FileSystem.readAsStringAsync(uri, {
@@ -132,14 +132,14 @@ export default function VideoRecorder({
         if (!base64) {
           throw new Error('File read returned empty result');
         }
-        console.log('Base64 read successfully, length:', base64.length);
+        if (__DEV__) console.log('Base64 read successfully, length:', base64.length);
       } catch (readError: any) {
         console.error('Failed to read video file:', readError);
         Alert.alert('Error', `Failed to read video file: ${readError?.message || 'Unknown error'}`);
         throw readError;
       }
 
-      console.log('Uploading video via base64...');
+      if (__DEV__) console.log('Uploading video via base64...');
 
       // Always use generic file upload for videos (no AI analysis to save API credits)
       const endpoint = '/api/files/upload';
@@ -150,7 +150,7 @@ export default function VideoRecorder({
         category: 'inspection_video',
       };
 
-      console.log('Uploading video to:', endpoint);
+      if (__DEV__) console.log('Uploading video to:', endpoint);
 
       // Upload as JSON with base64
       const response = await getApiClient().post(
@@ -166,7 +166,7 @@ export default function VideoRecorder({
       const result = responseData?.data;
       const aiAnalysis = responseData?.ai_analysis;
 
-      console.log('Video upload response:', {
+      if (__DEV__) console.log('Video upload response:', {
         hasFile: !!result?.id,
         hasVideoFile: !!result?.video_file,
         hasAiAnalysis: !!aiAnalysis,

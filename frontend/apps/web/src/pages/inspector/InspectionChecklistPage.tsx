@@ -639,7 +639,7 @@ function ChecklistItemCard({
       const vf = existingAnswer.video_file;
       const vn = existingAnswer.voice_note;
       if (pf || vf || vn) {
-        console.log(`[Media Debug] Item ${item.id}:`, {
+        if (import.meta.env.DEV) console.log(`[Media Debug] Item ${item.id}:`, {
           photo_file: pf ? { id: pf.id, url: pf.url } : null,
           video_file: vf ? { id: vf.id, url: vf.url } : null,
           voice_note: vn ? { id: vn.id, url: vn.url } : null,

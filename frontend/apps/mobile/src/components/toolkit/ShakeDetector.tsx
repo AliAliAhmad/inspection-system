@@ -60,7 +60,7 @@ export default function ShakeDetector({
       } catch {
         // Sensor not available - shake detection disabled
         // User can still use manual buttons
-        console.log('Accelerometer not available for shake detection');
+        if (__DEV__) console.log('Accelerometer not available for shake detection');
       }
     };
 

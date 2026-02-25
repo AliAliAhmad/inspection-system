@@ -211,7 +211,7 @@ export default function EquipmentPage() {
   };
 
   const handleImportUpload = () => {
-    console.log('handleImportUpload called, importFile:', importFile);
+    if (import.meta.env.DEV) console.log('handleImportUpload called, importFile:', importFile);
     if (!importFile) {
       message.warning(t('equipment.selectFile', 'Please select a file to import'));
       return;
@@ -532,7 +532,7 @@ export default function EquipmentPage() {
           <Upload.Dragger
             fileList={fileList}
             beforeUpload={(file) => {
-              console.log('beforeUpload called with file:', file);
+              if (import.meta.env.DEV) console.log('beforeUpload called with file:', file);
               setImportFile(file);
               setFileList([file as unknown as UploadFile]);
               return false;

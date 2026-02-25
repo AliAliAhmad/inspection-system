@@ -46,7 +46,7 @@ export function useOfflineQuery<TData, TError = unknown>({
       // On fetch error, try to return cached data
       const cached = await getCached<TData>(cacheKey);
       if (cached !== null) {
-        console.log('Returning cached data due to fetch error');
+        if (import.meta.env.DEV) console.log('Returning cached data due to fetch error');
         return cached;
       }
       throw error;

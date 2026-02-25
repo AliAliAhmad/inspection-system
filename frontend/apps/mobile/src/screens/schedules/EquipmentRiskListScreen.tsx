@@ -109,7 +109,7 @@ export default function EquipmentRiskListScreen() {
   const handleEquipmentPress = (equipmentId: number) => {
     // Navigate to equipment detail screen
     // Note: Adjust the navigation target based on your app's routing
-    console.log('Navigate to equipment:', equipmentId);
+    if (__DEV__) console.log('Navigate to equipment:', equipmentId);
   };
 
   const renderEquipmentItem = ({ item }: { item: EquipmentRiskScore }) => {

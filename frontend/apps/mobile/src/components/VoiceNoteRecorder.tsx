@@ -188,7 +188,7 @@ export default function VoiceNoteRecorder({
       setIsUploading(true);
 
       // Read audio file as base64
-      console.log('Reading audio as base64...', uri);
+      if (__DEV__) console.log('Reading audio as base64...', uri);
       let base64: string;
       try {
         base64 = await FileSystem.readAsStringAsync(uri, {
@@ -197,14 +197,14 @@ export default function VoiceNoteRecorder({
         if (!base64) {
           throw new Error('File read returned empty result');
         }
-        console.log('Base64 read successfully, length:', base64.length);
+        if (__DEV__) console.log('Base64 read successfully, length:', base64.length);
       } catch (readError: any) {
         console.error('Failed to read audio file:', readError);
         Alert.alert('Error', `Failed to read audio file: ${readError?.message || 'Unknown error'}`);
         throw readError;
       }
 
-      console.log('Uploading voice note via base64...');
+      if (__DEV__) console.log('Uploading voice note via base64...');
 
       // Upload as JSON with base64
       const response = await getApiClient().post(
@@ -224,7 +224,7 @@ export default function VoiceNoteRecorder({
       const result = (response.data as any)?.data;
 
       // Log the response for debugging
-      console.log('Voice upload response:', {
+      if (__DEV__) console.log('Voice upload response:', {
         hasAudioFile: !!result?.audio_file?.id,
         hasTranscription: !!(result?.en || result?.ar),
         transcriptionFailed: result?.transcription_failed

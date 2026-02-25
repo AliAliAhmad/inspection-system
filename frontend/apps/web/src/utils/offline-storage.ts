@@ -557,7 +557,7 @@ export async function initOfflineStorage(): Promise<void> {
     // Clean up expired items on startup
     const deleted = await cleanupExpiredCache();
     if (deleted > 0) {
-      console.log(`Cleaned up ${deleted} expired cache items`);
+      if (import.meta.env.DEV) console.log(`Cleaned up ${deleted} expired cache items`);
     }
   } catch (error) {
     console.error('Failed to initialize offline storage:', error);
