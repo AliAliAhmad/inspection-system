@@ -8,12 +8,92 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.inspection_list_service import InspectionListService
 from app.utils.decorators import get_current_user, admin_required, engineer_required, role_required, get_language
-from app.models import InspectionList, InspectionAssignment, Equipment, User
+from app.models import InspectionList, InspectionAssignment, Equipment, User, WorkPlan, WorkPlanDay, WorkPlanJob, WorkPlanAssignment
 from app.extensions import db
 from sqlalchemy import func, and_, or_
 from datetime import datetime, date, timedelta
 
 bp = Blueprint('inspection_assignments', __name__)
+
+
+def _auto_add_inspection_to_work_plan(inspection_list, target_date, user_id):
+    """Auto-create WorkPlanJob entries for each inspection assignment on the target date.
+    Called after generate_list. Non-critical — errors are swallowed so the main request succeeds."""
+    import logging
+    log = logging.getLogger(__name__)
+    try:
+        week_start = target_date - timedelta(days=target_date.weekday())  # Monday
+
+        # Find or create work plan for this week
+        work_plan = WorkPlan.query.filter_by(week_start=week_start).first()
+        if not work_plan:
+            work_plan = WorkPlan(
+                week_start=week_start,
+                week_end=week_start + timedelta(days=6),
+                status='draft',
+                created_by_id=user_id,
+            )
+            db.session.add(work_plan)
+            db.session.flush()
+            for i in range(7):
+                db.session.add(WorkPlanDay(
+                    work_plan_id=work_plan.id,
+                    date=week_start + timedelta(days=i),
+                ))
+            db.session.flush()
+
+        # Ensure target day exists
+        target_day = WorkPlanDay.query.filter_by(
+            work_plan_id=work_plan.id,
+            date=target_date,
+        ).first()
+        if not target_day:
+            target_day = WorkPlanDay(work_plan_id=work_plan.id, date=target_date)
+            db.session.add(target_day)
+            db.session.flush()
+
+        # Add each assignment as a WorkPlanJob (skip duplicates)
+        auto_added = 0
+        for assignment in inspection_list.assignments:
+            existing = WorkPlanJob.query.filter_by(
+                work_plan_day_id=target_day.id,
+                inspection_assignment_id=assignment.id,
+            ).first()
+            if existing:
+                continue
+
+            berth = getattr(assignment.equipment, 'berth', None) or 'both'
+            job = WorkPlanJob(
+                work_plan_day_id=target_day.id,
+                job_type='inspection',
+                berth=berth,
+                inspection_assignment_id=assignment.id,
+                estimated_hours=round(1 / 3, 3),  # 20 minutes
+            )
+            db.session.add(job)
+            db.session.flush()
+
+            # Auto-assign inspectors if already set on the assignment
+            if assignment.mechanical_inspector_id:
+                db.session.add(WorkPlanAssignment(
+                    work_plan_job_id=job.id,
+                    user_id=assignment.mechanical_inspector_id,
+                    is_lead=True,
+                ))
+            if assignment.electrical_inspector_id:
+                db.session.add(WorkPlanAssignment(
+                    work_plan_job_id=job.id,
+                    user_id=assignment.electrical_inspector_id,
+                    is_lead=False,
+                ))
+            auto_added += 1
+
+        if auto_added > 0:
+            db.session.commit()
+            log.info(f'Auto-added {auto_added} inspection jobs to work plan for {target_date}')
+    except Exception as e:
+        db.session.rollback()
+        log.warning(f'Auto-add inspection to work plan failed (non-critical): {e}')
 
 
 # ============================================
@@ -288,6 +368,9 @@ def generate_list():
         }), 400
 
     il = InspectionListService.generate_daily_list(target_date, shift)
+
+    # Auto-add generated assignments to the work plan for that day
+    _auto_add_inspection_to_work_plan(il, target_date, int(get_jwt_identity()))
 
     return jsonify({
         'status': 'success',

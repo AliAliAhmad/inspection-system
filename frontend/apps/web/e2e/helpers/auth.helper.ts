@@ -20,8 +20,15 @@ export async function loginAs(page: Page, role: Role): Promise<void> {
   // Form item name="email" accepts username too
   await page.getByPlaceholder(/email or username/i).fill(username);
   await page.getByPlaceholder(/password/i).fill(password);
-  await page.getByRole('button', { name: /log\s*in|sign\s*in/i }).click();
-  await page.waitForSelector('.app-header', { timeout: 90000 });
+  // Wait for the login API response and button click together (handles Render cold-start delays)
+  await Promise.all([
+    page.waitForResponse(
+      (res) => res.url().includes('/api/auth/login') && res.status() === 200,
+      { timeout: 90000 }
+    ),
+    page.getByRole('button', { name: /log\s*in|sign\s*in/i }).click(),
+  ]);
+  await page.waitForSelector('.app-header', { timeout: 30000 });
 }
 
 /**
