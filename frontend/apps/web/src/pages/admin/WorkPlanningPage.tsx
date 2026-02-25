@@ -27,6 +27,7 @@ import {
   Drawer,
   Switch,
   Tag,
+  Popover,
 } from 'antd';
 import {
   PlusOutlined,
@@ -165,7 +166,7 @@ const DraggableTeamMember: React.FC<{ user: any; isOnLeave: boolean; leaveInfo?:
         <span style={{ fontSize: 10, width: 18, height: 18, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: isOnLeave ? '#d9d9d9' : '#1890ff', color: '#fff', flexShrink: 0 }}>
           {user.full_name?.charAt(0) || '?'}
         </span>
-        <span style={{ fontSize: 11, color: isOnLeave ? '#8c8c8c' : '#262626', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: isOnLeave ? '#8c8c8c' : '#262626', whiteSpace: 'nowrap' }}>
           {user.full_name?.split(' ')[0]}
         </span>
         {isOnLeave && leaveInfo && (
@@ -173,6 +174,205 @@ const DraggableTeamMember: React.FC<{ user: any; isOnLeave: boolean; leaveInfo?:
         )}
       </div>
     </Tooltip>
+  );
+};
+
+// ── Equipment group row: shows "3× RS" compact chip with hover detail popover ──
+const EquipmentGroupRow: React.FC<{
+  eqType: string;
+  jobs: WorkPlanJob[];
+  berth: BerthTab;
+  onJobClick: (job: WorkPlanJob) => void;
+}> = ({ eqType, jobs, berth, onJobClick }) => {
+  const assignedCount = jobs.filter(j => (j.assignments || []).length > 0).length;
+  const unassigned = jobs.length - assignedCount;
+  const jobTypes = [...new Set(jobs.map(j => j.job_type))];
+  const hasOverdue = jobs.some(j => (j as any).overdue_value && (j as any).overdue_value > 0);
+  const typeColor = jobTypes[0] === 'defect' ? '#ff4d4f' : jobTypes[0] === 'inspection' ? '#722ed1' : '#1890ff';
+
+  const popoverContent = (
+    <div style={{ width: 260 }}>
+      <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 12 }}>
+        {jobs.length}× {eqType} — {berth === 'east' ? 'East' : 'West'} Berth
+      </div>
+      {jobs.slice(0, 5).map((job, idx) => {
+        const lead = (job.assignments || []).find((a: any) => a.is_lead);
+        const isAssigned = (job.assignments || []).length > 0;
+        const eqName =
+          (job as any).equipment?.name ||
+          (job as any).inspection_assignment?.equipment?.name ||
+          (job as any).equipment?.serial_number ||
+          `#${job.id}`;
+        return (
+          <div
+            key={job.id}
+            onClick={() => onJobClick(job)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '3px 4px', marginBottom: 2, borderRadius: 4,
+              cursor: 'pointer', background: isAssigned ? '#f6ffed' : '#fff7e6',
+            }}
+          >
+            <Text style={{ fontSize: 10, color: '#8c8c8c', minWidth: 16 }}>{idx + 1}</Text>
+            <Text style={{ fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {eqName}
+            </Text>
+            <Text style={{ fontSize: 10, color: isAssigned ? '#52c41a' : '#fa8c16', whiteSpace: 'nowrap' }}>
+              {isAssigned ? `✓ ${lead?.user?.full_name?.split(' ')[0] || ''}` : '⚠ None'}
+            </Text>
+          </div>
+        );
+      })}
+      {jobs.length > 5 && (
+        <div style={{ textAlign: 'center', marginTop: 4 }}>
+          <Text type="secondary" style={{ fontSize: 10 }}>+{jobs.length - 5} more — click chip to view</Text>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <Popover content={popoverContent} trigger="hover" placement="left" mouseEnterDelay={0.3}>
+      <div
+        onClick={() => onJobClick(jobs[0])}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '3px 6px', borderRadius: 4, marginBottom: 3,
+          background: unassigned > 0 ? '#fff7e6' : '#f6ffed',
+          border: `1px solid ${unassigned > 0 ? '#ffd591' : '#b7eb8f'}`,
+          cursor: 'pointer', userSelect: 'none',
+        }}
+      >
+        <div style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: typeColor }} />
+        <Text style={{ fontSize: 11, fontWeight: 700, color: '#262626', whiteSpace: 'nowrap' }}>
+          {jobs.length}× {eqType}
+        </Text>
+        <div style={{ flex: 1 }} />
+        {jobTypes.map(jt => (
+          <Tag key={jt} style={{ fontSize: 9, margin: 0, padding: '0 3px', lineHeight: '16px' }}
+            color={jt === 'defect' ? 'error' : jt === 'inspection' ? 'purple' : 'blue'}>
+            {jt === 'pm' ? 'PM' : jt === 'defect' ? 'DEF' : 'INS'}
+          </Tag>
+        ))}
+        {unassigned > 0 && <span style={{ fontSize: 9, color: '#fa8c16' }}>⚠{unassigned}</span>}
+        {hasOverdue && <span style={{ fontSize: 9, color: '#ff4d4f' }}>!</span>}
+      </div>
+    </Popover>
+  );
+};
+
+// ── Draggable at-risk job row (used inside at-risk drawer) ──
+// At-risk jobs are already in the plan — drag them to MOVE to another day (not re-add)
+const DraggableRiskJob: React.FC<{
+  risk: { id: number; dayId: number; reason: string; equipment: string; description: string };
+  job: WorkPlanJob | undefined;
+}> = ({ risk, job }) => {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `risk-pool-${risk.id}`,
+    data: {
+      type: 'job',  // already in plan → triggers moveMutation in handleDragEnd Case 2
+      job: job || { id: risk.id } as any,
+      dayId: risk.dayId,
+    },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1, cursor: 'grab', marginBottom: 6 }}
+    >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 12px', background: '#fff',
+        border: '1px solid #ffccc7', borderLeft: '4px solid #ff4d4f', borderRadius: 6,
+      }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 15, fontWeight: 700, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#262626', background: '#fffbe6', borderRadius: 3, padding: '0 4px' }}>
+            {risk.equipment}
+          </Text>
+          {risk.description && (() => {
+            // Strip equipment name prefix if the description was concatenated with it
+            const stripped = risk.description.startsWith(risk.equipment)
+              ? risk.description.slice(risk.equipment.length).replace(/^[\s\-_.]+/, '').trim()
+              : risk.description;
+            return stripped ? (
+              <Text style={{ fontSize: 13, fontWeight: 700, fontStyle: 'italic', color: '#262626', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {stripped.substring(0, 60)}
+              </Text>
+            ) : null;
+          })()}
+          <Text style={{ fontSize: 11, color: '#ff4d4f' }}>{risk.reason}</Text>
+        </div>
+        {job && (
+          <Tag color={job.job_type === 'defect' ? 'error' : job.job_type === 'inspection' ? 'purple' : 'blue'}
+            style={{ fontSize: 9, flexShrink: 0 }}>
+            {job.job_type?.toUpperCase()}
+          </Tag>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Simple row for PM / Defect jobs in day column — draggable between days & back to pool ──
+const SimpleJobRow: React.FC<{
+  job: WorkPlanJob;
+  dayId: number;
+  onJobClick: (job: WorkPlanJob) => void;
+}> = ({ job, dayId, onJobClick }) => {
+  const isOverdue = (job as any).overdue_value && (job as any).overdue_value > 0;
+  const isAssigned = (job.assignments || []).length > 0;
+  const equipmentName =
+    (job as any).equipment?.name ||
+    (job as any).defect?.equipment?.name ||
+    (job as any).equipment?.serial_number ||
+    `Job #${job.id}`;
+  const rawDesc = job.description || (job as any).defect?.description || '';
+  const description = rawDesc && equipmentName && !equipmentName.startsWith('Job #') && rawDesc.startsWith(equipmentName)
+    ? rawDesc.slice(equipmentName.length).replace(/^[\s\-_.]+/, '').trim()
+    : rawDesc;
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `plan-job-${job.id}`,
+    data: { type: 'job', job, dayId },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={() => onJobClick(job)}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 1,
+        padding: '3px 6px', borderRadius: 4, marginBottom: 3,
+        background: isDragging ? '#e6f7ff' : isOverdue ? '#fff1f0' : isAssigned ? '#f6ffed' : '#fafafa',
+        border: `1px solid ${isDragging ? '#1890ff' : isOverdue ? '#ffccc7' : isAssigned ? '#b7eb8f' : '#f0f0f0'}`,
+        cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none',
+        opacity: isDragging ? 0.4 : 1,
+        transform: CSS.Translate.toString(transform),
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: job.job_type === 'defect' ? '#ff4d4f' : '#1890ff' }} />
+        <Text style={{ fontSize: 14, fontWeight: 700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#262626', background: '#fffbe6', borderRadius: 3, padding: '0 4px' }}>
+          {equipmentName}
+        </Text>
+        <Tag
+          style={{ fontSize: 9, margin: 0, padding: '0 3px', lineHeight: '16px' }}
+          color={job.job_type === 'defect' ? 'error' : 'blue'}
+        >
+          {job.job_type === 'defect' ? 'DEF' : 'PM'}
+        </Tag>
+        {isOverdue && <span style={{ fontSize: 9, color: '#ff4d4f', fontWeight: 700 }}>!</span>}
+      </div>
+      {description && (
+        <Text style={{ fontSize: 13, fontWeight: 700, fontStyle: 'italic', color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: 10 }}>
+          {description.substring(0, 55)}
+        </Text>
+      )}
+    </div>
   );
 };
 
@@ -200,6 +400,7 @@ export default function WorkPlanningPage() {
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'jobs' | 'team'>('jobs');
+  const [atRiskDrawerOpen, setAtRiskDrawerOpen] = useState(false);
   const [teamPoolDisc, setTeamPoolDisc] = useState<'all' | 'mechanical' | 'electrical'>('all');
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
@@ -300,6 +501,20 @@ export default function WorkPlanningPage() {
     },
   });
 
+  // Remove job from plan (used when dragging calendar job back to pool)
+  const removeJobMutation = useMutation({
+    mutationFn: ({ planId, jobId }: { planId: number; jobId: number }) =>
+      workPlansApi.removeJob(planId, jobId),
+    onSuccess: () => {
+      message.success('Job removed from plan');
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to remove job');
+    },
+  });
+
   // Add job mutation (for drag from pool - non-SAP jobs)
   const addJobMutation = useMutation({
     mutationFn: (payload: { planId: number; dayId: number; jobType: JobType; berth: Berth; equipmentId?: number; defectId?: number; inspectionAssignmentId?: number; estimatedHours: number }) =>
@@ -312,8 +527,12 @@ export default function WorkPlanningPage() {
         inspection_assignment_id: payload.inspectionAssignmentId,
         estimated_hours: payload.estimatedHours,
       }),
-    onSuccess: () => {
-      message.success('Job added to plan');
+    onSuccess: (data: any) => {
+      const autoAdded = data?.data?.auto_added_defects || 0;
+      message.success(autoAdded > 0
+        ? `Job added (+${autoAdded} related defect${autoAdded > 1 ? 's' : ''} auto-added)`
+        : 'Job added to plan'
+      );
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
       queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
     },
@@ -329,8 +548,12 @@ export default function WorkPlanningPage() {
         sap_order_id: payload.sapOrderId,
         day_id: payload.dayId,
       }),
-    onSuccess: () => {
-      message.success('SAP order scheduled');
+    onSuccess: (data: any) => {
+      const autoAdded = data?.data?.auto_added_defects || 0;
+      message.success(autoAdded > 0
+        ? `SAP order scheduled (+${autoAdded} related defect${autoAdded > 1 ? 's' : ''} auto-added)`
+        : 'SAP order scheduled'
+      );
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
       queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
     },
@@ -631,18 +854,34 @@ export default function WorkPlanningPage() {
   // At-risk jobs computation
   const atRiskJobs = useMemo(() => {
     if (!currentPlan?.days) return [];
-    const risks: { id: number; reason: string; equipment: string }[] = [];
+    const risks: { id: number; dayId: number; reason: string; equipment: string; description: string }[] = [];
     currentPlan.days.forEach(day => {
       const jobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
       jobs.forEach((job: any) => {
+        // Equipment name — check inspection_assignment path too
+        const eqName =
+          job.equipment?.name ||
+          job.inspection_assignment?.equipment?.name ||
+          job.defect?.equipment?.name ||
+          job.equipment?.serial_number ||
+          'Unknown Equipment';
+        // Description — use job type label if blank or same as equipment name
+        const rawDesc = job.description || job.defect?.description || '';
+        const strippedDesc = rawDesc.startsWith(eqName)
+          ? rawDesc.slice(eqName.length).replace(/^[\s\-_.]+/, '').trim()
+          : rawDesc;
+        const jobTypeLabel = job.job_type === 'inspection' ? 'Inspection'
+          : job.job_type === 'defect' ? 'Defect' : 'PM';
+        const desc = strippedDesc || jobTypeLabel;
+
         if (!job.sap_order_number) {
-          risks.push({ id: job.id, reason: 'No SAP order', equipment: job.equipment?.serial_number || job.equipment?.name || `Job #${job.id}` });
+          risks.push({ id: job.id, dayId: day.id, reason: 'No SAP order', equipment: eqName, description: desc });
         }
         if (!job.assignments || job.assignments.length === 0) {
-          risks.push({ id: job.id, reason: 'No team assigned', equipment: job.equipment?.serial_number || job.equipment?.name || `Job #${job.id}` });
+          risks.push({ id: job.id, dayId: day.id, reason: 'No team assigned', equipment: eqName, description: desc });
         }
         if (job.computed_priority === 'critical' && job.overdue_value > 0) {
-          risks.push({ id: job.id, reason: 'Critical & overdue', equipment: job.equipment?.serial_number || job.equipment?.name || `Job #${job.id}` });
+          risks.push({ id: job.id, dayId: day.id, reason: 'Critical & overdue', equipment: eqName, description: desc });
         }
       });
     });
@@ -784,11 +1023,12 @@ export default function WorkPlanningPage() {
           dayId: targetDay.id,
         });
       } else {
-        // Regular job from pool
-        const equipmentId = job.equipment?.id;
-        const defectId = job.defect?.id;
+        // Regular job from pool — resolve equipment_id even for defect pool items
+        const equipmentId = job.equipment?.id || (job as any).defect?.equipment_id_direct || (job as any).defect?.equipment?.id;
+        const defectId = job.defect?.id || (job as any).defect_id;
         const inspectionAssignmentId = job.assignment?.id;
-        const estimatedHours = job.estimated_hours || 4;
+        // Inspections default to 20 min (0.333h); other jobs default to 4h
+        const estimatedHours = jobType === 'inspection' ? (job.estimated_hours || 0.333) : (job.estimated_hours || 4);
 
         addJobMutation.mutate({
           planId: currentPlan.id,
@@ -819,6 +1059,12 @@ export default function WorkPlanningPage() {
     }
 
     // Case 3: Dropping employee on a job
+    // Case 4: Dragging calendar job back to pool → remove from plan
+    if (activeData.type === 'job' && overData.type === 'pool') {
+      const job = activeData.job as WorkPlanJob;
+      removeJobMutation.mutate({ planId: currentPlan.id, jobId: job.id });
+    }
+
     if (activeData.type === 'employee' && overData.type === 'job') {
       const user = activeData.user;
       const job = overData.job as WorkPlanJob;
@@ -827,7 +1073,7 @@ export default function WorkPlanningPage() {
       setPendingAssignment({ job, user });
       setAssignModalOpen(true);
     }
-  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation]);
+  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, removeJobMutation]);
 
   const handleCreatePlan = (values: any) => {
     const weekStart = values.week_start.startOf('isoWeek').format('YYYY-MM-DD');
@@ -888,7 +1134,18 @@ export default function WorkPlanningPage() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
+      {/* Fix Ant Design Tabs so children can flex + scroll properly */}
+      <style>{`
+        .wp-right-panel .ant-tabs { display: flex; flex-direction: column; flex: 1; overflow: hidden; height: 100%; }
+        .wp-right-panel .ant-tabs-content-holder { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+        .wp-right-panel .ant-tabs-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; height: 100%; }
+        .wp-right-panel .ant-tabs-tabpane { flex: 1; overflow: hidden; display: flex; flex-direction: column; height: 100%; }
+        .wp-right-panel .ant-tabs-tabpane-active { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+        .wp-right-panel .ant-tabs-tabpane-hidden { display: none !important; }
+      `}</style>
+      <div style={{ display: 'flex', flexDirection: 'row', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
+        {/* ── LEFT COLUMN: toolbar, bars, calendar ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
         {/* COMPACT TOOLBAR */}
         <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 12 }}>
@@ -922,34 +1179,6 @@ export default function WorkPlanningPage() {
 
             <Button size="small" icon={<BulbOutlined />} onClick={() => setAiDrawerOpen(true)} disabled={!aiAssistanceEnabled}>AI</Button>
             <Button size="small" icon={<AlertOutlined />} onClick={() => setConflictPanelOpen(true)}>Conflicts</Button>
-
-            {/* AT-RISK BADGE */}
-            {atRiskJobs.length > 0 && (
-              <Dropdown
-                trigger={['click']}
-                menu={{
-                  items: atRiskJobs.slice(0, 10).map(risk => ({
-                    key: `risk-${risk.id}`,
-                    label: (
-                      <div style={{ maxWidth: 250 }}>
-                        <Text strong style={{ fontSize: 12 }}>{risk.equipment}</Text>
-                        <div><Text type="secondary" style={{ fontSize: 11 }}>{risk.reason}</Text></div>
-                      </div>
-                    ),
-                    onClick: () => {
-                      const job = allJobs.find(j => j.id === risk.id);
-                      if (job) handleJobClick(job);
-                    },
-                  })),
-                }}
-              >
-                <Badge count={atRiskJobs.length} size="small" offset={[-2, 2]}>
-                  <Button size="small" danger icon={<WarningFilled />} className="wp-at-risk-badge">
-                    At Risk
-                  </Button>
-                </Badge>
-              </Dropdown>
-            )}
 
             {/* Auto-Schedule */}
             {currentPlan && isDraft && (
@@ -1286,6 +1515,22 @@ export default function WorkPlanningPage() {
                 </Text>
               </div>
 
+              {/* At-Risk Jobs — clickable badge near hrs total */}
+              {atRiskJobs.length > 0 && (
+                <Badge count={atRiskJobs.length} size="small" offset={[-2, 2]} style={{ flexShrink: 0 }}>
+                  <Button
+                    size="small"
+                    danger
+                    icon={<WarningFilled />}
+                    onClick={() => setAtRiskDrawerOpen(true)}
+                    style={{ fontSize: 11, height: 28 }}
+                  >
+                    At Risk
+                  </Button>
+                </Badge>
+              )}
+
+
               {/* Contextual message (right-aligned) */}
               <div style={{ flex: 1 }} />
               <Text type="secondary" style={{ fontSize: 11, fontStyle: 'italic' }}>
@@ -1369,10 +1614,7 @@ export default function WorkPlanningPage() {
           </Card>
         )}
 
-        {/* MAIN LAYOUT: Left Area (Engineers Strip + Day Columns) | Right Panel (Jobs/Team Tabs) */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-
-          {/* ── LEFT AREA ── */}
+          {/* ── CALENDAR / ENGINEERS AREA ── */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
             {/* ENGINEERS STRIP (horizontal, scroll) */}
@@ -1474,18 +1716,8 @@ export default function WorkPlanningPage() {
                 ) : (
                   // CALENDAR VIEW: flex day columns with expand/collapse
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {aiAssistanceEnabled && incompleteJobPredictions.length > 0 && (
-                      <div style={{ flexShrink: 0, padding: '0 8px' }}>
-                        <IncompleteJobsWarning
-                          jobs={incompleteJobPredictions}
-                          compact
-                          maxItems={3}
-                          onTakeAction={(jobId, action) => { message.info(`Recommended action for job ${jobId}: ${action}`); }}
-                        />
-                      </div>
-                    )}
                     {/* 7 Flex Day Columns */}
-                    <div style={{ flex: 1, display: 'flex', gap: 5, padding: '6px 8px 8px', overflow: 'hidden' }}>
+                    <div style={{ flex: 1, display: 'flex', gap: 5, padding: '6px 8px 8px', overflow: 'hidden', background: '#fff' }}>
                       {(currentPlan.days || [])
                         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                         .map((day) => {
@@ -1604,7 +1836,7 @@ export default function WorkPlanningPage() {
                                       )}
                                     </div>
 
-                                    {/* Jobs List */}
+                                    {/* Jobs List — grouped by equipment type as compact "3× RS" chips */}
                                     <div style={{ flex: 1, overflowY: 'auto', padding: '4px 5px' }}>
                                       {jobs.length === 0 ? (
                                         <div style={{
@@ -1622,30 +1854,42 @@ export default function WorkPlanningPage() {
                                             </>
                                           ) : 'No jobs'}
                                         </div>
-                                      ) : (
-                                        jobs.map((job) => (
-                                          <TimelineJobBlock
-                                            key={job.id}
-                                            job={job}
-                                            onClick={() => handleJobClick(job)}
-                                            compact
-                                            showTeam
-                                            selectable={isDraft}
-                                            selected={selectedJobIds.has(job.id)}
-                                            onSelect={(jobId, sel) => {
-                                              if (sel) {
-                                                setSelectedJobIds(prev => new Set([...prev, jobId]));
-                                              } else {
-                                                setSelectedJobIds(prev => {
-                                                  const next = new Set(prev);
-                                                  next.delete(jobId);
-                                                  return next;
-                                                });
-                                              }
-                                            }}
-                                          />
-                                        ))
-                                      )}
+                                      ) : (() => {
+                                        // Inspections → grouped "3×RS" chips per equipment type
+                                        const inspectionJobs = jobs.filter(j => j.job_type === 'inspection');
+                                        const otherJobs = jobs.filter(j => j.job_type !== 'inspection');
+                                        const inspGroups = inspectionJobs.reduce<Record<string, WorkPlanJob[]>>((acc, job) => {
+                                          const eqType =
+                                            (job as any).equipment?.equipment_type ||
+                                            (job as any).inspection_assignment?.equipment?.equipment_type ||
+                                            (job as any).equipment?.name?.split(' ')[0] ||
+                                            'Other';
+                                          if (!acc[eqType]) acc[eqType] = [];
+                                          acc[eqType].push(job);
+                                          return acc;
+                                        }, {});
+                                        return (
+                                          <>
+                                            {Object.entries(inspGroups).map(([eqType, groupJobs]) => (
+                                              <EquipmentGroupRow
+                                                key={`insp-${eqType}`}
+                                                eqType={eqType}
+                                                jobs={groupJobs}
+                                                berth={berth}
+                                                onJobClick={handleJobClick}
+                                              />
+                                            ))}
+                                            {otherJobs.map(job => (
+                                              <SimpleJobRow
+                                                key={job.id}
+                                                job={job}
+                                                dayId={day.id}
+                                                onJobClick={handleJobClick}
+                                              />
+                                            ))}
+                                          </>
+                                        );
+                                      })()}
                                     </div>
 
                                     {/* Capacity Bar */}
@@ -1692,9 +1936,10 @@ export default function WorkPlanningPage() {
               )}
             </div>
           </div>
+        </div>{/* END left-column */}
 
-          {/* ── RIGHT PANEL: Tabbed Jobs + Team ── */}
-          <div className="wp-right-panel" style={{ width: 300, minWidth: 300, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
+        {/* ── RIGHT PANEL: Tabbed Jobs + Team ── */}
+        <div className="wp-right-panel" style={{ width: 300, minWidth: 300, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
             <Tabs
               activeKey={rightPanelTab}
               onChange={(k) => setRightPanelTab(k as 'jobs' | 'team')}
@@ -1739,7 +1984,7 @@ export default function WorkPlanningPage() {
                               equipmentId: job.equipment?.id,
                               defectId: job.defect?.id,
                               inspectionAssignmentId: job.assignment?.id,
-                              estimatedHours: job.estimated_hours || 4,
+                              estimatedHours: jobType === 'inspection' ? (job.estimated_hours || 0.333) : (job.estimated_hours || 4),
                             });
                           }
                         }}
@@ -1836,7 +2081,6 @@ export default function WorkPlanningPage() {
                 },
               ]}
             />
-          </div>
         </div>
       </div>
 
@@ -2428,6 +2672,34 @@ export default function WorkPlanningPage() {
           <ConflictResolutionPanel
             planId={currentPlan.id}
           />
+        )}
+      </Drawer>
+
+      {/* At-Risk Jobs Drawer — drag from here to any day column */}
+      <Drawer
+        title={
+          <Space>
+            <WarningFilled style={{ color: '#ff4d4f' }} />
+            <span>{atRiskJobs.length} Jobs At Risk</span>
+          </Space>
+        }
+        open={atRiskDrawerOpen}
+        onClose={() => setAtRiskDrawerOpen(false)}
+        width={320}
+        placement="right"
+        mask={false}
+      >
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
+          Drag a job card directly to a day column in the calendar.
+        </Text>
+        {atRiskJobs.map(risk => (
+          <DraggableRiskJob key={risk.id} risk={risk} job={allJobs.find(j => j.id === risk.id)} />
+        ))}
+        {atRiskJobs.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 32, color: '#52c41a' }}>
+            <div style={{ fontSize: 24 }}>✓</div>
+            <Text type="secondary">No at-risk jobs this week</Text>
+          </div>
         )}
       </Drawer>
     </DndContext>

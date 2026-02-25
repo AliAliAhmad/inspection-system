@@ -612,12 +612,52 @@ def add_job(plan_id):
     )
 
     db.session.add(job)
+
+    # Auto-add open defects for the same equipment when a PM or defect job is scheduled
+    auto_defect_count = 0
+    if job_type in ['pm', 'defect'] and equipment_id:
+        try:
+            related_defects = Defect.query.filter(
+                Defect.equipment_id_direct == equipment_id,
+                ~Defect.status.in_(['closed', 'resolved', 'rejected', 'completed']),
+            ).all()
+            for defect in related_defects:
+                if defect.id == defect_id:
+                    continue
+                already_planned = db.session.query(WorkPlanJob).join(WorkPlanDay).filter(
+                    WorkPlanDay.work_plan_id == plan_id,
+                    WorkPlanJob.defect_id == defect.id,
+                ).first()
+                if already_planned:
+                    continue
+                cur_max = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
+                    work_plan_day_id=day.id
+                ).scalar() or 0
+                db.session.add(WorkPlanJob(
+                    work_plan_day_id=day.id,
+                    job_type='defect',
+                    berth=data.get('berth'),
+                    equipment_id=equipment_id,
+                    defect_id=defect.id,
+                    estimated_hours=float(getattr(defect, 'estimated_hours', None) or 1.0),
+                    position=cur_max + 1,
+                    priority='normal',
+                ))
+                auto_defect_count += 1
+        except Exception:
+            pass  # non-critical
+
     db.session.commit()
+
+    msg = 'Job added to plan'
+    if auto_defect_count:
+        msg += f'. {auto_defect_count} related defect(s) auto-added to the same day.'
 
     return jsonify({
         'status': 'success',
-        'message': 'Job added to plan',
-        'job': job.to_dict(user.language or 'en')
+        'message': msg,
+        'job': job.to_dict(user.language or 'en'),
+        'auto_added_defects': auto_defect_count,
     }), 201
 
 
@@ -722,12 +762,49 @@ def schedule_sap_order(plan_id):
     # Mark SAP order as scheduled
     sap_order.status = 'scheduled'
 
+    # Auto-add open defects for same equipment (all defects, SAP or non-SAP)
+    auto_defect_count = 0
+    if sap_order.equipment_id:
+        try:
+            related_defects = Defect.query.filter(
+                Defect.equipment_id_direct == sap_order.equipment_id,
+                ~Defect.status.in_(['closed', 'resolved', 'rejected', 'completed']),
+            ).all()
+            for defect in related_defects:
+                already_planned = db.session.query(WorkPlanJob).join(WorkPlanDay).filter(
+                    WorkPlanDay.work_plan_id == plan_id,
+                    WorkPlanJob.defect_id == defect.id,
+                ).first()
+                if already_planned:
+                    continue
+                cur_max = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
+                    work_plan_day_id=day.id
+                ).scalar() or 0
+                db.session.add(WorkPlanJob(
+                    work_plan_day_id=day.id,
+                    job_type='defect',
+                    berth=sap_order.berth,
+                    equipment_id=sap_order.equipment_id,
+                    defect_id=defect.id,
+                    estimated_hours=float(getattr(defect, 'estimated_hours', None) or 1.0),
+                    position=cur_max + 1,
+                    priority='normal',
+                ))
+                auto_defect_count += 1
+        except Exception:
+            pass  # non-critical
+
     db.session.commit()
+
+    msg = 'SAP order scheduled'
+    if auto_defect_count:
+        msg += f'. {auto_defect_count} related defect(s) auto-added to the same day.'
 
     return jsonify({
         'status': 'success',
-        'message': 'SAP order scheduled',
-        'job': job.to_dict(user.language or 'en')
+        'message': msg,
+        'job': job.to_dict(user.language or 'en'),
+        'auto_added_defects': auto_defect_count,
     }), 201
 
 
@@ -791,6 +868,15 @@ def remove_job(plan_id, job_id):
     job = db.session.get(WorkPlanJob, job_id)
     if not job or job.day.work_plan_id != plan_id:
         raise NotFoundError("Job not found in this plan")
+
+    # If the job came from a SAP order, reset it back to 'pending' so it reappears in the pool
+    if job.sap_order_number:
+        sap_order = SAPWorkOrder.query.filter_by(
+            work_plan_id=plan_id,
+            order_number=job.sap_order_number
+        ).first()
+        if sap_order and sap_order.status == 'scheduled':
+            sap_order.status = 'pending'
 
     db.session.delete(job)
     db.session.commit()

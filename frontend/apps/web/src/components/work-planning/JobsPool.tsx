@@ -13,7 +13,7 @@ import {
   LeftOutlined,
   RightOutlined,
 } from '@ant-design/icons';
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { workPlansApi, type AvailablePMJob, type AvailableDefectJob, type SAPWorkOrder } from '@inspection/shared';
@@ -67,11 +67,15 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
   const isOverdue = job.overdue_value && job.overdue_value > 0;
   const priority = job.priority || 'normal';
 
-  // Get equipment name only (not serial number)
-  const equipmentName = job.equipment?.name || 'Unknown Equipment';
+  // Equipment name (never serial number)
+  const equipmentName = job.equipment?.name || job.defect?.equipment?.name || 'Unknown Equipment';
 
-  // Get description
-  const description = job.description || job.defect?.description || '';
+  // Description — strip equipment name prefix if the backend concatenated them, fall back to job type label
+  const jobTypeLabel = jobType === 'inspection' ? 'Inspection' : jobType === 'defect' ? 'Defect' : 'PM';
+  const rawDesc = job.description || job.defect?.description || job.assignment?.description || '';
+  const description = rawDesc && equipmentName !== 'Unknown Equipment' && rawDesc.startsWith(equipmentName)
+    ? rawDesc.slice(equipmentName.length).replace(/^[\s\-_.]+/, '').trim() || jobTypeLabel
+    : rawDesc || jobTypeLabel;
 
   // Get cycle info for PRM
   const cycleLabel = job.cycle?.display_label || job.maintenance_base || '';
@@ -100,73 +104,56 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
   ] : [];
 
   const cardContent = (
-    <Card
-      size="small"
-      hoverable
+    <div
       onClick={onClick}
       style={{
-        marginBottom: 8,
-        borderLeft: `4px solid ${isOverdue ? '#ff4d4f' : priorityColors[priority] || '#1890ff'}`,
-        backgroundColor: isDragging ? '#f0f0f0' : '#fff',
-      }}
-      bodyStyle={{ padding: '10px 12px' }}
-    >
-      {/* Equipment Name - Bold */}
-      <div style={{
-        fontWeight: 700,
-        fontSize: 13,
         marginBottom: 4,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap'
-      }}>
-        {equipmentName}
+        padding: '5px 8px',
+        borderLeft: `3px solid ${isOverdue ? '#ff4d4f' : priorityColors[priority] || '#1890ff'}`,
+        backgroundColor: isDragging ? '#f0f5ff' : '#fff',
+        border: `1px solid ${isOverdue ? '#ffccc7' : '#f0f0f0'}`,
+        borderLeftWidth: 3,
+        borderRadius: 4,
+        cursor: 'grab',
+        userSelect: 'none',
+      }}
+    >
+      {/* Row 1: Equipment name + overdue badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+        <div style={{
+          fontWeight: 700, fontSize: 15, flex: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#262626',
+          background: '#fffbe6', borderRadius: 3, padding: '0 4px',
+        }}>
+          {equipmentName}
+        </div>
+        {isOverdue && (
+          <span style={{ fontSize: 9, color: '#ff4d4f', fontWeight: 700, whiteSpace: 'nowrap' }}>
+            <WarningOutlined /> {job.overdue_value}{job.overdue_unit === 'hours' ? 'h' : 'd'}
+          </span>
+        )}
       </div>
-
-      {/* Description */}
+      {/* Row 2: Description (single line, truncated) */}
       {description && (
-        <div style={{
-          fontSize: 12,
-          color: '#595959',
-          marginBottom: 6,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}>
-          {description.substring(0, 50)}{description.length > 50 ? '...' : ''}
+        <div style={{ fontSize: 13, fontWeight: 700, fontStyle: 'italic', color: '#262626', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {description.substring(0, 60)}{description.length > 60 ? '…' : ''}
         </div>
       )}
-
-      {/* Overdue - Bold Red (shown prominently if overdue) */}
-      {isOverdue && (
-        <div style={{
-          fontWeight: 700,
-          fontSize: 12,
-          color: '#ff4d4f',
-          marginBottom: 6,
-        }}>
-          <WarningOutlined /> {job.overdue_value}{job.overdue_unit === 'hours' ? 'h' : 'd'} overdue
-        </div>
-      )}
-
-      {/* Tags Row */}
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Priority Tag */}
+      {/* Row 3: Tags */}
+      <div style={{ display: 'flex', gap: 3, alignItems: 'center', flexWrap: 'nowrap' }}>
         <Tag
           color={priority === 'urgent' ? 'error' : priority === 'high' ? 'warning' : 'default'}
-          style={{ fontSize: 10, margin: 0 }}
+          style={{ fontSize: 9, margin: 0, padding: '0 4px', lineHeight: '16px' }}
         >
-          {priority.toUpperCase()}
+          {priority.charAt(0).toUpperCase()}
         </Tag>
-
-        {/* Cycle Tag for PRM */}
         {cycleLabel && (
-          <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
+          <Tag color="blue" style={{ fontSize: 9, margin: 0, padding: '0 4px', lineHeight: '16px' }}>
             {cycleLabel}
           </Tag>
         )}
       </div>
-    </Card>
+    </div>
   );
 
   return (
@@ -213,6 +200,12 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   const [searchText, setSearchText] = useState<string>('');
   const [equipmentFilter, setEquipmentFilter] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+
+  // Droppable zone — accepts calendar jobs dragged back to remove them from the plan
+  const { setNodeRef: setPoolDropRef, isOver: isPoolOver } = useDroppable({
+    id: 'job-pool-drop',
+    data: { type: 'pool' },
+  });
 
   // Fetch available jobs including SAP orders from pool
   const { data: availableJobs, isLoading } = useQuery({
@@ -366,13 +359,17 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
 
   return (
     <div
+      ref={setPoolDropRef}
       style={embedded ? {
         display: 'flex',
         flexDirection: 'column' as const,
         height: '100%',
         width: '100%',
         overflow: 'hidden',
-        backgroundColor: '#fff',
+        backgroundColor: isPoolOver ? '#fff1f0' : '#fff',
+        outline: isPoolOver ? '2px dashed #ff4d4f' : undefined,
+        outlineOffset: isPoolOver ? '-2px' : undefined,
+        transition: 'background-color 0.15s, outline 0.15s',
       } : {
         position: 'fixed' as const,
         top: 0,
@@ -436,11 +433,12 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
         <>
           {/* Header */}
           <div style={{
-            padding: '12px',
+            padding: '8px 10px',
             borderBottom: '1px solid #f0f0f0',
-            backgroundColor: '#fafafa'
+            backgroundColor: '#fafafa',
+            flexShrink: 0,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 16 }}>📦</span>
                 <span style={{ fontWeight: 600, fontSize: 14 }}>Jobs Pool</span>
@@ -513,39 +511,37 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
             </Space>
           </div>
 
-          {/* Tabs */}
-          <Tabs
-            activeKey={activeTab}
-            onChange={(k) => setActiveTab(k as 'prm' | 'defect' | 'ins')}
-            size="small"
-            style={{ padding: '0 12px' }}
-            items={[
-              {
-                key: 'prm',
-                label: (
-                  <span>
-                    <ToolOutlined /> PRM <Badge count={prmCount} size="small" style={{ marginLeft: 4 }} />
-                  </span>
-                ),
-              },
-              {
-                key: 'defect',
-                label: (
-                  <span>
-                    <BugOutlined /> Defect <Badge count={defectCount} size="small" style={{ marginLeft: 4 }} />
-                  </span>
-                ),
-              },
-              {
-                key: 'ins',
-                label: (
-                  <span>
-                    <EyeOutlined /> INS <Badge count={insCount} size="small" style={{ marginLeft: 4 }} />
-                  </span>
-                ),
-              },
-            ]}
-          />
+          {/* Tab bar — custom (no content area, zero gap) */}
+          <div style={{ display: 'flex', borderBottom: '2px solid #f0f0f0', padding: '0 12px', flexShrink: 0 }}>
+            {([
+              { key: 'prm',    label: 'PRM',    icon: <ToolOutlined />, count: prmCount },
+              { key: 'defect', label: 'Defect', icon: <BugOutlined />,  count: defectCount },
+              { key: 'ins',    label: 'INS',    icon: <EyeOutlined />,  count: insCount },
+            ] as const).map(tab => (
+              <div
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                  borderBottom: activeTab === tab.key ? '2px solid #1890ff' : '2px solid transparent',
+                  marginBottom: -2,
+                  color: activeTab === tab.key ? '#1890ff' : '#595959',
+                  fontWeight: activeTab === tab.key ? 600 : 400,
+                  fontSize: 12,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  userSelect: 'none',
+                  transition: 'color 0.2s',
+                }}
+              >
+                {tab.icon}
+                {tab.label}
+                {tab.count > 0 && (
+                  <Badge count={tab.count} size="small" style={{ marginLeft: 2 }} />
+                )}
+              </div>
+            ))}
+          </div>
 
           {/* PRM Sub-tabs */}
           {activeTab === 'prm' && (
@@ -574,7 +570,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
           )}
 
           {/* Jobs List */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px' }}>
             {isLoading ? (
               <div style={{ textAlign: 'center', padding: 40 }}>
                 <Spin />
@@ -606,12 +602,13 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
           <div style={{
             padding: '10px 12px',
             borderTop: '1px solid #f0f0f0',
-            backgroundColor: '#fafafa',
+            backgroundColor: isPoolOver ? '#fff1f0' : '#fafafa',
             fontSize: 11,
-            color: '#8c8c8c',
-            textAlign: 'center'
+            color: isPoolOver ? '#ff4d4f' : '#8c8c8c',
+            textAlign: 'center',
+            transition: 'background-color 0.15s',
           }}>
-            👆 Drag jobs to calendar to schedule
+            {isPoolOver ? '🗑 Release to remove from plan' : '↕ Drag to calendar · Drag back to remove'}
           </div>
         </>
       )}

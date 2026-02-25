@@ -69,6 +69,8 @@
 <!-- Claude: After EVERY change you make, add an entry here. NEVER skip this. -->
 
 | Date | What Changed | Status |
+| 2026-02-25 | Work Planning: auto-add inspection jobs to work plan when generate_list is called (with auto-assign if inspectors set); auto-add related open defects when PM/defect job scheduled; equipment count grouped display "3×RS" chips with hover popover (5 units + see all); at-risk badge moved to health strip near hrs total; at-risk drawer (drag-to-day); compact pool cards; 20-min default inspection time; CSS fix for right panel tab scrolling | ✅ Done |
+| 2026-02-25 | Work Planning fixes: at-risk moved to health strip (near hrs total) + right-side drawer; day column splits inspection→grouped 3×RS chips, PM/defect→individual SimpleJobRow with eq-name+desc; auto-defect on SAP schedule endpoint; CSS fix for right panel tab switching (tabpane-hidden override); right panel full-height via layout restructure to row; calendar bg white; IncompleteJobsWarning removed from above calendar; equipment name (not serial) in popover; at-risk drawer shows name+desc | ✅ |
 | 2026-02-24 | Work Planning v6 layout: flat berth bar + plan score pill + smart inline tags; engineers-only horizontal strip (draggable); 7 flex day columns with in-place expand/collapse (flex 3.5/42px/1); right panel redesigned as Tabs (Jobs Pool + Team Pool with Mech/Elec filter); removed old bottom team pool; DroppableDay updated to accept containerStyle | ✅ |
 | 2026-02-24 | Applied responsive scaling (scale/vscale/mscale/fontScale) to ProfileScreen.tsx and AllInspectionsScreen.tsx StyleSheet values | ✅ Done |
 | 2026-02-24 | Applied responsive scaling (scale/vscale/mscale/fontScale) to DefectsScreen.tsx and AdminMoreScreen.tsx StyleSheet values | ✅ Done |
@@ -80,6 +82,7 @@
 | 2026-02-24 | Fixed LIFO mock ordering across all mock-based specs (catch-all first, mockLoginAs last) | ✅ Done |
 | 2026-02-24 | Fixed truthy empty array crash: `data: null` in reports/arabic/crud mocks ([] bypasses null checks) | ✅ Done |
 | 2026-02-24 | Fixed flaky logout test: wait for Ant Design dropdown item visibility before click | ✅ Done |
+| 2026-02-25 | Work Planning drag improvements: SimpleJobRow now draggable (move between days + drag back to pool to remove); pool shows red outline when hovered with a job; footer hint updated; description strips equipment name prefix in pool cards, day rows, at-risk drawer; user names in team pool/engineers strip +3px font + bold; backend remove_job resets SAP order to 'pending' so it reappears in pool; addJobMutation/scheduleSAPMutation onSuccess shows auto-added defect count; equipment_id extraction improved for defect pool items; atRiskJobs computes description with equipment name stripped | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
 <!-- Claude: When a feature is added, planned, or in progress, update this list. -->
