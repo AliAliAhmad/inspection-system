@@ -1,0 +1,70 @@
+name: Backend — Test & Deploy Guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'migrations/**'
+      - 'tests/**'
+      - 'requirements.txt'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'tests/**'
+      - 'requirements.txt'
+
+jobs:
+  test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FLASK_ENV: testing
+      SECRET_KEY: test-secret-key-ci
+      JWT_SECRET_KEY: test-jwt-key-ci
+      TESTING: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pytest
+        run: |
+          python -m pytest tests/ \
+            --ignore=tests/process/test_smoke_remote.py \
+            -q --tb=short -x
+
+  health-check:
+    name: Production Health Check
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 5
+    steps:
+      - name: Wait for Render auto-deploy
+        run: sleep 90
+
+      - name: Health check production API
+        run: |
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://inspection-api-o3hz.onrender.com/health --max-time 30)
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Production API healthy"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "Production API health check failed"
+          exit 1

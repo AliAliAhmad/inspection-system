@@ -1,0 +1,118 @@
+name: Security Audit
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Every Monday at 8am UTC
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  npm-audit:
+    name: npm Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit web dependencies
+        working-directory: frontend/apps/web
+        run: npm audit --audit-level=high --json > npm-audit-web.json 2>&1 || true
+
+      - name: Audit mobile dependencies
+        working-directory: frontend/apps/mobile
+        run: npm audit --audit-level=high --json > npm-audit-mobile.json 2>&1 || true
+
+      - name: Report audit results
+        run: |
+          echo "=== Web Audit ==="
+          cat frontend/apps/web/npm-audit-web.json | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          v=d.get('metadata',{}).get('vulnerabilities',{})
+          print(f'Critical: {v.get(\"critical\",0)}, High: {v.get(\"high\",0)}, Moderate: {v.get(\"moderate\",0)}')
+          if v.get('critical',0) > 0 or v.get('high',0) > 0:
+              sys.exit(1)
+          " || { echo "High/critical vulnerabilities found in web dependencies!"; exit 1; }
+
+  pip-audit:
+    name: Python Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Install project dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pip-audit
+        run: pip-audit --skip-editable --format json -o pip-audit.json 2>&1 || true
+
+      - name: Report results
+        run: |
+          if [ -f pip-audit.json ]; then
+            python3 -c "
+          import json,sys
+          d=json.load(open('pip-audit.json'))
+          vulns=[v for pkg in d.get('dependencies',[]) for v in pkg.get('vulns',[])]
+          critical=[v for v in vulns if v.get('aliases',[''])[0].startswith('CVE')]
+          print(f'Vulnerabilities found: {len(vulns)}')
+          if len(critical) > 0:
+              print('Critical CVEs:', [v[\"id\"] for v in critical[:5]])
+          "
+          fi
+
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for accidentally committed secrets
+        run: |
+          # Scan for common secret patterns in tracked files
+          FOUND=0
+          echo "Scanning for potential secrets..."
+
+          # Check for private keys
+          if git grep -l "BEGIN.*PRIVATE KEY" -- ':(exclude)*.yml' ':(exclude)*.md' 2>/dev/null | grep -v node_modules | grep .; then
+            echo "ALERT: Private key pattern found!"
+            FOUND=1
+          fi
+
+          # Check for hardcoded API keys (long alphanumeric strings assigned to key vars)
+          if git grep -nE "(api_key|apikey|secret_key|password)\s*=\s*['\"][a-zA-Z0-9_\-]{20,}['\"]" \
+            -- ':(exclude)*.example' ':(exclude)*.md' ':(exclude)test*' ':(exclude)tests*' \
+            ':(exclude)node_modules' 2>/dev/null | \
+            grep -v "os\.getenv\|os\.environ\|process\.env\|import\.meta\.env\|change-me\|your-\|example\|placeholder" | \
+            grep .; then
+            echo "ALERT: Potential hardcoded secret found!"
+            FOUND=1
+          fi
+
+          if [ $FOUND -eq 0 ]; then
+            echo "No secrets found in tracked files"
+          fi
+          exit $FOUND

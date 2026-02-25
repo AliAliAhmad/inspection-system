@@ -1,0 +1,87 @@
+name: Web Frontend — Typecheck, Build & Deploy Guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/apps/web/**'
+      - 'frontend/packages/shared/**'
+      - 'frontend/pnpm-lock.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/apps/web/**'
+      - 'frontend/packages/shared/**'
+
+jobs:
+  quality:
+    name: Typecheck + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck shared
+        working-directory: frontend
+        run: pnpm --filter @inspection/shared exec tsc --noEmit
+
+      - name: Typecheck web
+        working-directory: frontend
+        run: pnpm --filter @inspection/web exec tsc --noEmit
+
+      - name: Run shared tests
+        working-directory: frontend
+        run: pnpm --filter @inspection/shared test
+
+      - name: Build web app
+        working-directory: frontend
+        run: pnpm --filter @inspection/web build
+        env:
+          VITE_API_URL: https://inspection-api-o3hz.onrender.com
+
+      - name: Upload build artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: frontend/apps/web/dist/
+          retention-days: 7
+
+  health-check:
+    name: Web Health Check
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 5
+    steps:
+      - name: Wait for Render auto-deploy
+        run: sleep 120
+
+      - name: Health check production web
+        run: |
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://inspection-web.onrender.com --max-time 30)
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "Production web healthy"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "Production web health check failed"
+          exit 1

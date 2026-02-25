@@ -1,0 +1,84 @@
+name: Nightly Production Health Check
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 2am UTC daily
+  workflow_dispatch:
+
+jobs:
+  health:
+    name: Production Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check API health
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://inspection-api-o3hz.onrender.com/health --max-time 30)
+          echo "API status: HTTP $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "API health check FAILED"
+            exit 1
+          fi
+
+      - name: Check web frontend
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://inspection-web.onrender.com --max-time 30)
+          echo "Web status: HTTP $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Web health check FAILED"
+            exit 1
+          fi
+
+      - name: Check API endpoints
+        run: |
+          for ep in /api/equipment /api/defects /api/inspections; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://inspection-api-o3hz.onrender.com$ep" --max-time 15)
+            echo "$ep → HTTP $STATUS"
+            if [ "$STATUS" = "000" ]; then
+              echo "Endpoint $ep unreachable"
+              exit 1
+            fi
+          done
+
+  e2e-smoke:
+    name: Nightly E2E Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: health
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: frontend/apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright smoke tests against production
+        working-directory: frontend/apps/web
+        run: npx playwright test e2e/auth.spec.ts e2e/navigation.spec.ts --project="Desktop Chrome"
+        env:
+          CI: true
+          PLAYWRIGHT_BASE_URL: https://inspection-web.onrender.com
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-playwright-report
+          path: frontend/apps/web/playwright-report/
+          retention-days: 14
