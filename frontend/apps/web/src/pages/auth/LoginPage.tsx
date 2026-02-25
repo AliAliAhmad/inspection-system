@@ -38,7 +38,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div
+    <main
       style={{
         display: 'flex',
         justifyContent: 'center',
@@ -50,7 +50,7 @@ export default function LoginPage() {
       <Card style={{ width: 400, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Title level={3}>{t('common.app_title')}</Title>
-          <Typography.Text type="secondary">{t('auth.sign_in_prompt')}</Typography.Text>
+          <Typography.Text style={{ color: '#595959' }}>{t('auth.sign_in_prompt')}</Typography.Text>
         </div>
 
         {error && (
@@ -97,6 +97,7 @@ export default function LoginPage() {
               onChange={setLanguage}
               size="small"
               style={{ width: 120 }}
+              aria-label="Language selection"
               options={[
                 { value: 'en', label: 'English' },
                 { value: 'ar', label: '\u0627\u0644\u0639\u0631\u0628\u064A\u0629' },
@@ -105,6 +106,6 @@ export default function LoginPage() {
           </Space>
         </div>
       </Card>
-    </div>
+    </main>
   );
 }
