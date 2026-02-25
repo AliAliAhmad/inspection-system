@@ -138,16 +138,19 @@ class TestFinalAssessment:
         assert assessment.final_status == 'operational'
         assert assessment.resolved_by == 'agreement'
 
-    def test_one_urgent_stops_equipment(self, db_session, mech_inspector, elec_inspector):
+    def test_one_stop_escalates_to_engineer(self, db_session, mech_inspector, elec_inspector):
+        # One inspector says stop, other says operational → disagreement → escalate to engineer
         assessment = self._make_assessment(
-            db_session, mech_inspector, elec_inspector, 'urgent', 'operational'
+            db_session, mech_inspector, elec_inspector, 'stop', 'operational'
         )
-        assert assessment.final_status == 'urgent'
-        assert assessment.resolved_by == 'safety_rule'
+        # Disagreement: no final_status yet, escalated to engineer
+        assert assessment.final_status is None
+        assert assessment.escalation_level == 'engineer'
 
-    def test_both_urgent(self, db_session, mech_inspector, elec_inspector):
+    def test_both_stop_agrees(self, db_session, mech_inspector, elec_inspector):
+        # Both say stop and agree → auto-finalized as stop
         assessment = self._make_assessment(
-            db_session, mech_inspector, elec_inspector, 'urgent', 'urgent'
+            db_session, mech_inspector, elec_inspector, 'stop', 'stop'
         )
-        assert assessment.final_status == 'urgent'
+        assert assessment.final_status == 'stop'
         assert assessment.resolved_by == 'agreement'

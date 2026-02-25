@@ -15,9 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { teamCommunicationApi, usersApi } from '@inspection/shared';
+import type { ChannelType } from '@inspection/shared';
 import { useTheme } from '../../hooks/useTheme';
-
-type ChannelType = 'group' | 'announcement' | 'shift';
 
 export default function CreateChannelScreen() {
   const { t, i18n } = useTranslation();

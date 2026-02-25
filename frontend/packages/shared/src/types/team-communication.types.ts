@@ -1,6 +1,6 @@
 /** Team Communication Types */
 
-export type ChannelType = 'general' | 'shift' | 'role' | 'job' | 'emergency';
+export type ChannelType = 'general' | 'shift' | 'role' | 'job' | 'emergency' | 'group' | 'announcement';
 export type MessageType = 'text' | 'voice' | 'photo' | 'video' | 'location' | 'system';
 export type ChannelRole = 'admin' | 'member';
 

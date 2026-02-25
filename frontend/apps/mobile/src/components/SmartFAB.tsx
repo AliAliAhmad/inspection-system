@@ -33,6 +33,7 @@ import Animated, {
   cancelAnimation,
   useDerivedValue,
 } from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -369,10 +370,10 @@ function FABActionItem({
 }: {
   action: FABAction;
   index: number;
-  menuProgress: Animated.SharedValue<number>;
+  menuProgress: SharedValue<number>;
   isArabic: boolean;
-  isOnLeft: Animated.SharedValue<boolean>;
-  isOnTop: Animated.SharedValue<boolean>;
+  isOnLeft: SharedValue<boolean>;
+  isOnTop: SharedValue<boolean>;
   onPress: (action: FABAction) => void;
 }) {
   // Transform animation: direction-aware vertical movement + scale

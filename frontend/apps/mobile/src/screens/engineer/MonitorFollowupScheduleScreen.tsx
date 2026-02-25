@@ -71,15 +71,18 @@ function SelectableCard({
   selected,
   color,
   onPress,
+  testID,
 }: {
   label: string;
   icon: string;
   selected: boolean;
   color: string;
   onPress: () => void;
+  testID?: string;
 }) {
   return (
     <TouchableOpacity
+      testID={testID}
       style={[
         styles.selectableCard,
         selected && { backgroundColor: color, borderColor: color },

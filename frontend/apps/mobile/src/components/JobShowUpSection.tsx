@@ -71,7 +71,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
   // Upload show-up photo
   const uploadPhotoMutation = useMutation({
     mutationFn: async (uri: string) => {
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' as const });
       return getApiClient().post(
         `/api/job-showup/${jobType}/${jobId}/showup-photo`,
         { file_base64: base64, file_name: 'showup_photo.jpg', file_type: 'image/jpeg' },
@@ -88,7 +88,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
   // Upload challenge voice
   const uploadVoiceMutation = useMutation({
     mutationFn: async (uri: string) => {
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' as const });
       return getApiClient().post(
         `/api/job-showup/${jobType}/${jobId}/challenge-voice`,
         { audio_base64: base64, file_name: 'challenge.m4a', file_type: 'audio/m4a' },

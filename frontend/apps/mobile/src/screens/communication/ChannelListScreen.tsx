@@ -74,7 +74,7 @@ export default function ChannelListScreen() {
 
   const allUsers: User[] = useMemo(() => {
     if (!usersData) return [];
-    if (Array.isArray(usersData)) return usersData;
+    if (Array.isArray(usersData)) return usersData as User[];
     return [];
   }, [usersData]);
 
