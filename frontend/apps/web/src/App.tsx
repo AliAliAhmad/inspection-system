@@ -1,11 +1,13 @@
 import { Spin } from 'antd';
+import { lazy, Suspense } from 'react';
 import { useAuth } from './providers/AuthProvider';
 import AppRouter from './router/AppRouter';
 import LoginPage from './pages/auth/LoginPage';
 import ErrorBoundary from './components/ErrorBoundary';
-import AiAssistantChat from './components/AiAssistantChat';
 import OfflineBanner from './components/OfflineBanner';
-import CommandPalette from './components/CommandPalette';
+
+const AiAssistantChat = lazy(() => import('./components/AiAssistantChat'));
+const CommandPalette = lazy(() => import('./components/CommandPalette'));
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -26,8 +28,10 @@ export default function App() {
     <ErrorBoundary>
       <OfflineBanner />
       <AppRouter />
-      <AiAssistantChat />
-      <CommandPalette />
+      <Suspense fallback={null}>
+        <AiAssistantChat />
+        <CommandPalette />
+      </Suspense>
     </ErrorBoundary>
   );
 }
