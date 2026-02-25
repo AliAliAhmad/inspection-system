@@ -7,16 +7,18 @@ Google Gemini AI Service for photo analysis, video analysis, and audio transcrip
 Models (with fallback chain):
 ┌─────────────────────────────────────────────────────────────────────┐
 │ VISION (Photo/Video):                                               │
-│   1. gemini-2.5-pro           → Best quality (1,500 RPD shared)    │
-│   2. gemini-2.0-flash         → Fast, good quality                 │
-│   3. gemini-1.5-flash         → Fastest, decent quality            │
-│   4. gemini-1.5-pro           → Older pro model                    │
+│   1. gemini-2.5-flash-lite    → Fastest, free, Arabic ✅ (PRIMARY) │
+│   2. gemini-2.5-pro           → Best quality (1,500 RPD shared)    │
+│   3. gemini-2.0-flash         → Fast, good quality                 │
+│   4. gemini-1.5-flash         → Fastest, decent quality            │
+│   5. gemini-1.5-pro           → Older pro model                    │
 │   → Then: Groq → OpenRouter → HuggingFace → OpenAI                 │
 ├─────────────────────────────────────────────────────────────────────┤
 │ AUDIO (Transcription):                                              │
-│   1. gemini-2.5-pro           → Best quality audio                 │
-│   2. gemini-2.0-flash         → Fast audio                         │
-│   3. gemini-1.5-flash         → Fastest audio                      │
+│   1. gemini-2.5-flash-lite    → Fastest, free, Arabic ✅ (PRIMARY) │
+│   2. gemini-2.5-pro           → Best quality audio                 │
+│   3. gemini-2.0-flash         → Fast audio                         │
+│   4. gemini-1.5-flash         → Fastest audio                      │
 │   → Then: Groq (14,400 RPD FREE) → HuggingFace → OpenAI            │
 ├─────────────────────────────────────────────────────────────────────┤
 │ TRANSLATION (Text-only):                                            │
@@ -56,6 +58,7 @@ def _get_api_url(model: str) -> str:
 # Flash models are faster but lower quality
 # =============================================================================
 VISION_MODELS = [
+    "gemini-2.5-flash-lite",    # PRIMARY: Fastest, free, full Arabic support
     "gemini-2.5-pro",           # Best quality (1,500 RPD shared)
     "gemini-2.0-flash",         # Fast, good quality
     "gemini-1.5-flash",         # Fastest, decent quality
@@ -69,6 +72,7 @@ VISION_MODEL = VISION_MODELS[0]  # Primary model
 # Flash models support audio too
 # =============================================================================
 AUDIO_MODELS = [
+    "gemini-2.5-flash-lite",    # PRIMARY: Fastest, free, full Arabic support
     "gemini-2.5-pro",           # Best quality audio
     "gemini-2.0-flash",         # Fast audio
     "gemini-1.5-flash",         # Fastest audio
