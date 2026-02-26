@@ -51,3 +51,7 @@ report.xml
 testsprite_tests/
 frontend/testsprite_tests/
 frontend/apps/web/e2e/screenshots/
+
+# Lighthouse reports
+*.report.html
+screenshots/

@@ -52,7 +52,7 @@
 - Add TOGETHER_API_KEY on Render (key ready)
 - Add GROQ_API_KEY on Render (biggest gap — free, 14,400 RPD audio)
 - Google Gemini 429 quota: free tier limited to 5 RPM (known issue since Dec 2025)
-- New EAS build needed to pick up latest mobile fixes
+- ~~New EAS build needed~~ ✅ Done — Build 934e89de (Android APK, preview profile)
 
 ## How to Run Locally
 - Backend: `cd backend && flask run --debug`
@@ -84,6 +84,8 @@
 | 2026-02-24 | Fixed LIFO mock ordering across all mock-based specs (catch-all first, mockLoginAs last) | ✅ Done |
 | 2026-02-24 | Fixed truthy empty array crash: `data: null` in reports/arabic/crud mocks ([] bypasses null checks) | ✅ Done |
 | 2026-02-24 | Fixed flaky logout test: wait for Ant Design dropdown item visibility before click | ✅ Done |
+| 2026-02-26 | New EAS Android build (preview/APK): build 934e89de — picks up all latest mobile fixes (Wizard UX, Arabic RTL, push notifications, gemini-2.5-flash-lite) | ✅ Done |
+| 2026-02-26 | Fix GitHub Actions Playwright CI: added `version: 10` to pnpm/action-setup@v4 step — was failing with "No pnpm version is specified" | ✅ Done |
 | 2026-02-25 | Work Planning drag improvements: SimpleJobRow now draggable (move between days + drag back to pool to remove); pool shows red outline when hovered with a job; footer hint updated; description strips equipment name prefix in pool cards, day rows, at-risk drawer; user names in team pool/engineers strip +3px font + bold; backend remove_job resets SAP order to 'pending' so it reappears in pool; addJobMutation/scheduleSAPMutation onSuccess shows auto-added defect count; equipment_id extraction improved for defect pool items; atRiskJobs computes description with equipment name stripped | ✅ Done |
 
 ## Feature Tracker (AUTO-UPDATE THIS)
