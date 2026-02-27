@@ -3,15 +3,15 @@
 Allows each checklist question to be tagged with specific equipment sub-types.
 Questions with no rows apply to ALL types (backward compatible).
 
-Revision ID: a1b2c3d4e5f6
-Revises: z4a5b6c7d8e9
-Create Date: 2026-02-27 12:00:00.000000
+Revision ID: c9d0e1f2a3b4
+Revises: e5f6g7h8i9j0
+Create Date: 2026-02-28 12:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = 'a1b2c3d4e5f6'
-down_revision = 'z4a5b6c7d8e9'
+revision = 'c9d0e1f2a3b4'
+down_revision = 'e5f6g7h8i9j0'
 branch_labels = None
 depends_on = None
 
