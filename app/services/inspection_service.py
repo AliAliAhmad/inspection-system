@@ -179,9 +179,18 @@ class InspectionService:
         # Get user's language preference
         language = technician.language if hasattr(technician, 'language') and technician.language else 'en'
         
-        # Add template items with correct language
+        # Add template items filtered by equipment sub-type
         inspection_dict = inspection.to_dict(include_answers=True)
-        template_items = ChecklistItem.query.filter_by(template_id=template.id).order_by(ChecklistItem.order_index).all()
+        template_items = ChecklistItem.query.filter_by(
+            template_id=template.id
+        ).order_by(ChecklistItem.order_index).all()
+        # Filter by equipment sub-type: questions with no type filter apply to all
+        eqt_subtype = equipment.equipment_type_2 or equipment.name
+        template_items = [
+            item for item in template_items
+            if not item.equipment_type_filters
+            or eqt_subtype in item.applicable_equipment_types
+        ]
         inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
         
         return inspection_dict

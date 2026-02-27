@@ -68,7 +68,8 @@
 ## Change Log (AUTO-UPDATE THIS)
 <!-- Claude: After EVERY change you make, add an entry here. NEVER skip this. -->
 
-| Date | What Changed | Status |
+| Date | What Changed | Status |\n| 2026-02-27 | Offline photo & voice upload fix: photos copied to permanent storage + queued in new QueuedInspectionMedia queue; voice recordings saved locally so never lost; auto-upload on reconnect; amber badges/text instead of error alerts | ✅ Done |
+| 2026-02-28 | Per-question equipment type filter for checklists: new `checklist_item_equipment_types` junction table + migration; `ChecklistItemEquipmentType` model; server-side filter in by-assignment API + start_inspection service; admin CRUD API accepts `applicable_equipment_types`; Excel import + download template updated with Equipment Types column; web admin ChecklistsPage gets Equipment Type Filter tags select in Add/Edit modals + Type Filter column in items table; shared TS types updated | ✅ Done |
 | 2026-02-25 | Overnight autonomous production review (10 phases): fixed 10 mobile TS errors (Reanimated SharedValue, expo-notifications API, FileSystem EncodingType, textShadow CSS, ChannelType, testID prop), 1 failing backend test (urgent→stop verdict), flaky Playwright auth, favicon 404, React Router future flags, push token security leak; wrapped 48 web + 116 mobile console.logs under DEV guards; created 4 GitHub Actions CI/CD workflows; DEPLOYMENT_CHECKLIST.md; PRODUCTION_READY_REPORT.html (78/100 score) | ✅ Done |
 | 2026-02-25 | Phase 3 mobile audit: redacted Expo push token value from console.log in AuthProvider.tsx line 60 (was logging raw token string — now logs token length only); documented expo-av unmaintained (15 files, migration to expo-audio/expo-video planned); metro watchFolders override confirmed intentional monorepo trade-off; minor version mismatches on netinfo (11.5.2) + react-native-svg (15.15.3) non-breaking; 0 TS errors confirmed post-fix | ✅ Done |
 | 2026-02-25 | Work Planning: auto-add inspection jobs to work plan when generate_list is called (with auto-assign if inspectors set); auto-add related open defects when PM/defect job scheduled; equipment count grouped display "3×RS" chips with hover popover (5 units + see all); at-risk badge moved to health strip near hrs total; at-risk drawer (drag-to-day); compact pool cards; 20-min default inspection time; CSS fix for right panel tab scrolling | ✅ Done |
@@ -84,6 +85,9 @@
 | 2026-02-24 | Fixed LIFO mock ordering across all mock-based specs (catch-all first, mockLoginAs last) | ✅ Done |
 | 2026-02-24 | Fixed truthy empty array crash: `data: null` in reports/arabic/crud mocks ([] bypasses null checks) | ✅ Done |
 | 2026-02-24 | Fixed flaky logout test: wait for Ant Design dropdown item visibility before click | ✅ Done |
+| 2026-02-27 | Mobile persistence fixes: language → AsyncStorage (survives close+logout); inspection wizard draft backup in AsyncStorage; login email save/restore; nav state persistence (return to same screen); debug banner removed | ✅ Done |
+| 2026-02-27 | TTS Read Aloud: new TTSProvider (expo-speech); 🔊 icon per inspection question; Read Aloud action in all SmartFAB contexts; Arabic ar-SA voice | ✅ Done |
+| 2026-02-27 | SmartFAB drag bug fix: save start position in ref, compute from startPos+delta instead of currentPos+delta (FAB no longer flies off screen) | ✅ Done |
 | 2026-02-26 | New EAS Android build (preview/APK): build 934e89de — picks up all latest mobile fixes (Wizard UX, Arabic RTL, push notifications, gemini-2.5-flash-lite) | ✅ Done |
 | 2026-02-26 | Fix GitHub Actions Playwright CI: added `version: 10` to pnpm/action-setup@v4 step — was failing with "No pnpm version is specified" | ✅ Done |
 | 2026-02-25 | Work Planning drag improvements: SimpleJobRow now draggable (move between days + drag back to pool to remove); pool shows red outline when hovered with a job; footer hint updated; description strips equipment name prefix in pool cards, day rows, at-risk drawer; user names in team pool/engineers strip +3px font + bold; backend remove_job resets SAP order to 'pending' so it reappears in pool; addJobMutation/scheduleSAPMutation onSuccess shows auto-added defect count; equipment_id extraction improved for defect pool items; atRiskJobs computes description with equipment name stripped | ✅ Done |
@@ -141,7 +145,8 @@
 | Urgency indicator per question | ✅ Done | 4 levels (OK/Monitor/Attention/Critical), auto-predict assessment from scores |
 | Clickable answer cells + detail modal | ✅ Done | Tap any cell in answer bar → bottom sheet with question, answer, urgency, comment, photo |
 | Assessment badge near equipment | ✅ Done | Colored badge (Pass/Urgent/Monitor) next to equipment name on MyAssignments cards |
-| Monitor Follow-Up scheduling | ✅ Done | Full stack: DB + model + service + 9 API endpoints + 2 scheduler jobs + web page/form + mobile 2 screens + i18n |
+| Monitor Follow-Up scheduling | ✅ Done |
+| Per-question equipment type filter | ✅ Done | checklist_item_equipment_types table; admin tags each question with sub-types; wizard only shows relevant questions per equipment | Full stack: DB + model + service + 9 API endpoints + 2 scheduler jobs + web page/form + mobile 2 screens + i18n |
 | Multi-layer assessment system | ✅ Done | 4-layer flow (System→Inspector→Engineer→Admin), 3 verdicts (operational/monitor/stop), auto-escalation, notifications |
 | System auto-assessment | ✅ Done | Calculates verdict from urgency scores (weights 0,1,3,5), pre-selects on assessment screen |
 | Engineer review escalation | ✅ Done | Auto-escalates on disagreement, engineer can finalize or escalate to admin |
@@ -162,6 +167,12 @@
 | In-app notification toast alerts (mobile) | ✅ Done | NotificationAlertProvider + NotificationToast + vibration sounds, mirrors web useNotificationAlerts hook |
 | Notification preferences screen (mobile) | ✅ Done | Channels (In-App/Push) by group, DND quiet hours + day picker, digest mode radio, reset to defaults, full RTL/i18n |
 | Maestro E2E test suite (mobile) | ✅ Done | 44 flows across 5 roles (Inspector/Admin/Engineer/Specialist/Test), ALL PASS — testIDs on all 71 screens, role-specific flows, i18n-aware text assertions, scroll-reset pattern for quick links |
+| TTS Read Aloud (mobile) | ✅ Done | TTSProvider + 🔊 per wizard question + SmartFAB Read Aloud action + Arabic ar-SA voice |
+| Language persistence (mobile) | ✅ Done | AsyncStorage replaces localStorage — Arabic survives close and logout |
+| Inspection wizard draft backup | ✅ Done | Answers saved to AsyncStorage every change; loaded on reopen as fallback |
+| Login email memory | ✅ Done | Last-used email saved to AsyncStorage, pre-filled on next login |
+| Nav state persistence | ✅ Done | App returns to same screen after close and reopen |
+| SmartFAB drag fix | ✅ Done | FAB no longer flies off screen when dragged |
 | Playwright E2E test suite (web) | ✅ Done | 126 tests across 17 spec files — auth, navigation, CRUD, roles, Arabic/RTL, forms, uploads, mobile viewport, reports, quality-engineer, inspection-submit, error-handling/crash-regression. ALL PASS (0 failed, 0 flaky). Runs against https://inspection-web.onrender.com |
 | Work Planning v6 layout (web) | ✅ Done | Flat berth bar + plan score + smart pills; engineers horizontal strip; 7 flex day columns with in-place expand/collapse; right panel tabs (Jobs Pool + Team Pool with Mech/Elec filter) |
 | Inspection Wizard UX optimization | ✅ Done | Question-first layout, no banner/dots, collapsible media, segmented urgency, hint pills, minimized nav |

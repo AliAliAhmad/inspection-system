@@ -29,6 +29,8 @@ export interface CreateChecklistItemPayload {
   answer_type: 'pass_fail' | 'yes_no' | 'numeric' | 'text';
   category?: 'mechanical' | 'electrical';
   critical_failure?: boolean;
+  /** Equipment sub-types this question applies to. Omit or empty = applies to all types. */
+  applicable_equipment_types?: string[];
 }
 
 export interface UpdateChecklistItemPayload extends Partial<CreateChecklistItemPayload> {}

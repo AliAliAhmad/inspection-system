@@ -798,11 +798,20 @@ def get_or_start_by_assignment(assignment_id):
 
     if existing:
         inspection_dict = existing.to_dict(include_answers=True, language=language)
-        # Add checklist items
-        from app.models import ChecklistItem
+        # Add checklist items, filtered by equipment sub-type
+        from app.models import ChecklistItem, Equipment
         template_items = ChecklistItem.query.filter_by(
             template_id=existing.template_id
         ).order_by(ChecklistItem.order_index).all()
+        # Filter by equipment sub-type: questions with no type filter apply to all
+        equipment_obj = db.session.get(Equipment, assignment.equipment_id)
+        eqt_subtype = (equipment_obj.equipment_type_2 or equipment_obj.name) if equipment_obj else None
+        if eqt_subtype:
+            template_items = [
+                item for item in template_items
+                if not item.equipment_type_filters
+                or eqt_subtype in item.applicable_equipment_types
+            ]
         inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
 
         # Debug: log media file info for answers

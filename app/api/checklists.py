@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import func
-from app.models import ChecklistTemplate, ChecklistItem, User, Inspection, Defect
+from app.models import ChecklistTemplate, ChecklistItem, ChecklistItemEquipmentType, User, Inspection, Defect
 from sqlalchemy.exc import IntegrityError
 from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
@@ -187,10 +187,20 @@ def add_item_to_template(template_id):
         category=data.get('category'),
         critical_failure=data.get('critical_failure', False)
     )
-    
+
     db.session.add(item)
+    db.session.flush()  # get item.id before adding equipment type rows
+
+    for eq_type in (data.get('applicable_equipment_types') or []):
+        eq_type = eq_type.strip()
+        if eq_type:
+            db.session.add(ChecklistItemEquipmentType(
+                checklist_item_id=item.id,
+                equipment_type=eq_type,
+            ))
+
     safe_commit()
-    
+
     return jsonify({
         'status': 'success',
         'message': 'Item added to template',
@@ -241,9 +251,20 @@ def update_item(template_id, item_id):
         item.order_index = data['order_index']
     if 'critical_failure' in data:
         item.critical_failure = data['critical_failure']
-    
+
+    if 'applicable_equipment_types' in data:
+        # Replace all equipment type rows (delete-then-insert for clean update)
+        ChecklistItemEquipmentType.query.filter_by(checklist_item_id=item.id).delete()
+        for eq_type in (data['applicable_equipment_types'] or []):
+            eq_type = eq_type.strip()
+            if eq_type:
+                db.session.add(ChecklistItemEquipmentType(
+                    checklist_item_id=item.id,
+                    equipment_type=eq_type,
+                ))
+
     safe_commit()
-    
+
     return jsonify({
         'status': 'success',
         'message': 'Item updated',
@@ -331,7 +352,8 @@ def download_checklist_template():
         'Critical': ['Yes', 'No', 'Yes', 'No', 'Yes', 'No'],
         'Numeric Rule': ['less_than', 'less_than', '', '', '', 'less_than'],
         'Min Value': ['', '', '', '', '', ''],
-        'Max Value': ['80', '2.5', '', '', '', '0.05']
+        'Max Value': ['80', '2.5', '', '', '', '0.05'],
+        'Equipment Types': ['', '', 'Centrifugal Pump', 'Centrifugal Pump', 'Screw Pump', ''],
     }
     df = pd.DataFrame(data)
 
@@ -344,9 +366,9 @@ def download_checklist_template():
         instructions = {
             'Column': ['Equipment Type', 'Assembly', 'Part', 'Question', 'Question (Arabic)',
                        'Category', 'Answer Type', 'Expected Result', 'Action if Fail',
-                       'Critical', 'Numeric Rule', 'Min Value', 'Max Value'],
+                       'Critical', 'Numeric Rule', 'Min Value', 'Max Value', 'Equipment Types'],
             'Required': ['Yes', 'Yes', 'No', 'Yes', 'No (auto-translated)',
-                        'No', 'Yes', 'No', 'No', 'No', 'No', 'No', 'No'],
+                        'No', 'Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No'],
             'Description': [
                 'Equipment type (e.g., Pump, Crane, Generator)',
                 'Assembly name (e.g., Motor, Pump Unit, Coupling)',
@@ -360,7 +382,8 @@ def download_checklist_template():
                 'Yes = critical failure item',
                 'For numeric: less_than, greater_than, or between',
                 'Minimum value for numeric validation',
-                'Maximum value for numeric validation'
+                'Maximum value for numeric validation',
+                'Comma-separated sub-types (e.g. "Centrifugal Pump, Screw Pump"). Leave empty = applies to all types.'
             ]
         }
         df_instructions = pd.DataFrame(instructions)
@@ -609,6 +632,18 @@ def import_checklist():
                 max_value=max_value
             )
             db.session.add(item)
+            db.session.flush()  # get item.id for equipment type rows
+
+            # Handle Equipment Types column (comma-separated, empty = applies to all)
+            eq_types_raw = row.get('Equipment Types')
+            if pd.notna(eq_types_raw) and str(eq_types_raw).strip():
+                for eq_type in str(eq_types_raw).split(','):
+                    eq_type = eq_type.strip()
+                    if eq_type:
+                        db.session.add(ChecklistItemEquipmentType(
+                            checklist_item_id=item.id,
+                            equipment_type=eq_type,
+                        ))
 
         if items_created == 0:
             raise ValidationError("No valid items found in the file")

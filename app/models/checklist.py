@@ -63,6 +63,32 @@ class ChecklistTemplate(db.Model):
         return f'<ChecklistTemplate {self.name} v{self.version}>'
 
 
+class ChecklistItemEquipmentType(db.Model):
+    """
+    Junction table: links a checklist question to specific equipment sub-types.
+    A question with NO rows here applies to ALL equipment types (backward compatible).
+    A question with rows is only shown when inspecting equipment whose equipment_type_2
+    matches one of the listed equipment_type values.
+    """
+    __tablename__ = 'checklist_item_equipment_types'
+
+    id = db.Column(db.Integer, primary_key=True)
+    checklist_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey('checklist_items.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    equipment_type = db.Column(db.String(100), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('checklist_item_id', 'equipment_type', name='uq_ciet_item_type'),
+    )
+
+    def __repr__(self):
+        return f'<ChecklistItemEquipmentType item={self.checklist_item_id} type={self.equipment_type}>'
+
+
 class ChecklistItem(db.Model):
     """
     Individual question/item in a checklist template.
@@ -115,6 +141,13 @@ class ChecklistItem(db.Model):
     template = db.relationship('ChecklistTemplate', back_populates='items')
     answers = db.relationship('InspectionAnswer', back_populates='checklist_item', lazy='dynamic')
     defects = db.relationship('Defect', back_populates='checklist_item', lazy='dynamic')
+    # Equipment type filter: empty list = applies to all types
+    equipment_type_filters = db.relationship(
+        'ChecklistItemEquipmentType',
+        cascade='all, delete-orphan',
+        lazy='select',
+        foreign_keys='ChecklistItemEquipmentType.checklist_item_id',
+    )
 
     __table_args__ = (
         db.UniqueConstraint('template_id', 'order_index', name='uq_item_template_order'),
@@ -123,6 +156,11 @@ class ChecklistItem(db.Model):
             name='check_valid_item_category'
         ),
     )
+
+    @property
+    def applicable_equipment_types(self) -> list:
+        """Return list of equipment sub-types this question applies to. Empty = all types."""
+        return [f.equipment_type for f in self.equipment_type_filters]
 
     def to_dict(self, language='en'):
         """Convert checklist item to dictionary."""
@@ -151,7 +189,8 @@ class ChecklistItem(db.Model):
             'action_if_fail_ar': self.action_if_fail_ar,
             'numeric_rule': self.numeric_rule,
             'min_value': self.min_value,
-            'max_value': self.max_value
+            'max_value': self.max_value,
+            'applicable_equipment_types': self.applicable_equipment_types,
         }
 
     def __repr__(self):

@@ -364,6 +364,7 @@ export default function ChecklistsPage() {
       answer_type: item.answer_type,
       category: item.category,
       critical_failure: item.critical_failure,
+      applicable_equipment_types: item.applicable_equipment_types || [],
     });
     setEditItemOpen(true);
   };
@@ -697,6 +698,16 @@ export default function ChecklistsPage() {
                   { title: 'Type', dataIndex: 'answer_type', key: 'answer_type', width: 100, render: (v: string) => <Tag>{v?.replace('_', ' ')}</Tag> },
                   { title: 'Category', dataIndex: 'category', key: 'category', width: 100, render: (v: string | null) => v ? <Tag color={v === 'mechanical' ? 'blue' : 'gold'}>{v.toUpperCase()}</Tag> : '-' },
                   { title: 'Critical', dataIndex: 'critical_failure', key: 'critical_failure', width: 80, render: (v: boolean) => v ? <Tag color="red">YES</Tag> : <Tag>No</Tag> },
+                  {
+                    title: 'Type Filter',
+                    dataIndex: 'applicable_equipment_types',
+                    key: 'applicable_equipment_types',
+                    width: 110,
+                    render: (types: string[]) =>
+                      types?.length
+                        ? <Tooltip title={types.join(', ')}><Tag color="purple">{types.length} type(s)</Tag></Tooltip>
+                        : <Tag>All</Tag>,
+                  },
                   {
                     title: 'Actions',
                     key: 'actions',
@@ -1048,6 +1059,21 @@ export default function ChecklistsPage() {
           <Form.Item name="critical_failure" valuePropName="checked" initialValue={false}>
             <Switch /> Critical Failure Item
           </Form.Item>
+          <Form.Item
+            name="applicable_equipment_types"
+            label={
+              <Tooltip title="Leave empty to apply to all equipment types using this template">
+                Equipment Type Filter
+              </Tooltip>
+            }
+          >
+            <Select
+              mode="tags"
+              placeholder="Leave empty = applies to all types"
+              allowClear
+              tokenSeparators={[',']}
+            />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -1097,6 +1123,21 @@ export default function ChecklistsPage() {
           </Row>
           <Form.Item name="critical_failure" valuePropName="checked">
             <Switch /> Critical Failure Item
+          </Form.Item>
+          <Form.Item
+            name="applicable_equipment_types"
+            label={
+              <Tooltip title="Leave empty to apply to all equipment types using this template">
+                Equipment Type Filter
+              </Tooltip>
+            }
+          >
+            <Select
+              mode="tags"
+              placeholder="Leave empty = applies to all types"
+              allowClear
+              tokenSeparators={[',']}
+            />
           </Form.Item>
         </Form>
       </Modal>

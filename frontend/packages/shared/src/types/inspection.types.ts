@@ -84,6 +84,8 @@ export interface ChecklistItem {
   numeric_rule: 'less_than' | 'greater_than' | 'between' | null;
   min_value: number | null;
   max_value: number | null;
+  /** Equipment sub-types this question applies to. Empty array = applies to all types. */
+  applicable_equipment_types: string[];
 }
 
 export interface AnswerPayload {

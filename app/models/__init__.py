@@ -6,7 +6,7 @@ Export all models for easy importing
 # Core models
 from app.models.user import User
 from app.models.equipment import Equipment
-from app.models.checklist import ChecklistTemplate, ChecklistItem
+from app.models.checklist import ChecklistTemplate, ChecklistItem, ChecklistItemEquipmentType
 from app.models.inspection import Inspection, InspectionAnswer
 from app.models.defect import Defect
 from app.models.defect_occurrence import DefectOccurrence
