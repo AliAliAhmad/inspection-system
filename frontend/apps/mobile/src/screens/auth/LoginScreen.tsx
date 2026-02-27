@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../providers/AuthProvider';
 import { useLanguage } from '../../providers/LanguageProvider';
 import { useTranslation } from 'react-i18next';
+
+const LAST_EMAIL_KEY = 'last_login_email';
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -22,6 +25,13 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Restore last-used email on mount
+  useEffect(() => {
+    AsyncStorage.getItem(LAST_EMAIL_KEY)
+      .then((saved) => { if (saved) setUsername(saved); })
+      .catch(() => {});
+  }, []);
+
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
       Alert.alert(t('common.error'), t('auth.username_required'));
@@ -30,6 +40,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(username.trim(), password);
+      AsyncStorage.setItem(LAST_EMAIL_KEY, username.trim()).catch(() => {});
     } catch (err: any) {
       let message = err?.response?.data?.message || err?.response?.data?.error || err?.message || t('auth.login_failed');
 
@@ -47,13 +58,6 @@ export default function LoginScreen() {
   };
 
   return (
-    <>
-      {/* DEBUG BANNER - Shows on Login */}
-      <View style={{ backgroundColor: 'red', padding: 15, marginTop: 50 }}>
-        <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center', fontSize: 18 }}>
-          DEBUG v3 - SDK54 WORKING
-        </Text>
-      </View>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -108,7 +112,6 @@ export default function LoginScreen() {
 
       </View>
     </KeyboardAvoidingView>
-    </>
   );
 }
 

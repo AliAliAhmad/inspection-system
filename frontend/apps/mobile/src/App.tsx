@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from './navigation/navigationRef';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
@@ -13,6 +14,7 @@ import { AccessibilityProvider } from './providers/AccessibilityProvider';
 import { AIPhotoAnalysisProvider } from './providers/AIPhotoAnalysisProvider';
 import { UrgentAlertProvider } from './providers/UrgentAlertProvider';
 import { NotificationAlertProvider } from './providers/NotificationAlertProvider';
+import { TTSProvider } from './providers/TTSProvider';
 import OfflineBanner from './components/common/OfflineBanner';
 import VoiceCommandOverlay from './components/VoiceCommandOverlay';
 import BigButtonOverlay from './components/BigButtonOverlay';
@@ -82,7 +84,23 @@ function AppContent() {
   return <RootNavigator />;
 }
 
+const NAV_STATE_KEY = 'nav_state';
+
 export default function App() {
+  const [navState, setNavState] = useState<any>(undefined);
+  const navStateReady = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(NAV_STATE_KEY)
+      .then((raw) => {
+        if (raw) {
+          try { setNavState(JSON.parse(raw)); } catch {}
+        }
+        navStateReady.current = true;
+      })
+      .catch(() => { navStateReady.current = true; });
+  }, []);
+
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
@@ -90,7 +108,14 @@ export default function App() {
           <AccessibilityProvider>
             <OfflineProvider>
               <LanguageProvider>
-                <NavigationContainer ref={navigationRef}>
+                <TTSProvider>
+                <NavigationContainer
+                  ref={navigationRef}
+                  initialState={navState}
+                  onStateChange={(state) => {
+                    AsyncStorage.setItem(NAV_STATE_KEY, JSON.stringify(state)).catch(() => {});
+                  }}
+                >
                   <AuthProvider>
                     <NotificationAlertProvider>
                       <AIPhotoAnalysisProvider>
@@ -109,6 +134,7 @@ export default function App() {
                     </NotificationAlertProvider>
                   </AuthProvider>
                 </NavigationContainer>
+                </TTSProvider>
               </LanguageProvider>
             </OfflineProvider>
           </AccessibilityProvider>

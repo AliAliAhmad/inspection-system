@@ -43,6 +43,7 @@ import {
   aiApi,
 } from '@inspection/shared';
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
+import { useTTS } from '../../providers/TTSProvider';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -103,6 +104,7 @@ export default function InspectionWizardScreen() {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [localAnswers, setLocalAnswers] = useState<Record<number, LocalAnswer>>({});
+  const { speak, stop, isSpeaking, setReadable } = useTTS();
   const [skippedItems, setSkippedItems] = useState<Set<number>>(new Set());
   const [fixingIncomplete, setFixingIncomplete] = useState(false);
   const [mediaExpanded, setMediaExpanded] = useState(false);
@@ -313,6 +315,38 @@ export default function InspectionWizardScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefilledItems, inspectionId]);
 
+  // Register current question as readable content for TTS (FAB + inline icon)
+  useEffect(() => {
+    if (!currentItem) return;
+    const text = (isArabic && currentItem.question_text_ar)
+      ? currentItem.question_text_ar
+      : currentItem.question_text;
+    setReadable(text);
+  }, [currentItem, isArabic, setReadable]);
+
+  // Load local answer draft from AsyncStorage (fills gap for answers not yet debounce-saved to server)
+  const draftLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!inspectionId || draftLoadedRef.current) return;
+    draftLoadedRef.current = true;
+    AsyncStorage.getItem(`inspection_${inspectionId}_draft`)
+      .then((raw) => {
+        if (!raw) return;
+        try {
+          const draft = JSON.parse(raw) as Record<number, LocalAnswer>;
+          // Merge draft into state; server seeding (below) will override confirmed answers
+          setLocalAnswers((prev) => ({ ...draft, ...prev }));
+        } catch {}
+      })
+      .catch(() => {});
+  }, [inspectionId]);
+
+  // Save local answers to AsyncStorage on every change as a safety draft
+  useEffect(() => {
+    if (!inspectionId || Object.keys(localAnswers).length === 0) return;
+    AsyncStorage.setItem(`inspection_${inspectionId}_draft`, JSON.stringify(localAnswers)).catch(() => {});
+  }, [localAnswers, inspectionId]);
+
   // Resume on same question - Load saved index when inspection loads
   useEffect(() => {
     if (inspection?.id && totalItems > 0) {
@@ -361,11 +395,12 @@ export default function InspectionWizardScreen() {
   const submitMutation = useMutation({
     mutationFn: () => inspectionsApi.submit(inspectionId!),
     onSuccess: async () => {
-      // Clear saved index on submit
+      // Clear saved index and draft on submit
       try {
         await AsyncStorage.removeItem(`inspection_${inspectionId}_currentIndex`);
+        await AsyncStorage.removeItem(`inspection_${inspectionId}_draft`);
       } catch (error) {
-        console.error('Failed to clear saved inspection index:', error);
+        console.error('Failed to clear saved inspection data:', error);
       }
 
       queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
@@ -1514,11 +1549,20 @@ export default function InspectionWizardScreen() {
           </Text>
 
           {/* Question text — THE HERO */}
-          <Text style={[styles.questionText, isArabic && { textAlign: 'right', writingDirection: 'rtl' }]}>
-            {isArabic && currentItem.question_text_ar
-              ? currentItem.question_text_ar
-              : currentItem.question_text}
-          </Text>
+          <View style={[{ flexDirection: isArabic ? 'row-reverse' : 'row', alignItems: 'flex-start' }]}>
+            <Text style={[styles.questionText, { flex: 1 }, isArabic && { textAlign: 'right', writingDirection: 'rtl' }]}>
+              {isArabic && currentItem.question_text_ar
+                ? currentItem.question_text_ar
+                : currentItem.question_text}
+            </Text>
+            <TouchableOpacity
+              onPress={() => isSpeaking ? stop() : speak((isArabic && currentItem.question_text_ar) ? currentItem.question_text_ar : currentItem.question_text)}
+              style={{ padding: 6, marginTop: 2, marginLeft: isArabic ? 0 : 4, marginRight: isArabic ? 4 : 0 }}
+              accessibilityLabel="Read question aloud"
+            >
+              <Text style={{ fontSize: 20 }}>{isSpeaking ? '🔇' : '🔊'}</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Pre-filled from colleague indicator */}
           {currentItem && prefilledItems[currentItem.id] && (

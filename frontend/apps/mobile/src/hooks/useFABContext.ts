@@ -6,6 +6,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toolkitApi } from '@inspection/shared';
 import { navigationRef, navigate } from '../navigation/navigationRef';
+import { useTTS } from '../providers/TTSProvider';
 
 export type FABAction = {
   id: string;
@@ -109,6 +110,7 @@ const QUICK_REPORT: FABAction = {
 
 export function useFABContext(options: FABContextOptions = {}): UseFABContextResult {
   const [currentRouteName, setCurrentRouteName] = useState<string>('MainTabs');
+  const { speak, stop, readable, isSpeaking } = useTTS();
 
   useEffect(() => {
     const updateRoute = () => {
@@ -405,8 +407,19 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
         break;
     }
 
+    // Read Aloud action — present in every context
+    const readAloud: FABAction = {
+      id: 'read_aloud',
+      label: isSpeaking ? 'Stop Reading' : 'Read Aloud',
+      labelAr: isSpeaking ? 'إيقاف' : 'اقرأ بصوت',
+      icon: isSpeaking ? '🔇' : '🔊',
+      color: '#13c2c2',
+      onPress: () => isSpeaking ? stop() : speak(readable),
+    };
+    actions = [...actions, readAloud];
+
     return { actions, mainAction, mainColor, mainIcon };
-  }, [contextType, options]);
+  }, [contextType, options, speak, stop, readable, isSpeaking]);
 
   return { contextType, actions, mainAction, isEnabled, mainColor, mainIcon };
 }

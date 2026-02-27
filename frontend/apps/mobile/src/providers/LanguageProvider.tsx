@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useCallback, useState, useMemo } from 'react';
 import { I18nManager } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { useLanguageState, Language, resources } from '@inspection/shared';
+import { Language, resources } from '@inspection/shared';
+
+const LANG_KEY = 'app_language';
 
 i18n.use(initReactI18next).init({
   resources,
@@ -20,15 +23,31 @@ interface LanguageContextValue {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const { language, setLanguage, isRTL } = useLanguageState('en');
+  const [language, setLang] = useState<Language>('en');
 
+  // Restore saved language from AsyncStorage on mount
   useEffect(() => {
-    if (I18nManager.isRTL !== isRTL) {
-      I18nManager.forceRTL(isRTL);
-      // Note: In production, you'd need to reload the app for RTL to take effect
-    }
-    i18n.changeLanguage(language);
-  }, [language, isRTL]);
+    AsyncStorage.getItem(LANG_KEY)
+      .then((saved) => {
+        if (saved === 'en' || saved === 'ar') {
+          setLang(saved as Language);
+          i18n.changeLanguage(saved);
+          const rtl = saved === 'ar';
+          if (I18nManager.isRTL !== rtl) I18nManager.forceRTL(rtl);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const setLanguage = useCallback((lang: Language) => {
+    setLang(lang);
+    i18n.changeLanguage(lang);
+    const rtl = lang === 'ar';
+    if (I18nManager.isRTL !== rtl) I18nManager.forceRTL(rtl);
+    AsyncStorage.setItem(LANG_KEY, lang).catch(() => {});
+  }, []);
+
+  const isRTL = language === 'ar';
 
   const value = useMemo(
     () => ({ language, setLanguage, isRTL }),

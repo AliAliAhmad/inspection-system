@@ -137,6 +137,7 @@ export default function SmartFAB(props: SmartFABProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragStartPos = useRef({ x: 0, y: 0 });
 
   // Animated values using Reanimated 2
   const menuProgress = useSharedValue(0);
@@ -225,6 +226,8 @@ export default function SmartFAB(props: SmartFABProps) {
       },
       onPanResponderGrant: () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        // Save starting position so move delta is computed correctly
+        dragStartPos.current = { x: positionX.value, y: positionY.value };
         setIsDragging(true);
         scale.value = withSpring(0.95);
 
@@ -235,14 +238,14 @@ export default function SmartFAB(props: SmartFABProps) {
         }
       },
       onPanResponderMove: (_, gestureState) => {
-        // Update position with bounds checking
+        // gestureState.dx/dy is cumulative from touch START — use saved start pos to avoid drift
         const newX = Math.max(
           EDGE_PADDING,
-          Math.min(SCREEN_WIDTH - FAB_SIZE - EDGE_PADDING, positionX.value + gestureState.dx)
+          Math.min(SCREEN_WIDTH - FAB_SIZE - EDGE_PADDING, dragStartPos.current.x + gestureState.dx)
         );
         const newY = Math.max(
           BOTTOM_OFFSET,
-          Math.min(SCREEN_HEIGHT - FAB_SIZE - BOTTOM_OFFSET, positionY.value + gestureState.dy)
+          Math.min(SCREEN_HEIGHT - FAB_SIZE - BOTTOM_OFFSET, dragStartPos.current.y + gestureState.dy)
         );
 
         positionX.value = newX;
@@ -252,8 +255,8 @@ export default function SmartFAB(props: SmartFABProps) {
         setIsDragging(false);
         scale.value = withSpring(1);
 
-        // Snap to nearest edge
-        const currentX = positionX.value + gestureState.dx;
+        // Snap to nearest edge — use start pos + cumulative delta for final position
+        const currentX = dragStartPos.current.x + gestureState.dx;
         const snapToRight = currentX > SCREEN_WIDTH / 2;
 
         positionX.value = withSpring(
