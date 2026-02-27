@@ -115,13 +115,14 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
 
   // Refresh pending items list (includes both sync-manager + offline-mutations queues)
   const refreshPendingItems = useCallback(async () => {
-    const [details, items, lastSync, mutationCount] = await Promise.all([
+    const [details, items, lastSync, mutationCount, inspectionMediaCount] = await Promise.all([
       syncManager.getPendingDetails(),
       buildPendingItems(),
       syncManager.getLastSyncTime(),
       getMutationPendingCount(),
+      syncManager.getInspectionMediaCount(),
     ]);
-    const newCount = details.total + mutationCount;
+    const newCount = details.total + mutationCount + inspectionMediaCount;
     // Only update state if values actually changed to avoid unnecessary re-renders
     setPendingCount(prev => prev === newCount ? prev : newCount);
     setPendingDetails(prev => JSON.stringify(prev) === JSON.stringify(details) ? prev : details);
@@ -205,11 +206,14 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       // Process offline mutation queue (form submissions queued while offline)
       const mutationResult = await syncPendingMutations(client);
 
+      // Process inspection-specific media (photos + voice captured while offline)
+      const inspectionMediaResult = await syncManager.processInspectionMediaQueue(client);
+
       // Refresh state
       await refreshPendingItems();
 
       // Show notification if we were offline and sync completed
-      const totalSuccess = result.success + mediaResult.success + mutationResult.synced;
+      const totalSuccess = result.success + mediaResult.success + mutationResult.synced + inspectionMediaResult.success;
       if (wasOffline.current && totalSuccess > 0) {
         await Notifications.scheduleNotificationAsync({
           content: {

@@ -43,6 +43,8 @@ import {
   aiApi,
 } from '@inspection/shared';
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
+import { useOffline } from '../../providers/OfflineProvider';
+import { syncManager } from '../../utils/sync-manager';
 import { useTTS } from '../../providers/TTSProvider';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -105,6 +107,8 @@ export default function InspectionWizardScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [localAnswers, setLocalAnswers] = useState<Record<number, LocalAnswer>>({});
   const { speak, stop, isSpeaking, setReadable } = useTTS();
+  const { isOnline } = useOffline();
+  const [pendingPhotoItems, setPendingPhotoItems] = useState<Set<number>>(new Set());
   const [skippedItems, setSkippedItems] = useState<Set<number>>(new Set());
   const [fixingIncomplete, setFixingIncomplete] = useState(false);
   const [mediaExpanded, setMediaExpanded] = useState(false);
@@ -927,9 +931,41 @@ export default function InspectionWizardScreen() {
       [checklistItemId]: {
         ...prev[checklistItemId],
         photo_uri: uri,
-        isUploading: true,
+        isUploading: !isOnline ? false : true,
       },
     }));
+
+    // ─── Offline: copy to permanent storage and queue for later upload ────────
+    if (!isOnline && inspectionId) {
+      try {
+        const dir = `${FileSystem.documentDirectory}offline-photos/`;
+        await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+        const safeFileName = fileName || `photo_${checklistItemId}_${Date.now()}.jpg`;
+        const permanentUri = uri.startsWith(FileSystem.documentDirectory!)
+          ? uri
+          : `${dir}${safeFileName}`;
+        if (!uri.startsWith(FileSystem.documentDirectory!)) {
+          await FileSystem.copyAsync({ from: uri, to: permanentUri });
+        }
+        await syncManager.enqueueInspectionMedia({
+          mediaType: 'photo',
+          localUri: permanentUri,
+          inspectionId,
+          checklistItemId,
+          assignmentId: String(id),
+          fileName: safeFileName,
+        });
+        setLocalAnswers(prev => ({
+          ...prev,
+          [checklistItemId]: { ...prev[checklistItemId], photo_uri: permanentUri, isUploading: false },
+        }));
+        setPendingPhotoItems(prev => new Set(prev).add(checklistItemId));
+      } catch (offlineErr) {
+        console.error('Failed to queue photo offline:', offlineErr);
+      }
+      return;
+    }
+    // ─── End offline branch ───────────────────────────────────────────────────
 
     try {
       // Read file as base64
@@ -1163,6 +1199,22 @@ export default function InspectionWizardScreen() {
         voice_note_id: undefined,
         voice_note_url: undefined,
         voice_transcription: undefined,
+      },
+    }));
+  }, [currentItem]);
+
+  // Handle voice note queued offline — mark as pending so user can proceed
+  const handleVoiceQueuedOffline = useCallback((localUri: string) => {
+    if (!currentItem) return;
+    setLocalAnswers(prev => ({
+      ...prev,
+      [currentItem.id]: {
+        ...prev[currentItem.id],
+        voice_note_url: localUri,
+        voice_transcription: {
+          en: '(Transcription pending – will sync when online)',
+          ar: '(سيتم المزامنة عند الاتصال بالإنترنت)',
+        },
       },
     }));
   }, [currentItem]);
@@ -1718,6 +1770,11 @@ export default function InspectionWizardScreen() {
                           <Text style={styles.retryButtonTextSmall}>🔄</Text>
                         </TouchableOpacity>
                       )}
+                      {pendingPhotoItems.has(currentItem.id) && !currentAnswer?.photo_url && (
+                        <View style={styles.queuedBadge}>
+                          <Text style={styles.queuedBadgeText}>⏳ Queued</Text>
+                        </View>
+                      )}
                     </View>
                     <TouchableOpacity
                       style={styles.annotateButton}
@@ -1788,6 +1845,11 @@ export default function InspectionWizardScreen() {
                 existingTranscription={currentAnswer?.voice_transcription}
                 disabled={isUploading}
                 language={i18n.language}
+                isOnline={isOnline}
+                inspectionId={inspectionId}
+                checklistItemId={currentItem.id}
+                currentAnswerValue={currentAnswer?.answer_value}
+                onQueuedOffline={handleVoiceQueuedOffline}
               />
             </View>
           )}
@@ -2459,6 +2521,20 @@ const styles = StyleSheet.create({
   retryButtonTextSmall: {
     color: '#fff',
     fontSize: 16,
+  },
+  queuedBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(250,173,20,0.9)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  queuedBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
   },
   validationWarning: {
     backgroundColor: '#FFF8E1',

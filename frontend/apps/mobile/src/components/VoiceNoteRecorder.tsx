@@ -11,6 +11,7 @@ import {
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getApiClient } from '@inspection/shared';
+import { syncManager } from '../utils/sync-manager';
 
 // ─── Module-level audio singleton ─────────────────────────────
 // Ensures only one audio plays at a time across all VoiceNoteRecorder instances
@@ -40,6 +41,12 @@ interface VoiceNoteRecorderProps {
   existingTranscription?: { en: string; ar: string } | null;
   disabled?: boolean;
   language?: string;
+  // Offline support — all optional for backward compatibility
+  isOnline?: boolean;
+  inspectionId?: number;
+  checklistItemId?: number;
+  currentAnswerValue?: string;
+  onQueuedOffline?: (localUri: string) => void;
 }
 
 /**
@@ -67,10 +74,16 @@ export default function VoiceNoteRecorder({
   existingTranscription,
   disabled = false,
   language = 'en',
+  isOnline = true,
+  inspectionId,
+  checklistItemId,
+  currentAnswerValue,
+  onQueuedOffline,
 }: VoiceNoteRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [isQueued, setIsQueued] = useState(false);
   const [localAudioUri, setLocalAudioUri] = useState<string | null>(null);
   const [cloudinaryUrl, setCloudinaryUrl] = useState<string | null>(existingVoiceUrl || null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -183,6 +196,30 @@ export default function VoiceNoteRecorder({
       _activeRecording = null;
 
       if (!uri) return;
+
+      // ─── Offline: copy to permanent storage and queue for later upload ─────
+      if (!isOnline && inspectionId && checklistItemId) {
+        const dir = `${FileSystem.documentDirectory}offline-voice/`;
+        await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+        const fileName = `voice_${inspectionId}_${checklistItemId}_${Date.now()}.m4a`;
+        const permanentUri = `${dir}${fileName}`;
+        await FileSystem.copyAsync({ from: uri, to: permanentUri });
+        await syncManager.enqueueInspectionMedia({
+          mediaType: 'voice',
+          localUri: permanentUri,
+          inspectionId,
+          checklistItemId,
+          assignmentId: String(inspectionId),
+          fileName,
+          language: language || 'en',
+          answerValue: currentAnswerValue || '',
+        });
+        setLocalAudioUri(permanentUri);
+        setIsQueued(true);
+        onQueuedOffline?.(permanentUri);
+        return;
+      }
+      // ─── End offline branch ────────────────────────────────────────────────
 
       setLocalAudioUri(uri);
       setIsUploading(true);
@@ -374,6 +411,8 @@ export default function VoiceNoteRecorder({
           </View>
         ) : isUploading ? (
           <Text style={styles.uploadingText}>Uploading...</Text>
+        ) : isQueued ? (
+          <Text style={styles.queuedText}>Saved – will upload when back online</Text>
         ) : hasAudio ? (
           // WhatsApp-style audio playback with waveform and delete
           <View style={styles.audioPlaybackContainer}>
@@ -477,6 +516,11 @@ const styles = StyleSheet.create({
   uploadingText: {
     fontSize: 13,
     color: '#1677ff',
+  },
+  queuedText: {
+    fontSize: 13,
+    color: '#faad14',
+    fontStyle: 'italic',
   },
   hintText: {
     fontSize: 13,

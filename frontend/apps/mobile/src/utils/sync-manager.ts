@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const QUEUE_KEY = 'sync-queue:pending-operations';
 const MEDIA_QUEUE_KEY = 'sync-queue:pending-media';
 const LAST_SYNC_KEY = 'sync-queue:last-sync';
+const INSPECTION_MEDIA_QUEUE_KEY = 'sync-queue:pending-inspection-media';
 
 export type OperationType =
   | 'answer-question'
@@ -48,6 +49,24 @@ export interface QueuedMedia {
   error?: string;
 }
 
+// Inspection-specific media queue — photo and voice captured offline during inspections
+export interface QueuedInspectionMedia {
+  id: string;
+  mediaType: 'photo' | 'voice';
+  localUri: string;         // permanent path under FileSystem.documentDirectory
+  inspectionId: number;
+  checklistItemId: number;
+  assignmentId: string;
+  fileName: string;
+  language?: string;        // 'en' | 'ar' — for voice transcription
+  answerValue?: string;     // current answer at capture time — needed to re-link voice note
+  createdAt: string;
+  status: SyncStatus;
+  progress: number;
+  retryCount: number;
+  error?: string;
+}
+
 export interface SyncResult {
   success: number;
   failed: number;
@@ -76,6 +95,17 @@ async function getMediaQueue(): Promise<QueuedMedia[]> {
 
 async function saveMediaQueue(queue: QueuedMedia[]): Promise<void> {
   await AsyncStorage.setItem(MEDIA_QUEUE_KEY, JSON.stringify(queue));
+}
+
+async function getInspectionMediaQueue(): Promise<QueuedInspectionMedia[]> {
+  const raw = await AsyncStorage.getItem(INSPECTION_MEDIA_QUEUE_KEY);
+  if (!raw) return [];
+  try { return JSON.parse(raw); }
+  catch { return []; }
+}
+
+async function saveInspectionMediaQueue(queue: QueuedInspectionMedia[]): Promise<void> {
+  await AsyncStorage.setItem(INSPECTION_MEDIA_QUEUE_KEY, JSON.stringify(queue));
 }
 
 function getOperationDisplayName(op: Omit<QueuedOperation, 'id' | 'createdAt' | 'retryCount' | 'status'>): string {
@@ -336,6 +366,100 @@ export const syncManager = {
     const updatedQueue = await getQueue();
     return { success, failed, operations: updatedQueue };
   },
+
+  // ─── Inspection media queue (photo + voice captured offline) ────────────────
+
+  async enqueueInspectionMedia(
+    item: Omit<QueuedInspectionMedia, 'id' | 'createdAt' | 'status' | 'progress' | 'retryCount'>
+  ): Promise<string> {
+    const queue = await getInspectionMediaQueue();
+    const id = `insp-media-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    queue.push({ ...item, id, createdAt: new Date().toISOString(), status: 'pending', progress: 0, retryCount: 0 });
+    await saveInspectionMediaQueue(queue);
+    return id;
+  },
+
+  async getPendingInspectionMedia(): Promise<QueuedInspectionMedia[]> {
+    return getInspectionMediaQueue();
+  },
+
+  async getInspectionMediaCount(): Promise<number> {
+    return (await getInspectionMediaQueue()).length;
+  },
+
+  async dequeueInspectionMedia(id: string): Promise<void> {
+    await saveInspectionMediaQueue((await getInspectionMediaQueue()).filter(m => m.id !== id));
+  },
+
+  async markInspectionMediaRetry(id: string, error?: string): Promise<void> {
+    const queue = (await getInspectionMediaQueue()).map(m =>
+      m.id === id ? { ...m, retryCount: m.retryCount + 1, status: 'failed' as SyncStatus, error } : m
+    );
+    await saveInspectionMediaQueue(queue);
+  },
+
+  async pruneStaleInspectionMedia(): Promise<void> {
+    await saveInspectionMediaQueue((await getInspectionMediaQueue()).filter(m => m.retryCount < 5));
+  },
+
+  // Process inspection-specific media queue (called from OfflineProvider.triggerSync)
+  async processInspectionMediaQueue(
+    apiClient: import('axios').AxiosInstance
+  ): Promise<{ success: number; failed: number }> {
+    // Lazy-load FileSystem to avoid import issues at module level
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const FileSystem = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
+
+    const queue = await getInspectionMediaQueue();
+    let success = 0;
+    let failed = 0;
+
+    for (const item of queue) {
+      try {
+        const base64 = await FileSystem.readAsStringAsync(item.localUri, { encoding: 'base64' });
+
+        if (item.mediaType === 'photo') {
+          // Upload photo — backend auto-links file to InspectionAnswer and runs AI analysis
+          await apiClient.post(
+            `/api/inspections/${item.inspectionId}/upload-media`,
+            { file_base64: base64, file_name: item.fileName, file_type: 'image/jpeg', checklist_item_id: item.checklistItemId },
+            { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
+          );
+        } else {
+          // Upload voice — transcribe then link to the answer
+          const response = await apiClient.post(
+            '/api/voice/transcribe',
+            { audio_base64: base64, file_name: item.fileName, file_type: 'audio/m4a', language: item.language || 'en' },
+            { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
+          );
+          const result = (response.data as any)?.data;
+          if (result?.audio_file?.id && item.answerValue !== undefined) {
+            // Re-patch the answer to link voice_note_id (upsert endpoint)
+            await apiClient.post(`/api/inspections/${item.inspectionId}/answer`, {
+              checklist_item_id: item.checklistItemId,
+              answer_value: item.answerValue,
+              voice_note_id: result.audio_file.id,
+              voice_transcription: { en: result.en || '', ar: result.ar || '' },
+            });
+          }
+        }
+
+        await syncManager.dequeueInspectionMedia(item.id);
+        // Clean up local file after successful upload
+        FileSystem.deleteAsync(item.localUri, { idempotent: true }).catch(() => {});
+        success++;
+      } catch (error: unknown) {
+        await syncManager.markInspectionMediaRetry(item.id, (error as { message?: string })?.message);
+        failed++;
+      }
+    }
+
+    await syncManager.pruneStaleInspectionMedia();
+    if (success > 0) await syncManager.setLastSyncTime(new Date().toISOString());
+    return { success, failed };
+  },
+
+  // ─── End inspection media queue ──────────────────────────────────────────────
 
   // Process media uploads with progress
   async processMediaQueue(
