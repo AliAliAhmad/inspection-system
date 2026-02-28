@@ -878,13 +878,17 @@ def remove_job(plan_id, job_id):
         if sap_order and sap_order.status == 'scheduled':
             sap_order.status = 'pending'
 
-    # Delete child rows explicitly via raw SQL to avoid SQLAlchemy lazy-loading
-    # job_checklist_responses (which has model columns not yet in the DB).
-    db.session.execute(
-        db.text('DELETE FROM job_checklist_responses WHERE work_plan_job_id = :jid'),
-        {'jid': job_id}
-    )
-    db.session.delete(job)
+    # Detach job from ORM session so SQLAlchemy never lazy-loads its child
+    # relationships (job_checklist_responses has columns not yet in the DB).
+    db.session.expunge(job)
+
+    # Delete child records + job entirely via raw SQL — no ORM cascade, no lazy-load.
+    for table in ['job_checklist_responses', 'work_plan_assignments', 'work_plan_materials']:
+        db.session.execute(
+            db.text(f'DELETE FROM {table} WHERE work_plan_job_id = :jid'),
+            {'jid': job_id}
+        )
+    db.session.execute(db.text('DELETE FROM work_plan_jobs WHERE id = :jid'), {'jid': job_id})
     db.session.commit()
 
     return jsonify({
