@@ -427,6 +427,8 @@ export default function WorkPlanningPage() {
 
   // Track if error was already shown to prevent duplicate messages
   const errorShownRef = useRef<string | null>(null);
+  const poolPanelRef = useRef<HTMLDivElement>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   // Show error once when query fails
   useEffect(() => {
@@ -1003,18 +1005,44 @@ export default function WorkPlanningPage() {
     if (data) {
       setActiveItem({ type: data.type, data: data });
     }
+    // Track pointer position during drag for pool-drop detection
+    lastPointerRef.current = null;
+    const onMove = (e: PointerEvent) => {
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', () => window.removeEventListener('pointermove', onMove), { once: true });
   }, []);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     setActiveItem(null);
 
-    if (!over || !currentPlan || !isDraft) return;
+    if (!currentPlan || !isDraft) return;
 
     const activeData = active.data.current;
-    const overData = over.data.current;
+    if (!activeData) return;
 
-    if (!activeData || !overData) return;
+    // Case 4 (checked first): Dragging calendar job back to pool via pointer coords.
+    // We use raw pointer position rather than collision detection because the pool panel
+    // and rightmost day column DOM rects overlap in the flex layout, making droppable
+    // detection unreliable.
+    if (activeData.type === 'job') {
+      const poolRect = poolPanelRef.current?.getBoundingClientRect();
+      const ptr = lastPointerRef.current;
+      if (poolRect && ptr &&
+          ptr.x >= poolRect.left && ptr.x <= poolRect.right &&
+          ptr.y >= poolRect.top  && ptr.y <= poolRect.bottom) {
+        const job = activeData.job as WorkPlanJob;
+        removeJobMutation.mutate({ planId: currentPlan.id, jobId: job.id });
+        return;
+      }
+    }
+
+    if (!over) return;
+
+    const overData = over.data.current;
+    if (!overData) return;
 
     // Case 1: Moving job from pool to day
     if (activeData.type === 'pool-job' && overData.type === 'day') {
@@ -1067,12 +1095,6 @@ export default function WorkPlanningPage() {
     }
 
     // Case 3: Dropping employee on a job
-    // Case 4: Dragging calendar job back to pool → remove from plan
-    if (activeData.type === 'job' && overData.type === 'pool') {
-      const job = activeData.job as WorkPlanJob;
-      removeJobMutation.mutate({ planId: currentPlan.id, jobId: job.id });
-    }
-
     if (activeData.type === 'employee' && overData.type === 'job') {
       const user = activeData.user;
       const job = overData.job as WorkPlanJob;
@@ -1960,7 +1982,7 @@ export default function WorkPlanningPage() {
         </div>{/* END left-column */}
 
         {/* ── RIGHT PANEL: Tabbed Jobs + Team ── */}
-        <div className="wp-right-panel" style={{ width: 300, minWidth: 300, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
+        <div ref={poolPanelRef} className="wp-right-panel" style={{ width: 300, minWidth: 300, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
             <Tabs
               activeKey={rightPanelTab}
               onChange={(k) => setRightPanelTab(k as 'jobs' | 'team')}
