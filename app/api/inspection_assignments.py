@@ -1654,7 +1654,16 @@ def delete_all_unassigned():
     affected_list_ids = [r[0] for r in rows]
     total_count = sum(r[1] for r in rows)
 
-    # Step 2: Bulk delete all unassigned (1 SQL DELETE statement)
+    # Step 2a: NULL out work_plan_jobs.inspection_assignment_id for affected rows
+    # (prevents FK violation: work_plan_jobs references inspection_assignments with no ON DELETE)
+    unassigned_ids = [r[0] for r in db.session.query(InspectionAssignment.id)
+                      .filter_by(status='unassigned').all()]
+    if unassigned_ids:
+        WorkPlanJob.query.filter(
+            WorkPlanJob.inspection_assignment_id.in_(unassigned_ids)
+        ).update({'inspection_assignment_id': None}, synchronize_session=False)
+
+    # Step 2b: Bulk delete all unassigned (1 SQL DELETE statement)
     InspectionAssignment.query.filter_by(status='unassigned').delete(synchronize_session=False)
 
     # Step 3: Batch compute remaining counts per list (2 queries instead of N×2)

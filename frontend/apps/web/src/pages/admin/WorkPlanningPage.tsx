@@ -1139,7 +1139,12 @@ export default function WorkPlanningPage() {
   // This ensures dragging back to the Jobs Pool panel works even when calendar columns dominate.
   const customCollision = useCallback((args: Parameters<typeof pointerWithin>[0]) => {
     const hits = pointerWithin(args);
-    if (hits.length > 0) return hits;
+    if (hits.length > 0) {
+      // Pool always wins over day columns when both overlap under the pointer
+      const poolHit = hits.find(h => h.id === 'job-pool-drop');
+      if (poolHit) return [poolHit];
+      return hits;
+    }
     return closestCenter(args);
   }, []);
 
