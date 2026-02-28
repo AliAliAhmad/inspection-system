@@ -135,7 +135,13 @@ const DroppableDay: React.FC<{
 };
 
 // Draggable Team Member for Compact Team Pool
-const DraggableTeamMember: React.FC<{ user: any; isOnLeave: boolean; leaveInfo?: string }> = ({ user, isOnLeave, leaveInfo }) => {
+const DraggableTeamMember: React.FC<{
+  user: any;
+  isOnLeave: boolean;
+  leaveInfo?: string;
+  assignedCount?: number;
+  dailyBreakdown?: { label: string; count: number }[];
+}> = ({ user, isOnLeave, leaveInfo, assignedCount = 0, dailyBreakdown }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `employee-${user.id}`,
     data: { type: 'employee', user },
@@ -156,6 +162,9 @@ const DraggableTeamMember: React.FC<{ user: any; isOnLeave: boolean; leaveInfo?:
     marginBottom: 2,
   };
 
+  const badgeColor = assignedCount >= 5 ? '#ff4d4f' : assignedCount >= 3 ? '#fa8c16' : '#52c41a';
+  const badgeTitle = dailyBreakdown?.map(d => `${d.label}: ${d.count}`).join(' · ') || `${assignedCount} job${assignedCount !== 1 ? 's' : ''} this week`;
+
   return (
     <Tooltip title={isOnLeave ? `${user.full_name} - On Leave${leaveInfo ? ` (${leaveInfo})` : ''}` : user.full_name}>
       <div
@@ -172,6 +181,17 @@ const DraggableTeamMember: React.FC<{ user: any; isOnLeave: boolean; leaveInfo?:
         </span>
         {isOnLeave && leaveInfo && (
           <span style={{ fontSize: 9, color: '#fa8c16' }}>{leaveInfo}</span>
+        )}
+        {!isOnLeave && assignedCount > 0 && (
+          <Tooltip title={badgeTitle} placement="top">
+            <span style={{
+              fontSize: 9, fontWeight: 700, lineHeight: '14px',
+              padding: '0 4px', borderRadius: 8,
+              background: badgeColor, color: '#fff', flexShrink: 0,
+            }}>
+              {assignedCount}
+            </span>
+          </Tooltip>
         )}
       </div>
     </Tooltip>
@@ -379,6 +399,27 @@ const SimpleJobRow: React.FC<{
           {description.substring(0, 55)}
         </Text>
       )}
+      {(job.assignments || []).length > 0 && (
+        <div style={{ display: 'flex', gap: 2, marginTop: 3, flexWrap: 'wrap', paddingLeft: 10 }}>
+          {(job.assignments || []).slice(0, 3).map(a => (
+            <Tooltip key={a.id} title={`${a.user?.full_name || 'User'}${a.is_lead ? ' ★ Lead' : ''}`}>
+              <div style={{
+                width: 18, height: 18, borderRadius: '50%', fontSize: 9, fontWeight: 700,
+                background: a.is_lead ? '#faad14' : '#1890ff', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'default',
+              }}>
+                {(a.user?.full_name || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+            </Tooltip>
+          ))}
+          {(job.assignments || []).length > 3 && (
+            <div style={{ width: 18, height: 18, borderRadius: '50%', fontSize: 9, background: '#d9d9d9',
+              color: '#595959', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              +{(job.assignments || []).length - 3}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -435,6 +476,10 @@ export default function WorkPlanningPage() {
   const errorShownRef = useRef<string | null>(null);
   const poolPanelRef = useRef<HTMLDivElement>(null);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const { setNodeRef: setAtRiskDropRef, isOver: isOverAtRisk } = useDroppable({
+    id: 'at-risk-drop',
+    data: { type: 'at-risk' },
+  });
 
   // Show error once when query fails
   useEffect(() => {
@@ -910,6 +955,26 @@ export default function WorkPlanningPage() {
     });
   }, [currentPlan]);
 
+  // Per-user assignment counts across all days in the current plan week
+  const userAssignmentMap = useMemo(() => {
+    const map: Record<number, { total: number; days: { label: string; count: number }[] }> = {};
+    if (!currentPlan?.days) return map;
+    currentPlan.days.forEach((day: any) => {
+      const label = dayjs(day.date).format('ddd'); // 'Mon', 'Tue', …
+      const allJobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
+      allJobs.forEach((job: any) => {
+        (job.assignments || []).forEach((a: any) => {
+          if (!map[a.user_id]) map[a.user_id] = { total: 0, days: [] };
+          map[a.user_id].total += 1;
+          const existing = map[a.user_id].days.find(d => d.label === label);
+          if (existing) existing.count += 1;
+          else map[a.user_id].days.push({ label, count: 1 });
+        });
+      });
+    });
+    return map;
+  }, [currentPlan]);
+
   // Fetch team users for compact team pool
   const { data: teamUsersData } = useQuery({
     queryKey: ['users', 'active'],
@@ -1028,6 +1093,13 @@ export default function WorkPlanningPage() {
 
     const activeData = active.data.current;
     if (!activeData) return;
+
+    // Case: Dropping a scheduled job onto the at-risk drawer → unschedule (same as pool drop)
+    if (activeData.type === 'job' && over?.id === 'at-risk-drop') {
+      const job = activeData.job as WorkPlanJob;
+      removeJobMutation.mutate({ planId: currentPlan.id, jobId: job.id });
+      return;
+    }
 
     // Case 4 (checked first): Dragging calendar job back to pool via pointer coords.
     // We use raw pointer position rather than collision detection because the pool panel
@@ -1171,7 +1243,10 @@ export default function WorkPlanningPage() {
       // Priority 1: Pool panel — drag job back to pool
       const poolHit = hits.find(h => h.id === 'job-pool-drop');
       if (poolHit) return [poolHit];
-      // Priority 2: Job droppables — employee dragged onto a job card for assignment
+      // Priority 2: At-risk drawer — drag scheduled job to unschedule it
+      const atRiskHit = hits.find(h => h.id === 'at-risk-drop');
+      if (atRiskHit) return [atRiskHit];
+      // Priority 3: Job droppables — employee dragged onto a job card for assignment
       const jobHit = hits.find(h => String(h.id).startsWith('droppable-job-'));
       if (jobHit) return [jobHit];
       return hits;
@@ -1697,6 +1772,8 @@ export default function WorkPlanningPage() {
                           user={user}
                           isOnLeave={leaveUserIds.has(user.id)}
                           leaveInfo={leaveDetails.find(l => l.userId === user.id)?.dates.map(d => dayjs(d).format('ddd')).join(',')}
+                          assignedCount={userAssignmentMap[user.id]?.total ?? 0}
+                          dailyBreakdown={userAssignmentMap[user.id]?.days}
                         />
                       ))
                   }
@@ -2110,7 +2187,13 @@ export default function WorkPlanningPage() {
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                   {availableUsers.map((user: any) => (
-                                    <DraggableTeamMember key={user.id} user={user} isOnLeave={false} />
+                                    <DraggableTeamMember
+                                      key={user.id}
+                                      user={user}
+                                      isOnLeave={false}
+                                      assignedCount={userAssignmentMap[user.id]?.total ?? 0}
+                                      dailyBreakdown={userAssignmentMap[user.id]?.days}
+                                    />
                                   ))}
                                   {onLeaveUsers.map((user: any) => (
                                     <DraggableTeamMember
@@ -2741,18 +2824,27 @@ export default function WorkPlanningPage() {
         placement="right"
         mask={false}
       >
-        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 12 }}>
-          Drag a job card directly to a day column in the calendar.
-        </Text>
-        {atRiskJobs.map(risk => (
-          <DraggableRiskJob key={risk.id} risk={risk} job={allJobs.find(j => j.id === risk.id)} />
-        ))}
-        {atRiskJobs.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 32, color: '#52c41a' }}>
-            <div style={{ fontSize: 24 }}>✓</div>
-            <Text type="secondary">No at-risk jobs this week</Text>
-          </div>
-        )}
+        <div
+          ref={setAtRiskDropRef}
+          style={{
+            minHeight: '100%', padding: 4, borderRadius: 8, transition: 'all 0.2s',
+            background: isOverAtRisk ? '#fff1f0' : undefined,
+            border: isOverAtRisk ? '2px dashed #ff4d4f' : '2px dashed transparent',
+          }}
+        >
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+            Drag a job from the calendar here to unschedule it, or drag to a day column to reschedule.
+          </Text>
+          {atRiskJobs.map(risk => (
+            <DraggableRiskJob key={risk.id} risk={risk} job={allJobs.find(j => j.id === risk.id)} />
+          ))}
+          {atRiskJobs.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 32, color: '#52c41a' }}>
+              <div style={{ fontSize: 24 }}>✓</div>
+              <Text type="secondary">No at-risk jobs this week</Text>
+            </div>
+          )}
+        </div>
       </Drawer>
     </DndContext>
   );
