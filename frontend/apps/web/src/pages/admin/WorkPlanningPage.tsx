@@ -59,6 +59,7 @@ import {
   DragOverlay,
   DragStartEvent,
   closestCenter,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -858,18 +859,25 @@ export default function WorkPlanningPage() {
     currentPlan.days.forEach(day => {
       const jobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
       jobs.forEach((job: any) => {
-        // Equipment name — check inspection_assignment path too
+        // Equipment name — check all nested paths, then extract from "inspection: {name}" description
         const eqName =
           job.equipment?.name ||
           job.inspection_assignment?.equipment?.name ||
+          job.inspection_assignment?.equipment?.serial_number ||
           job.defect?.equipment?.name ||
           job.equipment?.serial_number ||
+          (job.job_type === 'inspection' && job.description
+            ? job.description.replace(/^inspection\s*:\s*/i, '').split(' - ')[0].trim() || null
+            : null) ||
           'Unknown Equipment';
-        // Description — use job type label if blank or same as equipment name
+        // Description — strip "inspection: " prefix, then strip redundant equipment name
         const rawDesc = job.description || job.defect?.description || '';
-        const strippedDesc = rawDesc.startsWith(eqName)
-          ? rawDesc.slice(eqName.length).replace(/^[\s\-_.]+/, '').trim()
-          : rawDesc;
+        const cleanDesc = rawDesc.replace(/^inspection\s*:\s*/i, '').trim();
+        const strippedDesc = cleanDesc === eqName
+          ? ''
+          : cleanDesc.startsWith(eqName)
+            ? cleanDesc.slice(eqName.length).replace(/^[\s\-_.]+/, '').trim()
+            : cleanDesc;
         const jobTypeLabel = job.job_type === 'inspection' ? 'Inspection'
           : job.job_type === 'defect' ? 'Defect' : 'PM';
         const desc = strippedDesc || jobTypeLabel;
@@ -1127,10 +1135,18 @@ export default function WorkPlanningPage() {
     { key: 'inspElec', label: 'Insp (Elec)', emoji: '⚡', color: '#eb2f96', users: teamColumns.inspElec },
   ];
 
+  // Pointer-first collision: if pointer is inside a droppable rect, prefer that over closest center.
+  // This ensures dragging back to the Jobs Pool panel works even when calendar columns dominate.
+  const customCollision = useCallback((args: Parameters<typeof pointerWithin>[0]) => {
+    const hits = pointerWithin(args);
+    if (hits.length > 0) return hits;
+    return closestCenter(args);
+  }, []);
+
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={customCollision}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
