@@ -374,13 +374,18 @@ const SimpleJobRow: React.FC<{
       style={{
         display: 'flex', flexDirection: 'column', gap: 1,
         padding: '3px 6px', borderRadius: 4, marginBottom: 3,
-        background: isDragging ? '#e6f7ff' : isOverdue ? '#fff1f0' : isAssigned ? '#f6ffed' : '#fafafa',
-        border: `1px solid ${isDragging ? '#1890ff' : isOverdue ? '#ffccc7' : isAssigned ? '#b7eb8f' : '#f0f0f0'}`,
+        background: isDragging ? '#e6f7ff' : isEmployeeOver ? '#f9f0ff' : isOverdue ? '#fff1f0' : isAssigned ? '#f6ffed' : '#fafafa',
+        border: `1px solid ${isDragging ? '#1890ff' : isEmployeeOver ? '#722ed1' : isOverdue ? '#ffccc7' : isAssigned ? '#b7eb8f' : '#f0f0f0'}`,
         cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none',
         opacity: isDragging ? 0.4 : 1,
         transform: CSS.Translate.toString(transform),
       }}
     >
+      {isEmployeeOver && (
+        <div style={{ fontSize: 9, color: '#722ed1', fontWeight: 700, marginBottom: 1, letterSpacing: 0.3 }}>
+          ↓ Assign here
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <div style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: job.job_type === 'defect' ? '#ff4d4f' : '#1890ff' }} />
         <Text style={{ fontSize: 14, fontWeight: 700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#262626', background: '#fffbe6', borderRadius: 3, padding: '0 4px' }}>
