@@ -1640,35 +1640,67 @@ def delete_assignment(assignment_id):
 @role_required('admin', 'engineer')
 def delete_all_unassigned():
     """Delete all unassigned inspection assignments. Cleans up empty lists."""
-    unassigned = InspectionAssignment.query.filter_by(status='unassigned').all()
-    count = len(unassigned)
+    # Step 1: Get affected list IDs + counts in one query (uses ix_inspection_assignments_status index)
+    rows = db.session.query(
+        InspectionAssignment.inspection_list_id,
+        func.count().label('cnt')
+    ).filter_by(status='unassigned').group_by(
+        InspectionAssignment.inspection_list_id
+    ).all()
 
-    if count == 0:
+    if not rows:
         return jsonify({'status': 'success', 'message': 'No unassigned assignments to delete', 'deleted': 0}), 200
 
-    affected_list_ids = {a.inspection_list_id for a in unassigned}
-    for a in unassigned:
-        db.session.delete(a)
+    affected_list_ids = [r[0] for r in rows]
+    total_count = sum(r[1] for r in rows)
 
-    db.session.flush()
+    # Step 2: Bulk delete all unassigned (1 SQL DELETE statement)
+    InspectionAssignment.query.filter_by(status='unassigned').delete(synchronize_session=False)
 
-    # Clean up lists that now have 0 assignments, update stats for others
+    # Step 3: Batch compute remaining counts per list (2 queries instead of N×2)
+    remaining_by_list = dict(
+        db.session.query(
+            InspectionAssignment.inspection_list_id,
+            func.count()
+        ).filter(InspectionAssignment.inspection_list_id.in_(affected_list_ids))
+         .group_by(InspectionAssignment.inspection_list_id).all()
+    )
+
+    assigned_by_list = dict(
+        db.session.query(
+            InspectionAssignment.inspection_list_id,
+            func.count()
+        ).filter(
+            InspectionAssignment.inspection_list_id.in_(affected_list_ids),
+            InspectionAssignment.status != 'unassigned'
+        ).group_by(InspectionAssignment.inspection_list_id).all()
+    )
+
+    # Step 4: Batch load all affected InspectionList rows (1 query)
+    lists_by_id = {
+        il.id: il for il in
+        InspectionList.query.filter(InspectionList.id.in_(affected_list_ids)).all()
+    }
+
+    # Step 5: Update stats or mark for deletion
+    lists_to_delete = []
     for list_id in affected_list_ids:
-        il = db.session.get(InspectionList, list_id)
-        if not il:
-            continue
-        remaining = InspectionAssignment.query.filter_by(inspection_list_id=list_id).count()
+        remaining = remaining_by_list.get(list_id, 0)
         if remaining == 0:
-            db.session.delete(il)
-        else:
+            lists_to_delete.append(list_id)
+        elif list_id in lists_by_id:
+            il = lists_by_id[list_id]
             il.total_assets = remaining
-            il.assigned_assets = InspectionAssignment.query.filter(
-                InspectionAssignment.inspection_list_id == list_id,
-                InspectionAssignment.status != 'unassigned'
-            ).count()
+            il.assigned_assets = assigned_by_list.get(list_id, 0)
+
+    # Step 6: Bulk delete empty lists (1 query)
+    if lists_to_delete:
+        InspectionList.query.filter(InspectionList.id.in_(lists_to_delete)).delete(
+            synchronize_session=False
+        )
 
     db.session.commit()
-    return jsonify({'status': 'success', 'message': f'Deleted {count} unassigned assignments', 'deleted': count}), 200
+    return jsonify({'status': 'success', 'message': f'Deleted {total_count} unassigned assignments', 'deleted': total_count}), 200
 
 
 @bp.route('/clear-all', methods=['DELETE'])

@@ -892,7 +892,7 @@ export default function InspectionAssignmentsPage() {
     mutationFn: () => inspectionAssignmentsApi.deleteAllUnassigned(),
     onSuccess: (res) => {
       const result = (res.data as any)?.data ?? res.data;
-      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
+      queryClient.refetchQueries({ queryKey: ['inspection-assignments'] });
       message.success(`Deleted ${result?.deleted ?? 0} unassigned assignments`);
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to delete unassigned'),
