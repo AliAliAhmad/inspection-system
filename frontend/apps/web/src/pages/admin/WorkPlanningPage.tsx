@@ -334,10 +334,16 @@ const SimpleJobRow: React.FC<{
     ? rawDesc.slice(equipmentName.length).replace(/^[\s\-_.]+/, '').trim()
     : rawDesc;
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: `plan-job-${job.id}`,
     data: { type: 'job', job, dayId },
   });
+  // Also droppable so employees can be dragged onto it for assignment
+  const { setNodeRef: setDropRef, isOver: isEmployeeOver } = useDroppable({
+    id: `droppable-job-${job.id}`,
+    data: { type: 'job', job, dayId },
+  });
+  const setNodeRef = (el: HTMLElement | null) => { setDragRef(el); setDropRef(el); };
 
   return (
     <div
@@ -1162,9 +1168,12 @@ export default function WorkPlanningPage() {
   const customCollision = useCallback((args: Parameters<typeof pointerWithin>[0]) => {
     const hits = pointerWithin(args);
     if (hits.length > 0) {
-      // Pool always wins over day columns when both overlap under the pointer
+      // Priority 1: Pool panel — drag job back to pool
       const poolHit = hits.find(h => h.id === 'job-pool-drop');
       if (poolHit) return [poolHit];
+      // Priority 2: Job droppables — employee dragged onto a job card for assignment
+      const jobHit = hits.find(h => String(h.id).startsWith('droppable-job-'));
+      if (jobHit) return [jobHit];
       return hits;
     }
     return closestCenter(args);
