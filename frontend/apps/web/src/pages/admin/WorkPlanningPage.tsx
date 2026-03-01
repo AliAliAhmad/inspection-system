@@ -453,6 +453,7 @@ export default function WorkPlanningPage() {
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'jobs' | 'team'>('jobs');
+  const [rightPanelVisible, setRightPanelVisible] = useState(true);
   const [atRiskDrawerOpen, setAtRiskDrawerOpen] = useState(false);
   const [teamPoolDisc, setTeamPoolDisc] = useState<'all' | 'mechanical' | 'electrical'>('all');
   const [addMaterialId, setAddMaterialId] = useState<number | null>(null);
@@ -1318,8 +1319,16 @@ export default function WorkPlanningPage() {
         .wp-right-panel .ant-tabs-tabpane { flex: 1; overflow: hidden; display: flex; flex-direction: column; height: 100%; }
         .wp-right-panel .ant-tabs-tabpane-active { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
         .wp-right-panel .ant-tabs-tabpane-hidden { display: none !important; }
+        @media (max-width: 1440px) {
+          .wp-view-toggle .ant-segmented-item-label > span:not([role="img"]) { display: none; }
+        }
+        @media (max-width: 1280px) {
+          .wp-autoschedule-label { display: none; }
+          .wp-health-contextual { display: none; }
+        }
       `}</style>
-      <div style={{ display: 'flex', flexDirection: 'row', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
+      <div style={{ minWidth: 1024, width: '100%', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', height: 'calc(100vh - 52px)', overflow: 'hidden', minWidth: 1024 }}>
         {/* ── LEFT COLUMN: toolbar, bars, calendar ── */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
@@ -1340,13 +1349,13 @@ export default function WorkPlanningPage() {
           </div>
 
           {/* Right side: Status + View + AI + At-Risk + Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>
             {/* Plan Status */}
             {currentPlan && (
               <Badge status={currentPlan.status === 'published' ? 'success' : 'warning'} text={<Text type="secondary" style={{ fontSize: 12 }}>{currentPlan.status.toUpperCase()} &bull; {currentPlan.total_jobs} jobs</Text>} />
             )}
 
-            <ViewToggle value={viewMode} onChange={setViewMode} />
+            <div className="wp-view-toggle"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
 
             {/* AI Toggle */}
             <Space size={4}>
@@ -1384,7 +1393,7 @@ export default function WorkPlanningPage() {
                 }}
                 loading={autoScheduleMutation.isPending}
               >
-                Auto-Schedule
+                <span className="wp-autoschedule-label">Auto-Schedule</span>
               </Button>
             )}
 
@@ -1468,6 +1477,15 @@ export default function WorkPlanningPage() {
             {!currentPlan && (
               <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>New Plan</Button>
             )}
+
+            {/* Panel toggle */}
+            <Tooltip title={rightPanelVisible ? 'Hide Panel' : 'Show Panel'}>
+              <Button
+                size="small"
+                icon={rightPanelVisible ? <RightOutlined /> : <LeftOutlined />}
+                onClick={() => setRightPanelVisible(v => !v)}
+              />
+            </Tooltip>
           </div>
         </div>
 
@@ -1709,6 +1727,7 @@ export default function WorkPlanningPage() {
 
               {/* Contextual message (right-aligned) */}
               <div style={{ flex: 1 }} />
+              <span className="wp-health-contextual">
               <Text type="secondary" style={{ fontSize: 11, fontStyle: 'italic' }}>
                 {weekStats.totalJobs === 0
                   ? 'Drag jobs from the right panel to schedule them'
@@ -1719,6 +1738,7 @@ export default function WorkPlanningPage() {
                   : `${weekStats.noSAP} job${weekStats.noSAP > 1 ? 's' : ''} missing SAP order`
                 }
               </Text>
+              </span>
             </div>
           );
         })()}
@@ -1946,6 +1966,7 @@ export default function WorkPlanningPage() {
                                       gap: 6,
                                       cursor: 'pointer',
                                       padding: 4,
+                                      overflow: 'hidden',
                                     }}
                                   >
                                     <div style={{
@@ -2117,6 +2138,7 @@ export default function WorkPlanningPage() {
         </div>{/* END left-column */}
 
         {/* ── RIGHT PANEL: Tabbed Jobs + Team ── */}
+        {rightPanelVisible && (
         <div ref={poolPanelRef} className="wp-right-panel" style={{ width: 300, minWidth: 300, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
             <Tabs
               activeKey={rightPanelTab}
@@ -2266,7 +2288,9 @@ export default function WorkPlanningPage() {
               ]}
             />
         </div>
+        )}{/* END right panel conditional */}
       </div>
+      </div>{/* END minWidth wrapper */}
 
       {/* Drag Overlay */}
       <DragOverlay>

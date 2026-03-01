@@ -69,6 +69,7 @@
 <!-- Claude: After EVERY change you make, add an entry here. NEVER skip this. -->
 
 | Date | What Changed | Status |
+| 2026-03-01 | Work Planning responsive layout: (1) minWidth:1024 + overflowX:auto wrapper stops all crushing; (2) collapsible right panel toggle (RightOutlined/LeftOutlined button, rightPanelVisible state); (3) CSS @media queries — ViewToggle icons-only at 1440px, Auto-Schedule label + contextual text hidden at 1280px; (4) toolbar right section flexShrink:1 + minWidth:0 + overflow:hidden; (5) collapsed day header overflow:hidden clips vertical text | ✅ Done |
 | 2026-03-01 | Materials: Added "Download Import Template" button to MaterialsPage import modal — uses existing materialsApi.getTemplateUrl() (no backend change needed) | ✅ Done |
 | 2026-03-01 | Work Planning: Replaced read-only materials card in job details modal with full CRUD UI — material selector + quantity + Add button; kit selector dropdown (auto-expands); stock indicator (✅/⚠️/❌ vs needed qty); Remove button with Popconfirm; only editable in draft status. Reuses existing workPlansApi.addMaterial/removeMaterial | ✅ Done |
 \n| 2026-02-28 | Fix "Delete All Unassigned" on Inspection Assignments page: replaced N+1 loop (N×3 queries) with 6 batch queries; added DB index on `inspection_assignments.status`; changed frontend `invalidateQueries` → `refetchQueries` for reliable immediate reload | ✅ Done |
