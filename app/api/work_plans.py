@@ -1165,6 +1165,29 @@ def publish_plan(plan_id):
         try:
             from app.services.email_service import EmailService
             email_sent = EmailService.send_work_plan_notification(plan, pdf_file)
+
+            # Also send materials list to store team
+            import os
+            store_emails = [e.strip() for e in os.getenv('STORE_EMAILS', '').split(',') if e.strip()]
+            if store_emails:
+                # Aggregate materials across all jobs in this plan
+                mat_totals = {}
+                for day in plan.days:
+                    for job in day.jobs:
+                        for wpm in (job.materials or []):
+                            mid = wpm.material_id
+                            if mid not in mat_totals:
+                                mat_totals[mid] = {
+                                    'code': wpm.material.code if wpm.material else '',
+                                    'name': wpm.material.name if wpm.material else '',
+                                    'unit': wpm.material.unit if wpm.material else '',
+                                    'location': wpm.material.storage_location if (wpm.material and hasattr(wpm.material, 'storage_location')) else None,
+                                    'total_qty': 0,
+                                }
+                            mat_totals[mid]['total_qty'] += (wpm.quantity or 0)
+                materials_summary = sorted(mat_totals.values(), key=lambda x: x['code'])
+                if materials_summary:
+                    EmailService.send_store_materials_notification(plan, materials_summary, store_emails)
         except Exception as e:
             logger.error(f"Email notification failed: {e}")
 

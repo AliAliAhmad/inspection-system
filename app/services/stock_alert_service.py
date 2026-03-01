@@ -13,6 +13,7 @@ from app.models.material_vendor import MaterialVendor
 from app.services.notification_service import NotificationService
 from sqlalchemy import func, and_, or_
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +276,18 @@ class StockAlertService:
                     action_url='/materials?filter=reorder_needed'
                 )
                 alerts_sent += 1
+
+        # Send email alert to store team if STORE_EMAILS configured
+        try:
+            from app.services.email_service import EmailService
+            store_emails = [e.strip() for e in os.getenv('STORE_EMAILS', '').split(',') if e.strip()]
+            if store_emails:
+                critical_items = [i for i in low_stock if i['severity'] == 'critical']
+                warning_items = [i for i in low_stock if i['severity'] == 'warning']
+                if critical_items or warning_items:
+                    EmailService.send_low_stock_alert(critical_items, warning_items, store_emails)
+        except Exception as e:
+            logger.warning(f"Failed to send low-stock email: {e}")
 
         logger.info(f"Sent {alerts_sent} stock alerts")
         return alerts_sent

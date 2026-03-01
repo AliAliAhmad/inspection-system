@@ -439,4 +439,25 @@ export const materialsApi = {
   getTemplateUrl() {
     return `${getApiBaseUrl()}/api/work-plans/templates/materials`;
   },
+
+  // ==================== CONSUMPTION HISTORY ====================
+  getConsumptionHistory(materialId: number, params?: { period?: string; years?: number }) {
+    return getApiClient().get<ApiResponse<any>>(`/api/materials/${materialId}/consumption-history`, { params });
+  },
+
+  getAllConsumptionHistory(params?: { period?: string }) {
+    return getApiClient().get<ApiResponse<any>>('/api/materials/consumption-history', { params });
+  },
+
+  importConsumptionHistory(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return getApiClient().post<ApiResponse<any>>('/api/materials/consumption-import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  getConsumptionTemplateUrl() {
+    return `${getApiBaseUrl()}/api/materials/consumption-template`;
+  },
 };

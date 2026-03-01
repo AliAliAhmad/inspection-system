@@ -1009,3 +1009,199 @@ def budget_forecast_alias():
     days = request.args.get('days', 30, type=int)
     forecast = material_ai.forecast_budget(days)
     return jsonify({'status': 'success', 'data': forecast})
+
+
+# ==================== CONSUMPTION HISTORY ====================
+
+class MaterialConsumptionHistory(db.Model):
+    """Imported or system-recorded consumption history per period."""
+    __tablename__ = 'material_consumption_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    material_id = db.Column(db.Integer, db.ForeignKey('materials.id', ondelete='CASCADE'), nullable=False, index=True)
+    period_type = db.Column(db.String(20), nullable=False)   # monthly | quarterly | yearly
+    period_label = db.Column(db.String(20), nullable=False)  # "2025-03" | "2025-Q1" | "2025"
+    quantity_consumed = db.Column(db.Float, nullable=False, default=0)
+    source = db.Column(db.String(20), nullable=False, default='imported')  # imported | system
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, server_default=db.text('NOW()'), nullable=False)
+
+    material = db.relationship('Material', backref=db.backref('consumption_history', lazy='dynamic'))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'material_id': self.material_id,
+            'period_type': self.period_type,
+            'period_label': self.period_label,
+            'quantity_consumed': self.quantity_consumed,
+            'source': self.source,
+            'notes': self.notes,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+@bp.route('/<int:material_id>/consumption-history', methods=['GET'])
+@jwt_required()
+def get_consumption_history(material_id):
+    """
+    Get consumption history for a material.
+    Query params: period=monthly|quarterly|yearly, years=1|2|3 (default 2)
+    """
+    material = db.session.get(Material, material_id)
+    if not material:
+        raise NotFoundError("Material not found")
+
+    period = request.args.get('period', 'monthly')
+    years = request.args.get('years', 2, type=int)
+
+    records = MaterialConsumptionHistory.query.filter_by(
+        material_id=material_id,
+        period_type=period
+    ).order_by(MaterialConsumptionHistory.period_label).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': [r.to_dict() for r in records],
+        'material': {'id': material.id, 'code': material.code, 'name': material.name, 'unit': material.unit},
+    })
+
+
+@bp.route('/consumption-history', methods=['GET'])
+@jwt_required()
+def get_all_consumption_history():
+    """
+    Get consumption history for all materials aggregated by period.
+    Query params: period=monthly|quarterly|yearly
+    """
+    period = request.args.get('period', 'monthly')
+
+    from sqlalchemy import func as sqlfunc
+    rows = db.session.query(
+        MaterialConsumptionHistory.period_label,
+        sqlfunc.sum(MaterialConsumptionHistory.quantity_consumed).label('total')
+    ).filter_by(period_type=period).group_by(
+        MaterialConsumptionHistory.period_label
+    ).order_by(MaterialConsumptionHistory.period_label).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': [{'period_label': r.period_label, 'total': float(r.total)} for r in rows],
+    })
+
+
+@bp.route('/consumption-import', methods=['POST'])
+@jwt_required()
+def import_consumption_history():
+    """
+    Import historical consumption data from Excel.
+    Expected columns: code, period_type, period_label, quantity_consumed, notes (optional)
+    """
+    import pandas as pd
+    from io import BytesIO
+
+    engineer_or_admin_required()
+
+    if 'file' not in request.files:
+        raise ValidationError("No file provided")
+
+    file = request.files['file']
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise ValidationError("File must be Excel (.xlsx or .xls)")
+
+    try:
+        df = pd.read_excel(BytesIO(file.read()))
+        df.columns = [c.strip().lower().replace(' ', '_') for c in df.columns]
+    except Exception as e:
+        raise ValidationError(f"Failed to read Excel file: {e}")
+
+    required_cols = {'code', 'period_type', 'period_label', 'quantity_consumed'}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValidationError(f"Missing columns: {', '.join(missing)}")
+
+    imported, updated, errors = 0, 0, []
+    for _, row in df.iterrows():
+        try:
+            code = str(row['code']).strip()
+            material = Material.query.filter_by(code=code).first()
+            if not material:
+                errors.append(f"Material not found: {code}")
+                continue
+
+            period_type = str(row['period_type']).strip()
+            period_label = str(row['period_label']).strip()
+            qty = float(row['quantity_consumed'])
+            notes = str(row.get('notes', '') or '').strip() or None
+
+            existing = MaterialConsumptionHistory.query.filter_by(
+                material_id=material.id,
+                period_type=period_type,
+                period_label=period_label,
+            ).first()
+
+            if existing:
+                existing.quantity_consumed = qty
+                existing.notes = notes
+                updated += 1
+            else:
+                record = MaterialConsumptionHistory(
+                    material_id=material.id,
+                    period_type=period_type,
+                    period_label=period_label,
+                    quantity_consumed=qty,
+                    source='imported',
+                    notes=notes,
+                )
+                db.session.add(record)
+                imported += 1
+        except Exception as e:
+            errors.append(f"Row error ({row.get('code', '?')}): {e}")
+
+    db.session.commit()
+    return jsonify({
+        'status': 'success',
+        'imported': imported,
+        'updated': updated,
+        'errors': errors,
+    }), 200
+
+
+@bp.route('/consumption-template', methods=['GET'])
+@jwt_required()
+def consumption_import_template():
+    """Download Excel template for consumption history import."""
+    import openpyxl
+    from io import BytesIO
+    from flask import send_file
+
+    wb = openpyxl.Workbook()
+
+    # Sheet 1: Data
+    ws = wb.active
+    ws.title = 'Consumption History'
+    headers = ['code', 'period_type', 'period_label', 'quantity_consumed', 'notes']
+    ws.append(headers)
+    ws.append(['FLT-001', 'monthly', '2025-01', 4, 'January maintenance'])
+    ws.append(['FLT-001', 'monthly', '2025-02', 6, ''])
+    ws.append(['OIL-002', 'quarterly', '2025-Q1', 20, 'Q1 total'])
+    ws.append(['OIL-002', 'yearly', '2025', 75, 'Full year'])
+
+    # Sheet 2: Instructions
+    ws2 = wb.create_sheet('Instructions')
+    ws2.append(['Column', 'Description', 'Allowed Values'])
+    ws2.append(['code', 'Material code (must exist in system)', 'e.g. FLT-001'])
+    ws2.append(['period_type', 'Period granularity', 'monthly | quarterly | yearly'])
+    ws2.append(['period_label', 'Period identifier', 'monthly: 2025-03 | quarterly: 2025-Q2 | yearly: 2025'])
+    ws2.append(['quantity_consumed', 'Quantity used in that period', 'Decimal number'])
+    ws2.append(['notes', 'Optional notes', 'Any text'])
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='consumption_history_template.xlsx'
+    )

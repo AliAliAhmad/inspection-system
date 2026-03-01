@@ -228,6 +228,167 @@ class EmailService:
         )
 
     @classmethod
+    def get_store_recipients(cls):
+        """Get store/warehouse team email addresses from STORE_EMAILS env var."""
+        env_emails = os.getenv('STORE_EMAILS', '')
+        if env_emails:
+            return [e.strip() for e in env_emails.split(',') if e.strip()]
+        return []
+
+    @classmethod
+    def send_low_stock_alert(cls, critical_items, warning_items, recipients=None):
+        """
+        Send low-stock email alert to store/warehouse team.
+
+        Args:
+            critical_items: List of dicts from StockAlertService.check_low_stock() with severity='critical'
+            warning_items:  List of dicts with severity='warning'
+            recipients:     List of email addresses (defaults to STORE_EMAILS env var)
+        """
+        if recipients is None:
+            recipients = cls.get_store_recipients()
+
+        if not recipients:
+            logger.warning("No STORE_EMAILS configured for low-stock alert")
+            return False
+
+        all_items = critical_items + warning_items
+        if not all_items:
+            return False
+
+        n = len(all_items)
+        subject = f"⚠️ Stock Alert: {n} Material{'s' if n != 1 else ''} Need Reorder"
+
+        def row_color(sev):
+            return '#fff2f0' if sev == 'critical' else '#fff7e6'
+
+        rows = ''
+        for i, item in enumerate(all_items):
+            bg = row_color(item.get('severity', 'warning')) if i % 2 == 0 else ('#fff2f0' if item.get('severity') == 'critical' else '#fffbe6')
+            suggested = max(0, (item.get('min_stock', 0) * 2) - item.get('current_stock', 0))
+            rows += f"""
+            <tr style="background:{bg};">
+              <td style="padding:8px;border:1px solid #ddd;">{item.get('code','')}</td>
+              <td style="padding:8px;border:1px solid #ddd;">{item.get('name','')}</td>
+              <td style="padding:8px;border:1px solid #ddd;color:{'#ff4d4f' if item.get('severity')=='critical' else '#fa8c16'};font-weight:700;">
+                {'🔴 Critical' if item.get('severity')=='critical' else '🟠 Low'}
+              </td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:center;">{item.get('current_stock',0)} {item.get('unit','')}</td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:center;">{item.get('min_stock',0)} {item.get('unit','')}</td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:center;font-weight:700;">{suggested} {item.get('unit','')}</td>
+            </tr>"""
+
+        html_body = f"""
+        <html>
+        <body style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
+          <div style="background:#d4380d;color:white;padding:20px;text-align:center;">
+            <h1 style="margin:0;">⚠️ Stock Alert</h1>
+            <p style="margin:8px 0 0;">{n} material{'s' if n!=1 else ''} require immediate attention</p>
+          </div>
+          <div style="padding:20px;">
+            <table style="width:100%;border-collapse:collapse;margin-top:16px;">
+              <thead>
+                <tr style="background:#fafafa;">
+                  <th style="padding:10px;border:1px solid #ddd;text-align:left;">Code</th>
+                  <th style="padding:10px;border:1px solid #ddd;text-align:left;">Name</th>
+                  <th style="padding:10px;border:1px solid #ddd;text-align:left;">Status</th>
+                  <th style="padding:10px;border:1px solid #ddd;">Current Stock</th>
+                  <th style="padding:10px;border:1px solid #ddd;">Min Stock</th>
+                  <th style="padding:10px;border:1px solid #ddd;">Suggested Order</th>
+                </tr>
+              </thead>
+              <tbody>{rows}</tbody>
+            </table>
+            <p style="margin-top:20px;color:#888;font-size:12px;">
+              This is an automated alert from the Industrial Inspection System.
+              Please reorder the flagged materials as soon as possible.
+            </p>
+          </div>
+        </body>
+        </html>"""
+
+        text_body = f"Stock Alert: {n} materials need reorder\n\n" + "\n".join(
+            f"- {i.get('code')} {i.get('name')}: {i.get('current_stock')} {i.get('unit')} (min: {i.get('min_stock')})"
+            for i in all_items
+        )
+
+        return cls.send_email(
+            to_emails=recipients,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body
+        )
+
+    @classmethod
+    def send_store_materials_notification(cls, plan, materials_summary, recipients=None):
+        """
+        Send materials preparation email to store team when a work plan is published.
+
+        Args:
+            plan:              WorkPlan instance
+            materials_summary: List of dicts [{code, name, total_qty, unit, location}]
+            recipients:        List of email addresses (defaults to STORE_EMAILS env var)
+        """
+        if recipients is None:
+            recipients = cls.get_store_recipients()
+
+        if not recipients or not materials_summary:
+            return False
+
+        week_str = f"{plan.week_start.strftime('%d %b')} - {plan.week_end.strftime('%d %b %Y')}"
+        subject = f"📦 Materials Needed for Work Plan: {week_str}"
+
+        rows = ''
+        for i, mat in enumerate(materials_summary):
+            bg = '#fafafa' if i % 2 == 0 else '#fff'
+            rows += f"""
+            <tr style="background:{bg};">
+              <td style="padding:8px;border:1px solid #ddd;">{mat.get('code','')}</td>
+              <td style="padding:8px;border:1px solid #ddd;">{mat.get('name','')}</td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:center;font-weight:700;">{mat.get('total_qty',0)} {mat.get('unit','')}</td>
+              <td style="padding:8px;border:1px solid #ddd;">{mat.get('location') or '—'}</td>
+            </tr>"""
+
+        html_body = f"""
+        <html>
+        <body style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
+          <div style="background:#1d39c4;color:white;padding:20px;text-align:center;">
+            <h1 style="margin:0;">📦 Materials Preparation Request</h1>
+            <p style="margin:8px 0 0;">Work Plan: {week_str}</p>
+          </div>
+          <div style="padding:20px;">
+            <p>Please prepare the following materials before <strong>{plan.week_start.strftime('%A, %d %b %Y')}</strong> morning:</p>
+            <table style="width:100%;border-collapse:collapse;margin-top:16px;">
+              <thead>
+                <tr style="background:#e6f7ff;">
+                  <th style="padding:10px;border:1px solid #ddd;text-align:left;">Code</th>
+                  <th style="padding:10px;border:1px solid #ddd;text-align:left;">Material</th>
+                  <th style="padding:10px;border:1px solid #ddd;">Total Qty Needed</th>
+                  <th style="padding:10px;border:1px solid #ddd;text-align:left;">Storage Location</th>
+                </tr>
+              </thead>
+              <tbody>{rows}</tbody>
+            </table>
+            <p style="margin-top:20px;color:#888;font-size:12px;">
+              This is an automated message from the Industrial Inspection System.
+            </p>
+          </div>
+        </body>
+        </html>"""
+
+        text_body = f"Materials for Work Plan {week_str}:\n\n" + "\n".join(
+            f"- {m.get('code')} {m.get('name')}: {m.get('total_qty')} {m.get('unit')}"
+            for m in materials_summary
+        )
+
+        return cls.send_email(
+            to_emails=recipients,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body
+        )
+
+    @classmethod
     def send_test_email(cls, to_email):
         """Send a test email to verify configuration."""
         return cls.send_email(

@@ -69,6 +69,10 @@
 <!-- Claude: After EVERY change you make, add an entry here. NEVER skip this. -->
 
 | Date | What Changed | Status |
+| 2026-03-01 | Feature 3: Low-stock email — new send_low_stock_alert() in email_service.py; hooked into stock_alert_service.send_stock_alerts() after in-app notifications; reads STORE_EMAILS env var | ✅ Done |
+| 2026-03-01 | Feature 5: PM Template materials UI — already existed in PMTemplatesPage.tsx (Materials tab with selector + quantity + add/remove) | ✅ Confirmed |
+| 2026-03-01 | Feature 6: Store email on publish — new send_store_materials_notification() in email_service.py; work_plans.py publish endpoint aggregates materials across all jobs + sends to STORE_EMAILS | ✅ Done |
+| 2026-03-01 | Feature 2: Consumption history — migration e1f2a3b4c5d6 (material_consumption_history table); 4 new endpoints (GET history, GET all aggregated, POST import, GET template); materialsApi 4 new methods; MaterialsPage Analytics tab: period selector (Monthly/Quarterly/Yearly) + recharts BarChart + Import Historical Data modal + Template button | ✅ Done |
 | 2026-03-01 | Work Planning bar restructure: (1) removed /admin/work-planning path text from Bar 1 + added flexShrink:0 to left side (fixes horizontal wrap); (2) moved Status badge, ViewToggle, AI switch+btn, Conflicts from Bar 1 → Bar 2 right side (marginLeft:auto group); (3) removed hrs total stat + divider from Bar 3 Health Strip | ✅ Done |
 | 2026-03-01 | Work Planning responsive layout: (1) minWidth:1024 + overflowX:auto wrapper stops all crushing; (2) collapsible right panel toggle (RightOutlined/LeftOutlined button, rightPanelVisible state); (3) CSS @media queries — ViewToggle icons-only at 1440px, Auto-Schedule label + contextual text hidden at 1280px; (4) toolbar right section flexShrink:1 + minWidth:0 + overflow:hidden; (5) collapsed day header overflow:hidden clips vertical text | ✅ Done |
 | 2026-03-01 | Materials: Added "Download Import Template" button to MaterialsPage import modal — uses existing materialsApi.getTemplateUrl() (no backend change needed) | ✅ Done |
@@ -158,7 +162,11 @@
 | Clickable answer cells + detail modal | ✅ Done | Tap any cell in answer bar → bottom sheet with question, answer, urgency, comment, photo |
 | Assessment badge near equipment | ✅ Done | Colored badge (Pass/Urgent/Monitor) next to equipment name on MyAssignments cards |
 | Monitor Follow-Up scheduling | ✅ Done |
-| Per-question equipment type filter | ✅ Done | checklist_item_equipment_types table; admin tags each question with sub-types; wizard only shows relevant questions per equipment | Full stack: DB + model + service + 9 API endpoints + 2 scheduler jobs + web page/form + mobile 2 screens + i18n |
+| Per-question equipment type filter | ✅ Done |
+| Low-stock email alerts (STORE_EMAILS) | ✅ Done | send_low_stock_alert() in email_service.py; triggered by scheduler daily |
+| Store email on work plan publish | ✅ Done | send_store_materials_notification() with aggregated materials table |
+| PM Template materials config UI | ✅ Done | Materials tab in PMTemplatesPage.tsx already existed |
+| Consumption history import + analytics | ✅ Done | New DB table + 4 endpoints + Analytics tab bar chart + import modal | checklist_item_equipment_types table; admin tags each question with sub-types; wizard only shows relevant questions per equipment | Full stack: DB + model + service + 9 API endpoints + 2 scheduler jobs + web page/form + mobile 2 screens + i18n |
 | Multi-layer assessment system | ✅ Done | 4-layer flow (System→Inspector→Engineer→Admin), 3 verdicts (operational/monitor/stop), auto-escalation, notifications |
 | System auto-assessment | ✅ Done | Calculates verdict from urgency scores (weights 0,1,3,5), pre-selects on assessment screen |
 | Engineer review escalation | ✅ Done | Auto-escalates on disagreement, engineer can finalize or escalate to admin |

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, ResponsiveContainer } from 'recharts';
 import {
   Card,
   Table,
@@ -22,6 +23,8 @@ import {
   FloatButton,
   Drawer,
   Badge,
+  Segmented,
+  Spin,
 } from 'antd';
 import {
   PlusOutlined,
@@ -122,6 +125,11 @@ export default function MaterialsPage() {
   // Active Tab
   const [activeTab, setActiveTab] = useState('inventory');
 
+  // Consumption History
+  const [consumptionPeriod, setConsumptionPeriod] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [consumptionImportOpen, setConsumptionImportOpen] = useState(false);
+  const [consumptionImportFile, setConsumptionImportFile] = useState<File | null>(null);
+
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
 
@@ -152,6 +160,27 @@ export default function MaterialsPage() {
   const materials = materialsData?.data?.materials || [];
   const lowStockCount = lowStockData?.data?.low_stock_count || 0;
   const alertsCount = alertsData?.data?.count || 0;
+
+  // Consumption history query (fires when Analytics tab is active)
+  const { data: consumptionData, isLoading: consumptionLoading } = useQuery({
+    queryKey: ['materials', 'consumption-history', consumptionPeriod],
+    queryFn: () => materialsApi.getAllConsumptionHistory({ period: consumptionPeriod }),
+    enabled: activeTab === 'analytics',
+  });
+  const consumptionHistory: { period_label: string; total: number }[] = consumptionData?.data?.data || [];
+
+  const consumptionImportMutation = useMutation({
+    mutationFn: (file: File) => materialsApi.importConsumptionHistory(file),
+    onSuccess: (res: any) => {
+      message.success(`Imported ${res.data.imported} records, updated ${res.data.updated}`);
+      queryClient.invalidateQueries({ queryKey: ['materials', 'consumption-history'] });
+      setConsumptionImportOpen(false);
+      setConsumptionImportFile(null);
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Import failed');
+    },
+  });
 
   // Create mutation
   const createMutation = useMutation({
@@ -514,6 +543,60 @@ export default function MaterialsPage() {
       ),
       children: (
         <Row gutter={[16, 16]}>
+          {/* Consumption History Chart */}
+          <Col xs={24}>
+            <Card
+              title="Consumption History"
+              extra={
+                <Space>
+                  <Segmented
+                    value={consumptionPeriod}
+                    onChange={(v) => setConsumptionPeriod(v as any)}
+                    options={[
+                      { label: 'Monthly', value: 'monthly' },
+                      { label: 'Quarterly', value: 'quarterly' },
+                      { label: 'Yearly', value: 'yearly' },
+                    ]}
+                    size="small"
+                  />
+                  <Button
+                    size="small"
+                    icon={<UploadOutlined />}
+                    onClick={() => setConsumptionImportOpen(true)}
+                  >
+                    Import Historical Data
+                  </Button>
+                  <Button
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    href={materialsApi.getConsumptionTemplateUrl()}
+                    target="_blank"
+                  >
+                    Template
+                  </Button>
+                </Space>
+              }
+            >
+              {consumptionLoading ? (
+                <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+              ) : consumptionHistory.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#8c8c8c' }}>
+                  <Text type="secondary">No consumption history yet. Import historical data to see the chart.</Text>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={consumptionHistory} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="period_label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <ReTooltip formatter={(v: any) => [`${v} units`, 'Total Consumed']} />
+                    <Bar dataKey="total" fill="#1890ff" radius={[3, 3, 0, 0]} name="Total Consumed" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </Card>
+          </Col>
+
           <Col xs={24} lg={12}>
             <ConsumptionChart />
           </Col>
@@ -805,6 +888,38 @@ export default function MaterialsPage() {
             >
               {t('materials.select_excel_file', 'Select Excel File')}
             </Button>
+          </Upload>
+        </Space>
+      </Modal>
+
+      {/* Consumption History Import Modal */}
+      <Modal
+        title="Import Consumption History"
+        open={consumptionImportOpen}
+        onCancel={() => { setConsumptionImportOpen(false); setConsumptionImportFile(null); }}
+        onOk={() => consumptionImportFile && consumptionImportMutation.mutate(consumptionImportFile)}
+        okText="Import"
+        confirmLoading={consumptionImportMutation.isPending}
+        okButtonProps={{ disabled: !consumptionImportFile }}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Alert
+            type="info"
+            message="Upload an Excel file with columns: code, period_type, period_label, quantity_consumed, notes"
+            showIcon
+          />
+          <Space>
+            <Button icon={<DownloadOutlined />} href={materialsApi.getConsumptionTemplateUrl()} target="_blank">
+              Download Template
+            </Button>
+          </Space>
+          <Upload
+            accept=".xlsx,.xls"
+            maxCount={1}
+            beforeUpload={(file) => { setConsumptionImportFile(file); return false; }}
+            onRemove={() => setConsumptionImportFile(null)}
+          >
+            <Button icon={<UploadOutlined />}>Select Excel File</Button>
           </Upload>
         </Space>
       </Modal>
