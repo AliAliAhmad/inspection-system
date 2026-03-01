@@ -222,7 +222,9 @@ const EquipmentGroupRow: React.FC<{
         const eqName =
           (job as any).equipment?.name ||
           (job as any).inspection_assignment?.equipment?.name ||
+          (job as any).equipment_name ||
           (job as any).inspection_assignment?.equipment?.serial_number ||
+          (job as any).equipment_serial ||
           (job as any).equipment?.serial_number ||
           (job.job_type === 'inspection' && job.description
             ? job.description.replace(/^inspection\s*:\s*/i, '').split(' - ')[0].trim()
@@ -2096,6 +2098,7 @@ export default function WorkPlanningPage() {
                                           const eqType =
                                             (job as any).equipment?.equipment_type ||
                                             (job as any).inspection_assignment?.equipment?.equipment_type ||
+                                            (job as any).equipment_type ||
                                             (job as any).equipment?.name?.split(' ')[0] ||
                                             (job.job_type === 'inspection' && job.description
                                               ? job.description.replace(/^inspection\s*:\s*/i, '').split(' - ')[0].trim()

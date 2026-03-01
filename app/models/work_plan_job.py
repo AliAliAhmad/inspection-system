@@ -165,14 +165,28 @@ class WorkPlanJob(db.Model):
         """
         # Compact mode for large lists - just essential fields
         if compact:
+            # For inspection jobs, equipment lives on the assignment, not directly on the job
+            if self.job_type == 'inspection' and self.inspection_assignment:
+                insp_eq = self.inspection_assignment.equipment
+                _eq_name = insp_eq.name if insp_eq else None
+                _eq_serial = insp_eq.serial_number if insp_eq else None
+                _eq_type = insp_eq.equipment_type if insp_eq else None
+                _insp_assignment_id = self.inspection_assignment_id
+            else:
+                _eq_name = self.equipment.name if self.equipment else None
+                _eq_serial = self.equipment.serial_number if self.equipment else None
+                _eq_type = self.equipment.equipment_type if self.equipment else None
+                _insp_assignment_id = self.inspection_assignment_id
             return {
                 'id': self.id,
                 'work_plan_day_id': self.work_plan_day_id,
                 'job_type': self.job_type,
                 'berth': self.berth,
                 'equipment_id': self.equipment_id,
-                'equipment_name': self.equipment.name if self.equipment else None,
-                'equipment_serial': self.equipment.serial_number if self.equipment else None,
+                'equipment_name': _eq_name,
+                'equipment_serial': _eq_serial,
+                'equipment_type': _eq_type,
+                'inspection_assignment_id': _insp_assignment_id,
                 'sap_order_number': self.sap_order_number,
                 'sap_order_type': self.sap_order_type,
                 'description': self.description,
