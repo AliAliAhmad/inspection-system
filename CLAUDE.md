@@ -68,7 +68,10 @@
 ## Change Log (AUTO-UPDATE THIS)
 <!-- Claude: After EVERY change you make, add an entry here. NEVER skip this. -->
 
-| Date | What Changed | Status |\n| 2026-02-28 | Fix "Delete All Unassigned" on Inspection Assignments page: replaced N+1 loop (N×3 queries) with 6 batch queries; added DB index on `inspection_assignments.status`; changed frontend `invalidateQueries` → `refetchQueries` for reliable immediate reload | ✅ Done |
+| Date | What Changed | Status |
+| 2026-03-01 | Materials: Added "Download Import Template" button to MaterialsPage import modal — uses existing materialsApi.getTemplateUrl() (no backend change needed) | ✅ Done |
+| 2026-03-01 | Work Planning: Replaced read-only materials card in job details modal with full CRUD UI — material selector + quantity + Add button; kit selector dropdown (auto-expands); stock indicator (✅/⚠️/❌ vs needed qty); Remove button with Popconfirm; only editable in draft status. Reuses existing workPlansApi.addMaterial/removeMaterial | ✅ Done |
+\n| 2026-02-28 | Fix "Delete All Unassigned" on Inspection Assignments page: replaced N+1 loop (N×3 queries) with 6 batch queries; added DB index on `inspection_assignments.status`; changed frontend `invalidateQueries` → `refetchQueries` for reliable immediate reload | ✅ Done |
 | 2026-02-28 | Work Planning drag-to-pool: expunge job from ORM session + pure raw SQL DELETE for job_checklist_responses/work_plan_assignments/work_plan_materials/work_plan_jobs — bypasses all lazy-loading; migrations added for lag_minutes (job_dependencies) + all missing columns in job_checklist_responses (IF NOT EXISTS) | ✅ Done |
 | 2026-02-28 | Delete All Unassigned: fixed FK violation by NULLing work_plan_jobs.inspection_assignment_id before bulk delete | ✅ Done |
 | 2026-02-28 | Work Planning: at-risk drawer now shows correct equipment name (extracted from "inspection: {name}" description pattern when nested equipment is null) + clean description ("Inspection" instead of "inspection: tt060"); drag-to-pool fixed by replacing closestCenter collision with pointerWithin-first detector (customCollision useCallback) | ✅ Done |

@@ -71,7 +71,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, equipmentApi, rosterApi, usersApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority } from '@inspection/shared';
+import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -455,6 +455,8 @@ export default function WorkPlanningPage() {
   const [rightPanelTab, setRightPanelTab] = useState<'jobs' | 'team'>('jobs');
   const [atRiskDrawerOpen, setAtRiskDrawerOpen] = useState(false);
   const [teamPoolDisc, setTeamPoolDisc] = useState<'all' | 'mechanical' | 'electrical'>('all');
+  const [addMaterialId, setAddMaterialId] = useState<number | null>(null);
+  const [addMaterialQty, setAddMaterialQty] = useState<number>(1);
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
 
@@ -690,6 +692,48 @@ export default function WorkPlanningPage() {
       message.error(err.response?.data?.message || 'Auto-schedule failed');
     },
   });
+
+  // Job materials mutations
+  const addMaterialMutation = useMutation({
+    mutationFn: ({ planId, jobId, materialId, quantity, kitId }: { planId: number; jobId: number; materialId?: number; quantity?: number; kitId?: number }) =>
+      workPlansApi.addMaterial(planId, jobId, { material_id: materialId, quantity, kit_id: kitId }),
+    onSuccess: (res) => {
+      message.success('Material added');
+      // Update selectedJob materials in-place so the modal refreshes instantly
+      setSelectedJob((prev) => prev ? { ...prev, materials: res.data.data || [] } : prev);
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to add material');
+    },
+  });
+
+  const removeMaterialMutation = useMutation({
+    mutationFn: ({ planId, jobId, materialId }: { planId: number; jobId: number; materialId: number }) =>
+      workPlansApi.removeMaterial(planId, jobId, materialId),
+    onSuccess: (_res, vars) => {
+      message.success('Material removed');
+      setSelectedJob((prev) => prev ? { ...prev, materials: prev.materials?.filter((m) => m.id !== vars.materialId) || [] } : prev);
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to remove material');
+    },
+  });
+
+  // Materials list for Add Material dropdown in job modal
+  const { data: materialsData } = useQuery({
+    queryKey: ['materials-list-all'],
+    queryFn: () => materialsApi.list({ active_only: true }).then((r: any) => r.data),
+  });
+  const allMaterials: Material[] = (materialsData as any)?.materials || [];
+
+  // Material kits for Add Kit dropdown
+  const { data: kitsData } = useQuery({
+    queryKey: ['material-kits-all'],
+    queryFn: () => materialsApi.listKits({ active_only: true }).then((r: any) => r.data),
+  });
+  const allKits: MaterialKit[] = (kitsData as any)?.kits || [];
 
   // Fetch equipment list for Add Job form
   const { data: equipmentData } = useQuery({
@@ -2556,18 +2600,102 @@ export default function WorkPlanningPage() {
             </Card>
 
             {/* Materials */}
-            {selectedJob.materials?.length > 0 && (
-              <Card size="small" style={{ marginBottom: 16 }}>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text type="secondary">Required Materials</Text>
-                <div style={{ marginTop: 8 }}>
-                  {selectedJob.materials.map((m) => (
-                    <div key={m.id}>
-                      {m.material?.name} x {m.quantity} {m.material?.unit}
-                    </div>
-                  ))}
+                {isDraft && (
+                  <Space size={4}>
+                    <Select
+                      showSearch
+                      placeholder="Add kit..."
+                      style={{ width: 140 }}
+                      size="small"
+                      optionFilterProp="children"
+                      onSelect={(kitId: any) => {
+                        if (!currentPlan || !selectedJob || !kitId) return;
+                        addMaterialMutation.mutate({ planId: currentPlan.id, jobId: selectedJob.id, kitId: kitId as number });
+                      }}
+                      value={undefined}
+                    >
+                      {allKits.map((k) => (
+                        <Select.Option key={k.id} value={k.id}>{k.name}</Select.Option>
+                      ))}
+                    </Select>
+                    <Select
+                      showSearch
+                      placeholder="Add material..."
+                      style={{ width: 160 }}
+                      size="small"
+                      optionFilterProp="children"
+                      value={addMaterialId}
+                      onChange={(v) => setAddMaterialId(v)}
+                    >
+                      {allMaterials.map((m) => (
+                        <Select.Option key={m.id} value={m.id}>{m.name} ({m.code})</Select.Option>
+                      ))}
+                    </Select>
+                    <InputNumber
+                      min={1}
+                      value={addMaterialQty}
+                      onChange={(v) => setAddMaterialQty(v || 1)}
+                      style={{ width: 60 }}
+                      size="small"
+                    />
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      loading={addMaterialMutation.isPending}
+                      disabled={!addMaterialId}
+                      onClick={() => {
+                        if (!currentPlan || !selectedJob || !addMaterialId) return;
+                        addMaterialMutation.mutate(
+                          { planId: currentPlan.id, jobId: selectedJob.id, materialId: addMaterialId, quantity: addMaterialQty },
+                          { onSuccess: () => { setAddMaterialId(null); setAddMaterialQty(1); } }
+                        );
+                      }}
+                    />
+                  </Space>
+                )}
+              </div>
+              {(selectedJob.materials?.length || 0) === 0 ? (
+                <div style={{ color: '#8c8c8c', fontSize: 12 }}>No materials assigned</div>
+              ) : (
+                <div>
+                  {selectedJob.materials!.map((m: WorkPlanMaterial) => {
+                    const stock = m.material?.current_stock ?? 0;
+                    const needed = m.quantity;
+                    const stockColor = stock >= needed ? '#52c41a' : stock > 0 ? '#faad14' : '#ff4d4f';
+                    const stockIcon = stock >= needed ? '✅' : stock > 0 ? '⚠️' : '❌';
+                    return (
+                      <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #f0f0f0' }}>
+                        <span style={{ flex: 1 }}>
+                          {m.material?.name}
+                          {m.from_kit && <Tag color="blue" style={{ marginLeft: 4, fontSize: 10 }}>kit</Tag>}
+                        </span>
+                        <span style={{ color: '#595959' }}>×{m.quantity} {m.material?.unit}</span>
+                        <Tooltip title={`Stock: ${stock} / Needed: ${needed}`}>
+                          <span style={{ color: stockColor, fontSize: 12 }}>{stockIcon} {stock}</span>
+                        </Tooltip>
+                        {isDraft && (
+                          <Popconfirm
+                            title="Remove this material?"
+                            onConfirm={() => {
+                              if (!currentPlan || !selectedJob) return;
+                              removeMaterialMutation.mutate({ planId: currentPlan.id, jobId: selectedJob.id, materialId: m.id });
+                            }}
+                            okText="Remove"
+                            cancelText="Cancel"
+                          >
+                            <Button size="small" type="text" icon={<CloseOutlined />} danger />
+                          </Popconfirm>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </Card>
-            )}
+              )}
+            </Card>
 
             {/* Defect Info */}
             {selectedJob.job_type === 'defect' && selectedJob.defect && (

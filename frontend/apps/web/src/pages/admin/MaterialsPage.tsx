@@ -39,6 +39,7 @@ import {
   BellOutlined,
   RobotOutlined,
   AuditOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -782,20 +783,30 @@ export default function MaterialsPage() {
           style={{ marginBottom: 16 }}
         />
 
-        <Upload
-          accept=".xlsx,.xls"
-          beforeUpload={handleImport}
-          showUploadList={false}
-        >
+        <Space direction="vertical" style={{ width: '100%' }}>
           <Button
-            icon={<FileExcelOutlined />}
-            loading={importMutation.isPending}
-            type="primary"
-            size="large"
+            icon={<DownloadOutlined />}
+            onClick={() => window.open(materialsApi.getTemplateUrl(), '_blank')}
+            style={{ marginBottom: 8 }}
           >
-            {t('materials.select_excel_file', 'Select Excel File')}
+            {t('materials.download_template', 'Download Import Template')}
           </Button>
-        </Upload>
+
+          <Upload
+            accept=".xlsx,.xls"
+            beforeUpload={handleImport}
+            showUploadList={false}
+          >
+            <Button
+              icon={<FileExcelOutlined />}
+              loading={importMutation.isPending}
+              type="primary"
+              size="large"
+            >
+              {t('materials.select_excel_file', 'Select Excel File')}
+            </Button>
+          </Upload>
+        </Space>
       </Modal>
 
       {/* Quick Consume Modal */}
