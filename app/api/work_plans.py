@@ -1694,6 +1694,15 @@ def get_available_jobs():
     # Get open defects
     if not job_type or job_type == 'defect':
         defect_query = Defect.query.filter(Defect.status.in_(['open', 'in_progress']))
+
+        # Exclude defects already scheduled in the current work plan
+        if plan_id:
+            already_in_plan = db.session.query(WorkPlanJob.defect_id).join(WorkPlanDay).filter(
+                WorkPlanDay.work_plan_id == int(plan_id),
+                WorkPlanJob.defect_id.isnot(None)
+            ).subquery()
+            defect_query = defect_query.filter(~Defect.id.in_(already_in_plan))
+
         defects = defect_query.order_by(Defect.created_at.desc()).all()
         result['defect_jobs'] = [{
             'defect': d.to_dict(language),

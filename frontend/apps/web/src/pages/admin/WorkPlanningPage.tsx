@@ -436,7 +436,7 @@ const SimpleJobRow: React.FC<{
   );
 };
 
-const fmtHours = (h: number) => parseFloat(h.toFixed(1));
+const fmtHours = (h: number | null | undefined) => parseFloat((h ?? 0).toFixed(1));
 
 export default function WorkPlanningPage() {
   const { t } = useTranslation();
@@ -1959,7 +1959,7 @@ export default function WorkPlanningPage() {
                           const date = dayjs(day.date);
                           const isToday = day.date === dayjs().format('YYYY-MM-DD');
                           const jobs = getJobsForBerth(day);
-                          const totalHours = jobs.reduce((sum, job) => sum + job.estimated_hours, 0);
+                          const totalHours = jobs.reduce((sum, job) => sum + (job.estimated_hours || 0), 0);
                           const workloadColor = totalHours > 10 ? '#ff4d4f' : totalHours > 6 ? '#fa8c16' : totalHours > 0 ? '#52c41a' : undefined;
                           const isExpanded = expandedDay === day.date;
                           const isCollapsed = expandedDay !== null && expandedDay !== day.date;
