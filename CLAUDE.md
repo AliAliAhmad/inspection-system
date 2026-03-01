@@ -69,6 +69,7 @@
 <!-- Claude: After EVERY change you make, add an entry here. NEVER skip this. -->
 
 | Date | What Changed | Status |
+| 2026-03-01 | Work Planning bar restructure: (1) removed /admin/work-planning path text from Bar 1 + added flexShrink:0 to left side (fixes horizontal wrap); (2) moved Status badge, ViewToggle, AI switch+btn, Conflicts from Bar 1 → Bar 2 right side (marginLeft:auto group); (3) removed hrs total stat + divider from Bar 3 Health Strip | ✅ Done |
 | 2026-03-01 | Work Planning responsive layout: (1) minWidth:1024 + overflowX:auto wrapper stops all crushing; (2) collapsible right panel toggle (RightOutlined/LeftOutlined button, rightPanelVisible state); (3) CSS @media queries — ViewToggle icons-only at 1440px, Auto-Schedule label + contextual text hidden at 1280px; (4) toolbar right section flexShrink:1 + minWidth:0 + overflow:hidden; (5) collapsed day header overflow:hidden clips vertical text | ✅ Done |
 | 2026-03-01 | Materials: Added "Download Import Template" button to MaterialsPage import modal — uses existing materialsApi.getTemplateUrl() (no backend change needed) | ✅ Done |
 | 2026-03-01 | Work Planning: Replaced read-only materials card in job details modal with full CRUD UI — material selector + quantity + Add button; kit selector dropdown (auto-expands); stock indicator (✅/⚠️/❌ vs needed qty); Remove button with Popconfirm; only editable in draft status. Reuses existing workPlansApi.addMaterial/removeMaterial | ✅ Done |

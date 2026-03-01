@@ -1335,9 +1335,8 @@ export default function WorkPlanningPage() {
         {/* COMPACT TOOLBAR */}
         <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 12 }}>
 
-          {/* Left side: Path + Week Nav */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>/admin/work-planning</Text>
+          {/* Left side: Week Nav */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <Space size={4}>
               <Button size="small" icon={<LeftOutlined />} onClick={() => setWeekOffset(o => o - 1)} />
               <Text strong style={{ fontSize: 13, minWidth: 170, textAlign: 'center', display: 'inline-block' }}>
@@ -1348,22 +1347,8 @@ export default function WorkPlanningPage() {
             </Space>
           </div>
 
-          {/* Right side: Status + View + AI + At-Risk + Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0, overflow: 'hidden' }}>
-            {/* Plan Status */}
-            {currentPlan && (
-              <Badge status={currentPlan.status === 'published' ? 'success' : 'warning'} text={<Text type="secondary" style={{ fontSize: 12 }}>{currentPlan.status.toUpperCase()} &bull; {currentPlan.total_jobs} jobs</Text>} />
-            )}
-
-            <div className="wp-view-toggle"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
-
-            {/* AI Toggle */}
-            <Space size={4}>
-              <Switch checked={aiAssistanceEnabled} onChange={setAiAssistanceEnabled} checkedChildren={<RobotOutlined />} unCheckedChildren={<RobotOutlined />} size="small" />
-            </Space>
-
-            <Button size="small" icon={<BulbOutlined />} onClick={() => setAiDrawerOpen(true)} disabled={!aiAssistanceEnabled}>AI</Button>
-            <Button size="small" icon={<AlertOutlined />} onClick={() => setConflictPanelOpen(true)}>Conflicts</Button>
+          {/* Right side: primary actions only */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
 
             {/* Auto-Schedule */}
             {currentPlan && isDraft && (
@@ -1584,6 +1569,19 @@ export default function WorkPlanningPage() {
               ✕ Collapse
             </Button>
           )}
+
+          {/* Secondary controls (moved from toolbar) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
+            {currentPlan && (
+              <Badge status={currentPlan.status === 'published' ? 'success' : 'warning'} text={<Text type="secondary" style={{ fontSize: 12 }}>{currentPlan.status.toUpperCase()} &bull; {currentPlan.total_jobs} jobs</Text>} />
+            )}
+            <div className="wp-view-toggle"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
+            <Space size={4}>
+              <Switch checked={aiAssistanceEnabled} onChange={setAiAssistanceEnabled} checkedChildren={<RobotOutlined />} unCheckedChildren={<RobotOutlined />} size="small" />
+            </Space>
+            <Button size="small" icon={<BulbOutlined />} onClick={() => setAiDrawerOpen(true)} disabled={!aiAssistanceEnabled}>AI</Button>
+            <Button size="small" icon={<AlertOutlined />} onClick={() => setConflictPanelOpen(true)}>Conflicts</Button>
+          </div>
         </div>
 
         {/* ── Smart Week Health Strip ─────────────────────────────── */}
@@ -1690,26 +1688,7 @@ export default function WorkPlanningPage() {
                 </div>
               </div>
 
-              {/* Divider */}
-              <div style={{ width: 1, height: 32, background: '#e8e8e8', marginRight: 16, flexShrink: 0 }} />
-
-              {/* Stat: Hours */}
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 80, marginRight: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <Text style={{ fontSize: 20, fontWeight: 700, color: '#595959', lineHeight: 1 }}>{weekStats.totalHours}</Text>
-                  <Text type="secondary" style={{ fontSize: 10 }}>hrs total</Text>
-                </div>
-                <Text type="secondary" style={{ fontSize: 10, marginTop: 1 }}>
-                  {avgHours > 10
-                    ? <span style={{ color: '#ff4d4f' }}>↑ Overloaded ({avgHours.toFixed(1)}h/day)</span>
-                    : avgHours > 8
-                    ? <span style={{ color: '#fa8c16' }}>~{avgHours.toFixed(1)}h / day</span>
-                    : <span style={{ color: '#52c41a' }}>~{avgHours.toFixed(1)}h / day ✓</span>
-                  }
-                </Text>
-              </div>
-
-              {/* At-Risk Jobs — clickable badge near hrs total */}
+              {/* At-Risk Jobs */}
               {atRiskJobs.length > 0 && (
                 <Badge count={atRiskJobs.length} size="small" offset={[-2, 2]} style={{ flexShrink: 0 }}>
                   <Button
