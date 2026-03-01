@@ -883,7 +883,7 @@ def remove_job(plan_id, job_id):
     db.session.expunge(job)
 
     # Delete child records + job entirely via raw SQL — no ORM cascade, no lazy-load.
-    for table in ['job_checklist_responses', 'work_plan_assignments', 'work_plan_materials']:
+    for table in ['job_checklist_responses', 'work_plan_assignments', 'work_plan_materials', 'work_plan_job_trackings']:
         db.session.execute(
             db.text(f'DELETE FROM {table} WHERE work_plan_job_id = :jid'),
             {'jid': job_id}
