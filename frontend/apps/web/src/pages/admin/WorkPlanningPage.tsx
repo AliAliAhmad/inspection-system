@@ -429,6 +429,8 @@ const SimpleJobRow: React.FC<{
   );
 };
 
+const fmtHours = (h: number) => parseFloat(h.toFixed(1));
+
 export default function WorkPlanningPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -809,7 +811,7 @@ export default function WorkPlanningPage() {
       if (totalHours > 10) {
         warnings.push({
           type: 'warning',
-          message: `This day has ${totalHours}h scheduled (high workload)`,
+          message: `This day has ${fmtHours(totalHours)}h scheduled (high workload)`,
         });
       }
     }
@@ -962,6 +964,7 @@ export default function WorkPlanningPage() {
     currentPlan.days.forEach(day => {
       const jobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
       jobs.forEach((job: any) => {
+        if (job.job_type === 'inspection') return; // inspection jobs excluded from At-Risk
         // Equipment name — check all nested paths, then extract from "inspection: {name}" description
         const eqName =
           job.equipment?.name ||
@@ -1003,6 +1006,36 @@ export default function WorkPlanningPage() {
       seen.add(r.id);
       return true;
     });
+  }, [currentPlan]);
+
+  // Overdue jobs (non-inspection, overdue_value > 0), deduped by job id
+  const overdueJobs = useMemo(() => {
+    if (!currentPlan?.days) return [];
+    const result: { id: number; dayId: number; reason: string; equipment: string; description: string }[] = [];
+    const seen = new Set<number>();
+    currentPlan.days.forEach(day => {
+      const jobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
+      jobs.forEach((job: any) => {
+        if (job.job_type === 'inspection') return;
+        if (!(job.overdue_value > 0) && !job.is_overdue) return;
+        if (seen.has(job.id)) return;
+        seen.add(job.id);
+        const eqName = job.equipment?.name || job.equipment?.serial_number || 'Unknown';
+        const rawDesc = job.description || job.defect?.description || '';
+        const cleanDesc = rawDesc.replace(/^inspection\s*:\s*/i, '').trim();
+        const desc = cleanDesc === eqName ? '' : cleanDesc.startsWith(eqName)
+          ? cleanDesc.slice(eqName.length).replace(/^[\s\-_.]+/, '').trim()
+          : cleanDesc;
+        result.push({
+          id: job.id,
+          dayId: day.id,
+          reason: `Overdue by ${job.overdue_value || '?'}h`,
+          equipment: eqName,
+          description: desc || 'Overdue',
+        });
+      });
+    });
+    return result;
   }, [currentPlan]);
 
   // Per-user assignment counts across all days in the current plan week
@@ -1335,7 +1368,7 @@ export default function WorkPlanningPage() {
         {/* COMPACT TOOLBAR */}
         <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 12 }}>
 
-          {/* Left side: Week Nav */}
+          {/* Left side: Week Nav + View Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <Space size={4}>
               <Button size="small" icon={<LeftOutlined />} onClick={() => setWeekOffset(o => o - 1)} />
@@ -1345,6 +1378,7 @@ export default function WorkPlanningPage() {
               <Button size="small" icon={<RightOutlined />} onClick={() => setWeekOffset(o => o + 1)} />
               {weekOffset !== 0 && <Button type="link" size="small" onClick={() => setWeekOffset(0)}>Today</Button>}
             </Space>
+            <div className="wp-view-toggle"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
           </div>
 
           {/* Right side: primary actions only */}
@@ -1570,17 +1604,34 @@ export default function WorkPlanningPage() {
             </Button>
           )}
 
-          {/* Secondary controls (moved from toolbar) */}
+          {/* Secondary controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
             {currentPlan && (
               <Badge status={currentPlan.status === 'published' ? 'success' : 'warning'} text={<Text type="secondary" style={{ fontSize: 12 }}>{currentPlan.status.toUpperCase()} &bull; {currentPlan.total_jobs} jobs</Text>} />
             )}
-            <div className="wp-view-toggle"><ViewToggle value={viewMode} onChange={setViewMode} /></div>
             <Space size={4}>
               <Switch checked={aiAssistanceEnabled} onChange={setAiAssistanceEnabled} checkedChildren={<RobotOutlined />} unCheckedChildren={<RobotOutlined />} size="small" />
             </Space>
             <Button size="small" icon={<BulbOutlined />} onClick={() => setAiDrawerOpen(true)} disabled={!aiAssistanceEnabled}>AI</Button>
             <Button size="small" icon={<AlertOutlined />} onClick={() => setConflictPanelOpen(true)}>Conflicts</Button>
+            {currentPlan && currentPlan.status !== 'published' && (
+              <Button
+                size="small"
+                type="primary"
+                icon={<SendOutlined />}
+                loading={publishMutation.isPending}
+                onClick={() => Modal.confirm({
+                  title: 'Publish Work Plan?',
+                  content: 'This will publish the work plan and notify all assigned users.',
+                  okText: 'Publish',
+                  okType: 'primary',
+                  cancelText: 'Cancel',
+                  onOk: () => publishMutation.mutate(currentPlan.id),
+                })}
+              >
+                Publish Plan
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1999,7 +2050,7 @@ export default function WorkPlanningPage() {
                                           />
                                           {totalHours > 0 && (
                                             <Text style={{ fontSize: 9, color: workloadColor || '#8c8c8c', fontWeight: totalHours > 6 ? 600 : 400 }}>
-                                              {totalHours}h
+                                              {fmtHours(totalHours)}h
                                             </Text>
                                           )}
                                         </div>
@@ -2075,7 +2126,7 @@ export default function WorkPlanningPage() {
                                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                                         <Text style={{ fontSize: 9, color: '#8c8c8c' }}>{jobs.length} job{jobs.length !== 1 ? 's' : ''}</Text>
                                         <Text style={{ fontSize: 9, color: workloadColor || '#8c8c8c', fontWeight: totalHours > 0 ? 600 : 400 }}>
-                                          {totalHours > 0 ? `${totalHours}h / 8h` : '—'}
+                                          {totalHours > 0 ? `${fmtHours(totalHours)}h / 8h` : '—'}
                                         </Text>
                                       </div>
                                       <div style={{ height: 4, background: '#f0f0f0', borderRadius: 2, overflow: 'hidden' }}>
@@ -2282,10 +2333,10 @@ export default function WorkPlanningPage() {
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
           }}>
             {activeItem.type === 'pool-job' && (
-              <span>{activeItem.data.job?.equipment?.serial_number || activeItem.data.job?.defect?.description?.substring(0, 20) || 'Job'}</span>
+              <span>{activeItem.data.job?.equipment?.name || activeItem.data.job?.defect?.description?.substring(0, 20) || 'Job'}</span>
             )}
             {activeItem.type === 'job' && (
-              <span>{activeItem.data.job?.equipment?.serial_number || 'Job'}</span>
+              <span>{activeItem.data.job?.equipment?.name || 'Job'}</span>
             )}
             {activeItem.type === 'employee' && (
               <span>{activeItem.data.user?.full_name}</span>
@@ -2363,7 +2414,7 @@ export default function WorkPlanningPage() {
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: 15 }}>
               Assign <strong>{pendingAssignment.user.full_name}</strong> to{' '}
-              <strong>{pendingAssignment.job.equipment?.serial_number || 'this job'}</strong>
+              <strong>{pendingAssignment.job.equipment?.name || 'this job'}</strong>
             </p>
 
             {/* Conflict Warnings */}
@@ -2542,8 +2593,8 @@ export default function WorkPlanningPage() {
               <Row gutter={16}>
                 <Col span={12}>
                   <Text type="secondary">Equipment</Text>
-                  <div style={{ fontWeight: 600 }}>{selectedJob.equipment?.serial_number || 'N/A'}</div>
-                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>{selectedJob.equipment?.name}</div>
+                  <div style={{ fontWeight: 600 }}>{selectedJob.equipment?.name || 'N/A'}</div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c' }}>{selectedJob.equipment?.serial_number}</div>
                 </Col>
                 <Col span={12}>
                   <Text type="secondary">Type</Text>
@@ -2719,7 +2770,7 @@ export default function WorkPlanningPage() {
               <Col span={8}>
                 <Card size="small">
                   <Text type="secondary">Est. Hours</Text>
-                  <div style={{ fontWeight: 600, fontSize: 18 }}>{selectedJob.estimated_hours}h</div>
+                  <div style={{ fontWeight: 600, fontSize: 18 }}>{fmtHours(selectedJob.estimated_hours)}h</div>
                 </Card>
               </Col>
               <Col span={8}>
@@ -2951,36 +3002,68 @@ export default function WorkPlanningPage() {
         title={
           <Space>
             <WarningFilled style={{ color: '#ff4d4f' }} />
-            <span>{atRiskJobs.length} Jobs At Risk</span>
+            <span>Jobs Needing Attention</span>
           </Space>
         }
         open={atRiskDrawerOpen}
         onClose={() => setAtRiskDrawerOpen(false)}
-        width={320}
+        width={340}
         placement="right"
         mask={false}
+        styles={{ body: { padding: '8px 12px' } }}
       >
-        <div
-          ref={setAtRiskDropRef}
-          style={{
-            minHeight: '100%', padding: 4, borderRadius: 8, transition: 'all 0.2s',
-            background: isOverAtRisk ? '#fff1f0' : undefined,
-            border: isOverAtRisk ? '2px dashed #ff4d4f' : '2px dashed transparent',
-          }}
-        >
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-            Drag a job from the calendar here to unschedule it, or drag to a day column to reschedule.
-          </Text>
-          {atRiskJobs.map(risk => (
-            <DraggableRiskJob key={risk.id} risk={risk} job={allJobs.find(j => j.id === risk.id)} />
-          ))}
-          {atRiskJobs.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 32, color: '#52c41a' }}>
-              <div style={{ fontSize: 24 }}>✓</div>
-              <Text type="secondary">No at-risk jobs this week</Text>
-            </div>
-          )}
-        </div>
+        <Tabs
+          size="small"
+          items={[
+            {
+              key: 'at-risk',
+              label: <span><WarningFilled style={{ color: '#ff4d4f', marginRight: 4 }} />{atRiskJobs.length} At Risk</span>,
+              children: (
+                <div
+                  ref={setAtRiskDropRef}
+                  style={{
+                    minHeight: 200, padding: 4, borderRadius: 8, transition: 'all 0.2s',
+                    background: isOverAtRisk ? '#fff1f0' : undefined,
+                    border: isOverAtRisk ? '2px dashed #ff4d4f' : '2px dashed transparent',
+                  }}
+                >
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    Drag a job from the calendar here to unschedule, or drag to a day to reschedule.
+                  </Text>
+                  {atRiskJobs.map(risk => (
+                    <DraggableRiskJob key={risk.id} risk={risk} job={allJobs.find(j => j.id === risk.id)} />
+                  ))}
+                  {atRiskJobs.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: 32, color: '#52c41a' }}>
+                      <div style={{ fontSize: 24 }}>✓</div>
+                      <Text type="secondary">No at-risk jobs this week</Text>
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: 'overdue',
+              label: <span style={{ color: overdueJobs.length > 0 ? '#fa8c16' : undefined }}>⏰ {overdueJobs.length} Overdue</span>,
+              children: (
+                <div style={{ minHeight: 200, padding: 4 }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                    Jobs past their scheduled completion date.
+                  </Text>
+                  {overdueJobs.map(risk => (
+                    <DraggableRiskJob key={risk.id} risk={risk} job={allJobs.find(j => j.id === risk.id)} />
+                  ))}
+                  {overdueJobs.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: 32, color: '#52c41a' }}>
+                      <div style={{ fontSize: 24 }}>✓</div>
+                      <Text type="secondary">No overdue jobs this week</Text>
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+          ]}
+        />
       </Drawer>
     </DndContext>
   );

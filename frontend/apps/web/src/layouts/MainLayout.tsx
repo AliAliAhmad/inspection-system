@@ -445,15 +445,17 @@ export default function MainLayout() {
             />
           </Tooltip>
 
-          <Tooltip title={isDark ? 'Light Mode' : 'Dark Mode'}>
-            <Switch
-              checked={isDark}
-              onChange={toggleTheme}
-              checkedChildren={<BulbFilled />}
-              unCheckedChildren={<BulbOutlined />}
-              size="small"
-            />
-          </Tooltip>
+          {!location.pathname.startsWith('/admin/work-planning') && (
+            <Tooltip title={isDark ? 'Light Mode' : 'Dark Mode'}>
+              <Switch
+                checked={isDark}
+                onChange={toggleTheme}
+                checkedChildren={<BulbFilled />}
+                unCheckedChildren={<BulbOutlined />}
+                size="small"
+              />
+            </Tooltip>
+          )}
 
           {/* Service Alert Badge (equipment maintenance alerts) */}
           {(user.role === 'admin' || user.role === 'engineer') && (

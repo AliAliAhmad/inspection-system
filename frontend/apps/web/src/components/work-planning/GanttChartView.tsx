@@ -103,7 +103,7 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
 
   const getJobName = (job: GanttJob | WorkPlanJob): string => {
     const jobAny = job as any;
-    return jobAny.equipment_name || jobAny.name || job.equipment?.serial_number || job.equipment?.name || `Job #${job.id}`;
+    return jobAny.equipment_name || job.equipment?.name || jobAny.name || job.equipment?.serial_number || `Job #${job.id}`;
   };
 
   const getJobAssignees = (job: GanttJob | WorkPlanJob): Array<{ id: number; full_name: string }> => {

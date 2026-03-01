@@ -62,7 +62,7 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
   const style = PRIORITY_STYLES[priority];
   const isOverdue = job.overdue_value && job.overdue_value > 0;
 
-  const equipmentName = job.equipment?.serial_number || job.equipment?.name || '';
+  const equipmentName = job.equipment?.name || job.equipment?.serial_number || '';
   const teamCount = job.assignments?.length || 0;
   const leadUser = job.assignments?.find(a => a.is_lead)?.user;
 

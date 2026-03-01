@@ -94,7 +94,7 @@ const transformAPIResponse = (
       userId: s.user_id,
       userName: s.user_name,
       jobId: s.job_id,
-      equipmentName: job?.equipment?.serial_number || job?.equipment?.name || 'Equipment',
+      equipmentName: job?.equipment?.name || job?.equipment?.serial_number || 'Equipment',
       suggestedQcRating: s.suggested_qc_rating,
       suggestedCleaningRating: s.suggested_cleaning_rating,
       confidence: Math.round(s.confidence * 100),

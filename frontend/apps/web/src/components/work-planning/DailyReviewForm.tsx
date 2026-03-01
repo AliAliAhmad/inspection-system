@@ -227,10 +227,7 @@ export const DailyReviewForm: React.FC<DailyReviewFormProps> = ({
       key: 'equipment',
       render: (_: any, record: any) => (
         <Space direction="vertical" size={0}>
-          <Text strong>{record.equipment?.serial_number || record.equipment?.name || 'Unknown'}</Text>
-          {record.equipment?.name && record.equipment?.serial_number && (
-            <Text type="secondary" style={{ fontSize: 11 }}>{record.equipment.name}</Text>
-          )}
+          <Text strong>{record.equipment?.name || record.equipment?.serial_number || 'Unknown'}</Text>
         </Space>
       ),
     },

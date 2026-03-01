@@ -225,7 +225,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       if (eq && eq.id) {
         equipmentMap.set(eq.id.toString(), {
           id: eq.id,
-          name: eq.serial_number || eq.name || `Equipment ${eq.id}`
+          name: eq.name || eq.serial_number || `Equipment ${eq.id}`
         });
       }
     });

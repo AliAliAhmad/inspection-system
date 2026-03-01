@@ -228,9 +228,6 @@ export default function DefectsPage() {
         return (
           <div>
             <div style={{ fontWeight: 500 }}>{record.equipment.name}</div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {record.equipment.serial_number}
-            </Typography.Text>
           </div>
         );
       },
