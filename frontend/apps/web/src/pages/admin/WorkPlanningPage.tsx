@@ -222,8 +222,13 @@ const EquipmentGroupRow: React.FC<{
         const eqName =
           (job as any).equipment?.name ||
           (job as any).inspection_assignment?.equipment?.name ||
+          (job as any).inspection_assignment?.equipment?.serial_number ||
           (job as any).equipment?.serial_number ||
-          `#${job.id}`;
+          (job.job_type === 'inspection' && job.description
+            ? job.description.replace(/^inspection\s*:\s*/i, '').split(' - ')[0].trim()
+            : null) ||
+          job.description?.split(' - ')[0]?.trim() ||
+          `Job #${job.id}`;
         return (
           <div
             key={job.id}
@@ -2089,10 +2094,14 @@ export default function WorkPlanningPage() {
                                         const otherJobs = jobs.filter(j => j.job_type !== 'inspection');
                                         const inspGroups = inspectionJobs.reduce<Record<string, WorkPlanJob[]>>((acc, job) => {
                                           const eqType =
+                                            (job as any).equipment?.name ||
+                                            (job as any).inspection_assignment?.equipment?.name ||
                                             (job as any).equipment?.equipment_type ||
                                             (job as any).inspection_assignment?.equipment?.equipment_type ||
-                                            (job as any).equipment?.name?.split(' ')[0] ||
-                                            'Other';
+                                            (job.job_type === 'inspection' && job.description
+                                              ? job.description.replace(/^inspection\s*:\s*/i, '').split(' - ')[0].trim()
+                                              : null) ||
+                                            'Inspection';
                                           if (!acc[eqType]) acc[eqType] = [];
                                           acc[eqType].push(job);
                                           return acc;

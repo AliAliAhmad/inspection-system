@@ -591,6 +591,12 @@ def add_job(plan_id):
         if not assignment:
             raise NotFoundError("Inspection assignment not found")
 
+    # For inspection jobs, always use the assignment's berth (east/west)
+    # so the job lands in the correct column regardless of where the user dropped it
+    effective_berth = data.get('berth')
+    if inspection_assignment_id and assignment and assignment.berth:
+        effective_berth = assignment.berth
+
     # Get next position
     max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
         work_plan_day_id=day.id
@@ -599,7 +605,7 @@ def add_job(plan_id):
     job = WorkPlanJob(
         work_plan_day_id=day.id,
         job_type=job_type,
-        berth=data.get('berth'),
+        berth=effective_berth,
         equipment_id=equipment_id,
         defect_id=defect_id,
         inspection_assignment_id=inspection_assignment_id,
