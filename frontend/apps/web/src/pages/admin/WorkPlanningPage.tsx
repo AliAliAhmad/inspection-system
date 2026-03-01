@@ -2094,10 +2094,9 @@ export default function WorkPlanningPage() {
                                         const otherJobs = jobs.filter(j => j.job_type !== 'inspection');
                                         const inspGroups = inspectionJobs.reduce<Record<string, WorkPlanJob[]>>((acc, job) => {
                                           const eqType =
-                                            (job as any).equipment?.name ||
-                                            (job as any).inspection_assignment?.equipment?.name ||
                                             (job as any).equipment?.equipment_type ||
                                             (job as any).inspection_assignment?.equipment?.equipment_type ||
+                                            (job as any).equipment?.name?.split(' ')[0] ||
                                             (job.job_type === 'inspection' && job.description
                                               ? job.description.replace(/^inspection\s*:\s*/i, '').split(' - ')[0].trim()
                                               : null) ||
