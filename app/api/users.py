@@ -668,17 +668,9 @@ def import_team():
                 })
                 continue
 
-            # Check role change attempt
+            # Update allowed fields (role changes are permitted via import)
             if existing_user.role != role:
-                results['failed'].append({
-                    'row': row_num,
-                    'sap_id': sap_id,
-                    'full_name': full_name,
-                    'errors': ["Role cannot be changed via import. Use role swap feature."]
-                })
-                continue
-
-            # Update allowed fields
+                existing_user.role = role
             existing_user.email = email if email else existing_user.email
             existing_user.phone = phone if phone else existing_user.phone
             existing_user.specialization = specialization if specialization else existing_user.specialization
