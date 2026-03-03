@@ -587,6 +587,132 @@ def create_app(config_name='development'):
 
         print('\n🎉 Database is now clean and ready for fresh data!')
 
+    @app.cli.command('cleanup-data')
+    def cleanup_data():
+        """
+        Remove all operational/test data while keeping imported base data.
+        Keeps: users, equipment, checklist templates/items, PM templates, materials,
+               vendors, storage_locations, job_templates, answer_templates, worker_skills,
+               capacity_configs, leave_types, leave_policies, notification_templates,
+               notification_rules, translations, achievements, challenges.
+        Deletes: all inspections, work plans, defects, notifications, chat, HR, gamification,
+                 stock history, media files (also purged from Cloudinary).
+        """
+        from sqlalchemy import text
+        from app.models import File
+
+        print('\n🧹 Starting full data cleanup (keeping users, equipment, checklists)...\n')
+
+        # Step 1: Delete Cloudinary files
+        print('📁 Purging media files from Cloudinary...')
+        files = File.query.all()
+        deleted_files = 0
+        failed_files = 0
+        if files:
+            try:
+                import cloudinary
+                import cloudinary.uploader
+                cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME')
+                api_key = os.getenv('CLOUDINARY_API_KEY')
+                api_secret = os.getenv('CLOUDINARY_API_SECRET')
+                if all([cloud_name, api_key, api_secret]):
+                    cloudinary.config(cloud_name=cloud_name, api_key=api_key,
+                                      api_secret=api_secret, secure=True)
+                    for f in files:
+                        if f.stored_filename and not f.stored_filename.startswith('/'):
+                            try:
+                                resource_type = 'video' if f.mime_type and (
+                                    'video' in f.mime_type or 'audio' in f.mime_type) else 'image'
+                                cloudinary.uploader.destroy(f.stored_filename,
+                                                             resource_type=resource_type)
+                                deleted_files += 1
+                            except Exception:
+                                failed_files += 1
+                    print(f'  ✓ Deleted {deleted_files} file(s) from Cloudinary'
+                          + (f', {failed_files} failed' if failed_files else ''))
+                else:
+                    print('  ⚠️  Cloudinary not configured — skipping cloud file deletion')
+            except ImportError:
+                print('  ⚠️  Cloudinary not installed — skipping cloud file deletion')
+        else:
+            print('  ✓ No files to delete')
+
+        # Step 2: Delete operational data in FK-safe order (children before parents)
+        print('\n🗑️  Deleting operational data...')
+
+        # For SQLite enable FK enforcement; for PostgreSQL it is always on
+        is_sqlite = 'sqlite' in str(db.engine.url)
+        if is_sqlite:
+            db.session.execute(text('PRAGMA foreign_keys = OFF'))
+
+        ordered_tables = [
+            # Chat
+            'message_read_receipts', 'team_messages', 'channel_members', 'team_channels',
+            # Notifications
+            'notification_analytics', 'notification_escalations',
+            'notification_schedules', 'notifications',
+            # Work plan job-level children
+            'job_review_marks', 'job_showup_photos', 'job_challenge_voices',
+            'job_takeovers', 'pause_logs', 'bonus_stars', 'job_checklist_responses',
+            'job_dependencies', 'work_plan_job_trackings', 'work_plan_job_logs',
+            'work_plan_job_ratings', 'work_plan_assignments', 'work_plan_materials',
+            'engineer_job_voice_notes', 'engineer_job_locations',
+            'specialist_jobs', 'engineer_jobs', 'work_plan_jobs',
+            # Work plan day & plan level
+            'work_plan_daily_reviews', 'work_plan_days',
+            'scheduling_conflicts', 'work_plan_carry_overs', 'work_plan_versions',
+            'work_plan_pause_requests', 'work_plan_performances', 'work_plans',
+            # Inspection data
+            'inspection_answers', 'defect_assessments', 'defect_occurrences',
+            'quality_reviews', 'inspection_ratings', 'monitor_followups',
+            'final_assessments', 'defects', 'inspections',
+            'inspection_lists', 'inspection_assignments',
+            'inspection_schedules', 'inspection_routines',
+            # Other operational
+            'sap_work_orders', 'unplanned_jobs', 'shift_handovers',
+            'running_hours_readings', 'running_hours_alerts',
+            'equipment_status_logs', 'equipment_readings',
+            'equipment_notes', 'equipment_certifications', 'equipment_watches',
+            # Gamification
+            'user_achievements', 'user_challenges', 'user_levels', 'user_streaks',
+            'point_history', 'leaderboard_snapshots', 'performance_goals',
+            'weekly_completions',
+            # HR
+            'leaves', 'leave_balance_history', 'leave_encashments',
+            'leave_calendar', 'leave_blackouts',
+            'shift_swap_requests', 'role_swap_logs', 'roster_entries',
+            # Stock operational
+            'stock_reservations', 'stock_history', 'material_batches',
+            'price_history', 'inventory_count_items', 'inventory_counts',
+            # Misc
+            'sync_queue', 'import_logs', 'token_blocklist', 'admin_activity_logs',
+            # Files last (all FK references cleared above)
+            'files',
+        ]
+
+        total_deleted = 0
+        for table in ordered_tables:
+            try:
+                result = db.session.execute(text(f'DELETE FROM {table}'))
+                count = result.rowcount
+                if count:
+                    print(f'  ✓ {table}: {count} row(s) deleted')
+                total_deleted += count
+            except Exception as e:
+                db.session.rollback()
+                print(f'  ⚠️  {table}: {e}')
+
+        if is_sqlite:
+            db.session.execute(text('PRAGMA foreign_keys = ON'))
+
+        try:
+            db.session.commit()
+            print(f'\n✅ Cleanup complete — {total_deleted} total row(s) removed.')
+            print('   Kept: users, equipment, checklists, PM templates, materials.\n')
+        except Exception as e:
+            db.session.rollback()
+            print(f'\n❌ Commit failed: {e}')
+
     return app
 
 

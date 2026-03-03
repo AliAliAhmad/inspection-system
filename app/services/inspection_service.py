@@ -496,6 +496,17 @@ class InspectionService:
             required_query = required_query.filter_by(category=inspector_category)
         required_items = required_query.all()
 
+        # Apply same equipment sub-type filter used when displaying questions in the wizard.
+        # Questions that were never shown to the user must not be required during validation.
+        equipment = db.session.get(Equipment, inspection.equipment_id)
+        if equipment:
+            eqt_subtype = equipment.equipment_type_2 or equipment.name
+            required_items = [
+                item for item in required_items
+                if not item.equipment_type_filters
+                or eqt_subtype in item.applicable_equipment_types
+            ]
+
         # Get answered item IDs
         answered_item_ids = [
             answer.checklist_item_id
