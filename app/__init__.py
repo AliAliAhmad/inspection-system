@@ -603,7 +603,7 @@ def create_app(config_name='development'):
 
         print('\n🧹 Starting full data cleanup (keeping users, equipment, checklists)...\n')
 
-        # Step 1: Delete Cloudinary files
+        # Step 1: Purge Cloudinary files before touching DB
         print('📁 Purging media files from Cloudinary...')
         files = File.query.all()
         deleted_files = 0
@@ -637,21 +637,18 @@ def create_app(config_name='development'):
         else:
             print('  ✓ No files to delete')
 
-        # Step 2: Delete operational data in FK-safe order (children before parents)
+        # Step 2: Delete all operational data in one transaction
         print('\n🗑️  Deleting operational data...')
 
-        # For SQLite enable FK enforcement; for PostgreSQL it is always on
         is_sqlite = 'sqlite' in str(db.engine.url)
-        if is_sqlite:
-            db.session.execute(text('PRAGMA foreign_keys = OFF'))
 
-        ordered_tables = [
+        tables = [
             # Chat
             'message_read_receipts', 'team_messages', 'channel_members', 'team_channels',
             # Notifications
             'notification_analytics', 'notification_escalations',
             'notification_schedules', 'notifications',
-            # Work plan job-level children
+            # Work plan job-level children (must precede work_plan_jobs)
             'job_review_marks', 'job_showup_photos', 'job_challenge_voices',
             'job_takeovers', 'pause_logs', 'bonus_stars', 'job_checklist_responses',
             'job_dependencies', 'work_plan_job_trackings', 'work_plan_job_logs',
@@ -662,17 +659,19 @@ def create_app(config_name='development'):
             'work_plan_daily_reviews', 'work_plan_days',
             'scheduling_conflicts', 'work_plan_carry_overs', 'work_plan_versions',
             'work_plan_pause_requests', 'work_plan_performances', 'work_plans',
-            # Inspection data
+            # equipment_readings references inspections — must come BEFORE inspections
+            'equipment_readings',
+            # Inspection data (inspection_assignments before inspection_lists due to FK)
             'inspection_answers', 'defect_assessments', 'defect_occurrences',
             'quality_reviews', 'inspection_ratings', 'monitor_followups',
             'final_assessments', 'defects', 'inspections',
-            'inspection_lists', 'inspection_assignments',
+            'inspection_assignments', 'inspection_lists',
             'inspection_schedules', 'inspection_routines',
             # Other operational
             'sap_work_orders', 'unplanned_jobs', 'shift_handovers',
             'running_hours_readings', 'running_hours_alerts',
-            'equipment_status_logs', 'equipment_readings',
-            'equipment_notes', 'equipment_certifications', 'equipment_watches',
+            'equipment_status_logs', 'equipment_notes',
+            'equipment_certifications', 'equipment_watches',
             # Gamification
             'user_achievements', 'user_challenges', 'user_levels', 'user_streaks',
             'point_history', 'leaderboard_snapshots', 'performance_goals',
@@ -686,28 +685,40 @@ def create_app(config_name='development'):
             'price_history', 'inventory_count_items', 'inventory_counts',
             # Misc
             'sync_queue', 'import_logs', 'token_blocklist', 'admin_activity_logs',
-            # Files last (all FK references cleared above)
+            # Files last — all referencing rows deleted above
             'files',
         ]
 
         total_deleted = 0
-        for table in ordered_tables:
-            try:
-                result = db.session.execute(text(f'DELETE FROM {table}'))
-                count = result.rowcount
-                if count:
-                    print(f'  ✓ {table}: {count} row(s) deleted')
-                total_deleted += count
-            except Exception as e:
-                db.session.rollback()
-                print(f'  ⚠️  {table}: {e}')
 
         if is_sqlite:
+            # SQLite: disable FK checks so order doesn't matter for local dev DB
+            db.session.execute(text('PRAGMA foreign_keys = OFF'))
+            for table in tables:
+                try:
+                    result = db.session.execute(text(f'DELETE FROM {table}'))
+                    count = result.rowcount
+                    if count:
+                        print(f'  ✓ {table}: {count} row(s) deleted')
+                    total_deleted += count
+                except Exception as e:
+                    print(f'  ⚠️  {table}: skipped ({e})')
             db.session.execute(text('PRAGMA foreign_keys = ON'))
+        else:
+            # PostgreSQL: TRUNCATE CASCADE on each table — handles all FK deps automatically.
+            # CASCADE only propagates to tables referencing the target, never to parent tables
+            # (users, equipment, checklists) so those are safe.
+            for table in tables:
+                try:
+                    db.session.execute(text(f'TRUNCATE TABLE {table} CASCADE'))
+                    print(f'  ✓ {table}')
+                    total_deleted += 1
+                except Exception as e:
+                    print(f'  ⚠️  {table}: skipped ({e})')
 
         try:
             db.session.commit()
-            print(f'\n✅ Cleanup complete — {total_deleted} total row(s) removed.')
+            print(f'\n✅ Cleanup complete — {total_deleted} table(s) cleared.')
             print('   Kept: users, equipment, checklists, PM templates, materials.\n')
         except Exception as e:
             db.session.rollback()
