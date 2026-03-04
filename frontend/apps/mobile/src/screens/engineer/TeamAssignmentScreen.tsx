@@ -62,10 +62,10 @@ export default function TeamAssignmentScreen() {
   const inspectionLists: InspectionList[] = (listsQuery.data?.data as any)?.items ?? (listsQuery.data?.data as any)?.data ?? (listsQuery.data?.data as any) ?? [];
 
   const allMechInspectors: User[] = ((mechInspectorsQuery.data?.data as any)?.items ?? (mechInspectorsQuery.data?.data as any)?.data ?? (mechInspectorsQuery.data?.data as any) ?? [])
-    .filter((u: User) => u.specialization === 'mechanical');
+    .filter((u: User) => u.specialization === 'mechanical' || !u.specialization);
 
   const allElecInspectors: User[] = ((elecInspectorsQuery.data?.data as any)?.items ?? (elecInspectorsQuery.data?.data as any)?.data ?? (elecInspectorsQuery.data?.data as any) ?? [])
-    .filter((u: User) => u.specialization === 'electrical');
+    .filter((u: User) => u.specialization === 'electrical' || !u.specialization);
 
   // Mutations
   const generateMutation = useMutation({

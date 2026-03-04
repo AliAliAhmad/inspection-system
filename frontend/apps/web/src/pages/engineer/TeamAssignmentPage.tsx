@@ -53,10 +53,10 @@ export default function TeamAssignmentPage() {
   const inspectors: User[] = usersData?.data ?? [];
 
   const mechanicalInspectors = inspectors.filter(
-    (u) => u.specialization === 'mechanical' && u.is_active
+    (u) => u.is_active && (u.specialization === 'mechanical' || !u.specialization)
   );
   const electricalInspectors = inspectors.filter(
-    (u) => u.specialization === 'electrical' && u.is_active
+    (u) => u.is_active && (u.specialization === 'electrical' || !u.specialization)
   );
 
   const generateMutation = useMutation({
