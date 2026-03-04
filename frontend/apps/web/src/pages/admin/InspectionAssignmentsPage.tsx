@@ -64,6 +64,7 @@ import { useTranslation } from 'react-i18next';
 import {
   inspectionAssignmentsApi,
   rosterApi,
+  usersApi,
   inspectionRoutinesApi,
   equipmentApi,
   type AssignTeamPayload,
@@ -821,6 +822,14 @@ export default function InspectionAssignmentsPage() {
     enabled: assignOpen && !!assignmentDate && !!assignmentShift,
   });
 
+  // All active inspectors + specialists for assignment dropdowns (not roster-filtered)
+  const { data: allAssignableData } = useQuery({
+    queryKey: ['users-for-assignment'],
+    queryFn: () => usersApi.getForAssignment().then((r) => r.data),
+    staleTime: 0,
+  });
+  const allAssignableUsers: any[] = allAssignableData?.data ?? [];
+
   // AI Suggestion query
   const { data: aiSuggestion, isLoading: aiSuggestionLoading, refetch: refetchAISuggestion } = useQuery({
     queryKey: ['inspection-assignments', 'ai-suggest', selectedAssignment?.id],
@@ -936,30 +945,28 @@ export default function InspectionAssignmentsPage() {
     return Array.from(types);
   }, [allAssignments]);
 
-  // Build inspector lists from roster availability
+  // Build inspector lists from roster availability (used for shift highlighting only)
   const availData = (availabilityData?.data as any)?.data ?? availabilityData?.data;
   const availableUsers: any[] = availData?.available ?? [];
   const onLeaveUsers: any[] = availData?.on_leave ?? [];
 
-  // Filter inspectors by specialization — also include inspectors without specialization in both lists
-  const isInspectorRole = (u: any) => u.role === 'inspector' || u.role === 'specialist';
-  const mechAvailable = availableUsers.filter(
-    (u: any) => isInspectorRole(u) && (u.specialization === 'mechanical' || !u.specialization),
-  );
-  const elecAvailable = availableUsers.filter(
-    (u: any) => isInspectorRole(u) && (u.specialization === 'electrical' || !u.specialization),
-  );
-
-  const mechOnLeave = onLeaveUsers.filter((u: any) => isInspectorRole(u) && (u.specialization === 'mechanical' || !u.specialization));
-  const elecOnLeave = onLeaveUsers.filter((u: any) => isInspectorRole(u) && (u.specialization === 'electrical' || !u.specialization));
-
-  const mechOptions = [...mechAvailable, ...mechOnLeave];
-  const elecOptions = [...elecAvailable, ...elecOnLeave];
+  // Build fast lookup sets for highlighting
+  const availableUserIds = new Set<number>(availableUsers.map((u: any) => u.id));
+  const onLeaveUserIds = new Set<number>(onLeaveUsers.map((u: any) => u.id));
 
   const coverUserIds = new Set<number>();
   for (const u of availableUsers) {
     if (u.covering_for) coverUserIds.add(u.id);
   }
+
+  // All inspectors/specialists for dropdown — no roster filtering, show everyone
+  const isInspectorRole = (u: any) => u.role === 'inspector' || u.role === 'specialist';
+  const mechOptions = allAssignableUsers.filter(
+    (u: any) => isInspectorRole(u) && (u.specialization === 'mechanical' || !u.specialization),
+  );
+  const elecOptions = allAssignableUsers.filter(
+    (u: any) => isInspectorRole(u) && (u.specialization === 'electrical' || !u.specialization),
+  );
 
   const PENDING_LABELS: Record<string, string> = {
     both_inspections: 'Pending: Both inspections',
@@ -1107,18 +1114,23 @@ export default function InspectionAssignmentsPage() {
   ];
 
   const renderInspectorOption = (u: any) => {
-    const onLeave = onLeaveUsers.some((ol: any) => ol.id === u.id);
+    const onLeave = onLeaveUserIds.has(u.id);
+    const isAvailable = availableUserIds.has(u.id);
     const isCover = coverUserIds.has(u.id);
+    // If roster data is loaded and user is not in available/leave lists → wrong shift or off
+    const rosterLoaded = !!availabilityData;
+    const isOffShift = rosterLoaded && !isAvailable && !onLeave;
+
+    const color = onLeave ? '#ff4d4f' : isCover ? '#52c41a' : isOffShift ? '#8c8c8c' : '#1677ff';
+    const badge = onLeave ? '🔴' : isCover ? '🟢' : isAvailable ? '🟢' : isOffShift ? '⚫' : '';
+
     return (
-      <Select.Option key={u.id} value={u.id} disabled={onLeave}>
-        <span style={{
-          color: onLeave ? '#ff4d4f' : isCover ? '#52c41a' : undefined,
-          fontWeight: onLeave || isCover ? 600 : undefined,
-        }}>
-          {u.full_name} ({u.role_id})
-          {onLeave && u.leave_cover ? ` — Cover: ${u.leave_cover.full_name}` : ''}
-          {onLeave && !u.leave_cover ? ' — On Leave' : ''}
-          {isCover && u.covering_for ? ` — Covering ${u.covering_for.full_name}` : ''}
+      <Select.Option key={u.id} value={u.id}>
+        <span style={{ color, fontWeight: isAvailable || onLeave ? 600 : undefined }}>
+          {badge} {u.full_name} ({u.role_id})
+          {onLeave ? ' — On Leave' : ''}
+          {isCover ? ' — Covering' : ''}
+          {isOffShift ? ' — Off/Other shift' : ''}
         </span>
       </Select.Option>
     );
