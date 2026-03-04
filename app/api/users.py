@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models import User, Leave, ImportLog, RoleSwapLog
 from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
-from app.utils.decorators import admin_required
+from app.utils.decorators import admin_required, role_required
 from app.utils.pagination import paginate
 
 bp = Blueprint('users', __name__)
@@ -65,6 +65,42 @@ def _generate_role_id(role):
             continue
 
     return f'{prefix}-{max_num + 1:03d}'
+
+
+@bp.route('/for-assignment', methods=['GET'])
+@jwt_required()
+@role_required('admin', 'engineer', 'quality_engineer')
+def get_users_for_assignment():
+    """
+    Return ALL active inspectors and specialists for team assignment dropdowns.
+    Accessible by engineers (not just admins).
+    Returns minimal fields needed for assignment UI.
+    """
+    users = (
+        User.query
+        .filter(
+            User.is_active == True,
+            User.role.in_(['inspector', 'specialist'])
+        )
+        .order_by(User.full_name)
+        .all()
+    )
+    return jsonify({
+        'status': 'success',
+        'data': [
+            {
+                'id': u.id,
+                'full_name': u.full_name,
+                'role': u.role,
+                'role_id': u.role_id,
+                'specialization': u.specialization,
+                'shift': u.shift,
+                'is_active': u.is_active,
+                'is_on_leave': u.is_on_leave,
+            }
+            for u in users
+        ]
+    }), 200
 
 
 @bp.route('', methods=['GET'])

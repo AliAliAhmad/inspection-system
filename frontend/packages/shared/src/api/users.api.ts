@@ -74,6 +74,11 @@ export const usersApi = {
     return getApiClient().get<PaginatedResponse<User>>('/api/users', { params });
   },
 
+  /** Fetch all active inspectors + specialists for assignment dropdowns. Engineer-accessible. */
+  getForAssignment() {
+    return getApiClient().get<{ status: string; data: User[] }>('/api/users/for-assignment');
+  },
+
   create(payload: CreateUserPayload) {
     return getApiClient().post<ApiResponse<User>>('/api/users', payload);
   },

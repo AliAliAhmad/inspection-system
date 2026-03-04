@@ -49,31 +49,22 @@ export default function TeamAssignmentScreen() {
     queryFn: () => inspectionAssignmentsApi.getLists(),
   });
 
-  const inspectorQuery = useQuery({
-    queryKey: ['users-role-inspector'],
-    queryFn: () => usersApi.list({ role: 'inspector', is_active: true, per_page: 200 }),
-    staleTime: 0,
-  });
-
-  const specialistQuery = useQuery({
-    queryKey: ['users-role-specialist'],
-    queryFn: () => usersApi.list({ role: 'specialist', is_active: true, per_page: 200 }),
+  const assignableUsersQuery = useQuery({
+    queryKey: ['users-for-assignment'],
+    queryFn: () => usersApi.getForAssignment().then((r) => r.data),
     staleTime: 0,
   });
 
   const inspectionLists: InspectionList[] = (listsQuery.data?.data as any)?.items ?? (listsQuery.data?.data as any)?.data ?? (listsQuery.data?.data as any) ?? [];
 
-  const extractUsers = (q: typeof inspectorQuery): User[] =>
-    (q.data?.data as any)?.items ?? (q.data?.data as any)?.data ?? (q.data?.data as any) ?? [];
-
-  const allUsers: User[] = [...extractUsers(inspectorQuery), ...extractUsers(specialistQuery)];
+  const allUsers: User[] = assignableUsersQuery.data?.data ?? [];
 
   const allMechInspectors: User[] = allUsers.filter(
-    (u: User) => u.is_active && (u.specialization === 'mechanical' || !u.specialization)
+    (u: User) => u.specialization === 'mechanical' || !u.specialization
   );
 
   const allElecInspectors: User[] = allUsers.filter(
-    (u: User) => u.is_active && (u.specialization === 'electrical' || !u.specialization)
+    (u: User) => u.specialization === 'electrical' || !u.specialization
   );
 
   // Mutations
@@ -372,7 +363,7 @@ export default function TeamAssignmentScreen() {
                 : t('assignments.select_electrical', 'Select Electrical Inspector')}
             </Text>
 
-            {(pickerType === 'mechanical' ? mechInspectorsQuery.isLoading : elecInspectorsQuery.isLoading) ? (
+            {assignableUsersQuery.isLoading ? (
               <ActivityIndicator size="large" color="#1976D2" style={{ marginVertical: 32 }} />
             ) : (
               <FlatList

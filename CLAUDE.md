@@ -72,4 +72,22 @@
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
 | 2026-03-04 | Dual-ID role system: revert bad role_id regeneration on import role change; inspector↔specialist swap now exchanges role_id↔minor_role_id (IDs permanent); other role changes keep both IDs dormant; added `flask backfill-minor-ids` CLI command | ✅ Done |
+| 2026-03-05 | Fix electrical inspector dropdown: added `/api/users/for-assignment` endpoint (engineer-accessible) that returns ALL active inspectors+specialists in one call; removed broken two-query approach that hit admin-only `/api/users`; fixed is_active double-filter; both web+mobile updated | ✅ Done |
 
+
+## Plugin Management
+Core plugins are always enabled. For others, enable on demand then disable after:
+- PR review: `/plugin enable code-review` → review → `/plugin disable code-review`
+- Overnight run: `/plugin enable ralph-loop`
+- Security audit: `/plugin enable security-guidance`
+- New feature: `/plugin enable feature-dev`
+- Build skills: `/plugin enable skill-creator`
+Disable non-core plugins after use to keep performance fast.
+
+## Mandatory Before Any Edit
+- Before editing ANY file, ALWAYS run: git stash push -m "backup-before-edit" || true
+- After completing the task successfully, drop the stash: git stash drop || true
+- If something goes wrong, restore with: git stash pop
+- NEVER skip the backup step. This is non-negotiable.
+- Before deleting any function, component, route, or file — search the entire codebase for references first using grep/ripgrep. If ANY reference exists, DO NOT delete.
+- NEVER remove code you didn't add in this session unless explicitly asked to remove THAT SPECIFIC code.
