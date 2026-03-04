@@ -51,12 +51,12 @@ export default function TeamAssignmentScreen() {
 
   const mechInspectorsQuery = useQuery({
     queryKey: ['inspectors', 'mechanical'],
-    queryFn: () => usersApi.list({ role: 'inspector', is_active: true }),
+    queryFn: () => usersApi.list({ role: 'inspector,specialist', is_active: true }),
   });
 
   const elecInspectorsQuery = useQuery({
     queryKey: ['inspectors', 'electrical'],
-    queryFn: () => usersApi.list({ role: 'inspector', is_active: true }),
+    queryFn: () => usersApi.list({ role: 'inspector,specialist', is_active: true }),
   });
 
   const inspectionLists: InspectionList[] = (listsQuery.data?.data as any)?.items ?? (listsQuery.data?.data as any)?.data ?? (listsQuery.data?.data as any) ?? [];

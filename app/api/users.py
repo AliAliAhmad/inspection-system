@@ -79,10 +79,14 @@ def list_users():
     if is_active is not None:
         query = query.filter_by(is_active=is_active.lower() == 'true')
 
-    # Filter by role
+    # Filter by role (supports comma-separated list, e.g. role=inspector,specialist)
     role = request.args.get('role')
     if role:
-        query = query.filter_by(role=role)
+        roles = [r.strip() for r in role.split(',') if r.strip()]
+        if len(roles) == 1:
+            query = query.filter_by(role=roles[0])
+        else:
+            query = query.filter(User.role.in_(roles))
 
     # Search by name or email
     search = request.args.get('search')
