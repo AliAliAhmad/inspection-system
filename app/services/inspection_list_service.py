@@ -240,6 +240,8 @@ class InspectionListService:
         def shifts_compatible(user_shift, assignment_shift):
             if not user_shift:
                 return True  # No roster = allow assignment
+            if user_shift == 'off':
+                return True  # Roster day-off can be overridden by admin/engineer
             if user_shift == assignment_shift:
                 return True
             if user_shift == 'day' and assignment_shift in ('morning', 'afternoon', 'day'):
