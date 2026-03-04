@@ -236,7 +236,8 @@ export default function UsersPage() {
       message.success(t('users.importSuccess', 'Import completed'));
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.message || 'Import failed');
+      const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Import failed';
+      message.error(msg, 5);
     },
   });
 
@@ -1129,19 +1130,42 @@ export default function UsersPage() {
               <li>Role: admin, inspector, specialist, engineer, quality_engineer, maintenance</li>
             </ul>
           } type="info" showIcon />
-          <input type="file" accept=".xlsx,.xls" onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) { importMutation.mutate(file); e.target.value = ''; }
-          }} />
-          {importMutation.isPending && <Text>Uploading...</Text>}
+          <Upload
+            accept=".xlsx,.xls"
+            showUploadList={false}
+            beforeUpload={(file) => {
+              importMutation.mutate(file as unknown as File);
+              return false; // prevent default upload
+            }}
+            disabled={importMutation.isPending}
+          >
+            <Button
+              icon={<UploadOutlined />}
+              loading={importMutation.isPending}
+              type="primary"
+              size="large"
+              style={{ width: '100%' }}
+            >
+              {importMutation.isPending ? 'Uploading...' : 'Click to Select Excel File (.xlsx)'}
+            </Button>
+          </Upload>
           {importResult && (
             <Alert
               message="Import Results"
               description={
-                <Space direction="vertical">
-                  <Text type="success">Created: {importResult.created.length}</Text>
-                  <Text type="warning">Updated: {importResult.updated.length}</Text>
-                  <Text type="danger">Failed: {importResult.failed.length}</Text>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text type="success">✅ Created: {importResult.created.length}</Text>
+                  <Text type="warning">🔄 Updated: {importResult.updated.length}</Text>
+                  <Text type="danger">❌ Failed: {importResult.failed.length}</Text>
+                  {importResult.failed.length > 0 && (
+                    <div style={{ maxHeight: 150, overflowY: 'auto', fontSize: 12, marginTop: 4 }}>
+                      {importResult.failed.map((f: any, i: number) => (
+                        <div key={i} style={{ color: '#ff4d4f' }}>
+                          Row {f.row} — {f.sap_id} {f.full_name}: {f.errors?.join(', ')}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </Space>
               }
               type={importResult.failed.length > 0 ? 'warning' : 'success'}
