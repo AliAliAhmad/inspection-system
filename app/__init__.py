@@ -587,6 +587,77 @@ def create_app(config_name='development'):
 
         print('\n🎉 Database is now clean and ready for fresh data!')
 
+    @app.cli.command('fix-role-id-mismatch')
+    def fix_role_id_mismatch():
+        """
+        Fix users whose role_id prefix does not match their current role.
+        - Specialists with INS/ENG prefix: promote their SPC minor_role_id to primary,
+          or generate a new SPC-XXX if none exists.
+        - Inspectors with SPC prefix: same logic in reverse.
+        Safe to run multiple times — skips users who are already correct.
+        """
+        from app.models import User
+        from app.api.users import _generate_role_id
+
+        role_prefixes = {
+            'inspector': 'INS',
+            'specialist': 'SPC',
+            'engineer': 'ENG',
+            'quality_engineer': 'QE',
+            'maintenance': 'MNT',
+            'admin': 'ADM',
+        }
+
+        users = User.query.filter(
+            User.role.in_(['inspector', 'specialist'])
+        ).all()
+
+        count = 0
+        for user in users:
+            expected_prefix = role_prefixes.get(user.role)
+            if not expected_prefix:
+                continue
+            current_prefix = user.role_id[:3] if user.role_id else ''
+            if current_prefix == expected_prefix:
+                continue  # Already correct
+
+            print(f'\n  {user.sap_id} {user.full_name}')
+            print(f'    role={user.role}, role_id={user.role_id}, minor_role_id={user.minor_role_id}')
+
+            minor_prefix = user.minor_role_id[:3] if user.minor_role_id else ''
+
+            if minor_prefix == expected_prefix:
+                # The correct ID is already sitting as the minor — swap
+                old_role_id = user.role_id
+                old_minor_role_id = user.minor_role_id
+                old_minor_role = user.minor_role
+                user.role_id = old_minor_role_id
+                user.minor_role_id = old_role_id
+                user.minor_role = user.role  # old role becomes minor
+                # role stays the same
+                print(f'    → SWAP: role_id={user.role_id}, minor_role_id={user.minor_role_id}')
+            else:
+                # No matching secondary ID — generate a fresh one
+                try:
+                    new_id = _generate_role_id(user.role)
+                    old_role_id = user.role_id
+                    user.minor_role_id = old_role_id
+                    user.minor_role = user.minor_role or 'inspector'  # keep or default
+                    user.role_id = new_id
+                    print(f'    → GENERATE: role_id={user.role_id}, minor_role_id={user.minor_role_id}')
+                except Exception as e:
+                    print(f'    ERROR: {e}')
+                    continue
+
+            count += 1
+
+        if count == 0:
+            print('All role IDs already match their roles. Nothing to do.')
+            return
+
+        db.session.commit()
+        print(f'\nDone. {count} user(s) fixed.')
+
     @app.cli.command('backfill-minor-ids')
     def backfill_minor_ids():
         """
