@@ -587,6 +587,43 @@ def create_app(config_name='development'):
 
         print('\n🎉 Database is now clean and ready for fresh data!')
 
+    @app.cli.command('backfill-minor-ids')
+    def backfill_minor_ids():
+        """
+        Assign missing minor role IDs to all inspectors and specialists who only have
+        one ID. Safe to run multiple times — skips users who already have both IDs.
+        Example: an inspector with role_id=INS-027 but no minor_role_id gets SPC-XXX.
+        """
+        from app.models import User
+        from app.api.users import _get_minor_role, _generate_role_id
+
+        users = User.query.filter(
+            User.role.in_(['inspector', 'specialist']),
+            User.minor_role_id.is_(None)
+        ).all()
+
+        if not users:
+            print('All inspectors/specialists already have both IDs. Nothing to do.')
+            return
+
+        print(f'Found {len(users)} user(s) missing a secondary ID:\n')
+        count = 0
+        for user in users:
+            minor_role = _get_minor_role(user.role)
+            if not minor_role:
+                continue
+            try:
+                new_id = _generate_role_id(minor_role)
+                user.minor_role = minor_role
+                user.minor_role_id = new_id
+                count += 1
+                print(f'  {user.role_id} ({user.full_name})  →  {new_id}')
+            except Exception as e:
+                print(f'  ERROR for {user.full_name}: {e}')
+
+        db.session.commit()
+        print(f'\nDone. {count} user(s) updated.')
+
     @app.cli.command('cleanup-data')
     def cleanup_data():
         """
