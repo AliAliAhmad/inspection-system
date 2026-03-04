@@ -49,23 +49,32 @@ export default function TeamAssignmentScreen() {
     queryFn: () => inspectionAssignmentsApi.getLists(),
   });
 
-  const mechInspectorsQuery = useQuery({
-    queryKey: ['inspectors', 'mechanical'],
-    queryFn: () => usersApi.list({ role: 'inspector,specialist', is_active: true }),
+  const inspectorQuery = useQuery({
+    queryKey: ['users-role-inspector'],
+    queryFn: () => usersApi.list({ role: 'inspector', is_active: true, per_page: 200 }),
+    staleTime: 0,
   });
 
-  const elecInspectorsQuery = useQuery({
-    queryKey: ['inspectors', 'electrical'],
-    queryFn: () => usersApi.list({ role: 'inspector,specialist', is_active: true }),
+  const specialistQuery = useQuery({
+    queryKey: ['users-role-specialist'],
+    queryFn: () => usersApi.list({ role: 'specialist', is_active: true, per_page: 200 }),
+    staleTime: 0,
   });
 
   const inspectionLists: InspectionList[] = (listsQuery.data?.data as any)?.items ?? (listsQuery.data?.data as any)?.data ?? (listsQuery.data?.data as any) ?? [];
 
-  const allMechInspectors: User[] = ((mechInspectorsQuery.data?.data as any)?.items ?? (mechInspectorsQuery.data?.data as any)?.data ?? (mechInspectorsQuery.data?.data as any) ?? [])
-    .filter((u: User) => u.specialization === 'mechanical' || !u.specialization);
+  const extractUsers = (q: typeof inspectorQuery): User[] =>
+    (q.data?.data as any)?.items ?? (q.data?.data as any)?.data ?? (q.data?.data as any) ?? [];
 
-  const allElecInspectors: User[] = ((elecInspectorsQuery.data?.data as any)?.items ?? (elecInspectorsQuery.data?.data as any)?.data ?? (elecInspectorsQuery.data?.data as any) ?? [])
-    .filter((u: User) => u.specialization === 'electrical' || !u.specialization);
+  const allUsers: User[] = [...extractUsers(inspectorQuery), ...extractUsers(specialistQuery)];
+
+  const allMechInspectors: User[] = allUsers.filter(
+    (u: User) => u.is_active && (u.specialization === 'mechanical' || !u.specialization)
+  );
+
+  const allElecInspectors: User[] = allUsers.filter(
+    (u: User) => u.is_active && (u.specialization === 'electrical' || !u.specialization)
+  );
 
   // Mutations
   const generateMutation = useMutation({

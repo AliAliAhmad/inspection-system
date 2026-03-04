@@ -45,13 +45,22 @@ export default function TeamAssignmentPage() {
 
   const lists: InspectionList[] = listsData?.data ?? [];
 
-  const { data: usersData } = useQuery({
-    queryKey: ['users-inspectors'],
-    queryFn: () => usersApi.list({ role: 'inspector,specialist', per_page: 200 }).then((r) => r.data),
+  const { data: inspectorData } = useQuery({
+    queryKey: ['users-role-inspector'],
+    queryFn: () => usersApi.list({ role: 'inspector', per_page: 200 }).then((r) => r.data),
     staleTime: 0,
   });
 
-  const inspectors: User[] = usersData?.data ?? [];
+  const { data: specialistData } = useQuery({
+    queryKey: ['users-role-specialist'],
+    queryFn: () => usersApi.list({ role: 'specialist', per_page: 200 }).then((r) => r.data),
+    staleTime: 0,
+  });
+
+  const inspectors: User[] = [
+    ...(inspectorData?.data ?? []),
+    ...(specialistData?.data ?? []),
+  ];
 
   const mechanicalInspectors = inspectors.filter(
     (u) => u.is_active && (u.specialization === 'mechanical' || !u.specialization)
