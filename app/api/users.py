@@ -671,6 +671,11 @@ def import_team():
             # Update allowed fields (role changes are permitted via import)
             if existing_user.role != role:
                 existing_user.role = role
+                # Generate new role_id to match the new role (e.g. INS-027 → SPC-031)
+                try:
+                    existing_user.role_id = _generate_role_id(role)
+                except Exception:
+                    pass  # Keep old role_id if generation fails
             existing_user.email = email if email else existing_user.email
             existing_user.phone = phone if phone else existing_user.phone
             existing_user.specialization = specialization if specialization else existing_user.specialization
