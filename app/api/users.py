@@ -99,6 +99,7 @@ def list_users():
         query = query.filter_by(shift=shift)
 
     # Search by name or email
+    search = request.args.get('search')
     if search:
         search_term = f'%{search}%'
         query = query.filter(
