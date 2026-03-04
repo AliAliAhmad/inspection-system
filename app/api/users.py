@@ -88,8 +88,17 @@ def list_users():
         else:
             query = query.filter(User.role.in_(roles))
 
+    # Filter by specialization
+    specialization = request.args.get('specialization')
+    if specialization:
+        query = query.filter(User.specialization.ilike(specialization))
+
+    # Filter by shift
+    shift = request.args.get('shift')
+    if shift:
+        query = query.filter_by(shift=shift)
+
     # Search by name or email
-    search = request.args.get('search')
     if search:
         search_term = f'%{search}%'
         query = query.filter(
