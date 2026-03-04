@@ -93,7 +93,7 @@ export const usersApi = {
     return getApiClient().post<ApiResponse<ImportResult>>(
       '/api/users/import',
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      { headers: { 'Content-Type': undefined } }, // let browser set boundary automatically
     );
   },
 

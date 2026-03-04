@@ -48,6 +48,7 @@ export default function TeamAssignmentPage() {
   const { data: usersData } = useQuery({
     queryKey: ['users-inspectors'],
     queryFn: () => usersApi.list({ role: 'inspector,specialist', per_page: 200 }).then((r) => r.data),
+    staleTime: 0,
   });
 
   const inspectors: User[] = usersData?.data ?? [];
