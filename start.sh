@@ -79,6 +79,22 @@ with app.app_context():
         db.session.rollback()
         print('inspection_assignments.template_id already exists')
 
+    try:
+        db.session.execute(text('ALTER TABLE inspection_assignments ADD COLUMN mech_penalty_applied BOOLEAN DEFAULT FALSE'))
+        db.session.commit()
+        print('Added mech_penalty_applied column')
+    except Exception:
+        db.session.rollback()
+        print('mech_penalty_applied already exists')
+
+    try:
+        db.session.execute(text('ALTER TABLE inspection_assignments ADD COLUMN elec_penalty_applied BOOLEAN DEFAULT FALSE'))
+        db.session.commit()
+        print('Added elec_penalty_applied column')
+    except Exception:
+        db.session.rollback()
+        print('elec_penalty_applied already exists')
+
     # Create roster_entries table
     try:
         db.session.execute(text('''

@@ -698,8 +698,111 @@ def init_scheduler(app):
         replace_existing=True
     )
 
+    # =========================================================================
+    # Inspection Overdue Penalty Jobs
+    # =========================================================================
+
+    @run_with_context
+    def apply_inspection_overdue_penalties():
+        """
+        Deduct 0.25 stars from inspectors who haven't completed their
+        inspection (up to verdict) within 48 hours of the assignment's target date.
+        Runs every 6 hours. Applied once per assignment per inspector.
+        """
+        from datetime import datetime, timedelta
+        from app.models import InspectionAssignment, Notification
+        from app.models.inspection_list import InspectionList
+        from app.models.user_level import UserLevel
+        from app.extensions import db
+
+        PENALTY = 0.25
+        now = datetime.utcnow()
+        # target_date is a date — treat it as midnight UTC, add 48h
+        cutoff_date = (now - timedelta(hours=48)).date()
+
+        # Assignments past the 48h window that still have unfinished inspectors
+        assignments = (
+            InspectionAssignment.query
+            .join(InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id)
+            .filter(
+                InspectionList.target_date <= cutoff_date,
+                InspectionAssignment.status.in_([
+                    'assigned', 'in_progress', 'mech_complete', 'elec_complete'
+                ]),
+            )
+            .all()
+        )
+
+        penalized = 0
+        for a in assignments:
+            # Mechanical inspector — not done and penalty not yet applied
+            if (a.mechanical_inspector_id
+                    and not a.mech_penalty_applied
+                    and a.mech_completed_at is None):
+                level = UserLevel.query.filter_by(user_id=a.mechanical_inspector_id).first()
+                if level:
+                    level.avg_rating = max(0.0, round((level.avg_rating or 0.0) - PENALTY, 2))
+                db.session.add(Notification(
+                    user_id=a.mechanical_inspector_id,
+                    type='inspection_penalty',
+                    title='Inspection Penalty Applied',
+                    title_ar='تم تطبيق خصم الفحص',
+                    message=(
+                        f'0.25 stars deducted from your rating because inspection '
+                        f'assignment #{a.id} was not completed within 48 hours.'
+                    ),
+                    message_ar=(
+                        f'تم خصم 0.25 نجمة من تقييمك لأن مهمة الفحص #{a.id} '
+                        f'لم تُكتمل خلال 48 ساعة.'
+                    ),
+                    priority='warning',
+                    related_type='inspection_assignment',
+                    related_id=a.id,
+                ))
+                a.mech_penalty_applied = True
+                penalized += 1
+
+            # Electrical inspector — not done and penalty not yet applied
+            if (a.electrical_inspector_id
+                    and not a.elec_penalty_applied
+                    and a.elec_completed_at is None):
+                level = UserLevel.query.filter_by(user_id=a.electrical_inspector_id).first()
+                if level:
+                    level.avg_rating = max(0.0, round((level.avg_rating or 0.0) - PENALTY, 2))
+                db.session.add(Notification(
+                    user_id=a.electrical_inspector_id,
+                    type='inspection_penalty',
+                    title='Inspection Penalty Applied',
+                    title_ar='تم تطبيق خصم الفحص',
+                    message=(
+                        f'0.25 stars deducted from your rating because inspection '
+                        f'assignment #{a.id} was not completed within 48 hours.'
+                    ),
+                    message_ar=(
+                        f'تم خصم 0.25 نجمة من تقييمك لأن مهمة الفحص #{a.id} '
+                        f'لم تُكتمل خلال 48 ساعة.'
+                    ),
+                    priority='warning',
+                    related_type='inspection_assignment',
+                    related_id=a.id,
+                ))
+                a.elec_penalty_applied = True
+                penalized += 1
+
+        if penalized:
+            db.session.commit()
+            logger.info("Inspection overdue penalties applied: %d inspector(s) penalized", penalized)
+
+    scheduler.add_job(
+        apply_inspection_overdue_penalties,
+        IntervalTrigger(hours=6),
+        id='apply_inspection_overdue_penalties',
+        name='Apply 0.25-star penalty for overdue inspections every 6 hours',
+        replace_existing=True
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
-    logger.info("Background scheduler started with 22 scheduled jobs")
+    logger.info("Background scheduler started with 23 scheduled jobs")
 
     return scheduler

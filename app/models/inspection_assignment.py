@@ -59,6 +59,10 @@ class InspectionAssignment(db.Model):
     mech_points_awarded = db.Column(db.Integer, default=0)
     elec_points_awarded = db.Column(db.Integer, default=0)
 
+    # Overdue penalty tracking (applied once per inspector after 48h)
+    mech_penalty_applied = db.Column(db.Boolean, default=False)
+    elec_penalty_applied = db.Column(db.Boolean, default=False)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
