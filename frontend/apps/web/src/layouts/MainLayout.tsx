@@ -58,7 +58,7 @@ const LAUNCHER_CATEGORIES: LauncherCategory[] = [
       { key: 'overdue', emoji: '\u23F0', label: 'Overdue', labelAr: '\u0645\u062A\u0623\u062E\u0631', path: '/admin/overdue', roles: ['admin', 'engineer'] },
       { key: 'approvals', emoji: '\u2714\uFE0F', label: 'Approvals', labelAr: '\u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0627\u062A', path: '/admin/approvals', roles: ['admin'] },
       { key: 'my-work-plan', emoji: '\u{1F4CB}', label: 'My Work Plan', labelAr: '\u062E\u0637\u0629 \u0639\u0645\u0644\u064A', path: '/my-work-plan', roles: ['inspector', 'specialist', 'engineer'] },
-      { key: 'my-assignments', emoji: '\u{1F4CB}', label: 'My Assignments', labelAr: '\u0645\u0647\u0627\u0645\u064A', path: '/inspector/assignments', roles: ['inspector'] },
+      { key: 'my-assignments', emoji: '\u{1F4CB}', label: 'My Assignments', labelAr: '\u0645\u0647\u0627\u0645\u064A', path: '/inspector/assignments', roles: ['inspector', 'specialist'] },
       { key: 'my-jobs-specialist', emoji: '\u{1F527}', label: 'My Jobs', labelAr: '\u0623\u0639\u0645\u0627\u0644\u064A', path: '/specialist/jobs', roles: ['specialist'] },
       { key: 'my-jobs-engineer', emoji: '\u{1F6E0}\uFE0F', label: 'My Jobs', labelAr: '\u0623\u0639\u0645\u0627\u0644\u064A', path: '/engineer/jobs', roles: ['engineer'] },
     ],

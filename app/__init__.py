@@ -695,6 +695,78 @@ def create_app(config_name='development'):
         db.session.commit()
         print(f'\nDone. {count} user(s) updated.')
 
+    @app.cli.command('fix-assignment-templates')
+    def fix_assignment_templates():
+        """
+        Fix InspectionAssignments that have a null template_id.
+        Scans active assignments, looks up the correct template by equipment type
+        (same logic as start_inspection), and updates the record.
+        Run this whenever assignments are created without a template (e.g. after
+        adding new equipment types or routines).
+        """
+        from app.models import InspectionAssignment, Equipment, ChecklistTemplate, InspectionRoutine
+
+        active_statuses = ['assigned', 'in_progress', 'mech_complete', 'elec_complete', 'both_complete']
+        assignments = InspectionAssignment.query.filter(
+            InspectionAssignment.template_id.is_(None),
+            InspectionAssignment.status.in_(active_statuses),
+        ).all()
+
+        if not assignments:
+            print('No assignments with null template_id found. Nothing to do.')
+            return
+
+        print(f'Found {len(assignments)} assignment(s) with null template_id:\n')
+        fixed = 0
+        skipped = 0
+
+        for a in assignments:
+            equipment = db.session.get(Equipment, a.equipment_id)
+            if not equipment:
+                print(f'  Assignment {a.id}: equipment {a.equipment_id} not found — skipped')
+                skipped += 1
+                continue
+
+            eq_type = equipment.equipment_type
+            template = None
+
+            # Fallback 1a: exact match on ChecklistTemplate.equipment_type
+            template = ChecklistTemplate.query.filter_by(
+                equipment_type=eq_type, is_active=True
+            ).first()
+
+            # Fallback 1b: comma-separated list match
+            if not template:
+                normalized = eq_type.lower().replace(' ', '_')
+                for t in ChecklistTemplate.query.filter_by(is_active=True).all():
+                    if t.equipment_type and ',' in t.equipment_type:
+                        if normalized in [x.strip() for x in t.equipment_type.split(',')]:
+                            template = t
+                            break
+
+            # Fallback 2: via InspectionRoutine asset_types
+            if not template:
+                for routine in InspectionRoutine.query.filter_by(is_active=True).all():
+                    if eq_type in (routine.asset_types or []):
+                        template = db.session.get(ChecklistTemplate, routine.template_id)
+                        if template:
+                            break
+
+            if template:
+                a.template_id = template.id
+                fixed += 1
+                print(f'  Assignment {a.id} ({eq_type}): → template {template.id} "{template.name}"')
+            else:
+                skipped += 1
+                print(f'  Assignment {a.id} ({eq_type}): no template found — skipped')
+
+        if fixed:
+            db.session.commit()
+            print(f'\nDone. {fixed} assignment(s) fixed, {skipped} skipped.')
+        else:
+            print(f'\nNo assignments could be fixed. {skipped} skipped (no matching template).')
+            print('Check that ChecklistTemplates exist for the equipment types above.')
+
     @app.cli.command('cleanup-data')
     def cleanup_data():
         """
