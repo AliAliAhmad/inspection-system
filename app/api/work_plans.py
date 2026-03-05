@@ -26,7 +26,6 @@ from app.utils.decorators import get_current_user, admin_required as admin_decor
 from app.services.notification_service import NotificationService
 from app.services.work_plan_ai_service import WorkPlanAIService
 from datetime import datetime, timedelta, date
-import pandas as pd
 from io import BytesIO
 import json
 
@@ -1473,6 +1472,7 @@ def import_sap_orders():
         raise ValidationError("File must be Excel format (.xlsx or .xls)")
 
     try:
+        import pandas as pd
         df = pd.read_excel(BytesIO(file.read()))
         # Normalize column names
         df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
@@ -1760,6 +1760,7 @@ def download_sap_import_template():
         'note': ['Check bearings', 'Urgent - safety issue', ''],
     }
 
+    import pandas as pd
     df = pd.DataFrame(sample_data)
 
     # Create Excel file in memory
@@ -1828,6 +1829,7 @@ def download_materials_template():
         'min_stock': [15, 50, 10],
     }
 
+    import pandas as pd
     df = pd.DataFrame(sample_data)
 
     # Create Excel file in memory
@@ -4733,6 +4735,7 @@ def export_plan_report(plan_id):
                 'Materials': materials_list
             })
 
+    import pandas as pd
     df = pd.DataFrame(rows)
 
     output = BytesIO()
