@@ -741,7 +741,7 @@ def init_scheduler(app):
                     and a.mech_completed_at is None):
                 level = UserLevel.query.filter_by(user_id=a.mechanical_inspector_id).first()
                 if level:
-                    level.avg_rating = max(0.0, round((level.avg_rating or 0.0) - PENALTY, 2))
+                    level.avg_rating = round((level.avg_rating or 0.0) - PENALTY, 2)
                 db.session.add(Notification(
                     user_id=a.mechanical_inspector_id,
                     type='inspection_penalty',
@@ -768,7 +768,7 @@ def init_scheduler(app):
                     and a.elec_completed_at is None):
                 level = UserLevel.query.filter_by(user_id=a.electrical_inspector_id).first()
                 if level:
-                    level.avg_rating = max(0.0, round((level.avg_rating or 0.0) - PENALTY, 2))
+                    level.avg_rating = round((level.avg_rating or 0.0) - PENALTY, 2)
                 db.session.add(Notification(
                     user_id=a.electrical_inspector_id,
                     type='inspection_penalty',
