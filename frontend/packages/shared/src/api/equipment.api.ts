@@ -88,6 +88,20 @@ export const equipmentApi = {
     return getApiClient().get<ApiResponse<any[]>>(`/api/equipment/${id}/status-history`);
   },
 
+  /** Get reading statistics for anomaly detection */
+  getReadingStats(equipmentId: number, readingType: string, days = 90) {
+    return getApiClient().get<ApiResponse<{
+      count: number;
+      avg: number | null;
+      min: number | null;
+      max: number | null;
+      stddev: number | null;
+      last_value: number | null;
+      reading_type: string;
+      days: number;
+    }>>(`/api/equipment/${equipmentId}/reading-stats/${readingType}`, { params: { days } });
+  },
+
   // KPI and Analytics endpoints
   getKPIs() {
     return getApiClient().get<ApiResponse<EquipmentKPIs>>('/api/equipment/kpis');

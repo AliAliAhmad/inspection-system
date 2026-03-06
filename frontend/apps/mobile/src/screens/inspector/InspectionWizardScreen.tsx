@@ -26,7 +26,7 @@ import { Photo } from '../../components/PhotoThumbnailGrid';
 import { QuickFill } from '../../components/inspection/AnswerTemplates';
 import { QuickNotes } from '../../components/inspection/QuickNotes';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -35,6 +35,7 @@ import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAuth } from '../../providers/AuthProvider';
 import {
   inspectionsApi,
+  equipmentApi,
   Inspection,
   InspectionAnswer,
   ChecklistItem,
@@ -182,6 +183,49 @@ export default function InspectionWizardScreen() {
     ? currentIndex - currentAssemblyGroup.startIndex + 1
     : 0;
   const assemblyTotal = currentAssemblyGroup?.count || 0;
+
+  // ── Improvement 4: Defect History Warning Badge ──
+  const equipmentId = inspection?.equipment_id;
+  const { data: itemHistoryData } = useQuery({
+    queryKey: ['checklist-item-history', equipmentId],
+    queryFn: async () => {
+      const res = await inspectionsApi.getChecklistItemHistory(equipmentId!);
+      return (res.data as any)?.data ?? res.data;
+    },
+    enabled: !!equipmentId,
+  });
+  const itemHistory: Record<string, { fail_count: number; total_count: number; has_active_defect: boolean; last_failed_at: string | null; severity: string | null; occurrence_count: number }> = itemHistoryData ?? {};
+
+  // ── Improvement 5: Smart Reading Anomaly Alert ──
+  const { data: readingStatsData } = useQuery({
+    queryKey: ['reading-stats', equipmentId],
+    queryFn: async () => {
+      const res = await equipmentApi.getReadingStats(equipmentId!, 'rnr');
+      return (res.data as any)?.data ?? res.data;
+    },
+    enabled: !!equipmentId,
+  });
+  const readingStats: { count: number; avg: number; min: number; max: number; stddev: number; last_value: number; reading_type: string; days: number } | null = readingStatsData ?? null;
+
+  // ── Improvement 6: Auto-Urgency Suggestion ──
+  const [autoSuggestedUrgency, setAutoSuggestedUrgency] = useState<Record<number, number>>({});
+
+  // ── Improvement 7: Timer & Pace Indicator ──
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const inspectionStartedAt = inspection?.started_at;
+  // Get deadline from the assignment data (cast as any since it may come from a broader response)
+  const assignmentDeadline = (inspection as any)?.assignment?.deadline ?? (inspection as any)?.deadline ?? null;
+
+  useEffect(() => {
+    if (!inspectionStartedAt) return;
+    const startTime = new Date(inspectionStartedAt).getTime();
+    // Set initial elapsed
+    setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+    const interval = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [inspectionStartedAt]);
 
   // Track pre-filled items from colleague
   const [prefilledItems, setPrefilledItems] = useState<Record<number, { name: string; type: string }>>({});
@@ -489,12 +533,36 @@ export default function InspectionWizardScreen() {
       });
     }
 
+    // ── Improvement 6: Auto-Urgency Suggestion on Fail/No ──
+    const isFailing = (currentItem.answer_type === 'pass_fail' && value === 'fail') ||
+                      (currentItem.answer_type === 'yes_no' && value === 'no');
+    let suggestedUrgency: number | undefined;
+    if (isFailing) {
+      const history = itemHistory[String(currentItem.id)];
+      const colleagueAnswer = colleagueData?.answers?.find((a: any) => a.checklist_item_id === currentItem.id);
+      const colleagueUrgency = colleagueAnswer?.urgency_level;
+
+      if (history?.has_active_defect) {
+        suggestedUrgency = 3; // Critical
+      } else if (history && history.fail_count >= 2) {
+        suggestedUrgency = 2; // Needs Attention
+      } else if (typeof colleagueUrgency === 'number' && colleagueUrgency >= 2) {
+        suggestedUrgency = colleagueUrgency;
+      } else {
+        suggestedUrgency = 1; // Monitor
+      }
+      setAutoSuggestedUrgency(prev => ({ ...prev, [currentItem.id]: suggestedUrgency! }));
+    }
+
     setLocalAnswers((prev) => ({
       ...prev,
       [currentItem.id]: {
         ...prev[currentItem.id],
         answer_value: value,
         skipped: false,
+        ...(suggestedUrgency !== undefined && prev[currentItem.id]?.urgency_level === undefined
+          ? { urgency_level: suggestedUrgency }
+          : {}),
       },
     }));
 
@@ -508,10 +576,12 @@ export default function InspectionWizardScreen() {
         checklist_item_id: currentItem.id,
         answer_value: value,
         comment: current?.comment,
-        urgency_level: current?.urgency_level,
+        urgency_level: suggestedUrgency !== undefined && current?.urgency_level === undefined
+          ? suggestedUrgency
+          : current?.urgency_level,
       });
     }, 500);
-  }, [currentItem, answerMutation, localAnswers]);
+  }, [currentItem, answerMutation, localAnswers, itemHistory, colleagueData]);
 
   // Handle urgency level change
   const handleUrgencyChange = useCallback((level: number) => {
@@ -1390,6 +1460,23 @@ export default function InspectionWizardScreen() {
                 ⚠️ {t('inspection.valueOutOfRange', 'Value is out of expected range')}
               </Text>
             )}
+            {/* Improvement 5: Smart Reading Anomaly Alert */}
+            {(() => {
+              if (!val || !readingStats || readingStats.count < 3) return null;
+              const numVal = parseFloat(val);
+              if (isNaN(numVal) || readingStats.avg === 0) return null;
+              const deviation = Math.abs((numVal - readingStats.avg) / readingStats.avg) * 100;
+              if (deviation < 10) return null;
+              const direction = numVal > readingStats.avg
+                ? t('inspection.aboveAverage', 'above average')
+                : t('inspection.belowAverage', 'below average');
+              const isRed = deviation > 20;
+              return (
+                <Text style={[styles.anomalyWarningText, isRed && styles.anomalyWarningTextRed]}>
+                  {isRed ? '\uD83D\uDD34' : '\u26A0'} {Math.round(deviation)}% {direction} ({t('inspection.avg', 'avg')}: {Math.round(readingStats.avg)})
+                </Text>
+              );
+            })()}
           </View>
         );
 
@@ -1616,6 +1703,35 @@ export default function InspectionWizardScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Improvement 4: Defect History Warning Badge */}
+          {currentItem && itemHistory[String(currentItem.id)] && (() => {
+            const hist = itemHistory[String(currentItem.id)];
+            const isActive = hist.has_active_defect;
+            return (
+              <TouchableOpacity
+                style={[styles.defectHistoryBadge, isActive && styles.defectHistoryBadgeRed]}
+                onPress={() => {
+                  Alert.alert(
+                    t('inspection.defectHistory', 'Defect History'),
+                    `${t('inspection.failCount', 'Failed')}: ${hist.fail_count} / ${hist.total_count}\n` +
+                    (hist.last_failed_at ? `${t('inspection.lastFailed', 'Last failed')}: ${new Date(hist.last_failed_at).toLocaleDateString()}\n` : '') +
+                    (hist.severity ? `${t('inspection.severity', 'Severity')}: ${hist.severity}\n` : '') +
+                    `${t('inspection.occurrences', 'Occurrences')}: ${hist.occurrence_count}`,
+                    [{ text: 'OK' }]
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.defectHistoryBadgeText, isActive && styles.defectHistoryBadgeTextRed]}>
+                  {isActive
+                    ? `\uD83D\uDD34 ${t('inspection.activeDefect', 'Active defect')} (${t('inspection.failedXTimes', 'failed {{count}} times').replace('{{count}}', String(hist.fail_count))})`
+                    : `\u26A0 ${t('inspection.failedXOfY', 'Failed {{x}} of {{y}} inspections').replace('{{x}}', String(hist.fail_count)).replace('{{y}}', String(hist.total_count))}`
+                  }
+                </Text>
+              </TouchableOpacity>
+            );
+          })()}
+
           {/* Pre-filled from colleague indicator */}
           {currentItem && prefilledItems[currentItem.id] && (
             <View style={[styles.prefilledBadge, isArabic && { flexDirection: 'row-reverse', borderLeftWidth: 0, borderRightWidth: 4, borderRightColor: '#1976D2' }]}>
@@ -1680,6 +1796,7 @@ export default function InspectionWizardScreen() {
               { level: 3, label: t('inspection.urgencyCritical', 'Crit'), color: '#F44336' },
             ] as const).map(({ level, label, color }, idx, arr) => {
               const isActive = currentAnswer?.urgency_level === level;
+              const isSuggested = currentItem && autoSuggestedUrgency[currentItem.id] === level;
               return (
                 <TouchableOpacity
                   key={level}
@@ -1700,6 +1817,9 @@ export default function InspectionWizardScreen() {
                   >
                     {label}
                   </Text>
+                  {isSuggested && isActive && (
+                    <Text style={styles.suggestedTag}>{t('inspection.suggested', 'Suggested')}</Text>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -1871,8 +1991,37 @@ export default function InspectionWizardScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Center: mini progress + hint pill */}
+        {/* Center: mini progress + hint pill + timer */}
         <View style={styles.navCenter}>
+          {/* Improvement 7: Timer & Pace Indicator */}
+          {totalItems > 0 && elapsedSeconds > 0 && (() => {
+            const elapsedMin = Math.floor(elapsedSeconds / 60);
+            const avgSecondsPerQ = answeredCount > 0 ? elapsedSeconds / answeredCount : 0;
+            const remainingQ = totalItems - answeredCount;
+            const estRemainingMin = avgSecondsPerQ > 0 ? Math.ceil((avgSecondsPerQ * remainingQ) / 60) : 0;
+            const estFinishTime = Date.now() + estRemainingMin * 60000;
+
+            let paceColor = '#4CAF50'; // green
+            if (assignmentDeadline) {
+              const deadlineTime = new Date(assignmentDeadline).getTime();
+              const hoursToDeadline = (deadlineTime - estFinishTime) / 3600000;
+              if (hoursToDeadline < 0) paceColor = '#F44336'; // red
+              else if (hoursToDeadline < 2) paceColor = '#FF9800'; // yellow
+            }
+
+            const formatTime = (min: number) => {
+              if (min < 60) return `${min}min`;
+              const h = Math.floor(min / 60);
+              const m = min % 60;
+              return m > 0 ? `${h}h ${m}min` : `${h}h`;
+            };
+
+            return (
+              <Text style={[styles.timerText, { color: paceColor }]}>
+                {'\u23F1'} {formatTime(elapsedMin)} {'\u2022'} {answeredCount}/{totalItems} {'\u2022'} ~{formatTime(estRemainingMin)} {t('inspection.left', 'left')}
+              </Text>
+            );
+          })()}
           <View style={styles.navTopRow}>
             <Text style={styles.navProgressText}>
               {currentIndex + 1} <Text style={styles.navProgressOf}>{t('inspection.of', 'of')}</Text> {totalItems}
@@ -2760,5 +2909,53 @@ const styles = StyleSheet.create({
   aiAnalysisTextAr: {
     textAlign: 'right',
     fontFamily: 'System',
+  },
+  // ─── Improvement 4: Defect History Warning Badge ───
+  defectHistoryBadge: {
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9800',
+  },
+  defectHistoryBadgeRed: {
+    backgroundColor: '#FFEBEE',
+    borderLeftColor: '#F44336',
+  },
+  defectHistoryBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E65100',
+  },
+  defectHistoryBadgeTextRed: {
+    color: '#C62828',
+  },
+  // ─── Improvement 5: Smart Reading Anomaly Alert ───
+  anomalyWarningText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E65100',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  anomalyWarningTextRed: {
+    color: '#C62828',
+  },
+  // ─── Improvement 6: Auto-Urgency Suggested tag ───
+  suggestedTag: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 1,
+    letterSpacing: 0.3,
+  },
+  // ─── Improvement 7: Timer & Pace Indicator ───
+  timerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 2,
   },
 });

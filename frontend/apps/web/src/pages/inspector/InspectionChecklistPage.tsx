@@ -16,6 +16,7 @@ import {
   message,
   Popconfirm,
   Descriptions,
+  Tooltip,
 } from 'antd';
 import {
   CameraOutlined,
@@ -28,12 +29,15 @@ import {
   AudioOutlined,
   SoundOutlined,
   VideoCameraOutlined,
+  ClockCircleOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   inspectionsApi,
+  equipmentApi,
   voiceApi,
   aiApi,
   Inspection,
@@ -167,6 +171,54 @@ export default function InspectionChecklistPage() {
   });
 
   const inspectionId = inspection?.id;
+  const equipmentId = inspection?.equipment_id;
+
+  // Improvement 4: Fetch defect history per checklist item
+  const { data: itemHistoryData } = useQuery({
+    queryKey: ['checklist-item-history', equipmentId],
+    queryFn: () =>
+      inspectionsApi.getChecklistItemHistory(equipmentId!).then((r) => (r.data as any).data as Record<string, {
+        fail_count: number;
+        total_count: number;
+        has_active_defect: boolean;
+        last_failed_at: string | null;
+        severity: string | null;
+        occurrence_count: number;
+      }>),
+    enabled: !!equipmentId,
+  });
+
+  // Improvement 5: Fetch reading stats for numeric anomaly detection
+  const { data: readingStatsData } = useQuery({
+    queryKey: ['reading-stats', equipmentId],
+    queryFn: () =>
+      equipmentApi.getReadingStats(equipmentId!, 'rnr').then((r) => (r.data as any).data as {
+        count: number;
+        avg: number;
+        min: number;
+        max: number;
+        stddev: number;
+        last_value: number;
+        reading_type: string;
+        days: number;
+      }),
+    enabled: !!equipmentId,
+  });
+
+  // Improvement 7: Fetch assignment details for deadline
+  const { data: assignmentDetails } = useQuery({
+    queryKey: ['assignment-details', assignmentId],
+    queryFn: () =>
+      inspectionsApi.getAssignmentFullDetails(assignmentId).then((r) => (r.data as any).data),
+    enabled: !!assignmentId,
+  });
+
+  // Improvement 7: Timer state — updates every 30s
+  const [timerNow, setTimerNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setTimerNow(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch colleague answers for pre-fill
   const { data: colleagueData } = useOfflineQuery({
@@ -379,6 +431,55 @@ export default function InspectionChecklistPage() {
               `${progress.answered_items} / ${progress.total_items}`
             }
           />
+          {/* Improvement 7: Timer & Pace Indicator */}
+          {inspection.started_at && progress.total_items > 0 && (() => {
+            const startedAt = new Date(inspection.started_at).getTime();
+            const elapsedMs = timerNow - startedAt;
+            const elapsedMin = Math.max(1, Math.floor(elapsedMs / 60000));
+            const answered = progress.answered_items;
+            const total = progress.total_items;
+            const remaining = total - answered;
+            const ratePerMin = answered > 0 ? elapsedMin / answered : 0;
+            const estRemainingMin = answered > 0 ? Math.ceil(remaining * ratePerMin) : 0;
+
+            const deadlineStr = assignmentDetails?.deadline;
+            let paceColor = '#52c41a'; // green
+            if (deadlineStr) {
+              const deadlineMs = new Date(deadlineStr).getTime();
+              const timeLeftMin = (deadlineMs - timerNow) / 60000;
+              if (estRemainingMin > timeLeftMin) {
+                paceColor = '#ff4d4f'; // red
+              } else if (estRemainingMin > timeLeftMin * 0.7) {
+                paceColor = '#faad14'; // orange
+              }
+            } else if (elapsedMin > 90) {
+              paceColor = '#faad14';
+            }
+
+            const fmtDuration = (mins: number) => {
+              if (mins < 60) return `${mins}${t('inspection.timerMin', 'min')}`;
+              const h = Math.floor(mins / 60);
+              const m = mins % 60;
+              return m > 0
+                ? `${h}${t('inspection.timerH', 'h')} ${m}${t('inspection.timerMin', 'min')}`
+                : `${h}${t('inspection.timerH', 'h')}`;
+            };
+
+            return (
+              <div style={{ marginTop: 8 }}>
+                <Typography.Text style={{ color: paceColor, fontSize: 13, fontWeight: 500 }}>
+                  <ClockCircleOutlined style={{ marginInlineEnd: 4 }} />
+                  {fmtDuration(elapsedMin)} • {answered}/{total}
+                  {answered > 0 && remaining > 0 && (
+                    <span> • ~{fmtDuration(estRemainingMin)} {t('inspection.timerLeft', 'left')}</span>
+                  )}
+                  {answered >= total && (
+                    <span> • {t('inspection.timerDone', 'Complete!')}</span>
+                  )}
+                </Typography.Text>
+              </div>
+            );
+          })()}
         </Card>
       )}
 
@@ -399,6 +500,9 @@ export default function InspectionChecklistPage() {
               inspectionId={inspectionId!}
               refetchInspection={refetchInspection}
               isSubmitted={inspection.status !== 'draft'}
+              itemHistory={itemHistoryData?.[String(item.id)]}
+              readingStats={readingStatsData}
+              colleagueAnswerForUrgency={colleagueAnswersMap.get(item.id)}
             />
           );
         }}
@@ -441,6 +545,26 @@ export default function InspectionChecklistPage() {
 /* Checklist Item Sub-Component                                       */
 /* ------------------------------------------------------------------ */
 
+interface ItemHistoryEntry {
+  fail_count: number;
+  total_count: number;
+  has_active_defect: boolean;
+  last_failed_at: string | null;
+  severity: string | null;
+  occurrence_count: number;
+}
+
+interface ReadingStatsEntry {
+  count: number;
+  avg: number;
+  min: number;
+  max: number;
+  stddev: number;
+  last_value: number;
+  reading_type: string;
+  days: number;
+}
+
 interface ChecklistItemCardProps {
   item: ChecklistItem;
   existingAnswer?: InspectionAnswer;
@@ -451,6 +575,12 @@ interface ChecklistItemCardProps {
   inspectionId: number;
   refetchInspection: () => void;
   isSubmitted: boolean;
+  // Improvement 4: Defect history for this item
+  itemHistory?: ItemHistoryEntry;
+  // Improvement 5: Reading stats for numeric anomaly detection
+  readingStats?: ReadingStatsEntry;
+  // Improvement 6: Colleague answer for auto-urgency
+  colleagueAnswerForUrgency?: any;
 }
 
 // Helper to extract analysis from comment
@@ -575,6 +705,9 @@ function ChecklistItemCard({
   inspectionId,
   refetchInspection,
   isSubmitted,
+  itemHistory,
+  readingStats,
+  colleagueAnswerForUrgency,
 }: ChecklistItemCardProps) {
   const { t, i18n } = useTranslation();
   const [voiceNoteId, setVoiceNoteId] = useState<number | undefined>(
@@ -682,6 +815,37 @@ function ChecklistItemCard({
   const hasExistingVoice = !!(existingAnswer?.voice_note_id || voiceNoteId);
   const [showComment, setShowComment] = useState(isFailed || hasExistingVoice || !!existingAnswer?.comment);
 
+  // Improvement 5: Numeric reading anomaly detection
+  const [numericAnomaly, setNumericAnomaly] = useState<{ type: 'warning' | 'error'; message: string } | null>(null);
+
+  // Improvement 6: Auto-urgency suggestion
+  const [suggestedUrgency, setSuggestedUrgency] = useState<number | null>(null);
+  const [selectedUrgency, setSelectedUrgency] = useState<number | null>(null);
+  const [urgencyWasSuggested, setUrgencyWasSuggested] = useState(false);
+
+  // Improvement 6: Calculate and auto-suggest urgency when item fails
+  useEffect(() => {
+    if (!isFailed) {
+      setSuggestedUrgency(null);
+      setUrgencyWasSuggested(false);
+      return;
+    }
+    let urgency = 1; // default: Monitor
+    if (itemHistory?.has_active_defect) {
+      urgency = 3; // Critical
+    } else if (itemHistory && itemHistory.fail_count >= 2) {
+      urgency = 2; // Needs Attention
+    } else if (colleagueAnswerForUrgency?.urgency && colleagueAnswerForUrgency.urgency >= 2) {
+      urgency = colleagueAnswerForUrgency.urgency;
+    }
+    setSuggestedUrgency(urgency);
+    if (selectedUrgency === null) {
+      setSelectedUrgency(urgency);
+      setUrgencyWasSuggested(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFailed, itemHistory, colleagueAnswerForUrgency]);
+
   useEffect(() => {
     if (isFailed) setShowComment(true);
   }, [isFailed]);
@@ -725,10 +889,46 @@ function ChecklistItemCard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildAnalysisComment]);
 
+  // Improvement 5: Check numeric value against reading stats
+  const checkNumericAnomaly = useCallback((value: string) => {
+    if (item.answer_type !== 'numeric' || !readingStats || readingStats.count < 3) {
+      setNumericAnomaly(null);
+      return;
+    }
+    const num = parseFloat(value);
+    if (isNaN(num) || readingStats.avg === 0) {
+      setNumericAnomaly(null);
+      return;
+    }
+    const deviation = Math.abs(num - readingStats.avg) / Math.abs(readingStats.avg);
+    const pctStr = Math.round(deviation * 100);
+    const direction = num > readingStats.avg
+      ? t('inspection.aboveAvg', 'above average')
+      : t('inspection.belowAvg', 'below average');
+    const avgFormatted = readingStats.avg.toLocaleString(undefined, { maximumFractionDigits: 1 });
+
+    if (deviation > 0.2) {
+      setNumericAnomaly({
+        type: 'error',
+        message: `${pctStr}% ${direction} (${t('inspection.avg', 'avg')}: ${avgFormatted})`,
+      });
+    } else if (deviation > 0.1) {
+      setNumericAnomaly({
+        type: 'warning',
+        message: `${pctStr}% ${direction} (${t('inspection.avg', 'avg')}: ${avgFormatted})`,
+      });
+    } else {
+      setNumericAnomaly(null);
+    }
+  }, [item.answer_type, readingStats, t]);
+
   const handleAnswerChange = (value: string) => {
     setCurrentValue(value);
-    setIsPrefilledFromColleague(false); // Clear pre-fill indicator once user makes their own choice
-    // Include any AI analysis/transcription in the comment for persistence
+    setIsPrefilledFromColleague(false);
+    // Improvement 5: Check for anomaly on numeric answers
+    if (item.answer_type === 'numeric') {
+      checkNumericAnomaly(value);
+    }
     const analysisComment = buildAnalysisComment();
     onAnswer(item.id, value, analysisComment, voiceNoteId, voiceTranscription || undefined);
   };
@@ -1042,6 +1242,22 @@ function ChecklistItemCard({
           {existingAnswer && (
             <CheckCircleOutlined style={{ color: '#52c41a' }} />
           )}
+          {/* Improvement 4: Defect History Warning Badge */}
+          {itemHistory && (
+            itemHistory.has_active_defect ? (
+              <Tooltip title={`${t('inspection.failedTimes', 'Failed')} ${itemHistory.fail_count}/${itemHistory.total_count} | ${t('inspection.severity', 'Severity')}: ${itemHistory.severity || 'N/A'}`}>
+                <Tag color="red" style={{ cursor: 'help' }}>
+                  <WarningOutlined /> {t('inspection.activeDefect', 'Active defect')} ({t('inspection.failedTimes', 'failed')} {itemHistory.fail_count}x)
+                </Tag>
+              </Tooltip>
+            ) : itemHistory.fail_count > 0 ? (
+              <Tooltip title={`${t('inspection.lastFailed', 'Last failed')}: ${itemHistory.last_failed_at ? new Date(itemHistory.last_failed_at).toLocaleDateString() : 'N/A'} | ${t('inspection.severity', 'Severity')}: ${itemHistory.severity || 'N/A'}`}>
+                <Tag color="orange" style={{ cursor: 'help' }}>
+                  <WarningOutlined /> {t('inspection.failed', 'Failed')} {itemHistory.fail_count}/{itemHistory.total_count}
+                </Tag>
+              </Tooltip>
+            ) : null
+          )}
         </Space>
       }
     >
@@ -1069,6 +1285,49 @@ function ChecklistItemCard({
         )}
 
         {renderAnswerInput()}
+
+        {/* Improvement 5: Smart Reading Anomaly Alert */}
+        {numericAnomaly && (
+          <Alert
+            type={numericAnomaly.type}
+            message={numericAnomaly.message}
+            showIcon
+            style={{ padding: '4px 12px', fontSize: 12 }}
+            banner
+          />
+        )}
+
+        {/* Improvement 6: Auto-Urgency Suggestion */}
+        {isFailed && !isSubmitted && (
+          <div style={{
+            background: '#fff7e6',
+            border: '1px solid #ffd591',
+            borderRadius: 6,
+            padding: '8px 12px',
+          }}>
+            <Typography.Text strong style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+              {t('inspection.urgencyLevel', 'Urgency Level')}
+            </Typography.Text>
+            <Radio.Group
+              value={selectedUrgency}
+              onChange={(e) => {
+                setSelectedUrgency(e.target.value);
+                setUrgencyWasSuggested(e.target.value === suggestedUrgency);
+              }}
+              size="small"
+            >
+              <Radio.Button value={0}>{t('inspection.urgencyNone', 'None')}</Radio.Button>
+              <Radio.Button value={1}>{t('inspection.urgencyMonitor', 'Monitor')}</Radio.Button>
+              <Radio.Button value={2}>{t('inspection.urgencyAttention', 'Attention')}</Radio.Button>
+              <Radio.Button value={3}>{t('inspection.urgencyCritical', 'Critical')}</Radio.Button>
+            </Radio.Group>
+            {urgencyWasSuggested && selectedUrgency === suggestedUrgency && (
+              <Tag color="blue" style={{ marginInlineStart: 8, fontSize: 11 }}>
+                {t('inspection.suggested', 'Suggested')}
+              </Tag>
+            )}
+          </div>
+        )}
 
         {/* Action buttons */}
         {!isSubmitted && (

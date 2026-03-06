@@ -65,6 +65,7 @@ import {
 import dayjs from 'dayjs';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import InspectionFindingCard from '../../components/InspectionFindingCard';
+import { AnswerSummaryGrid } from '../../components/shared/AnswerSummaryGrid';
 
 const { RangePicker } = DatePicker;
 
@@ -891,6 +892,29 @@ export default function AllInspectionsPage() {
             <Typography.Title level={5} style={{ marginBottom: 0 }}>
               {t('inspection.answers', 'Answers')}
             </Typography.Title>
+
+            {(viewInspectionQuery.data.answers ?? []).length > 0 && (
+              <Card size="small" style={{ marginBottom: 8 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+                  {t('inspection.answersSummary', 'Quick Overview')} ({(viewInspectionQuery.data.answers ?? []).length})
+                </Typography.Text>
+                <AnswerSummaryGrid
+                  answers={(viewInspectionQuery.data.answers ?? []).map((a: any) => ({
+                    answer_value: a.answer_value ?? '',
+                    answer_type: a.checklist_item?.answer_type ?? 'text',
+                    urgency_level: a.urgency_level ?? 0,
+                    question_text: a.checklist_item?.question_text ?? '',
+                    category: a.checklist_item?.category ?? null,
+                    comment: a.comment ?? null,
+                    has_photo: !!a.photo_path || !!a.photos?.length,
+                    min_value: a.checklist_item?.min_value ?? null,
+                    max_value: a.checklist_item?.max_value ?? null,
+                    numeric_rule: a.checklist_item?.numeric_rule ?? null,
+                  }))}
+                  compact
+                />
+              </Card>
+            )}
 
             {(viewInspectionQuery.data.answers ?? []).length === 0 && (
               <Typography.Text type="secondary">{t('common.noData', 'No answers yet')}</Typography.Text>

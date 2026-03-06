@@ -213,6 +213,18 @@ export const inspectionsApi = {
     }>>(`/api/inspections/colleague-answers/${assignmentId}`);
   },
 
+  /** Get defect/failure history per checklist item for an equipment */
+  getChecklistItemHistory(equipmentId: number) {
+    return getApiClient().get<ApiResponse<Record<string, {
+      fail_count: number;
+      total_count: number;
+      has_active_defect: boolean;
+      last_failed_at: string | null;
+      severity: string | null;
+      occurrence_count: number;
+    }>>>(`/api/inspections/checklist-item-history/${equipmentId}`);
+  },
+
   remove(id: number) {
     return getApiClient().delete<ApiResponse>(`/api/inspections/${id}`);
   },

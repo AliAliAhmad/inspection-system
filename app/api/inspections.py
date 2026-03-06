@@ -2690,3 +2690,72 @@ def search_inspections():
         'count': len(inspections),
         'data': [i.to_dict(language=lang) for i in inspections]
     }), 200
+
+
+@bp.route('/checklist-item-history/<int:equipment_id>', methods=['GET'])
+@jwt_required()
+def get_checklist_item_history(equipment_id):
+    """
+    Get defect/failure history per checklist item for an equipment.
+    Used to show warning badges on items that have failed before.
+    """
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        raise NotFoundError(f"Equipment {equipment_id} not found")
+
+    inspections = Inspection.query.filter(
+        Inspection.equipment_id == equipment_id,
+        Inspection.status.in_(['submitted', 'reviewed'])
+    ).all()
+    inspection_ids = [i.id for i in inspections]
+
+    if not inspection_ids:
+        return jsonify({'status': 'success', 'data': {}}), 200
+
+    answer_stats = db.session.query(
+        InspectionAnswer.checklist_item_id,
+        func.count(InspectionAnswer.id).label('total_count'),
+        func.sum(
+            db.case(
+                (InspectionAnswer.answer_value.in_(['fail', 'no']), 1),
+                else_=0
+            )
+        ).label('fail_count'),
+        func.max(
+            db.case(
+                (InspectionAnswer.answer_value.in_(['fail', 'no']), InspectionAnswer.answered_at),
+                else_=None
+            )
+        ).label('last_failed_at'),
+    ).filter(
+        InspectionAnswer.inspection_id.in_(inspection_ids)
+    ).group_by(InspectionAnswer.checklist_item_id).all()
+
+    active_defects = Defect.query.filter(
+        Defect.inspection_id.in_(inspection_ids),
+        Defect.status.in_(['open', 'in_progress'])
+    ).all()
+    active_defect_items = {}
+    for d in active_defects:
+        if d.checklist_item_id:
+            active_defect_items[d.checklist_item_id] = {
+                'severity': d.severity,
+                'occurrence_count': d.occurrence_count,
+            }
+
+    result = {}
+    for stat in answer_stats:
+        item_id = stat.checklist_item_id
+        fail_count = int(stat.fail_count or 0)
+        if fail_count > 0:
+            defect_info = active_defect_items.get(item_id, {})
+            result[str(item_id)] = {
+                'fail_count': fail_count,
+                'total_count': int(stat.total_count or 0),
+                'has_active_defect': item_id in active_defect_items,
+                'last_failed_at': stat.last_failed_at.isoformat() if stat.last_failed_at else None,
+                'severity': defect_info.get('severity'),
+                'occurrence_count': defect_info.get('occurrence_count', 0),
+            }
+
+    return jsonify({'status': 'success', 'data': result}), 200

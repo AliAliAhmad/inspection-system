@@ -902,6 +902,49 @@ def get_equipment_status_history(equipment_id):
     }), 200
 
 
+@bp.route('/<int:equipment_id>/reading-stats/<reading_type>', methods=['GET'])
+@jwt_required()
+def get_reading_stats(equipment_id, reading_type):
+    """
+    Get statistical summary of equipment readings for anomaly detection.
+    """
+    from app.models.equipment_reading import EquipmentReading
+    import math
+
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        raise NotFoundError(f"Equipment with ID {equipment_id} not found")
+
+    days = request.args.get('days', 90, type=int)
+    readings = EquipmentReading.get_reading_history(equipment_id, reading_type, days=days)
+    values = [r.reading_value for r in readings if r.reading_value is not None and not r.is_faulty]
+
+    if not values:
+        return jsonify({
+            'status': 'success',
+            'data': {'count': 0, 'avg': None, 'min': None, 'max': None, 'stddev': None, 'last_value': None}
+        }), 200
+
+    avg = sum(values) / len(values)
+    variance = sum((v - avg) ** 2 for v in values) / len(values) if len(values) > 1 else 0
+    stddev = math.sqrt(variance)
+    latest = EquipmentReading.get_latest_reading(equipment_id, reading_type)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'count': len(values),
+            'avg': round(avg, 2),
+            'min': round(min(values), 2),
+            'max': round(max(values), 2),
+            'stddev': round(stddev, 2),
+            'last_value': latest.reading_value if latest and not latest.is_faulty else None,
+            'reading_type': reading_type,
+            'days': days,
+        }
+    }), 200
+
+
 # ============================================================
 # EQUIPMENT AI ENDPOINTS
 # ============================================================
