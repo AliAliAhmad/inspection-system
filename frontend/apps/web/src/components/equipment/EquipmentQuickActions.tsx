@@ -89,8 +89,8 @@ export function EquipmentQuickActions({
     },
     {
       key: 'issue',
-      icon: <ToolOutlined />,
-      label: t('equipment.reportIssue', 'Report Issue'),
+      icon: <EditOutlined />,
+      label: t('equipment.changeStatus', 'Change Status'),
       onClick: handleReportIssue,
     },
     {
@@ -116,7 +116,7 @@ export function EquipmentQuickActions({
           title={
             <Space>
               <ToolOutlined />
-              {t('equipment.reportIssueFor', 'Report Issue for')} {equipmentName}
+              {t('equipment.changeStatusFor', 'Change Status for')} {equipmentName}
             </Space>
           }
           open={issueModalOpen}
@@ -133,20 +133,22 @@ export function EquipmentQuickActions({
               name="status"
               label={t('equipment.newStatus', 'New Status')}
               rules={[{ required: true }]}
-              initialValue={currentStatus === 'active' ? 'under_maintenance' : currentStatus}
+              initialValue={currentStatus}
             >
               <Select>
+                <Select.Option value="active">{t('equipment.active', 'Active (Operational)')}</Select.Option>
                 <Select.Option value="under_maintenance">
                   {t('equipment.underMaintenance', 'Under Maintenance')}
                 </Select.Option>
                 <Select.Option value="paused">{t('equipment.paused', 'Paused')}</Select.Option>
                 <Select.Option value="stopped">{t('equipment.stoppedStatus', 'Stopped')}</Select.Option>
+                <Select.Option value="out_of_service">{t('equipment.outOfService', 'Out of Service')}</Select.Option>
               </Select>
             </Form.Item>
             <Form.Item
               name="reason"
-              label={t('equipment.issueDescription', 'Issue Description')}
-              rules={[{ required: true, message: t('equipment.issueRequired', 'Please describe the issue') }]}
+              label={t('equipment.reason', 'Reason')}
+              rules={[{ required: true, message: t('equipment.reasonRequired', 'Reason is required') }]}
             >
               <TextArea rows={3} placeholder={t('equipment.describeIssue', 'Describe the issue...')} />
             </Form.Item>
@@ -177,15 +179,15 @@ export function EquipmentQuickActions({
             Inspect
           </Button>
         </Tooltip>
-        <Tooltip title={t('equipment.reportIssue', 'Report Issue')}>
+        <Tooltip title={t('equipment.changeStatus', 'Change Status')}>
           <Button
             type="text"
             size="small"
-            icon={<ToolOutlined />}
+            icon={<EditOutlined />}
             onClick={handleReportIssue}
             style={{ fontSize: 11 }}
           >
-            Issue
+            Status
           </Button>
         </Tooltip>
         <Tooltip title={t('equipment.viewDetails', 'View Details')}>
@@ -222,20 +224,22 @@ export function EquipmentQuickActions({
             name="status"
             label={t('equipment.newStatus', 'New Status')}
             rules={[{ required: true }]}
-            initialValue={currentStatus === 'active' ? 'under_maintenance' : currentStatus}
+            initialValue={currentStatus}
           >
             <Select>
+              <Select.Option value="active">{t('equipment.active', 'Active (Operational)')}</Select.Option>
               <Select.Option value="under_maintenance">
                 {t('equipment.underMaintenance', 'Under Maintenance')}
               </Select.Option>
               <Select.Option value="paused">{t('equipment.paused', 'Paused')}</Select.Option>
               <Select.Option value="stopped">{t('equipment.stoppedStatus', 'Stopped')}</Select.Option>
+              <Select.Option value="out_of_service">{t('equipment.outOfService', 'Out of Service')}</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item
             name="reason"
-            label={t('equipment.issueDescription', 'Issue Description')}
-            rules={[{ required: true, message: t('equipment.issueRequired', 'Please describe the issue') }]}
+            label={t('equipment.reason', 'Reason')}
+            rules={[{ required: true, message: t('equipment.reasonRequired', 'Reason is required') }]}
           >
             <TextArea rows={3} placeholder={t('equipment.describeIssue', 'Describe the issue...')} />
           </Form.Item>
