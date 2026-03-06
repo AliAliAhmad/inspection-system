@@ -391,7 +391,7 @@ export function EquipmentBulkActionsBar({
           >
             <TextArea rows={2} placeholder={t('equipment.reasonPlaceholder', 'Enter reason...')} />
           </Form.Item>
-          <Form.Item name="next_action" label={t('equipment.nextAction', 'Next Action (optional)')}>
+          <Form.Item name="next_action" label={t('equipment.nextAction', 'Next Action')} rules={[{ required: true, message: t('equipment.nextActionRequired', 'Next action is required') }]}>
             <TextArea rows={2} placeholder={t('equipment.nextActionPlaceholder', 'What should be done next...')} />
           </Form.Item>
         </Form>

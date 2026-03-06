@@ -114,11 +114,11 @@ export const equipmentApi = {
   },
 
   bulkUpdateStatus(ids: number[], status: string, reason: string, next_action?: string) {
-    return getApiClient().put<ApiResponse<Equipment[]>>('/api/equipment/bulk-status', {
-      ids,
-      status,
+    return getApiClient().post<ApiResponse<Equipment[]>>('/api/equipment/bulk/status', {
+      equipment_ids: ids,
+      new_status: status,
       reason,
-      next_action,
+      next_action: next_action || reason,
     });
   },
 

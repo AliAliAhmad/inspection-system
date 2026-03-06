@@ -2665,9 +2665,11 @@ def get_equipment_downtime_cost(equipment_id):
 
 @bp.route('/bulk/status', methods=['POST'])
 @jwt_required()
-@admin_required()
 def bulk_update_status():
-    """Update status for multiple equipment at once. Admin only."""
+    """Update status for multiple equipment at once. Admin and Engineer."""
+    current_user = get_current_user()
+    if current_user.role not in ('admin', 'engineer'):
+        return jsonify({'status': 'error', 'message': 'Admin or engineer access required'}), 403
     from datetime import datetime as dt
 
     data = request.get_json()
@@ -2688,7 +2690,6 @@ def bulk_update_status():
     if new_status not in valid_statuses:
         raise ValidationError(f"new_status must be one of: {', '.join(valid_statuses)}")
 
-    current_user = get_current_user()
     now = dt.utcnow()
     results = {'updated': [], 'failed': [], 'skipped': []}
 
