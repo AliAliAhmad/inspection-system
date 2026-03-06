@@ -798,12 +798,12 @@ def get_or_start_by_assignment(assignment_id):
 
     if existing:
         inspection_dict = existing.to_dict(include_answers=True, language=language)
-        # Add checklist items, filtered by equipment sub-type + inspector category
+        # Add checklist items, filtered by equipment sub-type
         from app.models import ChecklistItem, Equipment
         template_items = ChecklistItem.query.filter_by(
             template_id=existing.template_id
         ).order_by(ChecklistItem.order_index).all()
-        # Filter by equipment sub-type
+        # Filter by equipment sub-type: questions with no type filter apply to all
         equipment_obj = db.session.get(Equipment, assignment.equipment_id)
         eqt_subtype = (equipment_obj.equipment_type_2 or equipment_obj.name) if equipment_obj else None
         if eqt_subtype:
@@ -811,18 +811,6 @@ def get_or_start_by_assignment(assignment_id):
                 item for item in template_items
                 if not item.equipment_type_filters
                 or eqt_subtype in item.applicable_equipment_types
-            ]
-        # Filter by inspector category: only show their category + NULL (shared) items
-        if current_user.id == assignment.mechanical_inspector_id:
-            inspector_category = 'mechanical'
-        elif current_user.id == assignment.electrical_inspector_id:
-            inspector_category = 'electrical'
-        else:
-            inspector_category = None
-        if inspector_category:
-            template_items = [
-                item for item in template_items
-                if item.category is None or item.category == inspector_category
             ]
         inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
 
