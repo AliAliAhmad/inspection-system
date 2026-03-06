@@ -601,6 +601,19 @@ def add_job(plan_id):
         work_plan_day_id=day.id
     ).scalar() or 0
 
+    # Validate difficulty if provided
+    difficulty = data.get('difficulty')
+    if difficulty and difficulty not in ('minor', 'major'):
+        raise ValidationError("difficulty must be 'minor' or 'major'")
+
+    # Validate engineer_id if provided
+    engineer_id = data.get('engineer_id')
+    if engineer_id:
+        from app.models import User as UserModel
+        eng = db.session.get(UserModel, engineer_id)
+        if not eng or eng.role not in ('engineer', 'admin'):
+            raise ValidationError("engineer_id must reference an engineer or admin user")
+
     job = WorkPlanJob(
         work_plan_day_id=day.id,
         job_type=job_type,
@@ -613,7 +626,9 @@ def add_job(plan_id):
         estimated_hours=float(data['estimated_hours']),
         position=max_position + 1,
         priority=data.get('priority', 'normal'),
-        notes=data.get('notes')
+        notes=data.get('notes'),
+        difficulty=difficulty,
+        engineer_id=engineer_id,
     )
 
     db.session.add(job)
@@ -847,6 +862,18 @@ def update_job(plan_id, job_id):
         job.position = data['position']
     if 'sap_order_number' in data:
         job.sap_order_number = data['sap_order_number']
+    if 'difficulty' in data:
+        if data['difficulty'] and data['difficulty'] not in ('minor', 'major'):
+            raise ValidationError("difficulty must be 'minor' or 'major'")
+        job.difficulty = data['difficulty']
+    if 'engineer_id' in data:
+        engineer_id = data['engineer_id']
+        if engineer_id:
+            from app.models import User as UserModel
+            eng = db.session.get(UserModel, engineer_id)
+            if not eng or eng.role not in ('engineer', 'admin'):
+                raise ValidationError("engineer_id must reference an engineer or admin user")
+        job.engineer_id = engineer_id
 
     db.session.commit()
 
@@ -1195,6 +1222,14 @@ def publish_plan(plan_id):
                     EmailService.send_store_materials_notification(plan, materials_summary, store_emails)
         except Exception as e:
             logger.error(f"Email notification failed: {e}")
+
+    # Award engineer points for publishing
+    try:
+        from app.services.leaderboard_ai_service import LeaderboardAIService
+        lb = LeaderboardAIService()
+        lb.award_engineer_points(user.id, 'publish_plan', f'week {week_str}')
+    except Exception as e:
+        logger.warning(f"Engineer publish points failed: {e}")
 
     return jsonify({
         'status': 'success',
@@ -4759,3 +4794,101 @@ def export_plan_report(plan_id):
             'Content-Disposition': f'attachment; filename={filename}'
         }
     )
+
+
+# ==================== JOB CLASSIFICATION ====================
+
+MAJOR_KEYWORDS = [
+    'engine', 'transmission', 'hydraulic', 'brakes', 'brake', 'overhaul',
+    'rebuild', 'replacement', 'crack', 'structural', 'frame', 'suspension',
+    'differential', 'gearbox', 'clutch', 'radiator', 'turbo', 'compressor',
+    'alternator', 'starter motor', 'fuel pump', 'injector', 'cylinder',
+    'piston', 'crankshaft', 'camshaft', 'timing chain', 'timing belt',
+    'wiring harness', 'complete', 'full',
+]
+
+MINOR_KEYWORDS = [
+    'filter', 'oil', 'fluid', 'top-up', 'lamp', 'bulb', 'light', 'belt',
+    'hose', 'clamp', 'fuse', 'relay', 'sensor', 'wiper', 'washer', 'mirror',
+    'door handle', 'latch', 'gasket', 'adjustment', 'calibration',
+    'lubrication', 'grease', 'tire', 'tyre', 'wheel', 'rotation',
+    'alignment', 'cleaning', 'wash', 'polish', 'inspection', 'check',
+    'test', 'measure', 'visual',
+]
+
+
+def _classify_with_gemini(description: str) -> dict | None:
+    """Try to classify job difficulty using Gemini text model."""
+    try:
+        from app.services.gemini_service import is_gemini_configured, _get_api_key, _get_api_url, TRANSLATION_MODELS
+        import requests as req
+
+        if not is_gemini_configured():
+            return None
+
+        prompt = (
+            "You are a maintenance job classifier. Given this job description, "
+            "classify it as either 'minor' or 'major'. A major job involves significant "
+            "disassembly, structural work, or engine/transmission/hydraulic repair. "
+            "A minor job is routine maintenance like filters, fluids, inspections, adjustments.\n\n"
+            f"Job description: {description}\n\n"
+            "Reply with ONLY valid JSON: {\"difficulty\": \"minor\" or \"major\", \"confidence\": 0.0-1.0, \"reason\": \"brief reason\"}"
+        )
+
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 150}
+        }
+
+        api_key = _get_api_key()
+        for model in TRANSLATION_MODELS:
+            url = f"{_get_api_url(model)}:generateContent?key={api_key}"
+            try:
+                resp = req.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=15)
+                if resp.status_code == 200:
+                    text = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                    # Extract JSON from response
+                    if '{' in text:
+                        text = text[text.index('{'):text.rindex('}') + 1]
+                    return json.loads(text)
+                elif resp.status_code == 429:
+                    break
+            except Exception:
+                continue
+    except Exception as e:
+        logger.warning(f"Gemini classify failed: {e}")
+    return None
+
+
+@bp.route('/classify-job', methods=['POST'])
+@jwt_required()
+def classify_job():
+    """Classify a job description as minor or major."""
+    user = engineer_or_admin_required()
+
+    data = request.get_json() or {}
+    description = (data.get('description') or '').strip()
+    if not description:
+        raise ValidationError("description is required")
+
+    desc_lower = description.lower()
+    major_hits = sum(1 for kw in MAJOR_KEYWORDS if kw in desc_lower)
+    minor_hits = sum(1 for kw in MINOR_KEYWORDS if kw in desc_lower)
+
+    # Clear keyword winner (2+ margin)
+    if major_hits >= minor_hits + 2:
+        return jsonify({'data': {'difficulty': 'major', 'confidence': min(0.95, 0.6 + major_hits * 0.1), 'reason': f'Matched {major_hits} major keywords vs {minor_hits} minor'}})
+    if minor_hits >= major_hits + 2:
+        return jsonify({'data': {'difficulty': 'minor', 'confidence': min(0.95, 0.6 + minor_hits * 0.1), 'reason': f'Matched {minor_hits} minor keywords vs {major_hits} major'}})
+
+    # Ambiguous — try AI
+    ai_result = _classify_with_gemini(description)
+    if ai_result and ai_result.get('difficulty') in ('minor', 'major'):
+        ai_result['source'] = 'ai'
+        return jsonify({'data': ai_result})
+
+    # Fallback: if any major hits, lean major; else default minor
+    if major_hits > minor_hits:
+        return jsonify({'data': {'difficulty': 'major', 'confidence': 0.4, 'reason': f'Slight major lean ({major_hits} vs {minor_hits}), AI unavailable'}})
+
+    return jsonify({'data': {'difficulty': 'minor', 'confidence': 0.3, 'reason': 'No clear signal, defaulting to minor'}})

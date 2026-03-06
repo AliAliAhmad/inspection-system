@@ -50,6 +50,9 @@ class Defect(db.Model):
     # Occurrence tracking
     occurrence_count = db.Column(db.Integer, default=1, nullable=False)
 
+    # Additional finding: specialist who found this defect during repair
+    found_during_repair_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     # Work order grouping (for urgent multi-defect scenarios)
     work_order_id = db.Column(db.String(50), nullable=True)
 
@@ -62,6 +65,7 @@ class Defect(db.Model):
     assigned_to = db.relationship('User', foreign_keys=[assigned_to_id], backref='assigned_defects')
     reported_by = db.relationship('User', foreign_keys=[reported_by_id], backref='reported_defects')
     equipment_direct = db.relationship('Equipment', foreign_keys=[equipment_id_direct])
+    found_by_specialist = db.relationship('User', foreign_keys=[found_during_repair_by], backref='discovered_defects')
     occurrences = db.relationship('DefectOccurrence', back_populates='defect', order_by='DefectOccurrence.occurrence_number')
 
     __table_args__ = (
@@ -111,6 +115,8 @@ class Defect(db.Model):
             'voice_note_url': self.voice_note_url,
             'location_description': self.location_description,
             'hazard_type': self.hazard_type,
+            'found_during_repair_by': self.found_during_repair_by,
+            'found_by_specialist_name': self.found_by_specialist.full_name if self.found_by_specialist else None,
         }
 
         # Include equipment info — from inspection or direct field report

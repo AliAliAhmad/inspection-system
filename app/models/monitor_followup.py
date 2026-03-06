@@ -46,6 +46,11 @@ class MonitorFollowup(db.Model):
     result_verdict = db.Column(db.String(20), nullable=True)  # operational, monitor, stop
     result_assessment_id = db.Column(db.Integer, db.ForeignKey('final_assessments.id'), nullable=True)
 
+    # Repair verification (for specialist star system)
+    followup_question = db.Column(db.Text, nullable=True)  # Custom question for repair check
+    linked_specialist_job_id = db.Column(db.Integer, db.ForeignKey('specialist_jobs.id'), nullable=True)
+    repair_verified = db.Column(db.Boolean, nullable=True)  # True=pass, False=fail, None=pending
+
     # Overdue tracking
     is_overdue = db.Column(db.Boolean, default=False)
     overdue_since = db.Column(db.DateTime, nullable=True)
@@ -66,6 +71,7 @@ class MonitorFollowup(db.Model):
     scheduler = db.relationship('User', foreign_keys=[scheduled_by])
     inspection_assignment = db.relationship('InspectionAssignment')
     result_assessment = db.relationship('FinalAssessment', foreign_keys=[result_assessment_id])
+    linked_specialist_job = db.relationship('SpecialistJob', foreign_keys=[linked_specialist_job_id])
 
     VALID_TYPES = ('routine_check', 'detailed_inspection', 'operational_test')
     VALID_LOCATIONS = ('east', 'west')
@@ -103,6 +109,10 @@ class MonitorFollowup(db.Model):
             'status': self.status,
             'result_verdict': self.result_verdict,
             'result_assessment_id': self.result_assessment_id,
+            # Repair verification
+            'followup_question': self.followup_question,
+            'linked_specialist_job_id': self.linked_specialist_job_id,
+            'repair_verified': self.repair_verified,
             # Overdue
             'is_overdue': self.is_overdue or False,
             'overdue_since': self.overdue_since.isoformat() if self.overdue_since else None,

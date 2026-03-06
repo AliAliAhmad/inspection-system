@@ -835,6 +835,18 @@ export default function WorkPlanningPage() {
     return warnings;
   }, [pendingAssignment, currentPlan, isUserOnLeaveForDay, getDayTotalHours]);
 
+  // Fetch engineers for the Add Job modal
+  const { data: assignableUsersData } = useQuery({
+    queryKey: ['users-for-assignment'],
+    queryFn: () => usersApi.getForAssignment().then((r) => r.data),
+    staleTime: 0,
+  });
+  const engineersList = useMemo(() => {
+    if (!assignableUsersData) return [];
+    const users = (assignableUsersData as any)?.data || assignableUsersData;
+    return (Array.isArray(users) ? users : []).filter((u: any) => u.role === 'engineer');
+  }, [assignableUsersData]);
+
   // Manual add job mutation
   const manualAddJobMutation = useMutation({
     mutationFn: (values: {
@@ -846,6 +858,8 @@ export default function WorkPlanningPage() {
       estimated_hours: number;
       priority: JobPriority;
       notes?: string;
+      difficulty: 'minor' | 'major';
+      engineer_id?: number | null;
     }) => workPlansApi.addJob(currentPlan!.id, {
       day_id: values.day_id,
       job_type: values.job_type,
@@ -855,6 +869,8 @@ export default function WorkPlanningPage() {
       estimated_hours: values.estimated_hours,
       priority: values.priority,
       notes: values.notes,
+      difficulty: values.difficulty,
+      engineer_id: values.engineer_id || null,
     }),
     onSuccess: () => {
       message.success('Job added successfully');
@@ -2802,6 +2818,34 @@ export default function WorkPlanningPage() {
                 </Card>
               </Col>
             </Row>
+
+            {/* Difficulty & Engineer */}
+            {(selectedJob.difficulty || selectedJob.engineer_name || (selectedJob as any).engineer_id) && (
+              <Row gutter={16} style={{ marginTop: 16 }}>
+                <Col span={12}>
+                  <Card size="small">
+                    <Text type="secondary">Difficulty</Text>
+                    <div>
+                      {selectedJob.difficulty ? (
+                        <Tag color={selectedJob.difficulty === 'major' ? 'red' : 'blue'}>
+                          {selectedJob.difficulty === 'major' ? 'Major' : 'Minor'}
+                        </Tag>
+                      ) : (
+                        <span style={{ color: '#8c8c8c' }}>Not set</span>
+                      )}
+                    </div>
+                  </Card>
+                </Col>
+                <Col span={12}>
+                  <Card size="small">
+                    <Text type="secondary">Engineer</Text>
+                    <div style={{ fontWeight: 600 }}>
+                      {selectedJob.engineer_name || <span style={{ color: '#8c8c8c', fontWeight: 400 }}>Not assigned</span>}
+                    </div>
+                  </Card>
+                </Col>
+              </Row>
+            )}
           </div>
         )}
       </Modal>
@@ -2831,6 +2875,8 @@ export default function WorkPlanningPage() {
                 estimated_hours: values.estimated_hours,
                 priority: values.priority || 'normal',
                 notes: values.notes,
+                difficulty: values.difficulty || 'minor',
+                engineer_id: values.engineer_id || null,
               });
             }}
             initialValues={{
@@ -2838,6 +2884,7 @@ export default function WorkPlanningPage() {
               berth: berth,
               priority: 'normal',
               estimated_hours: 4,
+              difficulty: 'minor',
             }}
           >
             {/* Day Selection */}
@@ -2911,6 +2958,38 @@ export default function WorkPlanningPage() {
                     <Select.Option value="high">High</Select.Option>
                     <Select.Option value="urgent">Urgent</Select.Option>
                   </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+
+            {/* Difficulty & Engineer */}
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="difficulty"
+                  label="Difficulty"
+                  rules={[{ required: true, message: 'Select difficulty' }]}
+                >
+                  <Radio.Group buttonStyle="solid">
+                    <Radio.Button value="minor">Minor</Radio.Button>
+                    <Radio.Button value="major">Major</Radio.Button>
+                  </Radio.Group>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name="engineer_id" label="Engineer">
+                  <Select
+                    placeholder="Select engineer (optional)"
+                    allowClear
+                    showSearch
+                    filterOption={(input, option) =>
+                      (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
+                    }
+                    options={engineersList.map((eng: any) => ({
+                      value: eng.id,
+                      label: eng.full_name,
+                    }))}
+                  />
                 </Form.Item>
               </Col>
             </Row>

@@ -121,6 +121,23 @@ export function LeaderboardTable({
       ),
     },
     {
+      title: t('leaderboard.avg_stars', 'Avg Stars'),
+      dataIndex: 'avg_rating',
+      key: 'avg_rating',
+      width: 100,
+      sorter: (a, b) => (a.avg_rating || 0) - (b.avg_rating || 0),
+      render: (rating: number) => (
+        <Tooltip title={`${(rating || 0).toFixed(2)} / 5.0`}>
+          <Space>
+            <StarOutlined style={{ color: '#faad14' }} />
+            <Text strong style={{ color: '#faad14' }}>
+              {(rating || 0).toFixed(1)}
+            </Text>
+          </Space>
+        </Tooltip>
+      ),
+    },
+    {
       title: t('leaderboard.streak', 'Streak'),
       dataIndex: 'current_streak',
       key: 'current_streak',

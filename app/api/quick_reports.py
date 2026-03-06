@@ -112,6 +112,7 @@ def create_quick_report():
         location_description=data.get('location') if report_type == 'safety' else None,
         hazard_type=data.get('hazard_type') if report_type == 'safety' else None,
         category=data.get('category'),  # mechanical/electrical if provided
+        found_during_repair_by=data.get('found_during_repair_by'),
     )
 
     db.session.add(defect)

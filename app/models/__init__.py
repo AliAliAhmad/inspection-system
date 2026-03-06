@@ -168,6 +168,10 @@ from app.models.monitor_followup import MonitorFollowup
 # Unplanned Jobs
 from app.models.unplanned_job import UnplannedJob
 
+# Rating & EPI System
+from app.models.star_history import StarHistory
+from app.models.epi_snapshot import EPISnapshot
+
 __all__ = [
     'User',
     'Equipment',
@@ -307,4 +311,7 @@ __all__ = [
     'MonitorFollowup',
     # Unplanned Jobs
     'UnplannedJob',
+    # Rating & EPI System
+    'StarHistory',
+    'EPISnapshot',
 ]

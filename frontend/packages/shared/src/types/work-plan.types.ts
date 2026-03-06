@@ -198,6 +198,10 @@ export interface WorkPlanJob {
   actual_end_time?: string;
   dependencies?: JobDependency[];
   checklist_responses?: JobChecklistResponse[];
+  // Rating overhaul v2
+  difficulty?: 'minor' | 'major' | null;
+  engineer_id?: number | null;
+  engineer_name?: string | null;
 }
 
 export interface WorkPlanDay {
@@ -271,6 +275,8 @@ export interface AddJobPayload {
   estimated_hours: number;
   priority?: JobPriority;
   notes?: string;
+  difficulty?: 'minor' | 'major' | null;
+  engineer_id?: number | null;
 }
 
 export interface UpdateJobPayload {

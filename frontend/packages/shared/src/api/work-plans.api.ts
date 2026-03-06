@@ -592,4 +592,15 @@ export const workPlansApi = {
       delay_frequency: Array<{ reason: string; count: number }>;
     }>>('/api/work-plans/reports/historical-analysis', { params });
   },
+
+  // ==================== JOB CLASSIFICATION ====================
+
+  classifyJob(description: string) {
+    return getApiClient().post<ApiResponse<{
+      difficulty: 'minor' | 'major';
+      confidence: number;
+      reason: string;
+      source?: string;
+    }>>('/api/work-plans/classify-job', { description });
+  },
 };

@@ -75,6 +75,12 @@ class WorkPlanJob(db.Model):
     # Priority
     priority = db.Column(db.String(20), default='normal')  # low, normal, high, urgent
 
+    # Job difficulty classification (for points system)
+    difficulty = db.Column(db.String(10), nullable=True)  # 'minor' or 'major'
+
+    # Responsible engineer (reviews this job)
+    engineer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     # Checklist requirements
     checklist_required = db.Column(db.Boolean, default=False)
     checklist_completed = db.Column(db.Boolean, default=False)
@@ -106,6 +112,7 @@ class WorkPlanJob(db.Model):
     pm_template = db.relationship('PMTemplate')
     template = db.relationship('JobTemplate')
     split_from = db.relationship('WorkPlanJob', remote_side='WorkPlanJob.id', backref='split_jobs')
+    engineer = db.relationship('User', foreign_keys=[engineer_id])
     assignments = db.relationship('WorkPlanAssignment', back_populates='job', cascade='all, delete-orphan')
     materials = db.relationship('WorkPlanMaterial', back_populates='job', cascade='all, delete-orphan')
 
@@ -199,6 +206,8 @@ class WorkPlanJob(db.Model):
                 'checklist_completed': self.checklist_completed,
                 'is_split': self.is_split,
                 'split_part': self.split_part,
+                'difficulty': self.difficulty,
+                'engineer_id': self.engineer_id,
                 'assigned_users_count': len(self.assignments),
             }
 
@@ -242,6 +251,9 @@ class WorkPlanJob(db.Model):
             'split_from_id': self.split_from_id,
             'split_part': self.split_part,
             'notes': self.notes,
+            'difficulty': self.difficulty,
+            'engineer_id': self.engineer_id,
+            'engineer_name': self.engineer.full_name if self.engineer else None,
             'assignments': [a.to_dict() for a in self.assignments],
             'materials': [m.to_dict(language) for m in self.materials],
             'assigned_users_count': len(self.assignments),

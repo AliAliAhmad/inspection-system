@@ -100,7 +100,7 @@ class PointCalculator:
         calculator = PointCalculator()
         calculator.add_rule(PointRule(
             action=PointAction.JOB_COMPLETED,
-            base_points=10,
+            base_points=3,
             multiplier_conditions=[
                 {'field': 'time_efficiency', 'operator': '>=', 'value': 1.2, 'multiplier': 1.5},
             ]
@@ -114,19 +114,19 @@ class PointCalculator:
         # Inspection points
         PointRule(
             action=PointAction.INSPECTION_COMPLETE,
-            base_points=5,
+            base_points=2,
             description="Complete an inspection",
             role_specific='inspector',
         ),
         PointRule(
             action=PointAction.DEFECT_FOUND,
-            base_points=3,
-            description="Find a defect during inspection",
+            base_points=1,
+            description="Find a defect during inspection (generic; severity-specific in leaderboard_ai_service)",
             role_specific='inspector',
         ),
         PointRule(
             action=PointAction.CRITICAL_DEFECT_FOUND,
-            base_points=10,
+            base_points=3,
             description="Find a critical defect",
             role_specific='inspector',
         ),
@@ -134,22 +134,22 @@ class PointCalculator:
         # Job completion points
         PointRule(
             action=PointAction.JOB_COMPLETED,
-            base_points=10,
+            base_points=3,
             multiplier_conditions=[
                 {'field': 'qc_rating', 'operator': '>=', 'value': 4, 'multiplier': 1.5},
                 {'field': 'qc_rating', 'operator': '==', 'value': 5, 'multiplier': 2.0},
                 {'field': 'time_efficiency', 'operator': '>=', 'value': 1.2, 'multiplier': 1.3},
             ],
-            description="Complete a job",
+            description="Complete a job (minor job base; QC multiplier for quality incentive)",
         ),
         PointRule(
             action=PointAction.JOB_COMPLETED_EARLY,
-            base_points=5,
-            description="Complete a job ahead of schedule",
+            base_points=2,
+            description="Flat under-time bonus for early job completion",
         ),
         PointRule(
             action=PointAction.JOB_QUALITY_BONUS,
-            base_points=5,
+            base_points=2,
             multiplier_conditions=[
                 {'field': 'cleaning_rating', 'operator': '==', 'value': 2, 'multiplier': 2.0},
             ],
@@ -159,75 +159,67 @@ class PointCalculator:
         # Defect resolution points
         PointRule(
             action=PointAction.DEFECT_RESOLVED,
-            base_points=15,
+            base_points=3,
             multiplier_conditions=[
                 {'field': 'severity', 'operator': '==', 'value': 'critical', 'multiplier': 2.0},
                 {'field': 'severity', 'operator': '==', 'value': 'high', 'multiplier': 1.5},
             ],
-            description="Resolve a defect",
+            description="Resolve a defect (minor completion base)",
         ),
         PointRule(
             action=PointAction.DEFECT_RESOLVED_EARLY,
-            base_points=10,
+            base_points=2,
             description="Resolve a defect before SLA deadline",
         ),
 
         # QC review points
         PointRule(
             action=PointAction.REVIEW_COMPLETED,
-            base_points=5,
-            description="Complete a quality review",
+            base_points=1,
+            description="Complete a quality review (engineer/admin review)",
             role_specific='quality_engineer',
         ),
         PointRule(
             action=PointAction.REVIEW_THOROUGH,
-            base_points=5,
+            base_points=2,
             description="Thorough review with detailed feedback",
             role_specific='quality_engineer',
         ),
 
-        # Streak points
+        # Streak points (deprecated - zero points, kept for enum compatibility)
         PointRule(
             action=PointAction.STREAK_MAINTAINED,
-            base_points=2,
-            multiplier_conditions=[
-                {'field': 'streak_days', 'operator': '>=', 'value': 7, 'multiplier': 1.5},
-                {'field': 'streak_days', 'operator': '>=', 'value': 30, 'multiplier': 2.0},
-            ],
-            description="Maintain daily streak",
+            base_points=0,
+            description="Maintain daily streak (deprecated)",
         ),
         PointRule(
             action=PointAction.STREAK_MILESTONE,
-            base_points=50,
-            multiplier_conditions=[
-                {'field': 'milestone', 'operator': '==', 'value': 30, 'multiplier': 2.0},
-                {'field': 'milestone', 'operator': '==', 'value': 100, 'multiplier': 5.0},
-            ],
-            description="Reach streak milestone",
+            base_points=0,
+            description="Reach streak milestone (deprecated)",
         ),
 
-        # Achievement points
+        # Achievement points (achievements exist but don't grant points in new system)
         PointRule(
             action=PointAction.ACHIEVEMENT_UNLOCKED,
-            base_points=25,
-            description="Unlock an achievement",
+            base_points=0,
+            description="Unlock an achievement (no points in new system)",
         ),
         PointRule(
             action=PointAction.CHALLENGE_COMPLETED,
-            base_points=100,
-            description="Complete a challenge",
+            base_points=0,
+            description="Complete a challenge (no points in new system)",
         ),
 
-        # Bonus points
+        # Bonus points (stars are separate from points now)
         PointRule(
             action=PointAction.BONUS_STAR_EARNED,
-            base_points=20,
-            description="Earn a bonus star",
+            base_points=0,
+            description="Earn a bonus star (stars separate from points)",
         ),
         PointRule(
             action=PointAction.PEER_RECOGNITION,
-            base_points=5,
-            description="Receive peer recognition",
+            base_points=0,
+            description="Receive peer recognition (not in new system)",
             max_daily_occurrences=3,
         ),
 
@@ -248,8 +240,8 @@ class PointCalculator:
         ),
         PointRule(
             action=PointAction.STREAK_BROKEN,
-            base_points=-20,
-            description="Break a long streak",
+            base_points=0,
+            description="Break a long streak (deprecated)",
         ),
     ]
 

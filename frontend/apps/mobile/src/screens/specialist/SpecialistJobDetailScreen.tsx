@@ -24,6 +24,7 @@ import type { RootStackParamList } from '../../navigation/RootNavigator';
 import {
   specialistJobsApi,
   defectAssessmentsApi,
+  defectsApi,
   SpecialistJob,
   PauseLog,
   PauseCategory,
@@ -136,6 +137,13 @@ export default function SpecialistJobDetailScreen() {
   // Cleaning photo state
   const [cleaningPhotoUri, setCleaningPhotoUri] = useState<string | null>(null);
   const [uploadingCleaning, setUploadingCleaning] = useState(false);
+
+  // Additional finding modal state
+  const [findingModalVisible, setFindingModalVisible] = useState(false);
+  const [findingDescription, setFindingDescription] = useState('');
+  const [findingPhotoUri, setFindingPhotoUri] = useState<string | null>(null);
+  const [findingSeverity, setFindingSeverity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [uploadingFindingPhoto, setUploadingFindingPhoto] = useState(false);
 
   // Fetch job with offline support
   const {
@@ -413,6 +421,99 @@ export default function SpecialistJobDetailScreen() {
     });
   }, [jobData, assessmentVerdict, technicalNotes, defectAssessmentMutation, t]);
 
+  // Additional finding mutation
+  const additionalFindingMutation = useMutation({
+    mutationFn: async () => {
+      const equipmentId = (jobData as any)?.defect?.equipment_id_direct
+        || (jobData as any)?.defect?.equipment?.id;
+
+      // Upload photo first if taken
+      let photoUrl: string | undefined;
+      if (findingPhotoUri) {
+        setUploadingFindingPhoto(true);
+        try {
+          const formData = new FormData();
+          formData.append('file', {
+            uri: findingPhotoUri,
+            name: 'additional_finding.jpg',
+            type: 'image/jpeg',
+          } as any);
+          formData.append('entity_type', 'defect');
+          formData.append('entity_id', '0');
+          formData.append('file_category', 'photo');
+
+          const uploadRes = await getApiClient().post('/api/files/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          photoUrl = (uploadRes.data as any)?.url || (uploadRes.data as any)?.data?.url;
+        } catch (err) {
+          console.error('Finding photo upload failed:', err);
+        } finally {
+          setUploadingFindingPhoto(false);
+        }
+      }
+
+      return defectsApi.createQuickReport({
+        type: 'equipment',
+        severity: findingSeverity,
+        equipment_id: equipmentId,
+        description: findingDescription,
+        photo_url: photoUrl,
+        found_during_repair_by: authUser?.id,
+      });
+    },
+    onSuccess: () => {
+      setFindingModalVisible(false);
+      setFindingDescription('');
+      setFindingPhotoUri(null);
+      setFindingSeverity('medium');
+      Alert.alert(
+        t('common.success', 'Success'),
+        t('jobs.additional_finding_submitted', 'Additional finding reported successfully. Thank you for your diligence!')
+      );
+      queryClient.invalidateQueries({ queryKey: ['specialistJob', id] });
+    },
+    onError: () => Alert.alert(t('common.error'), t('common.error')),
+  });
+
+  const handleTakeFindingPhoto = useCallback(async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('common.error'), 'Camera permission required');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setFindingPhotoUri(result.assets[0].uri);
+    }
+  }, [t]);
+
+  const handlePickFindingPhoto = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('common.error'), 'Gallery permission required');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setFindingPhotoUri(result.assets[0].uri);
+    }
+  }, [t]);
+
+  const handleAdditionalFindingSubmit = useCallback(() => {
+    if (!findingDescription.trim()) {
+      Alert.alert(t('common.error'), t('jobs.description_required', 'Description is required'));
+      return;
+    }
+    additionalFindingMutation.mutate();
+  }, [findingDescription, additionalFindingMutation, t]);
+
   // Loading state
   if (isLoading) {
     return (
@@ -643,6 +744,25 @@ export default function SpecialistJobDetailScreen() {
                 <Text style={styles.workNotesText}>{jobData.work_notes}</Text>
               </View>
             ) : null}
+
+            {/* Report Additional Finding button */}
+            <TouchableOpacity
+              testID="report-additional-finding-btn"
+              style={[styles.actionButton, styles.additionalFindingButton]}
+              onPress={() => {
+                setFindingDescription('');
+                setFindingPhotoUri(null);
+                setFindingSeverity('medium');
+                setFindingModalVisible(true);
+              }}
+            >
+              <Text style={styles.actionButtonText}>
+                {t('jobs.report_additional_finding', 'Report Additional Finding')}
+              </Text>
+              <Text style={styles.additionalFindingSubtext}>
+                {t('jobs.report_additional_finding_ar', '\u0627\u0644\u0625\u0628\u0644\u0627\u063A \u0639\u0646 \u0645\u0644\u0627\u062D\u0638\u0629 \u0625\u0636\u0627\u0641\u064A\u0629')}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1147,6 +1267,130 @@ export default function SpecialistJobDetailScreen() {
                 </View>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Additional Finding Modal */}
+      <Modal
+        visible={findingModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFindingModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {t('jobs.report_additional_finding', 'Report Additional Finding')}
+            </Text>
+            <Text style={styles.findingModalSubtitle}>
+              {t('jobs.report_additional_finding_ar', '\u0627\u0644\u0625\u0628\u0644\u0627\u063A \u0639\u0646 \u0645\u0644\u0627\u062D\u0638\u0629 \u0625\u0636\u0627\u0641\u064A\u0629')}
+            </Text>
+
+            <Text style={styles.modalLabel}>
+              {t('jobs.finding_description', 'Description')} *
+            </Text>
+            <VoiceTextInput
+              style={styles.modalTextInput}
+              value={findingDescription}
+              onChangeText={setFindingDescription}
+              placeholder={t('jobs.finding_description_placeholder', 'Describe the additional defect you found...')}
+              multiline
+              numberOfLines={4}
+            />
+
+            <Text style={styles.modalLabel}>
+              {t('jobs.severity', 'Severity')}
+            </Text>
+            <View style={styles.severityPicker}>
+              {(['low', 'medium', 'high'] as const).map((sev) => (
+                <TouchableOpacity
+                  key={sev}
+                  style={[
+                    styles.severityOption,
+                    findingSeverity === sev && (
+                      sev === 'low' ? styles.severityLow :
+                      sev === 'medium' ? styles.severityMedium :
+                      styles.severityHigh
+                    ),
+                  ]}
+                  onPress={() => setFindingSeverity(sev)}
+                >
+                  <Text
+                    style={[
+                      styles.severityOptionText,
+                      findingSeverity === sev && styles.severityOptionTextActive,
+                    ]}
+                  >
+                    {sev === 'low' ? t('severity.low', 'Low') :
+                     sev === 'medium' ? t('severity.medium', 'Medium') :
+                     t('severity.high', 'High')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalLabel}>
+              {t('jobs.photo_evidence', 'Photo Evidence')}
+            </Text>
+            <View style={styles.findingPhotoButtons}>
+              <TouchableOpacity
+                style={styles.findingPhotoBtn}
+                onPress={handleTakeFindingPhoto}
+              >
+                <Text style={styles.findingPhotoBtnText}>
+                  {'\uD83D\uDCF7'} {t('common.camera', 'Camera')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.findingPhotoBtn}
+                onPress={handlePickFindingPhoto}
+              >
+                <Text style={styles.findingPhotoBtnText}>
+                  {'\uD83D\uDDBC\uFE0F'} {t('common.gallery', 'Gallery')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {findingPhotoUri && (
+              <View style={styles.findingPhotoPreview}>
+                <Text style={styles.findingPhotoPreviewText}>
+                  {'\u2713'} {t('jobs.photo_selected', 'Photo selected')}
+                </Text>
+                <TouchableOpacity onPress={() => setFindingPhotoUri(null)}>
+                  <Text style={styles.findingPhotoRemove}>{t('common.remove', 'Remove')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {uploadingFindingPhoto && (
+              <View style={styles.uploadingRow}>
+                <ActivityIndicator size="small" color="#E65100" />
+                <Text style={styles.uploadingText}>{t('common.uploading', 'Uploading...')}</Text>
+              </View>
+            )}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setFindingModalVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalSubmitButton,
+                  styles.additionalFindingSubmitBtn,
+                  additionalFindingMutation.isPending && styles.buttonDisabled,
+                ]}
+                onPress={handleAdditionalFindingSubmit}
+                disabled={additionalFindingMutation.isPending}
+              >
+                {additionalFindingMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalSubmitText}>{t('common.submit')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1751,5 +1995,91 @@ const styles = StyleSheet.create({
   },
   startSubmitButton: {
     backgroundColor: '#4CAF50',
+  },
+
+  // Additional Finding
+  additionalFindingButton: {
+    backgroundColor: '#E65100',
+    marginTop: 16,
+  },
+  additionalFindingSubtext: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  additionalFindingSubmitBtn: {
+    backgroundColor: '#E65100',
+  },
+  findingModalSubtitle: {
+    fontSize: 14,
+    color: '#757575',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  severityPicker: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  severityOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#e8e8e8',
+    alignItems: 'center',
+  },
+  severityLow: {
+    backgroundColor: '#4CAF50',
+  },
+  severityMedium: {
+    backgroundColor: '#FF9800',
+  },
+  severityHigh: {
+    backgroundColor: '#F44336',
+  },
+  severityOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+  },
+  severityOptionTextActive: {
+    color: '#fff',
+  },
+  findingPhotoButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  findingPhotoBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E65100',
+    alignItems: 'center',
+  },
+  findingPhotoBtnText: {
+    color: '#E65100',
+    fontWeight: '600',
+  },
+  findingPhotoPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  findingPhotoPreviewText: {
+    color: '#E65100',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  findingPhotoRemove: {
+    color: '#F44336',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

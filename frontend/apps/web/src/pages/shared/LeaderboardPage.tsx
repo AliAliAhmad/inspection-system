@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Card, Tabs, Space, Typography, Row, Col, Spin, message } from 'antd';
-import { TrophyOutlined, UserOutlined, StarOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Card, Tabs, Space, Typography, Row, Col, Spin, message, Progress, Segmented } from 'antd';
+import { TrophyOutlined, UserOutlined, StarOutlined, ThunderboltOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -13,6 +13,7 @@ import {
   AIInsight,
   RankPrediction,
   UserStats,
+  EPIBreakdown,
 } from '@inspection/shared';
 import {
   AnimatedPodium,
@@ -25,33 +26,54 @@ import {
   AIInsightsPanel,
   PeriodSelector,
 } from '../../components/leaderboard';
+import { useAuth } from '../../providers/AuthProvider';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 type TabKey = 'rankings' | 'my_stats' | 'achievements' | 'challenges';
-type RoleFilter = 'overall' | 'inspectors' | 'specialists' | 'engineers' | 'quality';
+type PageView = 'field_staff' | 'engineers';
+type FieldSubFilter = 'all' | 'inspectors' | 'specialists';
 type LeaderboardPeriod = 'daily' | 'weekly' | 'monthly' | 'all_time';
 
-const fetchers: Record<RoleFilter, (params?: { period?: LeaderboardPeriod }) => Promise<LeaderboardEntry[]>> = {
-  overall: (p) => leaderboardsApi.getOverall(p).then((r) => r.data.data || []),
+/** Fetcher for the combined field staff (inspectors + specialists) */
+const fieldStaffFetcher = async (params?: { period?: LeaderboardPeriod }): Promise<LeaderboardEntry[]> => {
+  const [inspectors, specialists] = await Promise.all([
+    leaderboardsApi.getInspectors(params).then((r) => r.data.data || []),
+    leaderboardsApi.getSpecialists(params).then((r) => r.data.data || []),
+  ]);
+  // Merge & re-rank by total_points descending
+  const merged = [...inspectors, ...specialists].sort((a, b) => b.total_points - a.total_points);
+  return merged.map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+};
+
+type FetcherKey = 'all' | 'inspectors' | 'specialists' | 'engineers';
+const fetchers: Record<FetcherKey, (params?: { period?: LeaderboardPeriod }) => Promise<LeaderboardEntry[]>> = {
+  all: fieldStaffFetcher,
   inspectors: (p) => leaderboardsApi.getInspectors(p).then((r) => r.data.data || []),
   specialists: (p) => leaderboardsApi.getSpecialists(p).then((r) => r.data.data || []),
   engineers: (p) => leaderboardsApi.getEngineers(p).then((r) => r.data.data || []),
-  quality: (p) => leaderboardsApi.getQualityEngineers(p).then((r) => r.data.data || []),
 };
 
 export default function LeaderboardPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>('rankings');
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('overall');
+  const [pageView, setPageView] = useState<PageView>('field_staff');
+  const [fieldSubFilter, setFieldSubFilter] = useState<FieldSubFilter>('all');
   const [period, setPeriod] = useState<LeaderboardPeriod>('weekly');
   const [historicalPeriod, setHistoricalPeriod] = useState<'7d' | '30d' | '90d'>('30d');
 
+  // Determine active fetcher key based on page view + sub-filter
+  const activeFetcherKey: FetcherKey = pageView === 'engineers' ? 'engineers' : fieldSubFilter;
+
+  // Show Engineers tab only to engineers, quality engineers, and admins
+  const canSeeEngineers = user && ['engineer', 'quality_engineer', 'admin'].includes(user.role);
+
   // Main leaderboard data
   const { data: leaderboardData, isLoading: leaderboardLoading } = useQuery({
-    queryKey: ['leaderboard', roleFilter, period],
-    queryFn: () => fetchers[roleFilter]({ period }),
+    queryKey: ['leaderboard', activeFetcherKey, period],
+    queryFn: () => fetchers[activeFetcherKey]({ period }),
   });
 
   // My rank
@@ -129,6 +151,13 @@ export default function LeaderboardPage() {
     enabled: activeTab === 'my_stats',
   });
 
+  // EPI data (only when my_stats tab is active)
+  const { data: epiData, isLoading: epiLoading } = useQuery({
+    queryKey: ['leaderboard', 'epi'],
+    queryFn: () => leaderboardsApi.getMyEPI().then((r) => r.data.data),
+    enabled: activeTab === 'my_stats',
+  });
+
   // Join challenge mutation
   const joinChallengeMutation = useMutation({
     mutationFn: (id: number) => leaderboardsApi.joinChallenge(id),
@@ -157,12 +186,35 @@ export default function LeaderboardPage() {
   const top3 = entries.slice(0, 3);
   const totalUsers = entries.length;
 
-  const roleTabs = [
-    { key: 'overall', label: t('common.all') },
+  const pageViewOptions = [
+    {
+      value: 'field_staff' as PageView,
+      label: (
+        <Space>
+          <TeamOutlined />
+          {t('leaderboard.field_staff', 'Field Staff')}
+        </Space>
+      ),
+    },
+    ...(canSeeEngineers
+      ? [
+          {
+            value: 'engineers' as PageView,
+            label: (
+              <Space>
+                <ToolOutlined />
+                {t('nav.engineers', 'Engineers')}
+              </Space>
+            ),
+          },
+        ]
+      : []),
+  ];
+
+  const fieldSubTabs = [
+    { key: 'all', label: t('common.all', 'All') },
     { key: 'inspectors', label: t('nav.inspectors', 'Inspectors') },
     { key: 'specialists', label: t('nav.specialists', 'Specialists') },
-    { key: 'engineers', label: t('nav.engineers', 'Engineers') },
-    { key: 'quality', label: t('nav.quality_engineers', 'Quality') },
   ];
 
   const mainTabs = [
@@ -206,13 +258,26 @@ export default function LeaderboardPage() {
 
   const renderRankingsTab = () => (
     <>
-      {/* Role filter tabs */}
-      <Tabs
-        activeKey={roleFilter}
-        onChange={(key) => setRoleFilter(key as RoleFilter)}
-        items={roleTabs.map((tab) => ({ key: tab.key, label: tab.label }))}
-        style={{ marginBottom: 16 }}
-      />
+      {/* Page-level split: Field Staff vs Engineers */}
+      <div style={{ marginBottom: 16 }}>
+        <Segmented
+          value={pageView}
+          onChange={(val) => setPageView(val as PageView)}
+          options={pageViewOptions}
+          size="large"
+        />
+      </div>
+
+      {/* Sub-filter tabs for Field Staff */}
+      {pageView === 'field_staff' && (
+        <Tabs
+          activeKey={fieldSubFilter}
+          onChange={(key) => setFieldSubFilter(key as FieldSubFilter)}
+          items={fieldSubTabs.map((tab) => ({ key: tab.key, label: tab.label }))}
+          style={{ marginBottom: 16 }}
+          size="small"
+        />
+      )}
 
       {/* Top 3 Podium */}
       {top3.length >= 3 && <AnimatedPodium entries={top3} />}
@@ -228,9 +293,76 @@ export default function LeaderboardPage() {
     </>
   );
 
+  const epiComponents: { key: keyof Omit<EPIBreakdown, 'total_epi'>; label: string; color: string }[] = [
+    { key: 'completion', label: t('leaderboard.epi_completion', 'Completion'), color: '#1677ff' },
+    { key: 'quality', label: t('leaderboard.epi_quality', 'Quality'), color: '#52c41a' },
+    { key: 'timeliness', label: t('leaderboard.epi_timeliness', 'Timeliness'), color: '#faad14' },
+    { key: 'contribution', label: t('leaderboard.epi_contribution', 'Contribution'), color: '#722ed1' },
+    { key: 'safety', label: t('leaderboard.epi_safety', 'Safety'), color: '#eb2f96' },
+  ];
+
   const renderMyStatsTab = () => (
     <Row gutter={[16, 16]}>
       <Col xs={24} lg={16}>
+        {/* EPI Score Card */}
+        <Card
+          title={
+            <Space>
+              <StarOutlined style={{ color: '#faad14' }} />
+              <span>{t('leaderboard.epi_title', 'Employee Performance Index (EPI)')}</span>
+            </Space>
+          }
+          loading={epiLoading}
+          style={{ marginBottom: 16 }}
+        >
+          {epiData ? (
+            <Row gutter={[24, 16]} align="middle">
+              <Col xs={24} sm={8} style={{ textAlign: 'center' }}>
+                <Progress
+                  type="dashboard"
+                  percent={epiData.total_epi}
+                  format={(pct) => (
+                    <div>
+                      <div style={{ fontSize: 28, fontWeight: 700, color: '#1677ff' }}>{pct}</div>
+                      <div style={{ fontSize: 12, color: '#8c8c8c' }}>/ 100</div>
+                    </div>
+                  )}
+                  size={140}
+                  strokeColor={{
+                    '0%': '#1677ff',
+                    '100%': '#52c41a',
+                  }}
+                />
+                <Text strong style={{ display: 'block', marginTop: 8, fontSize: 14 }}>
+                  {t('leaderboard.total_epi', 'Total EPI')}
+                </Text>
+              </Col>
+              <Col xs={24} sm={16}>
+                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  {epiComponents.map(({ key, label, color }) => (
+                    <div key={key}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 13 }}>{label}</Text>
+                        <Text strong style={{ fontSize: 13 }}>
+                          {epiData[key]} / 20
+                        </Text>
+                      </div>
+                      <Progress
+                        percent={(epiData[key] / 20) * 100}
+                        strokeColor={color}
+                        showInfo={false}
+                        size="small"
+                      />
+                    </div>
+                  ))}
+                </Space>
+              </Col>
+            </Row>
+          ) : (
+            <Text type="secondary">{t('leaderboard.no_epi_data', 'No EPI data available yet.')}</Text>
+          )}
+        </Card>
+
         {/* Performance Chart */}
         <PerformanceChart
           data={historicalData || []}

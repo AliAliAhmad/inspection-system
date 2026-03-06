@@ -193,6 +193,23 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
           </Tag>
         )}
 
+        {/* Difficulty badge */}
+        {!compact && job.difficulty && (
+          <Tag
+            color={job.difficulty === 'major' ? 'red' : 'blue'}
+            style={{ margin: 0, fontSize: '10px', padding: '0 4px', lineHeight: '18px' }}
+          >
+            {job.difficulty === 'major' ? 'Major' : 'Minor'}
+          </Tag>
+        )}
+
+        {/* Engineer name */}
+        {!compact && job.engineer_name && (
+          <span style={{ fontSize: '10px', color: '#722ed1' }}>
+            🔧 {job.engineer_name.split(' ')[0]}
+          </span>
+        )}
+
         {/* SAP order number */}
         {!compact && job.sap_order_number && (
           <span style={{ fontSize: '10px', color: '#8c8c8c' }}>
@@ -225,6 +242,8 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
           ).join(', ')}
         </div>
       )}
+      {job.difficulty && <div>📊 Difficulty: {job.difficulty === 'major' ? 'Major' : 'Minor'}</div>}
+      {job.engineer_name && <div>🔧 Engineer: {job.engineer_name}</div>}
       {job.notes && <div style={{ fontStyle: 'italic' }}>💬 {job.notes}</div>}
     </div>
   );

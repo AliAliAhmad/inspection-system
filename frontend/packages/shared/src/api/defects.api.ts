@@ -32,6 +32,7 @@ export interface QuickReportPayload {
   hazard_type?: string;
   location?: string;
   category?: string;
+  found_during_repair_by?: number;
 }
 
 export const defectsApi = {

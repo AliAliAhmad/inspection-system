@@ -801,8 +801,137 @@ def init_scheduler(app):
         replace_existing=True
     )
 
+    # =========================================================================
+    # Rating Overhaul v2: Daily Completion, Stars, EPI
+    # =========================================================================
+
+    # 24. Daily completion bonus check (12:30 AM — after leaderboard snapshot)
+    @run_with_context
+    def check_daily_completion():
+        from app.services.leaderboard_ai_service import LeaderboardAIService
+        from app.extensions import db
+        from app.models import User, InspectionAssignment, WorkPlanJob
+        from app.models.inspection_list import InspectionList
+        from datetime import date, timedelta
+
+        logger.info("Running: check_daily_completion")
+        yesterday = date.today() - timedelta(days=1)
+        service = LeaderboardAIService()
+        awarded = 0
+
+        # --- Inspectors: all assignments for yesterday completed ---
+        lists = InspectionList.query.filter_by(target_date=yesterday).all()
+        list_ids = [il.id for il in lists]
+
+        if list_ids:
+            assignments = InspectionAssignment.query.filter(
+                InspectionAssignment.inspection_list_id.in_(list_ids)
+            ).all()
+
+            inspector_totals = {}  # {user_id: {'total': N, 'done': N}}
+            for a in assignments:
+                for uid in [a.mechanical_inspector_id, a.electrical_inspector_id]:
+                    if uid:
+                        if uid not in inspector_totals:
+                            inspector_totals[uid] = {'total': 0, 'done': 0}
+                        inspector_totals[uid]['total'] += 1
+                        if a.status in ('completed', 'both_complete'):
+                            inspector_totals[uid]['done'] += 1
+
+            for uid, counts in inspector_totals.items():
+                if counts['total'] > 0 and counts['done'] == counts['total']:
+                    try:
+                        service.award_daily_completion(uid, 'inspector')
+                        awarded += 1
+                    except Exception as e:
+                        logger.warning(f"Daily completion award failed for inspector {uid}: {e}")
+
+        # --- Specialists: all assigned work plan jobs for yesterday completed ---
+        from app.models.work_plan_day import WorkPlanDay
+        from app.models.work_plan_assignment import WorkPlanAssignment
+
+        days = WorkPlanDay.query.filter_by(plan_date=yesterday).all()
+        day_ids = [d.id for d in days]
+
+        if day_ids:
+            jobs = WorkPlanJob.query.filter(
+                WorkPlanJob.day_id.in_(day_ids)
+            ).all()
+
+            specialist_totals = {}
+            for job in jobs:
+                job_assignments = WorkPlanAssignment.query.filter_by(job_id=job.id).all()
+                for wa in job_assignments:
+                    uid = wa.user_id
+                    if uid not in specialist_totals:
+                        specialist_totals[uid] = {'total': 0, 'done': 0}
+                    specialist_totals[uid]['total'] += 1
+                    if job.status in ('completed', 'verified'):
+                        specialist_totals[uid]['done'] += 1
+
+            for uid, counts in specialist_totals.items():
+                if counts['total'] > 0 and counts['done'] == counts['total']:
+                    user = db.session.get(User, uid)
+                    role = user.role if user else 'specialist'
+                    try:
+                        service.award_daily_completion(uid, role)
+                        awarded += 1
+                    except Exception as e:
+                        logger.warning(f"Daily completion award failed for {role} {uid}: {e}")
+
+        logger.info(f"Daily completion bonuses awarded to {awarded} users")
+
+    # 25. Calculate daily stars at 11 PM (before midnight snapshot)
+    @run_with_context
+    def calculate_daily_stars():
+        from app.services.rating_calculation_service import RatingCalculationService
+        from datetime import date
+        logger.info("Running: calculate_daily_stars")
+
+        service = RatingCalculationService()
+        today = date.today()
+        results = service.calculate_all_daily_stars(today)
+        logger.info(
+            f"Daily stars calculated: {results.get('inspector_count', 0)} inspectors, "
+            f"{results.get('specialist_count', 0)} specialists, "
+            f"{results.get('engineer_count', 0)} engineers"
+        )
+
+    # 26. Weekly EPI snapshot (Sunday at 11:30 PM)
+    @run_with_context
+    def generate_weekly_epi_snapshots():
+        from app.services.epi_service import EPIService
+        logger.info("Running: generate_weekly_epi_snapshots")
+        service = EPIService()
+        count = service.generate_weekly_snapshots()
+        logger.info(f"Generated EPI snapshots for {count} users")
+
+    scheduler.add_job(
+        check_daily_completion,
+        CronTrigger(hour=0, minute=30),
+        id='check_daily_completion',
+        name='Check daily completion and award bonus at 12:30 AM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        calculate_daily_stars,
+        CronTrigger(hour=23, minute=0),
+        id='calculate_daily_stars',
+        name='Calculate daily star ratings at 11 PM',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        generate_weekly_epi_snapshots,
+        CronTrigger(day_of_week='sun', hour=23, minute=30),
+        id='generate_weekly_epi_snapshots',
+        name='Generate weekly EPI snapshots Sunday at 11:30 PM',
+        replace_existing=True
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
-    logger.info("Background scheduler started with 23 scheduled jobs")
+    logger.info("Background scheduler started with 26 scheduled jobs")
 
     return scheduler

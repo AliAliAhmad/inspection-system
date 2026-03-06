@@ -71,8 +71,9 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
-| 2026-03-04 | Dual-ID role system: revert bad role_id regeneration on import role change; inspector↔specialist swap now exchanges role_id↔minor_role_id (IDs permanent); other role changes keep both IDs dormant; added `flask backfill-minor-ids` CLI command | ✅ Done |
-| 2026-03-05 | Fix electrical inspector dropdown: added `/api/users/for-assignment` endpoint (engineer-accessible) that returns ALL active inspectors+specialists in one call; removed broken two-query approach that hit admin-only `/api/users`; fixed is_active double-filter; both web+mobile updated | ✅ Done |
+| 2026-03-06 | AI job classification: POST /api/work-plans/classify-job endpoint (keyword + Gemini fallback); mobile "Report Additional Finding" button+modal for specialists; mobile LeaderboardScreen 2-tab restructure with EPI | ✅ Done |
+| 2026-03-06 | Web: WorkPlanningPage difficulty radio + engineer select in job modal; TimelineJobBlock shows difficulty tag + engineer; LeaderboardPage 2-tab layout + EPI card + UserRankCard avg_rating | ✅ Done |
+| 2026-03-06 | Rating Overhaul Phase 1-6 Complete: StarHistory+EPISnapshot models; points+stars+EPI services; scheduler jobs; all API endpoints; frontend web+mobile restructured | ✅ Done |
 
 
 ## Plugin Management

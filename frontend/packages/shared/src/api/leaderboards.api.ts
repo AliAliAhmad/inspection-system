@@ -14,6 +14,9 @@ import {
   HistoricalData,
   CreateChallengePayload,
   AwardPointsPayload,
+  EPIBreakdown,
+  EPISnapshot,
+  StarHistoryEntry,
 } from '../types/leaderboard.types';
 
 export interface LeaderboardParams {
@@ -172,5 +175,27 @@ export const leaderboardsApi = {
 
   getTierInfo() {
     return getApiClient().get<ApiResponse<TierInfo[]>>('/api/leaderboards/tiers');
+  },
+
+  // EPI (Employee Performance Index)
+  getMyEPI() {
+    return getApiClient().get<ApiResponse<EPIBreakdown>>('/api/leaderboards/epi');
+  },
+
+  getUserEPI(userId: number) {
+    return getApiClient().get<ApiResponse<EPIBreakdown>>(`/api/leaderboards/epi/${userId}`);
+  },
+
+  getEPIHistory(params?: { userId?: number; weeks?: number }) {
+    return getApiClient().get<ApiResponse<EPISnapshot[]>>('/api/leaderboards/epi/history', { params });
+  },
+
+  // Star History
+  getMyStars(params?: { page?: number; per_page?: number }) {
+    return getApiClient().get<ApiResponse<StarHistoryEntry[]>>('/api/leaderboards/stars', { params });
+  },
+
+  getUserStars(userId: number) {
+    return getApiClient().get<ApiResponse<{ avg_stars: number; recent: StarHistoryEntry[] }>>(`/api/leaderboards/stars/${userId}`);
   },
 };

@@ -1008,6 +1008,19 @@ def submit_review(review_id):
             if worker:
                 worker.add_points(rating.points_earned, worker.role)
 
+    # Award engineer review points (per rated job)
+    try:
+        from app.services.leaderboard_ai_service import LeaderboardAIService
+        lb = LeaderboardAIService()
+        for rating in ratings:
+            # Determine difficulty of the job for review point value
+            job = db.session.get(WorkPlanJob, rating.job_id) if rating.job_id else None
+            difficulty = job.difficulty if job and job.difficulty else 'minor'
+            action = f'review_{difficulty}'
+            lb.award_engineer_points(user.id, action, f'job #{rating.job_id}')
+    except Exception as e:
+        logger.warning(f"Engineer review points failed: {e}")
+
     db.session.commit()
 
     logger.info("Daily review %s submitted by engineer %s", review_id, user.id)

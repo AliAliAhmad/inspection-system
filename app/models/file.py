@@ -28,6 +28,9 @@ class File(db.Model):
     related_type = db.Column(db.String(50), nullable=True)  # 'specialist_job', 'defect', 'cleaning', etc.
     related_id = db.Column(db.Integer, nullable=True)
 
+    # Audio/Video duration (seconds)
+    duration_seconds = db.Column(db.Integer, nullable=True)
+
     # Cloudinary AI Features
     ai_tags = db.Column(db.JSON, nullable=True)  # Auto-detected tags from Cloudinary AI
     ocr_text = db.Column(db.Text, nullable=True)  # Extracted text from OCR
@@ -75,6 +78,7 @@ class File(db.Model):
             'related_type': self.related_type,
             'related_id': self.related_id,
             'url': url,  # Direct Cloudinary URL
+            'duration_seconds': self.duration_seconds,
             'ai_tags': self.ai_tags,  # Auto-detected tags from Cloudinary AI
             'ocr_text': self.ocr_text,  # Extracted text from OCR
             'created_at': self.created_at.isoformat() if self.created_at else None

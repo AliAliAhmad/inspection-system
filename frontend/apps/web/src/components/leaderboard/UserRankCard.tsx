@@ -1,4 +1,4 @@
-import { Card, Typography, Space, Avatar, Statistic, Row, Col, Divider } from 'antd';
+import { Card, Typography, Space, Avatar, Statistic, Row, Col, Divider, Rate } from 'antd';
 import { TrophyOutlined, FireOutlined, StarOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import TierBadge from './TierBadge';
@@ -60,7 +60,7 @@ export function UserRankCard({ entry, stats, totalUsers, loading }: UserRankCard
 
         <Col xs={24} sm={16}>
           <Row gutter={[16, 16]}>
-            <Col span={8}>
+            <Col span={6}>
               <div style={{ textAlign: 'center' }}>
                 <TrophyOutlined style={{ fontSize: 24, color: '#ffd700', marginBottom: 4 }} />
                 <Title level={2} style={{ color: '#fff', margin: 0 }}>
@@ -76,7 +76,7 @@ export function UserRankCard({ entry, stats, totalUsers, loading }: UserRankCard
                 </Space>
               </div>
             </Col>
-            <Col span={8}>
+            <Col span={6}>
               <div style={{ textAlign: 'center' }}>
                 <StarOutlined style={{ fontSize: 24, color: '#fadb14', marginBottom: 4 }} />
                 <Title level={2} style={{ color: '#fff', margin: 0 }}>
@@ -87,7 +87,7 @@ export function UserRankCard({ entry, stats, totalUsers, loading }: UserRankCard
                 </Text>
               </div>
             </Col>
-            <Col span={8}>
+            <Col span={6}>
               <div style={{ textAlign: 'center' }}>
                 <FireOutlined style={{ fontSize: 24, color: '#fa541c', marginBottom: 4 }} />
                 <Title level={2} style={{ color: '#fff', margin: 0 }}>
@@ -95,6 +95,24 @@ export function UserRankCard({ entry, stats, totalUsers, loading }: UserRankCard
                 </Title>
                 <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
                   {t('leaderboard.streak', 'Streak')}
+                </Text>
+              </div>
+            </Col>
+            <Col span={6}>
+              <div style={{ textAlign: 'center' }}>
+                <StarOutlined style={{ fontSize: 24, color: '#ff85c0', marginBottom: 4 }} />
+                <Title level={2} style={{ color: '#fff', margin: 0 }}>
+                  {entry.avg_rating != null ? entry.avg_rating.toFixed(1) : '—'}
+                </Title>
+                <Rate
+                  disabled
+                  allowHalf
+                  value={entry.avg_rating ?? 0}
+                  style={{ fontSize: 10, color: '#ff85c0' }}
+                />
+                <br />
+                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
+                  {t('leaderboard.avg_rating', 'Avg Rating')}
                 </Text>
               </div>
             </Col>

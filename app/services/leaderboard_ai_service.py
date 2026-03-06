@@ -21,21 +21,43 @@ logger = logging.getLogger(__name__)
 class LeaderboardAIService:
     """AI-powered leaderboard intelligence and gamification"""
 
-    # Point values for different actions
+    # Point values for different actions (Rating Overhaul v2)
     POINT_VALUES = {
-        'inspection_complete': 10,
-        'inspection_rated_5': 5,  # Bonus for 5-star rating
-        'inspection_rated_4': 3,
-        'job_complete': 15,
-        'job_under_time': 10,  # Bonus for finishing early
-        'defect_found': 8,
-        'defect_critical': 5,  # Bonus for critical defect
-        'takeover_job': 12,
-        'achievement_earned': 0,  # Points from achievement itself
-        'challenge_complete': 0,  # Points from challenge itself
-        'streak_7': 50,
-        'streak_30': 200,
+        # Inspector
+        'inspection_complete': 2,
+        'inspection_rated_star': 0.5,  # Per admin star
+        'defect_found_low': 1,
+        'defect_found_medium': 1,
+        'defect_found_high': 2,
+        'defect_found_critical': 3,
+        'defect_safety_critical_bonus': 1,  # Extra for engine/transmission/hydraulic/AC/brakes
+        'daily_completion_bonus': 3,  # All roles: finish all assigned work for the day
+        # Specialist
+        'job_complete_minor': 3,
+        'job_complete_major': 6,
+        'job_under_time': 2,  # Flat bonus for finishing faster than estimated
+        'additional_finding': 2,  # Specialist found extra defect during repair
+        'specialist_inspection_scheduled': 2,  # Takeover inspection (same as inspector)
+        'specialist_inspection_unscheduled': 3,  # Voluntary inspection
+        'specialist_inspection_defect_flat': 1,  # Per defect found (unscheduled only)
+        # Engineer
+        'engineer_publish_plan': 3,
+        'engineer_review_inspection': 1,  # Also applies to admin
+        'engineer_review_minor': 1,
+        'engineer_review_major': 2,
+        'engineer_own_minor': 2,
+        'engineer_own_major': 4,
+        'engineer_escalation': 1,
+        # Legacy (kept for backward compat but no longer triggered)
+        'achievement_earned': 0,
+        'challenge_complete': 0,
     }
+
+    # Safety-critical system keywords (for bonus point detection)
+    SAFETY_CRITICAL_KEYWORDS = [
+        'engine', 'transmission', 'hydraulic', 'ac', 'air conditioning',
+        'air.conditioning', 'brakes', 'brake',
+    ]
 
     # Level thresholds (XP needed to reach each level)
     LEVEL_XP = [0, 150, 350, 600, 900, 1250, 1650, 2100, 2600, 3150]  # Level 1-10
@@ -92,12 +114,15 @@ class LeaderboardAIService:
         user.total_points = old_total + final_points
 
         # Update role-specific points based on source_type
-        if source_type == 'inspection':
+        if source_type in ('inspection', 'defect', 'inspector_daily'):
             user.inspector_points = (user.inspector_points or 0) + final_points
-        elif source_type == 'job':
+        elif source_type in ('specialist_job', 'additional_finding', 'specialist_daily', 'specialist_inspection'):
             user.specialist_points = (user.specialist_points or 0) + final_points
-        elif source_type in ('defect', 'engineer_job'):
+        elif source_type in ('engineer_job', 'engineer_review', 'engineer_plan', 'engineer_escalation'):
             user.engineer_points = (user.engineer_points or 0) + final_points
+        elif source_type == 'job':
+            # Legacy: route to specialist
+            user.specialist_points = (user.specialist_points or 0) + final_points
 
         # Get or create user level
         user_level = UserLevel.query.filter_by(user_id=user_id).first()
@@ -148,59 +173,88 @@ class LeaderboardAIService:
     def calculate_speed_bonus(self, estimated_hours: float, actual_hours: float) -> int:
         """
         Calculate bonus points for completing under estimated time.
-        >20% faster = 10 points, >10% faster = 5 points
+        Flat 2 points if finished faster than estimated.
         """
         if actual_hours <= 0 or estimated_hours <= 0:
             return 0
-        time_saved_percent = (estimated_hours - actual_hours) / estimated_hours
-        if time_saved_percent >= 0.2:
-            return 10
-        elif time_saved_percent >= 0.1:
-            return 5
+        if actual_hours < estimated_hours:
+            return self.POINT_VALUES['job_under_time']
         return 0
+
+    def is_safety_critical(self, text: str) -> bool:
+        """Check if text mentions a safety-critical system."""
+        if not text:
+            return False
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in self.SAFETY_CRITICAL_KEYWORDS)
+
+    def award_defect_points(self, user_id: int, severity: str, defect_description: str = None,
+                            checklist_item_name: str = None) -> dict:
+        """Award points for finding a defect based on severity + safety-critical bonus."""
+        severity_key = f'defect_found_{severity}'
+        base_pts = self.POINT_VALUES.get(severity_key, 1)
+
+        result = self.award_points(
+            user_id=user_id,
+            points=base_pts,
+            reason=f'Defect found ({severity})',
+            source_type='defect'
+        )
+
+        # Check safety-critical bonus from description or checklist item name
+        check_text = f"{defect_description or ''} {checklist_item_name or ''}"
+        if self.is_safety_critical(check_text):
+            bonus_result = self.award_points(
+                user_id=user_id,
+                points=self.POINT_VALUES['defect_safety_critical_bonus'],
+                reason='Safety-critical system defect bonus',
+                source_type='defect'
+            )
+            result['safety_critical_bonus'] = bonus_result['points_awarded']
+
+        return result
+
+    def award_job_completion_points(self, user_id: int, difficulty: str) -> dict:
+        """Award points for completing a specialist job (minor or major)."""
+        key = f'job_complete_{difficulty or "minor"}'
+        pts = self.POINT_VALUES.get(key, self.POINT_VALUES['job_complete_minor'])
+        return self.award_points(
+            user_id=user_id,
+            points=pts,
+            reason=f'Job completed ({difficulty or "minor"})',
+            source_type='specialist_job'
+        )
+
+    def award_engineer_points(self, user_id: int, action: str, detail: str = '') -> dict:
+        """Award points to engineer for various actions."""
+        key = f'engineer_{action}'
+        pts = self.POINT_VALUES.get(key, 1)
+        return self.award_points(
+            user_id=user_id,
+            points=pts,
+            reason=f'Engineer: {action} {detail}'.strip(),
+            source_type=f'engineer_{action.split("_")[0] if "_" in action else action}'
+        )
+
+    def award_daily_completion(self, user_id: int, role: str) -> dict:
+        """Award daily completion bonus (3 pts) for finishing all assigned work."""
+        return self.award_points(
+            user_id=user_id,
+            points=self.POINT_VALUES['daily_completion_bonus'],
+            reason=f'Daily completion bonus ({role})',
+            source_type=f'{role}_daily'
+        )
 
     def update_streak(self, user_id: int) -> dict:
         """
-        Update user's work streak. Call when user completes any activity.
-
-        Returns:
-            {'current_streak': X, 'longest_streak': Y, 'streak_bonus': Z}
+        DEPRECATED: Streak system replaced by daily_completion_bonus.
+        Kept as no-op to avoid breaking any callers.
         """
-        user_streak = UserStreak.query.filter_by(user_id=user_id).first()
-        if not user_streak:
-            user_streak = UserStreak(user_id=user_id)
-            db.session.add(user_streak)
-
-        old_streak = user_streak.current_streak
-        user_streak.update_streak(date.today())
-
-        streak_bonus = 0
-
-        # Check for streak milestones
-        if user_streak.current_streak >= 30 and old_streak < 30:
-            streak_bonus = self.POINT_VALUES['streak_30']
-            self.award_points(
-                user_id=user_id,
-                points=streak_bonus,
-                reason='30-day streak achievement',
-                source_type='streak'
-            )
-        elif user_streak.current_streak >= 7 and old_streak < 7:
-            streak_bonus = self.POINT_VALUES['streak_7']
-            self.award_points(
-                user_id=user_id,
-                points=streak_bonus,
-                reason='7-day streak achievement',
-                source_type='streak'
-            )
-
-        db.session.commit()
-
         return {
-            'current_streak': user_streak.current_streak,
-            'longest_streak': user_streak.longest_streak,
-            'streak_bonus': streak_bonus,
-            'total_active_days': user_streak.total_active_days,
+            'current_streak': 0,
+            'longest_streak': 0,
+            'streak_bonus': 0,
+            'total_active_days': 0,
         }
 
     def check_achievements(self, user_id: int) -> list:
@@ -643,18 +697,11 @@ class LeaderboardAIService:
                     'points_needed': points_gap
                 })
 
-        # Tip: Streak maintenance
-        if user_streak:
-            if user_streak.current_streak >= 5 and user_streak.current_streak < 7:
-                tips.append({
-                    'tip': f'Maintain your streak for {7 - user_streak.current_streak} more day(s) for 50 bonus points!',
-                    'priority': 'high'
-                })
-            elif user_streak.current_streak >= 25 and user_streak.current_streak < 30:
-                tips.append({
-                    'tip': f'Only {30 - user_streak.current_streak} days to hit 30-day streak for 200 bonus points!',
-                    'priority': 'high'
-                })
+        # Tip: Daily completion bonus
+        tips.append({
+            'tip': f'Complete all assigned work today for {self.POINT_VALUES["daily_completion_bonus"]} bonus points',
+            'priority': 'medium'
+        })
 
         # Tip: Quality bonus
         tips.append({
@@ -664,7 +711,7 @@ class LeaderboardAIService:
 
         # Tip: Speed bonus
         tips.append({
-            'tip': 'Complete jobs 20% faster than estimated for 10 bonus points each',
+            'tip': f'Complete jobs faster than estimated for {self.POINT_VALUES["job_under_time"]} bonus points each',
             'priority': 'medium'
         })
 
@@ -820,6 +867,7 @@ class LeaderboardAIService:
                 'tier': user_level.tier if user_level else 'bronze',
                 'streak': user_streak.current_streak if user_streak else 0,
                 'achievements_count': achievements_count,
+                'avg_rating': round(user_level.avg_rating, 2) if user_level and user_level.avg_rating else 0.0,
             })
 
         # Sort by points descending

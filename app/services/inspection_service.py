@@ -453,6 +453,35 @@ class InspectionService:
                 related_id=inspection.id
             )
         
+        # Award inspection points
+        try:
+            from app.services.leaderboard_ai_service import LeaderboardAIService
+            lb = LeaderboardAIService()
+            lb.award_points(
+                user_id=inspection.technician_id,
+                points=lb.POINT_VALUES['inspection_complete'],
+                reason='Inspection completed',
+                source_type='inspection',
+                source_id=inspection.id
+            )
+            # Award defect points for each failed answer
+            for answer in failed_answers:
+                item = answer.checklist_item
+                severity = 'low'
+                if item and hasattr(item, 'severity'):
+                    severity = (item.severity or 'low').lower()
+                elif answer.urgency_level:
+                    severity = {0: 'low', 1: 'medium', 2: 'high', 3: 'critical'}.get(
+                        answer.urgency_level, 'low')
+                lb.award_defect_points(
+                    user_id=inspection.technician_id,
+                    severity=severity,
+                    defect_description=answer.notes or '',
+                    checklist_item_name=item.name if item else ''
+                )
+        except Exception as e:
+            logger.warning("Point awarding failed for inspection %s: %s", inspection.id, e)
+
         logger.info("Inspection submitted: inspection_id=%s result=%s technician_id=%s", inspection.id, inspection.result, inspection.technician_id)
         return inspection
 

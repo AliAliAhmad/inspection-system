@@ -5,14 +5,17 @@ export interface LeaderboardEntry {
   full_name: string;
   employee_id?: string;
   role: string;
+  role_id?: string;
+  specialization?: string;
   rank: number;
   rank_change?: number;  // +3, -1, 0
+  points: number;
   total_points: number;
   level: number;
   tier: Tier;
   current_streak: number;
   achievements_count: number;
-  avg_rating?: number;
+  avg_rating: number;
 }
 
 export interface UserStats {
@@ -129,4 +132,49 @@ export interface AwardPointsPayload {
   user_id: number;
   points: number;
   reason: string;
+}
+
+// EPI (Employee Performance Index)
+export interface EPIBreakdown {
+  completion: number;    // 0-20
+  quality: number;       // 0-20
+  timeliness: number;    // 0-20
+  contribution: number;  // 0-20
+  safety: number;        // 0-20
+  total_epi: number;     // 0-100
+}
+
+export interface EPISnapshot {
+  id: number;
+  user_id: number;
+  role: string;
+  week_start: string;
+  week_end: string;
+  breakdown: EPIBreakdown;
+  total_epi: number;
+  created_at: string;
+}
+
+// Star History
+export interface StarHistoryEntry {
+  id: number;
+  user_id: number;
+  role: string;
+  target_type: string;  // 'inspector_daily' | 'specialist_job' | 'engineer_daily'
+  target_id?: number;
+  target_date?: string;
+  star_1: boolean;
+  star_2: boolean;
+  star_3: boolean;
+  star_4: boolean;
+  star_5: boolean;
+  star_1_name: string;
+  star_2_name: string;
+  star_3_name: string;
+  star_4_name: string;
+  star_5_name: string;
+  total_stars: number;
+  auto_stars: number;
+  manual_stars: number;
+  created_at: string;
 }

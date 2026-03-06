@@ -461,3 +461,105 @@ def get_my_streak_alias():
     user = get_current_user()
     data = gamification.get_streak_info(user.id)
     return jsonify({'status': 'success', 'data': data})
+
+
+# ==================== EPI (Employee Performance Index) ====================
+
+@bp.route('/epi', methods=['GET'])
+@jwt_required()
+def get_my_epi():
+    """Get current user's EPI score and breakdown."""
+    from app.services.epi_service import EPIService
+    user = get_current_user()
+    service = EPIService()
+    epi = service.calculate_epi(user.id, user.role)
+    return jsonify({'status': 'success', 'data': epi})
+
+
+@bp.route('/epi/<int:user_id>', methods=['GET'])
+@jwt_required()
+def get_user_epi(user_id):
+    """Get specific user's EPI score."""
+    from app.services.epi_service import EPIService
+    from app.models import User
+    user = db.session.get(User, user_id)
+    if not user:
+        raise NotFoundError(f"User {user_id} not found")
+    service = EPIService()
+    epi = service.calculate_epi(user.id, user.role)
+    return jsonify({'status': 'success', 'data': epi})
+
+
+@bp.route('/epi/history', methods=['GET'])
+@jwt_required()
+def get_epi_history():
+    """Get weekly EPI snapshots for trend chart."""
+    from app.models.epi_snapshot import EPISnapshot
+    from datetime import datetime, timedelta
+
+    user_id = request.args.get('user_id', type=int) or get_current_user().id
+    weeks = request.args.get('weeks', 12, type=int)
+
+    start_date = datetime.utcnow().date() - timedelta(weeks=weeks)
+    snapshots = EPISnapshot.query.filter(
+        EPISnapshot.user_id == user_id,
+        EPISnapshot.week_start >= start_date
+    ).order_by(EPISnapshot.week_start.desc()).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': [s.to_dict() for s in snapshots]
+    })
+
+
+# ==================== STAR HISTORY ====================
+
+@bp.route('/stars', methods=['GET'])
+@jwt_required()
+def get_my_stars():
+    """Get current user's star history."""
+    from app.models.star_history import StarHistory
+
+    user = get_current_user()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    query = StarHistory.query.filter_by(user_id=user.id).order_by(
+        StarHistory.created_at.desc()
+    )
+    pagination = query.paginate(page=page, per_page=per_page)
+
+    return jsonify({
+        'status': 'success',
+        'data': [s.to_dict() for s in pagination.items],
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': pagination.total,
+            'pages': pagination.pages
+        }
+    })
+
+
+@bp.route('/stars/<int:user_id>', methods=['GET'])
+@jwt_required()
+def get_user_stars(user_id):
+    """Get specific user's star breakdown."""
+    from app.models.star_history import StarHistory
+    from sqlalchemy import func
+
+    avg_stars = db.session.query(
+        func.avg(StarHistory.total_stars)
+    ).filter(StarHistory.user_id == user_id).scalar() or 0
+
+    recent = StarHistory.query.filter_by(user_id=user_id).order_by(
+        StarHistory.created_at.desc()
+    ).limit(10).all()
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'avg_stars': round(float(avg_stars), 2),
+            'recent': [s.to_dict() for s in recent]
+        }
+    })
