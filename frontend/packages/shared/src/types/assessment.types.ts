@@ -68,6 +68,8 @@ export interface InspectionAssignment {
   equipment: import('./equipment.types').Equipment | null;
   mechanical_inspector_id: number | null;
   electrical_inspector_id: number | null;
+  engineer_id?: number | null;
+  engineer?: { id: number; full_name: string; role: string } | null;
   berth: string | null;
   shift: 'day' | 'night';
   status: string;

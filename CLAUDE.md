@@ -73,7 +73,8 @@ See HISTORY.md for full changelog. Only keep last 3 entries here.
 
 | 2026-03-07 | Offline improvements 6-7: StaleDataBanner component (yellow bar when cached data >24h old, on 3 screens); SyncQueueScreen (full offline queue dashboard with retry/clear); OfflinePendingBadge now navigates to SyncQueue; cache timestamp tracking in offline-cache.ts | ✅ Done |
 | 2026-03-07 | Improvement 3: Smart Conflict Resolution in mobile sync-manager — fail/no always wins over pass/yes; same answers update timestamp; never deletes data | ✅ Done |
-| 2026-03-07 | Offline gap fixes: InspectionChecklistScreen converted to useOfflineMutation (answer/submit/deletePhoto/deleteVideo) + useOfflineQuery (fieldReports) + StaleDataBanner; MyAssignmentsScreen smart pre-fetch (deadline priority) + offline-ready badge (✅/☁️); InspectionWizardScreen draft auto-save verified | ✅ Done |
+| 2026-03-08 | Engineer assignment feature (frontend): added engineer_id to AssignTeamPayload, InspectionAssignment type, admin assignment modal (dropdown), engineer TeamAssignment (auto-set), and "Assigned to you" badge+sorting on AssessmentTrackingPage | ✅ Done |
+| 2026-03-08 | Engineer assignment feature (backend): added engineer_id column+relationship to InspectionAssignment model, assign_team service (validates engineer role, auto-assigns if assigner is engineer, propagates to berth assignments), API endpoints (assign + bulk-assign), assessment creation links engineer_id, engineer notification on assessment ready, migration applied | ✅ Done |
 
 
 ## Plugin Management

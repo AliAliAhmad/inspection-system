@@ -15,6 +15,7 @@ import {
   Tooltip,
   Alert,
 } from 'antd';
+import { useAuth } from '../../providers/AuthProvider';
 import type { ColumnsType } from 'antd/es/table';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -101,19 +102,23 @@ function getStage(a: FinalAssessment): PipelineStage {
 interface PipelineCardProps {
   assessment: FinalAssessment;
   onClick?: () => void;
+  isAssignedToMe?: boolean;
 }
 
-function PipelineCard({ assessment, onClick }: PipelineCardProps) {
+function PipelineCard({ assessment, onClick, isAssignedToMe }: PipelineCardProps) {
   return (
     <Card
       size="small"
       hoverable
       onClick={onClick}
-      style={{ marginBottom: 8 }}
+      style={{ marginBottom: 8, borderLeft: isAssignedToMe ? '3px solid #1890ff' : undefined }}
       styles={{ body: { padding: 12 } }}
     >
       <Space direction="vertical" size={4} style={{ width: '100%' }}>
-        <Text strong>Equipment #{assessment.equipment_id}</Text>
+        <Space>
+          <Text strong>Equipment #{assessment.equipment_id}</Text>
+          {isAssignedToMe && <Tag color="blue">Assigned to you</Tag>}
+        </Space>
 
         <Space size={[4, 4]} wrap>
           {getVerdictTag(assessment.system_verdict, 'SYS')}
@@ -149,9 +154,20 @@ interface PipelineColumnProps {
   color: string;
   items: FinalAssessment[];
   onCardClick?: (a: FinalAssessment) => void;
+  currentUserId?: number;
 }
 
-function PipelineColumn({ title, icon, color, items, onCardClick }: PipelineColumnProps) {
+function PipelineColumn({ title, icon, color, items, onCardClick, currentUserId }: PipelineColumnProps) {
+  // Sort so that "Assigned to you" items appear first
+  const sortedItems = useMemo(() => {
+    if (!currentUserId) return items;
+    return [...items].sort((a, b) => {
+      const aAssigned = a.engineer_id === currentUserId ? 0 : 1;
+      const bAssigned = b.engineer_id === currentUserId ? 0 : 1;
+      return aAssigned - bAssigned;
+    });
+  }, [items, currentUserId]);
+
   return (
     <Card
       title={
@@ -171,11 +187,16 @@ function PipelineColumn({ title, icon, color, items, onCardClick }: PipelineColu
       }}
       style={{ height: '100%' }}
     >
-      {items.length === 0 ? (
+      {sortedItems.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No assessments" />
       ) : (
-        items.map((a) => (
-          <PipelineCard key={a.id} assessment={a} onClick={() => onCardClick?.(a)} />
+        sortedItems.map((a) => (
+          <PipelineCard
+            key={a.id}
+            assessment={a}
+            onClick={() => onCardClick?.(a)}
+            isAssignedToMe={currentUserId != null && a.engineer_id === currentUserId}
+          />
         ))
       )}
     </Card>
@@ -189,6 +210,7 @@ function PipelineColumn({ title, icon, color, items, onCardClick }: PipelineColu
 export default function AssessmentTrackingPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState('pipeline');
 
   // Fetch all assessments
@@ -265,12 +287,27 @@ export default function AssessmentTrackingPage() {
   );
 
   // Table columns for list view
+  // Sort all assessments so "Assigned to you" appear first
+  const sortedAssessments = useMemo(() => {
+    if (!currentUser?.id) return allAssessments;
+    return [...allAssessments].sort((a, b) => {
+      const aAssigned = a.engineer_id === currentUser.id ? 0 : 1;
+      const bAssigned = b.engineer_id === currentUser.id ? 0 : 1;
+      return aAssigned - bAssigned;
+    });
+  }, [allAssessments, currentUser?.id]);
+
   const columns: ColumnsType<FinalAssessment> = [
     {
       title: t('assessment.equipment', 'Equipment'),
       key: 'equipment',
       render: (_: unknown, record: FinalAssessment) => (
-        <Text strong>#{record.equipment_id}</Text>
+        <Space>
+          <Text strong>#{record.equipment_id}</Text>
+          {currentUser?.id != null && record.engineer_id === currentUser.id && (
+            <Tag color="blue">Assigned to you</Tag>
+          )}
+        </Space>
       ),
       sorter: (a, b) => a.equipment_id - b.equipment_id,
     },
@@ -489,6 +526,7 @@ export default function AssessmentTrackingPage() {
                     icon={<ClockCircleOutlined style={{ color: '#faad14' }} />}
                     color="#faad14"
                     items={pendingInspector}
+                    currentUserId={currentUser?.id}
                   />
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
@@ -497,6 +535,7 @@ export default function AssessmentTrackingPage() {
                     icon={<WarningOutlined style={{ color: '#1890ff' }} />}
                     color="#1890ff"
                     items={pendingEngineer}
+                    currentUserId={currentUser?.id}
                   />
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
@@ -505,6 +544,7 @@ export default function AssessmentTrackingPage() {
                     icon={<ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
                     color="#ff4d4f"
                     items={pendingAdmin}
+                    currentUserId={currentUser?.id}
                   />
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
@@ -513,6 +553,7 @@ export default function AssessmentTrackingPage() {
                     icon={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
                     color="#52c41a"
                     items={finalized}
+                    currentUserId={currentUser?.id}
                   />
                 </Col>
               </Row>
@@ -531,7 +572,7 @@ export default function AssessmentTrackingPage() {
                 <Table<FinalAssessment>
                   rowKey="id"
                   columns={columns}
-                  dataSource={allAssessments}
+                  dataSource={sortedAssessments}
                   pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `${total} assessments` }}
                   scroll={{ x: 1200 }}
                   locale={{

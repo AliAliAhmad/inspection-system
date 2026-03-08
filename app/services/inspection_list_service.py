@@ -184,7 +184,7 @@ class InspectionListService:
         return InspectionList.query.filter_by(target_date=target_date).all()
 
     @staticmethod
-    def assign_team(assignment_id, mechanical_inspector_id, electrical_inspector_id, assigned_by_id):
+    def assign_team(assignment_id, mechanical_inspector_id, electrical_inspector_id, assigned_by_id, engineer_id=None):
         """
         Assign a 2-person team to an equipment asset.
         Validates same shift and correct specializations.
@@ -194,6 +194,7 @@ class InspectionListService:
             mechanical_inspector_id: User ID of mechanical inspector
             electrical_inspector_id: User ID of electrical inspector
             assigned_by_id: Engineer assigning the team
+            engineer_id: Optional responsible engineer ID
         """
         assignment = db.session.get(InspectionAssignment, assignment_id)
         if not assignment:
@@ -251,6 +252,18 @@ class InspectionListService:
         assignment.deadline = deadline
         assignment.status = 'assigned'
 
+        # Set responsible engineer
+        if engineer_id:
+            eng_user = db.session.get(User, engineer_id)
+            if not eng_user or not (eng_user.has_role('engineer') or eng_user.has_role('admin')):
+                raise ValidationError("Selected engineer must have engineer or admin role")
+            assignment.engineer_id = engineer_id
+        else:
+            # If assigner is an engineer, they become the responsible engineer
+            assigner = db.session.get(User, assigned_by_id)
+            if assigner and (assigner.has_role('engineer') or assigner.has_role('admin')):
+                assignment.engineer_id = assigned_by_id
+
         # Auto-assign same inspector pair to other unassigned equipment at the same berth
         auto_assigned = []
         if assignment.berth:
@@ -264,6 +277,7 @@ class InspectionListService:
                 sa.mechanical_inspector_id = mechanical_inspector_id
                 sa.electrical_inspector_id = electrical_inspector_id
                 sa.assigned_by = assigned_by_id
+                sa.engineer_id = assignment.engineer_id
                 sa.assigned_at = datetime.utcnow()
                 sa.deadline = deadline
                 sa.status = 'assigned'

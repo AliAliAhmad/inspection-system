@@ -36,6 +36,10 @@ class InspectionAssignment(db.Model):
     # Assignment details
     shift = db.Column(db.String(20), nullable=False)  # 'day' or 'night'
     assigned_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    # Responsible engineer
+    engineer_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
     assigned_at = db.Column(db.DateTime, nullable=True)
 
     # Deadline (30 hours from shift start)
@@ -72,6 +76,7 @@ class InspectionAssignment(db.Model):
     mechanical_inspector = db.relationship('User', foreign_keys=[mechanical_inspector_id])
     electrical_inspector = db.relationship('User', foreign_keys=[electrical_inspector_id])
     assigner = db.relationship('User', foreign_keys=[assigned_by])
+    engineer = db.relationship('User', foreign_keys=[engineer_id])
     original_assignment = db.relationship('InspectionAssignment', remote_side=[id])
 
     def _compute_pending_on(self):
@@ -111,6 +116,8 @@ class InspectionAssignment(db.Model):
             'electrical_inspector': self.electrical_inspector.to_dict() if self.electrical_inspector else None,
             'shift': self.shift,
             'assigned_by': self.assigned_by,
+            'engineer_id': self.engineer_id,
+            'engineer': self.engineer.to_dict() if self.engineer else None,
             'assigned_at': self.assigned_at.isoformat() if self.assigned_at else None,
             'deadline': self.deadline.isoformat() if self.deadline else None,
             'backlog_triggered': self.backlog_triggered,

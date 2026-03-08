@@ -221,6 +221,7 @@ export interface GenerateListPayload {
 export interface AssignTeamPayload {
   mechanical_inspector_id: number;
   electrical_inspector_id: number;
+  engineer_id?: number;
 }
 
 export interface MyAssignmentsParams extends PaginationParams {

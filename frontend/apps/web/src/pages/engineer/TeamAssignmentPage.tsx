@@ -25,10 +25,12 @@ import {
   User,
   formatDate,
 } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 
 export default function TeamAssignmentPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
 
   const [targetDate, setTargetDate] = useState<dayjs.Dayjs | null>(dayjs());
   const [shift, setShift] = useState<'day' | 'night'>('day');
@@ -81,7 +83,7 @@ export default function TeamAssignmentPage() {
       payload,
     }: {
       assignmentId: number;
-      payload: { mechanical_inspector_id: number; electrical_inspector_id: number };
+      payload: { mechanical_inspector_id: number; electrical_inspector_id: number; engineer_id?: number };
     }) => inspectionAssignmentsApi.assignTeam(assignmentId, payload),
     onSuccess: () => {
       message.success(t('common.success', 'Team assigned'));
@@ -103,6 +105,7 @@ export default function TeamAssignmentPage() {
       payload: {
         mechanical_inspector_id: sel.mechanical_inspector_id,
         electrical_inspector_id: sel.electrical_inspector_id,
+        engineer_id: currentUser?.id,
       },
     });
   };

@@ -44,7 +44,8 @@ class AssessmentService:
             equipment_id=assignment.equipment_id,
             inspection_assignment_id=assignment_id,
             mechanical_inspector_id=assignment.mechanical_inspector_id,
-            electrical_inspector_id=assignment.electrical_inspector_id
+            electrical_inspector_id=assignment.electrical_inspector_id,
+            engineer_id=assignment.engineer_id
         )
         db.session.add(assessment)
 
@@ -73,6 +74,17 @@ class AssessmentService:
                 type='assessment_required',
                 title='Final Assessment Required',
                 message=f'Please submit your final verdict for {assignment.equipment.name}. System recommends: {assessment.system_verdict}',
+                related_type='final_assessment',
+                related_id=assessment.id
+            )
+
+        # Notify assigned engineer
+        if assignment.engineer_id:
+            NotificationService.create_notification(
+                user_id=assignment.engineer_id,
+                type='assessment_ready',
+                title='Assessment Ready for Review',
+                message=f'Inspection complete for {assignment.equipment.name}. Assessment ready for your review.',
                 related_type='final_assessment',
                 related_id=assessment.id
             )

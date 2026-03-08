@@ -82,6 +82,7 @@ import {
   RouteOptimizer,
 } from '../../components/inspection-assignments';
 import { scheduleAIApi } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -754,6 +755,8 @@ function GenerateWizardModal({ open, onClose, form, selectedEquipmentIds, onSele
 export default function InspectionAssignmentsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
+  const currentUserRole = currentUser?.role;
 
   // Modal states
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -966,6 +969,9 @@ export default function InspectionAssignmentsPage() {
   );
   const elecOptions = allAssignableUsers.filter(
     (u: any) => isInspectorRole(u) && (u.specialization === 'electrical' || !u.specialization),
+  );
+  const engineerOptions = allAssignableUsers.filter(
+    (u: any) => u.role === 'engineer' || u.role === 'admin',
   );
 
   const PENDING_LABELS: Record<string, string> = {
@@ -1648,6 +1654,24 @@ export default function InspectionAssignmentsPage() {
               placeholder={t('assignments.selectInspector', 'Select electrical inspector')}
             >
               {elecOptions.map(renderInspectorOption)}
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="engineer_id"
+            label={t('assignments.engineer', 'Responsible Engineer')}
+            rules={[{ required: currentUserRole === 'admin', message: 'Please select an engineer' }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder={t('assignments.selectEngineer', 'Select responsible engineer')}
+              allowClear
+            >
+              {engineerOptions.map((u: any) => (
+                <Select.Option key={u.id} value={u.id}>
+                  {u.full_name} ({u.role})
+                </Select.Option>
+              ))}
             </Select>
           </Form.Item>
         </Form>

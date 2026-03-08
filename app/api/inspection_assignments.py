@@ -407,7 +407,8 @@ def assign_team(assignment_id):
         assignment_id=assignment_id,
         mechanical_inspector_id=data['mechanical_inspector_id'],
         electrical_inspector_id=data['electrical_inspector_id'],
-        assigned_by_id=int(current_user_id)
+        assigned_by_id=int(current_user_id),
+        engineer_id=data.get('engineer_id')
     )
 
     auto_count = getattr(assignment, '_auto_assigned_count', 0)
@@ -797,7 +798,8 @@ def bulk_assign():
                         assignment_id=assignment_id,
                         mechanical_inspector_id=suggestion['mechanical']['id'],
                         electrical_inspector_id=suggestion['electrical']['id'],
-                        assigned_by_id=current_user_id
+                        assigned_by_id=current_user_id,
+                        engineer_id=data.get('engineer_id')
                     )
                     results['success'].append({
                         'assignment_id': assignment_id,
@@ -834,7 +836,8 @@ def bulk_assign():
                     assignment_id=assignment_id,
                     mechanical_inspector_id=mech_id,
                     electrical_inspector_id=elec_id,
-                    assigned_by_id=current_user_id
+                    assigned_by_id=current_user_id,
+                    engineer_id=item.get('engineer_id') or data.get('engineer_id')
                 )
                 results['success'].append({
                     'assignment_id': assignment_id,
