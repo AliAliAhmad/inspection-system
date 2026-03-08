@@ -71,9 +71,9 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
-| 2026-03-06 | Inspection UX improvements 1-3: Smart question ordering by category, dual progress bars, one-tap agree + agree all button (both web + mobile) | ✅ Done |
-| 2026-03-06 | Inspection UX improvements 4-7: Defect history badge, reading anomaly alert, auto-urgency suggestion, timer & pace; 2 new backend endpoints; web + mobile | ✅ Done |
-| 2026-03-06 | Improvement 8: Answer summary grid component for web; added to AllInspectionsPage for admin/engineer review | ✅ Done |
+| 2026-03-07 | Offline improvements 6-7: StaleDataBanner component (yellow bar when cached data >24h old, on 3 screens); SyncQueueScreen (full offline queue dashboard with retry/clear); OfflinePendingBadge now navigates to SyncQueue; cache timestamp tracking in offline-cache.ts | ✅ Done |
+| 2026-03-07 | Improvement 3: Smart Conflict Resolution in mobile sync-manager — fail/no always wins over pass/yes; same answers update timestamp; never deletes data | ✅ Done |
+| 2026-03-07 | Offline gap fixes: InspectionChecklistScreen converted to useOfflineMutation (answer/submit/deletePhoto/deleteVideo) + useOfflineQuery (fieldReports) + StaleDataBanner; MyAssignmentsScreen smart pre-fetch (deadline priority) + offline-ready badge (✅/☁️); InspectionWizardScreen draft auto-save verified | ✅ Done |
 
 
 ## Plugin Management

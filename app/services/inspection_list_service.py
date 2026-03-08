@@ -235,31 +235,7 @@ class InspectionListService:
         if elec_leave:
             raise ValidationError(f"{elec.full_name} is on leave on {target_date}")
 
-        # Validate same shift using roster for the assignment date
-        # Cross-match: 'day' roster covers 'morning'/'afternoon' assignments
-        def shifts_compatible(user_shift, assignment_shift):
-            if not user_shift:
-                return True  # No roster = allow assignment
-            if user_shift == 'off':
-                return True  # Roster day-off can be overridden by admin/engineer
-            if user_shift == assignment_shift:
-                return True
-            if user_shift == 'day' and assignment_shift in ('morning', 'afternoon', 'day'):
-                return True
-            if assignment_shift == 'day' and user_shift in ('morning', 'afternoon', 'day'):
-                return True
-            return False
-
-        mech_roster = RosterEntry.query.filter_by(user_id=mechanical_inspector_id, date=target_date).first()
-        elec_roster = RosterEntry.query.filter_by(user_id=electrical_inspector_id, date=target_date).first()
-        mech_shift = mech_roster.shift if mech_roster else mech.shift
-        elec_shift = elec_roster.shift if elec_roster else elec.shift
-        if not shifts_compatible(mech_shift, assignment.shift) or not shifts_compatible(elec_shift, assignment.shift):
-            raise ValidationError(
-                f"Both inspectors must be on the {assignment.shift} shift for {target_date}. "
-                f"Mechanical inspector is on '{mech_shift or 'unknown'}', "
-                f"Electrical inspector is on '{elec_shift or 'unknown'}'"
-            )
+        # Shift check removed — any inspector can be assigned regardless of roster/shift
 
         # Calculate deadline (30 hours from shift start)
         shift_hours = {'morning': 6, 'day': 7, 'afternoon': 14, 'night': 22}

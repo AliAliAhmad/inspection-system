@@ -6,6 +6,7 @@ export const offlineCache = {
   // Store data with a key
   async set<T>(key: string, data: T): Promise<void> {
     await AsyncStorage.setItem(CACHE_PREFIX + key, JSON.stringify(data));
+    await AsyncStorage.setItem(CACHE_PREFIX + key + ':ts', String(Date.now()));
   },
 
   // Get cached data
@@ -16,9 +17,16 @@ export const offlineCache = {
     catch { return null; }
   },
 
+  // Get cache timestamp for a key
+  async getTimestamp(key: string): Promise<number | null> {
+    const ts = await AsyncStorage.getItem(CACHE_PREFIX + key + ':ts');
+    return ts ? Number(ts) : null;
+  },
+
   // Remove cached data
   async remove(key: string): Promise<void> {
     await AsyncStorage.removeItem(CACHE_PREFIX + key);
+    await AsyncStorage.removeItem(CACHE_PREFIX + key + ':ts');
   },
 
   // Clear all cache

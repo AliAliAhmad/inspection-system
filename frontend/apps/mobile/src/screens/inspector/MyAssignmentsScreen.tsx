@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { scale, vscale, mscale, fontScale } from '../../utils/scale';
 import {
   View,
@@ -12,7 +12,7 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,11 +20,17 @@ import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAuth } from '../../providers/AuthProvider';
 import {
   inspectionAssignmentsApi,
+  inspectionsApi,
+  assessmentsApi,
+  equipmentApi,
   InspectionAssignment,
   MyAssignmentStats,
   AnswerSummaryEntry,
   AssessmentSummary,
 } from '@inspection/shared';
+import StaleDataBanner from '../../components/StaleDataBanner';
+import { useOffline } from '../../providers/OfflineProvider';
+import { offlineCache } from '../../storage/offline-cache';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -349,10 +355,13 @@ export default function MyAssignmentsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuth();
   const isAr = i18n.language === 'ar';
+  const { isOnline } = useOffline();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [assessmentFilter, setAssessmentFilter] = useState<AssessmentFilter>('all');
   const [selectedEntry, setSelectedEntry] = useState<AnswerSummaryEntry | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [cachedAssignments, setCachedAssignments] = useState<Set<number>>(new Set());
+  const prefetchedRef = useRef(false);
 
   // Personal stats
   const {
@@ -379,6 +388,63 @@ export default function MyAssignmentsScreen() {
   });
 
   const allAssignments = (Array.isArray(data) ? data : []) as InspectionAssignment[];
+
+  // Pre-fetch assignment data for offline use (priority: today > tomorrow > rest)
+  useEffect(() => {
+    if (!isOnline || prefetchedRef.current || allAssignments.length === 0) return;
+    prefetchedRef.current = true;
+
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+    // Sort by deadline priority: today first, tomorrow second, rest last
+    const sorted = [...allAssignments].sort((a, b) => {
+      const aDate = (a.deadline || '').slice(0, 10);
+      const bDate = (b.deadline || '').slice(0, 10);
+      const aPriority = aDate === todayStr ? 0 : aDate === tomorrowStr ? 1 : 2;
+      const bPriority = bDate === todayStr ? 0 : bDate === tomorrowStr ? 1 : 2;
+      return aPriority - bPriority;
+    });
+
+    (async () => {
+      const cachedSet = new Set<number>();
+      for (const assignment of sorted) {
+        try {
+          // Pre-fetch inspection data
+          const inspRes = await inspectionsApi.getByAssignment(assignment.id);
+          const inspData = (inspRes.data as any)?.data ?? inspRes.data;
+          await offlineCache.set(`inspection-${assignment.id}`, inspData);
+
+          // Pre-fetch colleague answers
+          if (inspData?.id) {
+            try {
+              const colleagueRes = await inspectionsApi.getColleagueAnswers(inspData.id);
+              await offlineCache.set(`colleague-answers-${inspData.id}`, colleagueRes.data);
+            } catch { /* optional data */ }
+          }
+
+          cachedSet.add(assignment.id);
+        } catch { /* skip failed items */ }
+      }
+      setCachedAssignments(cachedSet);
+    })();
+  }, [isOnline, allAssignments]);
+
+  // Check which assignments are already cached (on mount / when offline)
+  useEffect(() => {
+    if (allAssignments.length === 0) return;
+    (async () => {
+      const cachedSet = new Set<number>();
+      for (const a of allAssignments) {
+        const cached = await offlineCache.get(`inspection-${a.id}`);
+        if (cached) cachedSet.add(a.id);
+      }
+      setCachedAssignments(cachedSet);
+    })();
+  }, [allAssignments.length]);
 
   // Status grouping
   const IN_PROGRESS_STATUSES = ['in_progress', 'mech_complete', 'elec_complete', 'both_complete', 'assessment_pending'];
@@ -523,8 +589,15 @@ export default function MyAssignmentsScreen() {
             />
           </View>
           <View>
-            <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-              <Text style={styles.statusBadgeText}>{item.status.replace(/_/g, ' ')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                <Text style={styles.statusBadgeText}>{item.status.replace(/_/g, ' ')}</Text>
+              </View>
+              {cachedAssignments.has(item.id) ? (
+                <Text style={{ fontSize: 14 }}>✅</Text>
+              ) : (
+                <Text style={{ fontSize: 14, opacity: 0.4 }}>☁️</Text>
+              )}
             </View>
             {item.pending_on && PENDING_LABEL_KEYS[item.pending_on] ? (
               <Text style={styles.pendingOnText}>{t(PENDING_LABEL_KEYS[item.pending_on])}</Text>
@@ -631,6 +704,7 @@ export default function MyAssignmentsScreen() {
 
   return (
     <View testID="assignments-screen" style={styles.container}>
+      <StaleDataBanner cacheKey="my-assignments" />
       {/* User greeting + star score */}
       <View style={styles.greetingRow}>
         <Text style={styles.greetingText}>

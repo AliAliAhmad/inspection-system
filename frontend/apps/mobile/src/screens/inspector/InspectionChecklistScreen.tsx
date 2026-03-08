@@ -14,7 +14,7 @@ import {
 import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,6 +32,8 @@ import {
   aiApi,
 } from '@inspection/shared';
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
+import { useOfflineMutation } from '../../hooks/useOfflineMutation';
+import StaleDataBanner from '../../components/StaleDataBanner';
 
 /**
  * Optimize Cloudinary image URL with auto-format, auto-quality, and enhancement
@@ -190,19 +192,26 @@ export default function InspectionChecklistScreen() {
     cacheKey: inspectionId ? `inspection-progress-${inspectionId}` : 'inspection-progress-unknown',
   });
 
-  const answerMutation = useMutation({
+  const answerMutation = useOfflineMutation({
     mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string; voice_note_id?: number }) =>
       inspectionsApi.answerQuestion(inspectionId!, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inspectionProgress', inspectionId] });
+    offlineConfig: {
+      type: 'answer-question' as any,
+      endpoint: `/api/inspections/${inspectionId}/answer`,
+      method: 'POST',
     },
+    invalidateKeys: [['inspectionProgress', inspectionId]],
   });
 
-  const submitMutation = useMutation({
+  const submitMutation = useOfflineMutation({
     mutationFn: () => inspectionsApi.submit(inspectionId!),
+    offlineConfig: {
+      type: 'submit-inspection' as any,
+      endpoint: `/api/inspections/${inspectionId}/submit`,
+      method: 'POST',
+    },
+    invalidateKeys: [['myAssignments'], ['inspection', 'by-assignment', id]],
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
-      queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
       navigation.replace('Assessment', { id });
     },
     onError: (error: any) => {
@@ -411,10 +420,17 @@ export default function InspectionChecklistScreen() {
   }, [t, submitMutation]);
 
   // Delete photo mutation
-  const deletePhotoMutation = useMutation({
+  const deletePhotoMutation = useOfflineMutation({
     mutationFn: (checklistItemId: number) =>
       inspectionsApi.deletePhoto(inspectionId!, checklistItemId),
-    onSuccess: (_, checklistItemId) => {
+    offlineConfig: {
+      type: 'answer-question' as any,
+      endpoint: `/api/inspections/${inspectionId}/delete-photo`,
+      method: 'POST',
+      toPayload: (checklistItemId: number) => ({ checklist_item_id: checklistItemId }),
+    },
+    invalidateKeys: [['inspection', 'by-assignment', id]],
+    onSuccess: (_: any, checklistItemId: number) => {
       setLocalAnswers((prev) => ({
         ...prev,
         [checklistItemId]: {
@@ -423,7 +439,6 @@ export default function InspectionChecklistScreen() {
           photo_uri: undefined,
         },
       }));
-      queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
       Alert.alert(t('common.success', 'Success'), t('inspection.photoDeleted', 'Photo deleted'));
     },
     onError: (error: any) => {
@@ -433,10 +448,17 @@ export default function InspectionChecklistScreen() {
   });
 
   // Delete video mutation
-  const deleteVideoMutation = useMutation({
+  const deleteVideoMutation = useOfflineMutation({
     mutationFn: (checklistItemId: number) =>
       inspectionsApi.deleteVideo(inspectionId!, checklistItemId),
-    onSuccess: (_, checklistItemId) => {
+    offlineConfig: {
+      type: 'answer-question' as any,
+      endpoint: `/api/inspections/${inspectionId}/delete-video`,
+      method: 'POST',
+      toPayload: (checklistItemId: number) => ({ checklist_item_id: checklistItemId }),
+    },
+    invalidateKeys: [['inspection', 'by-assignment', id]],
+    onSuccess: (_: any, checklistItemId: number) => {
       setLocalAnswers((prev) => ({
         ...prev,
         [checklistItemId]: {
@@ -445,7 +467,6 @@ export default function InspectionChecklistScreen() {
           video_uri: undefined,
         },
       }));
-      queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
       Alert.alert(t('common.success', 'Success'), t('inspection.videoDeleted', 'Video deleted'));
     },
     onError: (error: any) => {
@@ -1069,11 +1090,10 @@ export default function InspectionChecklistScreen() {
   const equipmentId = (inspData as any).equipment_id ?? (inspData as any).equipment?.id;
 
   // Query open field-reported defects for this equipment
-  const fieldReportsQuery = useQuery({
+  const fieldReportsQuery = useOfflineQuery({
     queryKey: ['field-reports', equipmentId],
-    queryFn: () => defectsApi.listQuickReports({ type: 'all', per_page: 10 }),
-    enabled: !!equipmentId,
-    select: (res) => {
+    queryFn: async () => {
+      const res = await defectsApi.listQuickReports({ type: 'all', per_page: 10 });
       const items = (res.data as any)?.data ?? [];
       return items.filter((d: any) =>
         d.status === 'open' &&
@@ -1082,6 +1102,8 @@ export default function InspectionChecklistScreen() {
         d.report_source !== 'inspection'
       );
     },
+    enabled: !!equipmentId,
+    cacheKey: `field-reports-${equipmentId}`,
   });
   const fieldReports: any[] = fieldReportsQuery.data ?? [];
 
@@ -1110,6 +1132,7 @@ export default function InspectionChecklistScreen() {
         <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
       }
     >
+      <StaleDataBanner cacheKey={`inspection-${id}`} />
       {/* Equipment Info Header */}
       <View style={styles.headerCard}>
         <Text style={styles.headerTitle}>

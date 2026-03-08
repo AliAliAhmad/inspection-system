@@ -10,7 +10,10 @@ import {
   RefreshControl,
 } from 'react-native';
 import VoiceNoteRecorder from '../../components/VoiceNoteRecorder';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import StaleDataBanner from '../../components/StaleDataBanner';
+import { useQueryClient } from '@tanstack/react-query';
+import { useOfflineQuery } from '../../hooks/useOfflineQuery';
+import { useOfflineMutation } from '../../hooks/useOfflineMutation';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -52,7 +55,7 @@ export default function AssessmentScreen() {
     isError,
     refetch,
     isRefetching,
-  } = useQuery({
+  } = useOfflineQuery({
     queryKey: ['assessment', id],
     queryFn: async () => {
       try {
@@ -63,6 +66,7 @@ export default function AssessmentScreen() {
         return createRes.data.data ?? createRes.data;
       }
     },
+    cacheKey: `assessment-${id}`,
   });
 
   // Pre-select system verdict when data loads
@@ -78,12 +82,17 @@ export default function AssessmentScreen() {
     }
   }, [assessment, user?.id, selectedVerdict]);
 
-  const verdictMutation = useMutation({
+  const assessmentId = (assessment as FinalAssessment)?.id;
+  const verdictMutation = useOfflineMutation({
     mutationFn: (payload: { verdict: Verdict; monitor_reason?: string; stop_reason?: string; monitor_voice_url?: string; stop_voice_url?: string }) =>
-      assessmentsApi.submitVerdict((assessment as FinalAssessment).id, payload),
+      assessmentsApi.submitVerdict(assessmentId!, payload),
+    offlineConfig: {
+      type: 'submit-verdict' as any,
+      endpoint: `/api/assessments/${assessmentId}/verdict`,
+      method: 'POST',
+    },
+    invalidateKeys: [['assessment', id], ['myAssignments']],
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assessment', id] });
-      queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
       Alert.alert(
         t('assessment.success'),
         t('assessment.verdict_submitted')
@@ -177,6 +186,7 @@ export default function AssessmentScreen() {
         <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
       }
     >
+      <StaleDataBanner cacheKey={`assessment-${id}`} />
       {/* System Recommendation Banner */}
       {data.system_verdict && (
         <View testID="system-verdict-banner" style={[styles.systemBanner, { borderLeftColor: getVerdictColor(data.system_verdict) }]}>

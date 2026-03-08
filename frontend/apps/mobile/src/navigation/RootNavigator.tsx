@@ -132,6 +132,9 @@ import UnplannedJobScreen from '../screens/inspector/UnplannedJobScreen';
 // Create Channel (admin/engineer)
 import CreateChannelScreen from '../screens/communication/CreateChannelScreen';
 
+// Sync Queue (offline dashboard)
+import SyncQueueScreen from '../screens/shared/SyncQueueScreen';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
@@ -209,6 +212,8 @@ export type RootStackParamList = {
   NotificationPreferences: undefined;
   // Inspection Detail (read-only)
   InspectionDetail: { assignmentId: number };
+  // Sync Queue (offline dashboard)
+  SyncQueue: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -296,6 +301,8 @@ export default function RootNavigator() {
         <Stack.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} options={{ headerShown: false, title: 'Notification Preferences' }} />
         {/* Inspection Detail (read-only full details with media) */}
         <Stack.Screen name="InspectionDetail" component={InspectionDetailScreen} options={{ headerShown: false, title: 'Inspection Details' }} />
+        {/* Sync Queue (offline dashboard) */}
+        <Stack.Screen name="SyncQueue" component={SyncQueueScreen} options={{ headerShown: false, title: 'Sync Queue' }} />
       </Stack.Navigator>
 
       {/* Global Smart FAB - wrapped in error boundary for safety */}

@@ -26,7 +26,8 @@ import { Photo } from '../../components/PhotoThumbnailGrid';
 import { QuickFill } from '../../components/inspection/AnswerTemplates';
 import { QuickNotes } from '../../components/inspection/QuickNotes';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { useOfflineMutation } from '../../hooks/useOfflineMutation';
 import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -47,6 +48,7 @@ import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 import { useOffline } from '../../providers/OfflineProvider';
 import { syncManager } from '../../utils/sync-manager';
 import { useTTS } from '../../providers/TTSProvider';
+import StaleDataBanner from '../../components/StaleDataBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -186,23 +188,25 @@ export default function InspectionWizardScreen() {
 
   // ── Improvement 4: Defect History Warning Badge ──
   const equipmentId = inspection?.equipment_id;
-  const { data: itemHistoryData } = useQuery({
+  const { data: itemHistoryData } = useOfflineQuery({
     queryKey: ['checklist-item-history', equipmentId],
     queryFn: async () => {
       const res = await inspectionsApi.getChecklistItemHistory(equipmentId!);
       return (res.data as any)?.data ?? res.data;
     },
+    cacheKey: `checklist-item-history-${equipmentId}`,
     enabled: !!equipmentId,
   });
   const itemHistory: Record<string, { fail_count: number; total_count: number; has_active_defect: boolean; last_failed_at: string | null; severity: string | null; occurrence_count: number }> = itemHistoryData ?? {};
 
   // ── Improvement 5: Smart Reading Anomaly Alert ──
-  const { data: readingStatsData } = useQuery({
+  const { data: readingStatsData } = useOfflineQuery({
     queryKey: ['reading-stats', equipmentId],
     queryFn: async () => {
       const res = await equipmentApi.getReadingStats(equipmentId!, 'rnr');
       return (res.data as any)?.data ?? res.data;
     },
+    cacheKey: `reading-stats-${equipmentId}`,
     enabled: !!equipmentId,
   });
   const readingStats: { count: number; avg: number; min: number; max: number; stddev: number; last_value: number; reading_type: string; days: number } | null = readingStatsData ?? null;
@@ -430,18 +434,27 @@ export default function InspectionWizardScreen() {
     }
   }, [currentIndex, inspection?.id]);
 
-  // Answer mutation
-  const answerMutation = useMutation({
+  // Answer mutation (offline-capable)
+  const answerMutation = useOfflineMutation({
     mutationFn: (payload: { checklist_item_id: number; answer_value: string; comment?: string; voice_note_id?: number; voice_transcription?: { en: string; ar: string }; urgency_level?: number }) =>
       inspectionsApi.answerQuestion(inspectionId!, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inspectionProgress', inspectionId] });
+    offlineConfig: {
+      type: 'answer-question' as any,
+      endpoint: `/api/inspections/${inspectionId}/answer`,
+      method: 'POST',
     },
+    invalidateKeys: [['inspectionProgress', inspectionId]],
   });
 
-  // Submit mutation
-  const submitMutation = useMutation({
+  // Submit mutation (offline-capable)
+  const submitMutation = useOfflineMutation({
     mutationFn: () => inspectionsApi.submit(inspectionId!),
+    offlineConfig: {
+      type: 'submit-inspection' as any,
+      endpoint: `/api/inspections/${inspectionId}/submit`,
+      method: 'POST',
+    },
+    invalidateKeys: [['myAssignments'], ['inspection', 'by-assignment', id]],
     onSuccess: async () => {
       // Clear saved index and draft on submit
       try {
@@ -451,8 +464,6 @@ export default function InspectionWizardScreen() {
         console.error('Failed to clear saved inspection data:', error);
       }
 
-      queryClient.invalidateQueries({ queryKey: ['myAssignments'] });
-      queryClient.invalidateQueries({ queryKey: ['inspection', 'by-assignment', id] });
       Alert.alert(
         t('inspection.submitted', 'Inspection Submitted'),
         t('inspection.assessmentPending', 'Please provide your operational assessment verdict.'),
@@ -1611,6 +1622,7 @@ export default function InspectionWizardScreen() {
 
   return (
     <View style={styles.container} testID="inspection-wizard-screen">
+      <StaleDataBanner cacheKey={`inspection-${id}`} />
       {/* Slim header — single row */}
       <View style={styles.header} testID="wizard-header">
         <View style={[styles.headerTop, isArabic && { flexDirection: 'row-reverse' }]}>

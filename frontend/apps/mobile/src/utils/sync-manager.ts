@@ -8,6 +8,7 @@ const INSPECTION_MEDIA_QUEUE_KEY = 'sync-queue:pending-inspection-media';
 export type OperationType =
   | 'answer-question'
   | 'submit-inspection'
+  | 'submit-verdict'
   | 'start-job'
   | 'complete-job'
   | 'pause-job'
@@ -112,6 +113,7 @@ function getOperationDisplayName(op: Omit<QueuedOperation, 'id' | 'createdAt' | 
   const typeLabels: Record<OperationType, string> = {
     'answer-question': 'Answer',
     'submit-inspection': 'Inspection',
+    'submit-verdict': 'Submit Verdict',
     'start-job': 'Start Job',
     'complete-job': 'Complete Job',
     'pause-job': 'Pause Job',
@@ -125,6 +127,34 @@ function getOperationDisplayName(op: Omit<QueuedOperation, 'id' | 'createdAt' | 
     'upload-voice': 'Voice Note',
   };
   return typeLabels[op.type] || op.type;
+}
+
+/**
+ * Smart Conflict Resolution for offline sync.
+ *
+ * Rule: fail/defect always wins over pass — safer to flag defects.
+ * Returns true if we should send our (local) answer, false to keep the server's answer.
+ */
+function shouldOverrideServerAnswer(ourValue: string, serverValue: string): boolean {
+  const ourLower = (ourValue || '').toLowerCase().trim();
+  const serverLower = (serverValue || '').toLowerCase().trim();
+
+  // Same answer — send ours (updates timestamp)
+  if (ourLower === serverLower) return true;
+
+  // Fail/no always wins
+  const failValues = ['fail', 'no', 'stop', 'stopped', 'faulty'];
+  const ourIsFail = failValues.includes(ourLower);
+  const serverIsFail = failValues.includes(serverLower);
+
+  // Our answer is fail → always override
+  if (ourIsFail) return true;
+
+  // Server answer is fail and ours is not → keep server's
+  if (serverIsFail && !ourIsFail) return false;
+
+  // Neither is fail → last sync wins (send ours)
+  return true;
 }
 
 export const syncManager = {
@@ -329,6 +359,38 @@ export const syncManager = {
     for (const op of queue) {
       // Update status to syncing
       await syncManager.updateOperationStatus(op.id, 'syncing');
+
+      // ── Smart Conflict Resolution for answer-question operations ──
+      // Rule: fail/no always wins over pass/yes. Never delete data.
+      if (op.type === 'answer-question' && op.payload) {
+        try {
+          const inspectionId = op.endpoint.match(/\/api\/inspections\/(\d+)\/answer/)?.[1];
+          if (inspectionId) {
+            const currentRes = await apiClient.get(`/api/inspections/${inspectionId}`);
+            const currentData = (currentRes.data as Record<string, unknown>)?.data ?? currentRes.data;
+            const answers = ((currentData as Record<string, unknown>)?.answers ?? []) as Array<Record<string, unknown>>;
+            const existingAnswer = answers.find(
+              (a) => a.checklist_item_id === op.payload.checklist_item_id
+            );
+            if (existingAnswer?.answer_value && op.payload.answer_value) {
+              if (!shouldOverrideServerAnswer(
+                String(op.payload.answer_value),
+                String(existingAnswer.answer_value)
+              )) {
+                // Server's "fail" answer takes priority — skip this operation
+                if (__DEV__) console.log(
+                  `Conflict resolved: keeping server "fail" answer for item ${op.payload.checklist_item_id}`
+                );
+                await syncManager.dequeue(op.id);
+                success++;
+                continue;
+              }
+            }
+          }
+        } catch {
+          // If we can't check, just proceed with sending (fail-safe)
+        }
+      }
 
       try {
         if (op.method === 'POST') {

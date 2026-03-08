@@ -8,6 +8,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/RootNavigator';
 import { useOffline } from '../providers/OfflineProvider';
 
 /**
@@ -24,6 +27,7 @@ import { useOffline } from '../providers/OfflineProvider';
  */
 export default function OfflinePendingBadge() {
   const { t } = useTranslation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { pendingCount, isSyncing, triggerSync, isOnline } = useOffline();
 
   // Nothing to show if queue is empty and not syncing
@@ -32,9 +36,7 @@ export default function OfflinePendingBadge() {
   }
 
   const handlePress = () => {
-    if (!isSyncing && isOnline) {
-      triggerSync();
-    }
+    navigation.navigate('SyncQueue');
   };
 
   return (
@@ -46,7 +48,6 @@ export default function OfflinePendingBadge() {
       ]}
       onPress={handlePress}
       activeOpacity={0.7}
-      disabled={isSyncing || !isOnline}
       accessibilityRole="button"
       accessibilityLabel={
         isSyncing
