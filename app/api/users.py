@@ -105,9 +105,9 @@ def get_users_for_assignment():
 
 @bp.route('', methods=['GET'])
 @jwt_required()
-@admin_required()
+@role_required('admin', 'engineer', 'quality_engineer')
 def list_users():
-    """List all users. Admin only."""
+    """List all users. Admin, engineer, and QE."""
     query = User.query
 
     # Filter by active status

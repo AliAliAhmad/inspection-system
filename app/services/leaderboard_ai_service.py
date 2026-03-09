@@ -286,7 +286,7 @@ class LeaderboardAIService:
         user_streak = UserStreak.query.filter_by(user_id=user_id).first()
 
         inspection_count = Inspection.query.filter_by(
-            technician_id=user_id, status='completed'
+            technician_id=user_id, status='submitted'
         ).count()
 
         job_count = SpecialistJob.query.filter_by(
@@ -383,7 +383,7 @@ class LeaderboardAIService:
 
         # Count inspections and jobs
         inspection_count = Inspection.query.filter_by(
-            technician_id=user_id, status='completed'
+            technician_id=user_id, status='submitted'
         ).count()
 
         job_count = SpecialistJob.query.filter_by(
