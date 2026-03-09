@@ -324,6 +324,51 @@ class InspectionListService:
         return assignment
 
     @staticmethod
+    def unassign_team(assignment_id):
+        """
+        Remove inspector assignment — reset back to unassigned.
+        Only allowed if inspection has not been submitted yet.
+        """
+        assignment = db.session.get(InspectionAssignment, assignment_id)
+        if not assignment:
+            raise NotFoundError("Assignment not found")
+
+        # Don't allow unassign if inspection is already submitted/reviewed
+        if assignment.status in ('completed', 'reviewed'):
+            raise ValidationError("Cannot unassign — inspection already completed or reviewed")
+
+        # Check if there's a submitted inspection
+        from app.models.inspection import Inspection
+        existing_inspection = Inspection.query.filter_by(assignment_id=assignment_id).first()
+        if existing_inspection and existing_inspection.status in ('submitted', 'reviewed'):
+            raise ValidationError("Cannot unassign — inspection already submitted")
+
+        # Reset assignment fields
+        assignment.mechanical_inspector_id = None
+        assignment.electrical_inspector_id = None
+        assignment.engineer_id = None
+        assignment.assigned_by = None
+        assignment.assigned_at = None
+        assignment.deadline = None
+        assignment.status = 'unassigned'
+
+        # Update list stats
+        il = assignment.inspection_list
+        il.assigned_assets = InspectionAssignment.query.filter_by(
+            inspection_list_id=il.id
+        ).filter(InspectionAssignment.status != 'unassigned').count()
+
+        if il.assigned_assets == 0:
+            il.status = 'pending'
+        elif il.assigned_assets >= il.total_assets:
+            il.status = 'fully_assigned'
+        else:
+            il.status = 'partially_assigned'
+
+        db.session.commit()
+        return assignment
+
+    @staticmethod
     def _sync_to_work_plan(assignments, assigned_by_id):
         """
         Auto-create WorkPlanJob entries for assigned inspections.

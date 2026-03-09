@@ -424,6 +424,19 @@ def assign_team(assignment_id):
     }), 200
 
 
+@bp.route('/<int:assignment_id>/unassign', methods=['POST'])
+@jwt_required()
+@role_required('admin', 'engineer')
+def unassign_team(assignment_id):
+    """Remove inspector assignment — reset back to unassigned."""
+    assignment = InspectionListService.unassign_team(assignment_id)
+    return jsonify({
+        'status': 'success',
+        'message': 'Assignment removed successfully',
+        'data': assignment.to_dict(),
+    }), 200
+
+
 @bp.route('/<int:assignment_id>/berth', methods=['PUT'])
 @jwt_required()
 @role_required('admin', 'engineer')

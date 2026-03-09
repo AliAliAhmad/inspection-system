@@ -256,6 +256,12 @@ export const inspectionAssignmentsApi = {
     );
   },
 
+  unassignTeam(assignmentId: number) {
+    return getApiClient().post<ApiResponse<InspectionAssignment>>(
+      `/api/inspection-assignments/${assignmentId}/unassign`,
+    );
+  },
+
   updateBerth(assignmentId: number, berth: string) {
     return getApiClient().put<ApiResponse<InspectionAssignment>>(
       `/api/inspection-assignments/${assignmentId}/berth`,

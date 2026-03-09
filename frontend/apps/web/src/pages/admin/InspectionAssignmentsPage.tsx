@@ -58,6 +58,7 @@ import {
   SafetyCertificateOutlined,
   UnorderedListOutlined,
   DeleteOutlined,
+  UndoOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -886,6 +887,17 @@ export default function InspectionAssignmentsPage() {
     },
   });
 
+  const unassignMutation = useMutation({
+    mutationFn: (id: number) => inspectionAssignmentsApi.unassignTeam(id),
+    onSuccess: () => {
+      message.success('Assignment removed successfully');
+      queryClient.invalidateQueries({ queryKey: ['inspection-assignments'] });
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Failed to remove assignment');
+    },
+  });
+
   const bulkAssignMutation = useMutation({
     mutationFn: (assignmentIds: number[]) =>
       inspectionAssignmentsApi.bulkAssign({ assignment_ids: assignmentIds, auto_assign: true }),
@@ -1103,6 +1115,18 @@ export default function InspectionAssignmentsPage() {
                 }}
               />
             </Tooltip>
+          )}
+          {record.mechanical_inspector_id && record.status !== 'completed' && record.status !== 'reviewed' && (
+            <Popconfirm
+              title="Remove assignment and set back to unassigned?"
+              onConfirm={() => unassignMutation.mutate(record.id)}
+              okText={t('common.yes', 'Yes')}
+              cancelText={t('common.no', 'No')}
+            >
+              <Tooltip title="Unassign">
+                <Button size="small" danger icon={<UndoOutlined />} />
+              </Tooltip>
+            </Popconfirm>
           )}
           {record.status === 'unassigned' && (
             <Popconfirm
