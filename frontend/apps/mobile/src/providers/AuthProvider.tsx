@@ -11,6 +11,7 @@ import {
 } from '@inspection/shared';
 import { tokenStorage } from '../storage/token-storage';
 import { environment } from '../config/environment';
+import { prefetchAllAssignments } from '../utils/prefetch-assignments';
 
 const API_BASE_URL = environment.apiUrl;
 
@@ -103,6 +104,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               sendPushTokenToBackend(pushToken);
             }
           });
+
+          // Pre-fetch all assignments for offline use (non-blocking)
+          prefetchAllAssignments().catch(() => {});
         } catch {
           await tokenStorage.clear();
           setUser(null);
@@ -130,6 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             sendPushTokenToBackend(token);
           }
         });
+
+        // Pre-fetch all assignments for offline use (non-blocking)
+        prefetchAllAssignments().catch(() => {});
       } finally {
         setLoading(false);
       }

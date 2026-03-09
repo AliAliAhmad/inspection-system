@@ -20,9 +20,6 @@ import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAuth } from '../../providers/AuthProvider';
 import {
   inspectionAssignmentsApi,
-  inspectionsApi,
-  assessmentsApi,
-  equipmentApi,
   InspectionAssignment,
   MyAssignmentStats,
   AnswerSummaryEntry,
@@ -31,6 +28,7 @@ import {
 import StaleDataBanner from '../../components/StaleDataBanner';
 import { useOffline } from '../../providers/OfflineProvider';
 import { offlineCache } from '../../storage/offline-cache';
+import { prefetchAllAssignments } from '../../utils/prefetch-assignments';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -389,48 +387,21 @@ export default function MyAssignmentsScreen() {
 
   const allAssignments = (Array.isArray(data) ? data : []) as InspectionAssignment[];
 
-  // Pre-fetch assignment data for offline use (priority: today > tomorrow > rest)
+  // Pre-fetch assignment data for offline use (triggered on screen open when online)
   useEffect(() => {
     if (!isOnline || prefetchedRef.current || allAssignments.length === 0) return;
     prefetchedRef.current = true;
-
-    const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-
-    // Sort by deadline priority: today first, tomorrow second, rest last
-    const sorted = [...allAssignments].sort((a, b) => {
-      const aDate = (a.deadline || '').slice(0, 10);
-      const bDate = (b.deadline || '').slice(0, 10);
-      const aPriority = aDate === todayStr ? 0 : aDate === tomorrowStr ? 1 : 2;
-      const bPriority = bDate === todayStr ? 0 : bDate === tomorrowStr ? 1 : 2;
-      return aPriority - bPriority;
-    });
-
-    (async () => {
-      const cachedSet = new Set<number>();
-      for (const assignment of sorted) {
-        try {
-          // Pre-fetch inspection data
-          const inspRes = await inspectionsApi.getByAssignment(assignment.id);
-          const inspData = (inspRes.data as any)?.data ?? inspRes.data;
-          await offlineCache.set(`inspection-${assignment.id}`, inspData);
-
-          // Pre-fetch colleague answers
-          if (inspData?.id) {
-            try {
-              const colleagueRes = await inspectionsApi.getColleagueAnswers(inspData.id);
-              await offlineCache.set(`colleague-answers-${inspData.id}`, colleagueRes.data);
-            } catch { /* optional data */ }
-          }
-
-          cachedSet.add(assignment.id);
-        } catch { /* skip failed items */ }
-      }
-      setCachedAssignments(cachedSet);
-    })();
+    prefetchAllAssignments().then(() => {
+      // Refresh cache status after prefetch
+      (async () => {
+        const cachedSet = new Set<number>();
+        for (const a of allAssignments) {
+          const cached = await offlineCache.get(`inspection-${a.id}`);
+          if (cached) cachedSet.add(a.id);
+        }
+        setCachedAssignments(cachedSet);
+      })();
+    }).catch(() => {});
   }, [isOnline, allAssignments]);
 
   // Check which assignments are already cached (on mount / when offline)
