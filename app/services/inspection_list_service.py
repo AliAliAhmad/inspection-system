@@ -209,8 +209,8 @@ class InspectionListService:
         mech = db.session.get(User, mechanical_inspector_id)
         if not mech:
             raise ValidationError("Mechanical inspector not found")
-        if not (mech.has_role('inspector') or mech.has_role('specialist')):
-            raise ValidationError("User is not an inspector or specialist")
+        if not (mech.has_role('inspector') or mech.has_role('specialist') or mech.has_role('maintenance')):
+            raise ValidationError("User is not an inspector, specialist, or maintenance")
         # Check leave for the assignment date, not today
         mech_leave = Leave.query.filter(
             Leave.user_id == mechanical_inspector_id,
@@ -225,8 +225,8 @@ class InspectionListService:
         elec = db.session.get(User, electrical_inspector_id)
         if not elec:
             raise ValidationError("Electrical inspector not found")
-        if not (elec.has_role('inspector') or elec.has_role('specialist')):
-            raise ValidationError("User is not an inspector or specialist")
+        if not (elec.has_role('inspector') or elec.has_role('specialist') or elec.has_role('maintenance')):
+            raise ValidationError("User is not an inspector, specialist, or maintenance")
         elec_leave = Leave.query.filter(
             Leave.user_id == electrical_inspector_id,
             Leave.status == 'approved',
