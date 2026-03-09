@@ -114,12 +114,21 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
 
   useEffect(() => {
     const updateRoute = () => {
-      const route = navigationRef.getCurrentRoute();
-      if (route?.name) setCurrentRouteName(route.name);
+      try {
+        const route = navigationRef.getCurrentRoute();
+        if (route?.name) setCurrentRouteName(route.name);
+      } catch {
+        // Navigation not ready yet
+      }
     };
     updateRoute();
-    const unsubscribe = navigationRef.addListener('state', updateRoute);
-    return () => unsubscribe();
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = navigationRef.addListener('state', updateRoute);
+    } catch {
+      // Navigation not ready yet
+    }
+    return () => unsubscribe?.();
   }, []);
 
   const { data: prefs } = useQuery({

@@ -130,7 +130,7 @@ export default function ToolkitSettingsScreen() {
               icon={tool.icon}
               label={tool.label}
               description={tool.desc}
-              value={prefs?.[tool.field as keyof typeof prefs] as boolean ?? false}
+              value={(prefs?.[tool.field as keyof typeof prefs] as boolean) ?? true}
               onToggle={(val) => toggle(tool.field, val)}
             />
           ))}

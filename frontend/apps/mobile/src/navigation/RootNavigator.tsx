@@ -30,9 +30,18 @@ function BannerWithRouteCheck() {
 }
 
 // Safe wrapper for FAB — may use navigation hooks internally
-class SafeFABWrapper extends React.Component<{}, { hasError: boolean }> {
-  state = { hasError: false };
+class SafeFABWrapper extends React.Component<{}, { hasError: boolean; errorCount: number }> {
+  state = { hasError: false, errorCount: 0 };
   static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error) {
+    console.warn('[SmartFAB] Crashed:', error.message);
+    // Auto-retry after 3 seconds (up to 3 times)
+    if (this.state.errorCount < 3) {
+      setTimeout(() => {
+        this.setState((prev) => ({ hasError: false, errorCount: prev.errorCount + 1 }));
+      }, 3000);
+    }
+  }
   render() { return this.state.hasError ? null : <SmartFAB />; }
 }
 
