@@ -86,7 +86,7 @@ import { scheduleAIApi } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
 
 const { Text, Title } = Typography;
-const { RangePicker } = DatePicker;
+// DatePicker used directly (single date, not range)
 
 // SLA Monitor Component
 function SLAMonitorView() {
@@ -778,10 +778,11 @@ export default function InspectionAssignmentsPage() {
 
   // Filters
   const [filters, setFilters] = useState({
-    dateRange: null as [dayjs.Dayjs, dayjs.Dayjs] | null,
+    date: null as dayjs.Dayjs | null,
     shift: undefined as string | undefined,
     status: undefined as string | undefined,
     equipmentType: undefined as string | undefined,
+    berth: undefined as string | undefined,
   });
 
   // Bulk selection
@@ -801,11 +802,11 @@ export default function InspectionAssignmentsPage() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['inspection-assignments', filters],
     queryFn: () => inspectionAssignmentsApi.getLists({
-      date_from: filters.dateRange?.[0]?.format('YYYY-MM-DD'),
-      date_to: filters.dateRange?.[1]?.format('YYYY-MM-DD'),
+      date: filters.date?.format('YYYY-MM-DD'),
       shift: filters.shift as any,
       status: filters.status,
       equipment_type: filters.equipmentType,
+      berth: filters.berth,
     }),
   });
 
@@ -957,7 +958,15 @@ export default function InspectionAssignmentsPage() {
     allAssignments.forEach((a) => {
       if (a.equipment?.equipment_type) types.add(a.equipment.equipment_type);
     });
-    return Array.from(types);
+    return Array.from(types).sort();
+  }, [allAssignments]);
+
+  const berths = useMemo(() => {
+    const bs = new Set<string>();
+    allAssignments.forEach((a) => {
+      if (a.berth) bs.add(a.berth);
+    });
+    return Array.from(bs).sort();
   }, [allAssignments]);
 
   // Build inspector lists from roster availability (used for shift highlighting only)
@@ -1438,16 +1447,17 @@ export default function InspectionAssignmentsPage() {
         }
       >
         {/* Filters Row */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} sm={12} md={6}>
-            <RangePicker
+        <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+          <Col xs={12} sm={6} md={4}>
+            <DatePicker
               style={{ width: '100%' }}
-              value={filters.dateRange}
-              onChange={(dates) => setFilters({ ...filters, dateRange: dates as any })}
-              placeholder={['From', 'To']}
+              value={filters.date}
+              onChange={(d) => setFilters({ ...filters, date: d })}
+              placeholder="Date"
+              allowClear
             />
           </Col>
-          <Col xs={12} sm={6} md={4}>
+          <Col xs={12} sm={6} md={3}>
             <Select
               style={{ width: '100%' }}
               placeholder="Shift"
@@ -1461,7 +1471,7 @@ export default function InspectionAssignmentsPage() {
               <Select.Option value="day">Day (Legacy)</Select.Option>
             </Select>
           </Col>
-          <Col xs={12} sm={6} md={4}>
+          <Col xs={12} sm={6} md={3}>
             <Select
               style={{ width: '100%' }}
               placeholder="Status"
@@ -1475,7 +1485,20 @@ export default function InspectionAssignmentsPage() {
               <Select.Option value="completed">Completed</Select.Option>
             </Select>
           </Col>
-          <Col xs={12} sm={6} md={4}>
+          <Col xs={12} sm={6} md={3}>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Berth"
+              allowClear
+              value={filters.berth}
+              onChange={(v) => setFilters({ ...filters, berth: v })}
+            >
+              {berths.map((b) => (
+                <Select.Option key={b} value={b}>{b}</Select.Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={12} sm={6} md={3}>
             <Select
               style={{ width: '100%' }}
               placeholder="Equipment Type"
@@ -1488,9 +1511,9 @@ export default function InspectionAssignmentsPage() {
               ))}
             </Select>
           </Col>
-          <Col xs={12} sm={6} md={6}>
+          <Col xs={12} sm={6} md={3}>
             <Button
-              onClick={() => setFilters({ dateRange: null, shift: undefined, status: undefined, equipmentType: undefined })}
+              onClick={() => setFilters({ date: null, shift: undefined, status: undefined, equipmentType: undefined, berth: undefined })}
             >
               Clear Filters
             </Button>
