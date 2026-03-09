@@ -138,7 +138,15 @@ export default function InspectionWizardScreen() {
 
   const inspectionId = inspection?.id;
 
-  // Get all checklist items
+  // Determine inspector's category from colleague data
+  const inspectorCategory = useMemo(() => {
+    const colType = colleagueData?.colleague?.type;
+    if (colType === 'electrical') return 'mechanical';
+    if (colType === 'mechanical') return 'electrical';
+    return null; // unknown — no reordering
+  }, [colleagueData]);
+
+  // Get all checklist items — smart ordered by inspector's category
   const allChecklistItems = useMemo(() => {
     if (!inspection) return [];
     const rawChecklistItems: ChecklistItem[] = (inspection as any).checklist_items ?? [];
@@ -146,10 +154,30 @@ export default function InspectionWizardScreen() {
       .map((a: InspectionAnswer) => a.checklist_item)
       .filter((item): item is ChecklistItem => item !== null);
     const allItems = [...rawChecklistItems, ...itemsFromAnswers];
-    return Array.from(
+    const deduplicated = Array.from(
       new Map(allItems.map((item) => [item.id, item])).values(),
-    ).sort((a, b) => a.order_index - b.order_index);
-  }, [inspection]);
+    );
+
+    // If we know the inspector's category, sort: own category first, then null, then other
+    if (inspectorCategory) {
+      const otherCategory = inspectorCategory === 'mechanical' ? 'electrical' : 'mechanical';
+      const own: ChecklistItem[] = [];
+      const shared: ChecklistItem[] = [];
+      const other: ChecklistItem[] = [];
+      for (const item of deduplicated) {
+        const cat = (item as any).category;
+        if (cat === inspectorCategory) own.push(item);
+        else if (cat === otherCategory) other.push(item);
+        else shared.push(item);
+      }
+      own.sort((a, b) => a.order_index - b.order_index);
+      shared.sort((a, b) => a.order_index - b.order_index);
+      other.sort((a, b) => a.order_index - b.order_index);
+      return [...own, ...shared, ...other];
+    }
+
+    return deduplicated.sort((a, b) => a.order_index - b.order_index);
+  }, [inspection, inspectorCategory]);
 
   // Group items by assembly
   const assemblyGroups = useMemo(() => {
@@ -669,6 +697,14 @@ export default function InspectionWizardScreen() {
     }
   }, [currentItem, currentIndex, totalItems, goToIndex]);
 
+  // Can current item be skipped? Only "other category" items can be skipped
+  const canSkipCurrent = useMemo(() => {
+    if (!currentItem || !inspectorCategory) return false;
+    const cat = (currentItem as any).category;
+    const otherCategory = inspectorCategory === 'mechanical' ? 'electrical' : 'mechanical';
+    return cat === otherCategory;
+  }, [currentItem, inspectorCategory]);
+
   // Check if current question is answered
   const isCurrentAnswered = currentItem && localAnswers[currentItem.id]?.answer_value && !skippedItems.has(currentItem.id);
 
@@ -729,9 +765,16 @@ export default function InspectionWizardScreen() {
   // Check if all items are complete and offer to go to submit
   const checkAllCompleteAndOfferSubmit = useCallback((updatedAnswers: Record<number, LocalAnswer>) => {
     // Check if all items are answered
-    const allAnswered = allChecklistItems.every(item =>
-      updatedAnswers[item.id]?.answer_value && !skippedItems.has(item.id)
-    );
+    const otherCategory = inspectorCategory === 'mechanical' ? 'electrical'
+      : inspectorCategory === 'electrical' ? 'mechanical' : null;
+    const allAnswered = allChecklistItems.every(item => {
+      // Skipped items are OK
+      if (skippedItems.has(item.id)) return true;
+      // Other category items that are unanswered are OK (they're skippable)
+      if (otherCategory && (item as any).category === otherCategory && !updatedAnswers[item.id]?.answer_value) return true;
+      // Must be answered
+      return !!updatedAnswers[item.id]?.answer_value;
+    });
 
     if (!allAnswered) return;
 
@@ -1687,6 +1730,19 @@ export default function InspectionWizardScreen() {
                 <Text style={styles.badgeText}>{currentItem.category}</Text>
               </View>
             )}
+            {inspectorCategory && (
+              <View style={[styles.badge, {
+                backgroundColor: canSkipCurrent ? '#fff7e6' : '#e6f4ff',
+                borderColor: canSkipCurrent ? '#ffd591' : '#91caff',
+                borderWidth: 1,
+              }]}>
+                <Text style={[styles.badgeText, { color: canSkipCurrent ? '#ad6800' : '#0958d9', fontSize: 10 }]}>
+                  {canSkipCurrent
+                    ? (isArabic ? 'قابل للتخطي' : 'Skippable')
+                    : (isArabic ? 'مطلوب' : 'Required')}
+                </Text>
+              </View>
+            )}
             {currentItem.critical_failure && (
               <View style={[styles.badge, styles.badgeCritical]}>
                 <Text style={[styles.badgeText, styles.badgeCriticalText]}>{t('inspection.critical', 'CRITICAL')}</Text>
@@ -2091,25 +2147,39 @@ export default function InspectionWizardScreen() {
             );
           })()
         ) : (
-          <TouchableOpacity
-            testID="wizard-next-btn"
-            style={[
-              styles.navButton,
-              styles.navButtonPrimary,
-              !canProceedToNext && styles.navButtonDisabled,
-            ]}
-            onPress={goToNext}
-            disabled={!canProceedToNext}
-            activeOpacity={0.7}
-          >
-            <Text style={[
-              styles.navButtonChevron,
-              styles.navButtonChevronPrimary,
-              !canProceedToNext && styles.navButtonTextDisabled,
-            ]}>
-              {isArabic ? '‹' : '›'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {canSkipCurrent && (
+              <TouchableOpacity
+                testID="wizard-skip-btn"
+                style={[styles.navButton, { backgroundColor: '#faad14', borderColor: '#faad14' }]}
+                onPress={handleSkip}
+                activeOpacity={0.7}
+              >
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                  {isArabic ? 'تخطي' : 'Skip'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              testID="wizard-next-btn"
+              style={[
+                styles.navButton,
+                styles.navButtonPrimary,
+                !canProceedToNext && !canSkipCurrent && styles.navButtonDisabled,
+              ]}
+              onPress={canProceedToNext ? goToNext : canSkipCurrent ? handleSkip : undefined}
+              disabled={!canProceedToNext && !canSkipCurrent}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.navButtonChevron,
+                styles.navButtonChevronPrimary,
+                !canProceedToNext && !canSkipCurrent && styles.navButtonTextDisabled,
+              ]}>
+                {isArabic ? '‹' : '›'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 

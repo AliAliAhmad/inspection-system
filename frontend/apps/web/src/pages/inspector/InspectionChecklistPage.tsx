@@ -339,15 +339,44 @@ export default function InspectionChecklistPage() {
   const answeredMap = new Map<number, InspectionAnswer>();
   answers.forEach((a) => answeredMap.set(a.checklist_item_id, a));
 
+  // Determine inspector's category from colleague data
+  const inspectorCategory = React.useMemo(() => {
+    const colType = colleagueData?.colleague?.type;
+    if (colType === 'electrical') return 'mechanical' as const;
+    if (colType === 'mechanical') return 'electrical' as const;
+    return null;
+  }, [colleagueData]);
+
   const rawChecklistItems: ChecklistItem[] = (inspection as any).checklist_items ?? [];
   const itemsFromAnswers: ChecklistItem[] = answers
     .filter((a) => a.checklist_item !== null)
     .map((a) => a.checklist_item as ChecklistItem);
 
   const allItems = [...rawChecklistItems, ...itemsFromAnswers];
-  const uniqueItems = Array.from(
+  const deduplicated = Array.from(
     new Map(allItems.map((item) => [item.id, item])).values(),
-  ).sort((a, b) => a.order_index - b.order_index);
+  );
+
+  // Smart ordering: own category first, then shared, then other category
+  const uniqueItems = React.useMemo(() => {
+    if (inspectorCategory) {
+      const otherCategory = inspectorCategory === 'mechanical' ? 'electrical' : 'mechanical';
+      const own: ChecklistItem[] = [];
+      const shared: ChecklistItem[] = [];
+      const other: ChecklistItem[] = [];
+      for (const item of deduplicated) {
+        const cat = (item as any).category;
+        if (cat === inspectorCategory) own.push(item);
+        else if (cat === otherCategory) other.push(item);
+        else shared.push(item);
+      }
+      own.sort((a, b) => a.order_index - b.order_index);
+      shared.sort((a, b) => a.order_index - b.order_index);
+      other.sort((a, b) => a.order_index - b.order_index);
+      return [...own, ...shared, ...other];
+    }
+    return deduplicated.sort((a, b) => a.order_index - b.order_index);
+  }, [deduplicated, inspectorCategory]);
 
   const canSubmit =
     progress &&
