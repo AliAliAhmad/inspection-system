@@ -572,6 +572,29 @@ export default function InspectionWizardScreen() {
       });
     }
 
+    // If choosing pass/yes, reset urgency to 0 (can't have urgency on passing item)
+    const isPassing = (currentItem.answer_type === 'pass_fail' && value === 'pass') ||
+                      (currentItem.answer_type === 'yes_no' && value === 'yes');
+    if (isPassing) {
+      setLocalAnswers((prev) => ({
+        ...prev,
+        [currentItem.id]: {
+          ...prev[currentItem.id],
+          answer_value: value,
+          urgency_level: 0,
+          skipped: false,
+        },
+      }));
+
+      answerMutation.mutate({
+        checklist_item_id: currentItem.id,
+        answer_value: value,
+        comment: localAnswers[currentItem.id]?.comment,
+        urgency_level: 0,
+      });
+      return;
+    }
+
     // ── Improvement 6: Auto-Urgency Suggestion on Fail/No ──
     const isFailing = (currentItem.answer_type === 'pass_fail' && value === 'fail') ||
                       (currentItem.answer_type === 'yes_no' && value === 'no');
@@ -626,20 +649,29 @@ export default function InspectionWizardScreen() {
   const handleUrgencyChange = useCallback((level: number) => {
     if (!currentItem) return;
 
+    // If urgency > 0, force answer to fail/no (can't have urgency on a passing item)
+    let forcedAnswer: string | undefined;
+    if (level > 0) {
+      if (currentItem.answer_type === 'pass_fail') forcedAnswer = 'fail';
+      else if (currentItem.answer_type === 'yes_no') forcedAnswer = 'no';
+    }
+
     setLocalAnswers((prev) => ({
       ...prev,
       [currentItem.id]: {
         ...prev[currentItem.id],
         urgency_level: level,
+        ...(forcedAnswer ? { answer_value: forcedAnswer } : {}),
       },
     }));
 
     // Save urgency immediately with existing answer
     const current = localAnswers[currentItem.id];
-    if (current?.answer_value) {
+    const answerValue = forcedAnswer || current?.answer_value;
+    if (answerValue) {
       answerMutation.mutate({
         checklist_item_id: currentItem.id,
-        answer_value: current.answer_value,
+        answer_value: answerValue,
         comment: current?.comment,
         urgency_level: level,
       });
