@@ -80,7 +80,7 @@ def get_users_for_assignment():
         User.query
         .filter(
             User.is_active == True,
-            User.role.in_(['inspector', 'specialist', 'engineer', 'admin'])
+            User.role.in_(['inspector', 'specialist', 'engineer', 'admin', 'maintenance'])
         )
         .order_by(User.full_name)
         .all()

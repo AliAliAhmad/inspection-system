@@ -71,10 +71,9 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
-| 2026-03-07 | Offline improvements 6-7: StaleDataBanner component (yellow bar when cached data >24h old, on 3 screens); SyncQueueScreen (full offline queue dashboard with retry/clear); OfflinePendingBadge now navigates to SyncQueue; cache timestamp tracking in offline-cache.ts | ✅ Done |
-| 2026-03-07 | Improvement 3: Smart Conflict Resolution in mobile sync-manager — fail/no always wins over pass/yes; same answers update timestamp; never deletes data | ✅ Done |
-| 2026-03-08 | Engineer assignment feature (frontend): added engineer_id to AssignTeamPayload, InspectionAssignment type, admin assignment modal (dropdown), engineer TeamAssignment (auto-set), and "Assigned to you" badge+sorting on AssessmentTrackingPage | ✅ Done |
-| 2026-03-08 | Engineer assignment feature (backend): added engineer_id column+relationship to InspectionAssignment model, assign_team service (validates engineer role, auto-assigns if assigner is engineer, propagates to berth assignments), API endpoints (assign + bulk-assign), assessment creation links engineer_id, engineer notification on assessment ready, migration applied | ✅ Done |
+| 2026-03-08 | Engineer assignment feature: engineer_id on InspectionAssignment (backend+frontend), admin dropdown, auto-assign for engineers, propagate to berth, assessment link, notifications | ✅ Done |
+| 2026-03-09 | Fix: engineer dropdown empty (added engineer/admin roles to for-assignment query), FAB crash recovery (error boundary auto-retry), toolkit toggle defaults | ✅ Done |
+| 2026-03-09 | Feat: auto pre-fetch all assignments on login — inspectors get all data cached (inspection, colleague answers, progress, defect history) without manual action | ✅ Done |
 
 
 ## Plugin Management
