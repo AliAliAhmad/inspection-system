@@ -339,13 +339,15 @@ export default function InspectionChecklistPage() {
   const answeredMap = new Map<number, InspectionAnswer>();
   answers.forEach((a) => answeredMap.set(a.checklist_item_id, a));
 
-  // Determine inspector's category from colleague data
+  // Determine inspector's category — from inspection response (always available)
   const inspectorCategory = React.useMemo(() => {
+    const fromInspection = (inspection as any)?.inspector_category;
+    if (fromInspection === 'mechanical' || fromInspection === 'electrical') return fromInspection as 'mechanical' | 'electrical';
     const colType = colleagueData?.colleague?.type;
     if (colType === 'electrical') return 'mechanical' as const;
     if (colType === 'mechanical') return 'electrical' as const;
     return null;
-  }, [colleagueData]);
+  }, [inspection, colleagueData]);
 
   const rawChecklistItems: ChecklistItem[] = (inspection as any).checklist_items ?? [];
   const itemsFromAnswers: ChecklistItem[] = answers

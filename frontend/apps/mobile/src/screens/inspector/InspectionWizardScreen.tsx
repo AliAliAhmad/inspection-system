@@ -138,13 +138,17 @@ export default function InspectionWizardScreen() {
 
   const inspectionId = inspection?.id;
 
-  // Determine inspector's category from colleague data
+  // Determine inspector's category — from inspection response (always available)
+  // Falls back to colleague data if inspection doesn't have it
   const inspectorCategory = useMemo(() => {
+    const fromInspection = (inspection as any)?.inspector_category;
+    if (fromInspection === 'mechanical' || fromInspection === 'electrical') return fromInspection;
+    // Fallback: derive from colleague type
     const colType = colleagueData?.colleague?.type;
     if (colType === 'electrical') return 'mechanical';
     if (colType === 'mechanical') return 'electrical';
-    return null; // unknown — no reordering
-  }, [colleagueData]);
+    return null;
+  }, [inspection, colleagueData]);
 
   // Get all checklist items — smart ordered by inspector's category
   const allChecklistItems = useMemo(() => {

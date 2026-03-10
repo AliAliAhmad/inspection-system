@@ -814,6 +814,14 @@ def get_or_start_by_assignment(assignment_id):
             ]
         inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
 
+        # Include inspector's category based on which slot they occupy in the assignment
+        if current_user.id == assignment.mechanical_inspector_id:
+            inspection_dict['inspector_category'] = 'mechanical'
+        elif current_user.id == assignment.electrical_inspector_id:
+            inspection_dict['inspector_category'] = 'electrical'
+        else:
+            inspection_dict['inspector_category'] = None
+
         # Debug: log media file info for answers
         import logging
         logger = logging.getLogger(__name__)
@@ -841,6 +849,14 @@ def get_or_start_by_assignment(assignment_id):
         template_id=assignment.template_id,
         assignment_id=assignment_id
     )
+
+    # Include inspector's category
+    if current_user.id == assignment.mechanical_inspector_id:
+        inspection_dict['inspector_category'] = 'mechanical'
+    elif current_user.id == assignment.electrical_inspector_id:
+        inspection_dict['inspector_category'] = 'electrical'
+    else:
+        inspection_dict['inspector_category'] = None
 
     # Update assignment status to in_progress
     if assignment.status == 'assigned':
