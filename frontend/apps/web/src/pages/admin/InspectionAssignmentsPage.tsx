@@ -983,14 +983,11 @@ export default function InspectionAssignmentsPage() {
     if (u.covering_for) coverUserIds.add(u.id);
   }
 
-  // All inspectors/specialists/maintenance for dropdown — no roster filtering, show everyone
+  // All inspectors/specialists/maintenance for dropdown — show everyone, no specialization filter
   const isFieldRole = (u: any) => u.role === 'inspector' || u.role === 'specialist' || u.role === 'maintenance';
-  const mechOptions = allAssignableUsers.filter(
-    (u: any) => isFieldRole(u) && (u.specialization === 'mechanical' || !u.specialization),
-  );
-  const elecOptions = allAssignableUsers.filter(
-    (u: any) => isFieldRole(u) && (u.specialization === 'electrical' || !u.specialization),
-  );
+  const fieldUsers = allAssignableUsers.filter((u: any) => isFieldRole(u));
+  const mechOptions = fieldUsers;
+  const elecOptions = fieldUsers;
   const engineerOptions = allAssignableUsers.filter(
     (u: any) => u.role === 'engineer' || u.role === 'admin',
   );
