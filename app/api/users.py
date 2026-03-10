@@ -522,6 +522,10 @@ def update_user(user_id):
         if data['language'] not in ['en', 'ar']:
             raise ValidationError("language must be 'en' or 'ar'")
         user.language = data['language']
+    if 'specialization' in data:
+        user.specialization = data['specialization']
+    if 'shift' in data:
+        user.shift = data['shift']
     if 'is_active' in data:
         user.is_active = data['is_active']
     if 'password' in data:
