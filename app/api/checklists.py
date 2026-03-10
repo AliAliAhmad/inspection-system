@@ -251,6 +251,8 @@ def update_item(template_id, item_id):
         item.order_index = data['order_index']
     if 'critical_failure' in data:
         item.critical_failure = data['critical_failure']
+    if 'category' in data:
+        item.category = data['category']  # 'mechanical', 'electrical', or None
 
     if 'applicable_equipment_types' in data:
         # Replace all equipment type rows (delete-then-insert for clean update)
