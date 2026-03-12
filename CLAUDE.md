@@ -71,9 +71,9 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
-| 2026-03-08 | Engineer assignment feature: engineer_id on InspectionAssignment (backend+frontend), admin dropdown, auto-assign for engineers, propagate to berth, assessment link, notifications | ✅ Done |
-| 2026-03-09 | Fix: engineer dropdown empty (added engineer/admin roles to for-assignment query), FAB crash recovery (error boundary auto-retry), toolkit toggle defaults | ✅ Done |
-| 2026-03-09 | Feat: auto pre-fetch all assignments on login — inspectors get all data cached (inspection, colleague answers, progress, defect history) without manual action | ✅ Done |
+| 2026-03-11 | Fix: checklist item category edit not saving (backend missing category in update_item) | ✅ Done |
+| 2026-03-11 | Perf: photo compression before upload — resize to 1920px + quality 0.65, switch from base64 JSON to multipart FormData; ~10x smaller files, 3-5x faster uploads | ✅ Done |
+| 2026-03-12 | Fix: 10 offline mode bugs — ChecklistScreen offline photos, storage warning, failed upload fallback to queue, voice urgency preserved, timestamp conflict resolution, offline banner, queued badge cleanup, sync loop import fix, voice file size check | ✅ Done |
 
 
 ## Plugin Management

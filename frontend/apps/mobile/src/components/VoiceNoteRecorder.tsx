@@ -46,6 +46,7 @@ interface VoiceNoteRecorderProps {
   inspectionId?: number;
   checklistItemId?: number;
   currentAnswerValue?: string;
+  urgency_level?: number;
   onQueuedOffline?: (localUri: string) => void;
 }
 
@@ -78,6 +79,7 @@ export default function VoiceNoteRecorder({
   inspectionId,
   checklistItemId,
   currentAnswerValue,
+  urgency_level,
   onQueuedOffline,
 }: VoiceNoteRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
@@ -213,6 +215,7 @@ export default function VoiceNoteRecorder({
           fileName,
           language: language || 'en',
           answerValue: currentAnswerValue || '',
+          urgency_level,
         });
         setLocalAudioUri(permanentUri);
         setIsQueued(true);
@@ -223,6 +226,14 @@ export default function VoiceNoteRecorder({
 
       setLocalAudioUri(uri);
       setIsUploading(true);
+
+      // Check file size before reading (prevent memory issues with very large recordings)
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (fileInfo.exists && 'size' in fileInfo && fileInfo.size > 10 * 1024 * 1024) {
+        Alert.alert('Recording too long', 'Voice notes must be under 5 minutes. Please record a shorter note.');
+        setIsUploading(false);
+        return;
+      }
 
       // Read audio file as base64
       if (__DEV__) console.log('Reading audio as base64...', uri);

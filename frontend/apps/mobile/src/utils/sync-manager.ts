@@ -61,6 +61,7 @@ export interface QueuedInspectionMedia {
   fileName: string;
   language?: string;        // 'en' | 'ar' — for voice transcription
   answerValue?: string;     // current answer at capture time — needed to re-link voice note
+  urgency_level?: number;
   createdAt: string;
   status: SyncStatus;
   progress: number;
@@ -386,6 +387,20 @@ export const syncManager = {
                 continue;
               }
             }
+
+            // Timestamp check: if server answer was updated AFTER this was queued, skip
+            if (existingAnswer?.updated_at && op.createdAt) {
+              const serverTime = new Date(String(existingAnswer.updated_at)).getTime();
+              const queuedTime = new Date(op.createdAt).getTime();
+              if (serverTime > queuedTime) {
+                if (__DEV__) console.log(
+                  `Conflict resolved: server answer is newer for item ${op.payload.checklist_item_id}`
+                );
+                await syncManager.dequeue(op.id);
+                success++;
+                continue;
+              }
+            }
           }
         } catch {
           // If we can't check, just proceed with sending (fail-safe)
@@ -476,19 +491,30 @@ export const syncManager = {
     let success = 0;
     let failed = 0;
 
+    const { compressImage } = require('./compress-image');
     for (const item of queue) {
       try {
-        const base64 = await FileSystem.readAsStringAsync(item.localUri, { encoding: 'base64' });
-
         if (item.mediaType === 'photo') {
-          // Upload photo — backend auto-links file to InspectionAnswer and runs AI analysis
+          // Compress photo before upload (offline photos may not have been compressed)
+          const compressedUri = await compressImage(item.localUri);
+
+          // Upload via multipart FormData (faster than base64 JSON)
+          const formData = new FormData();
+          formData.append('file', {
+            uri: compressedUri,
+            name: item.fileName || 'photo.jpg',
+            type: 'image/jpeg',
+          } as any);
+          formData.append('checklist_item_id', String(item.checklistItemId));
+
           await apiClient.post(
             `/api/inspections/${item.inspectionId}/upload-media`,
-            { file_base64: base64, file_name: item.fileName, file_type: 'image/jpeg', checklist_item_id: item.checklistItemId },
-            { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
+            formData,
+            { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
           );
         } else {
-          // Upload voice — transcribe then link to the answer
+          // Upload voice — transcribe then link to the answer (voice still uses base64)
+          const base64 = await FileSystem.readAsStringAsync(item.localUri, { encoding: 'base64' });
           const response = await apiClient.post(
             '/api/voice/transcribe',
             { audio_base64: base64, file_name: item.fileName, file_type: 'audio/m4a', language: item.language || 'en' },
@@ -502,6 +528,7 @@ export const syncManager = {
               answer_value: item.answerValue,
               voice_note_id: result.audio_file.id,
               voice_transcription: { en: result.en || '', ar: result.ar || '' },
+              urgency_level: item.urgency_level,
             });
           }
         }

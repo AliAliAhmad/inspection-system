@@ -19,6 +19,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
+import { compressImage } from '../../utils/compress-image';
+import * as FileSystem from 'expo-file-system/legacy';
+import { useOffline } from '../../providers/OfflineProvider';
+import { syncManager } from '../../utils/sync-manager';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAuth } from '../../providers/AuthProvider';
 import {
@@ -92,6 +96,7 @@ export default function InspectionChecklistScreen() {
   const queryClient = useQueryClient();
   const { id } = route.params;
   const isArabic = i18n.language === 'ar';
+  const { isOnline } = useOffline();
 
   const [localAnswers, setLocalAnswers] = useState<LocalAnswers>({});
   const [showOnlyUnanswered, setShowOnlyUnanswered] = useState(false);
@@ -253,21 +258,56 @@ export default function InspectionChecklistScreen() {
   // Upload photo to Cloudinary via API and run AI analysis
   const uploadPhoto = useCallback(
     async (checklistItemId: number, uri: string, fileName: string) => {
+      // Compress image before upload (resize to 1920px, quality 0.65)
+      const compressedUri = await compressImage(uri);
+
       // Set uploading state
       setLocalAnswers((prev) => ({
         ...prev,
         [checklistItemId]: {
           ...prev[checklistItemId],
-          photo_uri: uri,
-          isUploading: true,
+          photo_uri: compressedUri,
+          isUploading: !isOnline ? false : true,
         },
       }));
+
+      // ─── Offline: copy to permanent storage and queue for later upload ────────
+      if (!isOnline && inspectionId) {
+        try {
+          const dir = `${FileSystem.documentDirectory}offline-photos/`;
+          await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+          const safeFileName = fileName || `photo_${checklistItemId}_${Date.now()}.jpg`;
+          const permanentUri = compressedUri.startsWith(FileSystem.documentDirectory!)
+            ? compressedUri
+            : `${dir}${safeFileName}`;
+          if (!compressedUri.startsWith(FileSystem.documentDirectory!)) {
+            await FileSystem.copyAsync({ from: compressedUri, to: permanentUri });
+          }
+          await syncManager.enqueueInspectionMedia({
+            mediaType: 'photo',
+            localUri: permanentUri,
+            inspectionId,
+            checklistItemId,
+            assignmentId: String(id),
+            fileName: safeFileName,
+          });
+          setLocalAnswers(prev => ({
+            ...prev,
+            [checklistItemId]: { ...prev[checklistItemId], photo_uri: permanentUri, isUploading: false },
+          }));
+        } catch (offlineErr) {
+          console.error('Failed to queue photo offline:', offlineErr);
+          Alert.alert('Storage Error', 'Could not save photo offline. Please free up space and try again.');
+        }
+        return;
+      }
+      // ─── End offline branch ───────────────────────────────────────────────────
 
       try {
         // Create FormData for React Native - must use this format
         const formData = new FormData();
         formData.append('file', {
-          uri,
+          uri: compressedUri,
           name: fileName || 'photo.jpg',
           type: 'image/jpeg',
         } as any);
@@ -359,7 +399,7 @@ export default function InspectionChecklistScreen() {
         }));
       }
     },
-    [id, inspectionId, queryClient, t, localAnswers, answerMutation],
+    [id, inspectionId, queryClient, t, localAnswers, answerMutation, isOnline],
   );
 
   const handleTakePhoto = useCallback(
@@ -1133,6 +1173,13 @@ export default function InspectionChecklistScreen() {
       }
     >
       <StaleDataBanner cacheKey={`inspection-${id}`} />
+      {!isOnline && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>
+            📡 Offline — photos & answers will sync when connected
+          </Text>
+        </View>
+      )}
       {/* Equipment Info Header */}
       <View style={styles.headerCard}>
         <Text style={styles.headerTitle}>
@@ -1684,5 +1731,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#E65100',
     marginBottom: 4,
+  },
+  offlineBanner: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE0B2',
+  },
+  offlineBannerText: {
+    fontSize: 13,
+    color: '#E65100',
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

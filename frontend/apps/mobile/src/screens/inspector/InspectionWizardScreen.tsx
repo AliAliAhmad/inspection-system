@@ -17,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
+import { compressImage } from '../../utils/compress-image';
 import { Video, ResizeMode } from 'expo-av';
 import VoiceTextInput from '../../components/VoiceTextInput';
 import VoiceNoteRecorder, { stopAllVoicePlayback, stopAllVoiceRecording } from '../../components/VoiceNoteRecorder';
@@ -137,6 +138,23 @@ export default function InspectionWizardScreen() {
   });
 
   const inspectionId = inspection?.id;
+
+  // Clear queued badge when photos have been synced (photo_url appears in server data)
+  useEffect(() => {
+    if (!inspection?.answers) return;
+    setPendingPhotoItems(prev => {
+      const updated = new Set(prev);
+      let changed = false;
+      for (const itemId of prev) {
+        const serverAnswer = (inspection.answers as any[])?.find((a: any) => a.checklist_item_id === itemId);
+        if (serverAnswer?.photo_file?.url || serverAnswer?.photo_url) {
+          updated.delete(itemId);
+          changed = true;
+        }
+      }
+      return changed ? updated : prev;
+    });
+  }, [inspection?.answers]);
 
   // Determine inspector's category — from inspection response (always available)
   // Falls back to colleague data if inspection doesn't have it
@@ -1086,11 +1104,14 @@ export default function InspectionWizardScreen() {
   const uploadPhoto = useCallback(async (checklistItemId: number, uri: string, fileName: string, retryCount = 0) => {
     const MAX_RETRIES = 2;
 
+    // Compress image before anything (resize to 1920px, quality 0.65)
+    const compressedUri = await compressImage(uri);
+
     setLocalAnswers((prev) => ({
       ...prev,
       [checklistItemId]: {
         ...prev[checklistItemId],
-        photo_uri: uri,
+        photo_uri: compressedUri,
         isUploading: !isOnline ? false : true,
       },
     }));
@@ -1101,11 +1122,11 @@ export default function InspectionWizardScreen() {
         const dir = `${FileSystem.documentDirectory}offline-photos/`;
         await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
         const safeFileName = fileName || `photo_${checklistItemId}_${Date.now()}.jpg`;
-        const permanentUri = uri.startsWith(FileSystem.documentDirectory!)
-          ? uri
+        const permanentUri = compressedUri.startsWith(FileSystem.documentDirectory!)
+          ? compressedUri
           : `${dir}${safeFileName}`;
-        if (!uri.startsWith(FileSystem.documentDirectory!)) {
-          await FileSystem.copyAsync({ from: uri, to: permanentUri });
+        if (!compressedUri.startsWith(FileSystem.documentDirectory!)) {
+          await FileSystem.copyAsync({ from: compressedUri, to: permanentUri });
         }
         await syncManager.enqueueInspectionMedia({
           mediaType: 'photo',
@@ -1122,41 +1143,30 @@ export default function InspectionWizardScreen() {
         setPendingPhotoItems(prev => new Set(prev).add(checklistItemId));
       } catch (offlineErr) {
         console.error('Failed to queue photo offline:', offlineErr);
+        Alert.alert('Storage Error', 'Could not save photo offline. Please free up space and try again.');
       }
       return;
     }
     // ─── End offline branch ───────────────────────────────────────────────────
 
     try {
-      // Read file as base64
-      if (__DEV__) console.log('Reading photo as base64...', uri);
-      let base64: string;
-      try {
-        base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: 'base64',
-        });
-        if (!base64) {
-          throw new Error('File read returned empty result');
-        }
-      } catch (readError: any) {
-        console.error('Failed to read photo file:', readError);
-        throw new Error(`Could not read photo file: ${readError?.message || 'Unknown error'}`);
-      }
+      // Upload compressed photo via multipart FormData (much faster than base64 JSON)
+      if (__DEV__) console.log('Uploading compressed photo via FormData...', compressedUri);
 
-      if (__DEV__) console.log('Uploading photo via base64... length:', base64.length);
+      const formData = new FormData();
+      formData.append('file', {
+        uri: compressedUri,
+        name: fileName || 'photo.jpg',
+        type: 'image/jpeg',
+      } as any);
+      formData.append('checklist_item_id', String(checklistItemId));
 
-      // Upload as JSON with base64
       const response = await getApiClient().post(
         `/api/inspections/${inspectionId}/upload-media`,
+        formData,
         {
-          file_base64: base64,
-          file_name: fileName || 'photo.jpg',
-          file_type: 'image/jpeg',
-          checklist_item_id: checklistItemId,
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 180000, // 3 minutes
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 120000, // 2 minutes (compressed photos are much smaller)
         }
       );
 
@@ -1289,9 +1299,31 @@ export default function InspectionWizardScreen() {
         if (__DEV__) console.log(`Upload failed, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
         // Wait 2 seconds before retry
         await new Promise(resolve => setTimeout(resolve, 2000));
-        return uploadPhoto(checklistItemId, uri, fileName, retryCount + 1);
+        return uploadPhoto(checklistItemId, compressedUri, fileName, retryCount + 1);
       }
       const errorMsg = error?.response?.data?.message || error?.message || 'Failed to upload photo';
+
+      // Fallback: queue photo for offline sync if upload failed
+      if (inspectionId) {
+        try {
+          const dir = `${FileSystem.documentDirectory}offline-photos/`;
+          await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+          const safeFileName = fileName || `photo_${checklistItemId}_${Date.now()}.jpg`;
+          const permanentUri = `${dir}${safeFileName}`;
+          await FileSystem.copyAsync({ from: compressedUri, to: permanentUri });
+          await syncManager.enqueueInspectionMedia({
+            mediaType: 'photo',
+            localUri: permanentUri,
+            inspectionId,
+            checklistItemId,
+            assignmentId: String(id),
+            fileName: safeFileName,
+          });
+          if (__DEV__) console.log('Upload failed — photo queued for offline sync');
+        } catch (queueErr) {
+          if (__DEV__) console.error('Failed to queue photo after upload failure:', queueErr);
+        }
+      }
 
       // Keep the photo locally even if upload fails - allow user to proceed
       setLocalAnswers((prev) => ({
@@ -1311,7 +1343,7 @@ export default function InspectionWizardScreen() {
         [{ text: 'OK' }]
       );
     }
-  }, [id, inspectionId, queryClient, t, answerMutation]);
+  }, [id, inspectionId, queryClient, t, answerMutation, isOnline]);
 
   // Handle voice note
   const handleVoiceNoteRecorded = useCallback((voiceNoteId: number, transcription?: { en: string; ar: string }, voiceUrl?: string) => {
@@ -1702,6 +1734,13 @@ export default function InspectionWizardScreen() {
   return (
     <View style={styles.container} testID="inspection-wizard-screen">
       <StaleDataBanner cacheKey={`inspection-${id}`} />
+      {!isOnline && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>
+            {t('offline.no_connection', '📡 Offline — photos & answers will sync when connected')}
+          </Text>
+        </View>
+      )}
       {/* Slim header — single row */}
       <View style={styles.header} testID="wizard-header">
         <View style={[styles.headerTop, isArabic && { flexDirection: 'row-reverse' }]}>
@@ -2073,6 +2112,7 @@ export default function InspectionWizardScreen() {
                 inspectionId={inspectionId}
                 checklistItemId={currentItem.id}
                 currentAnswerValue={currentAnswer?.answer_value}
+                urgency_level={currentAnswer?.urgency_level}
                 onQueuedOffline={handleVoiceQueuedOffline}
               />
             </View>
@@ -3075,5 +3115,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 2,
+  },
+  offlineBanner: {
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE0B2',
+  },
+  offlineBannerText: {
+    fontSize: 13,
+    color: '#E65100',
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });
