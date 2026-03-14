@@ -185,14 +185,14 @@ class InspectionService:
             template_id=template.id
         ).order_by(ChecklistItem.order_index).all()
         # Filter by equipment sub-type: questions with no type filter apply to all
-        eqt_subtype = equipment.equipment_type_2 or equipment.name
+        eqt_subtype = (equipment.equipment_type_2 or equipment.name).strip().lower()
         template_items = [
             item for item in template_items
             if not item.equipment_type_filters
-            or eqt_subtype in item.applicable_equipment_types
+            or eqt_subtype in [t.lower() for t in item.applicable_equipment_types]
         ]
         inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
-        
+
         return inspection_dict
     
     @staticmethod
@@ -541,11 +541,11 @@ class InspectionService:
         # Questions that were never shown to the user must not be required during validation.
         equipment = db.session.get(Equipment, inspection.equipment_id)
         if equipment:
-            eqt_subtype = equipment.equipment_type_2 or equipment.name
+            eqt_subtype = (equipment.equipment_type_2 or equipment.name).strip().lower()
             required_items = [
                 item for item in required_items
                 if not item.equipment_type_filters
-                or eqt_subtype in item.applicable_equipment_types
+                or eqt_subtype in [t.lower() for t in item.applicable_equipment_types]
             ]
 
         # Get answered item IDs

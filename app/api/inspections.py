@@ -805,12 +805,12 @@ def get_or_start_by_assignment(assignment_id):
         ).order_by(ChecklistItem.order_index).all()
         # Filter by equipment sub-type: questions with no type filter apply to all
         equipment_obj = db.session.get(Equipment, assignment.equipment_id)
-        eqt_subtype = (equipment_obj.equipment_type_2 or equipment_obj.name) if equipment_obj else None
+        eqt_subtype = ((equipment_obj.equipment_type_2 or equipment_obj.name).strip().lower()) if equipment_obj else None
         if eqt_subtype:
             template_items = [
                 item for item in template_items
                 if not item.equipment_type_filters
-                or eqt_subtype in item.applicable_equipment_types
+                or eqt_subtype in [t.lower() for t in item.applicable_equipment_types]
             ]
         inspection_dict['checklist_items'] = [item.to_dict(language=language) for item in template_items]
 

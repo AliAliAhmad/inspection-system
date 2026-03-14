@@ -94,6 +94,17 @@ def get_equipment_types():
     return jsonify({'status': 'success', 'data': types}), 200
 
 
+@bp.route('/subtypes', methods=['GET'])
+@jwt_required()
+def get_equipment_subtypes():
+    """Return distinct equipment_type_2 values for checklist item filtering."""
+    rows = db.session.query(Equipment.equipment_type_2).filter(
+        Equipment.equipment_type_2.isnot(None),
+        Equipment.equipment_type_2 != '',
+    ).distinct().order_by(Equipment.equipment_type_2).all()
+    return jsonify({'status': 'success', 'data': [r[0] for r in rows]}), 200
+
+
 @bp.route('/<int:equipment_id>', methods=['GET'])
 @jwt_required()
 def get_equipment(equipment_id):

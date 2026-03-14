@@ -64,6 +64,7 @@ import {
   type ChecklistStats,
   type TemplateAnalytics,
   type AISuggestion,
+  equipmentApi,
 } from '@inspection/shared';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import {
@@ -202,6 +203,13 @@ export default function ChecklistsPage() {
     queryKey: ['checklists', selectedTemplate?.id, 'analytics'],
     queryFn: () => checklistsApi.getTemplateAnalytics(selectedTemplate!.id).then((r) => r.data?.data),
     enabled: analyticsDrawerOpen && !!selectedTemplate,
+  });
+
+  // Equipment subtypes for checklist item filtering
+  const { data: subtypesData } = useQuery({
+    queryKey: ['equipment-subtypes'],
+    queryFn: () => equipmentApi.getSubTypes().then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
   });
 
   // AI Suggestions
@@ -1072,6 +1080,10 @@ export default function ChecklistsPage() {
               placeholder="Leave empty = applies to all types"
               allowClear
               tokenSeparators={[',']}
+              options={(subtypesData || []).map((t: string) => ({ label: t, value: t }))}
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Form.Item>
         </Form>
@@ -1137,6 +1149,10 @@ export default function ChecklistsPage() {
               placeholder="Leave empty = applies to all types"
               allowClear
               tokenSeparators={[',']}
+              options={(subtypesData || []).map((t: string) => ({ label: t, value: t }))}
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Form.Item>
         </Form>

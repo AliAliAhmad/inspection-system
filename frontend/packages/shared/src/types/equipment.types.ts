@@ -6,6 +6,7 @@ export interface Equipment {
   name_ar: string | null;
   equipment_type: string;
   equipment_type_ar: string | null;
+  equipment_type_2: string | null;
   serial_number: string;
   location: string;
   location_en: string;

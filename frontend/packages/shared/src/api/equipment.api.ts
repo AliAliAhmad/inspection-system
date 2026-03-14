@@ -56,6 +56,10 @@ export const equipmentApi = {
     return getApiClient().get<ApiResponse<string[]>>('/api/equipment/types');
   },
 
+  getSubTypes() {
+    return getApiClient().get<ApiResponse<string[]>>('/api/equipment/subtypes');
+  },
+
   // Import endpoints - accepts File (web) or { uri, type, name } (React Native)
   import(file: File | { uri: string; type: string; name: string }) {
     const formData = new FormData();

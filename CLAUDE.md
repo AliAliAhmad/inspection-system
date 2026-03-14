@@ -73,6 +73,7 @@ See HISTORY.md for full changelog. Only keep last 3 entries here.
 
 | 2026-03-12 | Fix: 10 offline mode bugs — ChecklistScreen offline photos, storage warning, failed upload fallback to queue, voice urgency preserved, timestamp conflict resolution, offline banner, queued badge cleanup, sync loop import fix, voice file size check | ✅ Done |
 | 2026-03-14 | Feat: Ad-hoc defect reporting during inspection — FAB on checklist screen, bottom sheet with photo+voice+severity, flows through same InspectionAnswer pipeline as question failures (same AI analysis, same offline, same defect creation at submit) | ✅ Done |
+| 2026-03-14 | Fix: Equipment type filtering for checklist items — case-insensitive matching (3 locations), new `/api/equipment/subtypes` endpoint, admin dropdown populated with real equipment_type_2 values instead of free text | ✅ Done |
 
 
 ## Plugin Management
