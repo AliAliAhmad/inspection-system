@@ -303,23 +303,26 @@ export default function InspectionWizardScreen() {
       setLocalAnswers((prev) => {
         const result = { ...prev };
         inspection.answers!.forEach((ans: InspectionAnswer) => {
+          // Skip ad-hoc findings (no checklist item)
+          if (!ans.checklist_item_id) return;
+          const itemId = ans.checklist_item_id;
           const photoUrl = (ans.photo_file as any)?.url || null;
           const videoUrl = (ans.video_file as any)?.url || null;
           const voiceNoteUrl = (ans.voice_note as any)?.url || null;
 
           // Deep merge: preserve local-only fields (urgency_level, local URIs, etc.)
-          result[ans.checklist_item_id] = {
-            ...prev[ans.checklist_item_id],  // Keep existing local fields
+          result[itemId] = {
+            ...prev[itemId],  // Keep existing local fields
             answer_value: ans.answer_value,
-            comment: ans.comment ?? prev[ans.checklist_item_id]?.comment,
-            urgency_level: (ans as any).urgency_level ?? prev[ans.checklist_item_id]?.urgency_level,
-            photo_url: photoUrl ?? prev[ans.checklist_item_id]?.photo_url,
-            photo_ai_analysis: ans.photo_ai_analysis ?? prev[ans.checklist_item_id]?.photo_ai_analysis,
-            video_url: videoUrl ?? prev[ans.checklist_item_id]?.video_url,
-            video_ai_analysis: ans.video_ai_analysis ?? prev[ans.checklist_item_id]?.video_ai_analysis,
-            voice_note_id: ans.voice_note_id ?? prev[ans.checklist_item_id]?.voice_note_id,
-            voice_note_url: voiceNoteUrl ?? prev[ans.checklist_item_id]?.voice_note_url,
-            voice_transcription: (ans as any).voice_transcription ?? prev[ans.checklist_item_id]?.voice_transcription,
+            comment: ans.comment ?? prev[itemId]?.comment,
+            urgency_level: (ans as any).urgency_level ?? prev[itemId]?.urgency_level,
+            photo_url: photoUrl ?? prev[itemId]?.photo_url,
+            photo_ai_analysis: ans.photo_ai_analysis ?? prev[itemId]?.photo_ai_analysis,
+            video_url: videoUrl ?? prev[itemId]?.video_url,
+            video_ai_analysis: ans.video_ai_analysis ?? prev[itemId]?.video_ai_analysis,
+            voice_note_id: ans.voice_note_id ?? prev[itemId]?.voice_note_id,
+            voice_note_url: voiceNoteUrl ?? prev[itemId]?.voice_note_url,
+            voice_transcription: (ans as any).voice_transcription ?? prev[itemId]?.voice_transcription,
           };
         });
         return result;

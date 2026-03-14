@@ -1857,6 +1857,25 @@
     "photo_required": "Photo is required to submit a report",
     "pending_reports": "{{count}} Field Report(s)"
   },
+  "adhoc_defect": {
+    "title": "Report Additional Defect",
+    "photo_required": "Take a photo of the defect",
+    "voice_required": "Record a voice description",
+    "severity": "Severity",
+    "severity_low": "Low",
+    "severity_medium": "Medium",
+    "severity_high": "High",
+    "severity_critical": "Critical",
+    "submit": "Add Finding",
+    "submitting": "Submitting...",
+    "success": "Defect reported successfully",
+    "photo_missing": "Photo is required",
+    "voice_missing": "Voice note is required",
+    "severity_missing": "Select a severity level",
+    "additional_findings": "Additional Findings",
+    "no_findings": "No additional findings yet",
+    "delete_confirm": "Delete this finding?"
+  },
   "offline": {
     "pending_uploads": "pending uploads",
     "syncing": "Syncing...",

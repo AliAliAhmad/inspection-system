@@ -1659,6 +1659,25 @@
     "photo_required": "الصورة مطلوبة لإرسال البلاغ",
     "pending_reports": "{{count}} بلاغ(ات) ميدانية"
   },
+  "adhoc_defect": {
+    "title": "الإبلاغ عن عيب إضافي",
+    "photo_required": "التقط صورة للعيب",
+    "voice_required": "سجّل وصفاً صوتياً",
+    "severity": "الخطورة",
+    "severity_low": "منخفض",
+    "severity_medium": "متوسط",
+    "severity_high": "عالي",
+    "severity_critical": "حرج",
+    "submit": "إضافة ملاحظة",
+    "submitting": "جارٍ الإرسال...",
+    "success": "تم الإبلاغ عن العيب بنجاح",
+    "photo_missing": "الصورة مطلوبة",
+    "voice_missing": "التسجيل الصوتي مطلوب",
+    "severity_missing": "اختر مستوى الخطورة",
+    "additional_findings": "ملاحظات إضافية",
+    "no_findings": "لا توجد ملاحظات إضافية بعد",
+    "delete_confirm": "حذف هذه الملاحظة؟"
+  },
   "offline": {
     "pending_uploads": "رفع معلق",
     "syncing": "جاري المزامنة...",

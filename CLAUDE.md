@@ -71,9 +71,8 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
-| 2026-03-11 | Fix: checklist item category edit not saving (backend missing category in update_item) | ✅ Done |
-| 2026-03-11 | Perf: photo compression before upload — resize to 1920px + quality 0.65, switch from base64 JSON to multipart FormData; ~10x smaller files, 3-5x faster uploads | ✅ Done |
 | 2026-03-12 | Fix: 10 offline mode bugs — ChecklistScreen offline photos, storage warning, failed upload fallback to queue, voice urgency preserved, timestamp conflict resolution, offline banner, queued badge cleanup, sync loop import fix, voice file size check | ✅ Done |
+| 2026-03-14 | Feat: Ad-hoc defect reporting during inspection — FAB on checklist screen, bottom sheet with photo+voice+severity, flows through same InspectionAnswer pipeline as question failures (same AI analysis, same offline, same defect creation at submit) | ✅ Done |
 
 
 ## Plugin Management

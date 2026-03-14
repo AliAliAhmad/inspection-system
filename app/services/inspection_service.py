@@ -198,21 +198,22 @@ class InspectionService:
     @staticmethod
     def answer_question(inspection_id, checklist_item_id, answer_value, comment=None, photo_path=None, voice_note_id=None, voice_transcription=None, current_user_id=None, urgency_level=None):
         """
-        Record or update an answer to a checklist item.
+        Record or update an answer to a checklist item, or create an ad-hoc finding.
 
         Args:
             inspection_id: ID of inspection
-            checklist_item_id: ID of checklist item being answered
+            checklist_item_id: ID of checklist item being answered (None for ad-hoc findings)
             answer_value: The answer value
-            comment: Optional comment
+            comment: Optional comment (used as description for ad-hoc findings)
             photo_path: Optional photo path
             voice_note_id: Optional voice note file ID
             voice_transcription: Optional dict with 'en' and 'ar' transcription
             current_user_id: ID of current user (for authorization)
-        
+            urgency_level: Optional urgency level (0-3)
+
         Returns:
             Created/updated InspectionAnswer object
-        
+
         Raises:
             NotFoundError: If inspection or item not found
             ValidationError: If inspection not in draft status
@@ -222,25 +223,41 @@ class InspectionService:
         inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError(f"Inspection with ID {inspection_id} not found")
-        
+
         # Only allow answering draft inspections
         if inspection.status != 'draft':
             raise ValidationError("Cannot modify inspection that is not in draft status")
-        
+
         # Verify user is the assigned inspector (unless admin)
         if current_user_id:
             user = db.session.get(User, int(current_user_id))
             if user.role != 'admin' and inspection.technician_id != int(current_user_id):
                 raise ForbiddenError("You can only answer your own inspections")
 
+        # Ad-hoc finding (no checklist item)
+        if checklist_item_id is None:
+            answer = InspectionAnswer(
+                inspection_id=inspection_id,
+                checklist_item_id=None,
+                answer_value=answer_value or 'fail',
+                comment=comment,
+                photo_path=photo_path,
+                voice_note_id=voice_note_id,
+                voice_transcription=voice_transcription,
+                urgency_level=urgency_level or 0,
+            )
+            db.session.add(answer)
+            db.session.commit()
+            return answer
+
         # Validate checklist item exists and belongs to the template
         item = db.session.get(ChecklistItem, checklist_item_id)
         if not item:
             raise NotFoundError(f"Checklist item with ID {checklist_item_id} not found")
-        
+
         if item.template_id != inspection.template_id:
             raise ValidationError("Checklist item does not belong to inspection template")
-        
+
         # Check if answer already exists
         existing_answer = InspectionAnswer.query.filter_by(
             inspection_id=inspection_id,
@@ -249,16 +266,11 @@ class InspectionService:
 
         if existing_answer:
             # Update existing answer - only update fields that are explicitly provided
-            # If answer_value is non-empty, validate and update it
-            # If empty, keep the existing answer_value (allows saving just comment/voice)
             if answer_value:
                 InspectionService._validate_answer_value(item.answer_type, answer_value)
                 existing_answer.answer_value = answer_value
-            # Only update comment if explicitly provided (not None)
-            # to avoid wiping AI analysis when just changing answer value
             if comment is not None:
                 existing_answer.comment = comment
-            # Only update photo_path if explicitly provided
             if photo_path is not None:
                 existing_answer.photo_path = photo_path
             if voice_note_id:
@@ -284,7 +296,7 @@ class InspectionService:
                 urgency_level=urgency_level or 0,
             )
             db.session.add(answer)
-        
+
         db.session.commit()
         return answer
     
@@ -586,16 +598,17 @@ class InspectionService:
     @staticmethod
     def _get_failed_answers(inspection_id, inspector_category=None):
         """
-        Get all failed answers (pass_fail or yes_no type).
+        Get all failed answers (pass_fail or yes_no type) AND ad-hoc findings.
 
         Args:
             inspection_id: ID of inspection
             inspector_category: Optional category filter ('mechanical' or 'electrical')
 
         Returns:
-            List of failed InspectionAnswer objects
+            List of failed InspectionAnswer objects (including ad-hoc findings)
         """
-        query = InspectionAnswer.query.join(ChecklistItem).filter(
+        # Regular failed answers from checklist questions
+        checklist_query = InspectionAnswer.query.join(ChecklistItem).filter(
             InspectionAnswer.inspection_id == inspection_id,
             ChecklistItem.answer_type.in_(['pass_fail', 'yes_no']),
             db.or_(
@@ -604,9 +617,18 @@ class InspectionService:
             )
         )
         if inspector_category:
-            query = query.filter(ChecklistItem.category == inspector_category)
+            checklist_query = checklist_query.filter(ChecklistItem.category == inspector_category)
 
-        return query.all()
+        checklist_failures = checklist_query.all()
+
+        # Ad-hoc findings (checklist_item_id IS NULL, always answer_value='fail')
+        adhoc_findings = InspectionAnswer.query.filter(
+            InspectionAnswer.inspection_id == inspection_id,
+            InspectionAnswer.checklist_item_id.is_(None),
+            InspectionAnswer.answer_value == 'fail'
+        ).all()
+
+        return checklist_failures + adhoc_findings
     
     @staticmethod
     def review_inspection(inspection_id, reviewer_id, notes=None):

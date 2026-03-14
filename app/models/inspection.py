@@ -114,7 +114,7 @@ class InspectionAnswer(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     inspection_id = db.Column(db.Integer, db.ForeignKey('inspections.id'), nullable=False)
-    checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id'), nullable=False)
+    checklist_item_id = db.Column(db.Integer, db.ForeignKey('checklist_items.id'), nullable=True)
     answer_value = db.Column(db.String(500), nullable=False)
     comment = db.Column(db.Text, nullable=True)
     photo_path = db.Column(db.String(500), nullable=True)
@@ -135,13 +135,8 @@ class InspectionAnswer(db.Model):
     video_file = db.relationship('File', foreign_keys=[video_file_id])
     voice_note = db.relationship('File', foreign_keys=[voice_note_id])
     
-    __table_args__ = (
-        db.UniqueConstraint(
-            'inspection_id',
-            'checklist_item_id',
-            name='uq_answer_inspection_item'
-        ),
-    )
+    # Note: unique constraint removed to support ad-hoc findings (checklist_item_id=NULL)
+    # For regular answers, uniqueness is enforced in application code
     
     def to_dict(self, language='en'):
         """Convert answer to dictionary."""

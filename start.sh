@@ -2559,6 +2559,24 @@ with app.app_context():
         db.session.rollback()
         print('defect_occurrences table already exists')
 
+    # Ad-hoc defect findings: make checklist_item_id nullable on inspection_answers
+    try:
+        db.session.execute(text('ALTER TABLE inspection_answers ALTER COLUMN checklist_item_id DROP NOT NULL'))
+        db.session.commit()
+        print('Made inspection_answers.checklist_item_id nullable')
+    except Exception:
+        db.session.rollback()
+        print('inspection_answers.checklist_item_id already nullable')
+
+    # Drop unique constraint that requires checklist_item_id (ad-hoc findings have NULL)
+    try:
+        db.session.execute(text('ALTER TABLE inspection_answers DROP CONSTRAINT IF EXISTS uq_answer_inspection_item'))
+        db.session.commit()
+        print('Dropped uq_answer_inspection_item constraint')
+    except Exception:
+        db.session.rollback()
+        print('uq_answer_inspection_item constraint already dropped or does not exist')
+
     print('Schema patches complete.')
 "
 

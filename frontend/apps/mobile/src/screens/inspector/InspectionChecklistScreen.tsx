@@ -38,6 +38,7 @@ import {
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 import { useOfflineMutation } from '../../hooks/useOfflineMutation';
 import StaleDataBanner from '../../components/StaleDataBanner';
+import AdHocDefectSheet from '../../components/AdHocDefectSheet';
 
 /**
  * Optimize Cloudinary image URL with auto-format, auto-quality, and enhancement
@@ -100,6 +101,7 @@ export default function InspectionChecklistScreen() {
 
   const [localAnswers, setLocalAnswers] = useState<LocalAnswers>({});
   const [showOnlyUnanswered, setShowOnlyUnanswered] = useState(false);
+  const [showAdHocSheet, setShowAdHocSheet] = useState(false);
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   const {
@@ -145,6 +147,8 @@ export default function InspectionChecklistScreen() {
       setLocalAnswers((prev) => {
         const merged: LocalAnswers = { ...prev };
         answers.forEach((ans: InspectionAnswer) => {
+          // Skip ad-hoc findings (no checklist item)
+          if (!ans.checklist_item_id) return;
           // Get Cloudinary URLs from file records if available
           const photoUrl = (ans.photo_file as any)?.url || null;
           const videoUrl = (ans.video_file as any)?.url || null;
@@ -1164,6 +1168,7 @@ export default function InspectionChecklistScreen() {
   const progressPct = progressData?.percentage ?? 0;
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView
       testID="inspection-checklist-screen"
       style={styles.container}
@@ -1297,6 +1302,32 @@ export default function InspectionChecklistScreen() {
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
+
+    {/* FAB: Report Ad-Hoc Defect */}
+    {inspData.status === 'draft' && (
+      <TouchableOpacity
+        testID="adhoc-defect-fab"
+        style={styles.fab}
+        onPress={() => setShowAdHocSheet(true)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabIcon}>⚠️</Text>
+      </TouchableOpacity>
+    )}
+
+    {/* Ad-Hoc Defect Bottom Sheet */}
+    {inspectionId && (
+      <AdHocDefectSheet
+        visible={showAdHocSheet}
+        onClose={() => setShowAdHocSheet(false)}
+        inspectionId={inspectionId}
+        onSuccess={() => {
+          setShowAdHocSheet(false);
+          refetch();
+        }}
+      />
+    )}
+    </View>
   );
 }
 
@@ -1744,5 +1775,24 @@ const styles = StyleSheet.create({
     color: '#E65100',
     textAlign: 'center',
     fontWeight: '500',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ff4d4f',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  fabIcon: {
+    fontSize: 24,
   },
 });

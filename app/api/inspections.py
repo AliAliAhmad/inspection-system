@@ -956,12 +956,15 @@ def answer_question(inspection_id):
     data = request.get_json()
     current_user_id = get_jwt_identity()
     
-    if not data or 'checklist_item_id' not in data or 'answer_value' not in data:
-        raise ValidationError("checklist_item_id and answer_value are required")
-    
+    if not data or 'answer_value' not in data:
+        raise ValidationError("answer_value is required")
+
+    # Ad-hoc findings have no checklist_item_id
+    checklist_item_id = data.get('checklist_item_id')
+
     answer = InspectionService.answer_question(
         inspection_id=inspection_id,
-        checklist_item_id=data['checklist_item_id'],
+        checklist_item_id=checklist_item_id,
         answer_value=data['answer_value'],
         comment=data.get('comment'),
         photo_path=data.get('photo_path'),
@@ -1361,12 +1364,11 @@ def upload_answer_media(inspection_id):
         file_base64 = data.get('file_base64')
         file_name = data.get('file_name', 'photo.jpg')
         file_type = data.get('file_type', 'image/jpeg')
-        checklist_item_id = data.get('checklist_item_id')
+        checklist_item_id = data.get('checklist_item_id')  # None for ad-hoc findings
+        adhoc_answer_id = data.get('answer_id')  # For ad-hoc: link to existing answer
 
         if not file_base64:
             raise ValidationError("file_base64 is required")
-        if not checklist_item_id:
-            raise ValidationError("checklist_item_id is required")
 
         # Decode base64 to bytes
         try:
@@ -1385,9 +1387,8 @@ def upload_answer_media(inspection_id):
         if 'file' not in request.files:
             raise ValidationError("No file in request")
 
-        checklist_item_id = request.form.get('checklist_item_id')
-        if not checklist_item_id:
-            raise ValidationError("checklist_item_id is required")
+        checklist_item_id = request.form.get('checklist_item_id')  # None for ad-hoc findings
+        adhoc_answer_id = request.form.get('answer_id')  # For ad-hoc: link to existing answer
 
         file = request.files['file']
 
@@ -1398,17 +1399,24 @@ def upload_answer_media(inspection_id):
         file=file,
         uploaded_by=int(current_user_id),
         related_type='inspection_answer_video' if is_video else 'inspection_answer',
-        related_id=int(checklist_item_id),
+        related_id=int(checklist_item_id) if checklist_item_id else 0,
         category='inspection_videos' if is_video else 'inspection_photos'
     )
 
-    # Link to the answer (auto-create if doesn't exist)
-    answer = InspectionAnswer.query.filter_by(
-        inspection_id=inspection_id,
-        checklist_item_id=int(checklist_item_id)
-    ).first()
+    # Link to the answer
+    # For ad-hoc findings: use answer_id to find the existing answer
+    # For checklist items: find by inspection_id + checklist_item_id
+    if adhoc_answer_id:
+        answer = db.session.get(InspectionAnswer, int(adhoc_answer_id))
+    elif checklist_item_id:
+        answer = InspectionAnswer.query.filter_by(
+            inspection_id=inspection_id,
+            checklist_item_id=int(checklist_item_id)
+        ).first()
+    else:
+        answer = None
 
-    if not answer:
+    if not answer and checklist_item_id:
         kwargs = {
             'inspection_id': inspection_id,
             'checklist_item_id': int(checklist_item_id),
@@ -1422,7 +1430,7 @@ def upload_answer_media(inspection_id):
             kwargs['photo_file_id'] = file_record.id
         answer = InspectionAnswer(**kwargs)
         db.session.add(answer)
-    else:
+    elif answer:
         if is_video:
             answer.video_path = file_record.stored_filename
             answer.video_file_id = file_record.id
@@ -1459,7 +1467,7 @@ def upload_answer_media(inspection_id):
 
     # Check if this is a "reading" question that needs number extraction
     from app.models import ChecklistItem
-    checklist_item = db.session.get(ChecklistItem, int(checklist_item_id))
+    checklist_item = db.session.get(ChecklistItem, int(checklist_item_id)) if checklist_item_id else None
     is_reading_question = False
     is_rnr_reading = False  # Running Hours (RNR)
     is_twl_reading = False  # Twistlock Count (TWL)

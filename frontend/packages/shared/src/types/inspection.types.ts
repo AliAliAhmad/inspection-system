@@ -26,7 +26,7 @@ export interface Inspection {
 export interface InspectionAnswer {
   id: number;
   inspection_id: number;
-  checklist_item_id: number;
+  checklist_item_id: number | null;
   checklist_item: ChecklistItem | null;
   answer_value: string;
   comment: string | null;
@@ -39,6 +39,7 @@ export interface InspectionAnswer {
   voice_note_id: number | null;
   voice_note: FileRecord | null;
   voice_transcription?: { en: string; ar: string } | null;
+  urgency_level: number;
   answered_at: string;
 }
 

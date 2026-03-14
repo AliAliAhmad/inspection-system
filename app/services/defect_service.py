@@ -14,24 +14,108 @@ class DefectService:
     @staticmethod
     def create_defect_from_failure(inspection_id, checklist_item_id, technician_id):
         """
-        Auto-create defect from failed inspection item, or increment occurrence
-        if the same defect already exists (open/in_progress) on the same equipment.
+        Auto-create defect from failed inspection item or ad-hoc finding.
+        Increments occurrence if the same defect already exists (open/in_progress).
 
         Args:
             inspection_id: ID of inspection
-            checklist_item_id: ID of failed item
+            checklist_item_id: ID of failed item (None for ad-hoc findings)
             technician_id: ID of technician to assign
 
         Returns:
             Created or updated Defect object
         """
-        item = db.session.get(ChecklistItem, checklist_item_id)
-        if not item:
-            raise NotFoundError("Checklist item not found")
+        from app.services.notification_service import NotificationService
 
         inspection = db.session.get(Inspection, inspection_id)
         if not inspection:
             raise NotFoundError("Inspection not found")
+
+        # Ad-hoc finding (no checklist item)
+        if checklist_item_id is None:
+            # Get the ad-hoc answer to extract description and severity
+            from app.models import InspectionAnswer
+            adhoc_answer = InspectionAnswer.query.filter_by(
+                inspection_id=inspection_id,
+                checklist_item_id=None
+            ).order_by(InspectionAnswer.id.desc()).first()
+
+            # Map urgency_level to severity
+            urgency_severity_map = {0: 'low', 1: 'medium', 2: 'high', 3: 'critical'}
+            severity = urgency_severity_map.get(
+                adhoc_answer.urgency_level if adhoc_answer else 0, 'medium'
+            )
+            due_date = DefectService._calculate_due_date(severity)
+
+            # Build description from voice transcription or comment
+            description = 'Additional Finding'
+            description_ar = 'ملاحظة إضافية'
+            if adhoc_answer:
+                transcription = adhoc_answer.voice_transcription
+                if transcription and isinstance(transcription, dict):
+                    if transcription.get('en'):
+                        description = f"Additional Finding: {transcription['en']}"
+                    if transcription.get('ar'):
+                        description_ar = f"ملاحظة إضافية: {transcription['ar']}"
+                elif adhoc_answer.comment:
+                    description = f"Additional Finding: {adhoc_answer.comment}"
+
+            # Get photo/voice URLs from the answer
+            photo_url = None
+            voice_url = None
+            if adhoc_answer:
+                if adhoc_answer.photo_file:
+                    photo_url = adhoc_answer.photo_file.file_path
+                elif adhoc_answer.photo_path:
+                    photo_url = adhoc_answer.photo_path
+                if adhoc_answer.voice_note:
+                    voice_url = adhoc_answer.voice_note.file_path
+
+            defect = Defect(
+                inspection_id=inspection_id,
+                checklist_item_id=None,
+                severity=severity,
+                description=description,
+                description_ar=description_ar,
+                status='open',
+                assigned_to_id=technician_id,
+                due_date=due_date,
+                occurrence_count=1,
+                report_source='field_report',
+                photo_url=photo_url,
+                voice_note_url=voice_url,
+                reported_by_id=technician_id,
+            )
+            db.session.add(defect)
+            db.session.commit()
+
+            # Create occurrence record
+            occ = DefectOccurrence(
+                defect_id=defect.id,
+                inspection_id=inspection_id,
+                occurrence_number=1,
+                found_by_id=technician_id,
+                found_at=datetime.utcnow()
+            )
+            db.session.add(occ)
+            db.session.commit()
+
+            # Notify technician
+            NotificationService.create_notification(
+                user_id=technician_id,
+                type='defect_created',
+                title=f'New Defect: {defect.severity.title()} (Additional Finding)',
+                message=f'{description[:100]}. Due: {defect.due_date.strftime("%B %d, %Y")}',
+                related_type='defect',
+                related_id=defect.id
+            )
+
+            return defect
+
+        # Standard checklist item failure
+        item = db.session.get(ChecklistItem, checklist_item_id)
+        if not item:
+            raise NotFoundError("Checklist item not found")
 
         # Check for existing open/in_progress defect for same checklist item + equipment
         existing = Defect.query.join(Inspection).filter(
@@ -39,8 +123,6 @@ class DefectService:
             Inspection.equipment_id == inspection.equipment_id,
             Defect.status.in_(['open', 'in_progress'])
         ).first()
-
-        from app.services.notification_service import NotificationService
 
         if existing:
             # Increment occurrence count on existing defect
