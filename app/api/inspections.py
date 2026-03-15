@@ -1449,47 +1449,94 @@ def upload_answer_media(inspection_id):
             checklist_item_id=int(checklist_item_id)
         ).first()
 
-    # AI analysis for photos only (no AI for videos)
-    ai_analysis = None
-    analysis_failed = False
-    extracted_reading = None  # For meter reading extraction
-
+    # For videos, skip AI analysis entirely
     if is_video:
-        # Skip AI analysis for video uploads entirely
         return jsonify({
             'status': 'success',
-            'message': f'Video uploaded successfully',
+            'message': 'Video uploaded successfully',
             'data': {
                 'file': file_record.to_dict(),
                 'answer_id': answer.id if answer else None,
             }
         }), 200
 
-    # Check if this is a "reading" question that needs number extraction
+    # === Return success immediately — run AI analysis in background ===
+    # This prevents the 120s gunicorn timeout from killing the request
+    # while the 8-provider AI fallback chain runs.
+    answer_id = answer.id if answer else None
+    file_record_dict = file_record.to_dict()
+    file_record_id = file_record.id
+    file_path = file_record.file_path
+
+    import threading
+
+    def _run_photo_ai_analysis(app, insp_id, ans_id, frec_id, fpath, cli_id, user_id):
+        """Background thread: AI analysis + reading extraction."""
+        with app.app_context():
+            _background_photo_analysis(insp_id, ans_id, frec_id, fpath, cli_id, user_id)
+
+    # Get Flask app for the background thread's app context
+    from flask import current_app
+    app = current_app._get_current_object()
+
+    thread = threading.Thread(
+        target=_run_photo_ai_analysis,
+        args=(app, inspection_id, answer_id, file_record_id, file_path,
+              int(checklist_item_id) if checklist_item_id else None, int(current_user_id)),
+        daemon=True,
+    )
+    thread.start()
+    logger.info(f"Photo uploaded — AI analysis started in background thread for answer #{answer_id}")
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Photo uploaded',
+        'data': file_record_dict,
+        'media_type': media_type,
+        'ai_analysis': None,  # Will be filled by background thread
+        'analysis_failed': False,
+        'analysis_pending': True,
+        'answer_id': answer_id,
+    }), 201
+
+def _background_photo_analysis(inspection_id, answer_id, file_record_id, file_path, checklist_item_id, user_id):
+    """
+    Background AI analysis for uploaded photos.
+    Runs in a separate thread after the upload response is already sent.
+    """
+    from app.models import InspectionAnswer, File
     from app.models import ChecklistItem
-    checklist_item = db.session.get(ChecklistItem, int(checklist_item_id)) if checklist_item_id else None
+
+    ai_analysis = None
+    analysis_failed = False
+    extracted_reading = None
+
+    # Re-fetch records in this thread's session
+    answer = db.session.get(InspectionAnswer, answer_id) if answer_id else None
+    file_record = db.session.get(File, file_record_id)
+    inspection = db.session.get(Inspection, inspection_id)
+
+    # Check if this is a "reading" question that needs number extraction
+    checklist_item = db.session.get(ChecklistItem, checklist_item_id) if checklist_item_id else None
     is_reading_question = False
-    is_rnr_reading = False  # Running Hours (RNR)
-    is_twl_reading = False  # Twistlock Count (TWL)
+    is_rnr_reading = False
+    is_twl_reading = False
 
     if checklist_item:
         question_text = (checklist_item.question_text or '').lower()
         question_text_ar = (checklist_item.question_text_ar or '').lower()
         combined_text = question_text + ' ' + question_text_ar
 
-        # Check for RNR (Running Hours) reading
         is_rnr_reading = any(keyword in combined_text for keyword in [
             'rnr reading', 'running hour reading', 'rnr', 'running hours', 'running hour',
             'ساعات التشغيل', 'ساعة التشغيل'
         ])
 
-        # Check for TWL (Twistlock Count) reading
         is_twl_reading = any(keyword in combined_text for keyword in [
             'twl count', 'twistlock count', 'twl', 'twistlock', 'twist lock',
             'تويست لوك', 'عدد التويست'
         ])
 
-        # General reading question (any meter/gauge reading)
         is_reading_question = is_rnr_reading or is_twl_reading or any(keyword in combined_text for keyword in [
             'reading', 'قراءة', 'عداد', 'meter', 'gauge', 'counter'
         ])
@@ -1502,23 +1549,12 @@ def upload_answer_media(inspection_id):
         import re
         import requests
 
-        media_type_label = "Video" if is_video else "Photo"
-        logger.info(f"=== AI ANALYSIS ({media_type_label}) ===")
+        logger.info("=== AI ANALYSIS (Photo - Background) ===")
         logger.info(f"Is reading question: {is_reading_question}")
-        logger.info(f"File URL: {file_record.file_path}")
+        logger.info(f"File URL: {file_path}")
 
-        # For videos, use Cloudinary thumbnail URL (extract frame from video)
-        if is_video:
-            analyze_url = file_record.file_path
-            if '/video/upload/' in analyze_url:
-                analyze_url = analyze_url.replace('/video/upload/', '/video/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
-            elif '/upload/' in analyze_url:
-                analyze_url = analyze_url.replace('/upload/', '/upload/so_auto,w_640,h_480,c_fill,f_jpg/')
-            analyze_url = re.sub(r'\.(mp4|mov|webm|avi|mkv|m4v|3gp)$', '.jpg', analyze_url, flags=re.IGNORECASE)
-            logger.info(f"Analyzing video thumbnail at URL: {analyze_url}")
-        else:
-            analyze_url = file_record.file_path
-            logger.info(f"Analyzing photo at URL: {analyze_url}")
+        analyze_url = file_path
+        logger.info(f"Analyzing photo at URL: {analyze_url}")
 
         # Import all vision services
         from app.services.gemini_service import get_vision_service as get_gemini_vision, is_gemini_configured
@@ -1662,7 +1698,7 @@ def upload_answer_media(inspection_id):
                     logger.info("Trying: OpenAI GPT-4 Vision (PAID - final fallback)")
                     client = OpenAI(api_key=api_key)
 
-                    if is_reading_question and not is_video:
+                    if is_reading_question:
                         prompt_text = (
                             "This is a photo of a meter, gauge, or counter reading. "
                             "Extract the numeric value shown on the display/dial. "
@@ -1670,7 +1706,7 @@ def upload_answer_media(inspection_id):
                         )
                     else:
                         prompt_text = (
-                            f"Analyze this industrial equipment inspection {'video frame' if is_video else 'photo'}. "
+                            "Analyze this industrial equipment inspection photo. "
                             "Identify defects, damage, or issues. "
                             "Format: { \"en\": \"English analysis\", \"ar\": \"Arabic analysis\" }"
                         )
@@ -1704,26 +1740,17 @@ def upload_answer_media(inspection_id):
                 analysis_failed = True
 
     except Exception as e:
-        logger.error(f"=== AI ANALYSIS EXCEPTION ===")
-        logger.error(f"{media_type_label} AI analysis failed: {e}", exc_info=True)
+        logger.error("=== AI ANALYSIS EXCEPTION ===")
+        logger.error(f"Photo AI analysis failed: {e}", exc_info=True)
         analysis_failed = True
 
     # Save AI analysis to the inspection answer
     if ai_analysis and answer:
         try:
-            # Ensure clean session before saving
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            # Re-fetch answer to ensure it's in current session
             answer = db.session.merge(answer)
-            if is_video:
-                answer.video_ai_analysis = ai_analysis
-            else:
-                answer.photo_ai_analysis = ai_analysis
+            answer.photo_ai_analysis = ai_analysis
             db.session.commit()
-            logger.info(f"Saved {media_type_label} AI analysis to answer #{answer.id}")
+            logger.info(f"Saved Photo AI analysis to answer #{answer.id}")
         except Exception as save_err:
             logger.error(f"Failed to save AI analysis: {save_err}")
             db.session.rollback()
@@ -1781,10 +1808,10 @@ def upload_answer_media(inspection_id):
                     reading_value=reading_value,
                     is_faulty=is_faulty,
                     reading_date=date_module.today(),
-                    recorded_by_id=int(current_user_id),
+                    recorded_by_id=user_id,
                     inspection_id=inspection_id,
-                    checklist_item_id=int(checklist_item_id),
-                    photo_file_id=file_record.id if not is_video else None,
+                    checklist_item_id=checklist_item_id,
+                    photo_file_id=file_record_id,
                     ai_analysis=ai_analysis,
                 )
                 db.session.add(equipment_reading)
@@ -1792,14 +1819,12 @@ def upload_answer_media(inspection_id):
                 logger.info(f"Saved {reading_type.upper()} reading: {reading_value} for equipment #{inspection.equipment_id}")
 
                 # === STUCK METER DETECTION ===
-                # If the last 3 readings for this equipment+type have the same value,
-                # and equipment is not stopped, auto-create a defect for meter repair.
                 try:
                     _check_stuck_meter(
                         equipment_id=inspection.equipment_id,
                         reading_type=reading_type,
                         current_value=reading_value,
-                        reporter_id=int(current_user_id),
+                        reporter_id=user_id,
                     )
                 except Exception as stuck_err:
                     logger.error(f"Stuck meter check failed: {stuck_err}")
@@ -1812,10 +1837,10 @@ def upload_answer_media(inspection_id):
                     reading_value=None,
                     is_faulty=True,
                     reading_date=date_module.today(),
-                    recorded_by_id=int(current_user_id),
+                    recorded_by_id=user_id,
                     inspection_id=inspection_id,
-                    checklist_item_id=int(checklist_item_id),
-                    photo_file_id=file_record.id if not is_video else None,
+                    checklist_item_id=checklist_item_id,
+                    photo_file_id=file_record_id,
                     ai_analysis=ai_analysis,
                 )
                 db.session.add(equipment_reading)
@@ -1824,20 +1849,8 @@ def upload_answer_media(inspection_id):
 
         except Exception as e:
             logger.error(f"Failed to save equipment reading: {e}")
-            # Don't fail the whole upload, just log the error
 
-    response_data = {
-        'status': 'success',
-        'message': f'{"Video" if is_video else "Photo"} uploaded',
-        'data': file_record.to_dict(),
-        'media_type': media_type,
-        'ai_analysis': ai_analysis,
-        'analysis_failed': analysis_failed,
-        'extracted_reading': extracted_reading,  # For meter reading auto-fill
-        'reading_validation': reading_validation,  # For RNR/TWL validation feedback
-    }
-    logger.info(f"Returning response with ai_analysis: {bool(ai_analysis)}, extracted_reading: {extracted_reading}, validation: {reading_validation}")
-    return jsonify(response_data), 201
+    logger.info(f"Background AI analysis complete: ai_analysis={bool(ai_analysis)}, extracted_reading={extracted_reading}")
 
 
 
