@@ -125,33 +125,41 @@ export async function syncPendingMutations(
   for (const mutation of queue) {
     try {
       if (mutation.files && mutation.files.length > 0) {
-        // ── Upload files via multipart/form-data ──
-        const formData = new FormData();
+        // ── Upload files via native FileSystem.uploadAsync ──
+        const FileSystem = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
+        const baseUrl = apiClient.defaults.baseURL || '';
+        const authHeader = String(
+          apiClient.defaults.headers?.Authorization
+          || apiClient.defaults.headers?.common?.Authorization || ''
+        );
+        const file = mutation.files[0];
+        const parameters: Record<string, string> = {};
 
-        for (const file of mutation.files) {
-          const fileName = file.uri.split('/').pop() || `file_${Date.now()}`;
-          formData.append(file.field, {
-            uri: file.uri,
-            type: file.type,
-            name: fileName,
-          } as unknown as Blob);
-        }
-
-        // Append the JSON payload fields
+        // Add payload fields as parameters
         if (mutation.payload && typeof mutation.payload === 'object') {
           Object.entries(mutation.payload).forEach(([key, value]) => {
             if (value !== undefined && value !== null) {
-              formData.append(
-                key,
-                typeof value === 'object' ? JSON.stringify(value) : String(value)
-              );
+              parameters[key] = typeof value === 'object' ? JSON.stringify(value) : String(value);
             }
           });
         }
 
-        await sendRequest(apiClient, mutation.method, mutation.endpoint, formData, {
-          'Content-Type': 'multipart/form-data',
-        });
+        const uploadResult = await FileSystem.uploadAsync(
+          `${baseUrl}${mutation.endpoint}`,
+          file.uri,
+          {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: file.field,
+            mimeType: file.type,
+            parameters,
+            headers: { Authorization: authHeader },
+          }
+        );
+
+        if (uploadResult.status < 200 || uploadResult.status >= 300) {
+          throw new Error(`Upload failed with status ${uploadResult.status}`);
+        }
       } else {
         // ── Plain JSON request ──
         await sendRequest(apiClient, mutation.method, mutation.endpoint, mutation.payload);

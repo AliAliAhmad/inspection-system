@@ -48,6 +48,7 @@ import {
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 import { useOffline } from '../../providers/OfflineProvider';
 import { syncManager } from '../../utils/sync-manager';
+import { tokenStorage } from '../../storage/token-storage';
 import { useTTS } from '../../providers/TTSProvider';
 import StaleDataBanner from '../../components/StaleDataBanner';
 
@@ -1153,27 +1154,31 @@ export default function InspectionWizardScreen() {
     // ─── End offline branch ───────────────────────────────────────────────────
 
     try {
-      // Upload compressed photo via multipart FormData (much faster than base64 JSON)
-      if (__DEV__) console.log('Uploading compressed photo via FormData...', compressedUri);
+      // Upload compressed photo via native FileSystem.uploadAsync (bypasses JS bridge FormData issues)
+      if (__DEV__) console.log('Uploading compressed photo via native upload...', compressedUri);
 
-      const formData = new FormData();
-      formData.append('file', {
-        uri: compressedUri,
-        name: fileName || 'photo.jpg',
-        type: 'image/jpeg',
-      } as any);
-      formData.append('checklist_item_id', String(checklistItemId));
+      const baseUrl = getApiClient().defaults.baseURL;
+      const token = await tokenStorage.getAccessToken();
+      const uploadUrl = `${baseUrl}/api/inspections/${inspectionId}/upload-media`;
 
-      const response = await getApiClient().post(
-        `/api/inspections/${inspectionId}/upload-media`,
-        formData,
-        {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 120000, // 2 minutes (compressed photos are much smaller)
-        }
-      );
+      const uploadResult = await FileSystem.uploadAsync(uploadUrl, compressedUri, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        mimeType: 'image/jpeg',
+        parameters: { checklist_item_id: String(checklistItemId) },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      const result = (response.data as any);
+      if (uploadResult.status < 200 || uploadResult.status >= 300) {
+        throw new Error(
+          `Upload failed with status ${uploadResult.status}: ${uploadResult.body?.substring(0, 200)}`
+        );
+      }
+
+      const result = JSON.parse(uploadResult.body);
       const data = result?.data;
       const cloudinaryUrl = data?.photo_file?.url || data?.url;
       const aiAnalysis = result?.ai_analysis;

@@ -498,20 +498,26 @@ export const syncManager = {
           // Compress photo before upload (offline photos may not have been compressed)
           const compressedUri = await compressImage(item.localUri);
 
-          // Upload via multipart FormData (faster than base64 JSON)
-          const formData = new FormData();
-          formData.append('file', {
-            uri: compressedUri,
-            name: item.fileName || 'photo.jpg',
-            type: 'image/jpeg',
-          } as any);
-          formData.append('checklist_item_id', String(item.checklistItemId));
+          // Upload via native FileSystem.uploadAsync (bypasses JS bridge FormData issues)
+          const baseUrl = apiClient.defaults.baseURL || '';
+          const authHeader = apiClient.defaults.headers?.Authorization
+            || apiClient.defaults.headers?.common?.Authorization || '';
+          const uploadUrl = `${baseUrl}/api/inspections/${item.inspectionId}/upload-media`;
 
-          await apiClient.post(
-            `/api/inspections/${item.inspectionId}/upload-media`,
-            formData,
-            { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
-          );
+          const uploadResult = await FileSystem.uploadAsync(uploadUrl, compressedUri, {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: 'file',
+            mimeType: 'image/jpeg',
+            parameters: { checklist_item_id: String(item.checklistItemId) },
+            headers: {
+              Authorization: String(authHeader),
+            },
+          });
+
+          if (uploadResult.status < 200 || uploadResult.status >= 300) {
+            throw new Error(`Upload failed with status ${uploadResult.status}`);
+          }
         } else {
           // Upload voice — transcribe then link to the answer (voice still uses base64)
           const base64 = await FileSystem.readAsStringAsync(item.localUri, { encoding: 'base64' });

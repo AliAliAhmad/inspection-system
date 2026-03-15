@@ -26,7 +26,7 @@ import { MediaAttachment } from '../../components/chat/MediaAttachment';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { filesApi } from '@inspection/shared';
+import { tokenStorage } from '../../storage/token-storage';
 import { UrgentAlertContext } from '../../providers/UrgentAlertProvider';
 
 const MAX_RECORDING_SECONDS = 120;
@@ -412,30 +412,35 @@ export default function ChatRoomScreen() {
       const asset = result.assets[0];
       setIsMediaUploading(true);
 
-      // Upload via FormData
-      const formData = new FormData();
-      const fileName = asset.fileName || (mediaType === 'video' ? `video_${Date.now()}.mp4` : `photo_${Date.now()}.jpg`);
+      // Upload via native FileSystem.uploadAsync (bypasses JS bridge FormData issues)
       const mimeType = asset.mimeType || (mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
 
-      // Ensure file URI has proper prefix on Android
       let fileUri = asset.uri;
       if (Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')) {
         fileUri = `file://${fileUri}`;
       }
 
-      formData.append('file', {
-        uri: fileUri,
-        name: fileName,
-        type: mimeType,
-      } as any);
-      formData.append('related_type', 'chat_message');
-      formData.append('related_id', String(channelId));
-      formData.append('category', mediaType);
+      const baseUrl = getApiClient().defaults.baseURL;
+      const chatToken = await tokenStorage.getAccessToken();
 
-      // NOTE: Do NOT manually set Content-Type header — let RN/axios set
-      // multipart/form-data with the correct boundary automatically
-      const uploadRes = await filesApi.uploadFormData(formData);
-      const fileRecord = (uploadRes.data as any)?.data;
+      const chatUploadResult = await FileSystem.uploadAsync(`${baseUrl}/api/files/upload`, fileUri, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        mimeType,
+        parameters: {
+          related_type: 'chat_message',
+          related_id: String(channelId),
+          category: mediaType,
+        },
+        headers: { Authorization: `Bearer ${chatToken}` },
+      });
+
+      if (chatUploadResult.status < 200 || chatUploadResult.status >= 300) {
+        throw new Error(`Upload failed with status ${chatUploadResult.status}`);
+      }
+
+      const fileRecord = JSON.parse(chatUploadResult.body)?.data;
       const mediaUrl = fileRecord?.url || fileRecord?.cloudinary_url;
 
       if (!mediaUrl) throw new Error('Upload returned no URL');

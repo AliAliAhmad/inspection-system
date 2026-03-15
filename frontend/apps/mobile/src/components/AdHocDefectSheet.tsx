@@ -16,6 +16,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { compressImage } from '../utils/compress-image';
 import VoiceNoteRecorder from './VoiceNoteRecorder';
 import { getApiClient } from '@inspection/shared';
+import * as FileSystem from 'expo-file-system/legacy';
+import { tokenStorage } from '../storage/token-storage';
 import { useOffline } from '../providers/OfflineProvider';
 
 type Severity = 'low' | 'medium' | 'high' | 'critical';
@@ -141,23 +143,24 @@ export default function AdHocDefectSheet({
       if (photoUri && answerId) {
         setIsUploadingPhoto(true);
         try {
-          const formData = new FormData();
-          const filename = `adhoc_defect_${Date.now()}.jpg`;
-          formData.append('file', {
-            uri: photoUri,
-            type: 'image/jpeg',
-            name: filename,
-          } as any);
-          formData.append('answer_id', String(answerId));
+            const baseUrl = getApiClient().defaults.baseURL;
+          const adHocToken = await tokenStorage.getAccessToken();
+          const adHocUploadUrl = `${baseUrl}/api/inspections/${inspectionId}/upload-media`;
 
-          await getApiClient().post(
-            `/api/inspections/${inspectionId}/upload-media`,
-            formData,
-            {
-              headers: { 'Content-Type': 'multipart/form-data' },
-              timeout: 120000,
-            }
-          );
+          const adHocUploadResult = await FileSystem.uploadAsync(adHocUploadUrl, photoUri, {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: 'file',
+            mimeType: 'image/jpeg',
+            parameters: { answer_id: String(answerId) },
+            headers: {
+              Authorization: `Bearer ${adHocToken}`,
+            },
+          });
+
+          if (adHocUploadResult.status < 200 || adHocUploadResult.status >= 300) {
+            throw new Error(`Upload failed with status ${adHocUploadResult.status}`);
+          }
         } catch (uploadErr: any) {
           console.warn('Ad-hoc photo upload failed:', uploadErr?.message);
           // Photo will need to be re-uploaded manually if offline

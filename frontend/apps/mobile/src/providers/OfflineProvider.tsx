@@ -172,27 +172,34 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
         );
       });
 
-      // Process media uploads (simplified - actual upload logic would be more complex)
+      // Process media uploads via native FileSystem.uploadAsync
+      const FileSystem = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
       const mediaResult = await syncManager.processMediaQueue(
         client,
         async (media, onProgress) => {
-          // This is a placeholder - actual upload would use FormData and axios with onUploadProgress
-          const formData = new FormData();
-          formData.append('file', {
-            uri: media.localUri,
-            type: media.type === 'photo' ? 'image/jpeg' : media.type === 'video' ? 'video/mp4' : 'audio/m4a',
-            name: `${media.type}_${media.id}`,
-          } as unknown as Blob);
+          const baseUrl = client.defaults.baseURL || '';
+          const authHeader = String(
+            client.defaults.headers?.Authorization
+            || client.defaults.headers?.common?.Authorization || ''
+          );
+          const mimeType = media.type === 'photo' ? 'image/jpeg' : media.type === 'video' ? 'video/mp4' : 'audio/m4a';
 
-          await client.post(`/api/${media.entityType}/${media.entityId}/media`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            onUploadProgress: (progressEvent) => {
-              if (progressEvent.total) {
-                const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                onProgress(percent);
-              }
-            },
-          });
+          const uploadResult = await FileSystem.uploadAsync(
+            `${baseUrl}/api/${media.entityType}/${media.entityId}/media`,
+            media.localUri,
+            {
+              httpMethod: 'POST',
+              uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+              fieldName: 'file',
+              mimeType,
+              headers: { Authorization: authHeader },
+            }
+          );
+
+          if (uploadResult.status < 200 || uploadResult.status >= 300) {
+            throw new Error(`Upload failed with status ${uploadResult.status}`);
+          }
+          onProgress(100);
         },
         (id, progress) => {
           setPendingItems(prev =>

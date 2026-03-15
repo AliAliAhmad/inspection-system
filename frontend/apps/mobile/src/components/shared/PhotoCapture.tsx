@@ -11,7 +11,9 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
-import { filesApi } from '@inspection/shared';
+import * as FileSystem from 'expo-file-system/legacy';
+import { getApiClient } from '@inspection/shared';
+import { tokenStorage } from '../../storage/token-storage';
 
 export type PhotoCaptureType = 'before' | 'after' | 'evidence' | 'general';
 export type EntityType = 'specialist_job' | 'engineer_job' | 'inspection' | 'defect' | 'quality_review' | string;
@@ -147,18 +149,26 @@ export function PhotoCapture({
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-      const formData = new FormData();
-      formData.append('file', {
-        uri,
-        name: filename,
-        type,
-      } as any);
-      formData.append('entity_type', entityType);
-      formData.append('entity_id', String(entityId));
-      formData.append('category', `${photoType}_photo`);
+      const baseUrl = getApiClient().defaults.baseURL;
+      const captureToken = await tokenStorage.getAccessToken();
 
-      const res = await filesApi.uploadFormData(formData);
-      const fileData = res.data?.data;
+      const captureResult = await FileSystem.uploadAsync(`${baseUrl}/api/files/upload`, uri, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        mimeType: type,
+        parameters: {
+          entity_type: entityType,
+          entity_id: String(entityId),
+          category: `${photoType}_photo`,
+        },
+        headers: { Authorization: `Bearer ${captureToken}` },
+      });
+
+      if (captureResult.status < 200 || captureResult.status >= 300) {
+        throw new Error(`Upload failed with status ${captureResult.status}`);
+      }
+      const fileData = JSON.parse(captureResult.body)?.data;
       const filePath = fileData?.filename ? `/uploads/${fileData.filename}` : `/uploads/${filename}`;
       setPhotoPath(filePath);
     } catch (err: any) {

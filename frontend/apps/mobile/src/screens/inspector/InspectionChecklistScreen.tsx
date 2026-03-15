@@ -23,6 +23,7 @@ import { compressImage } from '../../utils/compress-image';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useOffline } from '../../providers/OfflineProvider';
 import { syncManager } from '../../utils/sync-manager';
+import { tokenStorage } from '../../storage/token-storage';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { useAuth } from '../../providers/AuthProvider';
 import {
@@ -308,22 +309,29 @@ export default function InspectionChecklistScreen() {
       // ─── End offline branch ───────────────────────────────────────────────────
 
       try {
-        // Create FormData for React Native - must use this format
-        const formData = new FormData();
-        formData.append('file', {
-          uri: compressedUri,
-          name: fileName || 'photo.jpg',
-          type: 'image/jpeg',
-        } as any);
-        formData.append('checklist_item_id', String(checklistItemId));
+        // Upload via native FileSystem.uploadAsync (bypasses JS bridge FormData issues)
+        const baseUrl = getApiClient().defaults.baseURL;
+        const token = await tokenStorage.getAccessToken();
+        const uploadUrl = `${baseUrl}/api/inspections/${inspectionId}/upload-media`;
 
-        // Upload directly via API client (not through shared API which rebuilds FormData)
-        const response = await getApiClient().post(
-          `/api/inspections/${inspectionId}/upload-media`,
-          formData,
-          { headers: { 'Content-Type': 'multipart/form-data' } }
-        );
-        const data = (response.data as any)?.data;
+        const uploadResult = await FileSystem.uploadAsync(uploadUrl, compressedUri, {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: 'file',
+          mimeType: 'image/jpeg',
+          parameters: { checklist_item_id: String(checklistItemId) },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (uploadResult.status < 200 || uploadResult.status >= 300) {
+          throw new Error(
+            `Upload failed with status ${uploadResult.status}: ${uploadResult.body?.substring(0, 200)}`
+          );
+        }
+
+        const data = JSON.parse(uploadResult.body)?.data;
         const cloudinaryUrl = data?.photo_file?.url || data?.url;
 
         // Update state with Cloudinary URL
@@ -700,22 +708,27 @@ export default function InspectionChecklistScreen() {
       }));
 
       try {
-        // Create FormData for React Native
-        const formData = new FormData();
-        formData.append('file', {
-          uri,
-          name: fileName || 'video.mp4',
-          type: 'video/mp4',
-        } as any);
-        formData.append('checklist_item_id', String(checklistItemId));
+        // Upload via native FileSystem.uploadAsync (bypasses JS bridge FormData issues)
+        const baseUrl = getApiClient().defaults.baseURL;
+        const vidToken = await tokenStorage.getAccessToken();
+        const vidUploadUrl = `${baseUrl}/api/inspections/${inspectionId}/upload-media`;
 
-        // Upload directly via API client
-        const response = await getApiClient().post(
-          `/api/inspections/${inspectionId}/upload-media`,
-          formData,
-          { headers: { 'Content-Type': 'multipart/form-data' } }
-        );
-        const data = (response.data as any)?.data;
+        const vidUploadResult = await FileSystem.uploadAsync(vidUploadUrl, uri, {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: 'file',
+          mimeType: 'video/mp4',
+          parameters: { checklist_item_id: String(checklistItemId) },
+          headers: {
+            Authorization: `Bearer ${vidToken}`,
+          },
+        });
+
+        if (vidUploadResult.status < 200 || vidUploadResult.status >= 300) {
+          throw new Error(`Upload failed with status ${vidUploadResult.status}`);
+        }
+
+        const data = JSON.parse(vidUploadResult.body)?.data;
         const cloudinaryUrl = data?.video_file?.url || data?.url;
 
         setLocalAnswers((prev) => ({

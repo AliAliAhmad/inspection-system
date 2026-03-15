@@ -31,6 +31,8 @@ import {
   IncompleteReason,
   getApiClient,
 } from '@inspection/shared';
+import * as FileSystem from 'expo-file-system/legacy';
+import { tokenStorage } from '../../storage/token-storage';
 
 const INCOMPLETE_REASONS: { key: IncompleteReason; label: string }[] = [
   { key: 'no_spare_parts', label: 'No Spare Parts' },
@@ -383,19 +385,25 @@ export default function SpecialistJobDetailScreen() {
   const uploadCleaningPhoto = useCallback(async (uri: string) => {
     setUploadingCleaning(true);
     try {
-      const formData = new FormData();
-      formData.append('file', {
-        uri,
-        name: 'cleaning.jpg',
-        type: 'image/jpeg',
-      } as any);
-      formData.append('entity_type', 'specialist_job');
-      formData.append('entity_id', String(id));
-      formData.append('file_category', 'cleaning');
+      const baseUrl = getApiClient().defaults.baseURL;
+      const cleanToken = await tokenStorage.getAccessToken();
 
-      await getApiClient().post('/api/files/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const cleanResult = await FileSystem.uploadAsync(`${baseUrl}/api/files/upload`, uri, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'file',
+        mimeType: 'image/jpeg',
+        parameters: {
+          entity_type: 'specialist_job',
+          entity_id: String(id),
+          file_category: 'cleaning',
+        },
+        headers: { Authorization: `Bearer ${cleanToken}` },
       });
+
+      if (cleanResult.status < 200 || cleanResult.status >= 300) {
+        throw new Error(`Upload failed with status ${cleanResult.status}`);
+      }
 
       setCleaningPhotoUri(uri);
       cleaningMutation.mutate();
@@ -432,20 +440,27 @@ export default function SpecialistJobDetailScreen() {
       if (findingPhotoUri) {
         setUploadingFindingPhoto(true);
         try {
-          const formData = new FormData();
-          formData.append('file', {
-            uri: findingPhotoUri,
-            name: 'additional_finding.jpg',
-            type: 'image/jpeg',
-          } as any);
-          formData.append('entity_type', 'defect');
-          formData.append('entity_id', '0');
-          formData.append('file_category', 'photo');
+          const findBaseUrl = getApiClient().defaults.baseURL;
+          const findToken = await tokenStorage.getAccessToken();
 
-          const uploadRes = await getApiClient().post('/api/files/upload', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
+          const findUploadResult = await FileSystem.uploadAsync(`${findBaseUrl}/api/files/upload`, findingPhotoUri, {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: 'file',
+            mimeType: 'image/jpeg',
+            parameters: {
+              entity_type: 'defect',
+              entity_id: '0',
+              file_category: 'photo',
+            },
+            headers: { Authorization: `Bearer ${findToken}` },
           });
-          photoUrl = (uploadRes.data as any)?.url || (uploadRes.data as any)?.data?.url;
+
+          if (findUploadResult.status < 200 || findUploadResult.status >= 300) {
+            throw new Error(`Upload failed with status ${findUploadResult.status}`);
+          }
+          const findUploadData = JSON.parse(findUploadResult.body);
+          photoUrl = findUploadData?.url || findUploadData?.data?.url;
         } catch (err) {
           console.error('Finding photo upload failed:', err);
         } finally {
