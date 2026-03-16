@@ -1460,44 +1460,81 @@ def upload_answer_media(inspection_id):
             }
         }), 200
 
-    # === Return success immediately — run AI analysis in background ===
-    # This prevents the 120s gunicorn timeout from killing the request
-    # while the 8-provider AI fallback chain runs.
+    # === Decide: synchronous vs background AI analysis ===
+    # Reading questions (RNR/TWL) MUST run synchronously because the frontend
+    # needs extracted_reading + reading_validation in the immediate response
+    # to auto-fill the answer_value. Without this, the inspector gets stuck
+    # in a loop (findNextIncomplete sees empty answer_value as unanswered).
+    # Non-reading questions run in background to avoid gunicorn 120s timeout.
     answer_id = answer.id if answer else None
     file_record_dict = file_record.to_dict()
     file_record_id = file_record.id
     file_path = file_record.file_path
 
-    import threading
+    # Detect reading questions before deciding sync vs background
+    is_reading_upload = False
+    if checklist_item_id:
+        from app.models import ChecklistItem
+        cli = db.session.get(ChecklistItem, int(checklist_item_id))
+        if cli:
+            q_text = ((cli.question_text or '') + ' ' + (cli.question_text_ar or '')).lower()
+            is_reading_upload = any(kw in q_text for kw in [
+                'rnr reading', 'running hour', 'running hours', 'rnr',
+                'twl count', 'twistlock count', 'twistlock', 'twist lock', 'twl',
+                'ساعات التشغيل', 'ساعة التشغيل', 'تويست لوك', 'عدد التويست',
+                'reading', 'قراءة', 'عداد', 'meter', 'gauge', 'counter',
+            ])
 
-    def _run_photo_ai_analysis(app, insp_id, ans_id, frec_id, fpath, cli_id, user_id):
-        """Background thread: AI analysis + reading extraction."""
-        with app.app_context():
-            _background_photo_analysis(insp_id, ans_id, frec_id, fpath, cli_id, user_id)
+    if is_reading_upload:
+        # Run synchronously — reading extraction must be in the response
+        logger.info(f"Reading question detected — running AI analysis synchronously for answer #{answer_id}")
+        result = _background_photo_analysis(
+            inspection_id, answer_id, file_record_id, file_path,
+            int(checklist_item_id), int(current_user_id)
+        )
+        return jsonify({
+            'status': 'success',
+            'message': 'Photo uploaded',
+            'data': file_record_dict,
+            'media_type': media_type,
+            'ai_analysis': result.get('ai_analysis') if result else None,
+            'analysis_failed': result.get('analysis_failed', False) if result else False,
+            'analysis_pending': False,
+            'answer_id': answer_id,
+            'extracted_reading': result.get('extracted_reading') if result else None,
+            'reading_validation': result.get('reading_validation') if result else None,
+        }), 201
+    else:
+        # Non-reading: run in background to prevent timeout
+        import threading
 
-    # Get Flask app for the background thread's app context
-    from flask import current_app
-    app = current_app._get_current_object()
+        def _run_photo_ai_analysis(app, insp_id, ans_id, frec_id, fpath, cli_id, user_id):
+            """Background thread: AI analysis + reading extraction."""
+            with app.app_context():
+                _background_photo_analysis(insp_id, ans_id, frec_id, fpath, cli_id, user_id)
 
-    thread = threading.Thread(
-        target=_run_photo_ai_analysis,
-        args=(app, inspection_id, answer_id, file_record_id, file_path,
-              int(checklist_item_id) if checklist_item_id else None, int(current_user_id)),
-        daemon=True,
-    )
-    thread.start()
-    logger.info(f"Photo uploaded — AI analysis started in background thread for answer #{answer_id}")
+        from flask import current_app
+        app = current_app._get_current_object()
 
-    return jsonify({
-        'status': 'success',
-        'message': 'Photo uploaded',
-        'data': file_record_dict,
-        'media_type': media_type,
-        'ai_analysis': None,  # Will be filled by background thread
-        'analysis_failed': False,
-        'analysis_pending': True,
-        'answer_id': answer_id,
-    }), 201
+        thread = threading.Thread(
+            target=_run_photo_ai_analysis,
+            args=(app, inspection_id, answer_id, file_record_id, file_path,
+                  int(checklist_item_id) if checklist_item_id else None, int(current_user_id)),
+            daemon=True,
+        )
+        thread.start()
+        logger.info(f"Photo uploaded — AI analysis started in background thread for answer #{answer_id}")
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Photo uploaded',
+            'data': file_record_dict,
+            'media_type': media_type,
+            'ai_analysis': None,  # Will be filled by background thread
+            'analysis_failed': False,
+            'analysis_pending': True,
+            'answer_id': answer_id,
+        }), 201
 
 def _background_photo_analysis(inspection_id, answer_id, file_record_id, file_path, checklist_item_id, user_id):
     """
@@ -1851,6 +1888,14 @@ def _background_photo_analysis(inspection_id, answer_id, file_record_id, file_pa
             logger.error(f"Failed to save equipment reading: {e}")
 
     logger.info(f"Background AI analysis complete: ai_analysis={bool(ai_analysis)}, extracted_reading={extracted_reading}")
+
+    # Return results so synchronous callers can use them
+    return {
+        'ai_analysis': ai_analysis,
+        'analysis_failed': analysis_failed,
+        'extracted_reading': extracted_reading,
+        'reading_validation': reading_validation,
+    }
 
 
 
