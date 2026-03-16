@@ -609,6 +609,16 @@ def my_assignments():
     if status:
         query = query.filter_by(status=status)
 
+    # Auto-hide completed assignments older than 1 day (reviewed by admin/engineer)
+    COMPLETED_HIDE_DAYS = 1
+    cutoff = datetime.utcnow() - timedelta(days=COMPLETED_HIDE_DAYS)
+    query = query.filter(
+        or_(
+            InspectionAssignment.status != 'completed',
+            InspectionAssignment.updated_at >= cutoff,
+        )
+    )
+
     assignments = query.order_by(InspectionAssignment.created_at.desc()).all()
 
     # Build answer summaries and assessment for each assignment

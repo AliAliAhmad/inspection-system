@@ -385,7 +385,14 @@ export default function MyAssignmentsScreen() {
     select: (res) => (res.data as any).data ?? res.data,
   });
 
-  const allAssignments = (Array.isArray(data) ? data : []) as InspectionAssignment[];
+  const allAssignments = useMemo(() => {
+    const raw = (Array.isArray(data) ? data : []) as InspectionAssignment[];
+    // Client-side filter: hide completed assignments older than 1 day (matches backend)
+    const cutoff = Date.now() - 1 * 24 * 60 * 60 * 1000;
+    return raw.filter(a =>
+      a.status !== 'completed' || new Date(a.updated_at).getTime() >= cutoff
+    );
+  }, [data]);
 
   // Pre-fetch assignment data for offline use (triggered on screen open when online)
   useEffect(() => {

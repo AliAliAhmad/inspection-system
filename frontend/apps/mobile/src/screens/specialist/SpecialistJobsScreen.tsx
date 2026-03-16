@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -84,7 +84,16 @@ export default function SpecialistJobsScreen() {
     refetchOnMount: 'always',
   });
 
-  const jobs = (Array.isArray(allJobs) ? allJobs : []) as SpecialistJob[];
+  const jobs = useMemo(() => {
+    const raw = (Array.isArray(allJobs) ? allJobs : []) as SpecialistJob[];
+    // Client-side filter: hide completed jobs older than 1 day (matches backend)
+    const cutoff = Date.now() - 1 * 24 * 60 * 60 * 1000;
+    const doneStatuses = ['completed', 'qc_approved', 'incomplete', 'cancelled'];
+    return raw.filter(j =>
+      !doneStatuses.includes(j.status) ||
+      (j.completed_at && new Date(j.completed_at).getTime() >= cutoff)
+    );
+  }, [allJobs]);
 
   const filteredJobs = jobs.filter((job) => {
     switch (activeTab) {

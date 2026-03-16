@@ -81,6 +81,7 @@ export interface InspectionAssignment {
   backlog_triggered_at: string | null;
   assigned_at: string | null;
   created_at: string;
+  updated_at: string;
   answers_summary?: AnswerSummaryEntry[];
   assessment?: AssessmentSummary | null;
   urgency_score?: number;

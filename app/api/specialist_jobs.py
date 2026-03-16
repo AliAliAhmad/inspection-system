@@ -683,6 +683,20 @@ def get_jobs():
         if statuses:
             query = query.filter(SpecialistJob.status.in_(statuses))
 
+    # Auto-hide completed jobs older than 1 day (for non-admin users)
+    if user.role != 'admin':
+        from sqlalchemy import or_
+        COMPLETED_HIDE_DAYS = 1
+        cutoff = datetime.utcnow() - timedelta(days=COMPLETED_HIDE_DAYS)
+        done_statuses = ('completed', 'qc_approved', 'incomplete', 'cancelled')
+        query = query.filter(
+            or_(
+                ~SpecialistJob.status.in_(done_statuses),
+                SpecialistJob.completed_at >= cutoff,
+                SpecialistJob.completed_at.is_(None),
+            )
+        )
+
     query = query.order_by(SpecialistJob.created_at.desc())
     items, pagination_meta = paginate(query)
 

@@ -128,7 +128,8 @@ class InspectionAssignment(db.Model):
             'is_takeover': self.is_takeover,
             'mech_points_awarded': self.mech_points_awarded,
             'elec_points_awarded': self.elec_points_awarded,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
 
     def __repr__(self):
