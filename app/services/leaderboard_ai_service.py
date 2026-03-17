@@ -856,7 +856,7 @@ class LeaderboardAIService:
 
             rankings.append({
                 'user_id': u.id,
-                'full_name': u.full_name,
+                'full_name': u.full_name or 'Unknown',
                 'role': u.role,
                 'role_id': u.role_id,
                 'employee_id': u.role_id,

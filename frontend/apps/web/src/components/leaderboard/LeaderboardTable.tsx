@@ -77,7 +77,7 @@ export function LeaderboardTable({
                   fontWeight: isCurrentUser ? 700 : 400,
                 }}
               >
-                {name.charAt(0)}
+                {(name || '?').charAt(0)}
               </Avatar>
             </Badge>
             <div>

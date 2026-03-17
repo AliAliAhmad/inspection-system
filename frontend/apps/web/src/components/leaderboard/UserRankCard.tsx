@@ -46,7 +46,7 @@ export function UserRankCard({ entry, stats, totalUsers, loading }: UserRankCard
                 border: '3px solid rgba(255,255,255,0.3)',
               }}
             >
-              {entry.full_name.charAt(0)}
+              {(entry.full_name || '?').charAt(0)}
             </Avatar>
             <Text
               strong

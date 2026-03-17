@@ -82,7 +82,7 @@ export const TechnicianLeaderboard: React.FC<TechnicianLeaderboardProps> = ({ cu
       render: (name: string, record: EquipmentLeaderboardEntry) => (
         <Space>
           <Avatar style={{ backgroundColor: record.user_id === currentUserId ? '#1890ff' : '#87d068' }}>
-            {name.charAt(0)}
+            {(name || '?').charAt(0)}
           </Avatar>
           <div>
             <div style={{ fontWeight: record.user_id === currentUserId ? 600 : 400 }}>
@@ -261,7 +261,7 @@ const PodiumCard: React.FC<PodiumCardProps> = ({ entry, rank, isCurrentUser }) =
           border: `3px solid ${colors[rank as keyof typeof colors]}`,
         }}
       >
-        {entry.full_name.charAt(0)}
+        {(entry.full_name || '?').charAt(0)}
       </Avatar>
       <div style={{ marginTop: 8 }}>
         <Text strong style={{ fontSize: rank === 1 ? 16 : 14 }}>

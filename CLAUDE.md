@@ -76,6 +76,7 @@ See HISTORY.md for full changelog. Only keep last 3 entries here.
 | 2026-03-14 | Fix: Equipment type filtering for checklist items — case-insensitive matching (3 locations), new `/api/equipment/subtypes` endpoint, admin dropdown populated with real equipment_type_2 values instead of free text | ✅ Done |
 | 2026-03-15 | Fix: Photo upload timeout — moved AI analysis to background thread so upload returns instantly (~5s instead of 2min+), prevents gunicorn 120s timeout killing the request | ✅ Done |
 | 2026-03-16 | Fix: Running hours loop bug — reading questions (RNR/TWL) now run AI analysis synchronously so extracted_reading returns in immediate response; non-reading photos still use background thread | ✅ Done |
+| 2026-03-17 | Fix: Leaderboard charAt crash — guard all `.charAt(0)` calls on `full_name`/`name` with fallback `|| '?'` in 5 leaderboard components + backend `full_name or 'Unknown'` safety | ✅ Done |
 
 
 ## Plugin Management

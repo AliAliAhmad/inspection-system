@@ -76,7 +76,7 @@ export function AnimatedPodium({ entries, showConfetti = false, onUserClick }: A
               boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
             }}
           >
-            {entry.full_name.charAt(0)}
+            {(entry.full_name || '?').charAt(0)}
           </Avatar>
         </Badge>
 
