@@ -1665,6 +1665,112 @@ def import_sap_orders():
     }), 200
 
 
+# ==================== DAY INSPECTIONS (Read-Only Visibility) ====================
+
+@bp.route('/day-inspections', methods=['GET'])
+@jwt_required()
+def get_day_inspections():
+    """
+    Get inspection assignments for a given date, grouped by berth.
+    Used for read-only visibility in the work plan.
+    """
+    from app.models.inspection_assignment import InspectionAssignment
+    from app.models.inspection_list import InspectionList
+
+    date_str = request.args.get('date')
+    berth_filter = request.args.get('berth')  # optional: 'east' or 'west'
+
+    if not date_str:
+        return jsonify({'status': 'error', 'message': 'date parameter required'}), 400
+
+    # Query inspection assignments for the target date
+    query = db.session.query(InspectionAssignment).join(
+        InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id
+    ).filter(InspectionList.target_date == date_str)
+
+    assignments = query.all()
+
+    result = {'east': {'count': 0, 'assignments': []}, 'west': {'count': 0, 'assignments': []}}
+
+    for a in assignments:
+        # Determine berth from equipment or assignment
+        eq = a.equipment
+        berth = getattr(a, 'berth', None) or getattr(eq, 'berth', None) or 'east'
+        if isinstance(berth, str):
+            berth = berth.lower()
+        if berth not in ('east', 'west'):
+            berth = 'east'
+
+        if berth_filter and berth != berth_filter:
+            continue
+
+        # Get inspector/engineer names
+        mech_name = None
+        elec_name = None
+        eng_name = None
+
+        if hasattr(a, 'mechanical_inspector') and a.mechanical_inspector:
+            mech_name = a.mechanical_inspector.full_name if hasattr(a.mechanical_inspector, 'full_name') else str(a.mechanical_inspector)
+        if hasattr(a, 'electrical_inspector') and a.electrical_inspector:
+            elec_name = a.electrical_inspector.full_name if hasattr(a.electrical_inspector, 'full_name') else str(a.electrical_inspector)
+        if hasattr(a, 'engineer') and a.engineer:
+            eng_name = a.engineer.full_name if hasattr(a.engineer, 'full_name') else str(a.engineer)
+
+        # For relationship-based lookups
+        if mech_name is None and hasattr(a, 'mechanical_inspector_id') and a.mechanical_inspector_id:
+            from app.models.user import User
+            user = db.session.get(User, a.mechanical_inspector_id)
+            mech_name = user.full_name if user else None
+        if elec_name is None and hasattr(a, 'electrical_inspector_id') and a.electrical_inspector_id:
+            from app.models.user import User
+            user = db.session.get(User, a.electrical_inspector_id)
+            elec_name = user.full_name if user else None
+        if eng_name is None and hasattr(a, 'engineer_id') and a.engineer_id:
+            from app.models.user import User
+            user = db.session.get(User, a.engineer_id)
+            eng_name = user.full_name if user else None
+
+        entry = {
+            'equipment_name': eq.name if eq else 'Unknown',
+            'equipment_serial': eq.serial_number if eq else None,
+            'equipment_type': getattr(eq, 'equipment_type', None) or getattr(eq, 'equipment_type_2', None) or '',
+            'status': a.status or 'unassigned',
+            'mechanical_inspector': mech_name,
+            'electrical_inspector': elec_name,
+            'engineer': eng_name,
+            'shift': getattr(a, 'shift', 'day') or 'day',
+        }
+
+        result[berth]['assignments'].append(entry)
+        result[berth]['count'] += 1
+
+    return jsonify({'status': 'success', 'data': result}), 200
+
+
+@bp.route('/day-inspection-equipment', methods=['GET'])
+@jwt_required()
+def get_day_inspection_equipment():
+    """
+    Returns list of equipment_ids that have inspections on a given date.
+    Used for the inspection badge on PM/defect job cards.
+    """
+    from app.models.inspection_assignment import InspectionAssignment
+    from app.models.inspection_list import InspectionList
+
+    date_str = request.args.get('date')
+    if not date_str:
+        return jsonify({'status': 'error', 'message': 'date parameter required'}), 400
+
+    equipment_ids = db.session.query(InspectionAssignment.equipment_id).join(
+        InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id
+    ).filter(
+        InspectionList.target_date == date_str,
+        InspectionAssignment.equipment_id.isnot(None)
+    ).distinct().all()
+
+    return jsonify({'status': 'success', 'data': [eid for (eid,) in equipment_ids]}), 200
+
+
 # ==================== AVAILABLE JOBS ====================
 
 @bp.route('/available-jobs', methods=['GET'])

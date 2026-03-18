@@ -1,9 +1,8 @@
 import React from 'react';
-import { Tooltip, Tag, Badge, Checkbox } from 'antd';
-import { UserOutlined, ToolOutlined, WarningOutlined } from '@ant-design/icons';
+import { Tooltip, Tag, Checkbox } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
 import { useDroppable } from '@dnd-kit/core';
 import type { WorkPlanJob, ComputedPriority } from '@inspection/shared';
-import { useTranslation } from 'react-i18next';
 
 // Job type emojis
 const JOB_TYPE_EMOJI: Record<string, string> = {
@@ -36,6 +35,7 @@ interface TimelineJobBlockProps {
   selectable?: boolean; // Enable selection checkbox
   selected?: boolean; // Is this job selected
   onSelect?: (jobId: number, selected: boolean) => void; // Selection handler
+  inspectionEquipmentIds?: number[]; // Equipment IDs with inspections today
 }
 
 export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
@@ -48,9 +48,8 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
   selectable = false,
   selected = false,
   onSelect,
+  inspectionEquipmentIds,
 }) => {
-  const { t } = useTranslation();
-
   // Make this a drop target for employees
   const { setNodeRef, isOver } = useDroppable({
     id: `job-${job.id}`,
@@ -61,6 +60,7 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
   const priority = job.computed_priority || 'normal';
   const style = PRIORITY_STYLES[priority];
   const isOverdue = job.overdue_value && job.overdue_value > 0;
+  const hasInspection = inspectionEquipmentIds && job.equipment_id && inspectionEquipmentIds.includes(job.equipment_id);
 
   const equipmentName = job.equipment?.name || job.equipment?.serial_number || '';
   const teamCount = job.assignments?.length || 0;
@@ -102,6 +102,11 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: compact ? '2px' : '4px', paddingRight: selectable ? 24 : 0 }}>
         <span style={{ fontSize: compact ? '14px' : '16px' }}>{JOB_TYPE_EMOJI[job.job_type]}</span>
         {isOverdue && <span style={{ fontSize: compact ? '12px' : '14px' }}>⚠️</span>}
+        {hasInspection && (
+          <Tooltip title="Inspection scheduled today">
+            <SearchOutlined style={{ fontSize: compact ? '11px' : '12px', color: '#1677ff' }} />
+          </Tooltip>
+        )}
         <span style={{
           fontWeight: 500,
           fontSize: compact ? '12px' : '13px',

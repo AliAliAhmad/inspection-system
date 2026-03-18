@@ -77,6 +77,7 @@ See HISTORY.md for full changelog. Only keep last 3 entries here.
 | 2026-03-15 | Fix: Photo upload timeout — moved AI analysis to background thread so upload returns instantly (~5s instead of 2min+), prevents gunicorn 120s timeout killing the request | ✅ Done |
 | 2026-03-16 | Fix: Running hours loop bug — reading questions (RNR/TWL) now run AI analysis synchronously so extracted_reading returns in immediate response; non-reading photos still use background thread | ✅ Done |
 | 2026-03-17 | Fix: Leaderboard charAt crash — guard all `.charAt(0)` calls on `full_name`/`name` with fallback `|| '?'` in 5 leaderboard components + backend `full_name or 'Unknown'` safety | ✅ Done |
+| 2026-03-18 | Feat: Inspection visibility overhaul in work plan — inspections now read-only summary bar (not editable jobs). New backend endpoints (day-inspections, day-inspection-equipment), collapsible InspectionSummaryBar on web+mobile, inspection badge on job cards, removed inspection from add-job/pool | ✅ Done |
 
 
 ## Plugin Management

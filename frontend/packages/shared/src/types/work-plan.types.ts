@@ -944,3 +944,26 @@ export interface SimulationResponse {
     recommendations: string[];
   };
 }
+
+// ==================== DAY INSPECTIONS (Read-Only Visibility) ====================
+
+export interface DayInspectionSummary {
+  equipment_name: string;
+  equipment_serial: string;
+  equipment_type: string;
+  status: string;
+  mechanical_inspector: string | null;
+  electrical_inspector: string | null;
+  engineer: string | null;
+  shift: 'day' | 'night';
+}
+
+export interface DayInspectionsBerth {
+  count: number;
+  assignments: DayInspectionSummary[];
+}
+
+export interface DayInspections {
+  east: DayInspectionsBerth;
+  west: DayInspectionsBerth;
+}

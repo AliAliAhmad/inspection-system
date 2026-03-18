@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { workPlansApi } from '@inspection/shared';
 import type { WorkPlan, WorkPlanDay, WorkPlanJob } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
+import InspectionSummaryBar from '../../components/InspectionSummaryBar';
 
 type BerthTab = 'east' | 'west';
 
@@ -249,6 +250,7 @@ export default function WorkPlanOverviewScreen() {
             ) : (
               jobs.map(job => renderJob(job, day.id))
             )}
+            <InspectionSummaryBar date={day.date} berth={berth} />
           </View>
         )}
       </View>

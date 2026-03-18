@@ -50,6 +50,7 @@ import {
   type MaterialKit,
 } from '@inspection/shared';
 import dayjs from 'dayjs';
+import InspectionSummaryBar from '../../components/work-planning/InspectionSummaryBar';
 
 const { Title, Text } = Typography;
 
@@ -378,6 +379,7 @@ export default function WorkPlanDayPage() {
                 displayedJobs.map(renderJobCard)
               )}
             </Card>
+            {date && <InspectionSummaryBar date={date} berth={selectedBerth as 'east' | 'west'} />}
           </Col>
 
           {/* Available Team */}
@@ -416,7 +418,6 @@ export default function WorkPlanDayPage() {
             <Select value={selectedJobType} onChange={setSelectedJobType}>
               <Select.Option value="pm">PM (Preventive Maintenance)</Select.Option>
               <Select.Option value="defect">Defect Repair</Select.Option>
-              <Select.Option value="inspection">Inspection</Select.Option>
             </Select>
           </Form.Item>
 

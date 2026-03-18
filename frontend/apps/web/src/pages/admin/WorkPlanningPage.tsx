@@ -92,6 +92,7 @@ import {
   calculateTimeAccuracy,
   type ViewMode
 } from '../../components/work-planning';
+import InspectionSummaryBar from '../../components/work-planning/InspectionSummaryBar';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import { InputNumber } from 'antd';
 
@@ -2170,6 +2171,8 @@ export default function WorkPlanningPage() {
                                         }} />
                                       </div>
                                     </div>
+                                    {/* Inspection Summary */}
+                                    <InspectionSummaryBar date={day.date} berth={berth} />
                                   </>
                                 )}
                               </DroppableDay>

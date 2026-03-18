@@ -7,7 +7,6 @@ import {
   SearchOutlined,
   ToolOutlined,
   BugOutlined,
-  EyeOutlined,
   ClockCircleOutlined,
   WarningOutlined,
   LeftOutlined,
@@ -195,7 +194,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   embedded = false,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'prm' | 'defect' | 'ins'>('prm');
+  const [activeTab, setActiveTab] = useState<'prm' | 'defect'>('prm');
   const [prmSubTab, setPrmSubTab] = useState<'hourly' | 'calendar'>('hourly');
   const [searchText, setSearchText] = useState<string>('');
   const [equipmentFilter, setEquipmentFilter] = useState<string>('');
@@ -234,12 +233,12 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   }, [availableJobs]);
 
   // Filter and sort jobs
-  const { prmJobs, defectJobs, insJobs } = useMemo(() => {
-    if (!availableJobs) return { prmJobs: [], defectJobs: [], insJobs: [] };
+  const { prmJobs, defectJobs } = useMemo(() => {
+    if (!availableJobs) return { prmJobs: [], defectJobs: [] };
 
     const sapOrders = availableJobs.sap_orders || [];
     const defects = availableJobs.defect_jobs || [];
-    const inspections = availableJobs.inspection_jobs || [];
+    // Inspections no longer shown in pool — they appear in InspectionSummaryBar
 
     // Filter function
     const filterJob = (job: any) => {
@@ -336,26 +335,17 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       return aPriority - bPriority;
     });
 
-    // Inspection Jobs
-    let ins = inspections.map((i: any) => ({
-      ...i,
-      equipment: i.assignment?.equipment,
-      description: i.assignment?.template?.name || 'Inspection',
-      priority: 'normal',
-    })).filter(filterJob);
-
-    return { prmJobs: prm, defectJobs: defect, insJobs: ins };
+    return { prmJobs: prm, defectJobs: defect };
   }, [availableJobs, searchText, equipmentFilter, priorityFilter, prmSubTab]);
 
   // Counts
   const prmCount = prmJobs.length;
   const defectCount = defectJobs.length;
-  const insCount = insJobs.length;
-  const totalCount = prmCount + defectCount + insCount;
+  const totalCount = prmCount + defectCount;
 
   // Get current jobs based on active tab
-  const currentJobs = activeTab === 'prm' ? prmJobs : activeTab === 'defect' ? defectJobs : insJobs;
-  const currentJobType = activeTab === 'prm' ? 'sap' : activeTab === 'defect' ? 'defect' : 'inspection';
+  const currentJobs = activeTab === 'prm' ? prmJobs : defectJobs;
+  const currentJobType = activeTab === 'prm' ? 'sap' : 'defect';
 
   return (
     <div
@@ -516,7 +506,6 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
             {([
               { key: 'prm',    label: 'PRM',    icon: <ToolOutlined />, count: prmCount },
               { key: 'defect', label: 'Defect', icon: <BugOutlined />,  count: defectCount },
-              { key: 'ins',    label: 'INS',    icon: <EyeOutlined />,  count: insCount },
             ] as const).map(tab => (
               <div
                 key={tab.key}

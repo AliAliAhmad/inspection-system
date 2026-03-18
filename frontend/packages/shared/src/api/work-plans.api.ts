@@ -57,6 +57,7 @@ import {
   EfficiencyScoreResponse,
   PlanValidationResponse,
   SimulationResponse,
+  DayInspections,
 } from '../types/work-plan.types';
 
 export interface WorkPlanListParams {
@@ -602,5 +603,17 @@ export const workPlansApi = {
       reason: string;
       source?: string;
     }>>('/api/work-plans/classify-job', { description });
+  },
+
+  // ==================== DAY INSPECTIONS (Read-Only Visibility) ====================
+
+  getDayInspections(date: string, berth?: string) {
+    const params: Record<string, string> = { date };
+    if (berth) params.berth = berth;
+    return getApiClient().get<ApiResponse<DayInspections>>('/api/work-plans/day-inspections', { params });
+  },
+
+  getDayInspectionEquipment(date: string) {
+    return getApiClient().get<ApiResponse<number[]>>('/api/work-plans/day-inspection-equipment', { params: { date } });
   },
 };
