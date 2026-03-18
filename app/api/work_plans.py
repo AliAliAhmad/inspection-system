@@ -1689,9 +1689,14 @@ def get_day_inspections():
     except ValueError:
         return jsonify({'status': 'error', 'message': 'Invalid date format (use YYYY-MM-DD)'}), 400
 
-    # Query inspection assignments for the target date
+    # Query inspection assignments for the target date (eager-load relationships to avoid N+1)
     query = db.session.query(InspectionAssignment).join(
         InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id
+    ).options(
+        joinedload(InspectionAssignment.equipment),
+        joinedload(InspectionAssignment.mechanical_inspector),
+        joinedload(InspectionAssignment.electrical_inspector),
+        joinedload(InspectionAssignment.engineer),
     ).filter(InspectionList.target_date == target_date)
 
     assignments = query.all()
@@ -1699,35 +1704,39 @@ def get_day_inspections():
     result = {'east': {'count': 0, 'assignments': []}, 'west': {'count': 0, 'assignments': []}}
 
     for a in assignments:
-        # Determine berth from equipment or assignment
-        eq = a.equipment
-        berth = getattr(a, 'berth', None) or getattr(eq, 'berth', None) or 'east'
-        if isinstance(berth, str):
-            berth = berth.lower()
-        if berth not in ('east', 'west'):
-            berth = 'east'
+        try:
+            # Determine berth from equipment or assignment
+            eq = a.equipment
+            berth = getattr(a, 'berth', None) or getattr(eq, 'berth', None) or 'east'
+            if isinstance(berth, str):
+                berth = berth.lower()
+            if berth not in ('east', 'west'):
+                berth = 'east'
 
-        if berth_filter and berth != berth_filter:
+            if berth_filter and berth != berth_filter:
+                continue
+
+            # Get inspector/engineer names via relationships
+            mech_name = a.mechanical_inspector.full_name if a.mechanical_inspector else None
+            elec_name = a.electrical_inspector.full_name if a.electrical_inspector else None
+            eng_name = a.engineer.full_name if a.engineer else None
+
+            entry = {
+                'equipment_name': eq.name if eq else 'Unknown',
+                'equipment_serial': eq.serial_number if eq else None,
+                'equipment_type': getattr(eq, 'equipment_type', None) or getattr(eq, 'equipment_type_2', None) or '',
+                'status': a.status or 'unassigned',
+                'mechanical_inspector': mech_name,
+                'electrical_inspector': elec_name,
+                'engineer': eng_name,
+                'shift': getattr(a, 'shift', 'day') or 'day',
+            }
+
+            result[berth]['assignments'].append(entry)
+            result[berth]['count'] += 1
+        except Exception as e:
+            logger.error(f"Error processing inspection assignment {a.id}: {e}")
             continue
-
-        # Get inspector/engineer names via relationships
-        mech_name = a.mechanical_inspector.full_name if a.mechanical_inspector else None
-        elec_name = a.electrical_inspector.full_name if a.electrical_inspector else None
-        eng_name = a.engineer.full_name if a.engineer else None
-
-        entry = {
-            'equipment_name': eq.name if eq else 'Unknown',
-            'equipment_serial': eq.serial_number if eq else None,
-            'equipment_type': getattr(eq, 'equipment_type', None) or getattr(eq, 'equipment_type_2', None) or '',
-            'status': a.status or 'unassigned',
-            'mechanical_inspector': mech_name,
-            'electrical_inspector': elec_name,
-            'engineer': eng_name,
-            'shift': getattr(a, 'shift', 'day') or 'day',
-        }
-
-        result[berth]['assignments'].append(entry)
-        result[berth]['count'] += 1
 
     return jsonify({'status': 'success', 'data': result}), 200
 

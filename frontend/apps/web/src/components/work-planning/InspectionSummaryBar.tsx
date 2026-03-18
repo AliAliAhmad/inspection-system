@@ -27,7 +27,7 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
-  const { data: inspections, isLoading } = useQuery({
+  const { data: inspections, isLoading, isError, error } = useQuery({
     queryKey: ['day-inspections', date, berth],
     queryFn: async (): Promise<DayInspections> => {
       const r = await workPlansApi.getDayInspections(date, berth);
@@ -35,13 +35,28 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
     },
     enabled: !!date,
     staleTime: 30_000,
+    retry: 1,
   });
+
+  if (isError) {
+    console.error('[InspectionSummaryBar] API error:', error);
+  }
 
   const berthData: DayInspectionsBerth | undefined = inspections?.[berth];
   const count = berthData?.count ?? 0;
   const assignments: DayInspectionSummary[] = berthData?.assignments ?? [];
 
-  if (isLoading || count === 0) return null;
+  if (isLoading) return null;
+
+  if (isError) {
+    return (
+      <div style={{ marginTop: 4, padding: '4px 6px', backgroundColor: '#fff2f0', border: '1px solid #ffccc7', borderRadius: 4, fontSize: 11 }}>
+        <Text type="danger" style={{ fontSize: 11 }}>Inspections failed to load</Text>
+      </div>
+    );
+  }
+
+  if (count === 0) return null;
 
   return (
     <div style={{ marginTop: 4, flexShrink: 0 }}>

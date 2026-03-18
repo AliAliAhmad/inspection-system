@@ -24,18 +24,29 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
-  const { data: inspections, isLoading } = useQuery({
+  const { data: inspections, isLoading, isError } = useQuery({
     queryKey: ['day-inspections', date, berth],
     queryFn: () => workPlansApi.getDayInspections(date, berth).then(r => r.data.data),
     enabled: !!date,
     staleTime: 30_000,
+    retry: 1,
   });
 
   const berthData = inspections?.[berth];
   const count = berthData?.count ?? 0;
   const assignments = berthData?.assignments ?? [];
 
-  if (isLoading || count === 0) return null;
+  if (isLoading) return null;
+
+  if (isError) {
+    return (
+      <View style={[styles.container, { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2', borderWidth: 1, borderRadius: 8, padding: 8 }]}>
+        <Text style={{ color: '#D32F2F', fontSize: 12 }}>Inspections failed to load</Text>
+      </View>
+    );
+  }
+
+  if (count === 0) return null;
 
   const assigned = assignments.filter(a => a.status === 'assigned').length;
   const inProgress = assignments.filter(a => ['in_progress', 'mech_complete', 'elec_complete'].includes(a.status)).length;
