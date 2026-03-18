@@ -1676,6 +1676,7 @@ def get_day_inspections():
     """
     from app.models.inspection_assignment import InspectionAssignment
     from app.models.inspection_list import InspectionList
+    from datetime import date as date_type
 
     date_str = request.args.get('date')
     berth_filter = request.args.get('berth')  # optional: 'east' or 'west'
@@ -1683,10 +1684,15 @@ def get_day_inspections():
     if not date_str:
         return jsonify({'status': 'error', 'message': 'date parameter required'}), 400
 
+    try:
+        target_date = date_type.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid date format (use YYYY-MM-DD)'}), 400
+
     # Query inspection assignments for the target date
     query = db.session.query(InspectionAssignment).join(
         InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id
-    ).filter(InspectionList.target_date == date_str)
+    ).filter(InspectionList.target_date == target_date)
 
     assignments = query.all()
 
@@ -1704,31 +1710,10 @@ def get_day_inspections():
         if berth_filter and berth != berth_filter:
             continue
 
-        # Get inspector/engineer names
-        mech_name = None
-        elec_name = None
-        eng_name = None
-
-        if hasattr(a, 'mechanical_inspector') and a.mechanical_inspector:
-            mech_name = a.mechanical_inspector.full_name if hasattr(a.mechanical_inspector, 'full_name') else str(a.mechanical_inspector)
-        if hasattr(a, 'electrical_inspector') and a.electrical_inspector:
-            elec_name = a.electrical_inspector.full_name if hasattr(a.electrical_inspector, 'full_name') else str(a.electrical_inspector)
-        if hasattr(a, 'engineer') and a.engineer:
-            eng_name = a.engineer.full_name if hasattr(a.engineer, 'full_name') else str(a.engineer)
-
-        # For relationship-based lookups
-        if mech_name is None and hasattr(a, 'mechanical_inspector_id') and a.mechanical_inspector_id:
-            from app.models.user import User
-            user = db.session.get(User, a.mechanical_inspector_id)
-            mech_name = user.full_name if user else None
-        if elec_name is None and hasattr(a, 'electrical_inspector_id') and a.electrical_inspector_id:
-            from app.models.user import User
-            user = db.session.get(User, a.electrical_inspector_id)
-            elec_name = user.full_name if user else None
-        if eng_name is None and hasattr(a, 'engineer_id') and a.engineer_id:
-            from app.models.user import User
-            user = db.session.get(User, a.engineer_id)
-            eng_name = user.full_name if user else None
+        # Get inspector/engineer names via relationships
+        mech_name = a.mechanical_inspector.full_name if a.mechanical_inspector else None
+        elec_name = a.electrical_inspector.full_name if a.electrical_inspector else None
+        eng_name = a.engineer.full_name if a.engineer else None
 
         entry = {
             'equipment_name': eq.name if eq else 'Unknown',
@@ -1756,15 +1741,21 @@ def get_day_inspection_equipment():
     """
     from app.models.inspection_assignment import InspectionAssignment
     from app.models.inspection_list import InspectionList
+    from datetime import date as date_type
 
     date_str = request.args.get('date')
     if not date_str:
         return jsonify({'status': 'error', 'message': 'date parameter required'}), 400
 
+    try:
+        target_date = date_type.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid date format'}), 400
+
     equipment_ids = db.session.query(InspectionAssignment.equipment_id).join(
         InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id
     ).filter(
-        InspectionList.target_date == date_str,
+        InspectionList.target_date == target_date,
         InspectionAssignment.equipment_id.isnot(None)
     ).distinct().all()
 
