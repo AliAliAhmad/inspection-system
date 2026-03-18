@@ -132,7 +132,9 @@ export default function WorkPlanDayPage() {
     };
   }, [currentDay]);
 
-  const displayedJobs = [...(jobsByBerth[selectedBerth as keyof typeof jobsByBerth] || []), ...jobsByBerth.both];
+  // Filter out old inspection jobs — inspections now show in InspectionSummaryBar
+  const displayedJobs = [...(jobsByBerth[selectedBerth as keyof typeof jobsByBerth] || []), ...jobsByBerth.both]
+    .filter(j => j.job_type !== 'inspection');
 
   // Mutations
   const addJobMutation = useMutation({

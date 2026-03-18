@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Card, Col, Row, Space, Tag, Tooltip, Typography } from 'antd';
+import { Badge, Tooltip, Typography } from 'antd';
 import { CaretDownOutlined, CaretRightOutlined, SearchOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -44,55 +44,39 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
   if (isLoading || count === 0) return null;
 
   return (
-    <div style={{ marginTop: 12 }}>
-      {/* Summary bar */}
+    <div style={{ marginTop: 4, flexShrink: 0 }}>
+      {/* Compact summary bar — works in narrow columns */}
       <div
         onClick={() => setExpanded(!expanded)}
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '8px 12px',
+          flexWrap: 'wrap',
+          gap: 4,
+          padding: '4px 6px',
           backgroundColor: '#f0f5ff',
-          borderRadius: 6,
+          borderRadius: 4,
           cursor: 'pointer',
           border: '1px solid #d6e4ff',
+          minHeight: 24,
         }}
       >
-        {expanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
-        <SearchOutlined style={{ color: '#1677ff' }} />
-        <Text strong style={{ color: '#1677ff' }}>
+        <span style={{ fontSize: 10, color: '#1677ff' }}>
+          {expanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
+        </span>
+        <SearchOutlined style={{ color: '#1677ff', fontSize: 11 }} />
+        <Text strong style={{ color: '#1677ff', fontSize: 11, whiteSpace: 'nowrap' }}>
           {count} {t('work_plan.inspections', 'Inspections')}
         </Text>
-        <div style={{ flex: 1 }} />
-        {/* Status summary badges */}
-        <Space size={4}>
-          {(() => {
-            const assigned = assignments.filter(a => a.status === 'assigned').length;
-            const inProgress = assignments.filter(a => ['in_progress', 'mech_complete', 'elec_complete'].includes(a.status)).length;
-            const completed = assignments.filter(a => ['completed', 'both_complete', 'assessment_pending'].includes(a.status)).length;
-            const unassigned = assignments.filter(a => a.status === 'unassigned').length;
-            return (
-              <>
-                {unassigned > 0 && <Tag color="default">{unassigned} {t('common.unassigned', 'Unassigned')}</Tag>}
-                {assigned > 0 && <Tag color="blue">{assigned} {t('common.assigned', 'Assigned')}</Tag>}
-                {inProgress > 0 && <Tag color="orange">{inProgress} {t('common.in_progress', 'In Progress')}</Tag>}
-                {completed > 0 && <Tag color="green">{completed} {t('common.completed', 'Completed')}</Tag>}
-              </>
-            );
-          })()}
-        </Space>
       </div>
 
       {/* Expanded grid */}
       {expanded && (
-        <Row gutter={[8, 8]} style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 6 }}>
           {assignments.map((a, idx) => (
-            <Col key={idx} xs={24} sm={12} md={8} lg={6}>
-              <InspectionCard assignment={a} />
-            </Col>
+            <InspectionCard key={idx} assignment={a} />
           ))}
-        </Row>
+        </div>
       )}
     </div>
   );
@@ -102,45 +86,42 @@ function InspectionCard({ assignment }: { assignment: DayInspectionSummary }) {
   const statusColor = STATUS_COLORS[assignment.status] ?? '#d9d9d9';
 
   return (
-    <Card
-      size="small"
-      styles={{ body: { padding: '8px 10px' } }}
-      style={{ borderLeft: `3px solid ${statusColor}` }}
+    <div
+      style={{
+        padding: '4px 6px',
+        marginBottom: 3,
+        borderLeft: `3px solid ${statusColor}`,
+        backgroundColor: '#fafafa',
+        borderRadius: 3,
+        fontSize: 11,
+      }}
     >
-      {/* Equipment name */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+      {/* Equipment name with status dot */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
         <Tooltip title={assignment.status.replace(/_/g, ' ')}>
           <Badge color={statusColor} />
         </Tooltip>
-        <Text strong style={{ fontSize: 13 }} ellipsis={{ tooltip: true }}>
+        <Text strong style={{ fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {assignment.equipment_name}
         </Text>
       </div>
 
-      {/* Serial number */}
+      {/* Serial */}
       {assignment.equipment_serial && (
-        <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+        <div style={{ color: '#8c8c8c', fontSize: 10, marginLeft: 14 }}>
           {assignment.equipment_serial}
-        </Text>
+        </div>
       )}
 
-      {/* Inspectors */}
-      <div style={{ fontSize: 11, color: '#595959' }}>
-        {assignment.mechanical_inspector && (
-          <div>M: {assignment.mechanical_inspector}</div>
-        )}
-        {assignment.electrical_inspector && (
-          <div>E: {assignment.electrical_inspector}</div>
-        )}
-        {assignment.engineer && (
-          <div style={{ color: '#1677ff', fontWeight: 500 }}>
-            Eng: {assignment.engineer}
-          </div>
-        )}
+      {/* Inspectors — compact */}
+      <div style={{ color: '#595959', fontSize: 10, marginLeft: 14 }}>
+        {assignment.mechanical_inspector && <span>M: {assignment.mechanical_inspector.split(' ')[0]} </span>}
+        {assignment.electrical_inspector && <span>E: {assignment.electrical_inspector.split(' ')[0]} </span>}
+        {assignment.engineer && <span style={{ color: '#1677ff' }}>Eng: {assignment.engineer.split(' ')[0]}</span>}
         {!assignment.mechanical_inspector && !assignment.electrical_inspector && (
-          <Text type="danger" style={{ fontSize: 11 }}>Not Assigned</Text>
+          <span style={{ color: '#ff4d4f' }}>Not Assigned</span>
         )}
       </div>
-    </Card>
+    </div>
   );
 }

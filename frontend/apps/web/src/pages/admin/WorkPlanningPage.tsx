@@ -1326,11 +1326,11 @@ export default function WorkPlanningPage() {
 
   // Get jobs for current berth
   const getJobsForBerth = (day: WorkPlanDay): WorkPlanJob[] => {
-    if (berth === 'east') {
-      return [...(day.jobs_east || []), ...(day.jobs_both || [])];
-    } else {
-      return [...(day.jobs_west || []), ...(day.jobs_both || [])];
-    }
+    const jobs = berth === 'east'
+      ? [...(day.jobs_east || []), ...(day.jobs_both || [])]
+      : [...(day.jobs_west || []), ...(day.jobs_both || [])];
+    // Filter out old inspection jobs — inspections now show in InspectionSummaryBar
+    return jobs.filter(j => j.job_type !== 'inspection');
   };
 
   // Team column config for rendering
@@ -2091,60 +2091,34 @@ export default function WorkPlanningPage() {
 
                                     {/* Jobs List — grouped by equipment type as compact "3× RS" chips */}
                                     <div style={{ flex: 1, overflowY: 'auto', padding: '4px 5px' }}>
-                                      {jobs.length === 0 ? (
-                                        <div style={{
-                                          textAlign: 'center',
-                                          padding: 16,
-                                          color: '#bfbfbf',
-                                          border: isDraft ? '2px dashed #d9d9d9' : undefined,
-                                          borderRadius: 6,
-                                          margin: '4px 0',
-                                        }}>
-                                          {isDraft ? (
-                                            <>
-                                              <div style={{ fontSize: 16 }}>＋</div>
-                                              <div style={{ fontSize: 10 }}>Drag job here</div>
-                                            </>
-                                          ) : 'No jobs'}
-                                        </div>
-                                      ) : (() => {
-                                        // Inspections → grouped "3×RS" chips per equipment type
-                                        const inspectionJobs = jobs.filter(j => j.job_type === 'inspection');
-                                        const otherJobs = jobs.filter(j => j.job_type !== 'inspection');
-                                        const inspGroups = inspectionJobs.reduce<Record<string, WorkPlanJob[]>>((acc, job) => {
-                                          const eqType =
-                                            (job as any).equipment?.equipment_type ||
-                                            (job as any).inspection_assignment?.equipment?.equipment_type ||
-                                            (job as any).equipment_type ||
-                                            (job as any).equipment?.name?.split(' ')[0] ||
-                                            (job.job_type === 'inspection' && job.description
-                                              ? job.description.replace(/^inspection\s*:\s*/i, '').split(' - ')[0].trim()
-                                              : null) ||
-                                            'Inspection';
-                                          if (!acc[eqType]) acc[eqType] = [];
-                                          acc[eqType].push(job);
-                                          return acc;
-                                        }, {});
-                                        return (
-                                          <>
-                                            {Object.entries(inspGroups).map(([eqType, groupJobs]) => (
-                                              <EquipmentGroupRow
-                                                key={`insp-${eqType}`}
-                                                eqType={eqType}
-                                                jobs={groupJobs}
-                                                berth={berth}
-                                                onJobClick={handleJobClick}
-                                              />
-                                            ))}
-                                            {otherJobs.map(job => (
-                                              <SimpleJobRow
-                                                key={job.id}
-                                                job={job}
-                                                dayId={day.id}
-                                                onJobClick={handleJobClick}
-                                              />
-                                            ))}
-                                          </>
+                                      {(() => {
+                                        // Filter out inspection jobs — they now show in InspectionSummaryBar
+                                        const nonInspectionJobs = jobs.filter(j => j.job_type !== 'inspection');
+                                        return nonInspectionJobs.length === 0 ? (
+                                          <div style={{
+                                            textAlign: 'center',
+                                            padding: 16,
+                                            color: '#bfbfbf',
+                                            border: isDraft ? '2px dashed #d9d9d9' : undefined,
+                                            borderRadius: 6,
+                                            margin: '4px 0',
+                                          }}>
+                                            {isDraft ? (
+                                              <>
+                                                <div style={{ fontSize: 16 }}>＋</div>
+                                                <div style={{ fontSize: 10 }}>Drag job here</div>
+                                              </>
+                                            ) : 'No jobs'}
+                                          </div>
+                                        ) : (
+                                          nonInspectionJobs.map(job => (
+                                            <SimpleJobRow
+                                              key={job.id}
+                                              job={job}
+                                              dayId={day.id}
+                                              onJobClick={handleJobClick}
+                                            />
+                                          ))
                                         );
                                       })()}
                                     </div>
@@ -2171,8 +2145,8 @@ export default function WorkPlanningPage() {
                                         }} />
                                       </div>
                                     </div>
-                                    {/* Inspection Summary */}
-                                    <InspectionSummaryBar date={day.date} berth={berth} />
+                                    {/* Inspection Summary — only when expanded */}
+                                    {isExpanded && <InspectionSummaryBar date={day.date} berth={berth} />}
                                   </>
                                 )}
                               </DroppableDay>
