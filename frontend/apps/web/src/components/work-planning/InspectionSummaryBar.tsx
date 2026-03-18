@@ -38,6 +38,9 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
     retry: 1,
   });
 
+  // Debug logging — remove after issue resolved
+  console.log('[InspectionSummaryBar] date=', date, 'berth=', berth, 'isLoading=', isLoading, 'isError=', isError, 'data=', inspections);
+
   if (isError) {
     console.error('[InspectionSummaryBar] API error:', error);
   }
@@ -56,7 +59,13 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
     );
   }
 
-  if (count === 0) return null;
+  if (count === 0) {
+    return (
+      <div style={{ marginTop: 4, padding: '4px 6px', backgroundColor: '#f5f5f5', border: '1px solid #e0e0e0', borderRadius: 4, fontSize: 10, color: '#999' }}>
+        No inspections for {date} ({berth})
+      </div>
+    );
+  }
 
   return (
     <div style={{ marginTop: 4, flexShrink: 0 }}>
