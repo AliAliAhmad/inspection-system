@@ -21,7 +21,7 @@ export const ViewToggle: React.FC<ViewToggleProps> = ({ value, onChange }) => {
         {
           label: (
             <span>
-              <BarChartOutlined /> Timeline
+              <BarChartOutlined /> <span className="wp-view-label">Timeline</span>
             </span>
           ),
           value: 'timeline',
@@ -29,7 +29,7 @@ export const ViewToggle: React.FC<ViewToggleProps> = ({ value, onChange }) => {
         {
           label: (
             <span>
-              <CalendarOutlined /> Calendar
+              <CalendarOutlined /> <span className="wp-view-label">Calendar</span>
             </span>
           ),
           value: 'calendar',
@@ -37,7 +37,7 @@ export const ViewToggle: React.FC<ViewToggleProps> = ({ value, onChange }) => {
         {
           label: (
             <span>
-              <ProjectOutlined /> Gantt
+              <ProjectOutlined /> <span className="wp-view-label">Gantt</span>
             </span>
           ),
           value: 'gantt',
@@ -45,7 +45,7 @@ export const ViewToggle: React.FC<ViewToggleProps> = ({ value, onChange }) => {
         {
           label: (
             <span>
-              <PieChartOutlined /> Analytics
+              <PieChartOutlined /> <span className="wp-view-label">Analytics</span>
             </span>
           ),
           value: 'analytics',

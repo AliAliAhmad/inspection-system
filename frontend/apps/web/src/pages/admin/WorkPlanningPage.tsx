@@ -52,6 +52,8 @@ import {
   AlertOutlined,
   RobotOutlined,
   WarningFilled,
+  UpOutlined,
+  DownOutlined,
 } from '@ant-design/icons';
 import {
   DndContext,
@@ -446,6 +448,7 @@ export default function WorkPlanningPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [berth, setBerth] = useState<BerthTab>('east');
+  const [statsExpanded, setStatsExpanded] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [addJobModalOpen, setAddJobModalOpen] = useState(false);
@@ -1377,7 +1380,13 @@ export default function WorkPlanningPage() {
         .wp-right-panel .ant-tabs-tabpane-active { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
         .wp-right-panel .ant-tabs-tabpane-hidden { display: none !important; }
         @media (max-width: 1440px) {
-          .wp-view-toggle .ant-segmented-item-label > span:not([role="img"]) { display: none; }
+          .wp-view-toggle .wp-view-label { display: none; }
+          .wp-right-panel-container { width: 240px !important; min-width: 240px !important; }
+          .wp-day-columns { gap: 3px !important; padding: 4px 6px 6px !important; }
+          .wp-day-header { padding: 4px 6px !important; }
+          .wp-day-date { font-size: 14px !important; }
+          .wp-health-stat-number { font-size: 16px !important; }
+          .wp-health-stat { min-width: 60px !important; margin-right: 12px !important; }
         }
         @media (max-width: 1280px) {
           .wp-autoschedule-label { display: none; }
@@ -1532,16 +1541,15 @@ export default function WorkPlanningPage() {
           </div>
         </div>
 
-        {/* BERTH BAR: toggle + plan score + smart pills */}
+        {/* BERTH BAR: Row 1 — always visible (toggle + key alerts + actions) */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
-          padding: '6px 16px',
-          borderBottom: '1px solid #f0f0f0',
+          gap: 6,
+          padding: '4px 12px',
+          borderBottom: statsExpanded ? 'none' : '1px solid #f0f0f0',
           background: '#fff',
           flexShrink: 0,
-          flexWrap: 'wrap',
         }}>
           {/* Berth Toggle Buttons */}
           <div style={{ display: 'flex', gap: 0, border: '1px solid #d9d9d9', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
@@ -1577,84 +1585,90 @@ export default function WorkPlanningPage() {
             </Button>
           </div>
 
-          {/* Plan Confidence Score */}
-          {currentPlan && weekStats && weekStats.totalJobs > 0 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '3px 10px',
-              background: planScore >= 80 ? '#f6ffed' : planScore >= 50 ? '#fff7e6' : '#fff2f0',
-              border: `1px solid ${planScore >= 80 ? '#b7eb8f' : planScore >= 50 ? '#ffd591' : '#ffccc7'}`,
-              borderRadius: 12,
-              flexShrink: 0,
-            }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: planScore >= 80 ? '#52c41a' : planScore >= 50 ? '#fa8c16' : '#ff4d4f' }} />
-              <Text style={{ fontSize: 11, fontWeight: 700, color: planScore >= 80 ? '#52c41a' : planScore >= 50 ? '#fa8c16' : '#ff4d4f' }}>{planScore}%</Text>
-              <Text type="secondary" style={{ fontSize: 10 }}>Plan Score</Text>
-            </div>
+          {/* Critical alert — always visible */}
+          {currentPlan && weekStats && weekStats.unassigned > 0 && (
+            <Tag color="error" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
+              ⚠ {weekStats.unassigned} unassigned
+            </Tag>
           )}
 
-          {/* Smart Inline Pills */}
+          {/* Status badge */}
           {currentPlan && (
-            <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-              {weekStats && weekStats.unassigned > 0 && (
-                <Tag color="error" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
-                  ⚠ {weekStats.unassigned} unassigned
-                </Tag>
-              )}
-              {discTeamFree.mechFree > 0 && (
-                <Tag color="orange" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
-                  🔧 Mech: {discTeamFree.mechFree} free
-                </Tag>
-              )}
-              {discTeamFree.elecFree > 0 && (
-                <Tag color="purple" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
-                  ⚡ Elec: {discTeamFree.elecFree} free
-                </Tag>
-              )}
-              {weekStats && weekStats.noSAP > 0 && (
-                <Tag color="red" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
-                  📋 {weekStats.noSAP} no SAP
-                </Tag>
-              )}
-            </div>
+            <Badge status={currentPlan.status === 'published' ? 'success' : 'warning'} text={<Text type="secondary" style={{ fontSize: 11 }}>{currentPlan.status.toUpperCase()} &bull; {currentPlan.total_jobs} jobs</Text>} />
           )}
 
-          {/* Collapse expanded day hint */}
-          {expandedDay && (
-            <Button type="text" size="small" onClick={() => setExpandedDay(null)} style={{ fontSize: 11, color: '#8c8c8c', flexShrink: 0 }}>
-              ✕ Collapse
-            </Button>
-          )}
+          {/* Spacer */}
+          <div style={{ flex: 1 }} />
 
-          {/* Secondary controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
-            {currentPlan && (
-              <Badge status={currentPlan.status === 'published' ? 'success' : 'warning'} text={<Text type="secondary" style={{ fontSize: 12 }}>{currentPlan.status.toUpperCase()} &bull; {currentPlan.total_jobs} jobs</Text>} />
-            )}
-            <Space size={4}>
-              <Switch checked={aiAssistanceEnabled} onChange={setAiAssistanceEnabled} checkedChildren={<RobotOutlined />} unCheckedChildren={<RobotOutlined />} size="small" />
-            </Space>
+          {/* Right-aligned controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <Switch checked={aiAssistanceEnabled} onChange={setAiAssistanceEnabled} checkedChildren={<RobotOutlined />} unCheckedChildren={<RobotOutlined />} size="small" />
             <Button size="small" icon={<BulbOutlined />} onClick={() => setAiDrawerOpen(true)} disabled={!aiAssistanceEnabled}>AI</Button>
             <Button size="small" icon={<AlertOutlined />} onClick={() => setConflictPanelOpen(true)}>Conflicts</Button>
-            {currentPlan && currentPlan.status !== 'published' && (
-              <Button
-                size="small"
-                type="primary"
-                icon={<SendOutlined />}
-                loading={publishMutation.isPending}
-                onClick={() => Modal.confirm({
-                  title: 'Publish Work Plan?',
-                  content: 'This will publish the work plan and notify all assigned users.',
-                  okText: 'Publish',
-                  okType: 'primary',
-                  cancelText: 'Cancel',
-                  onOk: () => publishMutation.mutate(currentPlan.id),
-                })}
-              >
-                Publish Plan
+            {expandedDay && (
+              <Button type="text" size="small" onClick={() => setExpandedDay(null)} style={{ fontSize: 11, color: '#8c8c8c' }}>
+                ✕ Collapse
               </Button>
+            )}
+            <Button
+              type="text"
+              size="small"
+              icon={statsExpanded ? <UpOutlined /> : <DownOutlined />}
+              onClick={() => setStatsExpanded(v => !v)}
+              style={{ fontSize: 11, color: '#8c8c8c' }}
+            >
+              Stats
+            </Button>
+          </div>
+        </div>
+
+        {/* BERTH BAR: Row 2 — collapsible stats (plan score + team availability + SAP) */}
+        <div style={{
+          overflow: 'hidden',
+          maxHeight: statsExpanded ? 40 : 0,
+          transition: 'max-height 0.25s ease',
+          borderBottom: statsExpanded ? '1px solid #f0f0f0' : 'none',
+          background: '#fafafa',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px' }}>
+            {/* Plan Confidence Score */}
+            {currentPlan && weekStats && weekStats.totalJobs > 0 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '2px 8px',
+                background: planScore >= 80 ? '#f6ffed' : planScore >= 50 ? '#fff7e6' : '#fff2f0',
+                border: `1px solid ${planScore >= 80 ? '#b7eb8f' : planScore >= 50 ? '#ffd591' : '#ffccc7'}`,
+                borderRadius: 12,
+                flexShrink: 0,
+              }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: planScore >= 80 ? '#52c41a' : planScore >= 50 ? '#fa8c16' : '#ff4d4f' }} />
+                <Text style={{ fontSize: 11, fontWeight: 700, color: planScore >= 80 ? '#52c41a' : planScore >= 50 ? '#fa8c16' : '#ff4d4f' }}>{planScore}%</Text>
+                <Text type="secondary" style={{ fontSize: 10 }}>Plan Score</Text>
+              </div>
+            )}
+
+            {/* Team availability pills */}
+            {currentPlan && (
+              <>
+                {discTeamFree.mechFree > 0 && (
+                  <Tag color="orange" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
+                    🔧 Mech: {discTeamFree.mechFree} free
+                  </Tag>
+                )}
+                {discTeamFree.elecFree > 0 && (
+                  <Tag color="purple" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
+                    ⚡ Elec: {discTeamFree.elecFree} free
+                  </Tag>
+                )}
+                {weekStats && weekStats.noSAP > 0 && (
+                  <Tag color="red" style={{ fontSize: 10, margin: 0, cursor: 'default' }}>
+                    📋 {weekStats.noSAP} no SAP
+                  </Tag>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1715,18 +1729,18 @@ export default function WorkPlanningPage() {
               <div style={{ width: 1, height: 32, background: '#e8e8e8', marginRight: 16, flexShrink: 0 }} />
 
               {/* Stat: Jobs */}
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 70, marginRight: 20 }}>
+              <div className="wp-health-stat" style={{ display: 'flex', flexDirection: 'column', minWidth: 70, marginRight: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <Text style={{ fontSize: 20, fontWeight: 700, color: '#262626', lineHeight: 1 }}>{weekStats.totalJobs}</Text>
+                  <Text className="wp-health-stat-number" style={{ fontSize: 20, fontWeight: 700, color: '#262626', lineHeight: 1 }}>{weekStats.totalJobs}</Text>
                   <Text type="secondary" style={{ fontSize: 10 }}>jobs</Text>
                 </div>
                 <Text type="secondary" style={{ fontSize: 10, marginTop: 1 }}>This week</Text>
               </div>
 
               {/* Stat: Assigned (with bar) */}
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 90, marginRight: 20 }}>
+              <div className="wp-health-stat" style={{ display: 'flex', flexDirection: 'column', minWidth: 90, marginRight: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <Text style={{ fontSize: 20, fontWeight: 700, color: weekStats.unassigned > 0 ? '#fa8c16' : '#52c41a', lineHeight: 1 }}>
+                  <Text className="wp-health-stat-number" style={{ fontSize: 20, fontWeight: 700, color: weekStats.unassigned > 0 ? '#fa8c16' : '#52c41a', lineHeight: 1 }}>
                     {assigned}
                   </Text>
                   <Text type="secondary" style={{ fontSize: 10 }}>/ {weekStats.totalJobs} assigned</Text>
@@ -1744,9 +1758,9 @@ export default function WorkPlanningPage() {
               </div>
 
               {/* Stat: SAP coverage (with bar) */}
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 90, marginRight: 20 }}>
+              <div className="wp-health-stat" style={{ display: 'flex', flexDirection: 'column', minWidth: 90, marginRight: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <Text style={{ fontSize: 20, fontWeight: 700, color: weekStats.noSAP > 0 ? '#ff4d4f' : '#52c41a', lineHeight: 1 }}>
+                  <Text className="wp-health-stat-number" style={{ fontSize: 20, fontWeight: 700, color: weekStats.noSAP > 0 ? '#ff4d4f' : '#52c41a', lineHeight: 1 }}>
                     {weekStats.noSAP > 0 ? weekStats.noSAP : '✓'}
                   </Text>
                   <Text type="secondary" style={{ fontSize: 10 }}>{weekStats.noSAP > 0 ? 'no SAP #' : 'all SAP ok'}</Text>
@@ -1969,7 +1983,7 @@ export default function WorkPlanningPage() {
                   // CALENDAR VIEW: flex day columns with expand/collapse
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {/* 7 Flex Day Columns */}
-                    <div style={{ flex: 1, display: 'flex', gap: 5, padding: '6px 8px 8px', overflow: 'hidden', background: '#fff' }}>
+                    <div className="wp-day-columns" style={{ flex: 1, display: 'flex', gap: 5, padding: '6px 8px 8px', overflow: 'hidden', background: '#fff' }}>
                       {(currentPlan.days || [])
                         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                         .map((day) => {
@@ -2047,6 +2061,7 @@ export default function WorkPlanningPage() {
                                   <>
                                     {/* Column Header — click to expand/collapse */}
                                     <div
+                                      className="wp-day-header"
                                       onClick={() => setExpandedDay(isExpanded ? null : day.date)}
                                       style={{
                                         padding: '6px 8px',
@@ -2062,7 +2077,7 @@ export default function WorkPlanningPage() {
                                           <div style={{ fontSize: 9, fontWeight: 600, color: isToday ? '#52c41a' : '#8c8c8c', textTransform: 'uppercase', letterSpacing: 1 }}>
                                             {date.format('ddd')}
                                           </div>
-                                          <div style={{ fontSize: 18, fontWeight: 700, color: isToday ? '#52c41a' : workloadColor || '#262626', lineHeight: 1.1 }}>
+                                          <div className="wp-day-date" style={{ fontSize: 18, fontWeight: 700, color: isToday ? '#52c41a' : workloadColor || '#262626', lineHeight: 1.1 }}>
                                             {date.format('D')}
                                           </div>
                                         </div>
@@ -2175,7 +2190,7 @@ export default function WorkPlanningPage() {
 
         {/* ── RIGHT PANEL: Tabbed Jobs + Team ── */}
         {rightPanelVisible && (
-        <div ref={poolPanelRef} className="wp-right-panel" style={{ width: 300, minWidth: 300, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
+        <div ref={poolPanelRef} className="wp-right-panel wp-right-panel-container" style={{ width: 300, minWidth: 300, borderLeft: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', overflow: 'hidden', flexShrink: 0 }}>
             <Tabs
               activeKey={rightPanelTab}
               onChange={(k) => setRightPanelTab(k as 'jobs' | 'team')}
