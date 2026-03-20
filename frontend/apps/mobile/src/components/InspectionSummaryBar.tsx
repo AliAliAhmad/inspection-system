@@ -36,17 +36,7 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
   const count = berthData?.count ?? 0;
   const assignments = berthData?.assignments ?? [];
 
-  if (isLoading) return null;
-
-  if (isError) {
-    return (
-      <View style={[styles.container, { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2', borderWidth: 1, borderRadius: 8, padding: 8 }]}>
-        <Text style={{ color: '#D32F2F', fontSize: 12 }}>Inspections failed to load</Text>
-      </View>
-    );
-  }
-
-  if (count === 0) return null;
+  if (isLoading || isError || count === 0) return null;
 
   const assigned = assignments.filter(a => a.status === 'assigned').length;
   const inProgress = assignments.filter(a => ['in_progress', 'mech_complete', 'elec_complete'].includes(a.status)).length;
@@ -80,6 +70,25 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
           ))}
         </View>
       )}
+    </View>
+  );
+}
+
+/** Small badge component showing inspection count — for use in collapsed day headers */
+export function InspectionCountBadge({ date, berth }: { date: string; berth: 'east' | 'west' }) {
+  const { data } = useQuery({
+    queryKey: ['day-inspections', date, berth],
+    queryFn: () => workPlansApi.getDayInspections(date, berth).then(r => r.data.data),
+    enabled: !!date,
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const count = data?.[berth]?.count ?? 0;
+  if (count === 0) return null;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+      <Text style={{ fontSize: 11, color: '#1565C0' }}>🔍</Text>
+      <Text style={{ fontSize: 11, fontWeight: '600', color: '#1565C0' }}>{count}</Text>
     </View>
   );
 }

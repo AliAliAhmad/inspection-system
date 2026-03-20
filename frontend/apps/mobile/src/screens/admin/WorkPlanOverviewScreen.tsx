@@ -16,7 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { workPlansApi } from '@inspection/shared';
 import type { WorkPlan, WorkPlanDay, WorkPlanJob } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
-import InspectionSummaryBar from '../../components/InspectionSummaryBar';
+import InspectionSummaryBar, { InspectionCountBadge } from '../../components/InspectionSummaryBar';
 
 type BerthTab = 'east' | 'west';
 
@@ -238,6 +238,7 @@ export default function WorkPlanOverviewScreen() {
             <View style={styles.countBadge}>
               <Text style={styles.countText}>{jobs.length} jobs</Text>
             </View>
+            <InspectionCountBadge date={day.date} berth={berth} />
             <Text style={styles.hoursSum}>{totalHours}h</Text>
             <Text style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</Text>
           </View>

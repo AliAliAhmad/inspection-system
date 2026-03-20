@@ -27,7 +27,7 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
-  const { data: inspections, isLoading, isError, error } = useQuery({
+  const { data: inspections, isLoading, isError } = useQuery({
     queryKey: ['day-inspections', date, berth],
     queryFn: async (): Promise<DayInspections> => {
       const r = await workPlansApi.getDayInspections(date, berth);
@@ -38,34 +38,11 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
     retry: 1,
   });
 
-  // Debug logging — remove after issue resolved
-  console.log('[InspectionSummaryBar] date=', date, 'berth=', berth, 'isLoading=', isLoading, 'isError=', isError, 'data=', inspections);
-
-  if (isError) {
-    console.error('[InspectionSummaryBar] API error:', error);
-  }
-
   const berthData: DayInspectionsBerth | undefined = inspections?.[berth];
   const count = berthData?.count ?? 0;
   const assignments: DayInspectionSummary[] = berthData?.assignments ?? [];
 
-  if (isLoading) return null;
-
-  if (isError) {
-    return (
-      <div style={{ marginTop: 4, padding: '4px 6px', backgroundColor: '#fff2f0', border: '1px solid #ffccc7', borderRadius: 4, fontSize: 11 }}>
-        <Text type="danger" style={{ fontSize: 11 }}>Inspections failed to load</Text>
-      </div>
-    );
-  }
-
-  if (count === 0) {
-    return (
-      <div style={{ marginTop: 4, padding: '4px 6px', backgroundColor: '#f5f5f5', border: '1px solid #e0e0e0', borderRadius: 4, fontSize: 10, color: '#999' }}>
-        No inspections for {date} ({berth})
-      </div>
-    );
-  }
+  if (isLoading || isError || count === 0) return null;
 
   return (
     <div style={{ marginTop: 4, flexShrink: 0 }}>
@@ -103,6 +80,29 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
         </div>
       )}
     </div>
+  );
+}
+
+/** Small badge component showing inspection count — shares React Query cache with InspectionSummaryBar */
+export function InspectionCountBadge({ date, berth, style }: { date: string; berth: 'east' | 'west'; style?: React.CSSProperties }) {
+  const { data } = useQuery({
+    queryKey: ['day-inspections', date, berth],
+    queryFn: async (): Promise<DayInspections> => {
+      const r = await workPlansApi.getDayInspections(date, berth);
+      return r.data.data as DayInspections;
+    },
+    enabled: !!date,
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const count = data?.[berth]?.count ?? 0;
+  if (count === 0) return null;
+  return (
+    <Tooltip title={`${count} inspection${count !== 1 ? 's' : ''} scheduled`}>
+      <span style={{ fontSize: 9, color: '#1677ff', fontWeight: 600, whiteSpace: 'nowrap', ...style }}>
+        <SearchOutlined style={{ fontSize: 8, marginRight: 2 }} />{count}
+      </span>
+    </Tooltip>
   );
 }
 

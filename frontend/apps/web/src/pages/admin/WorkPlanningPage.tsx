@@ -92,7 +92,7 @@ import {
   calculateTimeAccuracy,
   type ViewMode
 } from '../../components/work-planning';
-import InspectionSummaryBar from '../../components/work-planning/InspectionSummaryBar';
+import InspectionSummaryBar, { InspectionCountBadge } from '../../components/work-planning/InspectionSummaryBar';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import { InputNumber } from 'antd';
 
@@ -2041,6 +2041,7 @@ export default function WorkPlanningPage() {
                                         style={{ backgroundColor: workloadColor || '#1890ff' }}
                                       />
                                     )}
+                                    <InspectionCountBadge date={day.date} berth={berth} />
                                   </div>
                                 ) : (
                                   <>
@@ -2077,6 +2078,7 @@ export default function WorkPlanningPage() {
                                               {fmtHours(totalHours)}h
                                             </Text>
                                           )}
+                                          <InspectionCountBadge date={day.date} berth={berth} />
                                         </div>
                                       </div>
                                       {isExpanded && totalHours > 6 && (
