@@ -1382,7 +1382,7 @@ def consumption_import_template():
 
         # Year range
         current_year = datetime.utcnow().year
-        years = list(range(2020, current_year + 1))
+        years = list(range(current_year - 6, current_year))  # Last 6 complete years (e.g. 2020-2025)
 
         # ═══ Sheet 1: Yearly Summary ═══
         ws = wb.active
