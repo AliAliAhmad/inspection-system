@@ -23,6 +23,10 @@ class MaterialKit(db.Model):
 
     # Equipment association (optional - for equipment-specific kits)
     equipment_type = db.Column(db.String(100))  # e.g., "STS Crane", "RTG", etc.
+    equipment_model = db.Column(db.String(100))  # e.g., "Kalmar DRF450" — for model-specific kits
+
+    # Maintenance interval (optional - links to MaintenanceCycle)
+    cycle_id = db.Column(db.Integer, db.ForeignKey('maintenance_cycles.id'), nullable=True)
 
     # Status
     is_active = db.Column(db.Boolean, default=True)
@@ -33,6 +37,7 @@ class MaterialKit(db.Model):
 
     # Relationships
     items = db.relationship('MaterialKitItem', back_populates='kit', cascade='all, delete-orphan')
+    cycle = db.relationship('MaintenanceCycle')
 
     def to_dict(self, language='en'):
         """Convert to dictionary."""
@@ -45,6 +50,13 @@ class MaterialKit(db.Model):
             'name_ar': self.name_ar,
             'description': self.description,
             'equipment_type': self.equipment_type,
+            'equipment_model': self.equipment_model,
+            'cycle_id': self.cycle_id,
+            'cycle': {
+                'id': self.cycle.id,
+                'name': self.cycle.name,
+                'display_label': self.cycle.display_label,
+            } if self.cycle else None,
             'is_active': self.is_active,
             'items': [item.to_dict(language) for item in self.items],
             'created_at': self.created_at.isoformat() if self.created_at else None,

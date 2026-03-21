@@ -504,6 +504,18 @@ with app.app_context():
         db.session.rollback()
         print('material_kits table already exists')
 
+    # Add cycle_id and equipment_model to material_kits
+    for col_name, col_type in [
+        ('cycle_id', 'INTEGER REFERENCES maintenance_cycles(id)'),
+        ('equipment_model', 'VARCHAR(100)'),
+    ]:
+        try:
+            db.session.execute(text(f'ALTER TABLE material_kits ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added {col_name} to material_kits')
+        except Exception:
+            db.session.rollback()
+
     # Create material_kit_items table
     try:
         db.session.execute(text('''

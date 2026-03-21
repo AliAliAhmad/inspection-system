@@ -632,6 +632,25 @@ def add_job(plan_id):
     )
 
     db.session.add(job)
+    db.session.flush()
+
+    # Auto-attach material kit for PM jobs
+    if job_type == 'pm' and equipment_id:
+        try:
+            from app.api.materials import find_matching_kit
+            kit = find_matching_kit(equipment_id, data.get('cycle_id'))
+            if kit and kit.items:
+                for item in kit.items:
+                    wpm = WorkPlanMaterial(
+                        work_plan_job_id=job.id,
+                        material_id=item.material_id,
+                        quantity=item.quantity,
+                        from_kit_id=kit.id
+                    )
+                    db.session.add(wpm)
+        except Exception as e:
+            import logging
+            logging.getLogger('app').warning(f'Auto-kit attach failed: {e}')
 
     # Auto-add open defects for the same equipment when a PM or defect job is scheduled
     auto_defect_count = 0
@@ -770,6 +789,7 @@ def schedule_sap_order(plan_id):
     db.session.flush()
 
     # Auto-add materials from PM template
+    kit_attached = None
     if pm_template:
         for tm in pm_template.materials:
             wpm = WorkPlanMaterial(
@@ -778,6 +798,28 @@ def schedule_sap_order(plan_id):
                 quantity=tm.quantity
             )
             db.session.add(wpm)
+
+    # Auto-attach material kit (if no PM template materials, or as additional kit materials)
+    if job.job_type == 'pm' and job.equipment_id:
+        try:
+            from app.api.materials import find_matching_kit
+            kit = find_matching_kit(job.equipment_id, job.cycle_id)
+            if kit and kit.items:
+                # Get already-added material IDs to avoid duplicates
+                existing_material_ids = {tm.material_id for tm in (pm_template.materials if pm_template else [])}
+                for item in kit.items:
+                    if item.material_id not in existing_material_ids:
+                        wpm = WorkPlanMaterial(
+                            work_plan_job_id=job.id,
+                            material_id=item.material_id,
+                            quantity=item.quantity,
+                            from_kit_id=kit.id
+                        )
+                        db.session.add(wpm)
+                kit_attached = kit
+        except Exception as e:
+            import logging
+            logging.getLogger('app').warning(f'Auto-kit attach failed: {e}')
 
     # Mark SAP order as scheduled
     sap_order.status = 'scheduled'

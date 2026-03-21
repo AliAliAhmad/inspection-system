@@ -117,6 +117,9 @@ export interface MaterialKit {
   name_ar: string | null;
   description: string | null;
   equipment_type: string | null;
+  equipment_model: string | null;
+  cycle_id: number | null;
+  cycle: { id: number; name: string; display_label: string } | null;
   is_active: boolean;
   items: MaterialKitItem[];
   created_at: string;
@@ -314,6 +317,8 @@ export interface CreateMaterialKitPayload {
   name_ar?: string;
   description?: string;
   equipment_type?: string;
+  equipment_model?: string;
+  cycle_id?: number;
   items: { material_id: number; quantity: number }[];
 }
 

@@ -47,6 +47,51 @@ def get_equipment_type_from_code(code: str) -> str:
     return CODE_PREFIX_TO_EQUIPMENT.get(code[:2].upper(), '')
 
 
+def find_matching_kit(equipment_id, cycle_id=None):
+    """Find best-matching material kit for equipment + PM interval.
+    Matching priority: exact (type+model+cycle) > type+cycle > type only.
+    """
+    from app.models import Equipment
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        return None
+
+    eq_type = equipment.equipment_type
+    eq_model = equipment.model_number
+
+    # 1. Exact: type + model + cycle
+    if eq_model and cycle_id:
+        kit = MaterialKit.query.filter_by(
+            equipment_type=eq_type, equipment_model=eq_model,
+            cycle_id=cycle_id, is_active=True
+        ).first()
+        if kit:
+            return kit
+
+    # 2. Type + cycle (any model)
+    if cycle_id:
+        kit = MaterialKit.query.filter_by(
+            equipment_type=eq_type, cycle_id=cycle_id,
+            is_active=True
+        ).filter(
+            (MaterialKit.equipment_model == None) | (MaterialKit.equipment_model == '')
+        ).first()
+        if kit:
+            return kit
+
+    # 3. Type only (any interval, any model)
+    kit = MaterialKit.query.filter_by(
+        equipment_type=eq_type, is_active=True
+    ).filter(
+        (MaterialKit.cycle_id == None),
+        (MaterialKit.equipment_model == None) | (MaterialKit.equipment_model == '')
+    ).first()
+    if kit:
+        return kit
+
+    return None
+
+
 def engineer_or_admin_required():
     """Check if user is engineer or admin."""
     user = get_current_user()
@@ -444,7 +489,9 @@ def create_kit():
         name=data['name'],
         name_ar=data.get('name_ar'),
         description=data.get('description'),
-        equipment_type=data.get('equipment_type')
+        equipment_type=data.get('equipment_type'),
+        equipment_model=data.get('equipment_model'),
+        cycle_id=data.get('cycle_id'),
     )
 
     db.session.add(kit)
@@ -501,6 +548,10 @@ def update_kit(kit_id):
         kit.description = data['description']
     if 'equipment_type' in data:
         kit.equipment_type = data['equipment_type']
+    if 'equipment_model' in data:
+        kit.equipment_model = data['equipment_model']
+    if 'cycle_id' in data:
+        kit.cycle_id = data['cycle_id']
     if 'is_active' in data:
         kit.is_active = data['is_active']
 
@@ -553,6 +604,27 @@ def delete_kit(kit_id):
     return jsonify({
         'status': 'success',
         'message': 'Material kit deleted'
+    }), 200
+
+
+@bp.route('/kits/match', methods=['GET'])
+@jwt_required()
+def match_kit():
+    """Preview which kit would auto-attach for an equipment + cycle combo."""
+    equipment_id = request.args.get('equipment_id', type=int)
+    cycle_id = request.args.get('cycle_id', type=int)
+
+    if not equipment_id:
+        raise ValidationError("equipment_id is required")
+
+    kit = find_matching_kit(equipment_id, cycle_id)
+
+    user = get_current_user()
+    language = user.language or 'en'
+
+    return jsonify({
+        'status': 'success',
+        'kit': kit.to_dict(language) if kit else None,
     }), 200
 
 

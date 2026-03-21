@@ -11,8 +11,10 @@ import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
 import {
   materialsApi,
+  cyclesApi,
   type Material,
   type MaterialKit,
+  type MaintenanceCycle,
   type CreateMaterialKitPayload,
 } from '@inspection/shared';
 
@@ -44,6 +46,12 @@ export default function MaterialKitManager() {
     queryFn: () => materialsApi.list({ active_only: true }),
   });
   const materials: Material[] = (materialsData?.data as any)?.data ?? [];
+
+  const { data: cyclesData } = useQuery({
+    queryKey: ['maintenance-cycles'],
+    queryFn: () => cyclesApi.list({ cycle_type: 'running_hours', active_only: true }),
+  });
+  const cycles: MaintenanceCycle[] = (cyclesData?.data as any)?.data?.cycles ?? (cyclesData?.data as any)?.data ?? [];
 
   // ── Mutations ──
   const createMutation = useMutation({
@@ -110,6 +118,8 @@ export default function MaterialKitManager() {
       name_ar: kit.name_ar,
       description: kit.description,
       equipment_type: kit.equipment_type,
+      equipment_model: kit.equipment_model,
+      cycle_id: kit.cycle_id,
     });
     setModalOpen(true);
   };
@@ -127,6 +137,8 @@ export default function MaterialKitManager() {
         name_ar: values.name_ar || undefined,
         description: values.description || undefined,
         equipment_type: values.equipment_type || undefined,
+        equipment_model: values.equipment_model || undefined,
+        cycle_id: values.cycle_id || undefined,
         items: validItems,
       };
 
@@ -172,9 +184,22 @@ export default function MaterialKitManager() {
     },
     {
       title: t('materials.equipment_type', 'Equipment Type'),
-      dataIndex: 'equipment_type',
       key: 'equipment_type',
-      render: (val: string | null) => val ? <Tag color="blue">{val}</Tag> : <Text type="secondary">—</Text>,
+      render: (_: unknown, record: MaterialKit) => (
+        <div>
+          {record.equipment_type ? <Tag color="blue">{record.equipment_type}</Tag> : <Text type="secondary">—</Text>}
+          {record.equipment_model && (
+            <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>{record.equipment_model}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: t('materials.interval', 'Interval'),
+      key: 'cycle',
+      width: 100,
+      render: (_: unknown, record: MaterialKit) =>
+        record.cycle ? <Tag color="orange">{record.cycle.display_label}</Tag> : <Text type="secondary">—</Text>,
     },
     {
       title: t('materials.items', 'Items'),
@@ -293,12 +318,27 @@ export default function MaterialKitManager() {
                 {equipmentTypes.map((et) => (
                   <Select.Option key={et} value={et}>{et}</Select.Option>
                 ))}
-                {/* Common types if not in list */}
                 {['STS Crane', 'RTG', 'Reach Stacker', 'Forklift', 'Empty Handler', 'Mobile Crane', 'Truck', 'Trailer', 'Spreader']
                   .filter((t) => !equipmentTypes.includes(t))
                   .map((et) => (
                     <Select.Option key={et} value={et}>{et}</Select.Option>
                   ))}
+              </Select>
+            </Form.Item>
+            <Form.Item name="equipment_model" label={t('materials.equipment_model', 'Equipment Model')} style={{ flex: 1 }}>
+              <Input placeholder="e.g. Kalmar DRF450 (optional)" />
+            </Form.Item>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Form.Item name="cycle_id" label={t('materials.maintenance_interval', 'Maintenance Interval')} style={{ flex: 1 }}>
+              <Select
+                placeholder={t('materials.select_interval', 'Select PM interval (optional)')}
+                allowClear
+              >
+                {cycles.map((c) => (
+                  <Select.Option key={c.id} value={c.id}>{c.display_label || c.name}</Select.Option>
+                ))}
               </Select>
             </Form.Item>
             <Form.Item name="description" label={t('materials.description', 'Description')} style={{ flex: 1 }}>
