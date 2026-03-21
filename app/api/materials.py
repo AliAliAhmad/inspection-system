@@ -1352,177 +1352,146 @@ def import_consumption_history():
 @bp.route('/consumption-template', methods=['GET'])
 def consumption_import_template():
     """Download Excel template for consumption history import, pre-populated with materials from DB."""
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
-    from io import BytesIO
-    from flask import send_file
-    from app.models import Equipment
-
-    wb = openpyxl.Workbook()
-
-    # Styling
-    header_font = Font(bold=True, color='FFFFFF', size=11)
-    header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
-    year_fill = PatternFill(start_color='D6E4F0', end_color='D6E4F0', fill_type='solid')
-    thin_border = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin'),
-    )
-
-    # Get equipment types for dropdown
-    eq_types = sorted(set(
-        t[0] for t in db.session.query(Equipment.equipment_type).distinct().all() if t[0]
-    ))
-
-    # Get all active materials
-    materials = Material.query.filter_by(is_active=True).order_by(Material.code).all()
-
-    # Year range
-    current_year = datetime.utcnow().year
-    years = list(range(2020, current_year + 1))
-
-    # ════════════════════════════════════════════════════
-    # Sheet 1: Yearly Summary
-    # ════════════════════════════════════════════════════
-    ws = wb.active
-    ws.title = 'Yearly Summary'
-
-    headers = ['code', 'name', 'unit'] + [str(y) for y in years] + ['equipment_type']
-    for col_idx, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col_idx, value=h)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center')
-        cell.border = thin_border
-
-    # Highlight year columns
-    year_start = 4  # column D
-    year_end = year_start + len(years) - 1
-    for col_idx in range(year_start, year_end + 1):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.fill = PatternFill(start_color='2E75B6', end_color='2E75B6', fill_type='solid')
-
-    # Pre-populate with existing materials
-    for row_idx, mat in enumerate(materials, 2):
-        ws.cell(row=row_idx, column=1, value=mat.code).border = thin_border
-        ws.cell(row=row_idx, column=2, value=mat.name).border = thin_border
-        ws.cell(row=row_idx, column=3, value=mat.unit or 'EA').border = thin_border
-        # Year cells — empty for user to fill
-        for col_idx in range(year_start, year_end + 1):
-            cell = ws.cell(row=row_idx, column=col_idx)
-            cell.fill = year_fill
-            cell.border = thin_border
-            cell.number_format = '#,##0'
-        # Equipment type cell
-        eq_col = year_end + 1
-        ws.cell(row=row_idx, column=eq_col).border = thin_border
-
-    # Add equipment_type dropdown validation
-    if eq_types:
+    import traceback
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
         from openpyxl.worksheet.datavalidation import DataValidation
-        eq_list = '"' + ','.join(eq_types) + '"'
-        eq_col_idx = year_end + 1
-        dv = DataValidation(type='list', formula1=eq_list, allow_blank=True)
-        dv.error = 'Please select a valid equipment type'
-        dv.errorTitle = 'Invalid Equipment Type'
-        ws.add_data_validation(dv)
-        max_row = max(len(materials) + 1, 2)
-        eq_col_letter = get_column_letter(eq_col_idx)
-        dv.add(f'{eq_col_letter}2:{eq_col_letter}{max_row + 100}')
+        from io import BytesIO
+        from flask import send_file
 
-    # Column widths
-    ws.column_dimensions['A'].width = 18
-    ws.column_dimensions['B'].width = 35
-    ws.column_dimensions['C'].width = 8
-    for i in range(year_start, year_end + 1):
-        ws.column_dimensions[get_column_letter(i)].width = 10
-    ws.column_dimensions[get_column_letter(year_end + 1)].width = 20
+        wb = openpyxl.Workbook()
 
-    # Freeze header row + code/name/unit columns
-    ws.freeze_panes = 'D2'
+        # Styling
+        header_font = Font(bold=True, color='FFFFFF', size=11)
+        header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
+        year_fill = PatternFill(start_color='D6E4F0', end_color='D6E4F0', fill_type='solid')
 
-    # ════════════════════════════════════════════════════
-    # Sheet 2: Monthly Detail (optional)
-    # ════════════════════════════════════════════════════
-    ws2 = wb.create_sheet('Monthly Detail')
-    month_headers = ['code', 'year', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        # Get equipment types for dropdown
+        try:
+            from app.models import Equipment
+            eq_types = sorted(set(
+                t[0] for t in db.session.query(Equipment.equipment_type).distinct().all() if t[0]
+            ))
+        except Exception:
+            eq_types = []
 
-    for col_idx, h in enumerate(month_headers, 1):
-        cell = ws2.cell(row=1, column=col_idx, value=h)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center')
-        cell.border = thin_border
+        # Get all active materials
+        materials = Material.query.filter_by(is_active=True).order_by(Material.code).all()
 
-    # Example row
-    ws2.cell(row=2, column=1, value='FLT-001')
-    ws2.cell(row=2, column=2, value=current_year)
-    for col_idx in range(3, 15):
-        ws2.cell(row=2, column=col_idx, value='').border = thin_border
+        # Year range
+        current_year = datetime.utcnow().year
+        years = list(range(2020, current_year + 1))
 
-    ws2.column_dimensions['A'].width = 18
-    ws2.column_dimensions['B'].width = 8
-    for i in range(3, 15):
-        ws2.column_dimensions[get_column_letter(i)].width = 8
-    ws2.freeze_panes = 'C2'
+        # ═══ Sheet 1: Yearly Summary ═══
+        ws = wb.active
+        ws.title = 'Yearly Summary'
 
-    # ════════════════════════════════════════════════════
-    # Sheet 3: Instructions
-    # ════════════════════════════════════════════════════
-    ws3 = wb.create_sheet('Instructions')
-    instructions = [
-        ['CONSUMPTION HISTORY IMPORT — INSTRUCTIONS', '', ''],
-        ['', '', ''],
-        ['SHEET 1: Yearly Summary (required)', '', ''],
-        ['Column', 'Description', 'Notes'],
-        ['code', 'Material code', 'Must match a material in the system'],
-        ['name', 'Material name', 'Pre-filled, for reference only (not imported)'],
-        ['unit', 'Unit of measure', 'Pre-filled, for reference only'],
-        ['2020, 2021, ...', 'Yearly consumption quantity', 'Enter total consumed that year. Leave blank if no data.'],
-        ['equipment_type', 'Equipment type that uses this material', 'Optional. Select from dropdown.'],
-        ['', '', ''],
-        ['SHEET 2: Monthly Detail (optional)', '', ''],
-        ['Column', 'Description', 'Notes'],
-        ['code', 'Material code', 'Must match a material in the system'],
-        ['year', 'Year for the monthly breakdown', 'e.g. 2024'],
-        ['Jan - Dec', 'Monthly consumption quantity', 'Enter quantity consumed each month. Leave blank if no data.'],
-        ['', '', ''],
-        ['TIPS', '', ''],
-        ['• You can add more year columns (e.g. 2026, 2027) — they are auto-detected', '', ''],
-        ['• Empty cells are ignored — only fill in data you have', '', ''],
-        ['• If a material+period already exists, it will be updated (not duplicated)', '', ''],
-        ['• The Monthly Detail sheet is optional — yearly totals are usually sufficient', '', ''],
-    ]
+        headers = ['code', 'name', 'unit'] + [str(y) for y in years] + ['equipment_type']
+        for col_idx, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
 
-    if eq_types:
-        instructions.append(['', '', ''])
-        instructions.append(['VALID EQUIPMENT TYPES', '', ''])
-        for et in eq_types:
-            instructions.append([et, '', ''])
+        year_start = 4  # column D
+        year_end = year_start + len(years) - 1
 
-    for row_data in instructions:
-        ws3.append(row_data)
+        # Pre-populate with existing materials
+        for row_idx, mat in enumerate(materials, 2):
+            ws.cell(row=row_idx, column=1, value=mat.code)
+            ws.cell(row=row_idx, column=2, value=mat.name)
+            ws.cell(row=row_idx, column=3, value=mat.unit or 'EA')
+            for col_idx in range(year_start, year_end + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.fill = year_fill
+                cell.number_format = '#,##0'
 
-    # Style instructions header
-    ws3.cell(row=1, column=1).font = Font(bold=True, size=14)
-    ws3.cell(row=3, column=1).font = Font(bold=True, size=12)
-    ws3.cell(row=11, column=1).font = Font(bold=True, size=12)
-    ws3.cell(row=17, column=1).font = Font(bold=True, size=12)
-    for r in [4, 12]:
-        for c in range(1, 4):
-            ws3.cell(row=r, column=c).font = Font(bold=True)
-    ws3.column_dimensions['A'].width = 40
-    ws3.column_dimensions['B'].width = 40
-    ws3.column_dimensions['C'].width = 50
+        # Equipment type dropdown
+        if eq_types:
+            eq_list = '"' + ','.join(eq_types[:250]) + '"'  # Excel limit ~255 chars
+            if len(eq_list) > 255:
+                # Too many types for inline list — use a reference sheet instead
+                eq_list = '"' + ','.join(eq_types[:20]) + '"'
+            eq_col_idx = year_end + 1
+            dv = DataValidation(type='list', formula1=eq_list, allow_blank=True)
+            dv.error = 'Please select a valid equipment type'
+            ws.add_data_validation(dv)
+            eq_col_letter = get_column_letter(eq_col_idx)
+            last_row = max(len(materials) + 1, 2) + 100
+            dv.add(f'{eq_col_letter}2:{eq_col_letter}{last_row}')
 
-    buf = BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    return send_file(
-        buf,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name='consumption_history_template.xlsx'
-    )
+        # Column widths
+        ws.column_dimensions['A'].width = 18
+        ws.column_dimensions['B'].width = 35
+        ws.column_dimensions['C'].width = 8
+        for i in range(year_start, year_end + 1):
+            ws.column_dimensions[get_column_letter(i)].width = 10
+        ws.column_dimensions[get_column_letter(year_end + 1)].width = 20
+        ws.freeze_panes = 'D2'
+
+        # ═══ Sheet 2: Monthly Detail (optional) ═══
+        ws2 = wb.create_sheet('Monthly Detail')
+        month_headers = ['code', 'year', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        for col_idx, h in enumerate(month_headers, 1):
+            cell = ws2.cell(row=1, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+
+        ws2.column_dimensions['A'].width = 18
+        ws2.column_dimensions['B'].width = 8
+        for i in range(3, 15):
+            ws2.column_dimensions[get_column_letter(i)].width = 8
+        ws2.freeze_panes = 'C2'
+
+        # ═══ Sheet 3: Instructions ═══
+        ws3 = wb.create_sheet('Instructions')
+        instructions = [
+            ['CONSUMPTION HISTORY IMPORT — INSTRUCTIONS'],
+            [''],
+            ['SHEET 1: Yearly Summary (required)'],
+            ['code — Material code (must match system)'],
+            ['name — Pre-filled for reference (not imported)'],
+            ['unit — Pre-filled for reference'],
+            ['2020, 2021, ... — Yearly consumption. Leave blank if no data.'],
+            ['equipment_type — Optional. Select from dropdown.'],
+            [''],
+            ['SHEET 2: Monthly Detail (optional)'],
+            ['code — Material code (must match system)'],
+            ['year — e.g. 2024'],
+            ['Jan-Dec — Monthly quantity. Leave blank if no data.'],
+            [''],
+            ['TIPS:'],
+            ['• Add more year columns (2026, 2027...) — auto-detected on import'],
+            ['• Empty cells are ignored'],
+            ['• Existing data is updated, not duplicated'],
+            ['• Monthly Detail sheet is optional'],
+        ]
+        if eq_types:
+            instructions.append([''])
+            instructions.append(['VALID EQUIPMENT TYPES:'])
+            for et in eq_types:
+                instructions.append([et])
+
+        for row_data in instructions:
+            ws3.append(row_data)
+
+        ws3.cell(row=1, column=1).font = Font(bold=True, size=14)
+        ws3.column_dimensions['A'].width = 60
+
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='consumption_history_template.xlsx'
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger('app').error(f'Template generation failed: {traceback.format_exc()}')
+        return jsonify({'status': 'error', 'message': f'Template generation failed: {str(e)}'}), 500
