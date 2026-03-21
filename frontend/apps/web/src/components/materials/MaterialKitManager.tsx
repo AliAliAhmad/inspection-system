@@ -12,6 +12,7 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   materialsApi,
   cyclesApi,
+  equipmentApi,
   type Material,
   type MaterialKit,
   type MaintenanceCycle,
@@ -32,6 +33,7 @@ export default function MaterialKitManager() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingKit, setEditingKit] = useState<MaterialKit | null>(null);
   const [kitItems, setKitItems] = useState<KitItemRow[]>([]);
+  const [selectedEqType, setSelectedEqType] = useState<string | undefined>();
   const [form] = Form.useForm();
 
   // ── Queries ──
@@ -52,6 +54,19 @@ export default function MaterialKitManager() {
     queryFn: () => cyclesApi.list({ cycle_type: 'running_hours', active_only: true }),
   });
   const cycles: MaintenanceCycle[] = (cyclesData?.data as any)?.data?.cycles ?? (cyclesData?.data as any)?.data ?? [];
+
+  const { data: eqTypesData } = useQuery({
+    queryKey: ['equipment-types'],
+    queryFn: () => equipmentApi.getTypes(),
+  });
+  const equipmentTypesFromDB: string[] = (eqTypesData?.data as any)?.data ?? [];
+
+  const { data: eqModelsData } = useQuery({
+    queryKey: ['equipment-models', selectedEqType],
+    queryFn: () => equipmentApi.getModels(selectedEqType),
+    enabled: !!selectedEqType,
+  });
+  const equipmentModels: string[] = (eqModelsData?.data as any)?.data ?? [];
 
   // ── Mutations ──
   const createMutation = useMutation({
@@ -101,6 +116,7 @@ export default function MaterialKitManager() {
   const openCreate = () => {
     setEditingKit(null);
     setKitItems([{ material_id: 0, quantity: 1 }]);
+    setSelectedEqType(undefined);
     form.resetFields();
     setModalOpen(true);
   };
@@ -113,6 +129,7 @@ export default function MaterialKitManager() {
         quantity: item.quantity,
       }))
     );
+    setSelectedEqType(kit.equipment_type || undefined);
     form.setFieldsValue({
       name: kit.name,
       name_ar: kit.name_ar,
@@ -164,8 +181,7 @@ export default function MaterialKitManager() {
     setKitItems(updated);
   };
 
-  // ── Equipment types from existing kits ──
-  const equipmentTypes = [...new Set(kits.map((k) => k.equipment_type).filter(Boolean))];
+  // Equipment types from DB (used in table column rendering)
 
   // ── Table columns ──
   const columns: ColumnsType<MaterialKit> = [
@@ -314,19 +330,27 @@ export default function MaterialKitManager() {
                 placeholder={t('materials.select_equipment_type', 'Select equipment type')}
                 allowClear
                 showSearch
+                onChange={(val) => {
+                  setSelectedEqType(val || undefined);
+                  form.setFieldValue('equipment_model', undefined);
+                }}
               >
-                {equipmentTypes.map((et) => (
+                {equipmentTypesFromDB.map((et) => (
                   <Select.Option key={et} value={et}>{et}</Select.Option>
                 ))}
-                {['STS Crane', 'RTG', 'Reach Stacker', 'Forklift', 'Empty Handler', 'Mobile Crane', 'Truck', 'Trailer', 'Spreader']
-                  .filter((t) => !equipmentTypes.includes(t))
-                  .map((et) => (
-                    <Select.Option key={et} value={et}>{et}</Select.Option>
-                  ))}
               </Select>
             </Form.Item>
             <Form.Item name="equipment_model" label={t('materials.equipment_model', 'Equipment Model')} style={{ flex: 1 }}>
-              <Input placeholder="e.g. Kalmar DRF450 (optional)" />
+              <Select
+                placeholder={selectedEqType ? t('materials.select_model', 'Select model') : t('materials.select_type_first', 'Select equipment type first')}
+                allowClear
+                showSearch
+                disabled={!selectedEqType}
+              >
+                {equipmentModels.map((m) => (
+                  <Select.Option key={m} value={m}>{m}</Select.Option>
+                ))}
+              </Select>
             </Form.Item>
           </div>
 

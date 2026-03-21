@@ -94,6 +94,21 @@ def get_equipment_types():
     return jsonify({'status': 'success', 'data': types}), 200
 
 
+@bp.route('/models', methods=['GET'])
+@jwt_required()
+def get_equipment_models():
+    """Return distinct model_number values, optionally filtered by equipment_type."""
+    eq_type = request.args.get('equipment_type')
+    query = db.session.query(Equipment.model_number).filter(
+        Equipment.model_number.isnot(None),
+        Equipment.model_number != '',
+    )
+    if eq_type:
+        query = query.filter(Equipment.equipment_type == eq_type)
+    rows = query.distinct().order_by(Equipment.model_number).all()
+    return jsonify({'status': 'success', 'data': [r[0] for r in rows]}), 200
+
+
 @bp.route('/subtypes', methods=['GET'])
 @jwt_required()
 def get_equipment_subtypes():
