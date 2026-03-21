@@ -53,7 +53,7 @@ export default function MaterialKitManager() {
     queryKey: ['maintenance-cycles'],
     queryFn: () => cyclesApi.list({ cycle_type: 'running_hours', active_only: true }),
   });
-  const cycles: MaintenanceCycle[] = (cyclesData?.data as any)?.data?.cycles ?? (cyclesData?.data as any)?.data ?? [];
+  const cycles: MaintenanceCycle[] = (cyclesData?.data as any)?.cycles ?? (cyclesData?.data as any)?.data?.cycles ?? [];
 
   const { data: eqTypesData } = useQuery({
     queryKey: ['equipment-types'],
