@@ -355,10 +355,9 @@ export default function MaterialKitManager() {
           </div>
 
           <div style={{ display: 'flex', gap: 12 }}>
-            <Form.Item name="cycle_id" label={t('materials.maintenance_interval', 'Maintenance Interval')} style={{ flex: 1 }}>
+            <Form.Item name="cycle_id" label={t('materials.maintenance_interval', 'Maintenance Interval')} style={{ flex: 1 }} rules={[{ required: true, message: 'Required' }]}>
               <Select
-                placeholder={t('materials.select_interval', 'Select PM interval (optional)')}
-                allowClear
+                placeholder={t('materials.select_interval', 'Select PM interval')}
               >
                 {cycles.map((c) => (
                   <Select.Option key={c.id} value={c.id}>{c.display_label || c.name}</Select.Option>

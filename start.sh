@@ -667,6 +667,21 @@ with app.app_context():
         db.session.rollback()
         print('maintenance_cycles table already exists')
 
+    # Seed default running_hours cycles if empty
+    try:
+        count = db.session.execute(text("SELECT COUNT(*) FROM maintenance_cycles WHERE cycle_type = 'running_hours'")).scalar()
+        if count == 0:
+            for hours, sort in [(250, 1), (500, 2), (1000, 3), (2000, 4), (4000, 5)]:
+                db.session.execute(text(
+                    "INSERT INTO maintenance_cycles (name, cycle_type, hours_value, display_label, is_active, is_system, sort_order) "
+                    "VALUES (:name, 'running_hours', :hours, :label, TRUE, TRUE, :sort)"
+                ), {'name': f'{hours}h', 'hours': hours, 'label': f'{hours} Hours', 'sort': sort})
+            db.session.commit()
+            print(f'Seeded {5} default maintenance cycles')
+    except Exception as e:
+        db.session.rollback()
+        print(f'maintenance_cycles seed skipped: {e}')
+
     # Create pm_templates table
     try:
         db.session.execute(text('''
