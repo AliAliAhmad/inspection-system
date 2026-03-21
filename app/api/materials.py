@@ -1142,9 +1142,12 @@ def get_all_consumption_history():
 def import_consumption_history():
     """
     Import historical consumption data from Excel.
-    Expected columns: code, period_type, period_label, quantity_consumed, notes (optional)
+    Supports two formats:
+    - New: year columns (2020, 2021, ...) with optional monthly detail sheet
+    - Legacy: code, period_type, period_label, quantity_consumed columns
     """
     import pandas as pd
+    import re
     from io import BytesIO
 
     engineer_or_admin_required()
@@ -1157,55 +1160,187 @@ def import_consumption_history():
         raise ValidationError("File must be Excel (.xlsx or .xls)")
 
     try:
-        df = pd.read_excel(BytesIO(file.read()))
-        df.columns = [c.strip().lower().replace(' ', '_') for c in df.columns]
+        file_bytes = BytesIO(file.read())
+        xls = pd.ExcelFile(file_bytes)
+        df = pd.read_excel(xls, sheet_name=0)
+        df.columns = [str(c).strip() for c in df.columns]
     except Exception as e:
         raise ValidationError(f"Failed to read Excel file: {e}")
 
-    required_cols = {'code', 'period_type', 'period_label', 'quantity_consumed'}
-    missing = required_cols - set(df.columns)
-    if missing:
-        raise ValidationError(f"Missing columns: {', '.join(missing)}")
+    # Detect format: new (year columns) or legacy (period_type column)
+    col_lower = [c.lower().replace(' ', '_') for c in df.columns]
+    is_legacy = 'period_type' in col_lower and 'quantity_consumed' in col_lower
+
+    MONTHS = [('Jan', '01'), ('Feb', '02'), ('Mar', '03'), ('Apr', '04'),
+              ('May', '05'), ('Jun', '06'), ('Jul', '07'), ('Aug', '08'),
+              ('Sep', '09'), ('Oct', '10'), ('Nov', '11'), ('Dec', '12')]
 
     imported, updated, errors = 0, 0, []
-    for _, row in df.iterrows():
-        try:
-            code = str(row['code']).strip()
-            material = Material.query.filter_by(code=code).first()
-            if not material:
-                errors.append(f"Material not found: {code}")
-                continue
 
-            period_type = str(row['period_type']).strip()
-            period_label = str(row['period_label']).strip()
-            qty = float(row['quantity_consumed'])
-            notes = str(row.get('notes', '') or '').strip() or None
+    if is_legacy:
+        # ── Legacy format: code, period_type, period_label, quantity_consumed ──
+        df.columns = col_lower
+        for _, row in df.iterrows():
+            try:
+                code = str(row['code']).strip()
+                if not code or code.lower() == 'nan':
+                    continue
+                material = Material.query.filter_by(code=code).first()
+                if not material:
+                    errors.append(f"Material not found: {code}")
+                    continue
 
-            existing = MaterialConsumptionHistory.query.filter_by(
-                material_id=material.id,
-                period_type=period_type,
-                period_label=period_label,
-            ).first()
+                period_type = str(row['period_type']).strip()
+                period_label = str(row['period_label']).strip()
+                qty = float(row['quantity_consumed'])
+                notes = str(row.get('notes', '') or '').strip() or None
+                if notes and notes.lower() == 'nan':
+                    notes = None
 
-            if existing:
-                existing.quantity_consumed = qty
-                existing.notes = notes
-                updated += 1
-            else:
-                record = MaterialConsumptionHistory(
-                    material_id=material.id,
-                    period_type=period_type,
-                    period_label=period_label,
-                    quantity_consumed=qty,
-                    source='imported',
-                    notes=notes,
-                )
-                db.session.add(record)
-                imported += 1
-        except Exception as e:
-            errors.append(f"Row error ({row.get('code', '?')}): {e}")
+                existing = MaterialConsumptionHistory.query.filter_by(
+                    material_id=material.id, period_type=period_type, period_label=period_label,
+                ).first()
 
-    db.session.commit()
+                if existing:
+                    existing.quantity_consumed = qty
+                    existing.notes = notes
+                    updated += 1
+                else:
+                    db.session.add(MaterialConsumptionHistory(
+                        material_id=material.id, period_type=period_type,
+                        period_label=period_label, quantity_consumed=qty,
+                        source='imported', notes=notes,
+                    ))
+                    imported += 1
+            except Exception as e:
+                db.session.rollback()
+                errors.append(f"Row error ({row.get('code', '?')}): {e}")
+    else:
+        # ── New format: year columns auto-detected ──
+        if 'code' not in col_lower:
+            raise ValidationError("Missing required 'code' column")
+
+        # Find year columns (4-digit numbers 2000-2099)
+        year_cols = []
+        for c in df.columns:
+            try:
+                y = int(c)
+                if 2000 <= y <= 2099:
+                    year_cols.append((c, str(y)))
+            except (ValueError, TypeError):
+                pass
+
+        if not year_cols:
+            raise ValidationError("No year columns found. Add columns like 2020, 2021, 2022, etc.")
+
+        # Map column names to lowercase for code lookup
+        code_col = next(c for c in df.columns if c.lower().strip() == 'code')
+
+        # ── Sheet 1: Yearly totals ──
+        for idx, row in df.iterrows():
+            try:
+                code = str(row[code_col]).strip()
+                if not code or code.lower() == 'nan':
+                    continue
+                material = Material.query.filter_by(code=code).first()
+                if not material:
+                    errors.append(f"Row {idx + 2}: Material not found: {code}")
+                    continue
+
+                for col_name, year_str in year_cols:
+                    val = row.get(col_name)
+                    if pd.isna(val):
+                        continue
+                    try:
+                        qty = float(val)
+                    except (ValueError, TypeError):
+                        continue
+                    if qty <= 0:
+                        continue
+
+                    existing = MaterialConsumptionHistory.query.filter_by(
+                        material_id=material.id, period_type='yearly', period_label=year_str,
+                    ).first()
+
+                    if existing:
+                        existing.quantity_consumed = qty
+                        updated += 1
+                    else:
+                        db.session.add(MaterialConsumptionHistory(
+                            material_id=material.id, period_type='yearly',
+                            period_label=year_str, quantity_consumed=qty, source='imported',
+                        ))
+                        imported += 1
+            except Exception as e:
+                db.session.rollback()
+                errors.append(f"Row {idx + 2} ({row.get(code_col, '?')}): {e}")
+
+        # ── Sheet 2: Monthly detail (optional) ──
+        monthly_sheet_names = [s for s in xls.sheet_names if 'monthly' in s.lower()]
+        if monthly_sheet_names:
+            try:
+                df_monthly = pd.read_excel(xls, sheet_name=monthly_sheet_names[0])
+                df_monthly.columns = [str(c).strip() for c in df_monthly.columns]
+                m_code_col = next((c for c in df_monthly.columns if c.lower().strip() == 'code'), None)
+                m_year_col = next((c for c in df_monthly.columns if c.lower().strip() == 'year'), None)
+
+                if m_code_col and m_year_col:
+                    for idx, row in df_monthly.iterrows():
+                        try:
+                            code = str(row[m_code_col]).strip()
+                            if not code or code.lower() == 'nan':
+                                continue
+                            material = Material.query.filter_by(code=code).first()
+                            if not material:
+                                errors.append(f"Monthly row {idx + 2}: Material not found: {code}")
+                                continue
+
+                            year_val = str(int(row[m_year_col]))
+
+                            for month_name, month_num in MONTHS:
+                                # Try exact match and case-insensitive
+                                val = None
+                                for c in df_monthly.columns:
+                                    if c.strip().lower()[:3] == month_name.lower():
+                                        val = row.get(c)
+                                        break
+                                if val is None or pd.isna(val):
+                                    continue
+                                try:
+                                    qty = float(val)
+                                except (ValueError, TypeError):
+                                    continue
+                                if qty <= 0:
+                                    continue
+
+                                period_label = f"{year_val}-{month_num}"
+                                existing = MaterialConsumptionHistory.query.filter_by(
+                                    material_id=material.id, period_type='monthly',
+                                    period_label=period_label,
+                                ).first()
+
+                                if existing:
+                                    existing.quantity_consumed = qty
+                                    updated += 1
+                                else:
+                                    db.session.add(MaterialConsumptionHistory(
+                                        material_id=material.id, period_type='monthly',
+                                        period_label=period_label, quantity_consumed=qty,
+                                        source='imported',
+                                    ))
+                                    imported += 1
+                        except Exception as e:
+                            db.session.rollback()
+                            errors.append(f"Monthly row {idx + 2}: {e}")
+            except Exception as e:
+                errors.append(f"Monthly sheet error: {e}")
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        raise ValidationError(f"Database error: {str(e)}")
+
     return jsonify({
         'status': 'success',
         'imported': imported,
@@ -1216,31 +1351,171 @@ def import_consumption_history():
 
 @bp.route('/consumption-template', methods=['GET'])
 def consumption_import_template():
-    """Download Excel template for consumption history import."""
+    """Download Excel template for consumption history import, pre-populated with materials from DB."""
     import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
     from io import BytesIO
     from flask import send_file
+    from app.models import Equipment
 
     wb = openpyxl.Workbook()
 
-    # Sheet 1: Data
-    ws = wb.active
-    ws.title = 'Consumption History'
-    headers = ['code', 'period_type', 'period_label', 'quantity_consumed', 'notes']
-    ws.append(headers)
-    ws.append(['FLT-001', 'monthly', '2025-01', 4, 'January maintenance'])
-    ws.append(['FLT-001', 'monthly', '2025-02', 6, ''])
-    ws.append(['OIL-002', 'quarterly', '2025-Q1', 20, 'Q1 total'])
-    ws.append(['OIL-002', 'yearly', '2025', 75, 'Full year'])
+    # Styling
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
+    year_fill = PatternFill(start_color='D6E4F0', end_color='D6E4F0', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin'),
+    )
 
-    # Sheet 2: Instructions
-    ws2 = wb.create_sheet('Instructions')
-    ws2.append(['Column', 'Description', 'Allowed Values'])
-    ws2.append(['code', 'Material code (must exist in system)', 'e.g. FLT-001'])
-    ws2.append(['period_type', 'Period granularity', 'monthly | quarterly | yearly'])
-    ws2.append(['period_label', 'Period identifier', 'monthly: 2025-03 | quarterly: 2025-Q2 | yearly: 2025'])
-    ws2.append(['quantity_consumed', 'Quantity used in that period', 'Decimal number'])
-    ws2.append(['notes', 'Optional notes', 'Any text'])
+    # Get equipment types for dropdown
+    eq_types = sorted(set(
+        t[0] for t in db.session.query(Equipment.equipment_type).distinct().all() if t[0]
+    ))
+
+    # Get all active materials
+    materials = Material.query.filter_by(is_active=True).order_by(Material.code).all()
+
+    # Year range
+    current_year = datetime.utcnow().year
+    years = list(range(2020, current_year + 1))
+
+    # ════════════════════════════════════════════════════
+    # Sheet 1: Yearly Summary
+    # ════════════════════════════════════════════════════
+    ws = wb.active
+    ws.title = 'Yearly Summary'
+
+    headers = ['code', 'name', 'unit'] + [str(y) for y in years] + ['equipment_type']
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # Highlight year columns
+    year_start = 4  # column D
+    year_end = year_start + len(years) - 1
+    for col_idx in range(year_start, year_end + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = PatternFill(start_color='2E75B6', end_color='2E75B6', fill_type='solid')
+
+    # Pre-populate with existing materials
+    for row_idx, mat in enumerate(materials, 2):
+        ws.cell(row=row_idx, column=1, value=mat.code).border = thin_border
+        ws.cell(row=row_idx, column=2, value=mat.name).border = thin_border
+        ws.cell(row=row_idx, column=3, value=mat.unit or 'EA').border = thin_border
+        # Year cells — empty for user to fill
+        for col_idx in range(year_start, year_end + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.fill = year_fill
+            cell.border = thin_border
+            cell.number_format = '#,##0'
+        # Equipment type cell
+        eq_col = year_end + 1
+        ws.cell(row=row_idx, column=eq_col).border = thin_border
+
+    # Add equipment_type dropdown validation
+    if eq_types:
+        from openpyxl.worksheet.datavalidation import DataValidation
+        eq_list = '"' + ','.join(eq_types) + '"'
+        eq_col_idx = year_end + 1
+        dv = DataValidation(type='list', formula1=eq_list, allow_blank=True)
+        dv.error = 'Please select a valid equipment type'
+        dv.errorTitle = 'Invalid Equipment Type'
+        ws.add_data_validation(dv)
+        max_row = max(len(materials) + 1, 2)
+        eq_col_letter = get_column_letter(eq_col_idx)
+        dv.add(f'{eq_col_letter}2:{eq_col_letter}{max_row + 100}')
+
+    # Column widths
+    ws.column_dimensions['A'].width = 18
+    ws.column_dimensions['B'].width = 35
+    ws.column_dimensions['C'].width = 8
+    for i in range(year_start, year_end + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 10
+    ws.column_dimensions[get_column_letter(year_end + 1)].width = 20
+
+    # Freeze header row + code/name/unit columns
+    ws.freeze_panes = 'D2'
+
+    # ════════════════════════════════════════════════════
+    # Sheet 2: Monthly Detail (optional)
+    # ════════════════════════════════════════════════════
+    ws2 = wb.create_sheet('Monthly Detail')
+    month_headers = ['code', 'year', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+    for col_idx, h in enumerate(month_headers, 1):
+        cell = ws2.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # Example row
+    ws2.cell(row=2, column=1, value='FLT-001')
+    ws2.cell(row=2, column=2, value=current_year)
+    for col_idx in range(3, 15):
+        ws2.cell(row=2, column=col_idx, value='').border = thin_border
+
+    ws2.column_dimensions['A'].width = 18
+    ws2.column_dimensions['B'].width = 8
+    for i in range(3, 15):
+        ws2.column_dimensions[get_column_letter(i)].width = 8
+    ws2.freeze_panes = 'C2'
+
+    # ════════════════════════════════════════════════════
+    # Sheet 3: Instructions
+    # ════════════════════════════════════════════════════
+    ws3 = wb.create_sheet('Instructions')
+    instructions = [
+        ['CONSUMPTION HISTORY IMPORT — INSTRUCTIONS', '', ''],
+        ['', '', ''],
+        ['SHEET 1: Yearly Summary (required)', '', ''],
+        ['Column', 'Description', 'Notes'],
+        ['code', 'Material code', 'Must match a material in the system'],
+        ['name', 'Material name', 'Pre-filled, for reference only (not imported)'],
+        ['unit', 'Unit of measure', 'Pre-filled, for reference only'],
+        ['2020, 2021, ...', 'Yearly consumption quantity', 'Enter total consumed that year. Leave blank if no data.'],
+        ['equipment_type', 'Equipment type that uses this material', 'Optional. Select from dropdown.'],
+        ['', '', ''],
+        ['SHEET 2: Monthly Detail (optional)', '', ''],
+        ['Column', 'Description', 'Notes'],
+        ['code', 'Material code', 'Must match a material in the system'],
+        ['year', 'Year for the monthly breakdown', 'e.g. 2024'],
+        ['Jan - Dec', 'Monthly consumption quantity', 'Enter quantity consumed each month. Leave blank if no data.'],
+        ['', '', ''],
+        ['TIPS', '', ''],
+        ['• You can add more year columns (e.g. 2026, 2027) — they are auto-detected', '', ''],
+        ['• Empty cells are ignored — only fill in data you have', '', ''],
+        ['• If a material+period already exists, it will be updated (not duplicated)', '', ''],
+        ['• The Monthly Detail sheet is optional — yearly totals are usually sufficient', '', ''],
+    ]
+
+    if eq_types:
+        instructions.append(['', '', ''])
+        instructions.append(['VALID EQUIPMENT TYPES', '', ''])
+        for et in eq_types:
+            instructions.append([et, '', ''])
+
+    for row_data in instructions:
+        ws3.append(row_data)
+
+    # Style instructions header
+    ws3.cell(row=1, column=1).font = Font(bold=True, size=14)
+    ws3.cell(row=3, column=1).font = Font(bold=True, size=12)
+    ws3.cell(row=11, column=1).font = Font(bold=True, size=12)
+    ws3.cell(row=17, column=1).font = Font(bold=True, size=12)
+    for r in [4, 12]:
+        for c in range(1, 4):
+            ws3.cell(row=r, column=c).font = Font(bold=True)
+    ws3.column_dimensions['A'].width = 40
+    ws3.column_dimensions['B'].width = 40
+    ws3.column_dimensions['C'].width = 50
 
     buf = BytesIO()
     wb.save(buf)
