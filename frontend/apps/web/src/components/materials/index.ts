@@ -60,3 +60,6 @@ export { default as InventoryCountModalDefault } from './InventoryCountModal';
 // Scanner Component
 export { BarcodeScanner } from './BarcodeScanner';
 export { default as BarcodeScannerDefault } from './BarcodeScanner';
+
+// Kit Management
+export { default as MaterialKitManager } from './MaterialKitManager';

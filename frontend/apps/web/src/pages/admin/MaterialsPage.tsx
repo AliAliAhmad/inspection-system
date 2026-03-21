@@ -43,6 +43,7 @@ import {
   RobotOutlined,
   AuditOutlined,
   DownloadOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -69,6 +70,7 @@ import {
   ReservationList,
   VendorCard,
   LocationSelector,
+  MaterialKitManager,
 } from '../../components/materials';
 
 const { Title, Text } = Typography;
@@ -636,6 +638,15 @@ export default function MaterialsPage() {
           </Col>
         </Row>
       ),
+    },
+    {
+      key: 'kits',
+      label: (
+        <span>
+          <AppstoreOutlined /> {t('materials.kits', 'Kits')}
+        </span>
+      ),
+      children: <MaterialKitManager />,
     },
     {
       key: 'settings',
