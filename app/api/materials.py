@@ -1215,7 +1215,6 @@ def import_consumption_history():
 
 
 @bp.route('/consumption-template', methods=['GET'])
-@jwt_required()
 def consumption_import_template():
     """Download Excel template for consumption history import."""
     import openpyxl
