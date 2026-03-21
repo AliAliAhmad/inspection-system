@@ -2138,6 +2138,8 @@ export default function WorkPlanningPage() {
                                           ))
                                         );
                                       })()}
+                                      {/* Inspection Summary — inside scroll area so cards are scrollable */}
+                                      {isExpanded && <InspectionSummaryBar date={day.date} berth={berth} />}
                                     </div>
 
                                     {/* Capacity Bar */}
@@ -2162,8 +2164,6 @@ export default function WorkPlanningPage() {
                                         }} />
                                       </div>
                                     </div>
-                                    {/* Inspection Summary — only when expanded */}
-                                    {isExpanded && <InspectionSummaryBar date={day.date} berth={berth} />}
                                   </>
                                 )}
                               </DroppableDay>
