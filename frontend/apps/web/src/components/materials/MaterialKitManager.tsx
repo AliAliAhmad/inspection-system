@@ -47,7 +47,7 @@ export default function MaterialKitManager() {
     queryKey: ['materials-all'],
     queryFn: () => materialsApi.list({ active_only: true }),
   });
-  const materials: Material[] = (materialsData?.data as any)?.data ?? [];
+  const materials: Material[] = (materialsData?.data as any)?.materials ?? (materialsData?.data as any)?.data ?? [];
 
   const { data: cyclesData } = useQuery({
     queryKey: ['maintenance-cycles'],
