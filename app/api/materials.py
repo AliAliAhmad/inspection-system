@@ -559,25 +559,67 @@ def import_materials():
     if missing:
         raise ValidationError(f"Missing required columns: {', '.join(missing)}")
 
+    # Valid categories per DB constraint
+    VALID_CATEGORIES = {'lubricant', 'filter', 'spare_part', 'consumable', 'electrical', 'mechanical', 'hvac', 'other'}
+    # Map common Excel variations to valid DB values
+    CATEGORY_MAP = {
+        'spare parts': 'spare_part', 'spare part': 'spare_part', 'spares': 'spare_part',
+        'filters': 'filter', 'oil filter': 'filter', 'air filter': 'filter',
+        'lubricants': 'lubricant', 'oil': 'lubricant', 'grease': 'lubricant',
+        'consumables': 'consumable',
+        'electric': 'electrical', 'electrics': 'electrical',
+        'mech': 'mechanical',
+    }
+
+    def safe_str(val, default=None):
+        """Convert pandas value to string, treating NaN/nan as None."""
+        if pd.isna(val):
+            return default
+        s = str(val).strip()
+        if s.lower() in ('nan', 'none', ''):
+            return default
+        return s
+
+    def normalize_category(raw):
+        """Map Excel category to valid DB category."""
+        if not raw:
+            return 'other'
+        lower = raw.lower().strip()
+        if lower in VALID_CATEGORIES:
+            return lower
+        # Try underscore variant
+        underscored = lower.replace(' ', '_')
+        if underscored in VALID_CATEGORIES:
+            return underscored
+        # Try known mappings
+        if lower in CATEGORY_MAP:
+            return CATEGORY_MAP[lower]
+        return 'other'
+
     created = 0
     updated = 0
     errors = []
 
     for idx, row in df.iterrows():
         try:
-            code = str(row['code']).strip()
+            code = safe_str(row['code'])
             if not code:
                 continue
+
+            name = safe_str(row['name'], '')
+            name_ar = safe_str(row.get('name_ar'))
+            category = normalize_category(safe_str(row['category']))
+            unit = safe_str(row['unit'], 'EA')
 
             # Check if exists
             material = Material.query.filter_by(code=code).first()
 
             if material:
                 # Update existing
-                material.name = str(row['name']).strip()
-                material.name_ar = str(row.get('name_ar', '')).strip() or None
-                material.category = str(row['category']).strip()
-                material.unit = str(row['unit']).strip()
+                material.name = name
+                material.name_ar = name_ar
+                material.category = category
+                material.unit = unit
                 if 'current_stock' in row and pd.notna(row['current_stock']):
                     material.current_stock = float(row['current_stock'])
                 if 'min_stock' in row and pd.notna(row['min_stock']):
@@ -587,10 +629,10 @@ def import_materials():
                 # Create new
                 material = Material(
                     code=code,
-                    name=str(row['name']).strip(),
-                    name_ar=str(row.get('name_ar', '')).strip() or None,
-                    category=str(row['category']).strip(),
-                    unit=str(row['unit']).strip(),
+                    name=name,
+                    name_ar=name_ar,
+                    category=category,
+                    unit=unit,
                     current_stock=float(row.get('current_stock', 0)) if pd.notna(row.get('current_stock')) else 0,
                     min_stock=float(row.get('min_stock', 0)) if pd.notna(row.get('min_stock')) else 0,
                     consumption_start_date=datetime.utcnow().date()
@@ -599,9 +641,14 @@ def import_materials():
                 created += 1
 
         except Exception as e:
+            db.session.rollback()
             errors.append(f"Row {idx + 2}: {str(e)}")
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        raise ValidationError(f"Database error: {str(e)}")
 
     return jsonify({
         'status': 'success',
