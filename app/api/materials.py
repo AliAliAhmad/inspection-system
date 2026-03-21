@@ -19,6 +19,33 @@ bp = Blueprint('materials', __name__)
 material_ai = MaterialAIService()
 stock_alerts = StockAlertService()
 
+# Material code prefix → equipment type mapping (first 2 chars of code)
+CODE_PREFIX_TO_EQUIPMENT = {
+    'CM': 'Common',
+    'CO': 'Consumable',
+    'DV': 'Dredger',
+    'EH': 'Empty Handler',
+    'FL': 'Forklift',
+    'FM': 'Power',
+    'MC': 'Mobile Crane',
+    'MS': 'Manual Spreader',
+    'PM': 'Truck',
+    'QC': 'Quay Crane',
+    'ST': 'Reach Stacker',
+    'SV': 'Service Pickup',
+    'TO': 'Tools',
+    'TR': 'Trailer',
+    'TS': 'Spreader',
+    'YC': 'RTG',
+    '90': 'Unknown',
+}
+
+def get_equipment_type_from_code(code: str) -> str:
+    """Derive equipment type from material code prefix (first 2 chars)."""
+    if not code or len(code) < 2:
+        return ''
+    return CODE_PREFIX_TO_EQUIPMENT.get(code[:2].upper(), '')
+
 
 def engineer_or_admin_required():
     """Check if user is engineer or admin."""
@@ -1357,7 +1384,6 @@ def consumption_import_template():
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment
         from openpyxl.utils import get_column_letter
-        from openpyxl.worksheet.datavalidation import DataValidation
         from io import BytesIO
         from flask import send_file
 
@@ -1367,15 +1393,6 @@ def consumption_import_template():
         header_font = Font(bold=True, color='FFFFFF', size=11)
         header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
         year_fill = PatternFill(start_color='D6E4F0', end_color='D6E4F0', fill_type='solid')
-
-        # Get equipment types for dropdown
-        try:
-            from app.models import Equipment
-            eq_types = sorted(set(
-                t[0] for t in db.session.query(Equipment.equipment_type).distinct().all() if t[0]
-            ))
-        except Exception:
-            eq_types = []
 
         # Get all active materials
         materials = Material.query.filter_by(is_active=True).order_by(Material.code).all()
@@ -1388,7 +1405,7 @@ def consumption_import_template():
         ws = wb.active
         ws.title = 'Yearly Summary'
 
-        headers = ['code', 'name', 'unit'] + [str(y) for y in years] + ['equipment_type']
+        headers = ['code', 'name', 'unit'] + [str(y) for y in years]
         for col_idx, h in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_idx, value=h)
             cell.font = header_font
@@ -1408,27 +1425,12 @@ def consumption_import_template():
                 cell.fill = year_fill
                 cell.number_format = '#,##0'
 
-        # Equipment type dropdown
-        if eq_types:
-            eq_list = '"' + ','.join(eq_types[:250]) + '"'  # Excel limit ~255 chars
-            if len(eq_list) > 255:
-                # Too many types for inline list — use a reference sheet instead
-                eq_list = '"' + ','.join(eq_types[:20]) + '"'
-            eq_col_idx = year_end + 1
-            dv = DataValidation(type='list', formula1=eq_list, allow_blank=True)
-            dv.error = 'Please select a valid equipment type'
-            ws.add_data_validation(dv)
-            eq_col_letter = get_column_letter(eq_col_idx)
-            last_row = max(len(materials) + 1, 2) + 100
-            dv.add(f'{eq_col_letter}2:{eq_col_letter}{last_row}')
-
         # Column widths
         ws.column_dimensions['A'].width = 18
         ws.column_dimensions['B'].width = 35
         ws.column_dimensions['C'].width = 8
         for i in range(year_start, year_end + 1):
             ws.column_dimensions[get_column_letter(i)].width = 10
-        ws.column_dimensions[get_column_letter(year_end + 1)].width = 20
         ws.freeze_panes = 'D2'
 
         # ═══ Sheet 2: Monthly Detail (optional) ═══
@@ -1457,7 +1459,6 @@ def consumption_import_template():
             ['name — Pre-filled for reference (not imported)'],
             ['unit — Pre-filled for reference'],
             ['2020, 2021, ... — Yearly consumption. Leave blank if no data.'],
-            ['equipment_type — Optional. Select from dropdown.'],
             [''],
             ['SHEET 2: Monthly Detail (optional)'],
             ['code — Material code (must match system)'],
@@ -1469,12 +1470,8 @@ def consumption_import_template():
             ['• Empty cells are ignored'],
             ['• Existing data is updated, not duplicated'],
             ['• Monthly Detail sheet is optional'],
+            ['• Equipment type is auto-detected from material code prefix inside the app'],
         ]
-        if eq_types:
-            instructions.append([''])
-            instructions.append(['VALID EQUIPMENT TYPES:'])
-            for et in eq_types:
-                instructions.append([et])
 
         for row_data in instructions:
             ws3.append(row_data)
