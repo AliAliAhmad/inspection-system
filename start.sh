@@ -669,18 +669,21 @@ with app.app_context():
 
     # Seed default running_hours cycles if empty
     try:
-        count = db.session.execute(text("SELECT COUNT(*) FROM maintenance_cycles WHERE cycle_type = 'running_hours'")).scalar()
+        count = db.session.execute(text(\"SELECT COUNT(*) FROM maintenance_cycles WHERE cycle_type = 'running_hours'\")).scalar()
         if count == 0:
-            for hours, sort in [(250, 1), (500, 2), (1000, 3), (2000, 4), (4000, 5)]:
+            seed_cycles = [[250,1],[500,2],[1000,3],[2000,4],[4000,5]]
+            for pair in seed_cycles:
+                h = pair[0]
+                s = pair[1]
                 db.session.execute(text(
-                    "INSERT INTO maintenance_cycles (name, cycle_type, hours_value, display_label, is_active, is_system, sort_order) "
-                    "VALUES (:name, 'running_hours', :hours, :label, TRUE, TRUE, :sort)"
-                ), {'name': f'{hours}h', 'hours': hours, 'label': f'{hours} Hours', 'sort': sort})
+                    \"INSERT INTO maintenance_cycles (name, cycle_type, hours_value, display_label, is_active, is_system, sort_order) \"
+                    \"VALUES (:name, 'running_hours', :hours, :label, TRUE, TRUE, :sort)\"
+                ), dict(name=str(h)+'h', hours=h, label=str(h)+' Hours', sort=s))
             db.session.commit()
-            print(f'Seeded {5} default maintenance cycles')
+            print('Seeded 5 default maintenance cycles')
     except Exception as e:
         db.session.rollback()
-        print(f'maintenance_cycles seed skipped: {e}')
+        print('maintenance_cycles seed skipped: ' + str(e))
 
     # Create pm_templates table
     try:
