@@ -1665,8 +1665,11 @@ def delete_assignment(assignment_id):
 @jwt_required()
 @role_required('admin', 'engineer')
 def delete_all_unassigned():
-    """Delete all unassigned inspection assignments. Cleans up empty lists."""
-    # Step 1: Get affected list IDs + counts in one query (uses ix_inspection_assignments_status index)
+    """Delete all unassigned inspection assignments. Cleans up empty lists.
+    Uses server-side subqueries for performance — no Python-side ID lists."""
+    from app.models import FinalAssessment, MonitorFollowup
+
+    # Step 1: Get affected list IDs + counts (uses ix_inspection_assignments_status index)
     rows = db.session.query(
         InspectionAssignment.inspection_list_id,
         func.count().label('cnt')
@@ -1680,19 +1683,28 @@ def delete_all_unassigned():
     affected_list_ids = [r[0] for r in rows]
     total_count = sum(r[1] for r in rows)
 
-    # Step 2a: NULL out work_plan_jobs.inspection_assignment_id for affected rows
-    # (prevents FK violation: work_plan_jobs references inspection_assignments with no ON DELETE)
-    unassigned_ids = [r[0] for r in db.session.query(InspectionAssignment.id)
-                      .filter_by(status='unassigned').all()]
-    if unassigned_ids:
-        WorkPlanJob.query.filter(
-            WorkPlanJob.inspection_assignment_id.in_(unassigned_ids)
-        ).update({'inspection_assignment_id': None}, synchronize_session=False)
+    # Reusable subquery: all unassigned assignment IDs (stays server-side, never fetched to Python)
+    unassigned_subq = db.session.query(InspectionAssignment.id).filter_by(status='unassigned').subquery()
 
-    # Step 2b: Bulk delete all unassigned (1 SQL DELETE statement)
+    # Step 2a: NULL out work_plan_jobs FK (prevents FK violation)
+    WorkPlanJob.query.filter(
+        WorkPlanJob.inspection_assignment_id.in_(db.select(unassigned_subq))
+    ).update({'inspection_assignment_id': None}, synchronize_session=False)
+
+    # Step 2b: Delete final_assessments for unassigned (non-nullable FK — must delete, not NULL)
+    FinalAssessment.query.filter(
+        FinalAssessment.inspection_assignment_id.in_(db.select(unassigned_subq))
+    ).delete(synchronize_session=False)
+
+    # Step 2c: NULL out monitor_followups FK (nullable FK)
+    MonitorFollowup.query.filter(
+        MonitorFollowup.inspection_assignment_id.in_(db.select(unassigned_subq))
+    ).update({'inspection_assignment_id': None}, synchronize_session=False)
+
+    # Step 3: Bulk delete all unassigned assignments
     InspectionAssignment.query.filter_by(status='unassigned').delete(synchronize_session=False)
 
-    # Step 3: Batch compute remaining counts per list (2 queries instead of N×2)
+    # Step 4: Compute remaining counts per affected list
     remaining_by_list = dict(
         db.session.query(
             InspectionAssignment.inspection_list_id,
@@ -1711,13 +1723,13 @@ def delete_all_unassigned():
         ).group_by(InspectionAssignment.inspection_list_id).all()
     )
 
-    # Step 4: Batch load all affected InspectionList rows (1 query)
+    # Step 5: Batch load affected InspectionList rows
     lists_by_id = {
         il.id: il for il in
         InspectionList.query.filter(InspectionList.id.in_(affected_list_ids)).all()
     }
 
-    # Step 5: Update stats or mark for deletion
+    # Step 6: Update stats or mark empty lists for deletion
     lists_to_delete = []
     for list_id in affected_list_ids:
         remaining = remaining_by_list.get(list_id, 0)
@@ -1728,7 +1740,7 @@ def delete_all_unassigned():
             il.total_assets = remaining
             il.assigned_assets = assigned_by_list.get(list_id, 0)
 
-    # Step 6: Bulk delete empty lists (1 query)
+    # Step 7: Bulk delete empty lists
     if lists_to_delete:
         InspectionList.query.filter(InspectionList.id.in_(lists_to_delete)).delete(
             synchronize_session=False

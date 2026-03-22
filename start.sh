@@ -188,6 +188,17 @@ with app.app_context():
         db.session.rollback()
         print('sap_id index already exists')
 
+    # Performance indexes for delete-unassigned
+    for idx_sql in [
+        'CREATE INDEX IF NOT EXISTS ix_wpj_inspection_assignment_id ON work_plan_jobs (inspection_assignment_id)',
+        'CREATE INDEX IF NOT EXISTS ix_ia_inspection_list_id ON inspection_assignments (inspection_list_id)',
+    ]:
+        try:
+            db.session.execute(text(idx_sql))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     # Add voice_note_id column to inspection_answers
     try:
         db.session.execute(text('ALTER TABLE inspection_answers ADD COLUMN voice_note_id INTEGER REFERENCES files(id)'))
