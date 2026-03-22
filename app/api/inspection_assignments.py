@@ -1701,6 +1701,17 @@ def delete_all_unassigned():
         MonitorFollowup.inspection_assignment_id.in_(unassigned_ids_q)
     ).update({'inspection_assignment_id': None}, synchronize_session=False)
 
+    # Step 2d: NULL out inspections.assignment_id FK (nullable FK)
+    from app.models import Inspection
+    Inspection.query.filter(
+        Inspection.assignment_id.in_(unassigned_ids_q)
+    ).update({'assignment_id': None}, synchronize_session=False)
+
+    # Step 2e: NULL out self-referential original_assignment_id (nullable FK)
+    InspectionAssignment.query.filter(
+        InspectionAssignment.original_assignment_id.in_(unassigned_ids_q)
+    ).update({'original_assignment_id': None}, synchronize_session=False)
+
     # Step 3: Bulk delete all unassigned assignments
     InspectionAssignment.query.filter_by(status='unassigned').delete(synchronize_session=False)
 
