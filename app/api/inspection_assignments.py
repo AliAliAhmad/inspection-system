@@ -1684,21 +1684,21 @@ def delete_all_unassigned():
     total_count = sum(r[1] for r in rows)
 
     # Reusable subquery: all unassigned assignment IDs (stays server-side, never fetched to Python)
-    unassigned_subq = db.session.query(InspectionAssignment.id).filter_by(status='unassigned').subquery()
+    unassigned_ids_q = db.session.query(InspectionAssignment.id).filter_by(status='unassigned')
 
     # Step 2a: NULL out work_plan_jobs FK (prevents FK violation)
     WorkPlanJob.query.filter(
-        WorkPlanJob.inspection_assignment_id.in_(db.select(unassigned_subq))
+        WorkPlanJob.inspection_assignment_id.in_(unassigned_ids_q)
     ).update({'inspection_assignment_id': None}, synchronize_session=False)
 
     # Step 2b: Delete final_assessments for unassigned (non-nullable FK — must delete, not NULL)
     FinalAssessment.query.filter(
-        FinalAssessment.inspection_assignment_id.in_(db.select(unassigned_subq))
+        FinalAssessment.inspection_assignment_id.in_(unassigned_ids_q)
     ).delete(synchronize_session=False)
 
     # Step 2c: NULL out monitor_followups FK (nullable FK)
     MonitorFollowup.query.filter(
-        MonitorFollowup.inspection_assignment_id.in_(db.select(unassigned_subq))
+        MonitorFollowup.inspection_assignment_id.in_(unassigned_ids_q)
     ).update({'inspection_assignment_id': None}, synchronize_session=False)
 
     # Step 3: Bulk delete all unassigned assignments
