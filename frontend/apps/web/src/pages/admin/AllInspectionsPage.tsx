@@ -102,7 +102,7 @@ function StatsCard({
   loading?: boolean;
 }) {
   return (
-    <Card size="small" loading={loading}>
+    <Card size="small" loading={loading} style={{ minHeight: 80 }}>
       <Row align="middle" gutter={8}>
         <Col>
           <div style={{
@@ -416,7 +416,7 @@ export default function AllInspectionsPage() {
       title: t('inspections.status', 'Status'),
       dataIndex: 'status',
       key: 'status',
-      width: 110,
+      width: 120,
       render: (s: InspectionStatus) => (
         <Tag color={statusColorMap[s]}>{s.toUpperCase()}</Tag>
       ),
@@ -425,7 +425,7 @@ export default function AllInspectionsPage() {
       title: t('inspections.result', 'Result'),
       dataIndex: 'result',
       key: 'result',
-      width: 100,
+      width: 115,
       render: (r: InspectionResult | null) =>
         r ? <Tag color={resultColorMap[r]}>{r.toUpperCase()}</Tag> : '-',
     },

@@ -28,6 +28,7 @@ import type {
   ReviewPayload,
   InspectionStats,
 } from '@inspection/shared';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import InspectionFindingDisplay from '../../components/InspectionFindingDisplay';
 import { scale, vscale, mscale, fontScale } from '../../utils/scale';
 
@@ -121,6 +122,7 @@ function InspectionCard({
 export default function AllInspectionsScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState<InspectionStatus | null>(null);
   const [page, setPage] = useState(1);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -332,7 +334,7 @@ export default function AllInspectionsScreen() {
 
   return (
     <View style={styles.container} testID="all-inspections-screen">
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + vscale(8) }]}>
         <Text style={styles.title}>{t('nav.inspections', 'All Inspections')}</Text>
         <TouchableOpacity style={styles.insightsButton} onPress={() => setInsightsModalVisible(true)}>
           <Text style={styles.insightsButtonText}>🤖 AI</Text>
@@ -468,7 +470,7 @@ export default function AllInspectionsScreen() {
               </ScrollView>
 
               {/* Action buttons */}
-              <View style={styles.actionBar}>
+              <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, scale(16)) }]}>
                 {canDownload && (
                   <>
                     <TouchableOpacity
@@ -518,7 +520,7 @@ export default function AllInspectionsScreen() {
       {/* Review Modal */}
       <Modal visible={reviewModalVisible} animationType="slide" transparent>
         <View style={styles.reviewModalOverlay}>
-          <View style={styles.reviewModalContent}>
+          <View style={[styles.reviewModalContent, { paddingBottom: Math.max(insets.bottom, scale(20)) }]}>
             <View style={styles.reviewModalHeader}>
               <Text style={styles.reviewModalTitle}>{t('inspections.reviewInspection', 'Review Inspection')}</Text>
               <TouchableOpacity onPress={() => setReviewModalVisible(false)}>
@@ -603,7 +605,7 @@ export default function AllInspectionsScreen() {
             <Text style={styles.aiReportText}>{aiReportContent}</Text>
           </ScrollView>
 
-          <View style={styles.aiReportActions}>
+          <View style={[styles.aiReportActions, { paddingBottom: Math.max(insets.bottom, scale(16)) }]}>
             <TouchableOpacity style={styles.shareButton} onPress={handleShareAiReport}>
               <Text style={styles.shareButtonText}>{t('common.share', 'Share')}</Text>
             </TouchableOpacity>
@@ -710,19 +712,19 @@ const styles = StyleSheet.create({
   title: { fontSize: fontScale(22), fontWeight: 'bold', color: '#212121' },
   insightsButton: { backgroundColor: '#9C27B0', paddingHorizontal: scale(14), paddingVertical: vscale(8), borderRadius: mscale(20) },
   insightsButtonText: { color: '#fff', fontWeight: '600', fontSize: fontScale(14) },
-  statsRow: { paddingHorizontal: scale(12), paddingVertical: vscale(8), maxHeight: vscale(80) },
+  statsRow: { paddingHorizontal: scale(12), paddingVertical: vscale(8) },
   statCard: {
     backgroundColor: '#fff',
     borderRadius: mscale(10),
     padding: scale(12),
     marginHorizontal: scale(4),
-    minWidth: scale(80),
+    minWidth: scale(90),
     alignItems: 'center',
     boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)',
     elevation: 1,
   },
   statValue: { fontSize: fontScale(20), fontWeight: 'bold' },
-  statLabel: { fontSize: fontScale(11), color: '#757575', marginTop: vscale(2) },
+  statLabel: { fontSize: fontScale(12), color: '#757575', marginTop: vscale(2) },
   filterScroll: { maxHeight: vscale(48), paddingBottom: vscale(4) },
   filterRow: { paddingHorizontal: scale(16), gap: scale(8), alignItems: 'center' },
   filterChip: { paddingHorizontal: scale(14), paddingVertical: vscale(7), borderRadius: mscale(20), borderWidth: 1 },
@@ -740,9 +742,9 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: vscale(8), paddingTop: vscale(8), borderTopWidth: 1, borderTopColor: '#f0f0f0' },
   dateText: { fontSize: fontScale(12), color: '#757575' },
   durationText: { fontSize: fontScale(12), color: '#9C27B0', fontWeight: '600' },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(6) },
-  badge: { paddingHorizontal: scale(10), paddingVertical: vscale(4), borderRadius: mscale(12) },
-  badgeText: { fontSize: fontScale(11), fontWeight: '600', color: '#fff' },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(8) },
+  badge: { paddingHorizontal: scale(12), paddingVertical: vscale(5), borderRadius: mscale(12), minWidth: scale(65), alignItems: 'center' as const },
+  badgeText: { fontSize: fontScale(12), fontWeight: '600', color: '#fff', textAlign: 'center' as const },
   footerLoader: { paddingVertical: vscale(16), alignItems: 'center' },
   emptyContainer: { paddingTop: vscale(60), alignItems: 'center' },
   emptyText: { fontSize: fontScale(15), color: '#757575' },
