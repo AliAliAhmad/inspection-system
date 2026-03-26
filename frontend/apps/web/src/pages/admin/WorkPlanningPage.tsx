@@ -73,7 +73,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit } from '@inspection/shared';
+import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -788,6 +788,13 @@ export default function WorkPlanningPage() {
   });
   const equipmentList = ((equipmentData as any)?.equipment || (equipmentData as any)?.data || []).filter((eq: any) => eq.is_active !== false);
 
+  // Fetch open defects for Add Job defect selector
+  const { data: defectsData } = useQuery({
+    queryKey: ['defects-open'],
+    queryFn: () => defectsApi.list({ status: 'open', per_page: 500 }).then((r) => r.data),
+  });
+  const openDefects = ((defectsData as any)?.data || []);
+
   // Fetch roster for leave status
   const { data: rosterData } = useQuery({
     queryKey: ['roster', weekStartStr],
@@ -918,6 +925,7 @@ export default function WorkPlanningPage() {
       job_type: JobType;
       berth: Berth;
       equipment_id: number;
+      defect_id?: number;
       description?: string;
       estimated_hours: number;
       priority: JobPriority;
@@ -929,6 +937,7 @@ export default function WorkPlanningPage() {
       job_type: values.job_type,
       berth: values.berth,
       equipment_id: values.equipment_id,
+      defect_id: values.defect_id,
       description: values.description,
       estimated_hours: values.estimated_hours,
       priority: values.priority,
@@ -3040,6 +3049,7 @@ export default function WorkPlanningPage() {
                 job_type: values.job_type,
                 berth: values.berth || berth,
                 equipment_id: values.equipment_id,
+                defect_id: values.defect_id,
                 description: values.description,
                 estimated_hours: values.estimated_hours,
                 priority: values.priority || 'normal',
@@ -3092,6 +3102,35 @@ export default function WorkPlanningPage() {
               />
             </Form.Item>
 
+            {/* Defect Selection (only when job_type is defect) */}
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.job_type !== cur.job_type}>
+              {({ getFieldValue }) => getFieldValue('job_type') === 'defect' ? (
+                <Form.Item
+                  name="defect_id"
+                  label="Defect"
+                  rules={[{ required: true, message: 'Select a defect' }]}
+                >
+                  <Select
+                    placeholder="Select open defect"
+                    showSearch
+                    filterOption={(input, option) =>
+                      (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
+                    }
+                    options={openDefects
+                      .filter((d: any) => {
+                        const eqId = addJobForm.getFieldValue('equipment_id');
+                        if (!eqId) return true;
+                        return d.equipment_id === eqId || d.inspection?.equipment_id === eqId;
+                      })
+                      .map((d: any) => ({
+                        value: d.id,
+                        label: `#${d.id} — ${d.description || d.description_ar || 'No description'} (${d.severity || 'unknown'})`,
+                      }))}
+                  />
+                </Form.Item>
+              ) : null}
+            </Form.Item>
+
             <Row gutter={16}>
               {/* Job Type */}
               <Col span={8}>
@@ -3100,7 +3139,7 @@ export default function WorkPlanningPage() {
                   label="Job Type"
                   rules={[{ required: true }]}
                 >
-                  <Select>
+                  <Select onChange={() => addJobForm.setFieldValue('defect_id', undefined)}>
                     <Select.Option value="pm">PM</Select.Option>
                     <Select.Option value="defect">Defect</Select.Option>
                   </Select>
