@@ -151,6 +151,8 @@ const DraggableTeamMember: React.FC<{
     disabled: isOnLeave,
   });
 
+  const hasPartialLeave = !isOnLeave && !!leaveInfo;
+
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.4 : 1,
@@ -159,8 +161,9 @@ const DraggableTeamMember: React.FC<{
     alignItems: 'center',
     gap: 4,
     padding: '2px 6px',
-    backgroundColor: isDragging ? '#e6f7ff' : isOnLeave ? '#f5f5f5' : '#fff',
-    border: `1px ${isOnLeave ? 'dashed' : 'solid'} ${isDragging ? '#1890ff' : '#d9d9d9'}`,
+    backgroundColor: isDragging ? '#e6f7ff' : isOnLeave ? '#f5f5f5' : hasPartialLeave ? '#fff7e6' : '#fff',
+    border: `1px ${isOnLeave ? 'dashed' : 'solid'} ${isDragging ? '#1890ff' : hasPartialLeave ? '#fa8c16' : '#d9d9d9'}`,
+    borderLeft: hasPartialLeave ? '3px solid #fa8c16' : undefined,
     borderRadius: 6,
     marginBottom: 2,
   };
@@ -168,15 +171,21 @@ const DraggableTeamMember: React.FC<{
   const badgeColor = assignedCount >= 5 ? '#ff4d4f' : assignedCount >= 3 ? '#fa8c16' : '#52c41a';
   const badgeTitle = dailyBreakdown?.map(d => `${d.label}: ${d.count}`).join(' · ') || `${assignedCount} job${assignedCount !== 1 ? 's' : ''} this week`;
 
+  const tooltipText = isOnLeave
+    ? `${user.full_name} - On Leave${leaveInfo ? ` (${leaveInfo})` : ''}`
+    : hasPartialLeave
+    ? `${user.full_name} — Off: ${leaveInfo}`
+    : user.full_name;
+
   return (
-    <Tooltip title={isOnLeave ? `${user.full_name} - On Leave${leaveInfo ? ` (${leaveInfo})` : ''}` : user.full_name}>
+    <Tooltip title={tooltipText}>
       <div
         ref={setNodeRef}
         style={style}
         className={`wp-team-member ${isOnLeave ? 'wp-team-member-leave' : ''}`}
         {...(isOnLeave ? {} : { ...listeners, ...attributes })}
       >
-        <span style={{ fontSize: 10, width: 18, height: 18, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: isOnLeave ? '#d9d9d9' : '#1890ff', color: '#fff', flexShrink: 0 }}>
+        <span style={{ fontSize: 10, width: 18, height: 18, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: isOnLeave ? '#d9d9d9' : hasPartialLeave ? '#fa8c16' : '#1890ff', color: '#fff', flexShrink: 0 }}>
           {user.full_name?.charAt(0) || '?'}
         </span>
         <span style={{ fontSize: 14, fontWeight: 700, color: isOnLeave ? '#8c8c8c' : '#262626', whiteSpace: 'nowrap' }}>
@@ -184,6 +193,11 @@ const DraggableTeamMember: React.FC<{
         </span>
         {isOnLeave && leaveInfo && (
           <span style={{ fontSize: 9, color: '#fa8c16' }}>{leaveInfo}</span>
+        )}
+        {hasPartialLeave && (
+          <span style={{ fontSize: 8, fontWeight: 700, padding: '0 3px', borderRadius: 4, background: '#fa8c16', color: '#fff', flexShrink: 0 }}>
+            Off: {leaveInfo}
+          </span>
         )}
         {!isOnLeave && assignedCount > 0 && (
           <Tooltip title={badgeTitle} placement="top">
