@@ -2740,6 +2740,78 @@ export default function WorkPlanningPage() {
               </Card>
             )}
 
+            {/* Defect Details — photos, voice, AI analysis */}
+            {selectedJob.job_type === 'defect' && selectedJob.defect && (() => {
+              const defect = selectedJob.defect as any;
+              const answer = defect.inspection_answer;
+              const photoUrl = answer?.photo_file?.url || answer?.photo_file?.file_path || defect.photo_url;
+              const voiceUrl = answer?.voice_note?.url || answer?.voice_note?.file_path || defect.voice_note_url;
+              const videoUrl = answer?.video_file?.url || answer?.video_file?.file_path;
+              const aiAnalysis = answer?.photo_ai_analysis;
+              const voiceTranscription = answer?.voice_transcription;
+              const hasMedia = photoUrl || voiceUrl || videoUrl || aiAnalysis;
+
+              return hasMedia ? (
+                <Card size="small" style={{ marginBottom: 16 }} title={<><WarningOutlined style={{ marginRight: 6, color: '#fa8c16' }} />Defect Evidence</>}>
+                  {/* Severity & Status */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    {defect.severity && <Tag color={defect.severity === 'critical' ? 'red' : defect.severity === 'high' ? 'orange' : defect.severity === 'medium' ? 'gold' : 'default'}>{defect.severity?.toUpperCase()}</Tag>}
+                    {defect.status && <Tag>{defect.status}</Tag>}
+                    {answer?.urgency_level != null && answer.urgency_level > 0 && (
+                      <Tag color={answer.urgency_level >= 3 ? 'red' : answer.urgency_level >= 2 ? 'orange' : 'gold'}>
+                        Urgency: {answer.urgency_level}
+                      </Tag>
+                    )}
+                  </div>
+
+                  {/* Photo */}
+                  {photoUrl && (
+                    <div style={{ marginBottom: 12 }}>
+                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Photo</Text>
+                      <img
+                        src={photoUrl}
+                        alt="Defect"
+                        style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8, border: '1px solid #f0f0f0', cursor: 'pointer' }}
+                        onClick={() => window.open(photoUrl, '_blank')}
+                      />
+                    </div>
+                  )}
+
+                  {/* Video */}
+                  {videoUrl && (
+                    <div style={{ marginBottom: 12 }}>
+                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Video</Text>
+                      <video src={videoUrl} controls style={{ maxWidth: '100%', maxHeight: 250, borderRadius: 8 }} />
+                    </div>
+                  )}
+
+                  {/* Voice Recording */}
+                  {voiceUrl && (
+                    <div style={{ marginBottom: 12 }}>
+                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Voice Note</Text>
+                      <audio src={voiceUrl} controls style={{ width: '100%' }} />
+                      {voiceTranscription && (
+                        <div style={{ marginTop: 4, padding: 8, background: '#f5f5f5', borderRadius: 6, fontSize: 12 }}>
+                          <Text type="secondary">Transcription: </Text>
+                          {voiceTranscription.en || voiceTranscription.ar || JSON.stringify(voiceTranscription)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* AI Analysis */}
+                  {aiAnalysis && (
+                    <div style={{ padding: 8, background: '#f0f5ff', borderRadius: 6, border: '1px solid #d6e4ff' }}>
+                      <Text type="secondary" style={{ fontSize: 11 }}>AI Analysis</Text>
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        {typeof aiAnalysis === 'string' ? aiAnalysis : (aiAnalysis.en || aiAnalysis.ar || JSON.stringify(aiAnalysis))}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              ) : null;
+            })()}
+
             {/* Overdue */}
             {selectedJob.overdue_value && selectedJob.overdue_value > 0 && (
               <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fff7e6', borderColor: '#ffd591' }}>
