@@ -1101,6 +1101,8 @@ export default function WorkPlanningPage() {
       specElec: [] as any[],
       inspMech: [] as any[],
       inspElec: [] as any[],
+      maintenance: [] as any[],
+      other: [] as any[],
     };
     (users as any[]).forEach((u: any) => {
       if (u.role === 'admin') return;
@@ -1114,6 +1116,10 @@ export default function WorkPlanningPage() {
         if (spec === 'mechanical') cols.inspMech.push(u);
         else if (spec === 'electrical') cols.inspElec.push(u);
         else cols.inspMech.push(u);
+      } else if (u.role === 'maintenance') {
+        cols.maintenance.push(u);
+      } else {
+        cols.other.push(u);
       }
     });
     return cols;
@@ -1125,7 +1131,9 @@ export default function WorkPlanningPage() {
       .filter((u: any) => !leaveUserIds.has(u.id)).length;
     const elecFree = [...(teamColumns.specElec || []), ...(teamColumns.inspElec || [])]
       .filter((u: any) => !leaveUserIds.has(u.id)).length;
-    return { mechFree, elecFree };
+    const maintFree = (teamColumns.maintenance || [])
+      .filter((u: any) => !leaveUserIds.has(u.id)).length;
+    return { mechFree, elecFree, maintFree };
   }, [teamColumns, leaveUserIds]);
 
   // Leave details for team pool
@@ -1343,6 +1351,8 @@ export default function WorkPlanningPage() {
     { key: 'specElec', label: 'Spec (Elec)', emoji: '⚡', color: '#faad14', users: teamColumns.specElec },
     { key: 'inspMech', label: 'Insp (Mech)', emoji: '🔍', color: '#722ed1', users: teamColumns.inspMech },
     { key: 'inspElec', label: 'Insp (Elec)', emoji: '⚡', color: '#eb2f96', users: teamColumns.inspElec },
+    { key: 'maintenance', label: 'Maintenance', emoji: '🛠️', color: '#fa8c16', users: teamColumns.maintenance },
+    ...(teamColumns.other.length > 0 ? [{ key: 'other', label: 'Other', emoji: '👤', color: '#8c8c8c', users: teamColumns.other }] : []),
   ];
 
   // Pointer-first collision: if pointer is inside a droppable rect, prefer that over closest center.
@@ -2250,7 +2260,7 @@ export default function WorkPlanningPage() {
                       Team Pool
                       {currentPlan && (
                         <Badge
-                          count={[...teamColumns.specMech, ...teamColumns.specElec, ...teamColumns.inspMech, ...teamColumns.inspElec]
+                          count={[...teamColumns.specMech, ...teamColumns.specElec, ...teamColumns.inspMech, ...teamColumns.inspElec, ...teamColumns.maintenance, ...teamColumns.other]
                             .filter((u: any) => !leaveUserIds.has(u.id)).length}
                           size="small"
                           style={{ marginLeft: 4, backgroundColor: '#52c41a' }}
@@ -2291,6 +2301,7 @@ export default function WorkPlanningPage() {
                           .filter(col => col.key !== 'engineers')
                           .filter(col => {
                             if (teamPoolDisc === 'all') return true;
+                            if (col.key === 'maintenance' || col.key === 'other') return true; // always show
                             if (teamPoolDisc === 'mechanical') return ['specMech', 'inspMech'].includes(col.key);
                             return ['specElec', 'inspElec'].includes(col.key);
                           })
