@@ -2418,20 +2418,27 @@ export default function WorkPlanningPage() {
       </div>{/* END minWidth wrapper */}
 
       {/* Drag Overlay */}
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {activeItem && (
           <div style={{
-            padding: 8,
+            padding: '6px 12px',
             backgroundColor: '#e6f7ff',
-            border: '1px solid #1890ff',
-            borderRadius: 4,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+            border: '2px solid #1890ff',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            maxWidth: 250,
+            fontSize: 12,
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            cursor: 'grabbing',
           }}>
             {activeItem.type === 'pool-job' && (
-              <span>{activeItem.data.job?.equipment?.name || activeItem.data.job?.defect?.description?.substring(0, 20) || 'Job'}</span>
+              <span>{activeItem.data.job?.equipment?.name || activeItem.data.job?.equipment_name || activeItem.data.job?.defect?.description?.substring(0, 30) || 'Job'}</span>
             )}
             {activeItem.type === 'job' && (
-              <span>{activeItem.data.job?.equipment?.name || 'Job'}</span>
+              <span>{activeItem.data.job?.equipment?.name || activeItem.data.job?.equipment_name || activeItem.data.job?.description?.substring(0, 30) || 'Job'}</span>
             )}
             {activeItem.type === 'employee' && (
               <span>{activeItem.data.user?.full_name}</span>
