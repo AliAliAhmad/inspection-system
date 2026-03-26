@@ -767,18 +767,46 @@ export default function WorkPlanningPage() {
   });
 
   // Get users on leave for the week
-  const leaveUserIds = useMemo(() => {
-    const ids = new Set<number>();
+  // Map userId -> set of leave dates (e.g. { 123: Set('2026-03-26', '2026-03-27') })
+  const userLeaveDatesMap = useMemo(() => {
+    const map = new Map<number, Set<string>>();
     if (rosterData?.users) {
-      rosterData.users.forEach((u) => {
-        // Check if user has any leave status in their entries
+      rosterData.users.forEach((u: any) => {
         const entries = u.entries || {};
-        const hasLeave = Object.values(entries).some(status => status === 'leave');
-        if (hasLeave || u.is_on_leave) ids.add(u.id);
+        const leaveDates = Object.entries(entries)
+          .filter(([_, status]) => status === 'leave')
+          .map(([date]) => date);
+        if (leaveDates.length > 0 || u.is_on_leave) {
+          map.set(u.id, new Set(leaveDates));
+        }
       });
     }
-    return ids;
+    return map;
   }, [rosterData]);
+
+  // Users on leave for the ENTIRE week (all working days) — fully disabled
+  const leaveUserIds = useMemo(() => {
+    const ids = new Set<number>();
+    const weekDays = currentPlan?.days?.map((d: any) => d.date) || [];
+    userLeaveDatesMap.forEach((leaveDates, userId) => {
+      // Only mark as fully on leave if on leave for ALL days in the plan
+      if (weekDays.length > 0 && weekDays.every((d: string) => leaveDates.has(d))) {
+        ids.add(userId);
+      }
+    });
+    return ids;
+  }, [userLeaveDatesMap, currentPlan]);
+
+  // Users with partial leave — draggable but shown with indicator
+  const partialLeaveUserIds = useMemo(() => {
+    const ids = new Set<number>();
+    userLeaveDatesMap.forEach((leaveDates, userId) => {
+      if (!leaveUserIds.has(userId) && leaveDates.size > 0) {
+        ids.add(userId);
+      }
+    });
+    return ids;
+  }, [userLeaveDatesMap, leaveUserIds]);
 
   // Helper to check if user is on leave for a specific day
   const isUserOnLeaveForDay = useCallback((userId: number, dayDate: string): boolean => {
@@ -1295,11 +1323,19 @@ export default function WorkPlanningPage() {
       const user = activeData.user;
       const job = overData.job as WorkPlanJob;
 
+      // Check if user is on leave for this job's day
+      const jobDay = currentPlan?.days?.find((d: any) => d.id === job.work_plan_day_id);
+      const leaveDates = userLeaveDatesMap.get(user.id);
+      if (jobDay && leaveDates?.has(jobDay.date)) {
+        message.warning(`${user.full_name} is on leave on ${jobDay.date}. Cannot assign to this day.`);
+        return;
+      }
+
       // Show modal to choose Lead or Member
       setPendingAssignment({ job, user });
       setAssignModalOpen(true);
     }
-  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, removeJobMutation]);
+  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, removeJobMutation, userLeaveDatesMap]);
 
   const handleCreatePlan = (values: any) => {
     const weekStart = values.week_start.startOf('isoWeek').format('YYYY-MM-DD');
@@ -2307,28 +2343,32 @@ export default function WorkPlanningPage() {
                           })
                           .map(col => {
                             const availableUsers = col.users.filter((u: any) => !leaveUserIds.has(u.id));
-                            const onLeaveUsers = col.users.filter((u: any) => leaveUserIds.has(u.id));
+                            const fullLeaveUsers = col.users.filter((u: any) => leaveUserIds.has(u.id));
                             return (
                               <div key={col.key} style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4, paddingBottom: 4, borderBottom: `2px solid ${col.color}30` }}>
                                   <span style={{ fontSize: 12 }}>{col.emoji}</span>
                                   <Text style={{ fontSize: 11, fontWeight: 600, color: col.color }}>{col.label}</Text>
                                   <Badge count={availableUsers.length} size="small" style={{ backgroundColor: col.color }} />
-                                  {onLeaveUsers.length > 0 && (
-                                    <Text type="secondary" style={{ fontSize: 10 }}>({onLeaveUsers.length} on leave)</Text>
+                                  {fullLeaveUsers.length > 0 && (
+                                    <Text type="secondary" style={{ fontSize: 10 }}>({fullLeaveUsers.length} on leave)</Text>
                                   )}
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                  {availableUsers.map((user: any) => (
-                                    <DraggableTeamMember
-                                      key={user.id}
-                                      user={user}
-                                      isOnLeave={false}
-                                      assignedCount={userAssignmentMap[user.id]?.total ?? 0}
-                                      dailyBreakdown={userAssignmentMap[user.id]?.days}
-                                    />
-                                  ))}
-                                  {onLeaveUsers.map((user: any) => (
+                                  {availableUsers.map((user: any) => {
+                                    const isPartialLeave = partialLeaveUserIds.has(user.id);
+                                    return (
+                                      <DraggableTeamMember
+                                        key={user.id}
+                                        user={user}
+                                        isOnLeave={false}
+                                        leaveInfo={isPartialLeave ? leaveDetails.find(l => l.userId === user.id)?.dates.map(d => dayjs(d).format('ddd')).join(',') : undefined}
+                                        assignedCount={userAssignmentMap[user.id]?.total ?? 0}
+                                        dailyBreakdown={userAssignmentMap[user.id]?.days}
+                                      />
+                                    );
+                                  })}
+                                  {fullLeaveUsers.map((user: any) => (
                                     <DraggableTeamMember
                                       key={user.id}
                                       user={user}
@@ -2336,7 +2376,7 @@ export default function WorkPlanningPage() {
                                       leaveInfo={leaveDetails.find(l => l.userId === user.id)?.dates.map(d => dayjs(d).format('ddd')).join(',')}
                                     />
                                   ))}
-                                  {availableUsers.length === 0 && onLeaveUsers.length === 0 && (
+                                  {availableUsers.length === 0 && fullLeaveUsers.length === 0 && (
                                     <Text type="secondary" style={{ fontSize: 10, padding: 4 }}>None</Text>
                                   )}
                                 </div>

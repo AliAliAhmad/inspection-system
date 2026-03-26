@@ -79,7 +79,7 @@ See HISTORY.md for full changelog. Only keep last 3 entries here.
 | 2026-03-17 | Fix: Leaderboard charAt crash — guard all `.charAt(0)` calls on `full_name`/`name` with fallback `|| '?'` in 5 leaderboard components + backend `full_name or 'Unknown'` safety | ✅ Done |
 | 2026-03-18 | Feat: Inspection visibility overhaul in work plan — inspections now read-only summary bar (not editable jobs). New backend endpoints (day-inspections, day-inspection-equipment), collapsible InspectionSummaryBar on web+mobile, inspection badge on job cards, removed inspection from add-job/pool | ✅ Done |
 | 2026-03-25 | Fix: All Inspections page — mobile safe area insets (buttons hidden behind Android nav bar), bigger/clearer badges and stats cards on mobile, wider status/result tag columns on web | ✅ Done |
-| 2026-03-26 | Fix: Team Pool missing employees — dynamic role grouping (was hardcoded to 3 roles), now shows ALL non-admin roles (maintenance, technician, quality_engineer, etc.) | ✅ Done |
+| 2026-03-26 | Fix: Team Pool missing employees — TWO fixes: (1) EmployeePool component dynamic roles, (2) WorkPlanningPage compact team pool was separately hardcoded to 3 roles. Both now show maintenance + all non-admin roles | ✅ Done |
 
 
 ## Plugin Management
