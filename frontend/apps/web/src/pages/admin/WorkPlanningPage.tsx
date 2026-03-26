@@ -672,6 +672,18 @@ export default function WorkPlanningPage() {
     },
   });
 
+  const unassignMutation = useMutation({
+    mutationFn: ({ planId, jobId, assignmentId }: { planId: number; jobId: number; assignmentId: number }) =>
+      workPlansApi.unassignUser(planId, jobId, assignmentId),
+    onSuccess: () => {
+      message.success('User unassigned');
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to unassign user');
+    },
+  });
+
   // Import SAP mutation
   const importMutation = useMutation({
     mutationFn: ({ planId, file }: { planId: number; file: File }) => workPlansApi.importSAP(planId, file),
@@ -2744,9 +2756,19 @@ export default function WorkPlanningPage() {
                 <div style={{ marginTop: 8 }}>
                   {selectedJob.assignments.map((a) => (
                     <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span>{a.is_lead ? 'Lead' : 'Member'}</span>
-                      <span>{a.user?.full_name}</span>
+                      <Tag color={a.is_lead ? 'gold' : 'blue'} style={{ margin: 0 }}>{a.is_lead ? 'Lead' : 'Member'}</Tag>
+                      <span style={{ flex: 1 }}>{a.user?.full_name}</span>
                       <Text type="secondary" style={{ fontSize: 12 }}>({a.user?.role})</Text>
+                      {isDraft && (
+                        <Popconfirm
+                          title={`Remove ${a.user?.full_name} from this job?`}
+                          onConfirm={() => currentPlan && unassignMutation.mutate({ planId: currentPlan.id, jobId: selectedJob.id, assignmentId: a.id })}
+                          okText="Yes"
+                          cancelText="No"
+                        >
+                          <Button type="text" size="small" danger icon={<DeleteOutlined />} loading={unassignMutation.isPending} />
+                        </Popconfirm>
+                      )}
                     </div>
                   ))}
                 </div>
