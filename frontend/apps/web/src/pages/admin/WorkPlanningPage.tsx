@@ -3087,7 +3087,7 @@ export default function WorkPlanningPage() {
                 }
                 options={equipmentList.map((eq: any) => ({
                   value: eq.id,
-                  label: `${eq.serial_number || eq.name} - ${eq.equipment_type || ''}`,
+                  label: `${eq.name || eq.serial_number} - ${eq.equipment_type || ''}`,
                 }))}
               />
             </Form.Item>
