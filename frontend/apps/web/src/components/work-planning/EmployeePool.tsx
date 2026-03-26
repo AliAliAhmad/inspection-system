@@ -11,6 +11,9 @@ const ROLE_CONFIG: Record<string, { label: string; emoji: string; color: string 
   engineer: { label: 'Engineers', emoji: '🔧', color: '#1890ff' },
   specialist: { label: 'Specialists', emoji: '🔨', color: '#52c41a' },
   inspector: { label: 'Inspectors', emoji: '🔍', color: '#722ed1' },
+  maintenance: { label: 'Maintenance', emoji: '🛠️', color: '#fa8c16' },
+  technician: { label: 'Technicians', emoji: '👷', color: '#13c2c2' },
+  quality_engineer: { label: 'Quality Engineers', emoji: '✅', color: '#eb2f96' },
 };
 
 // Specialization config
@@ -168,11 +171,7 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
 
   // Group users by role -> specialization
   const groupedUsers = useMemo(() => {
-    const groups: Record<string, Record<string, any[]>> = {
-      engineer: { mechanical: [], electrical: [], hvac: [], other: [] },
-      specialist: { mechanical: [], electrical: [], hvac: [], other: [] },
-      inspector: { mechanical: [], electrical: [], hvac: [], other: [] },
-    };
+    const groups: Record<string, Record<string, any[]>> = {};
 
     const users = usersData || [];
     users.forEach((user: any) => {
@@ -180,17 +179,27 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
       const role = user.role || 'other';
       const spec = user.specialization?.toLowerCase() || 'other';
 
-      if (groups[role]) {
-        if (groups[role][spec]) {
-          groups[role][spec].push(user);
-        } else {
-          groups[role].other.push(user);
-        }
+      if (!groups[role]) {
+        groups[role] = { mechanical: [], electrical: [], hvac: [], other: [] };
+      }
+      if (groups[role][spec]) {
+        groups[role][spec].push(user);
+      } else {
+        groups[role].other.push(user);
       }
     });
 
     return groups;
   }, [usersData]);
+
+  // Ordered list of roles to display (known roles first, then any extras)
+  const displayRoles = useMemo(() => {
+    const knownOrder = ['engineer', 'specialist', 'inspector', 'maintenance', 'technician', 'quality_engineer'];
+    const roles = Object.keys(groupedUsers);
+    const ordered = knownOrder.filter(r => roles.includes(r));
+    const extras = roles.filter(r => !knownOrder.includes(r));
+    return [...ordered, ...extras];
+  }, [groupedUsers]);
 
   const isLoading = usersLoading || rosterLoading;
 
@@ -319,8 +328,8 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
       ) : vertical ? (
         /* ──── Vertical layout for sidebar ──── */
         <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
-          {(['engineer', 'specialist', 'inspector'] as const).map(role => {
-            const config = ROLE_CONFIG[role];
+          {displayRoles.map(role => {
+            const config = ROLE_CONFIG[role] || { label: role.charAt(0).toUpperCase() + role.slice(1), emoji: '👤', color: '#8c8c8c' };
             const counts = getRoleCount(role);
             const specs = groupedUsers[role];
             if (counts.total === 0) return null;
@@ -340,7 +349,7 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
                 {/* All employees for this role */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                   {(['mechanical', 'electrical', 'hvac', 'other'] as const).map(spec => {
-                    const users = (specs[spec] || []).filter((u: any) => !leaveUserIds.has(u.id));
+                    const users = (specs?.[spec] || []).filter((u: any) => !leaveUserIds.has(u.id));
                     return users.map((user: any) => (
                       <DraggableEmployee
                         key={user.id}
@@ -362,10 +371,10 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
         </div>
       ) : (
         /* ──── Horizontal 3-column layout (default) ──── */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(displayRoles.length, 4)}, 1fr)`, gap: 12 }}>
           {/* Role Columns */}
-          {(['engineer', 'specialist', 'inspector'] as const).map(role => {
-            const config = ROLE_CONFIG[role];
+          {displayRoles.map(role => {
+            const config = ROLE_CONFIG[role] || { label: role.charAt(0).toUpperCase() + role.slice(1), emoji: '👤', color: '#8c8c8c' };
             const counts = getRoleCount(role);
             const specs = groupedUsers[role];
 
