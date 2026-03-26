@@ -371,7 +371,11 @@ const SimpleJobRow: React.FC<{
   const equipmentName =
     (job as any).equipment?.name ||
     (job as any).defect?.equipment?.name ||
+    (job as any).inspection_assignment?.equipment?.name ||
     (job as any).equipment?.serial_number ||
+    (job as any).defect?.equipment?.serial_number ||
+    (job as any).inspection_assignment?.equipment?.serial_number ||
+    (job.description?.split(' - ')[0]?.trim()) ||
     `Job #${job.id}`;
   const rawDesc = job.description || (job as any).defect?.description || '';
   const description = rawDesc && equipmentName && !equipmentName.startsWith('Job #') && rawDesc.startsWith(equipmentName)
