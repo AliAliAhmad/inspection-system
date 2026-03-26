@@ -193,6 +193,7 @@ class WorkPlanJob(db.Model):
                 'equipment_name': _eq_name,
                 'equipment_serial': _eq_serial,
                 'equipment_type': _eq_type,
+                'defect_id': self.defect_id,
                 'inspection_assignment_id': _insp_assignment_id,
                 'sap_order_number': self.sap_order_number,
                 'sap_order_type': self.sap_order_type,
@@ -209,6 +210,7 @@ class WorkPlanJob(db.Model):
                 'difficulty': self.difficulty,
                 'engineer_id': self.engineer_id,
                 'assigned_users_count': len(self.assignments),
+                'assignments': [a.to_dict() for a in self.assignments],
             }
 
         data = {
