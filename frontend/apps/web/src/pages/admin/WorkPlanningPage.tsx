@@ -370,9 +370,11 @@ const SimpleJobRow: React.FC<{
   const isAssigned = (job.assignments || []).length > 0;
   const equipmentName =
     (job as any).equipment?.name ||
+    (job as any).equipment_name ||
     (job as any).defect?.equipment?.name ||
     (job as any).inspection_assignment?.equipment?.name ||
     (job as any).equipment?.serial_number ||
+    (job as any).equipment_serial ||
     (job as any).defect?.equipment?.serial_number ||
     (job as any).inspection_assignment?.equipment?.serial_number ||
     (job.description?.split(' - ')[0]?.trim()) ||
@@ -1041,10 +1043,12 @@ export default function WorkPlanningPage() {
         // Equipment name — check all nested paths, then extract from "inspection: {name}" description
         const eqName =
           job.equipment?.name ||
+          job.equipment_name ||
           job.inspection_assignment?.equipment?.name ||
           job.inspection_assignment?.equipment?.serial_number ||
           job.defect?.equipment?.name ||
           job.equipment?.serial_number ||
+          job.equipment_serial ||
           (job.job_type === 'inspection' && job.description
             ? job.description.replace(/^inspection\s*:\s*/i, '').split(' - ')[0].trim() || null
             : null) ||
@@ -1093,7 +1097,7 @@ export default function WorkPlanningPage() {
         if (!(job.overdue_value > 0) && !job.is_overdue) return;
         if (seen.has(job.id)) return;
         seen.add(job.id);
-        const eqName = job.equipment?.name || job.equipment?.serial_number || 'Unknown';
+        const eqName = job.equipment?.name || job.equipment_name || job.equipment?.serial_number || job.equipment_serial || 'Unknown';
         const rawDesc = job.description || job.defect?.description || '';
         const cleanDesc = rawDesc.replace(/^inspection\s*:\s*/i, '').trim();
         const desc = cleanDesc === eqName ? '' : cleanDesc.startsWith(eqName)
