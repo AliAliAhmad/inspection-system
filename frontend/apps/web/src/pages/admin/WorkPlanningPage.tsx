@@ -1289,8 +1289,9 @@ export default function WorkPlanningPage() {
       const targetBerth = overData.berth as Berth;
       const jobType = activeData.jobType as string;
 
-      // Handle SAP orders specially
-      if (jobType === 'sap' && job.id) {
+      // Handle SAP orders specially (PRM tab uses jobType 'sap', but SAP defects come with jobType 'defect' + order_number)
+      const isSAPOrder = jobType === 'sap' || (job.order_number && job.status === 'pending');
+      if (isSAPOrder && job.id) {
         scheduleSAPMutation.mutate({
           planId: currentPlan.id,
           sapOrderId: job.id,
