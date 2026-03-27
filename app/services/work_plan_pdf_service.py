@@ -258,12 +258,22 @@ class WorkPlanPDF(FPDF):
         card_height = 18
         if job.job_type == 'defect':
             card_height = 28
-        self.rect(10, card_y, 277, card_height, 'F')
+        self.rect(10, card_y, 265, card_height, 'F')
 
         # Left color bar
         bar_color = C_PM if job.job_type == 'pm' else C_DEFECT
         self.set_fill_color(*bar_color)
         self.rect(10, card_y, 3, card_height, 'F')
+
+        # Right: Status checkbox area for manual tracking
+        self.set_draw_color(*C_BORDER)
+        self.set_fill_color(*C_WHITE)
+        self.rect(276, card_y, 11, card_height, 'DF')
+        # Empty checkbox
+        self.rect(278, card_y + (card_height / 2) - 3, 6, 6, 'D')
+        self.set_font('Helvetica', '', 5)
+        self.set_text_color(*C_MUTED)
+        self.text(277, card_y + (card_height / 2) + 6, 'Done')
 
         # Row 1: Type badge + Equipment + SAP + Hours
         self.set_xy(15, card_y + 1)
@@ -503,7 +513,15 @@ class WorkPlanPDFService:
 
             # One page per day
             for day in sorted(plan.days, key=lambda d: d.date):
-                pdf.add_day_page(day)
+                try:
+                    pdf.add_day_page(day)
+                except Exception as day_err:
+                    current_app.logger.error(f"PDF: Failed to render day {day.date}: {day_err}")
+                    # Add a minimal error page so the rest of the days still render
+                    pdf.current_day_label = day.date.strftime('%A, %d %B %Y') + ' (ERROR)'
+                    pdf.add_page()
+                    pdf.set_font('Helvetica', 'I', 10)
+                    pdf.cell(0, 10, 'Failed to render this day: %s' % str(day_err)[:80], new_x='LMARGIN', new_y='NEXT')
 
             # Summary page
             pdf.add_summary_page()
