@@ -80,6 +80,7 @@ See HISTORY.md for full changelog. Only keep last 3 entries here.
 | 2026-03-18 | Feat: Inspection visibility overhaul in work plan — inspections now read-only summary bar (not editable jobs). New backend endpoints (day-inspections, day-inspection-equipment), collapsible InspectionSummaryBar on web+mobile, inspection badge on job cards, removed inspection from add-job/pool | ✅ Done |
 | 2026-03-25 | Fix: All Inspections page — mobile safe area insets (buttons hidden behind Android nav bar), bigger/clearer badges and stats cards on mobile, wider status/result tag columns on web | ✅ Done |
 | 2026-03-26 | Fix: Team Pool missing employees — TWO fixes: (1) EmployeePool component dynamic roles, (2) WorkPlanningPage compact team pool was separately hardcoded to 3 roles. Both now show maintenance + all non-admin roles | ✅ Done |
+| 2026-03-27 | Fix: Publish timeout + Feat: Revise — moved PDF/email to background thread so publish responds instantly. New /revise endpoint to revert published plan to draft for editing. Notifies assigned users on both publish and revise | ✅ Done |
 
 
 ## Plugin Management

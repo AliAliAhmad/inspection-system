@@ -575,11 +575,22 @@ export default function WorkPlanningPage() {
   const publishMutation = useMutation({
     mutationFn: (planId: number) => workPlansApi.publish(planId),
     onSuccess: () => {
-      message.success('Work plan published! Notifications sent to all assigned users.');
+      message.success('Work plan published! PDF and email notifications are being processed.');
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
     onError: (err: any) => {
       message.error(err.response?.data?.message || 'Failed to publish plan');
+    },
+  });
+
+  const reviseMutation = useMutation({
+    mutationFn: (planId: number) => workPlansApi.revise(planId),
+    onSuccess: () => {
+      message.success('Work plan reverted to draft. You can now edit it.');
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to revise plan');
     },
   });
 
@@ -1596,6 +1607,23 @@ export default function WorkPlanningPage() {
                       }
                     },
                     disabled: !currentPlan || !isDraft,
+                  },
+                  {
+                    key: 'revise',
+                    label: 'Revise Published Plan',
+                    icon: <SwapOutlined />,
+                    onClick: () => {
+                      if (currentPlan) {
+                        Modal.confirm({
+                          title: 'Revise Work Plan?',
+                          content: 'This will revert the plan to draft so you can make changes. All assigned employees will be notified. You can re-publish when done.',
+                          okText: 'Yes, Revise',
+                          okType: 'danger',
+                          onOk: () => reviseMutation.mutate(currentPlan.id),
+                        });
+                      }
+                    },
+                    disabled: !currentPlan || isDraft,
                   },
                   {
                     key: 'pdf',

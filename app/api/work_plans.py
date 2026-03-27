@@ -1198,17 +1198,7 @@ def publish_plan(plan_id):
     if plan.get_total_jobs() == 0:
         raise ValidationError("Cannot publish an empty work plan")
 
-    # Generate PDF
-    from app.services.work_plan_pdf_service import WorkPlanPDFService
-    pdf_file = None
-    try:
-        pdf_file = WorkPlanPDFService.generate_plan_pdf(plan)
-        plan.pdf_file_id = pdf_file.id if pdf_file else None
-    except Exception as e:
-        # Continue without PDF if generation fails
-        logger.error(f"PDF generation failed: {e}")
-
-    # Update status
+    # Update status FIRST (fast — respond before heavy tasks)
     plan.status = 'published'
     plan.published_at = datetime.utcnow()
     plan.published_by_id = user.id
@@ -1233,50 +1223,118 @@ def publish_plan(plan_id):
 
     db.session.commit()
 
-    # Send email to planning team (async-ish, non-blocking)
-    email_sent = False
-    if send_email:
-        try:
-            from app.services.email_service import EmailService
-            email_sent = EmailService.send_work_plan_notification(plan, pdf_file)
+    # Background: PDF, email, points (non-blocking — don't delay response)
+    plan_id_for_bg = plan.id
+    user_id_for_bg = user.id
+    user_lang = user.language or 'en'
 
-            # Also send materials list to store team
-            import os
-            store_emails = [e.strip() for e in os.getenv('STORE_EMAILS', '').split(',') if e.strip()]
-            if store_emails:
-                # Aggregate materials across all jobs in this plan
-                mat_totals = {}
-                for day in plan.days:
-                    for job in day.jobs:
-                        for wpm in (job.materials or []):
-                            mid = wpm.material_id
-                            if mid not in mat_totals:
-                                mat_totals[mid] = {
-                                    'code': wpm.material.code if wpm.material else '',
-                                    'name': wpm.material.name if wpm.material else '',
-                                    'unit': wpm.material.unit if wpm.material else '',
-                                    'location': wpm.material.storage_location if (wpm.material and hasattr(wpm.material, 'storage_location')) else None,
-                                    'total_qty': 0,
-                                }
-                            mat_totals[mid]['total_qty'] += (wpm.quantity or 0)
-                materials_summary = sorted(mat_totals.values(), key=lambda x: x['code'])
-                if materials_summary:
-                    EmailService.send_store_materials_notification(plan, materials_summary, store_emails)
-        except Exception as e:
-            logger.error(f"Email notification failed: {e}")
+    def _publish_background_tasks():
+        """Run PDF generation, email, and points in background thread."""
+        from app import create_app
+        app = create_app()
+        with app.app_context():
+            _plan = db.session.get(WorkPlan, plan_id_for_bg)
+            if not _plan:
+                return
 
-    # Award engineer points for publishing
-    try:
-        from app.services.leaderboard_ai_service import LeaderboardAIService
-        lb = LeaderboardAIService()
-        lb.award_engineer_points(user.id, 'publish_plan', f'week {week_str}')
-    except Exception as e:
-        logger.warning(f"Engineer publish points failed: {e}")
+            # Generate PDF
+            pdf_file = None
+            try:
+                from app.services.work_plan_pdf_service import WorkPlanPDFService
+                pdf_file = WorkPlanPDFService.generate_plan_pdf(_plan)
+                _plan.pdf_file_id = pdf_file.id if pdf_file else None
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"PDF generation failed: {e}")
+
+            # Send email
+            if send_email:
+                try:
+                    from app.services.email_service import EmailService
+                    EmailService.send_work_plan_notification(_plan, pdf_file)
+
+                    # Materials email to store team
+                    import os
+                    store_emails = [e.strip() for e in os.getenv('STORE_EMAILS', '').split(',') if e.strip()]
+                    if store_emails:
+                        mat_totals = {}
+                        for day in _plan.days:
+                            for job in day.jobs:
+                                for wpm in (job.materials or []):
+                                    mid = wpm.material_id
+                                    if mid not in mat_totals:
+                                        mat_totals[mid] = {
+                                            'code': wpm.material.code if wpm.material else '',
+                                            'name': wpm.material.name if wpm.material else '',
+                                            'unit': wpm.material.unit if wpm.material else '',
+                                            'location': wpm.material.storage_location if (wpm.material and hasattr(wpm.material, 'storage_location')) else None,
+                                            'total_qty': 0,
+                                        }
+                                    mat_totals[mid]['total_qty'] += (wpm.quantity or 0)
+                        materials_summary = sorted(mat_totals.values(), key=lambda x: x['code'])
+                        if materials_summary:
+                            EmailService.send_store_materials_notification(_plan, materials_summary, store_emails)
+                except Exception as e:
+                    logger.error(f"Email notification failed: {e}")
+
+            # Award points
+            try:
+                from app.services.leaderboard_ai_service import LeaderboardAIService
+                lb = LeaderboardAIService()
+                lb.award_engineer_points(user_id_for_bg, 'publish_plan', f'week {week_str}')
+            except Exception as e:
+                logger.warning(f"Engineer publish points failed: {e}")
+
+    import threading
+    threading.Thread(target=_publish_background_tasks, daemon=True).start()
 
     return jsonify({
         'status': 'success',
-        'message': 'Work plan published',
-        'email_sent': email_sent,
+        'message': 'Work plan published. PDF and email notifications are being processed.',
+    }), 200
+
+
+@bp.route('/<int:plan_id>/revise', methods=['POST'])
+@jwt_required()
+def revise_plan(plan_id):
+    """
+    Revert a published work plan back to draft for editing.
+    Only admins and engineers can revise.
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status != 'published':
+        raise ValidationError("Only published plans can be revised")
+
+    plan.status = 'draft'
+
+    # Notify assigned users about the revision
+    assigned_user_ids = set()
+    for day in plan.days:
+        for job in day.jobs:
+            for assignment in job.assignments:
+                assigned_user_ids.add(assignment.user_id)
+
+    week_str = plan.week_start.strftime('%Y-%m-%d')
+    for uid in assigned_user_ids:
+        NotificationService.create_notification(
+            user_id=uid,
+            type='work_plan',
+            title='Work Plan Under Revision',
+            message=f'The work plan for week {week_str} is being revised. Changes may be coming.',
+            related_type='work_plan',
+            related_id=plan.id
+        )
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Work plan reverted to draft for editing',
         'work_plan': plan.to_dict(user.language or 'en')
     }), 200
 

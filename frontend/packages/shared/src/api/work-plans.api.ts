@@ -107,6 +107,10 @@ export const workPlansApi = {
     return getApiClient().post<ApiResponse<WorkPlan>>(`/api/work-plans/${planId}/publish`);
   },
 
+  revise(planId: number) {
+    return getApiClient().post<ApiResponse<WorkPlan>>(`/api/work-plans/${planId}/revise`);
+  },
+
   // Jobs
   addJob(planId: number, payload: AddJobPayload) {
     return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs`, payload);
