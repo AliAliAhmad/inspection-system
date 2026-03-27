@@ -606,6 +606,9 @@ export default function WorkPlanningPage() {
     onSuccess: () => {
       message.success('Work plan published! PDF and email notifications are being processed.');
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      // PDF generates in background thread — refetch after delay to pick up pdf_url
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ['work-plans'] }), 8000);
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ['work-plans'] }), 20000);
     },
     onError: (err: any) => {
       message.error(err.response?.data?.message || 'Failed to publish plan');
@@ -1689,6 +1692,17 @@ export default function WorkPlanningPage() {
             >
               <Button size="small" icon={<SettingOutlined />}>Actions</Button>
             </Dropdown>
+
+            {currentPlan?.pdf_url && (
+              <Button
+                size="small"
+                icon={<FilePdfOutlined />}
+                onClick={() => currentPlan.pdf_url && window.open(currentPlan.pdf_url, '_blank')}
+                style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+              >
+                PDF
+              </Button>
+            )}
 
             {currentPlan && isDraft && (
               <Popconfirm
