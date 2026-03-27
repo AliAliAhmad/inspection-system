@@ -1234,12 +1234,13 @@ def publish_plan(plan_id):
     plan_id_for_bg = plan.id
     user_id_for_bg = user.id
     user_lang = user.language or 'en'
+    # Capture the current app for the background thread
+    from flask import current_app
+    _app = current_app._get_current_object()
 
     def _publish_background_tasks():
         """Run PDF generation, email, and points in background thread."""
-        from app import create_app
-        app = create_app()
-        with app.app_context():
+        with _app.app_context():
             _plan = db.session.get(WorkPlan, plan_id_for_bg)
             if not _plan:
                 return
