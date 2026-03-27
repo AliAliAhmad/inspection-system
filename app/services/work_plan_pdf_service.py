@@ -269,20 +269,20 @@ class WorkPlanPDF(FPDF):
             ('PM Jobs', str(pm_count)),
             ('Defect Repairs', str(defect_count)),
             ('Inspections', str(inspection_count)),
-            ('Jobs Without SAP Order', f'{no_sap_count} ⚠️' if no_sap_count > 0 else '0'),
-            ('Overdue Jobs', f'{overdue_count} ⚠️' if overdue_count > 0 else '0'),
+            ('Jobs Without SAP Order', f'{no_sap_count} (!)' if no_sap_count > 0 else '0'),
+            ('Overdue Jobs', f'{overdue_count} (!)' if overdue_count > 0 else '0'),
             ('Team Members', str(sum(len(v) for v in users_by_role.values()))),
         ]
 
         for label, value in stats:
             # Highlight warnings
-            if '⚠️' in value:
+            if '(!)' in value:
                 self.set_fill_color(*self.COLORS['no_sap_order'])
                 fill = True
             else:
                 fill = False
             self.cell(80, 6, label, border=1, fill=fill)
-            self.cell(50, 6, value.replace('⚠️', ''), border=1, fill=fill, new_x='LMARGIN', new_y='NEXT')
+            self.cell(50, 6, value.replace('(!)', ''), border=1, fill=fill, new_x='LMARGIN', new_y='NEXT')
 
         self.ln(8)
 
@@ -292,9 +292,9 @@ class WorkPlanPDF(FPDF):
         self.ln(2)
 
         role_display = {
-            'engineer': '🔧 Engineers',
-            'specialist': '🔨 Specialists',
-            'inspector': '🔍 Inspectors',
+            'engineer': 'Engineers',
+            'specialist': 'Specialists',
+            'inspector': 'Inspectors',
         }
 
         self.set_font('Helvetica', '', 9)
@@ -334,7 +334,7 @@ class WorkPlanPDFService:
                 pdf.set_font('Helvetica', 'B', 14)
                 pdf.set_fill_color(46, 204, 113)  # Green
                 pdf.set_text_color(255, 255, 255)
-                pdf.cell(0, 10, '🚢  EAST BERTH', fill=True, align='C', new_x='LMARGIN', new_y='NEXT')
+                pdf.cell(0, 10, '>>> EAST BERTH <<<', fill=True, align='C', new_x='LMARGIN', new_y='NEXT')
                 pdf.set_text_color(0, 0, 0)
                 pdf.ln(3)
 
@@ -346,7 +346,7 @@ class WorkPlanPDFService:
                 pdf.set_font('Helvetica', 'B', 14)
                 pdf.set_fill_color(155, 89, 182)  # Purple
                 pdf.set_text_color(255, 255, 255)
-                pdf.cell(0, 10, '⚓  WEST BERTH', fill=True, align='C', new_x='LMARGIN', new_y='NEXT')
+                pdf.cell(0, 10, '>>> WEST BERTH <<<', fill=True, align='C', new_x='LMARGIN', new_y='NEXT')
                 pdf.set_text_color(0, 0, 0)
                 pdf.ln(3)
 
