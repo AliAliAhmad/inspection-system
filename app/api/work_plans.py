@@ -614,6 +614,13 @@ def add_job(plan_id):
         if not eng or eng.role not in ('engineer', 'admin'):
             raise ValidationError("engineer_id must reference an engineer or admin user")
 
+    # Auto-populate description from defect if not provided
+    description = data.get('description')
+    if not description and defect_id:
+        defect_obj = db.session.get(Defect, defect_id)
+        if defect_obj:
+            description = defect_obj.description
+
     job = WorkPlanJob(
         work_plan_day_id=day.id,
         job_type=job_type,
@@ -622,7 +629,7 @@ def add_job(plan_id):
         defect_id=defect_id,
         inspection_assignment_id=inspection_assignment_id,
         sap_order_number=data.get('sap_order_number'),
-        description=data.get('description'),
+        description=description,
         estimated_hours=float(data['estimated_hours']),
         position=max_position + 1,
         priority=data.get('priority', 'normal'),
