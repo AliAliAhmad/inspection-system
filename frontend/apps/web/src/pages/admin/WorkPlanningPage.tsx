@@ -1690,6 +1690,35 @@ export default function WorkPlanningPage() {
               <Button size="small" icon={<SettingOutlined />}>Actions</Button>
             </Dropdown>
 
+            {currentPlan && isDraft && (
+              <Popconfirm
+                title="Publish Work Plan?"
+                description="This will notify all assigned employees."
+                onConfirm={() => publishMutation.mutate(currentPlan.id)}
+                okText="Publish"
+                cancelText="Cancel"
+              >
+                <Button size="small" type="primary" icon={<SendOutlined />} loading={publishMutation.isPending} style={{ background: '#52c41a', borderColor: '#52c41a' }}>
+                  Publish
+                </Button>
+              </Popconfirm>
+            )}
+
+            {currentPlan && !isDraft && (
+              <Popconfirm
+                title="Revise Published Plan?"
+                description="This will revert to draft for editing. Users will be notified."
+                onConfirm={() => reviseMutation.mutate(currentPlan.id)}
+                okText="Yes, Revise"
+                okType="danger"
+                cancelText="Cancel"
+              >
+                <Button size="small" icon={<SwapOutlined />} loading={reviseMutation.isPending}>
+                  Revise
+                </Button>
+              </Popconfirm>
+            )}
+
             {!currentPlan && (
               <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>New Plan</Button>
             )}
