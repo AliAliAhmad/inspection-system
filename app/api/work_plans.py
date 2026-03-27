@@ -1244,8 +1244,13 @@ def publish_plan(plan_id):
                 pdf_file = WorkPlanPDFService.generate_plan_pdf(_plan)
                 _plan.pdf_file_id = pdf_file.id if pdf_file else None
                 db.session.commit()
+                if pdf_file:
+                    logger.info(f"PDF generated OK for plan {plan_id_for_bg}: file_id={pdf_file.id}")
+                else:
+                    logger.warning(f"PDF generation returned None for plan {plan_id_for_bg}")
             except Exception as e:
-                logger.error(f"PDF generation failed: {e}")
+                import traceback
+                logger.error(f"PDF generation failed for plan {plan_id_for_bg}: {e}\n{traceback.format_exc()}")
 
             # Send email
             if send_email:
@@ -2107,6 +2112,38 @@ def download_materials_template():
             'Content-Disposition': 'attachment; filename=materials_import_template.xlsx'
         }
     )
+
+
+@bp.route('/<int:plan_id>/generate-pdf', methods=['POST'])
+@jwt_required()
+def generate_plan_pdf_now(plan_id):
+    """Generate PDF for a plan synchronously (not background). Returns error details if it fails."""
+    user = get_current_user()
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    try:
+        from app.services.work_plan_pdf_service import WorkPlanPDFService
+        pdf_file = WorkPlanPDFService.generate_plan_pdf(plan)
+        if not pdf_file:
+            return jsonify({'status': 'error', 'message': 'PDF generation returned None — check Cloudinary config'}), 500
+
+        plan.pdf_file_id = pdf_file.id
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'PDF generated',
+            'pdf_url': pdf_file.get_url()
+        }), 200
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 
 
 @bp.route('/<int:plan_id>/pdf/day/<day_date>', methods=['GET'])

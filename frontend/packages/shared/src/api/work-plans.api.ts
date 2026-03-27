@@ -609,6 +609,12 @@ export const workPlansApi = {
     }>>('/api/work-plans/classify-job', { description });
   },
 
+  // ==================== PDF GENERATION ====================
+
+  generatePdf(planId: number) {
+    return getApiClient().post<ApiResponse<{ pdf_url: string }>>(`/api/work-plans/${planId}/generate-pdf`);
+  },
+
   // ==================== DAY INSPECTIONS (Read-Only Visibility) ====================
 
   getDayInspections(date: string, berth?: string) {

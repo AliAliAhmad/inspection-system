@@ -615,6 +615,24 @@ export default function WorkPlanningPage() {
     },
   });
 
+  const generatePdfMutation = useMutation({
+    mutationFn: (planId: number) => workPlansApi.generatePdf(planId),
+    onSuccess: (response) => {
+      const pdfUrl = (response?.data as any)?.pdf_url;
+      if (pdfUrl) {
+        message.success('PDF generated!');
+        window.open(pdfUrl, '_blank');
+      } else {
+        message.success('PDF generated! Refreshing...');
+      }
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any) => {
+      const detail = err.response?.data?.message || 'PDF generation failed';
+      message.error(detail);
+    },
+  });
+
   const reviseMutation = useMutation({
     mutationFn: (planId: number) => workPlansApi.revise(planId),
     onSuccess: () => {
@@ -1693,15 +1711,26 @@ export default function WorkPlanningPage() {
               <Button size="small" icon={<SettingOutlined />}>Actions</Button>
             </Dropdown>
 
-            {currentPlan?.pdf_url && (
-              <Button
-                size="small"
-                icon={<FilePdfOutlined />}
-                onClick={() => currentPlan.pdf_url && window.open(currentPlan.pdf_url, '_blank')}
-                style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
-              >
-                PDF
-              </Button>
+            {currentPlan && !isDraft && (
+              currentPlan.pdf_url ? (
+                <Button
+                  size="small"
+                  icon={<FilePdfOutlined />}
+                  onClick={() => currentPlan.pdf_url && window.open(currentPlan.pdf_url, '_blank')}
+                  style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+                >
+                  PDF
+                </Button>
+              ) : (
+                <Button
+                  size="small"
+                  icon={<FilePdfOutlined />}
+                  loading={generatePdfMutation.isPending}
+                  onClick={() => generatePdfMutation.mutate(currentPlan.id)}
+                >
+                  Generate PDF
+                </Button>
+              )
             )}
 
             {currentPlan && isDraft && (
