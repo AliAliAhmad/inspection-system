@@ -75,17 +75,18 @@ class WorkPlanPDF(FPDF):
             day: WorkPlanDay instance
             berth_filter: Optional 'east' or 'west' to filter jobs
         """
-        # Get jobs based on berth filter
+        # Get jobs based on berth filter (jobs have a .berth field: 'east', 'west', 'both')
+        all_jobs = list(day.jobs) if day.jobs else []
         if berth_filter == 'east':
-            jobs = list(day.jobs_east) + list(day.jobs_both)
+            jobs = [j for j in all_jobs if getattr(j, 'berth', '') in ('east', 'both')]
             berth_color = self.COLORS['berth_east']
             berth_label = 'EAST BERTH'
         elif berth_filter == 'west':
-            jobs = list(day.jobs_west) + list(day.jobs_both)
+            jobs = [j for j in all_jobs if getattr(j, 'berth', '') in ('west', 'both')]
             berth_color = self.COLORS['berth_west']
             berth_label = 'WEST BERTH'
         else:
-            jobs = list(day.jobs)
+            jobs = all_jobs
             berth_color = self.COLORS['day_header_bg']
             berth_label = None
 
