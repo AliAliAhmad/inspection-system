@@ -173,19 +173,14 @@ const DraggableTeamMember: React.FC<{
   const badgeColor = assignedCount >= 5 ? '#ff4d4f' : assignedCount >= 3 ? '#fa8c16' : '#52c41a';
   const badgeTitle = dailyBreakdown?.map(d => `${d.label}: ${d.count}`).join(' · ') || `${assignedCount} job${assignedCount !== 1 ? 's' : ''} this week`;
 
-  // Determine day status: working, leave, or weekend (Fri=5, Sat=6 in Iraq)
-  const getDayStatus = (date: string) => {
-    const dow = dayjs(date).day(); // 0=Sun, 5=Fri, 6=Sat
-    const isWeekend = dow === 5 || dow === 6;
-    const isLeave = leaveDateSet.has(date);
-    if (isLeave) return 'leave';
-    if (isWeekend) return 'weekend';
-    return 'working';
+  // Day status based on roster only — no hardcoded weekends
+  const getDayStatus = (date: string): 'leave' | 'working' => {
+    return leaveDateSet.has(date) ? 'leave' : 'working';
   };
 
   // Build tooltip with day-by-day breakdown
-  const statusEmoji = { working: '🟢', leave: '🔴', weekend: '⚪' };
-  const statusLabel = { working: 'Working', leave: 'On Leave', weekend: 'Weekend' };
+  const statusEmoji = { working: '🟢', leave: '🔴' };
+  const statusLabel = { working: 'Working', leave: 'On Leave' };
   const tooltipContent = isOnLeave
     ? `${user.full_name} — On Leave all week`
     : hasPartialLeave
@@ -209,12 +204,12 @@ const DraggableTeamMember: React.FC<{
         {isOnLeave && leaveInfo && (
           <span style={{ fontSize: 9, color: '#fa8c16' }}>All week</span>
         )}
-        {/* Mini week dots: green = working, red = leave, gray = weekend */}
+        {/* Mini week dots: green = working, red = leave (roster-based) */}
         {hasPartialLeave && planDays.length > 0 && (
           <span style={{ display: 'inline-flex', gap: 2, flexShrink: 0, padding: '1px 3px', background: '#fafafa', borderRadius: 4, border: '1px solid #f0f0f0' }}>
             {planDays.map(d => {
               const status = getDayStatus(d.date);
-              const dotColor = status === 'leave' ? '#ff4d4f' : status === 'weekend' ? '#d9d9d9' : '#52c41a';
+              const dotColor = status === 'leave' ? '#ff4d4f' : '#52c41a';
               const label = `${dayjs(d.date).format('ddd D')}: ${statusLabel[status]}`;
               return (
                 <Tooltip key={d.date} title={label} placement="top">
