@@ -173,11 +173,23 @@ const DraggableTeamMember: React.FC<{
   const badgeColor = assignedCount >= 5 ? '#ff4d4f' : assignedCount >= 3 ? '#fa8c16' : '#52c41a';
   const badgeTitle = dailyBreakdown?.map(d => `${d.label}: ${d.count}`).join(' · ') || `${assignedCount} job${assignedCount !== 1 ? 's' : ''} this week`;
 
+  // Determine day status: working, leave, or weekend (Fri=5, Sat=6 in Iraq)
+  const getDayStatus = (date: string) => {
+    const dow = dayjs(date).day(); // 0=Sun, 5=Fri, 6=Sat
+    const isWeekend = dow === 5 || dow === 6;
+    const isLeave = leaveDateSet.has(date);
+    if (isLeave) return 'leave';
+    if (isWeekend) return 'weekend';
+    return 'working';
+  };
+
   // Build tooltip with day-by-day breakdown
+  const statusEmoji = { working: '🟢', leave: '🔴', weekend: '⚪' };
+  const statusLabel = { working: 'Working', leave: 'On Leave', weekend: 'Weekend' };
   const tooltipContent = isOnLeave
     ? `${user.full_name} — On Leave all week`
     : hasPartialLeave
-    ? `${user.full_name}\n${planDays.map(d => `${dayjs(d.date).format('ddd')}: ${leaveDateSet.has(d.date) ? '🔴 Off' : '🟢 Available'}`).join('\n')}`
+    ? `${user.full_name}\n${planDays.map(d => { const s = getDayStatus(d.date); return `${dayjs(d.date).format('ddd')}: ${statusEmoji[s]} ${statusLabel[s]}`; }).join('\n')}`
     : user.full_name;
 
   return (
@@ -197,17 +209,20 @@ const DraggableTeamMember: React.FC<{
         {isOnLeave && leaveInfo && (
           <span style={{ fontSize: 9, color: '#fa8c16' }}>All week</span>
         )}
-        {/* Mini week dots: green = available, red = off */}
+        {/* Mini week dots: green = working, red = leave, gray = weekend */}
         {hasPartialLeave && planDays.length > 0 && (
-          <span style={{ display: 'inline-flex', gap: 2, flexShrink: 0 }}>
+          <span style={{ display: 'inline-flex', gap: 2, flexShrink: 0, padding: '1px 3px', background: '#fafafa', borderRadius: 4, border: '1px solid #f0f0f0' }}>
             {planDays.map(d => {
-              const isOff = leaveDateSet.has(d.date);
+              const status = getDayStatus(d.date);
+              const dotColor = status === 'leave' ? '#ff4d4f' : status === 'weekend' ? '#d9d9d9' : '#52c41a';
+              const label = `${dayjs(d.date).format('ddd D')}: ${statusLabel[status]}`;
               return (
-                <Tooltip key={d.date} title={`${dayjs(d.date).format('ddd D')}: ${isOff ? 'Off' : 'Available'}`} placement="top">
+                <Tooltip key={d.date} title={label} placement="top">
                   <span style={{
                     width: 8, height: 8, borderRadius: '50%',
-                    background: isOff ? '#ff4d4f' : '#52c41a',
+                    background: dotColor,
                     display: 'inline-block',
+                    border: status === 'leave' ? '1px solid #ff7875' : 'none',
                   }} />
                 </Tooltip>
               );
