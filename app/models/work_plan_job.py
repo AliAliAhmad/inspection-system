@@ -194,6 +194,7 @@ class WorkPlanJob(db.Model):
                 'equipment_serial': _eq_serial,
                 'equipment_type': _eq_type,
                 'defect_id': self.defect_id,
+                'defect': self.defect.to_dict(language) if self.defect else None,
                 'inspection_assignment_id': _insp_assignment_id,
                 'sap_order_number': self.sap_order_number,
                 'sap_order_type': self.sap_order_type,
