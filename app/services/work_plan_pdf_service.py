@@ -1,313 +1,319 @@
 """
 Work Plan PDF Service.
 Generates professional PDF reports for weekly work plans.
-Enhanced with berth separation, overdue indicators, and SAP order highlighting.
+Layout: one page per day, landscape, berth-separated, with job details.
 """
 
 from fpdf import FPDF
 from datetime import datetime
 import os
 import tempfile
+import requests
 from flask import current_app
 
 
+# Color palette
+C_PRIMARY = (41, 98, 155)       # Dark blue
+C_ACCENT = (52, 152, 219)       # Blue
+C_EAST = (39, 174, 96)          # Green
+C_WEST = (142, 68, 173)         # Purple
+C_PM = (41, 128, 185)           # Blue
+C_DEFECT = (192, 57, 43)        # Red
+C_INSPECTION = (127, 140, 141)  # Grey
+C_WHITE = (255, 255, 255)
+C_LIGHT = (245, 247, 250)       # Light background
+C_BORDER = (220, 220, 220)      # Light border
+C_TEXT = (44, 62, 80)           # Dark text
+C_MUTED = (149, 165, 166)       # Muted text
+C_WARNING = (243, 156, 18)      # Orange
+C_DANGER = (231, 76, 60)        # Red
+
+
 class WorkPlanPDF(FPDF):
-    """Custom PDF class for work plan reports."""
+    """Custom landscape PDF for work plan reports."""
 
     def __init__(self, plan, language='en'):
-        super().__init__()
+        super().__init__(orientation='L', format='A4')
         self.plan = plan
         self.language = language
-        self.set_auto_page_break(auto=True, margin=15)
-
-        # Colors
-        self.COLORS = {
-            'header_bg': (41, 128, 185),  # Blue header
-            'header_text': (255, 255, 255),
-            'day_header_bg': (52, 73, 94),  # Dark blue-grey
-            'day_header_text': (255, 255, 255),
-            'berth_east': (46, 204, 113),  # Green
-            'berth_west': (155, 89, 182),  # Purple
-            'table_header': (189, 195, 199),  # Light grey
-            'no_sap_order': (255, 200, 200),  # Light red - CRITICAL
-            'overdue_critical': (255, 150, 150),  # Red
-            'overdue_high': (255, 220, 180),  # Orange
-            'row_alt': (245, 245, 245),  # Alternating row
-        }
+        self.set_auto_page_break(auto=True, margin=12)
+        self.current_day_label = ''
 
     def header(self):
-        """Add header to each page."""
-        # Header background
-        self.set_fill_color(*self.COLORS['header_bg'])
-        self.rect(0, 0, 210, 25, 'F')
+        # Thin accent bar at top
+        self.set_fill_color(*C_PRIMARY)
+        self.rect(0, 0, 297, 3, 'F')
 
-        # Company name
-        self.set_text_color(*self.COLORS['header_text'])
-        self.set_font('Helvetica', 'B', 16)
+        # Company + week info
         self.set_y(5)
-        self.cell(0, 8, 'Industrial Inspection System', align='C', new_x='LMARGIN', new_y='NEXT')
+        self.set_font('Helvetica', 'B', 11)
+        self.set_text_color(*C_PRIMARY)
+        self.cell(100, 5, 'WORK PLAN', new_x='RIGHT')
 
-        # Report title with week range
-        self.set_font('Helvetica', 'B', 12)
-        week_str = f"Weekly Work Plan: {self.plan.week_start.strftime('%d %b')} - {self.plan.week_end.strftime('%d %b %Y')}"
-        self.cell(0, 7, week_str, align='C', new_x='LMARGIN', new_y='NEXT')
+        self.set_font('Helvetica', '', 9)
+        self.set_text_color(*C_MUTED)
+        week_str = '%s - %s' % (
+            self.plan.week_start.strftime('%d %b'),
+            self.plan.week_end.strftime('%d %b %Y')
+        )
+        self.cell(0, 5, week_str, align='R', new_x='LMARGIN', new_y='NEXT')
 
-        self.set_text_color(0, 0, 0)
-        self.ln(5)
+        # Day label if set
+        if self.current_day_label:
+            self.set_font('Helvetica', 'B', 13)
+            self.set_text_color(*C_TEXT)
+            self.cell(0, 7, self.current_day_label, align='C', new_x='LMARGIN', new_y='NEXT')
+
+        # Separator line
+        self.set_draw_color(*C_BORDER)
+        self.line(10, self.get_y() + 1, 287, self.get_y() + 1)
+        self.ln(4)
 
     def footer(self):
-        """Add footer to each page."""
-        self.set_y(-15)
-        self.set_font('Helvetica', 'I', 8)
-        self.set_text_color(128)
+        self.set_y(-10)
+        self.set_font('Helvetica', 'I', 7)
+        self.set_text_color(*C_MUTED)
+        self.cell(0, 4, 'Generated %s' % datetime.utcnow().strftime('%d %b %Y %H:%M UTC'), align='L')
+        self.set_x(-30)
+        self.cell(0, 4, 'Page %d' % self.page_no(), align='R')
 
-        # Add legend in footer
-        legend = "Legend: * = Lead | [!] = No SAP Order | [O] = Overdue"
-        self.cell(0, 5, legend, align='L')
-        self.set_x(-50)
-        self.cell(0, 5, f'Page {self.page_no()}', align='R')
+    def _safe(self, text, max_len=0):
+        """Ensure text is ASCII-safe and optionally truncated."""
+        if text is None:
+            return ''
+        s = str(text)
+        # Remove non-latin1 characters
+        s = s.encode('latin-1', errors='replace').decode('latin-1')
+        if max_len and len(s) > max_len:
+            return s[:max_len - 2] + '..'
+        return s
 
-    def add_day_section(self, day, berth_filter=None):
-        """
-        Add a day section to the report.
+    def _berth_header(self, label, color):
+        """Draw a berth section header."""
+        self.set_fill_color(*color)
+        self.set_text_color(*C_WHITE)
+        self.set_font('Helvetica', 'B', 9)
+        self.cell(0, 6, '  ' + label, fill=True, new_x='LMARGIN', new_y='NEXT')
+        self.set_text_color(*C_TEXT)
+        self.ln(2)
 
-        Args:
-            day: WorkPlanDay instance
-            berth_filter: Optional 'east' or 'west' to filter jobs
-        """
-        # Get jobs based on berth filter (jobs have a .berth field: 'east', 'west', 'both')
+    def _table_header(self, cols):
+        """Draw table column headers."""
+        self.set_fill_color(*C_LIGHT)
+        self.set_font('Helvetica', 'B', 7)
+        self.set_text_color(*C_MUTED)
+        for width, label, align in cols:
+            self.cell(width, 5, label, border=0, fill=True, align=align)
+        self.ln()
+        self.set_text_color(*C_TEXT)
+
+    def add_day_page(self, day):
+        """Add a full page for one day with East and West berth sections."""
+        self.current_day_label = day.date.strftime('%A, %d %B %Y')
+        self.add_page()
+
         all_jobs = list(day.jobs) if day.jobs else []
-        if berth_filter == 'east':
-            jobs = [j for j in all_jobs if getattr(j, 'berth', '') in ('east', 'both')]
-            berth_color = self.COLORS['berth_east']
-            berth_label = 'EAST BERTH'
-        elif berth_filter == 'west':
-            jobs = [j for j in all_jobs if getattr(j, 'berth', '') in ('west', 'both')]
-            berth_color = self.COLORS['berth_west']
-            berth_label = 'WEST BERTH'
-        else:
-            jobs = all_jobs
-            berth_color = self.COLORS['day_header_bg']
-            berth_label = None
+        east_jobs = sorted(
+            [j for j in all_jobs if getattr(j, 'berth', '') in ('east', 'both')],
+            key=lambda j: (0 if j.job_type == 'pm' else 1 if j.job_type == 'defect' else 2, j.position)
+        )
+        west_jobs = sorted(
+            [j for j in all_jobs if getattr(j, 'berth', '') in ('west', 'both')],
+            key=lambda j: (0 if j.job_type == 'pm' else 1 if j.job_type == 'defect' else 2, j.position)
+        )
 
-        # Sort jobs by position
-        jobs = sorted(jobs, key=lambda j: j.position)
-
-        # Day header with berth indicator
-        self.set_font('Helvetica', 'B', 11)
-        self.set_fill_color(*self.COLORS['day_header_bg'])
-        self.set_text_color(*self.COLORS['day_header_text'])
-
-        day_name = day.date.strftime('%A, %d %B %Y')
-        header_text = f"{day_name}"
-        if berth_label:
-            header_text = f"{day_name} - {berth_label}"
-
-        self.cell(0, 8, header_text, fill=True, new_x='LMARGIN', new_y='NEXT')
-        self.set_text_color(0, 0, 0)
-        self.ln(1)
-
-        if not jobs:
-            self.set_font('Helvetica', 'I', 10)
-            self.set_text_color(128)
-            self.cell(0, 6, 'No jobs scheduled', new_x='LMARGIN', new_y='NEXT')
-            self.set_text_color(0)
-            self.ln(3)
-            return
-
-        # Jobs table header
-        self.set_font('Helvetica', 'B', 8)
-        self.set_fill_color(*self.COLORS['table_header'])
-
-        # Column widths: Type, SAP Order, Equipment, Hours, Status, Team
-        col_widths = [12, 28, 45, 15, 25, 65]
-
-        self.cell(col_widths[0], 5, 'Type', border=1, fill=True, align='C')
-        self.cell(col_widths[1], 5, 'SAP Order', border=1, fill=True, align='C')
-        self.cell(col_widths[2], 5, 'Equipment', border=1, fill=True, align='C')
-        self.cell(col_widths[3], 5, 'Hours', border=1, fill=True, align='C')
-        self.cell(col_widths[4], 5, 'Status', border=1, fill=True, align='C')
-        self.cell(col_widths[5], 5, 'Assigned Team', border=1, fill=True, align='C', new_x='LMARGIN', new_y='NEXT')
-
-        # Job rows
-        self.set_font('Helvetica', '', 7)
-        for idx, job in enumerate(jobs):
-            # Check for page break
-            if self.get_y() > 265:
-                self.add_page()
-                self.set_font('Helvetica', '', 7)
-
-            # Determine row color based on priority and SAP order
-            has_sap_order = bool(job.sap_order_number)
-            is_overdue = job.overdue_value and job.overdue_value > 0
-            computed_priority = getattr(job, 'computed_priority', 'normal')
-
-            # Priority: No SAP Order > Critical > High > Normal
-            if not has_sap_order:
-                self.set_fill_color(*self.COLORS['no_sap_order'])
-                fill = True
-            elif computed_priority == 'critical':
-                self.set_fill_color(*self.COLORS['overdue_critical'])
-                fill = True
-            elif computed_priority == 'high' or is_overdue:
-                self.set_fill_color(*self.COLORS['overdue_high'])
-                fill = True
-            elif idx % 2 == 0:
-                self.set_fill_color(*self.COLORS['row_alt'])
-                fill = True
-            else:
-                fill = False
-
-            # Job type with emoji indicator
-            job_type_display = {
-                'pm': 'PM',
-                'defect': 'DEF',
-                'inspection': 'INS'
-            }.get(job.job_type, job.job_type.upper()[:3])
-
-            # SAP Order (with warning if missing)
-            sap_order = job.sap_order_number if has_sap_order else '[!] MISSING'
-
-            # Equipment name
-            equipment_name = ''
-            if job.equipment:
-                equipment_name = job.equipment.serial_number or job.equipment.name or ''
-            equipment_name = equipment_name[:22]
-
-            # Hours
-            hours = f"{job.estimated_hours:.1f}h"
-
-            # Status indicator
-            status_parts = []
-            if is_overdue:
-                overdue_text = f"{int(job.overdue_value)}{job.overdue_unit[0] if job.overdue_unit else 'h'}"
-                status_parts.append(f"[O]{overdue_text}")
-            if computed_priority == 'critical':
-                status_parts.append('CRIT')
-            elif computed_priority == 'high':
-                status_parts.append('HIGH')
-            status = ' '.join(status_parts) if status_parts else 'OK'
-
-            # Team members (lead marked with *)
-            team_list = []
-            for a in job.assignments:
-                name = a.user.full_name.split()[0] if a.user else 'Unknown'
-                if a.is_lead:
-                    name = f"*{name}"
-                team_list.append(name)
-            team = ', '.join(team_list) if team_list else '-'
-            if len(team) > 32:
-                team = team[:29] + '...'
-
-            # Render row
-            self.cell(col_widths[0], 5, job_type_display, border=1, fill=fill, align='C')
-
-            # SAP Order - bold red if missing
-            if not has_sap_order:
-                self.set_font('Helvetica', 'B', 7)
-                self.set_text_color(180, 0, 0)
-            self.cell(col_widths[1], 5, sap_order[:14], border=1, fill=fill, align='C')
-            self.set_font('Helvetica', '', 7)
-            self.set_text_color(0, 0, 0)
-
-            self.cell(col_widths[2], 5, equipment_name, border=1, fill=fill)
-            self.cell(col_widths[3], 5, hours, border=1, fill=fill, align='C')
-            self.cell(col_widths[4], 5, status, border=1, fill=fill, align='C')
-            self.cell(col_widths[5], 5, team, border=1, fill=fill, new_x='LMARGIN', new_y='NEXT')
-
-            # Reset fill color
-            self.set_fill_color(255, 255, 255)
+        # East berth
+        self._berth_header('EAST BERTH', C_EAST)
+        self._render_job_list(east_jobs)
 
         self.ln(4)
 
-    def add_summary(self):
-        """Add summary section at the end."""
+        # West berth
+        self._berth_header('WEST BERTH', C_WEST)
+        self._render_job_list(west_jobs)
+
+    def _render_job_list(self, jobs):
+        """Render a list of jobs, separating inspection (compact) from PM/defect (detailed)."""
+        if not jobs:
+            self.set_font('Helvetica', 'I', 8)
+            self.set_text_color(*C_MUTED)
+            self.cell(0, 5, 'No jobs scheduled', new_x='LMARGIN', new_y='NEXT')
+            self.set_text_color(*C_TEXT)
+            return
+
+        inspections = [j for j in jobs if j.job_type == 'inspection']
+        pm_defect = [j for j in jobs if j.job_type != 'inspection']
+
+        # ---- PM & Defect Jobs (detailed) ----
+        if pm_defect:
+            cols = [
+                (12, 'TYPE', 'C'),
+                (50, 'EQUIPMENT', 'L'),
+                (70, 'DESCRIPTION', 'L'),
+                (25, 'SAP #', 'C'),
+                (12, 'HRS', 'C'),
+                (55, 'TEAM', 'L'),
+                (50, 'MATERIALS', 'L'),
+            ]
+            self._table_header(cols)
+
+            self.set_font('Helvetica', '', 7)
+            for idx, job in enumerate(pm_defect):
+                if self.get_y() > 185:
+                    self.add_page()
+                    self._table_header(cols)
+                    self.set_font('Helvetica', '', 7)
+
+                # Alternate row bg
+                if idx % 2 == 0:
+                    self.set_fill_color(*C_LIGHT)
+                else:
+                    self.set_fill_color(*C_WHITE)
+
+                # Type badge color
+                if job.job_type == 'pm':
+                    type_label = 'PM'
+                elif job.job_type == 'defect':
+                    type_label = 'DEF'
+                else:
+                    type_label = job.job_type[:3].upper()
+
+                # Equipment
+                eq_name = ''
+                if job.equipment:
+                    eq_name = job.equipment.name or job.equipment.serial_number or ''
+
+                # Description
+                desc = job.description or ''
+                if not desc and job.defect:
+                    desc = job.defect.description or ''
+
+                # SAP
+                sap = job.sap_order_number or '-'
+
+                # Hours
+                hours = '%.1fh' % (job.estimated_hours or 0)
+
+                # Team
+                team_parts = []
+                for a in (job.assignments or []):
+                    name = a.user.full_name.split()[0] if a.user and a.user.full_name else '?'
+                    if a.is_lead:
+                        name = '*' + name
+                    team_parts.append(name)
+                team = ', '.join(team_parts) if team_parts else '-'
+
+                # Materials
+                mat_parts = []
+                for wpm in (job.materials or []):
+                    if wpm.material:
+                        mat_parts.append('%s x%.0f' % (self._safe(wpm.material.code, 12), wpm.quantity))
+                materials = ', '.join(mat_parts[:3])
+                if len(mat_parts) > 3:
+                    materials += ' +%d more' % (len(mat_parts) - 3)
+
+                fill = idx % 2 == 0
+
+                # Highlight row for overdue or missing SAP
+                is_overdue = job.overdue_value and job.overdue_value > 0
+                if not job.sap_order_number and job.job_type == 'pm':
+                    self.set_fill_color(255, 235, 235)
+                    fill = True
+                elif is_overdue:
+                    self.set_fill_color(255, 243, 224)
+                    fill = True
+
+                self.cell(12, 5, type_label, border=0, fill=fill, align='C')
+                self.cell(50, 5, self._safe(eq_name, 28), border=0, fill=fill)
+                self.cell(70, 5, self._safe(desc, 42), border=0, fill=fill)
+                self.cell(25, 5, self._safe(sap, 12), border=0, fill=fill, align='C')
+                self.cell(12, 5, hours, border=0, fill=fill, align='C')
+                self.cell(55, 5, self._safe(team, 30), border=0, fill=fill)
+                self.cell(50, 5, self._safe(materials, 28), border=0, fill=fill, new_x='LMARGIN', new_y='NEXT')
+
+                # Reset fill
+                self.set_fill_color(*C_WHITE)
+
+            self.ln(2)
+
+        # ---- Inspections (compact list) ----
+        if inspections:
+            self.set_font('Helvetica', 'B', 7)
+            self.set_text_color(*C_INSPECTION)
+            self.cell(0, 4, 'INSPECTIONS (%d)' % len(inspections), new_x='LMARGIN', new_y='NEXT')
+            self.set_text_color(*C_TEXT)
+            self.set_font('Helvetica', '', 6)
+
+            # Compact: 3 inspections per row
+            row_items = []
+            for j in inspections:
+                eq = j.equipment.serial_number if j.equipment and j.equipment.serial_number else (j.equipment.name[:15] if j.equipment else '?')
+                team = ', '.join(
+                    a.user.full_name.split()[0] for a in (j.assignments or []) if a.user
+                ) or '-'
+                row_items.append('%s [%s]' % (self._safe(eq, 15), self._safe(team, 12)))
+
+            # Print in compact rows of ~4 items
+            line = ''
+            for i, item in enumerate(row_items):
+                if line:
+                    line += '   |   '
+                line += item
+                if (i + 1) % 4 == 0:
+                    self.cell(0, 3.5, line, new_x='LMARGIN', new_y='NEXT')
+                    line = ''
+            if line:
+                self.cell(0, 3.5, line, new_x='LMARGIN', new_y='NEXT')
+
+    def add_summary_page(self):
+        """Add a summary page at the end."""
+        self.current_day_label = 'WEEKLY SUMMARY'
         self.add_page()
 
-        # Summary header
-        self.set_font('Helvetica', 'B', 14)
-        self.set_fill_color(*self.COLORS['header_bg'])
-        self.set_text_color(*self.COLORS['header_text'])
-        self.cell(0, 10, 'Weekly Summary', fill=True, align='C', new_x='LMARGIN', new_y='NEXT')
-        self.set_text_color(0, 0, 0)
-        self.ln(5)
-
-        # Statistics
-        total_jobs = self.plan.get_total_jobs()
+        total_jobs = sum(len(list(d.jobs)) for d in self.plan.days)
         total_hours = sum(sum(j.estimated_hours or 0 for j in d.jobs) for d in self.plan.days)
-
-        # Count by type
         pm_count = sum(sum(1 for j in d.jobs if j.job_type == 'pm') for d in self.plan.days)
         defect_count = sum(sum(1 for j in d.jobs if j.job_type == 'defect') for d in self.plan.days)
         inspection_count = sum(sum(1 for j in d.jobs if j.job_type == 'inspection') for d in self.plan.days)
 
-        # Count jobs without SAP orders
-        no_sap_count = sum(sum(1 for j in d.jobs if not j.sap_order_number) for d in self.plan.days)
+        # Stats grid
+        self.set_font('Helvetica', 'B', 20)
+        self.set_text_color(*C_PRIMARY)
+        self.cell(60, 12, str(total_jobs), align='C')
+        self.cell(60, 12, '%.0fh' % total_hours, align='C')
+        self.cell(60, 12, str(pm_count), align='C')
+        self.cell(60, 12, str(defect_count), align='C', new_x='LMARGIN', new_y='NEXT')
 
-        # Count overdue jobs
-        overdue_count = sum(sum(1 for j in d.jobs if j.overdue_value and j.overdue_value > 0) for d in self.plan.days)
+        self.set_font('Helvetica', '', 8)
+        self.set_text_color(*C_MUTED)
+        self.cell(60, 5, 'Total Jobs', align='C')
+        self.cell(60, 5, 'Total Hours', align='C')
+        self.cell(60, 5, 'PM Jobs', align='C')
+        self.cell(60, 5, 'Defect Repairs', align='C', new_x='LMARGIN', new_y='NEXT')
+        self.ln(8)
 
-        # All assigned users with roles
+        # Team roster
         users_by_role = {}
         for day in self.plan.days:
             for job in day.jobs:
-                for a in job.assignments:
+                for a in (job.assignments or []):
                     if a.user:
                         role = a.user.role or 'other'
                         if role not in users_by_role:
                             users_by_role[role] = set()
-                        users_by_role[role].add(a.user.full_name)
+                        users_by_role[role].add(a.user.full_name or 'Unknown')
 
-        # Statistics table
         self.set_font('Helvetica', 'B', 10)
-        self.cell(80, 7, 'Metric', border=1, fill=True)
-        self.cell(50, 7, 'Value', border=1, fill=True, new_x='LMARGIN', new_y='NEXT')
+        self.set_text_color(*C_TEXT)
+        self.cell(0, 6, 'Team Roster', new_x='LMARGIN', new_y='NEXT')
+        self.ln(1)
 
-        self.set_font('Helvetica', '', 10)
-        stats = [
-            ('Total Jobs', str(total_jobs)),
-            ('Total Estimated Hours', f'{total_hours:.1f}h'),
-            ('PM Jobs', str(pm_count)),
-            ('Defect Repairs', str(defect_count)),
-            ('Inspections', str(inspection_count)),
-            ('Jobs Without SAP Order', f'{no_sap_count} (!)' if no_sap_count > 0 else '0'),
-            ('Overdue Jobs', f'{overdue_count} (!)' if overdue_count > 0 else '0'),
-            ('Team Members', str(sum(len(v) for v in users_by_role.values()))),
-        ]
-
-        for label, value in stats:
-            # Highlight warnings
-            if '(!)' in value:
-                self.set_fill_color(*self.COLORS['no_sap_order'])
-                fill = True
-            else:
-                fill = False
-            self.cell(80, 6, label, border=1, fill=fill)
-            self.cell(50, 6, value.replace('(!)', ''), border=1, fill=fill, new_x='LMARGIN', new_y='NEXT')
-
-        self.ln(8)
-
-        # Team by role
-        self.set_font('Helvetica', 'B', 11)
-        self.cell(0, 7, 'Assigned Team by Role:', new_x='LMARGIN', new_y='NEXT')
-        self.ln(2)
-
-        role_display = {
-            'engineer': 'Engineers',
-            'specialist': 'Specialists',
-            'inspector': 'Inspectors',
-        }
-
-        self.set_font('Helvetica', '', 9)
+        self.set_font('Helvetica', '', 8)
         for role, users in sorted(users_by_role.items()):
-            role_label = role_display.get(role, role.title())
-            self.set_font('Helvetica', 'B', 9)
-            self.cell(0, 5, f'{role_label}:', new_x='LMARGIN', new_y='NEXT')
-            self.set_font('Helvetica', '', 9)
-            for name in sorted(users):
-                self.cell(10, 4, '')
-                self.cell(0, 4, f'- {name}', new_x='LMARGIN', new_y='NEXT')
-            self.ln(2)
+            self.set_font('Helvetica', 'B', 8)
+            self.cell(30, 5, role.title() + ':', new_x='RIGHT')
+            self.set_font('Helvetica', '', 8)
+            self.cell(0, 5, ', '.join(sorted(users)), new_x='LMARGIN', new_y='NEXT')
 
 
 class WorkPlanPDFService:
@@ -315,62 +321,25 @@ class WorkPlanPDFService:
 
     @staticmethod
     def generate_plan_pdf(plan, language='en', by_berth=True):
-        """
-        Generate a PDF for a work plan.
-
-        Args:
-            plan: WorkPlan instance
-            language: Language for the report
-            by_berth: If True, generates separate sections for East/West
-
-        Returns:
-            File instance if successful, None otherwise
-        """
+        """Generate a PDF for a work plan. One page per day + summary."""
         try:
             pdf = WorkPlanPDF(plan, language)
-            pdf.add_page()
 
-            if by_berth:
-                # First: All East Berth jobs by day
-                pdf.set_font('Helvetica', 'B', 14)
-                pdf.set_fill_color(46, 204, 113)  # Green
-                pdf.set_text_color(255, 255, 255)
-                pdf.cell(0, 10, '>>> EAST BERTH <<<', fill=True, align='C', new_x='LMARGIN', new_y='NEXT')
-                pdf.set_text_color(0, 0, 0)
-                pdf.ln(3)
+            # One page per day
+            for day in sorted(plan.days, key=lambda d: d.date):
+                pdf.add_day_page(day)
 
-                for day in sorted(plan.days, key=lambda d: d.date):
-                    pdf.add_day_section(day, berth_filter='east')
-
-                # Then: All West Berth jobs by day
-                pdf.add_page()
-                pdf.set_font('Helvetica', 'B', 14)
-                pdf.set_fill_color(155, 89, 182)  # Purple
-                pdf.set_text_color(255, 255, 255)
-                pdf.cell(0, 10, '>>> WEST BERTH <<<', fill=True, align='C', new_x='LMARGIN', new_y='NEXT')
-                pdf.set_text_color(0, 0, 0)
-                pdf.ln(3)
-
-                for day in sorted(plan.days, key=lambda d: d.date):
-                    pdf.add_day_section(day, berth_filter='west')
-            else:
-                # Combined view
-                for day in sorted(plan.days, key=lambda d: d.date):
-                    pdf.add_day_section(day)
-
-            # Add summary
-            pdf.add_summary()
+            # Summary page
+            pdf.add_summary_page()
 
             # Save to temp file
             temp_dir = tempfile.gettempdir()
-            filename = f"work_plan_{plan.id}_{plan.week_start.strftime('%Y%m%d')}.pdf"
+            filename = 'work_plan_%d_%s.pdf' % (plan.id, plan.week_start.strftime('%Y%m%d'))
             temp_path = os.path.join(temp_dir, filename)
-
             pdf.output(temp_path)
 
             # Upload to Cloudinary
             from app.services.file_service import FileService
-
             with open(temp_path, 'rb') as f:
                 file_record = FileService.upload_from_bytes(
                     file_bytes=f.read(),
@@ -382,32 +351,19 @@ class WorkPlanPDFService:
                     category='work_plan'
                 )
 
-            # Clean up temp file
             os.remove(temp_path)
-
             return file_record
 
         except Exception as e:
-            current_app.logger.error(f"Failed to generate work plan PDF: {e}")
+            current_app.logger.error('Failed to generate work plan PDF: %s' % str(e))
             import traceback
             traceback.print_exc()
             return None
 
     @staticmethod
     def generate_day_pdf(plan, day_date, language='en'):
-        """
-        Generate a PDF for a single day.
-
-        Args:
-            plan: WorkPlan instance
-            day_date: Date string (YYYY-MM-DD)
-            language: Language for the report
-
-        Returns:
-            File instance if successful, None otherwise
-        """
+        """Generate a PDF for a single day."""
         try:
-            # Find the day
             target_day = None
             for day in plan.days:
                 if day.date.strftime('%Y-%m-%d') == day_date:
@@ -418,29 +374,14 @@ class WorkPlanPDFService:
                 return None
 
             pdf = WorkPlanPDF(plan, language)
-            pdf.add_page()
+            pdf.add_day_page(target_day)
 
-            # Single day - show both berths
-            pdf.set_font('Helvetica', 'B', 12)
-            pdf.cell(0, 8, f"Daily Work Plan: {target_day.date.strftime('%A, %d %B %Y')}", align='C', new_x='LMARGIN', new_y='NEXT')
-            pdf.ln(3)
-
-            # East berth section
-            pdf.add_day_section(target_day, berth_filter='east')
-
-            # West berth section
-            pdf.add_day_section(target_day, berth_filter='west')
-
-            # Save to temp file
             temp_dir = tempfile.gettempdir()
-            filename = f"work_plan_{plan.id}_day_{day_date}.pdf"
+            filename = 'work_plan_%d_day_%s.pdf' % (plan.id, day_date)
             temp_path = os.path.join(temp_dir, filename)
-
             pdf.output(temp_path)
 
-            # Upload to Cloudinary
             from app.services.file_service import FileService
-
             with open(temp_path, 'rb') as f:
                 file_record = FileService.upload_from_bytes(
                     file_bytes=f.read(),
@@ -452,13 +393,11 @@ class WorkPlanPDFService:
                     category='work_plan'
                 )
 
-            # Clean up temp file
             os.remove(temp_path)
-
             return file_record
 
         except Exception as e:
-            current_app.logger.error(f"Failed to generate day PDF: {e}")
+            current_app.logger.error('Failed to generate day PDF: %s' % str(e))
             import traceback
             traceback.print_exc()
             return None
