@@ -1711,26 +1711,27 @@ export default function WorkPlanningPage() {
               <Button size="small" icon={<SettingOutlined />}>Actions</Button>
             </Dropdown>
 
-            {currentPlan && !isDraft && (
-              currentPlan.pdf_url ? (
-                <Button
-                  size="small"
-                  icon={<FilePdfOutlined />}
-                  onClick={() => currentPlan.pdf_url && window.open(currentPlan.pdf_url, '_blank')}
-                  style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
-                >
-                  PDF
-                </Button>
-              ) : (
+            {currentPlan && (
+              <>
+                {currentPlan.pdf_url && (
+                  <Button
+                    size="small"
+                    icon={<FilePdfOutlined />}
+                    onClick={() => window.open(currentPlan.pdf_url, '_blank')}
+                    style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
+                  >
+                    PDF
+                  </Button>
+                )}
                 <Button
                   size="small"
                   icon={<FilePdfOutlined />}
                   loading={generatePdfMutation.isPending}
                   onClick={() => generatePdfMutation.mutate(currentPlan.id)}
                 >
-                  Generate PDF
+                  {currentPlan.pdf_url ? 'Regenerate PDF' : 'Generate PDF'}
                 </Button>
-              )
+              </>
             )}
 
             {currentPlan && isDraft && (
