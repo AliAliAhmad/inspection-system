@@ -143,18 +143,20 @@ const DraggableTeamMember: React.FC<{
   isOnLeave: boolean;
   leaveInfo?: string;
   leaveDates?: string[];
+  offDates?: string[];
   planDays?: { date: string; day_name: string }[];
   assignedCount?: number;
   dailyBreakdown?: { label: string; count: number }[];
-}> = ({ user, isOnLeave, leaveInfo, leaveDates = [], planDays = [], assignedCount = 0, dailyBreakdown }) => {
+}> = ({ user, isOnLeave, leaveInfo, leaveDates = [], offDates = [], planDays = [], assignedCount = 0, dailyBreakdown }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `employee-${user.id}`,
     data: { type: 'employee', user },
     disabled: isOnLeave,
   });
 
-  const hasPartialLeave = !isOnLeave && leaveDates.length > 0;
+  const hasPartialLeave = !isOnLeave && (leaveDates.length > 0 || offDates.length > 0);
   const leaveDateSet = new Set(leaveDates);
+  const offDateSet = new Set(offDates);
 
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
@@ -173,14 +175,16 @@ const DraggableTeamMember: React.FC<{
   const badgeColor = assignedCount >= 5 ? '#ff4d4f' : assignedCount >= 3 ? '#fa8c16' : '#52c41a';
   const badgeTitle = dailyBreakdown?.map(d => `${d.label}: ${d.count}`).join(' · ') || `${assignedCount} job${assignedCount !== 1 ? 's' : ''} this week`;
 
-  // Day status based on roster only — no hardcoded weekends
-  const getDayStatus = (date: string): 'leave' | 'working' => {
-    return leaveDateSet.has(date) ? 'leave' : 'working';
+  // Day status based on roster: leave, off (rest day), or working
+  const getDayStatus = (date: string): 'leave' | 'off' | 'working' => {
+    if (leaveDateSet.has(date)) return 'leave';
+    if (offDateSet.has(date)) return 'off';
+    return 'working';
   };
 
   // Build tooltip with day-by-day breakdown
-  const statusEmoji = { working: '🟢', leave: '🔴' };
-  const statusLabel = { working: 'Working', leave: 'On Leave' };
+  const statusEmoji = { working: '🟢', leave: '🔴', off: '⚪' };
+  const statusLabel = { working: 'Working', leave: 'On Leave', off: 'Off / Rest' };
   const tooltipContent = isOnLeave
     ? `${user.full_name} — On Leave all week`
     : hasPartialLeave
@@ -209,7 +213,7 @@ const DraggableTeamMember: React.FC<{
           <span style={{ display: 'inline-flex', gap: 2, flexShrink: 0, padding: '1px 3px', background: '#fafafa', borderRadius: 4, border: '1px solid #f0f0f0' }}>
             {planDays.map(d => {
               const status = getDayStatus(d.date);
-              const dotColor = status === 'leave' ? '#ff4d4f' : '#52c41a';
+              const dotColor = status === 'leave' ? '#ff4d4f' : status === 'off' ? '#d9d9d9' : '#52c41a';
               const label = `${dayjs(d.date).format('ddd D')}: ${statusLabel[status]}`;
               return (
                 <Tooltip key={d.date} title={label} placement="top">
@@ -841,8 +845,8 @@ export default function WorkPlanningPage() {
     enabled: !!weekStartStr,
   });
 
-  // Get users on leave for the week
-  // Map userId -> set of leave dates (e.g. { 123: Set('2026-03-26', '2026-03-27') })
+  // Get users on leave/off for the week
+  // Map userId -> { leave: Set<date>, off: Set<date> }
   const userLeaveDatesMap = useMemo(() => {
     const map = new Map<number, Set<string>>();
     if (rosterData?.users) {
@@ -853,6 +857,23 @@ export default function WorkPlanningPage() {
           .map(([date]) => date);
         if (leaveDates.length > 0 || u.is_on_leave) {
           map.set(u.id, new Set(leaveDates));
+        }
+      });
+    }
+    return map;
+  }, [rosterData]);
+
+  // Map userId -> set of "off" (rest day) dates
+  const userOffDatesMap = useMemo(() => {
+    const map = new Map<number, Set<string>>();
+    if (rosterData?.users) {
+      rosterData.users.forEach((u: any) => {
+        const entries = u.entries || {};
+        const offDates = Object.entries(entries)
+          .filter(([_, status]) => status === 'off')
+          .map(([date]) => date);
+        if (offDates.length > 0) {
+          map.set(u.id, new Set(offDates));
         }
       });
     }
@@ -2053,6 +2074,7 @@ export default function WorkPlanningPage() {
                           isOnLeave={leaveUserIds.has(user.id)}
                           leaveInfo={leaveDetails.find(l => l.userId === user.id)?.dates.map(d => dayjs(d).format('ddd')).join(',')}
                           leaveDates={leaveDetails.find(l => l.userId === user.id)?.dates || []}
+                          offDates={[...(userOffDatesMap.get(user.id) || [])]}
                           planDays={(currentPlan?.days || []).map(d => ({ date: d.date, day_name: d.day_name || '' })).sort((a, b) => a.date.localeCompare(b.date))}
                           assignedCount={userAssignmentMap[user.id]?.total ?? 0}
                           dailyBreakdown={userAssignmentMap[user.id]?.days}
@@ -2462,6 +2484,7 @@ export default function WorkPlanningPage() {
                                         user={user}
                                         isOnLeave={false}
                                         leaveDates={userLeave?.dates || []}
+                                        offDates={[...(userOffDatesMap.get(user.id) || [])]}
                                         planDays={(currentPlan?.days || []).map(d => ({ date: d.date, day_name: d.day_name || '' })).sort((a, b) => a.date.localeCompare(b.date))}
                                         assignedCount={userAssignmentMap[user.id]?.total ?? 0}
                                         dailyBreakdown={userAssignmentMap[user.id]?.days}
@@ -2475,6 +2498,7 @@ export default function WorkPlanningPage() {
                                       isOnLeave={true}
                                       leaveInfo="All week"
                                       leaveDates={leaveDetails.find(l => l.userId === user.id)?.dates || []}
+                                      offDates={[...(userOffDatesMap.get(user.id) || [])]}
                                       planDays={(currentPlan?.days || []).map(d => ({ date: d.date, day_name: d.day_name || '' })).sort((a, b) => a.date.localeCompare(b.date))}
                                     />
                                   ))}
