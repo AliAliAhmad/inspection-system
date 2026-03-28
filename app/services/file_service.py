@@ -62,6 +62,12 @@ def _get_resource_type(ext, mime_type):
         return 'video'
     if ext in audio_extensions:
         return 'video'  # Cloudinary uses 'video' resource type for audio
+
+    # PDFs and documents must use 'raw' — 'image' converts them to single-page PNG
+    raw_extensions = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'zip'}
+    if ext in raw_extensions or (mime_type and 'pdf' in mime_type.lower()):
+        return 'raw'
+
     return 'image'
 
 
