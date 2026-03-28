@@ -618,9 +618,11 @@ export default function WorkPlanningPage() {
   const generatePdfMutation = useMutation({
     mutationFn: (planId: number) => workPlansApi.generatePdf(planId),
     onSuccess: (response) => {
-      const pdfUrl = (response?.data as any)?.pdf_url;
+      const data = response?.data as any;
+      const pdfUrl = data?.pdf_url;
+      const daysCount = data?.days_count || '?';
       if (pdfUrl) {
-        message.success('PDF generated!');
+        message.success(`PDF generated (${daysCount} days)!`);
         window.open(pdfUrl, '_blank');
       } else {
         message.success('PDF generated! Refreshing...');

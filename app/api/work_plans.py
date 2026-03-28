@@ -2132,6 +2132,13 @@ def generate_plan_pdf_now(plan_id):
         raise NotFoundError("Work plan not found")
 
     try:
+        # Log plan details for debugging
+        days_info = []
+        for d in plan.days:
+            job_count = len(list(d.jobs))
+            days_info.append(f"{d.date.isoformat()}: {job_count} jobs")
+        logger.info(f"Generating PDF for plan {plan.id}: {len(plan.days)} days — {days_info}")
+
         from app.services.work_plan_pdf_service import WorkPlanPDFService
         pdf_file = WorkPlanPDFService.generate_plan_pdf(plan)
         if not pdf_file:
@@ -2142,8 +2149,10 @@ def generate_plan_pdf_now(plan_id):
 
         return jsonify({
             'status': 'success',
-            'message': 'PDF generated',
-            'pdf_url': pdf_file.get_url()
+            'message': f'PDF generated ({len(plan.days)} days)',
+            'pdf_url': pdf_file.get_url(),
+            'days_count': len(plan.days),
+            'days_detail': days_info,
         }), 200
     except Exception as e:
         import traceback
