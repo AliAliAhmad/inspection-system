@@ -401,15 +401,14 @@ class WorkPlanPDF(FPDF):
             self.set_font('Helvetica', '', 6.5)
             self.cell(cols[3], 5.5, self._s(desc, 35), fill=True)
 
-            # SAP #
+            # SAP # (blank if none — user can write it in)
             sap = job.sap_order_number or ''
             if sap:
                 self.set_font('Helvetica', '', 6.5)
                 self.set_text_color(*BLUE)
             else:
-                self.set_font('Helvetica', 'I', 5.5)
-                self.set_text_color(*DANGER)
-                sap = 'none'
+                self.set_font('Helvetica', '', 6.5)
+                self.set_text_color(*TEXT)
             self.cell(cols[4], 5.5, self._s(sap, 14), fill=True, align='C')
             self.set_text_color(*TEXT)
 
@@ -424,15 +423,16 @@ class WorkPlanPDF(FPDF):
             self.set_font('Helvetica', '', 6)
             self.cell(cols[5], 5.5, self._s(team_str, 32), fill=True)
 
-            # Materials (show ALL)
+            # Materials (show ALL — use smaller font if many)
             mat_parts = []
             for wpm in (job.materials or []):
                 if wpm.material:
                     code = wpm.material.code or wpm.material.name or ''
-                    mat_parts.append('%s x%g' % (self._s(code, 12), wpm.quantity or 0))
+                    mat_parts.append('%s x%g' % (self._s(code, 15), wpm.quantity or 0))
             mat_str = ', '.join(mat_parts)
-            self.set_font('Helvetica', '', 5.5)
-            self.cell(cols[6], 5.5, self._s(mat_str, 32), fill=True)
+            font_sz = 5 if len(mat_str) > 40 else 5.5
+            self.set_font('Helvetica', '', font_sz)
+            self.cell(cols[6], 5.5, self._s(mat_str, 50), fill=True)
 
             # Done checkbox
             x0 = self.get_x()
