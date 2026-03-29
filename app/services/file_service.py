@@ -243,6 +243,12 @@ class FileService:
                     {'quality': 'auto:good', 'fetch_format': 'auto'}
                 ]
 
+            # For raw uploads (PDF, etc.), include extension in public_id so URL ends with .pdf
+            if resource_type == 'raw' and ext:
+                import uuid
+                upload_options['public_id'] = '%s/%s.%s' % (folder, uuid.uuid4().hex[:12], ext)
+                upload_options.pop('folder', None)  # folder is already in public_id
+
             result = cloudinary.uploader.upload(
                 file_bytes,
                 **upload_options
