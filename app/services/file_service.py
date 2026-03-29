@@ -249,11 +249,6 @@ class FileService:
             )
 
             cloudinary_url = result.get('secure_url')
-
-            # For raw uploads, Cloudinary URL may not have file extension.
-            # Append it so browsers recognize the file type (e.g. .pdf)
-            if resource_type == 'raw' and ext and cloudinary_url and not cloudinary_url.endswith('.%s' % ext):
-                cloudinary_url = cloudinary_url + '.' + ext if '?' not in cloudinary_url else cloudinary_url.replace('?', '.%s?' % ext)
             public_id = result.get('public_id')
 
             # Extract AI tags from response

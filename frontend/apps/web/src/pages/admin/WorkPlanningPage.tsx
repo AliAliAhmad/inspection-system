@@ -623,7 +623,11 @@ export default function WorkPlanningPage() {
       const daysCount = data?.days_count || '?';
       if (pdfUrl) {
         message.success(`PDF generated (${daysCount} days)!`);
-        window.open(pdfUrl, '_blank');
+        // Add fl_attachment to force browser to treat as PDF download with proper filename
+        const downloadUrl = pdfUrl.includes('/raw/upload/')
+          ? pdfUrl.replace('/raw/upload/', '/raw/upload/fl_attachment:work_plan/')
+          : pdfUrl;
+        window.open(downloadUrl, '_blank');
       } else {
         message.success('PDF generated! Refreshing...');
       }
@@ -1700,7 +1704,10 @@ export default function WorkPlanningPage() {
                     icon: <FilePdfOutlined />,
                     onClick: () => {
                       if (currentPlan?.pdf_url) {
-                        window.open(currentPlan.pdf_url, '_blank');
+                        const url = currentPlan.pdf_url.includes('/raw/upload/')
+                          ? currentPlan.pdf_url.replace('/raw/upload/', '/raw/upload/fl_attachment:work_plan/')
+                          : currentPlan.pdf_url;
+                        window.open(url, '_blank');
                       } else {
                         message.info('PDF not available');
                       }
@@ -1719,7 +1726,12 @@ export default function WorkPlanningPage() {
                   <Button
                     size="small"
                     icon={<FilePdfOutlined />}
-                    onClick={() => window.open(currentPlan.pdf_url, '_blank')}
+                    onClick={() => {
+                      const url = currentPlan.pdf_url?.includes('/raw/upload/')
+                        ? currentPlan.pdf_url.replace('/raw/upload/', '/raw/upload/fl_attachment:work_plan/')
+                        : currentPlan.pdf_url;
+                      if (url) window.open(url, '_blank');
+                    }}
                     style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
                   >
                     PDF
