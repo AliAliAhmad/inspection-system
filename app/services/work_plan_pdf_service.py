@@ -154,7 +154,6 @@ class WorkPlanPDF(FPDF):
 
         boxes = [
             (str(total_jobs), 'Total Jobs', NAVY),
-            ('%.0fh' % total_hours, 'Total Hours', BLUE),
             (str(pm_count), 'PM Jobs', TEAL),
             (str(defect_count), 'Defect Repairs', RED),
             (str(insp_count), 'Inspections', GREY),
@@ -184,7 +183,7 @@ class WorkPlanPDF(FPDF):
         self.ln(1)
 
         # Header
-        hcols = [(55, 'Day'), (22, 'PM'), (22, 'Defect'), (22, 'Inspect'), (22, 'Total'), (28, 'Hours'), (100, 'Team')]
+        hcols = [(55, 'Day'), (25, 'PM'), (25, 'Defect'), (25, 'Inspect'), (25, 'Total'), (116, 'Team')]
         self.set_fill_color(*NAVY)
         self.set_text_color(*WHITE)
         self.set_font('Helvetica', 'B', 7)
@@ -209,14 +208,13 @@ class WorkPlanPDF(FPDF):
             self.set_fill_color(*bg)
             self.set_font('Helvetica', '', 7.5)
             self.cell(55, 5, '  %s' % day.date.strftime('%A, %d %b'), fill=True)
-            self.cell(22, 5, str(dpm), fill=True, align='C')
-            self.cell(22, 5, str(ddef), fill=True, align='C')
-            self.cell(22, 5, str(dins), fill=True, align='C')
+            self.cell(25, 5, str(dpm), fill=True, align='C')
+            self.cell(25, 5, str(ddef), fill=True, align='C')
+            self.cell(25, 5, str(dins), fill=True, align='C')
             self.set_font('Helvetica', 'B', 7.5)
-            self.cell(22, 5, str(len(all_j)), fill=True, align='C')
-            self.cell(28, 5, '%.1fh' % dhrs, fill=True, align='C')
+            self.cell(25, 5, str(len(all_j)), fill=True, align='C')
             self.set_font('Helvetica', '', 6.5)
-            self.cell(100, 5, self._s(', '.join(sorted(team)), 60), fill=True, new_x='LMARGIN', new_y='NEXT')
+            self.cell(116, 5, self._s(', '.join(sorted(team)), 70), fill=True, new_x='LMARGIN', new_y='NEXT')
 
         self.ln(6)
 
@@ -249,7 +247,7 @@ class WorkPlanPDF(FPDF):
         hours = sum(j.estimated_hours or 0 for j in all_jobs)
 
         self.current_day_label = day.date.strftime('%A, %d %B %Y')
-        self.current_day_stats = '%d jobs  |  %.1f hours' % (total, hours)
+        self.current_day_stats = '%d jobs' % total
         self.add_page()
 
         east = sorted(
@@ -289,7 +287,7 @@ class WorkPlanPDF(FPDF):
         self.set_font('Helvetica', 'B', 8.5)
         self.cell(CW * 0.65, 6, '   %s' % label, fill=True)
         self.set_font('Helvetica', '', 7.5)
-        self.cell(CW * 0.35, 6, '%d jobs  |  %.1fh   ' % (len(jobs), hours), fill=True, align='R',
+        self.cell(CW * 0.35, 6, '%d jobs   ' % len(jobs), fill=True, align='R',
                   new_x='LMARGIN', new_y='NEXT')
         self.set_text_color(*TEXT)
         self.ln(1)
@@ -308,40 +306,30 @@ class WorkPlanPDF(FPDF):
         if pm_def:
             self._job_table(pm_def)
 
-        # ── Inspections (compact) ──
+        # ── Inspections (single compact line) ──
         if inspections:
-            self.ln(1.5)
-            self._pill('INSPECTIONS (%d)' % len(inspections), GREY, w=32)
             self.ln(1)
-            self.set_font('Helvetica', '', 6.5)
-            # Compact: 3-column grid
-            col_w = CW / 3
-            for i, j in enumerate(inspections):
+            eq_names = []
+            for j in inspections:
                 eq = ''
                 if j.equipment:
                     eq = j.equipment.name or j.equipment.serial_number or ''
                 elif j.inspection_assignment and j.inspection_assignment.equipment:
                     eq = j.inspection_assignment.equipment.name or ''
-                if not eq:
-                    eq = self._s(j.description or '', 25) or '?'
-                team = ', '.join(
-                    (a.user.full_name or '?') for a in (j.assignments or []) if a.user
-                ) or '-'
-                txt = '%s  [%s]' % (self._s(eq, 22), self._s(team, 18))
-
-                bg = LIGHT if (i // 3) % 2 == 0 else WHITE
-                self.set_fill_color(*bg)
-                self.cell(col_w, 3.8, '  ' + txt, fill=True)
-                if (i + 1) % 3 == 0:
-                    self.ln()
-            if len(inspections) % 3 != 0:
-                self.ln()
+                if eq:
+                    eq_names.append(self._s(eq, 20))
+            line = 'Inspections (%d):  %s' % (len(inspections), ',  '.join(eq_names) if eq_names else '-')
+            self.set_fill_color(*LIGHT)
+            self.set_font('Helvetica', 'I', 6.5)
+            self.set_text_color(*GREY)
+            self.cell(CW, 4, '  ' + self._s(line, 150), fill=True, new_x='LMARGIN', new_y='NEXT')
+            self.set_text_color(*TEXT)
 
     def _job_table(self, jobs):
         """Render PM/defect jobs as a professional table."""
-        # Column widths:  #  Type  Equipment  Description  SAP#  Hrs  Team  Materials  Done
-        cols = [7, 14, 52, 60, 26, 14, 55, 42, 7]
-        headers = ['#', 'Type', 'Equipment', 'Description', 'SAP #', 'Hrs', 'Team', 'Materials', '']
+        # Column widths:  #  Type  Equipment  Description  SAP#  Team  Materials  Done
+        cols = [7, 14, 55, 58, 26, 55, 55, 7]
+        headers = ['#', 'Type', 'Equipment', 'Description', 'SAP #', 'Team', 'Materials', '']
 
         # Table header
         self.set_fill_color(70, 90, 120)
@@ -425,10 +413,6 @@ class WorkPlanPDF(FPDF):
             self.cell(cols[4], 5.5, self._s(sap, 14), fill=True, align='C')
             self.set_text_color(*TEXT)
 
-            # Hours
-            self.set_font('Helvetica', 'B', 6.5)
-            self.cell(cols[5], 5.5, '%.1f' % (job.estimated_hours or 0), fill=True, align='C')
-
             # Team (full names)
             team_parts = []
             for a in (job.assignments or []):
@@ -438,24 +422,22 @@ class WorkPlanPDF(FPDF):
                 team_parts.append(name)
             team_str = ', '.join(team_parts) if team_parts else '-'
             self.set_font('Helvetica', '', 6)
-            self.cell(cols[6], 5.5, self._s(team_str, 32), fill=True)
+            self.cell(cols[5], 5.5, self._s(team_str, 32), fill=True)
 
-            # Materials
+            # Materials (show ALL)
             mat_parts = []
             for wpm in (job.materials or []):
                 if wpm.material:
                     code = wpm.material.code or wpm.material.name or ''
-                    mat_parts.append('%s x%g' % (self._s(code, 10), wpm.quantity or 0))
-            mat_str = ', '.join(mat_parts[:3])
-            if len(mat_parts) > 3:
-                mat_str += ' +%d' % (len(mat_parts) - 3)
+                    mat_parts.append('%s x%g' % (self._s(code, 12), wpm.quantity or 0))
+            mat_str = ', '.join(mat_parts)
             self.set_font('Helvetica', '', 5.5)
-            self.cell(cols[7], 5.5, self._s(mat_str, 24), fill=True)
+            self.cell(cols[6], 5.5, self._s(mat_str, 32), fill=True)
 
             # Done checkbox
             x0 = self.get_x()
             y0 = self.get_y()
-            self.cell(cols[8], 5.5, '', fill=True, new_x='LMARGIN', new_y='NEXT')
+            self.cell(cols[7], 5.5, '', fill=True, new_x='LMARGIN', new_y='NEXT')
             self.set_draw_color(*BORDER)
             self.rect(x0 + 1, y0 + 0.8, 4, 4, 'D')
 
