@@ -42,7 +42,7 @@ export default function EquipmentDetailPage() {
     enabled: !!equipmentId,
   });
 
-  const equipment: Equipment | undefined = (eqData?.data as any)?.data || (eqData?.data as any);
+  const equipment: Equipment | undefined = (eqData?.data as any)?.equipment || (eqData?.data as any)?.data || (eqData?.data as any);
   const history = (readingsData?.data as any)?.data;
   const groups: ReadingGroup[] = history?.reading_groups || [];
   const isLoading = eqLoading || readingsLoading;
