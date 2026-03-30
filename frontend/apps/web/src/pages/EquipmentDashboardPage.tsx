@@ -941,6 +941,21 @@ export default function EquipmentDashboardPage() {
         width={700}
         footer={null}
       >
+        {/* Always show the readings button */}
+        {selectedEquipmentId && (
+          <Button
+            type="primary"
+            block
+            style={{ marginBottom: 12 }}
+            onClick={() => {
+              handleCloseModal();
+              navigate(`/equipment/${selectedEquipmentId}`);
+            }}
+          >
+            View Readings Dashboard
+          </Button>
+        )}
+
         {detailsLoading ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <Spin size="large" />
@@ -960,18 +975,6 @@ export default function EquipmentDashboardPage() {
               <Descriptions.Item label={t('equipment.capacity', 'Capacity')}>{equipmentDetails.capacity || '-'}</Descriptions.Item>
               <Descriptions.Item label={t('equipment.installDate', 'Install Date')}>{equipmentDetails.installation_date || '-'}</Descriptions.Item>
             </Descriptions>
-
-            <Button
-              type="primary"
-              block
-              style={{ marginTop: 12, marginBottom: 4 }}
-              onClick={() => {
-                handleCloseModal();
-                navigate(`/equipment/${selectedEquipmentId}`);
-              }}
-            >
-              View Readings Dashboard
-            </Button>
 
             <Divider />
 
