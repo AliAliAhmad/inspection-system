@@ -412,7 +412,7 @@ class WorkPlanPDF(FPDF):
             self.cell(cols[4], 5.5, self._s(sap, 14), fill=True, align='C')
             self.set_text_color(*TEXT)
 
-            # Team (full names)
+            # Team (full names) — collect text
             team_parts = []
             for a in (job.assignments or []):
                 name = a.user.full_name if a.user and a.user.full_name else '?'
@@ -420,26 +420,49 @@ class WorkPlanPDF(FPDF):
                     name = name + '*'
                 team_parts.append(name)
             team_str = ', '.join(team_parts) if team_parts else '-'
-            self.set_font('Helvetica', '', 6)
-            self.cell(cols[5], 5.5, self._s(team_str, 32), fill=True)
 
-            # Materials (show ALL — use smaller font if many)
+            # Materials (show ALL) — collect text
             mat_parts = []
             for wpm in (job.materials or []):
                 if wpm.material:
                     code = wpm.material.code or wpm.material.name or ''
                     mat_parts.append('%s x%g' % (self._s(code, 15), wpm.quantity or 0))
             mat_str = ', '.join(mat_parts)
-            font_sz = 5 if len(mat_str) > 40 else 5.5
-            self.set_font('Helvetica', '', font_sz)
-            self.cell(cols[6], 5.5, self._s(mat_str, 50), fill=True)
+
+            # Calculate row height based on team + materials text length
+            row_x = self.get_x()
+            row_y = self.get_y()
+            self.set_font('Helvetica', '', 5.5)
+            team_safe = self._s(team_str, 200)
+            mat_safe = self._s(mat_str, 200)
+            team_lines = max(1, self.get_string_width(team_safe) // (cols[5] - 2) + 1)
+            mat_lines = max(1, self.get_string_width(mat_safe) // (cols[6] - 2) + 1)
+            row_h = max(5.5, int(max(team_lines, mat_lines)) * 3.5 + 2)
+
+            # Draw background for full row at calculated height
+            self.set_fill_color(*bg)
+            sum_before = sum(cols[:5])
+            self.rect(LM + sum_before, row_y, cols[5], row_h, 'F')
+            self.rect(LM + sum_before + cols[5], row_y, cols[6], row_h, 'F')
+            self.rect(LM + sum_before + cols[5] + cols[6], row_y, cols[7], row_h, 'F')
+
+            # Team — use multi_cell for wrapping
+            self.set_xy(row_x, row_y)
+            self.set_font('Helvetica', '', 5.5)
+            self.multi_cell(cols[5], 3.5, team_safe, new_x='RIGHT', new_y='TOP', max_line_height=3.5)
+
+            # Materials — use multi_cell for wrapping
+            self.set_xy(row_x + cols[5], row_y)
+            self.set_font('Helvetica', '', 5)
+            self.multi_cell(cols[6], 3.5, mat_safe, new_x='RIGHT', new_y='TOP', max_line_height=3.5)
 
             # Done checkbox
-            x0 = self.get_x()
-            y0 = self.get_y()
-            self.cell(cols[7], 5.5, '', fill=True, new_x='LMARGIN', new_y='NEXT')
+            chk_x = LM + sum(cols[:7])
             self.set_draw_color(*BORDER)
-            self.rect(x0 + 1, y0 + 0.8, 4, 4, 'D')
+            self.rect(chk_x + 1, row_y + (row_h / 2) - 2, 4, 4, 'D')
+
+            # Move to next row
+            self.set_y(row_y + row_h)
 
 
 class WorkPlanPDFService:
