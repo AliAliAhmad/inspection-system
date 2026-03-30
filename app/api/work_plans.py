@@ -2166,13 +2166,13 @@ def generate_plan_pdf_now(plan_id):
 
 @bp.route('/<int:plan_id>/download-pdf', methods=['GET'])
 def download_plan_pdf(plan_id):
-    """Download the plan PDF with proper Content-Type and filename headers.
-    Accepts JWT via Authorization header OR ?token= query param (for window.open).
+    """Generate and serve PDF directly with proper headers.
+    Accepts JWT via Authorization header OR ?token= query param.
+    No Cloudinary dependency — generates fresh PDF on demand.
     """
-    # Support token via query param for direct browser access (window.open can't set headers)
+    from flask_jwt_extended import decode_token
     token = request.args.get('token')
-    if token and not request.headers.get('Authorization'):
-        from flask_jwt_extended import decode_token
+    if token:
         try:
             decode_token(token)
         except Exception:
@@ -2185,30 +2185,38 @@ def download_plan_pdf(plan_id):
 
     plan = db.session.get(WorkPlan, plan_id)
     if not plan:
-        raise NotFoundError("Work plan not found")
-    if not plan.pdf_file:
-        raise NotFoundError("PDF not generated yet")
+        return jsonify({'status': 'error', 'message': 'Plan not found'}), 404
 
-    pdf_url = plan.pdf_file.get_url()
-    if not pdf_url:
-        raise NotFoundError("PDF URL not available")
-
+    # Generate PDF fresh (no Cloudinary)
+    from app.services.work_plan_pdf_service import WorkPlanPDFService, WorkPlanPDF
+    import tempfile
     try:
-        resp = http_requests.get(pdf_url, timeout=30)
-        if resp.status_code != 200:
-            raise NotFoundError("Failed to fetch PDF from storage")
+        pdf = WorkPlanPDF(plan)
+        pdf.add_cover_page()
+        for day in sorted(plan.days, key=lambda d: d.date):
+            try:
+                pdf.add_day_page(day)
+            except Exception as e:
+                logger.error(f"PDF day render error {day.date}: {e}")
+                pdf.current_day_label = day.date.strftime('%A, %d %B %Y') + ' (ERROR)'
+                pdf.current_day_stats = ''
+                pdf.add_page()
 
+        pdf_bytes = pdf.output()
         filename = 'work_plan_%s.pdf' % plan.week_start.strftime('%Y_%m_%d')
+
         return Response(
-            resp.content,
+            pdf_bytes,
             mimetype='application/pdf',
             headers={
                 'Content-Disposition': 'inline; filename="%s"' % filename,
                 'Content-Type': 'application/pdf',
+                'Cache-Control': 'no-cache',
             }
         )
-    except http_requests.RequestException as e:
-        raise NotFoundError("Failed to download PDF: %s" % str(e))
+    except Exception as e:
+        logger.error(f"PDF generation failed: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @bp.route('/<int:plan_id>/pdf/day/<day_date>', methods=['GET'])
