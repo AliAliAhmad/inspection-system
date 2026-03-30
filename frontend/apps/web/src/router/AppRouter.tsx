@@ -72,6 +72,7 @@ const BonusRequestsPage = lazy(() => import('../pages/quality_engineer/BonusRequ
 
 // Equipment Dashboard - accessible by all roles
 const EquipmentDashboardPage = lazy(() => import('../pages/EquipmentDashboardPage'));
+const EquipmentDetailPage = lazy(() => import('../pages/EquipmentDetailPage'));
 
 function PageLoader() {
   return (
@@ -102,6 +103,7 @@ export default function AppRouter() {
           <Route path="leaves" element={<LeavesPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="equipment-dashboard" element={<EquipmentDashboardPage />} />
+          <Route path="equipment/:id" element={<EquipmentDetailPage />} />
           <Route path="my-work-plan" element={<MyWorkPlanPage />} />
 
           {/* Admin routes */}

@@ -971,6 +971,233 @@ def get_reading_stats(equipment_id, reading_type):
     }), 200
 
 
+@bp.route('/<int:equipment_id>/readings-history', methods=['GET'])
+@jwt_required()
+def get_readings_history(equipment_id):
+    """
+    Get ALL numeric readings for an equipment, grouped by type, with time series data.
+    Used for the Equipment Readings Dashboard charts and tables.
+
+    Query params:
+        - days: How far back to fetch (default 90)
+    """
+    from app.models.equipment_reading import EquipmentReading
+    from app.models.running_hours import RunningHoursReading
+    from app.models.inspection import Inspection, InspectionAnswer
+    from app.models.checklist import ChecklistItem
+    from datetime import date, timedelta
+    from collections import defaultdict
+    import math
+
+    equipment = db.session.get(Equipment, equipment_id)
+    if not equipment:
+        raise NotFoundError(f"Equipment with ID {equipment_id} not found")
+
+    language = get_language()
+    days = request.args.get('days', 90, type=int)
+    cutoff = date.today() - timedelta(days=days)
+
+    groups = []
+
+    # ── Source 1: EquipmentReading (rnr/twl) ──
+    eq_readings = EquipmentReading.query.filter(
+        EquipmentReading.equipment_id == equipment_id,
+        EquipmentReading.reading_date >= cutoff
+    ).order_by(EquipmentReading.reading_date.asc()).all()
+
+    er_by_type = defaultdict(list)
+    for r in eq_readings:
+        er_by_type[r.reading_type].append(r)
+
+    type_labels = {
+        'rnr': ('Running Hours', 'ساعات التشغيل', 'hours'),
+        'twl': ('Twistlock Count', 'عدد التويستلوك', 'count'),
+    }
+
+    for rtype, readings in er_by_type.items():
+        label_en, label_ar, unit = type_labels.get(rtype, (rtype.upper(), rtype.upper(), ''))
+        values = [r.reading_value for r in readings if r.reading_value is not None and not r.is_faulty]
+        data_points = []
+        for r in readings:
+            recorder = None
+            if r.recorded_by_id:
+                u = db.session.get(User, r.recorded_by_id)
+                recorder = u.full_name if u else None
+            data_points.append({
+                'id': r.id,
+                'value': r.reading_value,
+                'date': r.reading_date.isoformat() if r.reading_date else None,
+                'recorded_at': r.recorded_at.isoformat() if r.recorded_at else None,
+                'recorded_by': recorder,
+                'inspection_id': r.inspection_id,
+                'is_faulty': r.is_faulty or False,
+            })
+
+        stats = _compute_stats(values)
+        groups.append({
+            'group_key': rtype,
+            'label': label_en,
+            'label_ar': label_ar,
+            'unit': unit,
+            'source': 'equipment_reading',
+            'thresholds': {'min_value': None, 'max_value': None, 'numeric_rule': None},
+            'readings': data_points,
+            'stats': stats,
+        })
+
+    # ── Source 2: InspectionAnswer with numeric checklist items ──
+    numeric_answers = db.session.query(
+        InspectionAnswer, ChecklistItem, Inspection
+    ).join(
+        Inspection, InspectionAnswer.inspection_id == Inspection.id
+    ).join(
+        ChecklistItem, InspectionAnswer.checklist_item_id == ChecklistItem.id
+    ).filter(
+        Inspection.equipment_id == equipment_id,
+        ChecklistItem.answer_type == 'numeric',
+        InspectionAnswer.answered_at >= cutoff
+    ).order_by(InspectionAnswer.answered_at.asc()).all()
+
+    ans_by_item = defaultdict(list)
+    item_info = {}
+    for answer, item, inspection in numeric_answers:
+        ans_by_item[item.id].append((answer, inspection))
+        if item.id not in item_info:
+            item_info[item.id] = item
+
+    for item_id, answer_pairs in ans_by_item.items():
+        item = item_info[item_id]
+        # Skip if this is a running hours question (already covered by EquipmentReading)
+        q_lower = (item.question_text or '').lower()
+        if any(kw in q_lower for kw in ['rnr reading', 'running hour', 'running hours', 'rnr']):
+            continue
+
+        data_points = []
+        values = []
+        for answer, inspection in answer_pairs:
+            try:
+                val = float(answer.answer_value)
+            except (TypeError, ValueError):
+                continue
+            values.append(val)
+            recorder = None
+            if inspection.technician_id:
+                u = db.session.get(User, inspection.technician_id)
+                recorder = u.full_name if u else None
+            data_points.append({
+                'id': answer.id,
+                'value': val,
+                'date': answer.answered_at.strftime('%Y-%m-%d') if answer.answered_at else None,
+                'recorded_at': answer.answered_at.isoformat() if answer.answered_at else None,
+                'recorded_by': recorder,
+                'inspection_id': inspection.id,
+                'is_faulty': False,
+            })
+
+        if not data_points:
+            continue
+
+        stats = _compute_stats(values)
+        groups.append({
+            'group_key': f'checklist_item_{item_id}',
+            'label': item.question_text or f'Item #{item_id}',
+            'label_ar': item.question_text_ar,
+            'unit': None,
+            'source': 'inspection_answer',
+            'thresholds': {
+                'min_value': item.min_value,
+                'max_value': item.max_value,
+                'numeric_rule': item.numeric_rule,
+            },
+            'readings': data_points,
+            'stats': stats,
+        })
+
+    # ── Source 3: RunningHoursReading (merge if no EquipmentReading rnr exists) ──
+    if 'rnr' not in er_by_type:
+        rhr_readings = RunningHoursReading.query.filter(
+            RunningHoursReading.equipment_id == equipment_id,
+            RunningHoursReading.recorded_at >= cutoff
+        ).order_by(RunningHoursReading.recorded_at.asc()).all()
+
+        if rhr_readings:
+            data_points = []
+            values = []
+            for r in rhr_readings:
+                values.append(r.hours)
+                recorder = None
+                if r.recorded_by_id:
+                    u = db.session.get(User, r.recorded_by_id)
+                    recorder = u.full_name if u else None
+                data_points.append({
+                    'id': r.id,
+                    'value': r.hours,
+                    'date': r.recorded_at.strftime('%Y-%m-%d') if r.recorded_at else None,
+                    'recorded_at': r.recorded_at.isoformat() if r.recorded_at else None,
+                    'recorded_by': recorder,
+                    'inspection_id': None,
+                    'is_faulty': False,
+                })
+
+            stats = _compute_stats(values)
+            groups.append({
+                'group_key': 'running_hours',
+                'label': 'Running Hours',
+                'label_ar': 'ساعات التشغيل',
+                'unit': 'hours',
+                'source': 'running_hours',
+                'thresholds': {'min_value': None, 'max_value': None, 'numeric_rule': None},
+                'readings': data_points,
+                'stats': stats,
+            })
+
+    # Sort by most readings first
+    groups.sort(key=lambda g: len(g['readings']), reverse=True)
+
+    total_readings = sum(len(g['readings']) for g in groups)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'equipment_id': equipment_id,
+            'equipment_name': equipment.name or equipment.serial_number or f'Equipment #{equipment_id}',
+            'reading_groups': groups,
+            'total_readings': total_readings,
+            'date_range': {
+                'start': cutoff.isoformat(),
+                'end': date.today().isoformat(),
+            },
+        }
+    }), 200
+
+
+def _compute_stats(values):
+    """Compute basic statistics for a list of numeric values."""
+    if not values:
+        return {'count': 0, 'avg': 0, 'min': 0, 'max': 0, 'latest': 0, 'trend': 'stable'}
+    avg = sum(values) / len(values)
+    # Trend: compare last 3 readings average vs first 3
+    if len(values) >= 6:
+        early = sum(values[:3]) / 3
+        recent = sum(values[-3:]) / 3
+        if recent > early * 1.05:
+            trend = 'increasing'
+        elif recent < early * 0.95:
+            trend = 'decreasing'
+        else:
+            trend = 'stable'
+    else:
+        trend = 'stable'
+    return {
+        'count': len(values),
+        'avg': round(avg, 2),
+        'min': round(min(values), 2),
+        'max': round(max(values), 2),
+        'latest': round(values[-1], 2),
+        'trend': trend,
+    }
+
+
 # ============================================================
 # EQUIPMENT AI ENDPOINTS
 # ============================================================

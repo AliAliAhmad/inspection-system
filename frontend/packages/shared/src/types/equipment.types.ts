@@ -291,3 +291,52 @@ export interface ExportOptions {
   include_certifications?: boolean;
   include_notes?: boolean;
 }
+
+// ── Equipment Readings Dashboard Types ──
+
+export interface ReadingDataPoint {
+  id: number;
+  value: number;
+  date: string;
+  recorded_at: string;
+  recorded_by: string | null;
+  inspection_id: number | null;
+  is_faulty: boolean;
+}
+
+export interface ReadingThresholds {
+  min_value: number | null;
+  max_value: number | null;
+  numeric_rule: 'less_than' | 'greater_than' | 'between' | null;
+}
+
+export interface ReadingGroupStats {
+  count: number;
+  avg: number;
+  min: number;
+  max: number;
+  latest: number;
+  trend: 'increasing' | 'decreasing' | 'stable';
+}
+
+export interface ReadingGroup {
+  group_key: string;
+  label: string;
+  label_ar: string | null;
+  unit: string | null;
+  source: 'equipment_reading' | 'inspection_answer' | 'running_hours';
+  thresholds: ReadingThresholds;
+  readings: ReadingDataPoint[];
+  stats: ReadingGroupStats;
+}
+
+export interface EquipmentReadingsHistory {
+  equipment_id: number;
+  equipment_name: string;
+  reading_groups: ReadingGroup[];
+  total_readings: number;
+  date_range: {
+    start: string;
+    end: string;
+  };
+}

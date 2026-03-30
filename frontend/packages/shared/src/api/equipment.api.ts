@@ -23,6 +23,7 @@ import {
   AchievementsData,
   EquipmentStreak,
   ExportOptions,
+  EquipmentReadingsHistory,
 } from '../types';
 
 export interface EquipmentListParams extends PaginationParams {
@@ -109,6 +110,14 @@ export const equipmentApi = {
       reading_type: string;
       days: number;
     }>>(`/api/equipment/${equipmentId}/reading-stats/${readingType}`, { params: { days } });
+  },
+
+  /** Get all numeric readings history for equipment — charts and tables */
+  getReadingsHistory(equipmentId: number, days = 90) {
+    return getApiClient().get<ApiResponse<EquipmentReadingsHistory>>(
+      `/api/equipment/${equipmentId}/readings-history`,
+      { params: { days } }
+    );
   },
 
   // KPI and Analytics endpoints
