@@ -5,6 +5,7 @@ Enhanced with job templates, dependencies, capacity config, skills, conflicts, a
 """
 
 import logging
+import requests as http_requests
 from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
@@ -2161,6 +2162,53 @@ def generate_plan_pdf_now(plan_id):
             'message': str(e),
             'traceback': traceback.format_exc()
         }), 500
+
+
+@bp.route('/<int:plan_id>/download-pdf', methods=['GET'])
+def download_plan_pdf(plan_id):
+    """Download the plan PDF with proper Content-Type and filename headers.
+    Accepts JWT via Authorization header OR ?token= query param (for window.open).
+    """
+    # Support token via query param for direct browser access (window.open can't set headers)
+    token = request.args.get('token')
+    if token and not request.headers.get('Authorization'):
+        from flask_jwt_extended import decode_token
+        try:
+            decode_token(token)
+        except Exception:
+            return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
+    else:
+        try:
+            jwt_required()(lambda: None)()
+        except Exception:
+            return jsonify({'status': 'error', 'message': 'Authentication required'}), 401
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+    if not plan.pdf_file:
+        raise NotFoundError("PDF not generated yet")
+
+    pdf_url = plan.pdf_file.get_url()
+    if not pdf_url:
+        raise NotFoundError("PDF URL not available")
+
+    try:
+        resp = http_requests.get(pdf_url, timeout=30)
+        if resp.status_code != 200:
+            raise NotFoundError("Failed to fetch PDF from storage")
+
+        filename = 'work_plan_%s.pdf' % plan.week_start.strftime('%Y_%m_%d')
+        return Response(
+            resp.content,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': 'inline; filename="%s"' % filename,
+                'Content-Type': 'application/pdf',
+            }
+        )
+    except http_requests.RequestException as e:
+        raise NotFoundError("Failed to download PDF: %s" % str(e))
 
 
 @bp.route('/<int:plan_id>/pdf/day/<day_date>', methods=['GET'])

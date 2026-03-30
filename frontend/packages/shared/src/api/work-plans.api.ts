@@ -615,6 +615,10 @@ export const workPlansApi = {
     return getApiClient().post<ApiResponse<{ pdf_url: string }>>(`/api/work-plans/${planId}/generate-pdf`);
   },
 
+  getPdfDownloadUrl(planId: number) {
+    return `${getApiBaseUrl()}/api/work-plans/${planId}/download-pdf`;
+  },
+
   // ==================== DAY INSPECTIONS (Read-Only Visibility) ====================
 
   getDayInspections(date: string, berth?: string) {

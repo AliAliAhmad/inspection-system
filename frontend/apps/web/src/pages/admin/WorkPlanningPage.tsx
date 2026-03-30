@@ -617,20 +617,11 @@ export default function WorkPlanningPage() {
 
   const generatePdfMutation = useMutation({
     mutationFn: (planId: number) => workPlansApi.generatePdf(planId),
-    onSuccess: (response) => {
-      const data = response?.data as any;
-      const pdfUrl = data?.pdf_url;
-      const daysCount = data?.days_count || '?';
-      if (pdfUrl) {
-        message.success(`PDF generated (${daysCount} days)!`);
-        // Add fl_attachment to force browser to treat as PDF download with proper filename
-        const downloadUrl = pdfUrl.includes('/raw/upload/')
-          ? pdfUrl.replace('/raw/upload/', '/raw/upload/fl_attachment:work_plan/')
-          : pdfUrl;
-        window.open(downloadUrl, '_blank');
-      } else {
-        message.success('PDF generated! Refreshing...');
-      }
+    onSuccess: (_response, planId) => {
+      message.success('PDF generated! Opening...');
+      // Open via backend proxy endpoint which serves with correct Content-Type: application/pdf
+      const downloadUrl = workPlansApi.getPdfDownloadUrl(planId) + '?token=' + (localStorage.getItem('access_token') || '');
+      window.open(downloadUrl, '_blank');
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
     onError: (err: any) => {
@@ -1704,12 +1695,10 @@ export default function WorkPlanningPage() {
                     icon: <FilePdfOutlined />,
                     onClick: () => {
                       if (currentPlan?.pdf_url) {
-                        const url = currentPlan.pdf_url.includes('/raw/upload/')
-                          ? currentPlan.pdf_url.replace('/raw/upload/', '/raw/upload/fl_attachment:work_plan/')
-                          : currentPlan.pdf_url;
+                        const url = workPlansApi.getPdfDownloadUrl(currentPlan.id) + '?token=' + (localStorage.getItem('access_token') || '');
                         window.open(url, '_blank');
                       } else {
-                        message.info('PDF not available');
+                        message.info('PDF not available — click Regenerate PDF first');
                       }
                     },
                     disabled: !currentPlan?.pdf_url,
@@ -1727,10 +1716,8 @@ export default function WorkPlanningPage() {
                     size="small"
                     icon={<FilePdfOutlined />}
                     onClick={() => {
-                      const url = currentPlan.pdf_url?.includes('/raw/upload/')
-                        ? currentPlan.pdf_url.replace('/raw/upload/', '/raw/upload/fl_attachment:work_plan/')
-                        : currentPlan.pdf_url;
-                      if (url) window.open(url, '_blank');
+                      const url = workPlansApi.getPdfDownloadUrl(currentPlan.id) + '?token=' + (localStorage.getItem('access_token') || '');
+                      window.open(url, '_blank');
                     }}
                     style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
                   >
