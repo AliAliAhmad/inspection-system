@@ -2165,23 +2165,11 @@ def generate_plan_pdf_now(plan_id):
 
 
 @bp.route('/<int:plan_id>/download-pdf', methods=['GET'])
+@jwt_required()
 def download_plan_pdf(plan_id):
     """Generate and serve PDF directly with proper headers.
-    Accepts JWT via Authorization header OR ?token= query param.
     No Cloudinary dependency — generates fresh PDF on demand.
     """
-    from flask_jwt_extended import decode_token
-    token = request.args.get('token')
-    if token:
-        try:
-            decode_token(token)
-        except Exception:
-            return jsonify({'status': 'error', 'message': 'Invalid token'}), 401
-    else:
-        try:
-            jwt_required()(lambda: None)()
-        except Exception:
-            return jsonify({'status': 'error', 'message': 'Authentication required'}), 401
 
     plan = db.session.get(WorkPlan, plan_id)
     if not plan:

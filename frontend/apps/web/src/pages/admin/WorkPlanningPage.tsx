@@ -73,7 +73,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit } from '@inspection/shared';
+import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -616,12 +616,19 @@ export default function WorkPlanningPage() {
   });
 
   const generatePdfMutation = useMutation({
-    mutationFn: (planId: number) => workPlansApi.generatePdf(planId),
-    onSuccess: (_response, planId) => {
-      message.success('PDF generated! Opening...');
-      // Open via backend proxy endpoint which serves with correct Content-Type: application/pdf
-      const downloadUrl = workPlansApi.getPdfDownloadUrl(planId) + '?token=' + (localStorage.getItem('access_token') || '');
-      window.open(downloadUrl, '_blank');
+    mutationFn: async (planId: number) => {
+      // Step 1: Generate PDF on server (uploads to Cloudinary)
+      await workPlansApi.generatePdf(planId);
+      // Step 2: Download PDF via proxy endpoint as blob (sends auth header automatically)
+      const response = await getApiClient().get(`/api/work-plans/${planId}/download-pdf`, { responseType: 'blob' });
+      return response;
+    },
+    onSuccess: (response) => {
+      message.success('PDF generated!');
+      // Create blob URL and open in new tab
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
     onError: (err: any) => {
@@ -1693,10 +1700,13 @@ export default function WorkPlanningPage() {
                     key: 'pdf',
                     label: 'Download PDF',
                     icon: <FilePdfOutlined />,
-                    onClick: () => {
+                    onClick: async () => {
                       if (currentPlan?.pdf_url) {
-                        const url = workPlansApi.getPdfDownloadUrl(currentPlan.id) + '?token=' + (localStorage.getItem('access_token') || '');
-                        window.open(url, '_blank');
+                        try {
+                          const resp = await getApiClient().get(`/api/work-plans/${currentPlan.id}/download-pdf`, { responseType: 'blob' });
+                          const blob = new Blob([resp.data], { type: 'application/pdf' });
+                          window.open(URL.createObjectURL(blob), '_blank');
+                        } catch { message.error('Failed to download PDF'); }
                       } else {
                         message.info('PDF not available — click Regenerate PDF first');
                       }
@@ -1715,9 +1725,12 @@ export default function WorkPlanningPage() {
                   <Button
                     size="small"
                     icon={<FilePdfOutlined />}
-                    onClick={() => {
-                      const url = workPlansApi.getPdfDownloadUrl(currentPlan.id) + '?token=' + (localStorage.getItem('access_token') || '');
-                      window.open(url, '_blank');
+                    onClick={async () => {
+                      try {
+                        const resp = await getApiClient().get(`/api/work-plans/${currentPlan.id}/download-pdf`, { responseType: 'blob' });
+                        const blob = new Blob([resp.data], { type: 'application/pdf' });
+                        window.open(URL.createObjectURL(blob), '_blank');
+                      } catch { message.error('Failed to download PDF'); }
                     }}
                     style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
                   >
