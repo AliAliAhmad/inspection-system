@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Row,
@@ -170,6 +171,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function EquipmentDashboardPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -958,6 +960,18 @@ export default function EquipmentDashboardPage() {
               <Descriptions.Item label={t('equipment.capacity', 'Capacity')}>{equipmentDetails.capacity || '-'}</Descriptions.Item>
               <Descriptions.Item label={t('equipment.installDate', 'Install Date')}>{equipmentDetails.installation_date || '-'}</Descriptions.Item>
             </Descriptions>
+
+            <Button
+              type="primary"
+              block
+              style={{ marginTop: 12, marginBottom: 4 }}
+              onClick={() => {
+                handleCloseModal();
+                navigate(`/equipment/${selectedEquipmentId}`);
+              }}
+            >
+              View Readings Dashboard
+            </Button>
 
             <Divider />
 

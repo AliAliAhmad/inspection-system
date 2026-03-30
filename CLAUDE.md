@@ -81,6 +81,7 @@ See HISTORY.md for full changelog. Only keep last 3 entries here.
 | 2026-03-25 | Fix: All Inspections page — mobile safe area insets (buttons hidden behind Android nav bar), bigger/clearer badges and stats cards on mobile, wider status/result tag columns on web | ✅ Done |
 | 2026-03-26 | Fix: Team Pool missing employees — TWO fixes: (1) EmployeePool component dynamic roles, (2) WorkPlanningPage compact team pool was separately hardcoded to 3 roles. Both now show maintenance + all non-admin roles | ✅ Done |
 | 2026-03-27 | Fix: Publish timeout + Feat: Revise — moved PDF/email to background thread so publish responds instantly. New /revise endpoint to revert published plan to draft for editing. Notifies assigned users on both publish and revise | ✅ Done |
+| 2026-03-30 | Feat: Equipment Readings Dashboard — /equipment/:id page with line charts (recharts) for all numeric readings from inspections (running hours, temperatures, pressures), threshold danger lines, history table, trend indicators. Backend /readings-history aggregates EquipmentReading + InspectionAnswer + RunningHoursReading | ✅ Done |
 
 
 ## Plugin Management
