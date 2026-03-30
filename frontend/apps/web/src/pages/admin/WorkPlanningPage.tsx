@@ -523,8 +523,8 @@ export default function WorkPlanningPage() {
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
 
-  // Calculate week start (Monday)
-  const currentWeekStart = dayjs().startOf('isoWeek').add(weekOffset, 'week');
+  // Calculate week start (Sunday-based: week starts on Sunday)
+  const currentWeekStart = dayjs().startOf('week').add(weekOffset, 'week');
   const weekStartStr = currentWeekStart.format('YYYY-MM-DD');
 
   // Sensors for drag & drop
@@ -584,8 +584,8 @@ export default function WorkPlanningPage() {
         setCreateModalOpen(false);
         form.resetFields();
         // Navigate to the week that was selected
-        const selectedWeek = dayjs(variables.week_start).startOf('isoWeek');
-        const currentWeek = dayjs().startOf('isoWeek');
+        const selectedWeek = dayjs(variables.week_start).startOf('week');
+        const currentWeek = dayjs().startOf('week');
         const diffWeeks = selectedWeek.diff(currentWeek, 'week');
 
         // If same week, just refetch. Otherwise set offset which triggers refetch via queryKey change
@@ -1464,7 +1464,7 @@ export default function WorkPlanningPage() {
   }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, removeJobMutation, userLeaveDatesMap]);
 
   const handleCreatePlan = (values: any) => {
-    const weekStart = values.week_start.startOf('isoWeek').format('YYYY-MM-DD');
+    const weekStart = values.week_start.startOf('week').format('YYYY-MM-DD');
     createMutation.mutate({ week_start: weekStart, notes: values.notes });
   };
 

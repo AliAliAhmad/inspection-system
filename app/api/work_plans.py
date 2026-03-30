@@ -460,10 +460,8 @@ def create_work_plan():
     except ValueError:
         raise ValidationError("Invalid date format. Use YYYY-MM-DD")
 
-    # Ensure it's a Monday
-    if week_start.weekday() != 0:
-        # Adjust to Monday
-        week_start = week_start - timedelta(days=week_start.weekday())
+    # Accept any start date — no longer forced to Monday
+    # The plan runs 7 days from the selected start date
 
     week_end = week_start + timedelta(days=6)
 
