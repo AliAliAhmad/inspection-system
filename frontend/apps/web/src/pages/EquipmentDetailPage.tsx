@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Card, Tabs, Tag, Space, Typography, Breadcrumb, Button, Spin, Empty, Segmented, Row, Col, Statistic, Descriptions,
+  Card, Tabs, Tag, Space, Typography, Breadcrumb, Button, Spin, Empty, Segmented, Row, Col, Statistic, Descriptions, Drawer, Table,
 } from 'antd';
 import {
   ArrowLeftOutlined, DashboardOutlined, TableOutlined, InfoCircleOutlined,
@@ -29,6 +29,7 @@ export default function EquipmentDetailPage() {
   const navigate = useNavigate();
   const [days, setDays] = useState(90);
   const [activeTab, setActiveTab] = useState('charts');
+  const [selectedGroup, setSelectedGroup] = useState<ReadingGroup | null>(null);
 
   const { data: eqData, isLoading: eqLoading } = useQuery({
     queryKey: ['equipment-detail', equipmentId],
@@ -119,7 +120,12 @@ export default function EquipmentDetailPage() {
                           : <MinusOutlined style={{ color: '#8c8c8c' }} />;
                         return (
                           <Col key={g.group_key} xs={12} sm={6}>
-                            <Card size="small">
+                            <Card
+                              size="small"
+                              hoverable
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => setSelectedGroup(g)}
+                            >
                               <Statistic
                                 title={<Text style={{ fontSize: 11 }}>{g.label}</Text>}
                                 value={g.stats.latest}
@@ -130,6 +136,7 @@ export default function EquipmentDetailPage() {
                               <Text type="secondary" style={{ fontSize: 10 }}>
                                 Avg: {g.stats.avg} | Range: {g.stats.min}–{g.stats.max}
                               </Text>
+                              <div style={{ fontSize: 9, color: '#1890ff', marginTop: 4 }}>Click for details</div>
                             </Card>
                           </Col>
                         );
@@ -178,6 +185,78 @@ export default function EquipmentDetailPage() {
           },
         ]}
       />
+      {/* Reading Detail Drawer */}
+      <Drawer
+        title={selectedGroup ? `${selectedGroup.label} — All Readings` : 'Readings'}
+        open={!!selectedGroup}
+        onClose={() => setSelectedGroup(null)}
+        width={600}
+      >
+        {selectedGroup && (
+          <>
+            {/* Stats summary */}
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={6}><Statistic title="Count" value={selectedGroup.stats.count} /></Col>
+                <Col span={6}><Statistic title="Average" value={selectedGroup.stats.avg} /></Col>
+                <Col span={6}><Statistic title="Min" value={selectedGroup.stats.min} /></Col>
+                <Col span={6}><Statistic title="Max" value={selectedGroup.stats.max} /></Col>
+              </Row>
+            </Card>
+
+            {/* Thresholds info */}
+            {(selectedGroup.thresholds.min_value != null || selectedGroup.thresholds.max_value != null) && (
+              <Card size="small" style={{ marginBottom: 16, background: '#fffbe6', borderColor: '#ffe58f' }}>
+                <Text strong>Thresholds: </Text>
+                {selectedGroup.thresholds.min_value != null && <Tag color="orange">Min: {selectedGroup.thresholds.min_value}</Tag>}
+                {selectedGroup.thresholds.max_value != null && <Tag color="red">Max: {selectedGroup.thresholds.max_value}</Tag>}
+              </Card>
+            )}
+
+            {/* Readings table */}
+            <Table
+              size="small"
+              dataSource={[...selectedGroup.readings].reverse().map((r, i) => ({ ...r, key: i }))}
+              pagination={{ pageSize: 20, showSizeChanger: true }}
+              columns={[
+                {
+                  title: 'Date',
+                  dataIndex: 'recorded_at',
+                  key: 'date',
+                  render: (v: string) => v ? new Date(v).toLocaleDateString() + ' ' + new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-',
+                },
+                {
+                  title: 'Value',
+                  dataIndex: 'value',
+                  key: 'value',
+                  render: (val: number) => {
+                    const exceeds = selectedGroup!.thresholds.max_value != null && val > selectedGroup!.thresholds.max_value;
+                    const below = selectedGroup!.thresholds.min_value != null && val < selectedGroup!.thresholds.min_value;
+                    return <Text strong style={{ color: exceeds ? '#ff4d4f' : below ? '#faad14' : '#262626' }}>{val}</Text>;
+                  },
+                },
+                {
+                  title: 'Status',
+                  key: 'status',
+                  width: 70,
+                  render: (_: unknown, r: any) => {
+                    if (r.is_faulty) return <Tag color="red">Faulty</Tag>;
+                    if (selectedGroup!.thresholds.max_value != null && r.value > selectedGroup!.thresholds.max_value) return <Tag color="red">High</Tag>;
+                    if (selectedGroup!.thresholds.min_value != null && r.value < selectedGroup!.thresholds.min_value) return <Tag color="orange">Low</Tag>;
+                    return <Tag color="green">OK</Tag>;
+                  },
+                },
+                {
+                  title: 'Recorded By',
+                  dataIndex: 'recorded_by',
+                  key: 'by',
+                  render: (v: string | null) => v || '-',
+                },
+              ]}
+            />
+          </>
+        )}
+      </Drawer>
     </div>
   );
 }
