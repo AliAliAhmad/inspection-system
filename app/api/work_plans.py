@@ -53,6 +53,59 @@ def admin_required():
 ai_service = WorkPlanAIService()
 
 
+def _auto_group_defects(plan_id, day_id, equipment_id):
+    """Auto-add open defects for the same equipment to the same day.
+    Called after any job is scheduled. Returns count of auto-added defects.
+    """
+    if not equipment_id:
+        return 0
+
+    # Find open defects for this equipment that are NOT already in this plan
+    already_scheduled = db.session.query(WorkPlanJob.defect_id).join(WorkPlanDay).filter(
+        WorkPlanDay.work_plan_id == plan_id,
+        WorkPlanJob.defect_id.isnot(None)
+    ).subquery()
+
+    from app.models.inspection import Inspection
+    open_defects = Defect.query.filter(
+        Defect.status.in_(['open', 'in_progress']),
+        ~Defect.id.in_(already_scheduled),
+        db.or_(
+            Defect.equipment_id_direct == equipment_id,
+            Defect.inspection.has(Inspection.equipment_id == equipment_id)
+        )
+    ).all()
+
+    if not open_defects:
+        return 0
+
+    # Get next position
+    max_pos = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
+        work_plan_day_id=day_id
+    ).scalar() or 0
+
+    added = 0
+    for defect in open_defects:
+        max_pos += 1
+        eq_id = defect.equipment_id_direct or (defect.inspection.equipment_id if defect.inspection else None)
+        eq = db.session.get(Equipment, eq_id) if eq_id else None
+        job = WorkPlanJob(
+            work_plan_day_id=day_id,
+            job_type='defect',
+            berth=eq.berth if eq else None,
+            equipment_id=eq_id,
+            defect_id=defect.id,
+            description=defect.description or defect.description_ar or '',
+            estimated_hours=2.0,
+            position=max_pos,
+            priority='normal',
+        )
+        db.session.add(job)
+        added += 1
+
+    return added
+
+
 def create_plan_version(plan, change_type, change_summary, user_id):
     """Create a version snapshot of the plan."""
     # Get next version number
@@ -660,39 +713,12 @@ def add_job(plan_id):
             import logging
             logging.getLogger('app').warning(f'Auto-kit attach failed: {e}')
 
-    # Auto-add open defects for the same equipment when a PM or defect job is scheduled
+    # Auto-add open defects for the same equipment (any job type triggers grouping)
     auto_defect_count = 0
-    if job_type in ['pm', 'defect'] and equipment_id:
-        try:
-            related_defects = Defect.query.filter(
-                Defect.equipment_id_direct == equipment_id,
-                ~Defect.status.in_(['closed', 'resolved', 'rejected', 'completed']),
-            ).all()
-            for defect in related_defects:
-                if defect.id == defect_id:
-                    continue
-                already_planned = db.session.query(WorkPlanJob).join(WorkPlanDay).filter(
-                    WorkPlanDay.work_plan_id == plan_id,
-                    WorkPlanJob.defect_id == defect.id,
-                ).first()
-                if already_planned:
-                    continue
-                cur_max = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
-                    work_plan_day_id=day.id
-                ).scalar() or 0
-                db.session.add(WorkPlanJob(
-                    work_plan_day_id=day.id,
-                    job_type='defect',
-                    berth=data.get('berth'),
-                    equipment_id=equipment_id,
-                    defect_id=defect.id,
-                    estimated_hours=float(getattr(defect, 'estimated_hours', None) or 1.0),
-                    position=cur_max + 1,
-                    priority='normal',
-                ))
-                auto_defect_count += 1
-        except Exception:
-            pass  # non-critical
+    try:
+        auto_defect_count = _auto_group_defects(plan_id, day.id, equipment_id)
+    except Exception as e:
+        logger.warning(f'Auto-group defects failed: {e}')
 
     db.session.commit()
 
@@ -832,37 +858,12 @@ def schedule_sap_order(plan_id):
     # Mark SAP order as scheduled
     sap_order.status = 'scheduled'
 
-    # Auto-add open defects for same equipment (all defects, SAP or non-SAP)
+    # Auto-add open defects for same equipment
     auto_defect_count = 0
-    if sap_order.equipment_id:
-        try:
-            related_defects = Defect.query.filter(
-                Defect.equipment_id_direct == sap_order.equipment_id,
-                ~Defect.status.in_(['closed', 'resolved', 'rejected', 'completed']),
-            ).all()
-            for defect in related_defects:
-                already_planned = db.session.query(WorkPlanJob).join(WorkPlanDay).filter(
-                    WorkPlanDay.work_plan_id == plan_id,
-                    WorkPlanJob.defect_id == defect.id,
-                ).first()
-                if already_planned:
-                    continue
-                cur_max = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
-                    work_plan_day_id=day.id
-                ).scalar() or 0
-                db.session.add(WorkPlanJob(
-                    work_plan_day_id=day.id,
-                    job_type='defect',
-                    berth=sap_order.berth,
-                    equipment_id=sap_order.equipment_id,
-                    defect_id=defect.id,
-                    estimated_hours=float(getattr(defect, 'estimated_hours', None) or 1.0),
-                    position=cur_max + 1,
-                    priority='normal',
-                ))
-                auto_defect_count += 1
-        except Exception:
-            pass  # non-critical
+    try:
+        auto_defect_count = _auto_group_defects(plan_id, day.id, sap_order.equipment_id)
+    except Exception as e:
+        logger.warning(f'Auto-group defects failed: {e}')
 
     db.session.commit()
 
