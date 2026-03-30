@@ -2190,7 +2190,7 @@ def download_plan_pdf(plan_id):
                 pdf.current_day_stats = ''
                 pdf.add_page()
 
-        pdf_bytes = pdf.output()
+        pdf_bytes = bytes(pdf.output())
         filename = 'work_plan_%s.pdf' % plan.week_start.strftime('%Y_%m_%d')
 
         return Response(
