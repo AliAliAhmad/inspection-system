@@ -198,6 +198,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   const [prmSubTab, setPrmSubTab] = useState<'hourly' | 'calendar'>('hourly');
   const [searchText, setSearchText] = useState<string>('');
   const [equipmentFilter, setEquipmentFilter] = useState<string>('');
+  const [equipmentTypeFilter, setEquipmentTypeFilter] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
 
   // Droppable zone — accepts calendar jobs dragged back to remove them from the plan
@@ -232,6 +233,17 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     return Array.from(equipmentMap.values());
   }, [availableJobs]);
 
+  // Get unique equipment types for filter
+  const equipmentTypeList = useMemo(() => {
+    if (!availableJobs) return [];
+    const types = new Set<string>();
+    [...(availableJobs.sap_orders || []), ...(availableJobs.defect_jobs || [])].forEach((job: any) => {
+      const eqType = job.equipment?.equipment_type;
+      if (eqType) types.add(eqType);
+    });
+    return Array.from(types).sort();
+  }, [availableJobs]);
+
   // Filter and sort jobs
   const { prmJobs, defectJobs } = useMemo(() => {
     if (!availableJobs) return { prmJobs: [], defectJobs: [] };
@@ -256,6 +268,10 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       }
       // Equipment filter
       if (equipmentFilter && job.equipment?.id?.toString() !== equipmentFilter) {
+        return false;
+      }
+      // Equipment type filter
+      if (equipmentTypeFilter && job.equipment?.equipment_type !== equipmentTypeFilter) {
         return false;
       }
       // Priority filter
@@ -336,7 +352,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     });
 
     return { prmJobs: prm, defectJobs: defect };
-  }, [availableJobs, searchText, equipmentFilter, priorityFilter, prmSubTab]);
+  }, [availableJobs, searchText, equipmentFilter, equipmentTypeFilter, priorityFilter, prmSubTab]);
 
   // Counts
   const prmCount = prmJobs.length;
@@ -483,6 +499,17 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
                 options={equipmentList.map(eq => ({ value: eq.id.toString(), label: eq.name }))}
               />
 
+              {/* Equipment Type Filter */}
+              <Select
+                placeholder="Filter by equipment type..."
+                allowClear
+                style={{ width: '100%' }}
+                size="small"
+                value={equipmentTypeFilter || undefined}
+                onChange={(v) => setEquipmentTypeFilter(v || '')}
+                options={equipmentTypeList.map(t => ({ value: t, label: t }))}
+              />
+
               {/* Priority Filter */}
               <div style={{ display: 'flex', gap: 4 }}>
                 {['all', 'urgent', 'high', 'normal'].map(p => (
@@ -567,7 +594,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
             ) : currentJobs.length === 0 ? (
               <Empty
                 description={
-                  searchText || equipmentFilter || priorityFilter !== 'all'
+                  searchText || equipmentFilter || equipmentTypeFilter || priorityFilter !== 'all'
                     ? "No jobs match filters"
                     : `No ${activeTab.toUpperCase()} jobs available`
                 }
