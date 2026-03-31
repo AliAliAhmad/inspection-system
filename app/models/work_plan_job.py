@@ -59,12 +59,12 @@ class WorkPlanJob(db.Model):
     planned_date = db.Column(db.Date)
 
     # Time slots for timeline view
-    start_time = db.Column(db.Time)
-    end_time = db.Column(db.Time)
+    start_time = db.Column(db.DateTime)
+    end_time = db.Column(db.DateTime)
 
     # Actual time tracking
-    actual_start_time = db.Column(db.Time)
-    actual_end_time = db.Column(db.Time)
+    actual_start_time = db.Column(db.DateTime)
+    actual_end_time = db.Column(db.DateTime)
 
     # Time estimate (required when adding job)
     estimated_hours = db.Column(db.Float, nullable=False)
@@ -239,10 +239,10 @@ class WorkPlanJob(db.Model):
             'computed_priority': self.computed_priority,
             'maintenance_base': self.maintenance_base,
             'planned_date': self.planned_date.isoformat() if self.planned_date else None,
-            'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
-            'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
-            'actual_start_time': self.actual_start_time.strftime('%H:%M') if self.actual_start_time else None,
-            'actual_end_time': self.actual_end_time.strftime('%H:%M') if self.actual_end_time else None,
+            'start_time': self.start_time.isoformat() if self.start_time else None,
+            'end_time': self.end_time.isoformat() if self.end_time else None,
+            'actual_start_time': self.actual_start_time.isoformat() if self.actual_start_time else None,
+            'actual_end_time': self.actual_end_time.isoformat() if self.actual_end_time else None,
             'estimated_hours': self.estimated_hours,
             'position': self.position,
             'priority': self.priority,
