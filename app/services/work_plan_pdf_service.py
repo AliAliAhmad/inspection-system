@@ -477,7 +477,19 @@ class WorkPlanPDF(FPDF):
             # Defect severity + photo indicator (if defect job)
             if job.job_type == 'defect' and job.defect:
                 severity = getattr(job.defect, 'severity', None)
+                # Check for photo: direct photo_url OR through inspection_answer
                 photo_url = getattr(job.defect, 'photo_url', None)
+                if not photo_url and job.defect.inspection_id and job.defect.checklist_item_id:
+                    try:
+                        from app.models.inspection import InspectionAnswer
+                        ans = InspectionAnswer.query.filter_by(
+                            inspection_id=job.defect.inspection_id,
+                            checklist_item_id=job.defect.checklist_item_id
+                        ).first()
+                        if ans and ans.photo_file:
+                            photo_url = ans.photo_file.get_url()
+                    except Exception:
+                        pass
                 has_photo = bool(photo_url)
                 if severity or has_photo:
                     self.set_font('Helvetica', 'B', 5.5)
@@ -492,20 +504,28 @@ class WorkPlanPDF(FPDF):
                     self.set_text_color(*TEXT)
                     self.ln()
 
-            # RNR reading badge (cached per equipment)
+            # Latest reading badge (cached per equipment) — tries RNR first, then TWL
             if job.equipment_id and job.equipment_id not in self._rnr_cache:
                 try:
                     from app.models.equipment_reading import EquipmentReading
                     latest = EquipmentReading.get_latest_reading(job.equipment_id, 'rnr')
-                    self._rnr_cache[job.equipment_id] = latest.reading_value if latest and not latest.is_faulty else None
+                    if latest and not latest.is_faulty:
+                        self._rnr_cache[job.equipment_id] = ('RNR', latest.reading_value)
+                    else:
+                        latest_twl = EquipmentReading.get_latest_reading(job.equipment_id, 'twl')
+                        if latest_twl and not latest_twl.is_faulty:
+                            self._rnr_cache[job.equipment_id] = ('TWL', latest_twl.reading_value)
+                        else:
+                            self._rnr_cache[job.equipment_id] = None
                 except Exception:
                     self._rnr_cache[job.equipment_id] = None
 
-            rnr_val = self._rnr_cache.get(job.equipment_id) if job.equipment_id else None
-            if rnr_val is not None:
+            reading_info = self._rnr_cache.get(job.equipment_id) if job.equipment_id else None
+            if reading_info:
+                rtype, rval = reading_info
                 self.set_font('Helvetica', '', 5)
                 self.set_text_color(*BLUE)
-                self.cell(CW, 3.5, '    RNR: %.0fh' % rnr_val, new_x='LMARGIN', new_y='NEXT')
+                self.cell(CW, 3.5, '    %s: %.0f' % (rtype, rval), new_x='LMARGIN', new_y='NEXT')
                 self.set_text_color(*TEXT)
 
 
