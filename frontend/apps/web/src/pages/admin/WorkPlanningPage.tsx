@@ -1533,6 +1533,7 @@ export default function WorkPlanningPage() {
   }, []);
 
   return (
+    <>
     <DndContext
       sensors={sensors}
       collisionDetection={customCollision}
@@ -3566,5 +3567,6 @@ export default function WorkPlanningPage() {
         </div>
       )}
     </Modal>
+    </>
   );
 }
