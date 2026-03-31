@@ -76,6 +76,7 @@ export interface SAPImportResponse {
   status: string;
   message: string;
   created: number;
+  skipped: number;
   templates_linked: number;
   materials_added: number;
   errors: string[];
