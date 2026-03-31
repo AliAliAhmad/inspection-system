@@ -754,17 +754,40 @@ export default function WorkPlanningPage() {
     mutationFn: ({ planId, file }: { planId: number; file: File }) => workPlansApi.importSAP(planId, file),
     onSuccess: (response) => {
       const data = response.data;
-      message.success(`Imported ${data.created} jobs`);
-      if (data.errors?.length) {
-        Modal.warning({
-          title: 'Import completed with some errors',
-          content: (
-            <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-              {data.errors.map((e, i) => <div key={i} style={{ color: '#ff4d4f' }}>{e}</div>)}
+      const hasErrors = data.errors?.length > 0;
+      const hasSkipped = data.skipped > 0;
+
+      Modal[hasErrors ? 'warning' : 'success']({
+        title: hasErrors ? 'Import Completed with Issues' : 'Import Successful',
+        width: 520,
+        content: (
+          <div>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 16, marginTop: 8 }}>
+              <div style={{ textAlign: 'center', flex: 1, padding: 12, background: '#f6ffed', borderRadius: 8, border: '1px solid #b7eb8f' }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: '#52c41a' }}>{data.created}</div>
+                <div style={{ fontSize: 12, color: '#52c41a' }}>Imported</div>
+              </div>
+              <div style={{ textAlign: 'center', flex: 1, padding: 12, background: hasSkipped ? '#fff7e6' : '#fafafa', borderRadius: 8, border: `1px solid ${hasSkipped ? '#ffd591' : '#f0f0f0'}` }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: hasSkipped ? '#fa8c16' : '#8c8c8c' }}>{data.skipped || 0}</div>
+                <div style={{ fontSize: 12, color: hasSkipped ? '#fa8c16' : '#8c8c8c' }}>Skipped (duplicates)</div>
+              </div>
+              <div style={{ textAlign: 'center', flex: 1, padding: 12, background: hasErrors ? '#fff2f0' : '#fafafa', borderRadius: 8, border: `1px solid ${hasErrors ? '#ffccc7' : '#f0f0f0'}` }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: hasErrors ? '#ff4d4f' : '#8c8c8c' }}>{data.errors?.length || 0}</div>
+                <div style={{ fontSize: 12, color: hasErrors ? '#ff4d4f' : '#8c8c8c' }}>Errors</div>
+              </div>
             </div>
-          ),
-        });
-      }
+            {hasErrors && (
+              <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #ffccc7', borderRadius: 6, padding: 8, background: '#fff2f0' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: '#ff4d4f' }}>Error Details:</div>
+                {data.errors.map((e: string, i: number) => (
+                  <div key={i} style={{ fontSize: 11, color: '#cf1322', padding: '2px 0', borderBottom: '1px solid #ffccc7' }}>{e}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        ),
+      });
+
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
       queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
       setImportModalOpen(false);
