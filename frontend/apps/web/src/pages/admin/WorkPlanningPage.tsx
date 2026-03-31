@@ -3122,6 +3122,32 @@ export default function WorkPlanningPage() {
               )}
             </Card>
 
+            {/* Job Notes */}
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Text type="secondary">Notes</Text>
+              {isDraft ? (
+                <Input.TextArea
+                  rows={2}
+                  placeholder="Add notes for this job..."
+                  defaultValue={selectedJob.notes || ''}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    if (val !== (selectedJob.notes || '') && currentPlan) {
+                      workPlansApi.updateJob(currentPlan.id, selectedJob.id, { notes: val } as any).then(() => {
+                        message.success('Notes saved');
+                        queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+                      });
+                    }
+                  }}
+                  style={{ marginTop: 4 }}
+                />
+              ) : (
+                <div style={{ marginTop: 4, color: selectedJob.notes ? '#262626' : '#8c8c8c' }}>
+                  {selectedJob.notes || 'No notes'}
+                </div>
+              )}
+            </Card>
+
             {/* Defect Info */}
             {selectedJob.job_type === 'defect' && selectedJob.defect && (
               <Card size="small" style={{ marginBottom: 16 }}>

@@ -50,6 +50,7 @@ class WorkPlanPDF(FPDF):
         self.set_auto_page_break(auto=True, margin=14)
         self.current_day_label = ''
         self.current_day_stats = ''
+        self._rnr_cache = {}  # Cache RNR readings per equipment_id
 
     # ── Header / Footer ──────────────────────────────────────────
     def header(self):
@@ -463,6 +464,49 @@ class WorkPlanPDF(FPDF):
 
             # Move to next row
             self.set_y(row_y + row_h)
+
+            # ── Extra info lines below the row ──
+
+            # Notes line (if exists)
+            if job.notes:
+                self.set_font('Helvetica', 'I', 5.5)
+                self.set_text_color(100, 100, 100)
+                self.cell(CW, 4, '    Note: %s' % self._s(job.notes, 120), new_x='LMARGIN', new_y='NEXT')
+                self.set_text_color(*TEXT)
+
+            # Defect severity + photo indicator (if defect job)
+            if job.job_type == 'defect' and job.defect:
+                severity = getattr(job.defect, 'severity', None)
+                photo_url = getattr(job.defect, 'photo_url', None)
+                has_photo = bool(photo_url)
+                if severity or has_photo:
+                    self.set_font('Helvetica', 'B', 5.5)
+                    sev_colors = {'critical': DANGER, 'high': (230, 126, 34), 'medium': WARN_BG, 'low': MUTED}
+                    if severity:
+                        sc = sev_colors.get(severity, MUTED)
+                        self.set_text_color(*sc)
+                        self.cell(25, 3.5, '    %s' % severity.upper())
+                    if has_photo:
+                        self.set_text_color(*BLUE)
+                        self.cell(20, 3.5, '[Photo]')
+                    self.set_text_color(*TEXT)
+                    self.ln()
+
+            # RNR reading badge (cached per equipment)
+            if job.equipment_id and job.equipment_id not in self._rnr_cache:
+                try:
+                    from app.models.equipment_reading import EquipmentReading
+                    latest = EquipmentReading.get_latest_reading(job.equipment_id, 'rnr')
+                    self._rnr_cache[job.equipment_id] = latest.reading_value if latest and not latest.is_faulty else None
+                except Exception:
+                    self._rnr_cache[job.equipment_id] = None
+
+            rnr_val = self._rnr_cache.get(job.equipment_id) if job.equipment_id else None
+            if rnr_val is not None:
+                self.set_font('Helvetica', '', 5)
+                self.set_text_color(*BLUE)
+                self.cell(CW, 3.5, '    RNR: %.0fh' % rnr_val, new_x='LMARGIN', new_y='NEXT')
+                self.set_text_color(*TEXT)
 
 
 class WorkPlanPDFService:
