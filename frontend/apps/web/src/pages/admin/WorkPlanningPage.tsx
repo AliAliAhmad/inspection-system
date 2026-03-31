@@ -1927,12 +1927,11 @@ export default function WorkPlanningPage() {
           const assignedPct = weekStats.totalJobs > 0 ? Math.round((assigned / weekStats.totalJobs) * 100) : 100;
           const sapPct = weekStats.totalJobs > 0 ? Math.round(((weekStats.totalJobs - weekStats.noSAP) / weekStats.totalJobs) * 100) : 100;
           const avgHours = weekStats.totalHours / 5;
-          // Health score: weighted penalty for unassigned + no-SAP + overload
+          // Health score: based on assignment + SAP coverage only (no hours penalty)
           const healthScore = Math.max(0, Math.round(
             100
-            - (weekStats.unassigned / Math.max(weekStats.totalJobs, 1)) * 45
-            - (weekStats.noSAP / Math.max(weekStats.totalJobs, 1)) * 35
-            - (avgHours > 10 ? 20 : avgHours > 8 ? 10 : 0)
+            - (weekStats.unassigned / Math.max(weekStats.totalJobs, 1)) * 50
+            - (weekStats.noSAP / Math.max(weekStats.totalJobs, 1)) * 40
           ));
           const health = healthScore >= 80
             ? { label: 'Plan Healthy', color: '#52c41a', bg: '#f6ffed', glow: 'rgba(82,196,26,0.3)' }
@@ -2347,14 +2346,7 @@ export default function WorkPlanningPage() {
                                           <InspectionCountBadge date={day.date} berth={berth} />
                                         </div>
                                       </div>
-                                      {isExpanded && totalHours > 6 && (
-                                        <div style={{ marginTop: 3 }}>
-                                          {totalHours > 10
-                                            ? <Tag color="error" style={{ fontSize: 9, margin: 0 }}>⚠ Overloaded</Tag>
-                                            : <Tag color="warning" style={{ fontSize: 9, margin: 0 }}>Busy</Tag>
-                                          }
-                                        </div>
-                                      )}
+                                      {/* Stats shown without judgment colors */}
                                     </div>
 
                                     {/* Jobs List — grouped by equipment type as compact "3× RS" chips */}
