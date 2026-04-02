@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { inspectionAssignmentsApi, rosterApi } from '@inspection/shared';
+import { inspectionAssignmentsApi, rosterApi, usersApi } from '@inspection/shared';
 import type { AssignTeamPayload, AssignmentStats, InspectorSuggestion } from '@inspection/shared';
 import { SmartBatchView, TemplateList, WorkloadBalancer } from '../../components/inspection-assignments';
 
@@ -68,6 +68,7 @@ interface InspectorOption {
   specialization: string;
   covering_for?: { id: number; full_name: string };
   isOnLeave?: boolean;
+  isOnShift?: boolean;
 }
 
 function Badge({ label, color }: { label: string; color: string }) {
@@ -272,6 +273,13 @@ export default function InspectionAssignmentsScreen() {
     enabled: assignModalVisible && !!assignmentDate && !!assignmentShift,
   });
 
+  // All inspectors (not shift-filtered) — same as web approach
+  const allUsersQuery = useQuery({
+    queryKey: ['users-for-assignment'],
+    queryFn: () => usersApi.getForAssignment().then((r) => r.data),
+    staleTime: 0,
+  });
+
   const generateMutation = useMutation({
     mutationFn: (payload: { target_date: string; shift: 'day' | 'night' }) =>
       inspectionAssignmentsApi.generateList(payload),
@@ -423,38 +431,47 @@ export default function InspectionAssignmentsScreen() {
     setInspectorPickerVisible(false);
   };
 
-  // Build inspector options from roster availability
+  // Build availability lookup sets for highlighting (from roster data)
   const availData = (availabilityQuery.data?.data as any)?.data ?? availabilityQuery.data?.data;
-  const availableUsers: any[] = availData?.available ?? [];
-  const onLeaveUsers: any[] = availData?.on_leave ?? [];
+  const rosterAvailable: any[] = availData?.available ?? [];
+  const rosterOnLeave: any[] = availData?.on_leave ?? [];
+  const availableUserIds = new Set<number>(rosterAvailable.map((u: any) => u.id));
+  const onLeaveUserIds = new Set<number>(rosterOnLeave.map((u: any) => u.id));
 
-  const mechAvailable: InspectorOption[] = availableUsers
-    .filter(
-      (u: any) =>
-        u.specialization === 'mechanical' &&
-        (u.role === 'inspector' || (u.role === 'specialist' && u.covering_for))
-    )
-    .map((u: any) => ({ ...u, isOnLeave: false }));
+  // Build inspector options from ALL users (not shift-filtered) — matching web behavior
+  const allAssignableUsers: any[] = allUsersQuery.data?.data ?? [];
+  const isFieldRole = (u: any) => u.role === 'inspector' || u.role === 'specialist' || u.role === 'maintenance';
 
-  const mechOnLeave: InspectorOption[] = onLeaveUsers
-    .filter((u: any) => u.role === 'inspector' && u.specialization === 'mechanical')
-    .map((u: any) => ({ ...u, isOnLeave: true }));
+  const allMechOptions: InspectorOption[] = allAssignableUsers
+    .filter((u: any) => isFieldRole(u) && u.specialization !== 'electrical')
+    .map((u: any) => ({
+      ...u,
+      isOnLeave: onLeaveUserIds.has(u.id),
+      isOnShift: availableUserIds.has(u.id),
+    }))
+    // Sort: on-shift first, then off-shift, then on-leave last
+    .sort((a: any, b: any) => {
+      if (a.isOnShift && !b.isOnShift) return -1;
+      if (!a.isOnShift && b.isOnShift) return 1;
+      if (!a.isOnLeave && b.isOnLeave) return -1;
+      if (a.isOnLeave && !b.isOnLeave) return 1;
+      return (a.full_name || '').localeCompare(b.full_name || '');
+    });
 
-  const allMechOptions = [...mechAvailable, ...mechOnLeave];
-
-  const elecAvailable: InspectorOption[] = availableUsers
-    .filter(
-      (u: any) =>
-        u.specialization === 'electrical' &&
-        (u.role === 'inspector' || (u.role === 'specialist' && u.covering_for))
-    )
-    .map((u: any) => ({ ...u, isOnLeave: false }));
-
-  const elecOnLeave: InspectorOption[] = onLeaveUsers
-    .filter((u: any) => u.role === 'inspector' && u.specialization === 'electrical')
-    .map((u: any) => ({ ...u, isOnLeave: true }));
-
-  const allElecOptions = [...elecAvailable, ...elecOnLeave];
+  const allElecOptions: InspectorOption[] = allAssignableUsers
+    .filter((u: any) => isFieldRole(u) && u.specialization !== 'mechanical')
+    .map((u: any) => ({
+      ...u,
+      isOnLeave: onLeaveUserIds.has(u.id),
+      isOnShift: availableUserIds.has(u.id),
+    }))
+    .sort((a: any, b: any) => {
+      if (a.isOnShift && !b.isOnShift) return -1;
+      if (!a.isOnShift && b.isOnShift) return 1;
+      if (!a.isOnLeave && b.isOnLeave) return -1;
+      if (a.isOnLeave && !b.isOnLeave) return 1;
+      return (a.full_name || '').localeCompare(b.full_name || '');
+    });
 
   const currentPickerOptions = inspectorPickerType === 'mech' ? allMechOptions : allElecOptions;
 
@@ -749,7 +766,7 @@ export default function InspectionAssignmentsScreen() {
               </View>
             )}
 
-            {availabilityQuery.isLoading ? (
+            {(availabilityQuery.isLoading || allUsersQuery.isLoading) ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#1976D2" />
                 <Text style={styles.loadingText}>Loading available inspectors...</Text>
@@ -896,33 +913,45 @@ export default function InspectionAssignmentsScreen() {
             <FlatList
               data={currentPickerOptions}
               keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.inspectorOption, item.isOnLeave && styles.inspectorOptionDisabled]}
-                  onPress={() => !item.isOnLeave && selectInspector(item)}
-                  disabled={item.isOnLeave}
-                >
-                  <Text
-                    style={[
-                      styles.inspectorOptionName,
-                      item.covering_for && styles.inspectorCovering,
-                      item.isOnLeave && styles.inspectorOnLeave,
-                    ]}
+              renderItem={({ item }) => {
+                const isOnShift = (item as any).isOnShift;
+                const isOffShift = !isOnShift && !item.isOnLeave;
+                return (
+                  <TouchableOpacity
+                    style={[styles.inspectorOption, item.isOnLeave && styles.inspectorOptionDisabled]}
+                    onPress={() => selectInspector(item)}
                   >
-                    {item.full_name}
-                  </Text>
-                  <Text style={styles.inspectorOptionDetail}>
-                    {item.covering_for
-                      ? `Covering ${item.covering_for.full_name}`
-                      : item.isOnLeave
-                        ? 'On Leave'
-                        : item.role}
-                  </Text>
-                </TouchableOpacity>
-              )}
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{
+                        width: 8, height: 8, borderRadius: 4, marginRight: 8,
+                        backgroundColor: item.isOnLeave ? '#F44336' : isOnShift ? '#4CAF50' : '#9E9E9E',
+                      }} />
+                      <Text
+                        style={[
+                          styles.inspectorOptionName,
+                          item.covering_for && styles.inspectorCovering,
+                          item.isOnLeave && styles.inspectorOnLeave,
+                          isOffShift && { color: '#757575' },
+                        ]}
+                      >
+                        {item.full_name}
+                      </Text>
+                    </View>
+                    <Text style={styles.inspectorOptionDetail}>
+                      {item.covering_for
+                        ? `Covering ${item.covering_for.full_name}`
+                        : item.isOnLeave
+                          ? 'On Leave'
+                          : isOnShift
+                            ? 'On Shift'
+                            : 'Off Shift'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }}
               ListEmptyComponent={
                 <Text style={styles.noInspectorsText}>
-                  No inspectors available for this specialization and shift.
+                  No inspectors available for this specialization.
                 </Text>
               }
               style={styles.inspectorList}

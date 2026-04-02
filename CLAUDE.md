@@ -71,17 +71,9 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
-| 2026-03-12 | Fix: 10 offline mode bugs — ChecklistScreen offline photos, storage warning, failed upload fallback to queue, voice urgency preserved, timestamp conflict resolution, offline banner, queued badge cleanup, sync loop import fix, voice file size check | ✅ Done |
-| 2026-03-14 | Feat: Ad-hoc defect reporting during inspection — FAB on checklist screen, bottom sheet with photo+voice+severity, flows through same InspectionAnswer pipeline as question failures (same AI analysis, same offline, same defect creation at submit) | ✅ Done |
-| 2026-03-14 | Fix: Equipment type filtering for checklist items — case-insensitive matching (3 locations), new `/api/equipment/subtypes` endpoint, admin dropdown populated with real equipment_type_2 values instead of free text | ✅ Done |
-| 2026-03-15 | Fix: Photo upload timeout — moved AI analysis to background thread so upload returns instantly (~5s instead of 2min+), prevents gunicorn 120s timeout killing the request | ✅ Done |
-| 2026-03-16 | Fix: Running hours loop bug — reading questions (RNR/TWL) now run AI analysis synchronously so extracted_reading returns in immediate response; non-reading photos still use background thread | ✅ Done |
-| 2026-03-17 | Fix: Leaderboard charAt crash — guard all `.charAt(0)` calls on `full_name`/`name` with fallback `|| '?'` in 5 leaderboard components + backend `full_name or 'Unknown'` safety | ✅ Done |
-| 2026-03-18 | Feat: Inspection visibility overhaul in work plan — inspections now read-only summary bar (not editable jobs). New backend endpoints (day-inspections, day-inspection-equipment), collapsible InspectionSummaryBar on web+mobile, inspection badge on job cards, removed inspection from add-job/pool | ✅ Done |
-| 2026-03-25 | Fix: All Inspections page — mobile safe area insets (buttons hidden behind Android nav bar), bigger/clearer badges and stats cards on mobile, wider status/result tag columns on web | ✅ Done |
-| 2026-03-26 | Fix: Team Pool missing employees — TWO fixes: (1) EmployeePool component dynamic roles, (2) WorkPlanningPage compact team pool was separately hardcoded to 3 roles. Both now show maintenance + all non-admin roles | ✅ Done |
-| 2026-03-27 | Fix: Publish timeout + Feat: Revise — moved PDF/email to background thread so publish responds instantly. New /revise endpoint to revert published plan to draft for editing. Notifies assigned users on both publish and revise | ✅ Done |
 | 2026-03-30 | Feat: Equipment Readings Dashboard — /equipment/:id page with line charts (recharts) for all numeric readings from inspections (running hours, temperatures, pressures), threshold danger lines, history table, trend indicators. Backend /readings-history aggregates EquipmentReading + InspectionAnswer + RunningHoursReading | ✅ Done |
+| 2026-04-02 | Fix: AsyncStorage SQLite "disk full" error — auto-cleanup stale cache (24h TTL), old drafts (7d), dead queue items (3d). Runs on app launch via OfflineProvider. Prevents storage overflow on heavy-use Android devices | ✅ Done |
+| 2026-04-02 | Fix: Engineers can't access inspection assignments — added "Assignment Lists" to engineer dashboard on mobile, added engineer role to web sidebar nav and route guard. Backend already allowed both admin+engineer | ✅ Done |
 
 
 ## Plugin Management
