@@ -496,8 +496,9 @@ export default function InspectionAssignmentsScreen() {
     );
   };
 
-  return (
-    <View style={styles.container} testID="inspection-assignments-screen">
+  const listHeader = (
+    <>
+      {/* Header row: title + generate button */}
       <View style={styles.header}>
         <Text style={styles.title}>{t('nav.inspectionAssignments', 'Assignments')}</Text>
         <TouchableOpacity testID="inspection-generate-btn" style={styles.addButton} onPress={() => setGenerateModalVisible(true)}>
@@ -505,114 +506,129 @@ export default function InspectionAssignmentsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Phase 4: Tab Bar */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar}>
+      {/* Tab Bar */}
+      <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'assignments' && styles.tabItemActive]}
           onPress={() => setActiveTab('assignments')}
         >
-          <Text style={[styles.tabText, activeTab === 'assignments' && styles.tabTextActive]}>📋 Assignments</Text>
+          <Text style={[styles.tabText, activeTab === 'assignments' && styles.tabTextActive]}>Assignments</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'batching' && styles.tabItemActive]}
           onPress={() => { setActiveTab('batching'); setSelectionMode(true); }}
         >
-          <Text style={[styles.tabText, activeTab === 'batching' && styles.tabTextActive]}>📍 Batching</Text>
+          <Text style={[styles.tabText, activeTab === 'batching' && styles.tabTextActive]}>Batching</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'templates' && styles.tabItemActive]}
           onPress={() => setActiveTab('templates')}
         >
-          <Text style={[styles.tabText, activeTab === 'templates' && styles.tabTextActive]}>📑 Templates</Text>
+          <Text style={[styles.tabText, activeTab === 'templates' && styles.tabTextActive]}>Templates</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'balancer' && styles.tabItemActive]}
           onPress={() => setActiveTab('balancer')}
         >
-          <Text style={[styles.tabText, activeTab === 'balancer' && styles.tabTextActive]}>⚖️ Balancer</Text>
+          <Text style={[styles.tabText, activeTab === 'balancer' && styles.tabTextActive]}>Balancer</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
 
+      {/* Stats — compact inline */}
+      {activeTab === 'assignments' && (
+        <View style={styles.statsRow}>
+          <StatCard label="Today" value={stats?.today?.total || 0} />
+          <StatCard label="Unassigned" value={stats?.today?.unassigned || 0} color={stats?.today?.unassigned ? '#FF9800' : '#4CAF50'} />
+          <StatCard label="Done" value={stats?.today?.completed || 0} color="#4CAF50" />
+          <StatCard label="Overdue" value={stats?.overdue_count || 0} color={stats?.overdue_count ? '#E53935' : '#4CAF50'} />
+          <StatCard label="Week" value={`${stats?.completion_rate || 0}%`} />
+        </View>
+      )}
+
+      {/* Selection Mode Bar */}
+      {selectionMode && (
+        <View style={styles.selectionBar}>
+          <Text style={styles.selectionText}>
+            {selectedAssignmentIds.length} selected for batching
+          </Text>
+          <TouchableOpacity
+            style={styles.selectionDoneButton}
+            onPress={() => setActiveTab('batching')}
+          >
+            <Text style={styles.selectionDoneText}>Analyze</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Bulk Action Button */}
+      {activeTab === 'assignments' && unassignedCount > 0 && !selectionMode && (
+        <TouchableOpacity
+          testID="inspection-auto-assign-btn"
+          style={styles.bulkButton}
+          onPress={handleBulkAutoAssign}
+          disabled={bulkAssignMutation.isPending}
+        >
+          {bulkAssignMutation.isPending ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.bulkButtonText}>
+              Auto-Assign All ({unassignedCount})
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
+    </>
+  );
+
+  return (
+    <View style={styles.container} testID="inspection-assignments-screen">
       {/* Phase 4: Smart Batching View */}
       {activeTab === 'batching' && (
-        <SmartBatchView
-          selectedIds={selectedAssignmentIds}
-          onClose={() => {
-            setActiveTab('assignments');
-            setSelectionMode(false);
-            setSelectedAssignmentIds([]);
-          }}
-        />
+        <>
+          {listHeader}
+          <SmartBatchView
+            selectedIds={selectedAssignmentIds}
+            onClose={() => {
+              setActiveTab('assignments');
+              setSelectionMode(false);
+              setSelectedAssignmentIds([]);
+            }}
+          />
+        </>
       )}
 
       {/* Phase 4: Templates View */}
       {activeTab === 'templates' && (
-        <TemplateList
-          currentListId={currentListId}
-          targetListId={currentListId}
-          onTemplateApplied={() => listsQuery.refetch()}
-          onClose={() => setActiveTab('assignments')}
-        />
+        <>
+          {listHeader}
+          <TemplateList
+            currentListId={currentListId}
+            targetListId={currentListId}
+            onTemplateApplied={() => listsQuery.refetch()}
+            onClose={() => setActiveTab('assignments')}
+          />
+        </>
       )}
 
       {/* Phase 4: Workload Balancer View */}
       {activeTab === 'balancer' && (
-        <WorkloadBalancer
-          listId={currentListId}
-          onBalanceApplied={() => listsQuery.refetch()}
-          onClose={() => setActiveTab('assignments')}
-        />
+        <>
+          {listHeader}
+          <WorkloadBalancer
+            listId={currentListId}
+            onBalanceApplied={() => listsQuery.refetch()}
+            onClose={() => setActiveTab('assignments')}
+          />
+        </>
       )}
 
-      {/* Main Assignments View */}
+      {/* Main Assignments View — everything scrolls together */}
       {activeTab === 'assignments' && (
-        <>
-          {/* Stats Row — compact inline badges */}
-          <View style={styles.statsRow}>
-            <StatCard label="Today" value={stats?.today?.total || 0} />
-            <StatCard label="Unassigned" value={stats?.today?.unassigned || 0} color={stats?.today?.unassigned ? '#FF9800' : '#4CAF50'} />
-            <StatCard label="Done" value={stats?.today?.completed || 0} color="#4CAF50" />
-            <StatCard label="Overdue" value={stats?.overdue_count || 0} color={stats?.overdue_count ? '#E53935' : '#4CAF50'} />
-            <StatCard label="Week" value={`${stats?.completion_rate || 0}%`} />
-          </View>
-
-          {/* Selection Mode Bar */}
-          {selectionMode && (
-            <View style={styles.selectionBar}>
-              <Text style={styles.selectionText}>
-                {selectedAssignmentIds.length} selected for batching
-              </Text>
-              <TouchableOpacity
-                style={styles.selectionDoneButton}
-                onPress={() => setActiveTab('batching')}
-              >
-                <Text style={styles.selectionDoneText}>Analyze →</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Bulk Action Button */}
-          {unassignedCount > 0 && !selectionMode && (
-            <TouchableOpacity
-              testID="inspection-auto-assign-btn"
-              style={styles.bulkButton}
-              onPress={handleBulkAutoAssign}
-              disabled={bulkAssignMutation.isPending}
-            >
-              {bulkAssignMutation.isPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.bulkButtonText}>
-                  🤖 Auto-Assign All ({unassignedCount})
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
-
           <FlatList
             testID="inspection-assignments-list"
             data={allAssignments}
             keyExtractor={(item) => String(item.id)}
+            ListHeaderComponent={listHeader}
             renderItem={({ item }) => (
               <TouchableOpacity
                 onLongPress={() => {
@@ -659,7 +675,6 @@ export default function InspectionAssignmentsScreen() {
               </View>
             }
           />
-        </>
       )}
 
       {/* Generate Modal */}
@@ -1196,28 +1211,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: 24,
   },
-  // Phase 4: Tab Bar Styles
+  // Tab Bar Styles
   tabBar: {
     flexDirection: 'row',
     paddingHorizontal: 8,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    maxHeight: 56,
+    paddingVertical: 6,
+    gap: 6,
   },
   tabItem: {
-    paddingHorizontal: 14,
+    flex: 1,
     paddingVertical: 10,
-    marginHorizontal: 3,
     borderRadius: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#E8E8E8',
+    alignItems: 'center',
   },
   tabItemActive: {
     backgroundColor: '#1976D2',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#616161',
     fontWeight: '600',
   },
