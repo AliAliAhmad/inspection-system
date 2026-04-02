@@ -567,14 +567,14 @@ export default function InspectionAssignmentsScreen() {
       {/* Main Assignments View */}
       {activeTab === 'assignments' && (
         <>
-          {/* Stats Row */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statsRow}>
+          {/* Stats Row — compact inline badges */}
+          <View style={styles.statsRow}>
             <StatCard label="Today" value={stats?.today?.total || 0} />
             <StatCard label="Unassigned" value={stats?.today?.unassigned || 0} color={stats?.today?.unassigned ? '#FF9800' : '#4CAF50'} />
-            <StatCard label="Completed" value={stats?.today?.completed || 0} color="#4CAF50" />
+            <StatCard label="Done" value={stats?.today?.completed || 0} color="#4CAF50" />
             <StatCard label="Overdue" value={stats?.overdue_count || 0} color={stats?.overdue_count ? '#E53935' : '#4CAF50'} />
-            <StatCard label="Week %" value={`${stats?.completion_rate || 0}%`} />
-          </ScrollView>
+            <StatCard label="Week" value={`${stats?.completion_rate || 0}%`} />
+          </View>
 
           {/* Selection Mode Bar */}
           {selectionMode && (
@@ -981,19 +981,20 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  statsRow: { paddingHorizontal: 12, paddingVertical: 8, maxHeight: 80 },
+  statsRow: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 6, flexWrap: 'wrap', gap: 6 },
   statCard: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
-    marginHorizontal: 4,
-    minWidth: 80,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)',
     elevation: 1,
   },
-  statValue: { fontSize: 20, fontWeight: 'bold' },
-  statLabel: { fontSize: 11, color: '#757575', marginTop: 2 },
+  statValue: { fontSize: 16, fontWeight: 'bold' },
+  statLabel: { fontSize: 12, color: '#757575' },
   bulkButton: {
     backgroundColor: '#9C27B0',
     marginHorizontal: 16,
@@ -1198,31 +1199,31 @@ const styles = StyleSheet.create({
   // Phase 4: Tab Bar Styles
   tabBar: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    maxHeight: 50,
+    maxHeight: 56,
   },
   tabItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 4,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: 3,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
   },
   tabItemActive: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#1976D2',
   },
   tabText: {
-    fontSize: 13,
-    color: '#757575',
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#616161',
+    fontWeight: '600',
   },
   tabTextActive: {
-    color: '#1976D2',
-    fontWeight: '600',
+    color: '#fff',
+    fontWeight: '700',
   },
   // Selection Mode Styles
   selectionBar: {
