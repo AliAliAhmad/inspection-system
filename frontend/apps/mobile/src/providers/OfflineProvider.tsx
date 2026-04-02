@@ -9,6 +9,7 @@ import {
   syncPendingMutations,
   getPendingCount as getMutationPendingCount,
 } from '../utils/offline-mutations';
+import { runStorageCleanup } from '../storage/storage-cleanup';
 
 export interface SyncDetails {
   operations: number;
@@ -130,9 +131,11 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     setLastSyncAt(prev => prev === lastSync ? prev : lastSync);
   }, [buildPendingItems]);
 
-  // Load initial state
+  // Load initial state + run storage cleanup to prevent SQLite "disk full" errors
   useEffect(() => {
     refreshPendingItems();
+    // Cleanup stale cache/drafts/queues in the background (non-blocking)
+    runStorageCleanup().catch(() => {});
   }, [refreshPendingItems]);
 
   // Monitor network status

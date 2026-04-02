@@ -9,6 +9,9 @@ export async function prefetchAllAssignments(): Promise<number> {
   let cachedCount = 0;
 
   try {
+    // Evict expired cache entries before prefetching to free space
+    await offlineCache.evictExpired();
+
     // Fetch all assignments
     const res = await inspectionAssignmentsApi.getMyAssignments();
     const allAssignments = (res.data as any)?.data ?? res.data;
