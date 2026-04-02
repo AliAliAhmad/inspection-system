@@ -112,7 +112,7 @@ export default function AppRouter() {
             <Route path="equipment" element={<RoleGuard roles={['admin']}><EquipmentPage /></RoleGuard>} />
             <Route path="checklists" element={<RoleGuard roles={['admin']}><ChecklistsPage /></RoleGuard>} />
             <Route path="schedules" element={<RoleGuard roles={['admin']}><SchedulesPage /></RoleGuard>} />
-            <Route path="assignments" element={<RoleGuard roles={['admin']}><InspectionAssignmentsPage /></RoleGuard>} />
+            <Route path="assignments" element={<RoleGuard roles={['admin', 'engineer']}><InspectionAssignmentsPage /></RoleGuard>} />
             <Route path="inspections" element={<RoleGuard roles={['admin']}><AllInspectionsPage /></RoleGuard>} />
             <Route path="specialist-jobs" element={<RoleGuard roles={['admin']}><AllSpecialistJobsPage /></RoleGuard>} />
             <Route path="engineer-jobs" element={<RoleGuard roles={['admin']}><AllEngineerJobsPage /></RoleGuard>} />

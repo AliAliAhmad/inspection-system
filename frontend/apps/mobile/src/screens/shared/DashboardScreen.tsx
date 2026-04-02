@@ -507,6 +507,7 @@ export default function DashboardScreen() {
           {isEngineer && (
             <>
               <Text style={[s.sectionTitle, { color: colors.text }]}>{t('nav.quick_links', 'Quick Access')}</Text>
+              <QuickLink icon="📌" label={t('nav.inspectionAssignments', 'Assignment Lists')} onPress={() => navigation.navigate('InspectionAssignments')} colors={colors} />
               <QuickLink icon="⚠️" label={t('nav.defects', 'Defects')} onPress={() => navigation.navigate('Defects')} colors={colors} />
               <QuickLink icon="⚙️" label={t('nav.equipment', 'Equipment')} onPress={() => navigation.navigate('Equipment')} colors={colors} />
               <QuickLink icon="📊" label={t('nav.allInspections', 'All Inspections')} onPress={() => navigation.navigate('AllInspections')} colors={colors} />

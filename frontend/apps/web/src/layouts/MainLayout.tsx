@@ -54,7 +54,7 @@ const LAUNCHER_CATEGORIES: LauncherCategory[] = [
       { key: 'work-planning', emoji: '\u{1F4C5}', label: 'Work Planning', labelAr: '\u062A\u062E\u0637\u064A\u0637 \u0627\u0644\u0639\u0645\u0644', path: '/admin/work-planning', roles: ['admin', 'engineer'] },
       { key: 'daily-review', emoji: '\u{1F4DD}', label: 'Daily Review', labelAr: '\u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u064A\u0648\u0645\u064A\u0629', path: '/admin/daily-review', roles: ['admin', 'engineer'] },
       { key: 'schedules', emoji: '\u{1F4C6}', label: 'Schedules', labelAr: '\u0627\u0644\u062C\u062F\u0627\u0648\u0644', path: '/admin/schedules', roles: ['admin'] },
-      { key: 'assignments', emoji: '\u{1F4CB}', label: 'Assignments', labelAr: '\u0627\u0644\u062A\u0639\u064A\u064A\u0646\u0627\u062A', path: '/admin/assignments', roles: ['admin'] },
+      { key: 'assignments', emoji: '\u{1F4CB}', label: 'Assignments', labelAr: '\u0627\u0644\u062A\u0639\u064A\u064A\u0646\u0627\u062A', path: '/admin/assignments', roles: ['admin', 'engineer'] },
       { key: 'overdue', emoji: '\u23F0', label: 'Overdue', labelAr: '\u0645\u062A\u0623\u062E\u0631', path: '/admin/overdue', roles: ['admin', 'engineer'] },
       { key: 'approvals', emoji: '\u2714\uFE0F', label: 'Approvals', labelAr: '\u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0627\u062A', path: '/admin/approvals', roles: ['admin'] },
       { key: 'my-work-plan', emoji: '\u{1F4CB}', label: 'My Work Plan', labelAr: '\u062E\u0637\u0629 \u0639\u0645\u0644\u064A', path: '/my-work-plan', roles: ['inspector', 'specialist', 'engineer'] },
