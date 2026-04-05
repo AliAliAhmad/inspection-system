@@ -2178,8 +2178,9 @@ def generate_plan_pdf_now(plan_id):
             days_info.append(f"{d.date.isoformat()}: {job_count} jobs")
         logger.info(f"Generating PDF for plan {plan.id}: {len(plan.days)} days — {days_info}")
 
+        lang = request.args.get('lang', 'en')
         from app.services.work_plan_pdf_service import WorkPlanPDFService
-        pdf_file = WorkPlanPDFService.generate_plan_pdf(plan)
+        pdf_file = WorkPlanPDFService.generate_plan_pdf(plan, language=lang)
         if not pdf_file:
             return jsonify({'status': 'error', 'message': 'PDF generation returned None — check Cloudinary config'}), 500
 
@@ -2216,8 +2217,9 @@ def download_plan_pdf(plan_id):
     # Generate PDF fresh (no Cloudinary)
     from app.services.work_plan_pdf_service import WorkPlanPDFService, WorkPlanPDF
     import tempfile
+    lang = request.args.get('lang', 'en')
     try:
-        pdf = WorkPlanPDF(plan)
+        pdf = WorkPlanPDF(plan, language=lang)
         pdf.add_cover_page()
         for day in sorted(plan.days, key=lambda d: d.date):
             try:
@@ -2257,8 +2259,9 @@ def download_day_pdf(plan_id, day_date):
     if not plan:
         raise NotFoundError("Work plan not found")
 
+    lang = request.args.get('lang', 'en')
     from app.services.work_plan_pdf_service import WorkPlanPDFService
-    pdf_file = WorkPlanPDFService.generate_day_pdf(plan, day_date)
+    pdf_file = WorkPlanPDFService.generate_day_pdf(plan, day_date, language=lang)
 
     if not pdf_file:
         raise ValidationError("Failed to generate PDF")
