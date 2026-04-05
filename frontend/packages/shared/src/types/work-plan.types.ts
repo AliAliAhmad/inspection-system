@@ -972,3 +972,40 @@ export interface DayInspections {
   east: DayInspectionsBerth;
   west: DayInspectionsBerth;
 }
+
+// ==================== SMART PLAN GENERATOR ====================
+
+export type PlanRecipe = 'priority_first' | 'travel_optimized' | 'team_balanced' | 'pm_compliance' | 'copy_last_week';
+
+export interface PlanRecipeInfo {
+  key: PlanRecipe;
+  label: string;
+  label_ar: string;
+  description: string;
+  description_ar: string;
+  icon: string;
+}
+
+export interface PlanScore {
+  overall: number;
+  pm_coverage: number;
+  priority_coverage: number;
+  travel_efficiency: number;
+  team_balance: number;
+  capacity_fit: number;
+}
+
+export interface GenerationSummary {
+  total_candidates: number;
+  scheduled: number;
+  bundles_created: number;
+  unscheduled: number;
+  recipe: PlanRecipe;
+}
+
+export interface GenerationResult {
+  status: string;
+  summary: GenerationSummary;
+  score: PlanScore;
+  jobs_by_day: Record<string, number>;
+}

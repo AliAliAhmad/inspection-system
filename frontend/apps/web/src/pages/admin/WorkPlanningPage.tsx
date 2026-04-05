@@ -73,7 +73,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit } from '@inspection/shared';
+import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -92,7 +92,10 @@ import {
   generateMockPredictions,
   TimeAccuracyChart,
   calculateTimeAccuracy,
-  type ViewMode
+  type ViewMode,
+  GeneratePlanButton,
+  PlanScoreCard,
+  GenerationActionBar,
 } from '../../components/work-planning';
 import InspectionSummaryBar, { InspectionCountBadge } from '../../components/work-planning/InspectionSummaryBar';
 import VoiceTextArea from '../../components/VoiceTextArea';
@@ -520,6 +523,10 @@ export default function WorkPlanningPage() {
   const [teamPoolDisc, setTeamPoolDisc] = useState<'all' | 'mechanical' | 'electrical'>('all');
   const [addMaterialId, setAddMaterialId] = useState<number | null>(null);
   const [addMaterialQty, setAddMaterialQty] = useState<number>(1);
+  // Smart Plan Generator state
+  const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null);
+  const [smartPlanScore, setSmartPlanScore] = useState<PlanScoreType | null>(null);
+  const [showActionBar, setShowActionBar] = useState(false);
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
 
@@ -1586,6 +1593,20 @@ export default function WorkPlanningPage() {
           {/* Right side: primary actions only */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
 
+            {/* Smart Plan Generator */}
+            {currentPlan && isDraft && (
+              <GeneratePlanButton
+                planId={currentPlan.id}
+                planStatus={currentPlan.status}
+                onGenerated={(result) => {
+                  setGenerationResult(result);
+                  setSmartPlanScore(result.score);
+                  setShowActionBar(true);
+                  refetch();
+                }}
+              />
+            )}
+
             {/* Auto-Schedule */}
             {currentPlan && isDraft && (
               <Button
@@ -1920,6 +1941,11 @@ export default function WorkPlanningPage() {
             )}
           </div>
         </div>
+
+        {/* ── Smart Plan Score (shown after AI generation) ── */}
+        {smartPlanScore && currentPlan && (
+          <PlanScoreCard score={smartPlanScore} />
+        )}
 
         {/* ── Smart Week Health Strip ─────────────────────────────── */}
         {weekStats && (() => {
@@ -3585,6 +3611,28 @@ export default function WorkPlanningPage() {
         </div>
       )}
     </Modal>
+
+    {/* Smart Plan Generation Action Bar */}
+    {showActionBar && generationResult && (
+      <GenerationActionBar
+        summary={generationResult.summary}
+        score={generationResult.score}
+        planId={currentPlan?.id ?? 0}
+        onAccept={() => {
+          setShowActionBar(false);
+        }}
+        onReject={() => {
+          setShowActionBar(false);
+          setGenerationResult(null);
+          setSmartPlanScore(null);
+          refetch();
+        }}
+        onRegenerate={() => {
+          setShowActionBar(false);
+          // The user picks a new recipe from the button again
+        }}
+      />
+    )}
     </>
   );
 }

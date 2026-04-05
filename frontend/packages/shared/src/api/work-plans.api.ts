@@ -58,6 +58,9 @@ import {
   PlanValidationResponse,
   SimulationResponse,
   DayInspections,
+  PlanRecipe,
+  PlanScore,
+  GenerationResult,
 } from '../types/work-plan.types';
 
 export interface WorkPlanListParams {
@@ -630,5 +633,23 @@ export const workPlansApi = {
 
   getDayInspectionEquipment(date: string) {
     return getApiClient().get<ApiResponse<number[]>>('/api/work-plans/day-inspection-equipment', { params: { date } });
+  },
+
+  // ==================== SMART PLAN GENERATOR ====================
+
+  generatePlan(planId: number, recipe: PlanRecipe = 'priority_first', clearExisting: boolean = false) {
+    return getApiClient().post<GenerationResult>(`/api/work-plans/${planId}/generate`, { recipe, clear_existing: clearExisting });
+  },
+
+  rejectGeneration(planId: number) {
+    return getApiClient().post(`/api/work-plans/${planId}/generate/reject`);
+  },
+
+  getPlanScore(planId: number) {
+    return getApiClient().get<{ status: string; score: PlanScore }>(`/api/work-plans/${planId}/score`);
+  },
+
+  previewCandidates(planId: number) {
+    return getApiClient().get(`/api/work-plans/${planId}/generate/preview`);
   },
 };
