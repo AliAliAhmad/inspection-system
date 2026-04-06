@@ -1,15 +1,15 @@
 """Add worker_assignment_rules table
 
-Revision ID: e5f6g7h8i9j0
-Revises: d4e5f6g7h8i9
-Create Date: 2026-04-06 12:00:00.000000
+Revision ID: f7g8h9i0j1k2
+Revises: 52fc8ee11957
+Create Date: 2026-04-06 19:30:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = 'e5f6g7h8i9j0'
-down_revision = 'd4e5f6g7h8i9'
+revision = 'f7g8h9i0j1k2'
+down_revision = '52fc8ee11957'
 branch_labels = None
 depends_on = None
 
