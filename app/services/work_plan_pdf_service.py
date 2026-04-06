@@ -1030,7 +1030,11 @@ class WorkPlanPDF(FPDF):
         self._render_sign_off()
 
     def _berth_section(self, label, color, jobs):
-        """Render a berth section with header + card grid."""
+        """
+        Render a berth section using the team-grouped row layout.
+        Sections: Mech PM, Elec PM, AC PM, Defect Mech, Defect Elec.
+        Each section is a header bar + dense rows.
+        """
         # Check page break for header
         if self.get_y() > PH - 25:
             self.add_page()
@@ -1044,7 +1048,7 @@ class WorkPlanPDF(FPDF):
         self.cell(CW * 0.35, 6, '%d %s   ' % (len(jobs), self._t('jobs')), fill=True, align='R',
                   new_x='LMARGIN', new_y='NEXT')
         self.set_text_color(*TEXT)
-        self.ln(2)
+        self.ln(1)
 
         if not jobs:
             self._font('', 9)
@@ -1053,7 +1057,201 @@ class WorkPlanPDF(FPDF):
             self.set_text_color(*TEXT)
             return
 
-        self._render_card_grid(jobs)
+        # Group jobs into team sections
+        mech_pm = []
+        elec_pm = []
+        ac_pm = []
+        defect_mech = []
+        defect_elec = []
+
+        for j in jobs:
+            wc = (getattr(j, 'work_center', '') or '').upper()
+            if j.job_type == 'pm':
+                desc_upper = (j.description or '').upper()
+                is_ac = (
+                    ' AC ' in f' {desc_upper} '
+                    or 'AC SYSTEM' in desc_upper
+                    or desc_upper.startswith('AC ')
+                    or desc_upper.endswith(' AC')
+                )
+                if is_ac or wc == 'AC':
+                    ac_pm.append(j)
+                elif wc == 'ELEC':
+                    elec_pm.append(j)
+                elif wc == 'MECH':
+                    mech_pm.append(j)
+                else:
+                    # ELME or default → both teams
+                    mech_pm.append(j)
+                    elec_pm.append(j)
+            elif j.job_type == 'defect':
+                cat = ''
+                if j.defect:
+                    cat = (getattr(j.defect, 'category', '') or '').lower()
+                if cat == 'electrical' or wc == 'ELEC':
+                    defect_elec.append(j)
+                else:
+                    defect_mech.append(j)
+
+        # Render each section that has jobs
+        sections = [
+            ('MECH PM TEAM', BLUE, mech_pm),
+            ('ELEC PM TEAM', ORANGE, elec_pm),
+            ('AC SERVICE TEAM', TEAL, ac_pm),
+            ('DEFECT MECH TEAM', RED, defect_mech),
+            ('DEFECT ELEC TEAM', PURPLE, defect_elec),
+        ]
+
+        for section_label, section_color, section_jobs in sections:
+            if section_jobs:
+                self._render_team_section(section_label, section_color, section_jobs)
+                self.ln(1)
+
+    def _render_team_section(self, label, color, jobs):
+        """Render a single team section: colored header + dense rows."""
+        # Check page break — need at least 25mm for header + first row
+        if self.get_y() > PH - 30:
+            self.add_page()
+
+        # Find the team lead (first lead worker assigned to any job in this section)
+        lead_name = None
+        for j in jobs:
+            for a in (j.assignments or []):
+                if a.is_lead and a.user and a.user.full_name:
+                    lead_name = a.user.full_name
+                    break
+            if lead_name:
+                break
+
+        # Total hours
+        total_hours = sum(j.estimated_hours or 0 for j in jobs)
+
+        # Section header bar
+        self.set_fill_color(*color)
+        self.set_text_color(*WHITE)
+        self._font('B', 8)
+        header_left = '  %s' % label
+        if lead_name:
+            header_left += '  -  Lead: %s *' % self._safe(lead_name, 25)
+        self.cell(CW * 0.7, 5.5, header_left, fill=True)
+        self._font('', 7.5)
+        header_right = '%d jobs  ·  %.1fh  ' % (len(jobs), total_hours)
+        self.cell(CW * 0.3, 5.5, header_right, fill=True, align='R', new_x='LMARGIN', new_y='NEXT')
+        self.set_text_color(*TEXT)
+
+        # Table column widths (sum = CW = 277mm)
+        col_widths = [
+            8,    # # row number
+            55,   # Equipment
+            60,   # Description
+            50,   # Team / Workers
+            60,   # Materials
+            14,   # Hours
+            12,   # OD (overdue)
+            8,    # Done checkbox
+            10,   # extra
+        ]
+
+        # Sub-header row for the table (smaller, light gray)
+        self.set_fill_color(245, 245, 245)
+        self.set_text_color(*MUTED)
+        self._font('B', 6)
+        headers = ['#', 'Equipment', 'Description', 'Team', 'Materials', 'Hrs', 'OD', '☐', 'Note']
+        for w, h in zip(col_widths, headers):
+            self.cell(w, 4, h, fill=True, align='L' if h not in ('Hrs', 'OD', '☐') else 'C', border=0)
+        self.ln()
+        self.set_text_color(*TEXT)
+
+        # Job rows
+        for idx, job in enumerate(jobs):
+            self._render_job_row(idx + 1, job, col_widths)
+
+    def _render_job_row(self, num, job, col_widths):
+        """Render a single dense job row."""
+        # Page break check
+        if self.get_y() > PH - 18:
+            self.add_page()
+
+        # Equipment name
+        eq_name = self._get_equipment_name(job)
+        # Description (strip equipment prefix)
+        desc = self._get_description(job)
+        # Team string (assignments)
+        team_parts = []
+        for a in (job.assignments or []):
+            if a.user and a.user.full_name:
+                name = a.user.full_name
+                if a.is_lead:
+                    name = name + '*'
+                team_parts.append(name)
+        team_str = ', '.join(team_parts) if team_parts else '(unassigned)'
+        # Materials string
+        mat_parts = []
+        for wpm in (job.materials or []):
+            if wpm.material:
+                code = wpm.material.code or wpm.material.name or ''
+                mat_parts.append('%s x%g' % (self._safe(code, 12), wpm.quantity or 0))
+        mat_str = ', '.join(mat_parts) if mat_parts else '-'
+        # Hours
+        hours = job.estimated_hours or 0
+        # Overdue
+        od_str = ''
+        if job.overdue_value and job.overdue_value > 0:
+            unit = 'd' if (job.overdue_unit and 'day' in job.overdue_unit) else 'h'
+            od_str = '%g%s' % (job.overdue_value, unit)
+
+        # Background — alternate + overdue tint
+        if job.overdue_value and job.overdue_value > 0:
+            bg = WARN_BG
+        elif num % 2 == 0:
+            bg = LIGHT
+        else:
+            bg = WHITE
+        self.set_fill_color(*bg)
+
+        # Calculate row height based on text length
+        row_x = LM
+        row_y = self.get_y()
+
+        self._font('', 7)
+        self.set_text_color(*TEXT)
+
+        # Render each cell
+        # # column
+        self.cell(col_widths[0], 5.5, str(num), fill=True, align='C', border=0)
+        # Equipment
+        self._font('B', 7)
+        self.cell(col_widths[1], 5.5, self._safe(eq_name, 30), fill=True, border=0)
+        # Description
+        self._font('', 6.5)
+        self.cell(col_widths[2], 5.5, self._safe(desc, 35), fill=True, border=0)
+        # Team
+        self.cell(col_widths[3], 5.5, self._safe(team_str, 35), fill=True, border=0)
+        # Materials
+        self._font('', 6)
+        self.cell(col_widths[4], 5.5, self._safe(mat_str, 40), fill=True, border=0)
+        # Hours
+        self._font('', 7)
+        self.cell(col_widths[5], 5.5, '%g' % hours, fill=True, align='C', border=0)
+        # Overdue
+        if od_str:
+            self.set_text_color(*DANGER)
+            self._font('B', 6.5)
+        else:
+            self._font('', 6.5)
+        self.cell(col_widths[6], 5.5, od_str or '-', fill=True, align='C', border=0)
+        self.set_text_color(*TEXT)
+        # Done checkbox
+        chk_x = self.get_x() + 1
+        chk_y = self.get_y() + 1
+        self.cell(col_widths[7], 5.5, '', fill=True, border=0)
+        self.set_draw_color(*BORDER)
+        self.set_line_width(0.3)
+        self.rect(chk_x, chk_y, 3.5, 3.5, 'D')
+        self.set_line_width(0.2)
+        # Note placeholder
+        self.cell(col_widths[8], 5.5, '_____', fill=True, align='L', border=0)
+        self.ln()
 
 
 class WorkPlanPDFService:
