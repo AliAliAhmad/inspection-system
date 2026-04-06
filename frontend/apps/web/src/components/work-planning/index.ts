@@ -39,3 +39,4 @@ export { GeneratePlanButton } from './GeneratePlanButton';
 export { PlanScoreCard } from './PlanScoreCard';
 export { GenerationActionBar } from './GenerationActionBar';
 export { WorkerAssignmentRulesManager } from './WorkerAssignmentRulesManager';
+export { BundleCard } from './BundleCard';

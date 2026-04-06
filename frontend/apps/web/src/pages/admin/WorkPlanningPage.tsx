@@ -94,6 +94,7 @@ import {
   calculateTimeAccuracy,
   type ViewMode,
   GeneratePlanButton,
+  BundleCard,
   PlanScoreCard,
   GenerationActionBar,
 } from '../../components/work-planning';
@@ -2424,37 +2425,59 @@ export default function WorkPlanningPage() {
                                       {/* Stats shown without judgment colors */}
                                     </div>
 
-                                    {/* Jobs List — grouped by equipment type as compact "3× RS" chips */}
+                                    {/* Jobs List — grouped into bundles by equipment_id */}
                                     <div style={{ flex: 1, overflowY: 'auto', padding: '4px 5px' }}>
                                       {(() => {
                                         // Filter out inspection jobs — they now show in InspectionSummaryBar
                                         const nonInspectionJobs = jobs.filter(j => j.job_type !== 'inspection');
-                                        return nonInspectionJobs.length === 0 ? (
-                                          <div style={{
-                                            textAlign: 'center',
-                                            padding: 16,
-                                            color: '#bfbfbf',
-                                            border: isDraft ? '2px dashed #d9d9d9' : undefined,
-                                            borderRadius: 6,
-                                            margin: '4px 0',
-                                          }}>
-                                            {isDraft ? (
-                                              <>
-                                                <div style={{ fontSize: 16 }}>＋</div>
-                                                <div style={{ fontSize: 10 }}>Drag job here</div>
-                                              </>
-                                            ) : 'No jobs'}
-                                          </div>
-                                        ) : (
-                                          nonInspectionJobs.map(job => (
-                                            <SimpleJobRow
-                                              key={job.id}
-                                              job={job}
-                                              dayId={day.id}
-                                              onJobClick={handleJobClick}
-                                            />
-                                          ))
-                                        );
+
+                                        if (nonInspectionJobs.length === 0) {
+                                          return (
+                                            <div style={{
+                                              textAlign: 'center',
+                                              padding: 16,
+                                              color: '#bfbfbf',
+                                              border: isDraft ? '2px dashed #d9d9d9' : undefined,
+                                              borderRadius: 6,
+                                              margin: '4px 0',
+                                            }}>
+                                              {isDraft ? (
+                                                <>
+                                                  <div style={{ fontSize: 16 }}>＋</div>
+                                                  <div style={{ fontSize: 10 }}>Drag job here</div>
+                                                </>
+                                              ) : 'No jobs'}
+                                            </div>
+                                          );
+                                        }
+
+                                        // Group jobs by equipment_id (jobs without equipment become individual orphan bundles)
+                                        const groups = new Map<string, WorkPlanJob[]>();
+                                        for (const job of nonInspectionJobs) {
+                                          const key = job.equipment_id ? `eq-${job.equipment_id}` : `orphan-${job.id}`;
+                                          if (!groups.has(key)) groups.set(key, []);
+                                          groups.get(key)!.push(job);
+                                        }
+
+                                        // Sort: PM bundles first, then defect, by overdue desc
+                                        const sortedGroups = Array.from(groups.entries()).sort((a, b) => {
+                                          const aHasPm = a[1].some(j => j.job_type === 'pm') ? 0 : 1;
+                                          const bHasPm = b[1].some(j => j.job_type === 'pm') ? 0 : 1;
+                                          if (aHasPm !== bHasPm) return aHasPm - bHasPm;
+                                          const aOver = Math.max(...a[1].map(j => (j as any).overdue_value || 0));
+                                          const bOver = Math.max(...b[1].map(j => (j as any).overdue_value || 0));
+                                          return bOver - aOver;
+                                        });
+
+                                        return sortedGroups.map(([key, bundleJobs]) => (
+                                          <BundleCard
+                                            key={key}
+                                            jobs={bundleJobs}
+                                            equipmentId={bundleJobs[0]?.equipment_id || null}
+                                            dayId={day.id}
+                                            onJobClick={handleJobClick}
+                                          />
+                                        ));
                                       })()}
                                       {/* Inspection Summary — inside scroll area so cards are scrollable */}
                                       {isExpanded && <InspectionSummaryBar date={day.date} berth={berth} />}
