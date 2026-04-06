@@ -815,7 +815,7 @@ EQUIPMENT_CATEGORIES = {
     'TRAILER': 'trailer',
 }
 
-# Max bundles per day per berth — by category
+# Max bundles per day per berth — Regular PM service (mechanical+electrical team)
 PM_CAPACITY_BY_CATEGORY = {
     'reach_stacker': 1,
     'ech': 1,
@@ -823,6 +823,18 @@ PM_CAPACITY_BY_CATEGORY = {
     'forklift': 3,
     'trailer': 3,
     'other': 1,  # Conservative default for unknown equipment
+}
+
+# Max bundles per day per berth — AC service (separate AC team of 2 guys)
+# AC team is faster and works independently from regular service team.
+# Small forklifts and trailers don't have AC, so they're excluded.
+AC_CAPACITY_BY_CATEGORY = {
+    'reach_stacker': 2,
+    'ech': 2,
+    'truck': 3,
+    'forklift': 2,  # Only big forklifts have AC
+    # 'trailer': not allowed (no AC system)
+    'other': 1,
 }
 
 # Defect team: max 3 different equipment with defect-only jobs per day per berth
@@ -856,9 +868,57 @@ def _get_category(equipment_type: str) -> str:
     return 'other'
 
 
-def _get_pm_category_capacity(category: str) -> int:
-    """How many bundles of this category can the PM team handle per day per berth."""
+def _get_pm_category_capacity(category: str, is_ac: bool = False) -> int:
+    """How many bundles of this category can the relevant team handle per day per berth."""
+    if is_ac:
+        # AC service has different limits and excludes some categories
+        if category not in AC_CAPACITY_BY_CATEGORY:
+            return 0  # Trailers and small forklifts don't have AC
+        return AC_CAPACITY_BY_CATEGORY[category]
     return PM_CAPACITY_BY_CATEGORY.get(category, PM_CAPACITY_BY_CATEGORY['other'])
+
+
+def _is_ac_service(bundle: Dict[str, Any]) -> bool:
+    """
+    Detect if this bundle is AC service.
+    Rule: PM job with description containing 'AC' or 'AC system' (case insensitive).
+    """
+    for m in bundle.get('members', []):
+        if m.get('job_type') != 'pm':
+            continue
+        desc = (m.get('description') or '').upper()
+        # Match 'AC' as standalone word or 'AC SYSTEM'
+        if ' AC ' in f' {desc} ' or 'AC SYSTEM' in desc or desc.startswith('AC ') or desc.endswith(' AC'):
+            return True
+    return False
+
+
+def _bundle_has_ac_pm(bundle: Dict[str, Any]) -> bool:
+    """True if any member is an AC PM."""
+    for m in bundle.get('members', []):
+        if m.get('job_type') != 'pm':
+            continue
+        desc = (m.get('description') or '').upper()
+        if ' AC ' in f' {desc} ' or 'AC SYSTEM' in desc or desc.startswith('AC ') or desc.endswith(' AC'):
+            return True
+    return False
+
+
+def _bundle_has_regular_pm(bundle: Dict[str, Any]) -> bool:
+    """True if any member is a non-AC (regular) PM."""
+    for m in bundle.get('members', []):
+        if m.get('job_type') != 'pm':
+            continue
+        desc = (m.get('description') or '').upper()
+        is_ac = (
+            ' AC ' in f' {desc} '
+            or 'AC SYSTEM' in desc
+            or desc.startswith('AC ')
+            or desc.endswith(' AC')
+        )
+        if not is_ac:
+            return True
+    return False
 
 
 def _is_urgent_bundle(bundle: Dict[str, Any]) -> bool:
@@ -897,11 +957,17 @@ def _step_distribute(
     # Track load per day for even distribution (informational)
     day_load: Dict[int, float] = {d.id: _existing_load(d) for d in days}
 
-    # NEW capacity tracker structure:
-    # {day_id: {berth: {
-    #     'pm_category_locked': str | None,    # The PM category locked for this slot
-    #     'pm_count': int,                      # Bundles in the locked category
-    #     'defect_equipment': set,              # Equipment IDs with defect-only bundles
+    # Capacity tracker — 3 independent teams per day per berth:
+    # 1. Regular PM team (mech+elec): one category locked
+    # 2. AC PM team (separate 2-guy team): one category locked
+    # 3. Defect team: counts unique equipment with defects
+    #
+    # Structure: {day_id: {berth: {
+    #     'pm_category_locked': str | None,
+    #     'pm_count': int,
+    #     'ac_category_locked': str | None,
+    #     'ac_count': int,
+    #     'defect_equipment': set,
     # }}}
     capacity_tracker: Dict[int, Dict[str, Dict]] = {}
     for d in days:
@@ -910,6 +976,8 @@ def _step_distribute(
             capacity_tracker[d.id][berth] = {
                 'pm_category_locked': None,
                 'pm_count': 0,
+                'ac_category_locked': None,
+                'ac_count': 0,
                 'defect_equipment': set(),
             }
         # Account for jobs already on this day (manual placements)
@@ -920,10 +988,24 @@ def _step_distribute(
                 continue
             if job.job_type == 'pm' and job.equipment and job.equipment.equipment_type:
                 cat = _get_category(job.equipment.equipment_type)
-                if tracker['pm_category_locked'] is None:
-                    tracker['pm_category_locked'] = cat
-                if tracker['pm_category_locked'] == cat:
-                    tracker['pm_count'] += 1
+                # Detect AC PM by description
+                desc_upper = (job.description or '').upper()
+                is_ac = (
+                    ' AC ' in f' {desc_upper} '
+                    or 'AC SYSTEM' in desc_upper
+                    or desc_upper.startswith('AC ')
+                    or desc_upper.endswith(' AC')
+                )
+                if is_ac:
+                    if tracker['ac_category_locked'] is None:
+                        tracker['ac_category_locked'] = cat
+                    if tracker['ac_category_locked'] == cat:
+                        tracker['ac_count'] += 1
+                else:
+                    if tracker['pm_category_locked'] is None:
+                        tracker['pm_category_locked'] = cat
+                    if tracker['pm_category_locked'] == cat:
+                        tracker['pm_count'] += 1
             elif job.job_type == 'defect' and job.equipment_id:
                 tracker['defect_equipment'].add(job.equipment_id)
 
@@ -947,20 +1029,28 @@ def _step_distribute(
         bundle_hours = sum(c.get('estimated_hours', 0) for c in bundle['members'])
         day_load[target_day.id] += bundle_hours
 
-        # Update capacity tracker
+        # Update capacity tracker — count against ALL applicable buckets
         b = bundle.get('berth') or 'both'
         if b not in capacity_tracker[target_day.id]:
             b = 'both'
         tracker = capacity_tracker[target_day.id][b]
-        has_pm = any(m.get('job_type') == 'pm' for m in bundle['members'])
         eq_id = bundle.get('equipment_id')
+        cat = _get_category(_get_equipment_type_key(bundle)) if eq_id else None
+        has_regular_pm = _bundle_has_regular_pm(bundle)
+        has_ac_pm = _bundle_has_ac_pm(bundle)
 
-        if has_pm:
-            cat = _get_category(_get_equipment_type_key(bundle))
+        if has_regular_pm and cat:
             if tracker['pm_category_locked'] is None:
                 tracker['pm_category_locked'] = cat
             tracker['pm_count'] += 1
-        elif eq_id:
+
+        if has_ac_pm and cat:
+            if tracker['ac_category_locked'] is None:
+                tracker['ac_category_locked'] = cat
+            tracker['ac_count'] += 1
+
+        # Defect-only bundle: count against defect team
+        if not has_regular_pm and not has_ac_pm and eq_id:
             tracker['defect_equipment'].add(eq_id)
 
     # Build capacity utilization summary for the response
@@ -987,19 +1077,30 @@ def _build_capacity_utilization(
         util[date_key] = {}
         for berth in ('east', 'west', 'both'):
             tracker = capacity_tracker.get(d.id, {}).get(berth, {})
-            cat = tracker.get('pm_category_locked')
-            pm_max = _get_pm_category_capacity(cat) if cat else 0
+
+            pm_cat = tracker.get('pm_category_locked')
+            pm_max = _get_pm_category_capacity(pm_cat) if pm_cat else 0
             pm_used = tracker.get('pm_count', 0)
+
+            ac_cat = tracker.get('ac_category_locked')
+            ac_max = _get_pm_category_capacity(ac_cat, is_ac=True) if ac_cat else 0
+            ac_used = tracker.get('ac_count', 0)
+
             defect_used = len(tracker.get('defect_equipment', set()))
+
             util[date_key][berth] = {
-                'pm_category': cat,
+                'pm_category': pm_cat,
                 'pm_used': pm_used,
                 'pm_max': pm_max,
+                'ac_category': ac_cat,
+                'ac_used': ac_used,
+                'ac_max': ac_max,
                 'defect_used': defect_used,
                 'defect_max': DEFECT_CAPACITY_PER_BERTH,
                 'is_full': (
-                    cat is not None
+                    pm_cat is not None
                     and pm_used >= pm_max
+                    and (ac_cat is None or ac_used >= ac_max)
                     and defect_used >= DEFECT_CAPACITY_PER_BERTH
                 ),
             }
@@ -1045,42 +1146,58 @@ def _check_capacity(
 ) -> bool:
     """
     Check if placing this bundle on this day respects capacity rules.
-    Returns False if no slot available (caller should try next day).
+    A bundle may contain regular PM, AC PM, and defects all on the same equipment.
+    Each component is checked against its own team's capacity bucket.
+
+    Returns False if ANY required bucket is over capacity.
 
     Rules:
-    - PM: bundle's category must match locked category (or slot is empty)
-          AND pm_count < category capacity
-    - Defect-only: defect_equipment count < DEFECT_CAPACITY_PER_BERTH
+    - PM (regular): pm_category lock must match (or empty), pm_count < cap
+    - PM (AC service): ac_category lock must match (or empty), ac_count < cap
+      AC excluded for trailers/small forklifts (cap = 0)
+    - Defect: defect_equipment count < DEFECT_CAPACITY_PER_BERTH
     - Urgent override: allow +1 over capacity
     """
     berth = bundle.get('berth') or 'both'
     eq_id = bundle.get('equipment_id')
-    has_pm = any(m.get('job_type') == 'pm' for m in bundle['members'])
 
     tracker = capacity_tracker.get(day.id, {}).get(berth)
     if not tracker:
-        return False  # No tracker for this berth — reject
+        return False
 
     extra_slots = 1 if allow_urgent_override else 0
+    bundle_cat = _get_category(_get_equipment_type_key(bundle)) if eq_id else None
+    has_regular_pm = _bundle_has_regular_pm(bundle)
+    has_ac_pm = _bundle_has_ac_pm(bundle)
+    has_defect = any(m.get('job_type') == 'defect' for m in bundle.get('members', []))
 
-    if has_pm:
-        # Determine bundle's category
-        bundle_cat = _get_category(_get_equipment_type_key(bundle))
+    # Regular PM check
+    if has_regular_pm and bundle_cat:
         locked_cat = tracker['pm_category_locked']
-
-        # Category lock: if a category is already set, must match
         if locked_cat is not None and locked_cat != bundle_cat:
             return False
-
-        # Capacity check
         max_cap = _get_pm_category_capacity(bundle_cat) + extra_slots
         if tracker['pm_count'] >= max_cap:
             return False
-    else:
-        # Defect-only bundle
+
+    # AC PM check
+    if has_ac_pm and bundle_cat:
+        locked_cat = tracker['ac_category_locked']
+        if locked_cat is not None and locked_cat != bundle_cat:
+            return False
+        max_cap = _get_pm_category_capacity(bundle_cat, is_ac=True)
+        if max_cap == 0:
+            return False
+        max_cap += extra_slots
+        if tracker['ac_count'] >= max_cap:
+            return False
+
+    # Defect check (only if bundle has NO PM — pure defect bundle)
+    # If bundle has PM, defects ride along for free (same equipment, same visit)
+    if not has_regular_pm and not has_ac_pm and has_defect:
         defect_equip = tracker['defect_equipment']
         if eq_id and eq_id in defect_equip:
-            return True  # Already counted
+            return True
         if len(defect_equip) >= DEFECT_CAPACITY_PER_BERTH + extra_slots:
             return False
 
@@ -1092,23 +1209,45 @@ def _remaining_capacity(
     day: WorkPlanDay,
     capacity_tracker: Dict[int, Dict[str, Dict]],
 ) -> int:
-    """How many more slots of this bundle's type can fit on this day?"""
+    """
+    How many more bundles of this type can fit on this day?
+    For mixed bundles (PM+AC), returns the MIN of all relevant buckets — the
+    bottleneck.
+    """
     berth = bundle.get('berth') or 'both'
-    has_pm = any(m.get('job_type') == 'pm' for m in bundle['members'])
+    eq_id = bundle.get('equipment_id')
 
     tracker = capacity_tracker.get(day.id, {}).get(berth)
     if not tracker:
         return 0
 
-    if has_pm:
-        bundle_cat = _get_category(_get_equipment_type_key(bundle))
+    bundle_cat = _get_category(_get_equipment_type_key(bundle)) if eq_id else None
+    has_regular_pm = _bundle_has_regular_pm(bundle)
+    has_ac_pm = _bundle_has_ac_pm(bundle)
+
+    capacities = []
+
+    if has_regular_pm and bundle_cat:
         locked_cat = tracker['pm_category_locked']
         if locked_cat is not None and locked_cat != bundle_cat:
-            return 0  # Locked to a different category
+            return 0
         max_cap = _get_pm_category_capacity(bundle_cat)
-        return max(0, max_cap - tracker['pm_count'])
-    else:
-        return max(0, DEFECT_CAPACITY_PER_BERTH - len(tracker['defect_equipment']))
+        capacities.append(max(0, max_cap - tracker['pm_count']))
+
+    if has_ac_pm and bundle_cat:
+        locked_cat = tracker['ac_category_locked']
+        if locked_cat is not None and locked_cat != bundle_cat:
+            return 0
+        max_cap = _get_pm_category_capacity(bundle_cat, is_ac=True)
+        if max_cap == 0:
+            return 0
+        capacities.append(max(0, max_cap - tracker['ac_count']))
+
+    if not has_regular_pm and not has_ac_pm:
+        # Defect-only
+        capacities.append(max(0, DEFECT_CAPACITY_PER_BERTH - len(tracker['defect_equipment'])))
+
+    return min(capacities) if capacities else 0
 
 
 def _pick_day_with_capacity(
