@@ -471,14 +471,18 @@ export const WorkerAssignmentRulesManager: React.FC = () => {
                 />
               </Form.Item>
             </Space>
-            <Form.Item name="candidate_mech_workers" label="Pool of mechanical workers (rotation)">
+            <Form.Item
+              name="candidate_mech_workers"
+              label="Pool of mechanical workers (extra slots, rotated by workload)"
+              tooltip="Workers used to fill remaining mech_count slots beyond the lead. The system rotates fairly by who has the least work this week. Primary lead and successor are automatically included even if not selected here."
+            >
               <Select
                 mode="multiple"
                 showSearch
                 allowClear
                 optionFilterProp="label"
                 options={workerOptions.mech}
-                placeholder="Select workers from rotation pool"
+                placeholder="Pick extra mechanical workers (optional — primary + successor auto-included)"
               />
             </Form.Item>
           </Card>
@@ -506,14 +510,18 @@ export const WorkerAssignmentRulesManager: React.FC = () => {
                 />
               </Form.Item>
             </Space>
-            <Form.Item name="candidate_elec_workers" label="Pool of electrical workers (rotation)">
+            <Form.Item
+              name="candidate_elec_workers"
+              label="Pool of electrical workers (extra slots, rotated by workload)"
+              tooltip="Workers used to fill remaining elec_count slots beyond the lead. The system rotates fairly by who has the least work this week. Primary lead and successor are automatically included even if not selected here."
+            >
               <Select
                 mode="multiple"
                 showSearch
                 allowClear
                 optionFilterProp="label"
                 options={workerOptions.elec}
-                placeholder="Select workers from rotation pool"
+                placeholder="Pick extra electrical workers (optional — primary + successor auto-included)"
               />
             </Form.Item>
           </Card>

@@ -1574,8 +1574,12 @@ def _assign_from_rule(
             assigned_count += 1
 
     # Fill remaining mech workers from candidate pool
+    # Implicitly include successor + primary in the pool (in case admin forgot)
     needed_mech = max(0, rule.mech_count - (1 if mech_lead_id else 0))
-    mech_pool = (rule.candidate_mech_workers or [])
+    mech_pool = list(rule.candidate_mech_workers or [])
+    for implicit_id in (rule.successor_mech_lead_id, rule.primary_mech_lead_id):
+        if implicit_id and implicit_id not in mech_pool:
+            mech_pool.append(implicit_id)
     # Sort by least-loaded for balance
     mech_pool_sorted = sorted(mech_pool, key=lambda uid: weekly_load.get(uid, 0))
     for uid in mech_pool_sorted:
@@ -1612,8 +1616,12 @@ def _assign_from_rule(
             assigned_count += 1
 
     # Fill remaining elec workers
+    # Implicitly include successor + primary in the pool
     needed_elec = max(0, rule.elec_count - (1 if elec_lead_id else 0))
-    elec_pool = (rule.candidate_elec_workers or [])
+    elec_pool = list(rule.candidate_elec_workers or [])
+    for implicit_id in (rule.successor_elec_lead_id, rule.primary_elec_lead_id):
+        if implicit_id and implicit_id not in elec_pool:
+            elec_pool.append(implicit_id)
     elec_pool_sorted = sorted(elec_pool, key=lambda uid: weekly_load.get(uid, 0))
     for uid in elec_pool_sorted:
         if needed_elec == 0:
