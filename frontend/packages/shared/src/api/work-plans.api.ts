@@ -652,4 +652,11 @@ export const workPlansApi = {
   previewCandidates(planId: number) {
     return getApiClient().get(`/api/work-plans/${planId}/generate/preview`);
   },
+
+  clearAllJobs(weekStart: string) {
+    // weekStart format: 'YYYY-MM-DD'
+    return getApiClient().post<{ status: string; deleted: number; sap_orders_reset: number }>(
+      `/api/work-plans/clear-jobs/${weekStart}`
+    );
+  },
 };

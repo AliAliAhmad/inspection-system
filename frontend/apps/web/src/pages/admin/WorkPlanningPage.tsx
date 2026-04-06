@@ -1607,6 +1607,55 @@ export default function WorkPlanningPage() {
               />
             )}
 
+            {/* Clear All Jobs (admin + engineer) */}
+            {currentPlan && isDraft && (
+              <Popconfirm
+                title="Clear ALL jobs from this plan?"
+                description={
+                  <div style={{ maxWidth: 280 }}>
+                    <p style={{ margin: 0, marginBottom: 4 }}>
+                      This will <strong>delete every job</strong> from the current week.
+                    </p>
+                    <p style={{ margin: 0, fontSize: 12, color: '#8c8c8c' }}>
+                      SAP orders return to the pool. Manual + auto-generated jobs are removed.
+                      You can regenerate after.
+                    </p>
+                  </div>
+                }
+                okText="Yes, Clear All"
+                okType="danger"
+                cancelText="Cancel"
+                onConfirm={async () => {
+                  try {
+                    const weekStart = currentPlan.week_start; // YYYY-MM-DD
+                    const res = await workPlansApi.clearAllJobs(weekStart);
+                    const deleted = res.data?.deleted ?? 0;
+                    const sapReset = res.data?.sap_orders_reset ?? 0;
+                    message.success(
+                      `Cleared ${deleted} job${deleted !== 1 ? 's' : ''}` +
+                      (sapReset > 0 ? ` • ${sapReset} SAP order${sapReset !== 1 ? 's' : ''} returned to pool` : '')
+                    );
+                    setGenerationResult(null);
+                    setSmartPlanScore(null);
+                    setShowActionBar(false);
+                    refetch();
+                  } catch (err: any) {
+                    const errorMsg = err?.response?.data?.message || err?.message || 'Clear failed';
+                    message.error(errorMsg);
+                  }
+                }}
+              >
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  style={{ fontWeight: 500 }}
+                >
+                  Clear All
+                </Button>
+              </Popconfirm>
+            )}
+
             {/* Auto-Schedule */}
             {currentPlan && isDraft && (
               <Button

@@ -324,26 +324,40 @@ def cleanup_duplicate_jobs(week_start_str):
 
 @bp.route('/clear-jobs/<week_start_str>', methods=['POST'])
 @jwt_required()
-@admin_decorator()
 def clear_all_jobs(week_start_str):
-    """Remove ALL jobs from a plan. Admin only, destructive operation."""
+    """Remove ALL jobs from a plan. Admin or engineer only, destructive operation."""
+    user = engineer_or_admin_required()
     try:
         week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
         plan = WorkPlan.query.filter_by(week_start=week_date).first()
         if not plan:
             return jsonify({'status': 'no_plan'}), 404
 
+        # Reset SAP orders that were scheduled back to pending so they're available again
+        from app.models.sap_work_order import SAPWorkOrder
+        scheduled_sap_numbers = set()
         deleted = 0
         for day in plan.days:
             for job in day.jobs:
+                if job.sap_order_number:
+                    scheduled_sap_numbers.add(job.sap_order_number)
                 db.session.delete(job)
                 deleted += 1
 
+        if scheduled_sap_numbers:
+            SAPWorkOrder.query.filter(
+                SAPWorkOrder.work_plan_id == plan.id,
+                SAPWorkOrder.order_number.in_(scheduled_sap_numbers),
+                SAPWorkOrder.status == 'scheduled',
+            ).update({'status': 'pending'}, synchronize_session=False)
+
         db.session.commit()
+        logger.info(f'clear_all_jobs | plan_id={plan.id} deleted={deleted} sap_reset={len(scheduled_sap_numbers)}')
 
         return jsonify({
             'status': 'ok',
-            'deleted': deleted
+            'deleted': deleted,
+            'sap_orders_reset': len(scheduled_sap_numbers),
         }), 200
 
     except Exception as e:
@@ -351,7 +365,7 @@ def clear_all_jobs(week_start_str):
         logger.error(f'Clear all jobs error: {e}')
         return jsonify({
             'status': 'error',
-            'message': 'Internal server error'
+            'message': str(e)
         }), 500
 
 
