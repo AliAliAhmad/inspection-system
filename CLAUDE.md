@@ -72,8 +72,8 @@
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
 | 2026-04-02 | Fix: AsyncStorage SQLite "disk full" error — auto-cleanup stale cache (24h TTL), old drafts (7d), dead queue items (3d). Runs on app launch via OfflineProvider. Prevents storage overflow on heavy-use Android devices | ✅ Done |
-| 2026-04-02 | Fix: Engineers can't access inspection assignments — added "Assignment Lists" to engineer dashboard on mobile, added engineer role to web sidebar nav and route guard. Backend already allowed both admin+engineer | ✅ Done |
 | 2026-04-04 | Feat: Smart Work Plan Generator frontend — GeneratePlanButton (5 recipe dropdown + confirm modal), PlanScoreCard (5-dimension quality bars), GenerationActionBar (accept/reject/regenerate sticky bar). Shared types + API layer for /generate, /reject, /score endpoints. Integrated into WorkPlanningPage toolbar | ✅ Done |
+| 2026-04-06 | Feat: Adaptive capacity rules + AC service + Worker Assignment Rules — Strict capacity (no overflow), urgent override, balanced distribution, separate AC team bucket per berth, configurable worker rules per (berth, team_type, equipment_category) with primary lead + successor + candidate pools, settings page tab, Clear All Jobs button. Requires `flask db upgrade` on Render | ✅ Done |
 
 
 ## Plugin Management
