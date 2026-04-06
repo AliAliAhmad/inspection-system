@@ -785,6 +785,47 @@ def _step_bundle(
 # STEP 4: DISTRIBUTE — Spread bundles across days
 # ===========================================================================
 
+# ── Capacity Rules (per day per berth) ─────────────────────────
+# PM team can handle this many equipment of each type per day per berth:
+PM_CAPACITY_BY_TYPE = {
+    'REACHSTACKER': 1,
+    'RS': 1,
+    'ECH': 1,
+    'EMPTYCONTAINERHANDLER': 1,
+    'TRUCK': 2,
+    'TERMINALTRUCK': 2,
+    'FORKLIFT': 3,
+    'FORKLIFTTRUCK': 3,
+}
+PM_CAPACITY_DEFAULT = 1  # Conservative default for unknown equipment types
+
+# Defect team: max 3 different equipment with defect-only jobs per day per berth
+DEFECT_CAPACITY_PER_BERTH = 3
+
+
+def _get_equipment_type_key(bundle: Dict[str, Any]) -> str:
+    """Get normalized equipment type for capacity lookup."""
+    eq_type = ''
+    for m in bundle.get('members', []):
+        t = (m.get('equipment_type') or '').strip().upper().replace(' ', '').replace('-', '')
+        if t:
+            eq_type = t
+            break
+    return eq_type
+
+
+def _get_pm_capacity(equipment_type: str) -> int:
+    """How many of this equipment type can the PM team handle per day per berth."""
+    eq_key = equipment_type.strip().upper().replace(' ', '').replace('-', '')
+    # Check exact match first, then prefix match
+    if eq_key in PM_CAPACITY_BY_TYPE:
+        return PM_CAPACITY_BY_TYPE[eq_key]
+    for pattern, cap in PM_CAPACITY_BY_TYPE.items():
+        if pattern in eq_key or eq_key in pattern:
+            return cap
+    return PM_CAPACITY_DEFAULT
+
+
 def _step_distribute(
     plan: WorkPlan,
     bundles: List[Dict[str, Any]],
@@ -792,6 +833,8 @@ def _step_distribute(
 ) -> Tuple[Dict[int, List[WorkPlanJob]], List[Dict[str, Any]]]:
     """
     Assign each bundle to a day and create WorkPlanJob records.
+    Respects capacity rules: PM team limits per equipment type per berth,
+    defect team limits per berth.
 
     Returns:
         (day_map, unscheduled)
@@ -808,13 +851,35 @@ def _step_distribute(
     # Track load per day for even distribution
     day_load: Dict[int, float] = {d.id: _existing_load(d) for d in days}
 
+    # Track capacity usage per day per berth
+    # Structure: {day_id: {berth: {'pm_by_type': {eq_type: count}, 'defect_equipment': set()}}}
+    capacity_tracker: Dict[int, Dict[str, Dict]] = {}
+    for d in days:
+        capacity_tracker[d.id] = {}
+        for berth in ('east', 'west', 'both'):
+            capacity_tracker[d.id][berth] = {
+                'pm_by_type': defaultdict(int),   # {equipment_type: count}
+                'defect_equipment': set(),          # set of equipment_ids with defect-only jobs
+            }
+        # Account for existing jobs on this day
+        for job in d.jobs:
+            b = job.berth or 'both'
+            eq_type = ''
+            if job.equipment and job.equipment.equipment_type:
+                eq_type = job.equipment.equipment_type.upper().replace(' ', '').replace('-', '')
+            if job.job_type == 'pm':
+                capacity_tracker[d.id][b]['pm_by_type'][eq_type] += 1
+            elif job.job_type == 'defect' and job.equipment_id:
+                capacity_tracker[d.id][b]['defect_equipment'].add(job.equipment_id)
+
     # Apply recipe-specific ordering/grouping
     ordered_bundles = _apply_recipe_ordering(bundles, days, recipe)
 
     for bundle in ordered_bundles:
-        target_day = _pick_day(bundle, days, day_load, recipe)
+        target_day = _pick_day_with_capacity(
+            bundle, days, day_load, capacity_tracker, recipe
+        )
         if target_day is None:
-            # Should never happen with 7 days, but handle gracefully
             unscheduled.extend(bundle['members'])
             continue
 
@@ -824,6 +889,17 @@ def _step_distribute(
         # Update load tracker
         bundle_hours = sum(c.get('estimated_hours', 0) for c in bundle['members'])
         day_load[target_day.id] += bundle_hours
+
+        # Update capacity tracker
+        b = bundle.get('berth') or 'both'
+        eq_type_key = _get_equipment_type_key(bundle)
+        has_pm = any(m.get('job_type') == 'pm' for m in bundle['members'])
+        eq_id = bundle.get('equipment_id')
+
+        if has_pm:
+            capacity_tracker[target_day.id][b]['pm_by_type'][eq_type_key] += 1
+        elif eq_id:
+            capacity_tracker[target_day.id][b]['defect_equipment'].add(eq_id)
 
     return day_map, unscheduled
 
@@ -859,49 +935,75 @@ def _apply_recipe_ordering(
     return bundles
 
 
-def _pick_day(
+def _check_capacity(
+    bundle: Dict[str, Any],
+    day: WorkPlanDay,
+    capacity_tracker: Dict[int, Dict[str, Dict]],
+) -> bool:
+    """Check if placing this bundle on this day respects capacity rules."""
+    berth = bundle.get('berth') or 'both'
+    eq_type_key = _get_equipment_type_key(bundle)
+    eq_id = bundle.get('equipment_id')
+    has_pm = any(m.get('job_type') == 'pm' for m in bundle['members'])
+
+    tracker = capacity_tracker.get(day.id, {}).get(berth, {})
+    if not tracker:
+        return True  # No tracking data — allow
+
+    if has_pm:
+        # Check PM capacity for this equipment type on this berth
+        max_cap = _get_pm_capacity(eq_type_key)
+        current = tracker.get('pm_by_type', {}).get(eq_type_key, 0)
+        if current >= max_cap:
+            return False
+    else:
+        # Defect-only bundle: check defect team capacity
+        defect_equip = tracker.get('defect_equipment', set())
+        if eq_id and eq_id not in defect_equip and len(defect_equip) >= DEFECT_CAPACITY_PER_BERTH:
+            return False
+
+    return True
+
+
+def _pick_day_with_capacity(
     bundle: Dict[str, Any],
     days: List[WorkPlanDay],
     day_load: Dict[int, float],
+    capacity_tracker: Dict[int, Dict[str, Dict]],
     recipe: str,
 ) -> Optional[WorkPlanDay]:
     """
-    Choose which day a bundle should land on, based on recipe.
-
-    priority_first: highest scored bundles go to day 1, then 2, etc.
-                    We achieve this by filling days sequentially until load
-                    threshold, then move to the next day.
-    travel_optimized: prefer a day that already has same-berth jobs.
-    team_balanced: least loaded day (round-robin by hours).
-    pm_compliance: same as priority_first (PM bundles already pushed to front).
-    copy_last_week: least loaded (fallback — real copy logic is a separate path).
+    Choose which day a bundle should land on, respecting capacity rules.
+    Falls back to least-loaded day that has capacity.
     """
+    # Build candidate days (those with capacity)
+    def has_capacity(d):
+        return _check_capacity(bundle, d, capacity_tracker)
+
     if recipe == 'priority_first' or recipe == 'pm_compliance':
-        # Fill days in order, moving on when a day gets significantly heavier
         avg_load = sum(day_load.values()) / len(days) if days else 0
         bundle_hours = sum(c.get('estimated_hours', 0) for c in bundle['members'])
-        threshold = avg_load + bundle_hours + 8  # generous — just avoid extreme imbalance
+        threshold = avg_load + bundle_hours + 8
 
         for d in days:
-            if day_load[d.id] <= threshold:
+            if day_load[d.id] <= threshold and has_capacity(d):
                 return d
-        # All days at threshold — pick lightest
+        # Try any day with capacity
+        for d in days:
+            if has_capacity(d):
+                return d
+        # All at capacity — pick lightest anyway (overflow)
         return min(days, key=lambda d: day_load[d.id])
 
     if recipe == 'travel_optimized':
         bundle_berth = bundle.get('berth')
         if bundle_berth:
-            # Find days that already have most jobs on same berth
             best_day = None
             best_affinity = -1
             for d in days:
-                same_berth = sum(
-                    1 for j in d.jobs if j.berth == bundle_berth
-                ) + sum(
-                    1 for j in (day_load.get('_jobs', {}).get(d.id, []))
-                    if isinstance(j, dict) and j.get('berth') == bundle_berth
-                )
-                # Tie-break by least load
+                if not has_capacity(d):
+                    continue
+                same_berth = sum(1 for j in d.jobs if j.berth == bundle_berth)
                 if same_berth > best_affinity or (
                     same_berth == best_affinity
                     and (best_day is None or day_load[d.id] < day_load[best_day.id])
@@ -911,10 +1013,16 @@ def _pick_day(
             if best_day:
                 return best_day
 
-        # Fallback: least loaded
+        # Fallback: least loaded with capacity
+        valid = [d for d in days if has_capacity(d)]
+        if valid:
+            return min(valid, key=lambda d: day_load[d.id])
         return min(days, key=lambda d: day_load[d.id])
 
-    # team_balanced / copy_last_week / default: round-robin by load
+    # team_balanced / copy_last_week / default
+    valid = [d for d in days if has_capacity(d)]
+    if valid:
+        return min(valid, key=lambda d: day_load[d.id])
     return min(days, key=lambda d: day_load[d.id])
 
 
