@@ -11,9 +11,12 @@ bind = os.getenv('GUNICORN_BIND', '0.0.0.0:5000')
 backlog = 2048
 
 # Worker processes
-workers = int(os.getenv('GUNICORN_WORKERS', multiprocessing.cpu_count() * 2 + 1))
+# Render starter (512MB) can only handle 1 worker due to heavy AI service imports.
+# Override via GUNICORN_WORKERS env var if you upgrade to a bigger plan.
+workers = int(os.getenv('GUNICORN_WORKERS', '1'))
 worker_class = 'gthread'
-threads = int(os.getenv('GUNICORN_THREADS', '4'))
+# More threads compensate for fewer workers — async I/O bound work scales well with threads
+threads = int(os.getenv('GUNICORN_THREADS', '8'))
 worker_connections = 1000
 timeout = 120
 keepalive = 5
