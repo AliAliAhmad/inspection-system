@@ -474,7 +474,7 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
             'equipment_id': sap.equipment_id,
             'equipment_name': eq.name if eq else None,
             'equipment_type': eq.equipment_type if eq else None,
-            'berth': sap.berth or (eq.berth if eq else None),
+            'berth': _normalize_berth(sap.berth or (eq.berth if eq else None)),
             'description': sap.description or '',
             'estimated_hours': sap.estimated_hours or 4.0,
             'priority': sap.priority or 'normal',
@@ -523,7 +523,7 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
             'equipment_id': eq_id,
             'equipment_name': eq.name if eq else None,
             'equipment_type': eq.equipment_type if eq else None,
-            'berth': eq.berth if eq else None,
+            'berth': _normalize_berth(eq.berth if eq else None),
             'description': defect.description or '',
             'estimated_hours': 2.0,  # Default estimate for defect repairs
             'severity': defect.severity,
@@ -584,7 +584,7 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
                 'equipment_id': job.equipment_id,
                 'equipment_name': eq.name if eq else None,
                 'equipment_type': eq.equipment_type if eq else None,
-                'berth': job.berth,
+                'berth': _normalize_berth(job.berth),
                 'description': job.description or '',
                 'estimated_hours': job.estimated_hours or 4.0,
                 'priority': job.priority or 'normal',
@@ -620,7 +620,7 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
             'equipment_id': ia.equipment_id,
             'equipment_name': eq.name if eq else None,
             'equipment_type': eq.equipment_type if eq else None,
-            'berth': ia.berth or (eq.berth if eq else None),
+            'berth': _normalize_berth(ia.berth or (eq.berth if eq else None)),
             'description': f'Inspection: {eq.name}' if eq else 'Inspection',
             'estimated_hours': 1.5,  # Default for inspections
             'priority': 'normal',
@@ -784,6 +784,22 @@ def _step_bundle(
 # ===========================================================================
 # STEP 4: DISTRIBUTE — Spread bundles across days
 # ===========================================================================
+
+# ── Helpers ────────────────────────────────────────────────────
+def _normalize_berth(berth):
+    """Normalize berth value to match DB check constraint (east/west/both)."""
+    if not berth:
+        return None
+    b = str(berth).strip().lower()
+    if b in ('east', 'west', 'both'):
+        return b
+    # Handle common variations
+    if 'east' in b or b == 'e':
+        return 'east'
+    if 'west' in b or b == 'w':
+        return 'west'
+    return 'both'
+
 
 # ── Capacity Rules (per day per berth) ─────────────────────────
 # PM team can handle this many equipment of each type per day per berth:
@@ -1060,7 +1076,7 @@ def _create_jobs_for_bundle(
         job_kwargs = dict(
             work_plan_day_id=day.id,
             job_type=member['job_type'],
-            berth=member.get('berth'),
+            berth=_normalize_berth(member.get('berth')),
             equipment_id=member.get('equipment_id'),
             defect_id=member.get('defect_id'),
             inspection_assignment_id=member.get('inspection_assignment_id'),
