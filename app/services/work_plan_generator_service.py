@@ -522,6 +522,7 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
             'sap_order_number': sap.order_number,
             'sap_order_type': sap.order_type,
             'cycle_id': sap.cycle_id,
+            'work_center': getattr(sap, 'work_center', None),
         })
 
     # ── 2. Open defects from inspections ─────────────────────────────────
@@ -553,6 +554,10 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
             delta = (date.today() - defect.due_date).days
             overdue_days = max(delta, 0)
 
+        # Map defect category to work_center
+        cat = (defect.category or '').lower()
+        defect_work_center = 'ELEC' if cat == 'electrical' else 'MECH'
+
         candidates.append({
             'source': 'defect',
             'job_type': 'defect',
@@ -568,6 +573,7 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
             'overdue_unit': 'days' if overdue_days is not None else None,
             'maintenance_base': None,
             'defect_id': defect.id,
+            'work_center': defect_work_center,
         })
 
     # ── 3. Carry-overs from previous week ────────────────────────────────
@@ -632,6 +638,7 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
                 'defect_id': job.defect_id,
                 'original_job_id': job.id,
                 'carry_over_tracking_id': tracking.id,
+                'work_center': getattr(job, 'work_center', None),
             })
 
     # ── 4. Inspections — EXCLUDED ────────────────────────────────────────
@@ -1376,6 +1383,19 @@ def _create_jobs_for_bundle(
             if tpl:
                 pm_template_id = tpl.id
 
+        # Default work_center: PM = ELME (both teams), Defect = MECH (override via category)
+        work_center = member.get('work_center')
+        if not work_center:
+            if member['job_type'] == 'pm':
+                # AC PM defaults to ELEC, regular PM defaults to ELME (both)
+                desc_upper = (member.get('description') or '').upper()
+                if ' AC ' in f' {desc_upper} ' or 'AC SYSTEM' in desc_upper:
+                    work_center = 'ELEC'
+                else:
+                    work_center = 'ELME'
+            elif member['job_type'] == 'defect':
+                work_center = 'MECH'  # Defaults; defect category overrides
+
         job_kwargs = dict(
             work_plan_day_id=day.id,
             job_type=member['job_type'],
@@ -1396,6 +1416,10 @@ def _create_jobs_for_bundle(
             pm_template_id=pm_template_id,
             position=max_pos,
         )
+
+        # Set work_center if column exists
+        if _has_column(WorkPlanJob, 'work_center'):
+            job_kwargs['work_center'] = work_center
 
         job = WorkPlanJob(**job_kwargs)
 

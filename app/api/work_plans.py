@@ -1792,6 +1792,19 @@ def import_sap_orders():
                 notes = str(row.get('notes', '')).strip() if pd.notna(row.get('notes')) else None
             maintenance_base = str(row.get('maintenance_base', '')).strip() if pd.notna(row.get('maintenance_base')) else None
 
+            # Parse work_center: ELEC, MECH, or ELME (both)
+            work_center = None
+            if pd.notna(row.get('work_center')):
+                wc_raw = str(row['work_center']).strip().upper()
+                if wc_raw in ('ELEC', 'MECH', 'ELME'):
+                    work_center = wc_raw
+                elif wc_raw in ('E', 'ELECTRICAL'):
+                    work_center = 'ELEC'
+                elif wc_raw in ('M', 'MECHANICAL'):
+                    work_center = 'MECH'
+                elif wc_raw in ('B', 'BOTH', 'EM', 'ME'):
+                    work_center = 'ELME'
+
             # Parse cycle info
             cycle_id = None
             if job_type == 'pm' and pd.notna(row.get('cycle_value')):
@@ -1846,6 +1859,7 @@ def import_sap_orders():
                 overdue_value=overdue_value,
                 overdue_unit=overdue_unit,
                 notes=notes,
+                work_center=work_center,
                 status='pending'
             )
 
@@ -2088,9 +2102,10 @@ def download_sap_import_template():
         'order_number': ['SAP-2026-001', 'SAP-2026-002', 'SAP-2026-003'],
         'type': ['PRM', 'COM', 'INS'],
         'equipment_code': ['PUMP-001', 'CRANE-002', 'GEN-003'],
+        'work_center': ['ELME', 'ELEC', 'MECH'],
         'date': ['2026-02-10', '2026-02-11', '2026-02-12'],
         'estimated_hours': [4, 6, 2],
-        'description': ['Monthly pump maintenance', 'Crane hydraulic repair', 'Generator inspection'],
+        'description': ['Monthly pump maintenance', 'AC system service', 'Generator inspection'],
         'priority': ['normal', 'high', 'normal'],
         'berth': ['east', 'west', 'both'],
         'cycle_value': [250, '', ''],
@@ -2113,12 +2128,12 @@ def download_sap_import_template():
         # Add instructions sheet
         instructions = pd.DataFrame({
             'Column': [
-                'order_number', 'type', 'equipment_code', 'date', 'estimated_hours',
+                'order_number', 'type', 'equipment_code', 'work_center', 'date', 'estimated_hours',
                 'description', 'priority', 'berth', 'cycle_value', 'cycle_unit',
                 'maintenance_base', 'overdue_value', 'overdue_unit', 'planned_date', 'note'
             ],
             'Required': [
-                'Yes', 'Yes', 'Yes', 'Yes', 'No',
+                'Yes', 'Yes', 'Yes', 'No', 'Yes', 'No',
                 'No', 'No', 'No', 'No', 'No',
                 'No', 'No', 'No', 'No', 'No'
             ],
@@ -2126,6 +2141,7 @@ def download_sap_import_template():
                 'SAP order number (unique identifier)',
                 'Any SAP order type (e.g., PRM, COM, INS, PM01, PM02, CM01). Stored as-is.',
                 'Equipment name or serial number (must exist in system)',
+                'Work center: ELEC = electrical only, MECH = mechanical only, ELME = both teams. Defaults to ELME for PM, MECH for defects.',
                 'SAP required/due date (YYYY-MM-DD). Jobs outside plan week go to first day.',
                 'Estimated hours to complete',
                 'Job description/notes',

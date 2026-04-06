@@ -99,6 +99,10 @@ class WorkPlanJob(db.Model):
     # Notes
     notes = db.Column(db.Text)
 
+    # Work center: ELEC (electrical), MECH (mechanical), ELME (both)
+    # Used by the bundle card view to split jobs into mech/elec sub-teams
+    work_center = db.Column(db.String(10))
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -254,6 +258,7 @@ class WorkPlanJob(db.Model):
             'split_from_id': self.split_from_id,
             'split_part': self.split_part,
             'notes': self.notes,
+            'work_center': self.work_center,
             'difficulty': self.difficulty,
             'engineer_id': self.engineer_id,
             'engineer_name': self.engineer.full_name if self.engineer else None,

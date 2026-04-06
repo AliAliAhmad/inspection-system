@@ -46,21 +46,31 @@ const stripEquipmentPrefix = (raw: string, eq: string): string => {
   return raw;
 };
 
-/** Decide which sub-team a job belongs to (mech / elec / both) */
+/** Decide which sub-team a job belongs to (mech / elec / both)
+ *  Priority order:
+ *  1. job.work_center field (ELEC, MECH, ELME)
+ *  2. AC PM detection (always elec only)
+ *  3. defect.category for inspection defects
+ *  4. PM with no other signal → both teams
+ */
 const subTeamForJob = (job: WorkPlanJob): 'mech' | 'elec' | 'both' => {
-  // Defect uses defect.category
+  // 1. Explicit work_center wins
+  const wc = ((job as any).work_center || '').toUpperCase();
+  if (wc === 'ELEC') return 'elec';
+  if (wc === 'MECH') return 'mech';
+  if (wc === 'ELME') return 'both';
+
+  // 2. AC service is always electrical only
+  if (job.job_type === 'pm' && isAcServiceJob(job)) return 'elec';
+
+  // 3. Defect from inspection uses defect.category
   if (job.job_type === 'defect') {
     const cat = (job as any).defect?.category;
     if (cat === 'electrical') return 'elec';
     return 'mech';
   }
-  // PM: look at assignments — if any elec specialist assigned → elec, otherwise mech
-  // Better: check assignments specialization to split
-  const assignments = job.assignments || [];
-  const hasMech = assignments.some((a) => teamCategoryOf(a.user) === 'mech');
-  const hasElec = assignments.some((a) => teamCategoryOf(a.user) === 'elec');
-  if (hasMech && !hasElec) return 'mech';
-  if (hasElec && !hasMech) return 'elec';
+
+  // 4. Regular PM with no signal → both teams work on it in parallel
   return 'both';
 };
 
@@ -322,9 +332,16 @@ export const BundleCard: React.FC<BundleCardProps> = ({
   // Stripe color
   const stripeColor = isPmBundle ? '#16a085' : '#c0392b';
 
-  // Group jobs into mech / elec sub-teams for the team summary
-  const mechJobs = jobs.filter((j) => subTeamForJob(j) !== 'elec');
-  const elecJobs = jobs.filter((j) => subTeamForJob(j) === 'elec');
+  // Group jobs into mech / elec sub-teams for the team summary.
+  // Jobs with subTeam='both' (e.g. regular PM that needs both teams) appear in BOTH lists.
+  const mechJobs = jobs.filter((j) => {
+    const t = subTeamForJob(j);
+    return t === 'mech' || t === 'both';
+  });
+  const elecJobs = jobs.filter((j) => {
+    const t = subTeamForJob(j);
+    return t === 'elec' || t === 'both';
+  });
 
   // Pull lead names from assignments
   const findLead = (jobsList: WorkPlanJob[]): string | null => {

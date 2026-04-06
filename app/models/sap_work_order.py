@@ -52,6 +52,10 @@ class SAPWorkOrder(db.Model):
     # Notes
     notes = db.Column(db.Text)
 
+    # Work center: ELEC (electrical), MECH (mechanical), ELME (both)
+    # Drives sub-team assignment in the auto-planner and bundle card view
+    work_center = db.Column(db.String(10))  # ELEC, MECH, ELME
+
     # Status: pending (in pool), scheduled (moved to a day)
     status = db.Column(db.String(20), default='pending')
 
@@ -98,6 +102,7 @@ class SAPWorkOrder(db.Model):
             'overdue_value': self.overdue_value,
             'overdue_unit': self.overdue_unit,
             'notes': self.notes,
+            'work_center': self.work_center,
             'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
