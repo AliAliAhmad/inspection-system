@@ -2272,6 +2272,69 @@ def download_day_pdf(plan_id, day_date):
     }), 200
 
 
+# ==================== SMART PLAN GENERATOR ====================
+
+@bp.route('/<int:plan_id>/generate', methods=['POST'])
+@jwt_required()
+def generate_plan(plan_id):
+    """Auto-generate a weekly work plan using the 5-step pipeline."""
+    data = request.get_json(silent=True) or {}
+    recipe = data.get('recipe', 'priority_first')
+    clear_existing = data.get('clear_existing', False)
+
+    try:
+        from app.services.work_plan_generator_service import WorkPlanGeneratorService
+        result = WorkPlanGeneratorService.generate_plan(
+            plan_id=plan_id,
+            recipe=recipe,
+            clear_existing=clear_existing,
+        )
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Plan generation failed: {e}")
+        import traceback
+        return jsonify({'status': 'error', 'message': str(e), 'traceback': traceback.format_exc()}), 500
+
+
+@bp.route('/<int:plan_id>/generate/reject', methods=['POST'])
+@jwt_required()
+def reject_generation(plan_id):
+    """Remove all AI-generated jobs and reset SAP orders to pending."""
+    try:
+        from app.services.work_plan_generator_service import WorkPlanGeneratorService
+        result = WorkPlanGeneratorService.reject_generation(plan_id)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Reject generation failed: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@bp.route('/<int:plan_id>/score', methods=['GET'])
+@jwt_required()
+def get_plan_score(plan_id):
+    """Score an existing plan on 5 dimensions."""
+    try:
+        from app.services.work_plan_generator_service import WorkPlanGeneratorService
+        result = WorkPlanGeneratorService.score_plan(plan_id)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Plan scoring failed: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@bp.route('/<int:plan_id>/generate/preview', methods=['GET'])
+@jwt_required()
+def preview_candidates(plan_id):
+    """Preview what would be scheduled without creating jobs."""
+    try:
+        from app.services.work_plan_generator_service import WorkPlanGeneratorService
+        result = WorkPlanGeneratorService.get_candidates(plan_id)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Candidate preview failed: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 # ==================== EMAIL SETTINGS ====================
 
 @bp.route('/<int:plan_id>/auto-schedule', methods=['POST'])
