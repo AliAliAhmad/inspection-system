@@ -829,19 +829,31 @@ def _normalize_berth(berth):
 
 # ── Capacity Rules (per day per berth) ─────────────────────────
 # Equipment categories — PM team can only do ONE category per day per berth.
+# Maps the equipment_type code (or substring) → normalized category.
+# Tellham uses these short codes: TT (Terminal Truck), RS (Reach Stacker),
+# ECH (Empty Container Handler), TR (Trailer), FL (Forklift), BFL (Big Forklift).
 EQUIPMENT_CATEGORIES = {
-    'REACHSTACKER': 'reach_stacker',
+    # Reach Stacker
     'RS': 'reach_stacker',
+    'REACHSTACKER': 'reach_stacker',
     'STACKER': 'reach_stacker',
+    # Empty Container Handler
     'ECH': 'ech',
     'EMPTYCONTAINERHANDLER': 'ech',
     'EMPTYHANDLER': 'ech',
+    # Truck (Terminal Truck)
+    'TT': 'truck',
     'TRUCK': 'truck',
     'TERMINALTRUCK': 'truck',
     'TRACTOR': 'truck',
+    # Forklift (regular + big)
+    'FL': 'forklift',
+    'BFL': 'forklift',
     'FORKLIFT': 'forklift',
     'FORKLIFTTRUCK': 'forklift',
-    'FL': 'forklift',
+    'BIGFORKLIFT': 'forklift',
+    # Trailer
+    'TR': 'trailer',
     'TRAILER': 'trailer',
 }
 
