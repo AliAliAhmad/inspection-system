@@ -99,6 +99,7 @@ from app.models.job_template_checklist import JobTemplateChecklist
 from app.models.job_dependency import JobDependency
 from app.models.job_checklist_response import JobChecklistResponse
 from app.models.capacity_config import CapacityConfig
+from app.models.worker_assignment_rule import WorkerAssignmentRule
 from app.models.worker_skill import WorkerSkill
 from app.models.equipment_restriction import EquipmentRestriction
 from app.models.work_plan_version import WorkPlanVersion
@@ -267,6 +268,7 @@ __all__ = [
     'JobDependency',
     'JobChecklistResponse',
     'CapacityConfig',
+    'WorkerAssignmentRule',
     'WorkerSkill',
     'EquipmentRestriction',
     'WorkPlanVersion',

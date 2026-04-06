@@ -6,6 +6,7 @@ import {
   TeamOutlined,
   ClockCircleOutlined,
   ToolOutlined,
+  CrownOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -14,6 +15,7 @@ import {
   CapacityConfigManager,
   WorkerSkillsManager,
   EquipmentRestrictionsManager,
+  WorkerAssignmentRulesManager,
 } from '../../components/work-planning';
 
 export default function WorkPlanSettingsPage() {
@@ -60,6 +62,16 @@ export default function WorkPlanSettingsPage() {
         </span>
       ),
       children: <EquipmentRestrictionsManager />,
+    },
+    {
+      key: 'assignment_rules',
+      label: (
+        <span>
+          <CrownOutlined />
+          {t('workPlan.assignmentRules', 'Worker Assignment Rules')}
+        </span>
+      ),
+      children: <WorkerAssignmentRulesManager />,
     },
   ];
 

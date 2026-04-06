@@ -1408,18 +1408,24 @@ def _step_assign(
     day_map: Dict[int, List[WorkPlanJob]],
 ) -> Dict[str, int]:
     """
-    Assign best-fit workers to newly created jobs.
-
-    Scoring per worker per job:
-      - Last performer bonus (+30): worked on same equipment/job_type last week
-      - Specialization match (+20): worker.specialization matches equipment type
-      - Berth continuity (+15): worker already has jobs on same berth that day
-      - Load balance (+10): fewer jobs that day = higher score
+    Assign workers to newly created jobs using configured WorkerAssignmentRules
+    when available, with smart fallback to scoring algorithm.
 
     Returns:
         Stats dict with workers_assigned, jobs_without_worker counts.
     """
-    # Query available workers
+    # Try loading the rules table. If missing, fall back to scoring only.
+    rules_by_key: Dict[Tuple[str, str, str], Any] = {}
+    try:
+        from app.models.worker_assignment_rule import WorkerAssignmentRule
+        all_rules = WorkerAssignmentRule.query.filter_by(is_active=True).all()
+        for r in all_rules:
+            rules_by_key[(r.berth, r.team_type, r.equipment_category)] = r
+        logger.info("assign | loaded %d worker assignment rules", len(rules_by_key))
+    except Exception as e:
+        logger.warning("assign | could not load worker assignment rules: %s", e)
+
+    # Query available workers (any role that can be assigned)
     workers = (
         User.query
         .filter(
@@ -1429,25 +1435,21 @@ def _step_assign(
         )
         .all()
     )
+    workers_by_id = {w.id: w for w in workers}
 
     if not workers:
         total_jobs = sum(len(jobs) for jobs in day_map.values())
         logger.warning("assign | no available workers found — %d jobs unassigned", total_jobs)
         return {'workers_assigned': 0, 'jobs_without_worker': total_jobs}
 
-    # Pre-compute: previous week's assignments per (user_id, equipment_id, job_type)
     prev_assignments = _get_previous_week_assignments(plan)
 
-    # Track daily load: {day_id: {user_id: job_count}}
     daily_worker_load: Dict[int, Dict[int, int]] = defaultdict(lambda: defaultdict(int))
-
-    # Pre-load existing assignments from manual jobs on these days
     for day in plan.days:
         for job in day.jobs:
             for assignment in job.assignments:
                 daily_worker_load[day.id][assignment.user_id] += 1
 
-    # Track weekly load for overall balance
     weekly_worker_load: Dict[int, int] = defaultdict(int)
     for loads in daily_worker_load.values():
         for uid, count in loads.items():
@@ -1458,25 +1460,45 @@ def _step_assign(
 
     for day_id, jobs in day_map.items():
         for job in jobs:
-            best_worker, best_score = _score_workers_for_job(
-                job=job,
-                workers=workers,
-                day_id=day_id,
-                daily_load=daily_worker_load,
-                weekly_load=weekly_worker_load,
-                prev_assignments=prev_assignments,
+            # Determine team_type from job
+            team_type = _determine_team_type(job)
+            berth = _normalize_berth(job.berth)
+            eq_cat = _get_category(job.equipment.equipment_type) if (job.equipment and job.equipment.equipment_type) else 'all'
+
+            # Try to find a configured rule (specific category, then 'all')
+            rule = (
+                rules_by_key.get((berth, team_type, eq_cat))
+                or rules_by_key.get((berth, team_type, 'all'))
             )
 
-            if best_worker:
-                assignment = WorkPlanAssignment(
-                    work_plan_job_id=job.id,
-                    user_id=best_worker.id,
-                    is_lead=True,
+            assigned_count = 0
+            if rule:
+                # Use the configured rule for this job
+                assigned_count = _assign_from_rule(
+                    job, rule, workers_by_id, daily_worker_load, weekly_worker_load, day_id,
                 )
-                db.session.add(assignment)
-                daily_worker_load[day_id][best_worker.id] += 1
-                weekly_worker_load[best_worker.id] += 1
-                workers_assigned += 1
+            else:
+                # Fall back to scoring algorithm
+                best_worker, _ = _score_workers_for_job(
+                    job=job,
+                    workers=workers,
+                    day_id=day_id,
+                    daily_load=daily_worker_load,
+                    weekly_load=weekly_worker_load,
+                    prev_assignments=prev_assignments,
+                )
+                if best_worker:
+                    db.session.add(WorkPlanAssignment(
+                        work_plan_job_id=job.id,
+                        user_id=best_worker.id,
+                        is_lead=True,
+                    ))
+                    daily_worker_load[day_id][best_worker.id] += 1
+                    weekly_worker_load[best_worker.id] += 1
+                    assigned_count = 1
+
+            if assigned_count > 0:
+                workers_assigned += assigned_count
             else:
                 jobs_without_worker += 1
 
@@ -1491,6 +1513,124 @@ def _step_assign(
         'workers_assigned': workers_assigned,
         'jobs_without_worker': jobs_without_worker,
     }
+
+
+def _determine_team_type(job: WorkPlanJob) -> str:
+    """Map a WorkPlanJob to one of: regular_pm, ac_pm, defect_mech, defect_elec."""
+    if job.job_type == 'pm':
+        desc_upper = (job.description or '').upper()
+        is_ac = (
+            ' AC ' in f' {desc_upper} '
+            or 'AC SYSTEM' in desc_upper
+            or desc_upper.startswith('AC ')
+            or desc_upper.endswith(' AC')
+        )
+        return 'ac_pm' if is_ac else 'regular_pm'
+    if job.job_type == 'defect':
+        if job.defect and (job.defect.category or '').lower() == 'electrical':
+            return 'defect_elec'
+        return 'defect_mech'
+    return 'regular_pm'  # fallback
+
+
+def _assign_from_rule(
+    job: WorkPlanJob,
+    rule: Any,
+    workers_by_id: Dict[int, Any],
+    daily_load: Dict[int, Dict[int, int]],
+    weekly_load: Dict[int, int],
+    day_id: int,
+) -> int:
+    """
+    Assign workers to a job using a WorkerAssignmentRule.
+    Picks primary lead (or successor if on leave), then fills with candidate workers.
+    Returns count of workers assigned.
+    """
+    assigned_count = 0
+    assigned_user_ids = set()
+
+    def is_available(user_id):
+        if user_id is None or user_id in assigned_user_ids:
+            return False
+        u = workers_by_id.get(user_id)
+        return u is not None and u.is_active and not u.is_on_leave
+
+    # Pick MECH lead
+    mech_lead_id = None
+    if rule.mech_count > 0:
+        if is_available(rule.primary_mech_lead_id):
+            mech_lead_id = rule.primary_mech_lead_id
+        elif is_available(rule.successor_mech_lead_id):
+            mech_lead_id = rule.successor_mech_lead_id
+        if mech_lead_id:
+            db.session.add(WorkPlanAssignment(
+                work_plan_job_id=job.id,
+                user_id=mech_lead_id,
+                is_lead=True,
+            ))
+            assigned_user_ids.add(mech_lead_id)
+            daily_load[day_id][mech_lead_id] += 1
+            weekly_load[mech_lead_id] += 1
+            assigned_count += 1
+
+    # Fill remaining mech workers from candidate pool
+    needed_mech = max(0, rule.mech_count - (1 if mech_lead_id else 0))
+    mech_pool = (rule.candidate_mech_workers or [])
+    # Sort by least-loaded for balance
+    mech_pool_sorted = sorted(mech_pool, key=lambda uid: weekly_load.get(uid, 0))
+    for uid in mech_pool_sorted:
+        if needed_mech == 0:
+            break
+        if is_available(uid):
+            db.session.add(WorkPlanAssignment(
+                work_plan_job_id=job.id,
+                user_id=uid,
+                is_lead=False,
+            ))
+            assigned_user_ids.add(uid)
+            daily_load[day_id][uid] += 1
+            weekly_load[uid] += 1
+            assigned_count += 1
+            needed_mech -= 1
+
+    # Pick ELEC lead
+    elec_lead_id = None
+    if rule.elec_count > 0:
+        if is_available(rule.primary_elec_lead_id):
+            elec_lead_id = rule.primary_elec_lead_id
+        elif is_available(rule.successor_elec_lead_id):
+            elec_lead_id = rule.successor_elec_lead_id
+        if elec_lead_id:
+            db.session.add(WorkPlanAssignment(
+                work_plan_job_id=job.id,
+                user_id=elec_lead_id,
+                is_lead=(mech_lead_id is None),  # Lead only if no mech lead
+            ))
+            assigned_user_ids.add(elec_lead_id)
+            daily_load[day_id][elec_lead_id] += 1
+            weekly_load[elec_lead_id] += 1
+            assigned_count += 1
+
+    # Fill remaining elec workers
+    needed_elec = max(0, rule.elec_count - (1 if elec_lead_id else 0))
+    elec_pool = (rule.candidate_elec_workers or [])
+    elec_pool_sorted = sorted(elec_pool, key=lambda uid: weekly_load.get(uid, 0))
+    for uid in elec_pool_sorted:
+        if needed_elec == 0:
+            break
+        if is_available(uid):
+            db.session.add(WorkPlanAssignment(
+                work_plan_job_id=job.id,
+                user_id=uid,
+                is_lead=False,
+            ))
+            assigned_user_ids.add(uid)
+            daily_load[day_id][uid] += 1
+            weekly_load[uid] += 1
+            assigned_count += 1
+            needed_elec -= 1
+
+    return assigned_count
 
 
 def _get_previous_week_assignments(

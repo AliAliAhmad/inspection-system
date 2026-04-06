@@ -173,11 +173,17 @@ export type {
   SearchResult,
   AssistantResponse,
 } from './ai.api';
-export { workPlansApi } from './work-plans.api';
+export { workPlansApi, workerAssignmentRulesApi } from './work-plans.api';
 export type {
   WorkPlanListParams,
   WorkPlansListResponse,
   SAPImportResponse,
+  WorkerAssignmentRule,
+  WorkerAssignmentRulePayload,
+  TeamType,
+  EquipmentCategory,
+  RuleUserSummary,
+  RuleBerth,
 } from './work-plans.api';
 export { materialsApi } from './materials.api';
 export type {

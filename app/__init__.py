@@ -158,6 +158,8 @@ def create_app(config_name='development'):
         quick_reports,
         # Unplanned Jobs
         unplanned_jobs,
+        # Smart Plan Generator — Worker Assignment Rules
+        worker_assignment_rules,
     )
 
     # Core
@@ -216,6 +218,7 @@ def create_app(config_name='development'):
     app.register_blueprint(materials.bp, url_prefix='/api/materials')
     app.register_blueprint(cycles.bp, url_prefix='/api/cycles')
     app.register_blueprint(pm_templates.bp, url_prefix='/api/pm-templates')
+    app.register_blueprint(worker_assignment_rules.bp)  # Has its own url_prefix
 
     # Work Plan Tracking & Performance
     app.register_blueprint(work_plan_tracking.bp, url_prefix='/api/work-plan-tracking')

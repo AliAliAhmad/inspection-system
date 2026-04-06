@@ -660,3 +660,87 @@ export const workPlansApi = {
     );
   },
 };
+
+// ==================== WORKER ASSIGNMENT RULES ====================
+
+export interface RuleUserSummary {
+  id: number;
+  full_name: string;
+  role: string;
+}
+
+export type RuleBerth = 'east' | 'west';
+export type TeamType = 'regular_pm' | 'ac_pm' | 'defect_mech' | 'defect_elec';
+export type EquipmentCategory = 'reach_stacker' | 'ech' | 'truck' | 'forklift' | 'trailer' | 'all';
+
+export interface WorkerAssignmentRule {
+  id: number;
+  berth: RuleBerth;
+  team_type: TeamType;
+  equipment_category: EquipmentCategory;
+  mech_count: number;
+  elec_count: number;
+  primary_mech_lead_id: number | null;
+  primary_mech_lead: RuleUserSummary | null;
+  successor_mech_lead_id: number | null;
+  successor_mech_lead: RuleUserSummary | null;
+  primary_elec_lead_id: number | null;
+  primary_elec_lead: RuleUserSummary | null;
+  successor_elec_lead_id: number | null;
+  successor_elec_lead: RuleUserSummary | null;
+  candidate_mech_workers: number[];
+  candidate_elec_workers: number[];
+  is_active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface WorkerAssignmentRulePayload {
+  berth?: RuleBerth;
+  team_type?: TeamType;
+  equipment_category?: EquipmentCategory;
+  mech_count?: number;
+  elec_count?: number;
+  primary_mech_lead_id?: number | null;
+  successor_mech_lead_id?: number | null;
+  primary_elec_lead_id?: number | null;
+  successor_elec_lead_id?: number | null;
+  candidate_mech_workers?: number[];
+  candidate_elec_workers?: number[];
+  is_active?: boolean;
+}
+
+export const workerAssignmentRulesApi = {
+  list(params?: { berth?: RuleBerth; team_type?: TeamType }) {
+    return getApiClient().get<{ status: string; rules: WorkerAssignmentRule[]; table_missing?: boolean }>(
+      '/api/worker-assignment-rules',
+      { params }
+    );
+  },
+
+  create(payload: WorkerAssignmentRulePayload) {
+    return getApiClient().post<{ status: string; rule: WorkerAssignmentRule }>(
+      '/api/worker-assignment-rules',
+      payload
+    );
+  },
+
+  update(ruleId: number, payload: WorkerAssignmentRulePayload) {
+    return getApiClient().put<{ status: string; rule: WorkerAssignmentRule }>(
+      `/api/worker-assignment-rules/${ruleId}`,
+      payload
+    );
+  },
+
+  delete(ruleId: number) {
+    return getApiClient().delete<{ status: string; message: string }>(
+      `/api/worker-assignment-rules/${ruleId}`
+    );
+  },
+
+  seedDefaults() {
+    return getApiClient().post<{ status: string; created: number; skipped: number; message: string }>(
+      '/api/worker-assignment-rules/seed-defaults'
+    );
+  },
+};
