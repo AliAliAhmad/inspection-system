@@ -333,36 +333,71 @@ def clear_all_jobs(week_start_str):
         if not plan:
             return jsonify({'status': 'no_plan'}), 404
 
-        # Reset SAP orders that were scheduled back to pending so they're available again
         from app.models.sap_work_order import SAPWorkOrder
+        from app.models.work_plan_job_tracking import WorkPlanJobTracking
+        from app.models.work_plan_assignment import WorkPlanAssignment
+        from app.models.work_plan_material import WorkPlanMaterial
+
+        # Collect ALL job IDs and SAP order numbers in one pass
         scheduled_sap_numbers = set()
-        deleted = 0
+        job_ids = []
         for day in plan.days:
             for job in day.jobs:
                 if job.sap_order_number:
                     scheduled_sap_numbers.add(job.sap_order_number)
-                db.session.delete(job)
-                deleted += 1
+                job_ids.append(job.id)
 
+        if not job_ids:
+            return jsonify({'status': 'ok', 'deleted': 0, 'sap_orders_reset': 0}), 200
+
+        # Delete child records FIRST to avoid FK violations
+        # 1. Tracking rows (NOT NULL FK, no cascade)
+        WorkPlanJobTracking.query.filter(
+            WorkPlanJobTracking.work_plan_job_id.in_(job_ids)
+        ).delete(synchronize_session=False)
+
+        # Also clean up tracking rows referencing these as original_job_id
+        WorkPlanJobTracking.query.filter(
+            WorkPlanJobTracking.original_job_id.in_(job_ids)
+        ).update({'original_job_id': None}, synchronize_session=False)
+
+        # 2. Assignments (cascade should handle, but be explicit for safety)
+        WorkPlanAssignment.query.filter(
+            WorkPlanAssignment.work_plan_job_id.in_(job_ids)
+        ).delete(synchronize_session=False)
+
+        # 3. Materials
+        WorkPlanMaterial.query.filter(
+            WorkPlanMaterial.work_plan_job_id.in_(job_ids)
+        ).delete(synchronize_session=False)
+
+        # 4. Now delete the jobs themselves
+        from app.models.work_plan_job import WorkPlanJob as WPJ
+        deleted = WPJ.query.filter(WPJ.id.in_(job_ids)).delete(synchronize_session=False)
+
+        # 5. Reset SAP orders back to pending
+        sap_reset = 0
         if scheduled_sap_numbers:
-            SAPWorkOrder.query.filter(
+            sap_reset = SAPWorkOrder.query.filter(
                 SAPWorkOrder.work_plan_id == plan.id,
                 SAPWorkOrder.order_number.in_(scheduled_sap_numbers),
                 SAPWorkOrder.status == 'scheduled',
             ).update({'status': 'pending'}, synchronize_session=False)
 
         db.session.commit()
-        logger.info(f'clear_all_jobs | plan_id={plan.id} deleted={deleted} sap_reset={len(scheduled_sap_numbers)}')
+        logger.info(f'clear_all_jobs | plan_id={plan.id} deleted={deleted} sap_reset={sap_reset}')
 
         return jsonify({
             'status': 'ok',
             'deleted': deleted,
-            'sap_orders_reset': len(scheduled_sap_numbers),
+            'sap_orders_reset': sap_reset,
         }), 200
 
     except Exception as e:
         db.session.rollback()
         logger.error(f'Clear all jobs error: {e}')
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'status': 'error',
             'message': str(e)

@@ -389,43 +389,66 @@ def _clear_generated_jobs(plan: WorkPlan, clear_all: bool = False) -> int:
     """
     Remove previously generated jobs from the plan.
 
-    If clear_all=True, remove every job.
-    Otherwise, only remove jobs where ai_confidence IS NOT NULL
-    (or all jobs if the column doesn't exist — safe fallback).
+    Uses bulk DELETE with explicit child cleanup to avoid the
+    NotNullViolation on work_plan_job_trackings.work_plan_job_id.
+
+    If clear_all=True, removes every job. Otherwise removes only
+    AI-generated ones (where ai_confidence IS NOT NULL).
 
     Also resets SAP orders back to 'pending' for re-scheduling.
-
-    Returns:
-        Number of jobs removed.
     """
-    removed = 0
+    from app.models.work_plan_job_tracking import WorkPlanJobTracking
+
     has_ai_col = _has_column(WorkPlanJob, 'ai_confidence')
 
+    # Decide which jobs to remove
+    job_ids: List[int] = []
+    sap_numbers: set = set()
+
     for day in plan.days:
-        jobs_to_remove = []
         for job in day.jobs:
             should_remove = clear_all
-            if not should_remove and has_ai_col:
-                should_remove = getattr(job, 'ai_confidence', None) is not None
-            elif not should_remove and not has_ai_col:
-                # Column doesn't exist yet — skip removal unless clear_all
-                continue
-
+            if not should_remove:
+                if has_ai_col:
+                    should_remove = getattr(job, 'ai_confidence', None) is not None
+                else:
+                    # Column doesn't exist — skip non-clear-all calls
+                    continue
             if should_remove:
-                # Reset SAP order status if this job came from one
+                job_ids.append(job.id)
                 if job.sap_order_number:
-                    sap = SAPWorkOrder.query.filter_by(
-                        work_plan_id=plan.id,
-                        order_number=job.sap_order_number,
-                    ).first()
-                    if sap:
-                        sap.status = 'pending'
+                    sap_numbers.add(job.sap_order_number)
 
-                jobs_to_remove.append(job)
+    if not job_ids:
+        return 0
 
-        for job in jobs_to_remove:
-            db.session.delete(job)
-            removed += 1
+    # Reset SAP orders back to pending
+    if sap_numbers:
+        SAPWorkOrder.query.filter(
+            SAPWorkOrder.work_plan_id == plan.id,
+            SAPWorkOrder.order_number.in_(sap_numbers),
+        ).update({'status': 'pending'}, synchronize_session=False)
+
+    # Delete child records FIRST to avoid FK violations on tracking
+    WorkPlanJobTracking.query.filter(
+        WorkPlanJobTracking.work_plan_job_id.in_(job_ids)
+    ).delete(synchronize_session=False)
+
+    WorkPlanJobTracking.query.filter(
+        WorkPlanJobTracking.original_job_id.in_(job_ids)
+    ).update({'original_job_id': None}, synchronize_session=False)
+
+    WorkPlanAssignment.query.filter(
+        WorkPlanAssignment.work_plan_job_id.in_(job_ids)
+    ).delete(synchronize_session=False)
+
+    from app.models.work_plan_material import WorkPlanMaterial
+    WorkPlanMaterial.query.filter(
+        WorkPlanMaterial.work_plan_job_id.in_(job_ids)
+    ).delete(synchronize_session=False)
+
+    # Now delete the jobs
+    removed = WorkPlanJob.query.filter(WorkPlanJob.id.in_(job_ids)).delete(synchronize_session=False)
 
     db.session.flush()
     return removed
