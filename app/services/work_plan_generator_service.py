@@ -1160,24 +1160,28 @@ def _apply_recipe_ordering(
     recipe: str,
 ) -> List[Dict[str, Any]]:
     """
-    Re-order bundles based on recipe.
-    Bundles are already sorted by score desc from _step_bundle.
+    Two-pass ordering:
+
+    1. PM bundles (any equipment with at least one PM job) come FIRST.
+       This ensures the PM team grabs equipment + all its bundled defects
+       before defect-only bundles compete for capacity.
+
+    2. Defect-only bundles come SECOND.
+       These are equipment with no PM in the current week — handled
+       by the defect team.
+
+    Within each pass, recipe-specific ordering applies (priority, travel, etc).
     """
-    if recipe == 'pm_compliance':
-        # PMs first, then defects, then inspections
-        def pm_key(b):
-            has_pm = any(m.get('job_type') == 'pm' for m in b['members'])
-            return (0 if has_pm else 1, -b['score'])
-        return sorted(bundles, key=pm_key)
+    pm_bundles = [b for b in bundles if any(m.get('job_type') == 'pm' for m in b['members'])]
+    defect_bundles = [b for b in bundles if not any(m.get('job_type') == 'pm' for m in b['members'])]
 
-    if recipe == 'travel_optimized':
-        # Group by berth so same-berth bundles land together
-        def berth_key(b):
-            return (b.get('berth') or 'zzz', -b['score'])
-        return sorted(bundles, key=berth_key)
+    def order_within_pass(bundle_list):
+        if recipe == 'travel_optimized':
+            return sorted(bundle_list, key=lambda b: (b.get('berth') or 'zzz', -b['score']))
+        # priority_first, team_balanced, copy_last_week, pm_compliance: by score desc
+        return sorted(bundle_list, key=lambda b: -b['score'])
 
-    # priority_first, team_balanced, copy_last_week: keep score-descending
-    return bundles
+    return order_within_pass(pm_bundles) + order_within_pass(defect_bundles)
 
 
 def _check_capacity(
