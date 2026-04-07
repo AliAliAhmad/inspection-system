@@ -1104,10 +1104,39 @@ class WorkPlanPDF(FPDF):
 
         for section_label, section_color, section_jobs in sections:
             if section_jobs:
-                self._render_team_section(section_label, section_color, section_jobs)
+                # Group by equipment for PM sections so the PM row appears with
+                # its related defect rows under the same equipment header.
+                # Defect/AC sections stay flat.
+                group_by_equipment = section_label in ('MECH PM TEAM', 'ELEC PM TEAM')
+                # For PM sections, attach mech/elec defects onto the same equipment bundle
+                if group_by_equipment:
+                    is_elec_section = section_label == 'ELEC PM TEAM'
+                    enriched_jobs = list(section_jobs)
+                    eq_ids_in_section = {j.equipment_id for j in section_jobs if j.equipment_id}
+                    # Pull defects on these equipment from the berth's job list
+                    for candidate in jobs:
+                        if candidate.job_type != 'defect':
+                            continue
+                        if candidate.equipment_id not in eq_ids_in_section:
+                            continue
+                        cat = ''
+                        if candidate.defect:
+                            cat = (getattr(candidate.defect, 'category', '') or '').lower()
+                        if is_elec_section and cat != 'electrical':
+                            continue
+                        if (not is_elec_section) and cat == 'electrical':
+                            continue
+                        if candidate not in enriched_jobs:
+                            enriched_jobs.append(candidate)
+                    self._render_team_section(
+                        section_label, section_color, enriched_jobs,
+                        group_by_equipment=True,
+                    )
+                else:
+                    self._render_team_section(section_label, section_color, section_jobs)
                 self.ln(1)
 
-    def _render_team_section(self, label, color, jobs):
+    def _render_team_section(self, label, color, jobs, group_by_equipment: bool = False):
         """Render a single team section: colored header + dense rows."""
         # Check page break — need at least 25mm for header + first row
         if self.get_y() > PH - 30:
@@ -1162,15 +1191,59 @@ class WorkPlanPDF(FPDF):
         self.ln()
         self.set_text_color(*TEXT)
 
-        # Job rows — wrap each in try/except so one bad row doesn't kill the PDF
-        for idx, job in enumerate(jobs):
-            try:
-                self._render_job_row(idx + 1, job, col_widths)
-            except Exception as e:
-                from flask import current_app
-                current_app.logger.error(f'PDF row render failed for job {job.id}: {e}')
-                # Reset position and continue
-                self.ln()
+        if group_by_equipment:
+            # Group jobs by equipment_id, PMs first then defects per group
+            from collections import OrderedDict
+            groups: 'OrderedDict[Any, List]' = OrderedDict()
+            orphans = []
+            for j in jobs:
+                if j.equipment_id:
+                    groups.setdefault(j.equipment_id, []).append(j)
+                else:
+                    orphans.append(j)
+
+            # Render each equipment group
+            row_num = 0
+            for eq_id, eq_jobs in groups.items():
+                # Sort inside group: PM first, then defects
+                eq_jobs_sorted = sorted(eq_jobs, key=lambda j: 0 if j.job_type == 'pm' else 1)
+
+                # Equipment sub-header (thin bar with equipment name)
+                first_job = eq_jobs_sorted[0]
+                eq_name = self._get_equipment_name(first_job)
+                self.set_fill_color(240, 245, 250)
+                self.set_text_color(*NAVY)
+                self._font('B', 7)
+                self.cell(CW, 4, '  ' + self._safe(eq_name, 80), fill=True, border=0, new_x='LMARGIN', new_y='NEXT')
+                self.set_text_color(*TEXT)
+
+                for job in eq_jobs_sorted:
+                    row_num += 1
+                    try:
+                        self._render_job_row(row_num, job, col_widths)
+                    except Exception as e:
+                        from flask import current_app
+                        current_app.logger.error(f'PDF row render failed for job {job.id}: {e}')
+                        self.ln()
+
+            # Orphan jobs (no equipment) at the end
+            for job in orphans:
+                row_num += 1
+                try:
+                    self._render_job_row(row_num, job, col_widths)
+                except Exception as e:
+                    from flask import current_app
+                    current_app.logger.error(f'PDF row render failed for job {job.id}: {e}')
+                    self.ln()
+        else:
+            # Flat rendering — one row per job
+            for idx, job in enumerate(jobs):
+                try:
+                    self._render_job_row(idx + 1, job, col_widths)
+                except Exception as e:
+                    from flask import current_app
+                    current_app.logger.error(f'PDF row render failed for job {job.id}: {e}')
+                    self.ln()
 
     def _render_job_row(self, num, job, col_widths):
         """Render a single dense job row."""
