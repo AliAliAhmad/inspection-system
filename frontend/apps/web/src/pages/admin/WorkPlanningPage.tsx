@@ -1612,6 +1612,9 @@ export default function WorkPlanningPage() {
                   setGenerationResult(result);
                   setSmartPlanScore(result.score);
                   setShowActionBar(true);
+                  // Refresh BOTH the plan AND the pool so newly scheduled jobs leave the pool
+                  queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+                  queryClient.invalidateQueries({ queryKey: ['defects'] });
                   refetch();
                 }}
               />
@@ -1648,6 +1651,10 @@ export default function WorkPlanningPage() {
                     setGenerationResult(null);
                     setSmartPlanScore(null);
                     setShowActionBar(false);
+                    // Refresh BOTH the work plan AND the pool sidebar so cleared jobs reappear in the pool
+                    queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+                    queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+                    queryClient.invalidateQueries({ queryKey: ['defects'] });
                     refetch();
                   } catch (err: any) {
                     const errorMsg = err?.response?.data?.message || err?.message || 'Clear failed';
@@ -3724,6 +3731,9 @@ export default function WorkPlanningPage() {
           setShowActionBar(false);
           setGenerationResult(null);
           setSmartPlanScore(null);
+          // Refresh BOTH the plan AND the pool so cleared jobs reappear in the pool
+          queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
+          queryClient.invalidateQueries({ queryKey: ['defects'] });
           refetch();
         }}
         onRegenerate={() => {
