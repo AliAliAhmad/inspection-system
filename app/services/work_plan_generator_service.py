@@ -1478,13 +1478,20 @@ def _step_assign(
         Stats dict with workers_assigned, jobs_without_worker counts.
     """
     # Try loading the rules table. If missing, fall back to scoring only.
-    rules_by_key: Dict[Tuple[str, str, str], Any] = {}
+    # Each key maps to a LIST of rules (sorted by team_number) because
+    # multiple parallel teams can exist per (berth, team_type, category).
+    rules_by_key: Dict[Tuple[str, str, str], List[Any]] = defaultdict(list)
     try:
         from app.models.worker_assignment_rule import WorkerAssignmentRule
         all_rules = WorkerAssignmentRule.query.filter_by(is_active=True).all()
+        # Sort by team_number so team 1 comes first
+        all_rules.sort(key=lambda r: (r.berth, r.team_type, r.equipment_category, getattr(r, 'team_number', 1) or 1))
         for r in all_rules:
-            rules_by_key[(r.berth, r.team_type, r.equipment_category)] = r
-        logger.info("assign | loaded %d worker assignment rules", len(rules_by_key))
+            rules_by_key[(r.berth, r.team_type, r.equipment_category)].append(r)
+        logger.info(
+            "assign | loaded %d worker assignment rules across %d (berth,team,cat) combinations",
+            len(all_rules), len(rules_by_key),
+        )
     except Exception as e:
         logger.warning("assign | could not load worker assignment rules: %s", e)
 
@@ -1587,6 +1594,9 @@ def _step_assign(
             if day.date in leave_dates:
                 unavailable_by_day[day.id].add(user_id)
 
+    # Track team rotation per (day_id, berth, team_type, cat) for multi-team load balancing
+    team_rotation_counter: Dict[Tuple[int, str, str, str], int] = defaultdict(int)
+
     for day_id, jobs in day_map.items():
         for job in jobs:
             # Determine team_type from job
@@ -1594,21 +1604,43 @@ def _step_assign(
             berth = _normalize_berth(job.berth)
             eq_cat = _get_category(job.equipment.equipment_type) if (job.equipment and job.equipment.equipment_type) else 'all'
 
-            # Try to find a configured rule (specific category, then 'all')
-            rule = (
+            # Try to find configured rules (specific category, then 'all')
+            rule_list = (
                 rules_by_key.get((berth, team_type, eq_cat))
                 or rules_by_key.get((berth, team_type, 'all'))
+                or []
             )
 
             day_unavailable = unavailable_by_day.get(day_id, set())
 
             assigned_count = 0
-            if rule:
-                # Use the configured rule for this job, skipping unavailable workers
-                assigned_count = _assign_from_rule(
-                    job, rule, workers_by_id, daily_worker_load, weekly_worker_load, day_id,
-                    day_unavailable=day_unavailable,
-                )
+            rule = None  # will point to the chosen rule for logging below
+
+            if rule_list:
+                # Multi-team selection: try each team in order of team rotation balance.
+                # Track how many jobs each team has received TODAY for this (berth, team, cat).
+                rotation_key = (day_id, berth, team_type, eq_cat)
+
+                # Sort rules so the team with the LEAST jobs today comes first
+                # (round-robin load balancing). Ties broken by team_number.
+                def _rule_load(r):
+                    tn = getattr(r, 'team_number', 1) or 1
+                    return (team_rotation_counter.get((*rotation_key, tn), 0), tn)
+                sorted_rules = sorted(rule_list, key=_rule_load)
+
+                # Try each team until one succeeds
+                for candidate_rule in sorted_rules:
+                    assigned_count = _assign_from_rule(
+                        job, candidate_rule, workers_by_id, daily_worker_load, weekly_worker_load, day_id,
+                        day_unavailable=day_unavailable,
+                    )
+                    if assigned_count > 0:
+                        rule = candidate_rule
+                        tn = getattr(candidate_rule, 'team_number', 1) or 1
+                        team_rotation_counter[(*rotation_key, tn)] += 1
+                        break
+                    else:
+                        rule = candidate_rule  # for logging even on failure
                 if assigned_count == 0:
                     eq_name = job.equipment.name if job.equipment else 'unknown'
                     logger.warning(

@@ -86,6 +86,7 @@ def create_rule():
         berth=data['berth'],
         team_type=data['team_type'],
         equipment_category=data['equipment_category'],
+        team_number=int(data.get('team_number') or 1),
         mech_count=int(data.get('mech_count') or 0),
         elec_count=int(data.get('elec_count') or 0),
         primary_mech_lead_id=data.get('primary_mech_lead_id'),
@@ -104,7 +105,7 @@ def create_rule():
         db.session.rollback()
         return jsonify({
             'status': 'error',
-            'message': 'A rule for this (berth, team_type, equipment_category) combination already exists.',
+            'message': 'A rule for this (berth, team_type, equipment_category, team_number) combination already exists.',
         }), 409
 
     return jsonify({'status': 'success', 'rule': rule.to_dict()}), 201
@@ -122,6 +123,8 @@ def update_rule(rule_id):
 
     data = request.get_json() or {}
 
+    if 'team_number' in data:
+        rule.team_number = int(data['team_number'])
     if 'mech_count' in data:
         rule.mech_count = int(data['mech_count'])
     if 'elec_count' in data:

@@ -169,6 +169,7 @@ export const WorkerAssignmentRulesManager: React.FC = () => {
       berth: rule.berth,
       team_type: rule.team_type,
       equipment_category: rule.equipment_category,
+      team_number: rule.team_number || 1,
       mech_count: rule.mech_count,
       elec_count: rule.elec_count,
       primary_mech_lead_id: rule.primary_mech_lead_id,
@@ -188,6 +189,7 @@ export const WorkerAssignmentRulesManager: React.FC = () => {
       berth: activeBerth,
       team_type: 'regular_pm',
       equipment_category: 'reach_stacker',
+      team_number: 1,
       mech_count: 0,
       elec_count: 0,
       is_active: true,
@@ -229,6 +231,20 @@ export const WorkerAssignmentRulesManager: React.FC = () => {
         key: 'equipment_category',
         render: (cat: EquipmentCategory) => (
           <Tag color="default">{EQUIPMENT_CATEGORY_LABELS[cat]}</Tag>
+        ),
+      },
+      {
+        title: (
+          <Tooltip title="Team number. Multiple parallel teams can exist per (berth + team type + equipment). Auto-planner rotates jobs between teams.">
+            <span>Team #</span>
+          </Tooltip>
+        ),
+        dataIndex: 'team_number',
+        key: 'team_number',
+        width: 80,
+        align: 'center' as const,
+        render: (n: number) => (
+          <Tag color={n === 1 ? 'blue' : n === 2 ? 'purple' : 'gold'}>#{n || 1}</Tag>
         ),
       },
       {
@@ -433,6 +449,14 @@ export const WorkerAssignmentRulesManager: React.FC = () => {
                   </Select.Option>
                 ))}
               </Select>
+            </Form.Item>
+            <Form.Item
+              name="team_number"
+              label="Team #"
+              tooltip="Use 1 for the first team. Create a second rule with Team #2 if you need parallel teams (e.g. two defect teams per berth with different leads). Auto-planner rotates jobs between teams by workload."
+              rules={[{ required: true }]}
+            >
+              <InputNumber min={1} max={9} style={{ width: 90 }} disabled={!!editingRule} />
             </Form.Item>
           </Space>
 

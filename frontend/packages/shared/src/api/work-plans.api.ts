@@ -678,6 +678,7 @@ export interface WorkerAssignmentRule {
   berth: RuleBerth;
   team_type: TeamType;
   equipment_category: EquipmentCategory;
+  team_number: number;
   mech_count: number;
   elec_count: number;
   primary_mech_lead_id: number | null;
@@ -699,6 +700,7 @@ export interface WorkerAssignmentRulePayload {
   berth?: RuleBerth;
   team_type?: TeamType;
   equipment_category?: EquipmentCategory;
+  team_number?: number;
   mech_count?: number;
   elec_count?: number;
   primary_mech_lead_id?: number | null;

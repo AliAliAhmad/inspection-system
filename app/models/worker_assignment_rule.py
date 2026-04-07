@@ -19,10 +19,11 @@ class WorkerAssignmentRule(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # The 3-key composite that identifies a rule
+    # The 4-key composite that identifies a rule
     berth = db.Column(db.String(10), nullable=False)  # east, west
     team_type = db.Column(db.String(20), nullable=False)  # regular_pm, ac_pm, defect_mech, defect_elec
     equipment_category = db.Column(db.String(30), nullable=False)  # reach_stacker, ech, truck, forklift, trailer, all
+    team_number = db.Column(db.Integer, nullable=False, default=1)  # 1, 2, 3 — for parallel teams on same berth
 
     # Worker counts
     mech_count = db.Column(db.Integer, default=0, nullable=False)
@@ -53,7 +54,7 @@ class WorkerAssignmentRule(db.Model):
     successor_elec_lead = db.relationship('User', foreign_keys=[successor_elec_lead_id])
 
     __table_args__ = (
-        db.UniqueConstraint('berth', 'team_type', 'equipment_category', name='uq_worker_assignment_rule'),
+        db.UniqueConstraint('berth', 'team_type', 'equipment_category', 'team_number', name='uq_worker_assignment_rule'),
         db.CheckConstraint("berth IN ('east', 'west')", name='check_war_berth'),
         db.CheckConstraint(
             "team_type IN ('regular_pm', 'ac_pm', 'defect_mech', 'defect_elec')",
@@ -72,6 +73,7 @@ class WorkerAssignmentRule(db.Model):
             'berth': self.berth,
             'team_type': self.team_type,
             'equipment_category': self.equipment_category,
+            'team_number': self.team_number,
             'mech_count': self.mech_count,
             'elec_count': self.elec_count,
             'primary_mech_lead_id': self.primary_mech_lead_id,
@@ -91,22 +93,48 @@ class WorkerAssignmentRule(db.Model):
 
     @classmethod
     def find_rule(cls, berth, team_type, equipment_category):
-        """Find a matching rule. Falls back to 'all' equipment_category if specific not found."""
+        """
+        Find a matching rule (first team_number=1).
+        Falls back to 'all' equipment_category if specific not found.
+        Use find_all_rules() when you need to iterate over multiple parallel teams.
+        """
         rule = cls.query.filter_by(
             berth=berth,
             team_type=team_type,
             equipment_category=equipment_category,
             is_active=True,
-        ).first()
+        ).order_by(cls.team_number.asc()).first()
         if rule:
             return rule
-        # Fallback: rule for 'all' equipment categories
         return cls.query.filter_by(
             berth=berth,
             team_type=team_type,
             equipment_category='all',
             is_active=True,
-        ).first()
+        ).order_by(cls.team_number.asc()).first()
+
+    @classmethod
+    def find_all_rules(cls, berth, team_type, equipment_category):
+        """
+        Find ALL matching rules (one per team_number).
+        Used when multiple parallel teams exist for the same role (e.g.
+        two defect teams on west berth led by different people).
+        Returns a list ordered by team_number.
+        """
+        rules = cls.query.filter_by(
+            berth=berth,
+            team_type=team_type,
+            equipment_category=equipment_category,
+            is_active=True,
+        ).order_by(cls.team_number.asc()).all()
+        if rules:
+            return rules
+        return cls.query.filter_by(
+            berth=berth,
+            team_type=team_type,
+            equipment_category='all',
+            is_active=True,
+        ).order_by(cls.team_number.asc()).all()
 
     def __repr__(self):
         return f'<WorkerAssignmentRule {self.berth}/{self.team_type}/{self.equipment_category}>'
