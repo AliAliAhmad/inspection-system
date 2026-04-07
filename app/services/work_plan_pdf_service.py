@@ -1156,15 +1156,21 @@ class WorkPlanPDF(FPDF):
         self.set_fill_color(245, 245, 245)
         self.set_text_color(*MUTED)
         self._font('B', 6)
-        headers = ['#', 'Equipment', 'Description', 'Team', 'Materials', 'Hrs', 'OD', '☐', 'Note']
+        headers = ['#', 'Equipment', 'Description', 'Team', 'Materials', 'Hrs', 'OD', 'Done', 'Note']
         for w, h in zip(col_widths, headers):
-            self.cell(w, 4, h, fill=True, align='L' if h not in ('Hrs', 'OD', '☐') else 'C', border=0)
+            self.cell(w, 4, h, fill=True, align='L' if h not in ('Hrs', 'OD', 'Done') else 'C', border=0)
         self.ln()
         self.set_text_color(*TEXT)
 
-        # Job rows
+        # Job rows — wrap each in try/except so one bad row doesn't kill the PDF
         for idx, job in enumerate(jobs):
-            self._render_job_row(idx + 1, job, col_widths)
+            try:
+                self._render_job_row(idx + 1, job, col_widths)
+            except Exception as e:
+                from flask import current_app
+                current_app.logger.error(f'PDF row render failed for job {job.id}: {e}')
+                # Reset position and continue
+                self.ln()
 
     def _render_job_row(self, num, job, col_widths):
         """Render a single dense job row."""
