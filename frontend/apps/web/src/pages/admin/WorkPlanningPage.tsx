@@ -629,14 +629,23 @@ export default function WorkPlanningPage() {
       await workPlansApi.generatePdf(planId);
       // Step 2: Download PDF via proxy endpoint as blob (sends auth header automatically)
       const response = await getApiClient().get(`/api/work-plans/${planId}/download-pdf`, { responseType: 'blob' });
-      return response;
+      return { response, planId };
     },
-    onSuccess: (response) => {
+    onSuccess: ({ response, planId }) => {
       message.success('PDF generated!');
-      // Create blob URL and open in new tab
+      // Create blob URL and trigger download via anchor click (popup-blocker safe)
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `work-plan-${planId}.pdf`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Revoke after a delay so the download/tab has time to start
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
     onError: (err: any) => {
@@ -1773,7 +1782,16 @@ export default function WorkPlanningPage() {
                         try {
                           const resp = await getApiClient().get(`/api/work-plans/${currentPlan.id}/download-pdf`, { responseType: 'blob' });
                           const blob = new Blob([resp.data], { type: 'application/pdf' });
-                          window.open(URL.createObjectURL(blob), '_blank');
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `work-plan-${currentPlan.id}.pdf`;
+                          a.target = '_blank';
+                          a.rel = 'noopener noreferrer';
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          setTimeout(() => URL.revokeObjectURL(url), 10000);
                         } catch { message.error('Failed to download PDF'); }
                       } else {
                         message.info('PDF not available — click Regenerate PDF first');
@@ -1797,7 +1815,16 @@ export default function WorkPlanningPage() {
                       try {
                         const resp = await getApiClient().get(`/api/work-plans/${currentPlan.id}/download-pdf`, { responseType: 'blob' });
                         const blob = new Blob([resp.data], { type: 'application/pdf' });
-                        window.open(URL.createObjectURL(blob), '_blank');
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `work-plan-${currentPlan.id}.pdf`;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        setTimeout(() => URL.revokeObjectURL(url), 10000);
                       } catch { message.error('Failed to download PDF'); }
                     }}
                     style={{ color: '#ff4d4f', borderColor: '#ff4d4f' }}
