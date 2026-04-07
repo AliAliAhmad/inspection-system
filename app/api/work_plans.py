@@ -2022,6 +2022,15 @@ def get_available_jobs():
                 sap_query = sap_query.filter(
                     db.or_(SAPWorkOrder.berth == berth, SAPWorkOrder.berth == 'both', SAPWorkOrder.berth == None)
                 )
+            # Defensive: also exclude any SAP order whose order_number is already
+            # used by a WorkPlanJob in this plan (in case the status field drifted out of sync)
+            scheduled_order_numbers = db.session.query(WorkPlanJob.sap_order_number).join(
+                WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id
+            ).filter(
+                WorkPlanDay.work_plan_id == int(plan_id),
+                WorkPlanJob.sap_order_number.isnot(None),
+            ).subquery()
+            sap_query = sap_query.filter(~SAPWorkOrder.order_number.in_(scheduled_order_numbers))
             sap_orders = sap_query.order_by(SAPWorkOrder.required_date, SAPWorkOrder.order_number).all()
             result['sap_orders'] = [o.to_dict(language) for o in sap_orders]
 
@@ -2049,15 +2058,34 @@ def get_available_jobs():
 
     # Get open defects
     if not job_type or job_type == 'defect':
+        from app.models.inspection import Inspection
         defect_query = Defect.query.filter(Defect.status.in_(['open', 'in_progress']))
 
         # Exclude defects already scheduled in the current work plan
         if plan_id:
-            already_in_plan = db.session.query(WorkPlanJob.defect_id).join(WorkPlanDay).filter(
+            # Direct match: defect_id explicitly set on a job
+            already_in_plan_by_id = db.session.query(WorkPlanJob.defect_id).join(WorkPlanDay).filter(
                 WorkPlanDay.work_plan_id == int(plan_id),
                 WorkPlanJob.defect_id.isnot(None)
             ).subquery()
-            defect_query = defect_query.filter(~Defect.id.in_(already_in_plan))
+            defect_query = defect_query.filter(~Defect.id.in_(already_in_plan_by_id))
+
+            # Bundle exclusion: also exclude defects on equipment that already has
+            # ANY job in the plan (the auto-planner bundles same-equipment work
+            # under a single PM job — the defect doesn't get its own row but
+            # it IS being handled by that team).
+            from sqlalchemy import or_ as _or
+            scheduled_equipment_ids = db.session.query(WorkPlanJob.equipment_id).join(WorkPlanDay).filter(
+                WorkPlanDay.work_plan_id == int(plan_id),
+                WorkPlanJob.equipment_id.isnot(None),
+            ).subquery()
+            # A defect's equipment can come via inspection.equipment_id OR equipment_id_direct
+            defect_query = defect_query.outerjoin(Defect.inspection).filter(
+                ~_or(
+                    Defect.equipment_id_direct.in_(scheduled_equipment_ids),
+                    Inspection.equipment_id.in_(scheduled_equipment_ids),
+                )
+            )
 
         defects = defect_query.order_by(Defect.created_at.desc()).all()
         result['defect_jobs'] = [{
