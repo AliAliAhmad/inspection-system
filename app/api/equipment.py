@@ -971,6 +971,143 @@ def get_reading_stats(equipment_id, reading_type):
     }), 200
 
 
+@bp.route('/<int:equipment_id>/readings/<int:reading_id>', methods=['PATCH'])
+@jwt_required()
+@admin_required()
+def edit_equipment_reading(equipment_id, reading_id):
+    """
+    Admin-only: correct a previously saved EquipmentReading row.
+
+    Used when an inspector typo'd a value (e.g. 9000 vs 900). Updates the
+    reading_value in place, preserves the original value on first edit,
+    and stamps an audit trail (updated_by, updated_at, edit_reason, edit_count).
+
+    Body:
+        reading_value (float, required) — the corrected value
+        edit_reason (str, required) — short explanation, shown in the audit log
+    """
+    from app.models.equipment_reading import EquipmentReading
+    from app.services.equipment_reading_service import (
+        validate_reading_against_history,
+    )
+    from datetime import datetime
+
+    reading = db.session.get(EquipmentReading, reading_id)
+    if not reading:
+        return jsonify({'status': 'error', 'message': 'Reading not found'}), 404
+    if reading.equipment_id != equipment_id:
+        return jsonify({
+            'status': 'error',
+            'message': 'Reading does not belong to this equipment',
+        }), 400
+
+    data = request.get_json(silent=True) or {}
+    new_value = data.get('reading_value')
+    edit_reason = (data.get('edit_reason') or '').strip()
+
+    if new_value is None:
+        return jsonify({
+            'status': 'error',
+            'message': 'reading_value is required',
+        }), 400
+    if not edit_reason:
+        return jsonify({
+            'status': 'error',
+            'message': 'edit_reason is required',
+        }), 400
+
+    try:
+        new_value = float(new_value)
+    except (TypeError, ValueError):
+        return jsonify({
+            'status': 'error',
+            'message': 'reading_value must be numeric',
+        }), 400
+
+    # Validate the corrected value against the equipment history. We
+    # exclude the row being edited from the "latest" lookup so the user
+    # can correct the most-recent reading too. The simplest way is to
+    # temporarily mark this row as faulty for the lookup — but that's
+    # invasive. Instead, manually fetch the previous-other-row.
+    previous_other = (
+        EquipmentReading.query
+        .filter(
+            EquipmentReading.equipment_id == equipment_id,
+            EquipmentReading.reading_type == reading.reading_type,
+            EquipmentReading.id != reading_id,
+        )
+        .order_by(
+            EquipmentReading.reading_date.desc(),
+            EquipmentReading.recorded_at.desc(),
+        )
+        .first()
+    )
+
+    # If there's a previous row, run the same history-based check
+    # against it (lower bound + upper bound from time elapsed).
+    if previous_other and not previous_other.is_faulty and previous_other.reading_value is not None:
+        from datetime import date as date_module
+        from app.services.equipment_reading_service import (
+            MAX_RUNNING_HOURS_PER_DAY, MAX_TWL_PER_DAY,
+            TOLERANCE_BUFFER_RNR, TOLERANCE_BUFFER_TWL,
+        )
+        last_value = float(previous_other.reading_value)
+        if new_value < last_value:
+            return jsonify({
+                'status': 'error',
+                'message': (
+                    f'Corrected reading {new_value:g} cannot be less than the '
+                    f'previous reading {last_value:g}.'
+                ),
+            }), 400
+
+        days_elapsed = max(
+            1,
+            (reading.reading_date - previous_other.reading_date).days,
+        )
+        if reading.reading_type == 'rnr':
+            max_realistic = last_value + (days_elapsed * MAX_RUNNING_HOURS_PER_DAY) + TOLERANCE_BUFFER_RNR
+        elif reading.reading_type == 'twl':
+            max_realistic = last_value + (days_elapsed * MAX_TWL_PER_DAY) + TOLERANCE_BUFFER_TWL
+        else:
+            max_realistic = None
+
+        if max_realistic is not None and new_value > max_realistic:
+            return jsonify({
+                'status': 'error',
+                'message': (
+                    f'Corrected reading {new_value:g} exceeds the realistic '
+                    f'maximum of {max_realistic:g} (previous was {last_value:g}, '
+                    f'{days_elapsed} day(s) earlier).'
+                ),
+            }), 400
+
+    # All checks passed — apply the edit
+    user = get_current_user()
+
+    if reading.original_value is None:
+        # First edit ever for this row → snapshot the original value
+        reading.original_value = reading.reading_value
+
+    reading.reading_value = new_value
+    reading.updated_at = datetime.utcnow()
+    reading.updated_by_id = user.id
+    reading.edit_reason = edit_reason[:255]
+    reading.edit_count = (reading.edit_count or 0) + 1
+
+    db.session.commit()
+
+    logger.info(
+        f"Admin {user.id} corrected reading #{reading_id} for equipment "
+        f"#{equipment_id}: {reading.original_value} → {new_value} ({edit_reason!r})"
+    )
+
+    return jsonify({
+        'status': 'success',
+        'data': reading.to_dict(),
+    }), 200
+
+
 @bp.route('/<int:equipment_id>/readings-history', methods=['GET'])
 @jwt_required()
 def get_readings_history(equipment_id):
@@ -1023,6 +1160,15 @@ def get_readings_history(equipment_id):
             if r.recorded_by_id:
                 u = db.session.get(User, r.recorded_by_id)
                 recorder = u.full_name if u else None
+            updater_name = None
+            if r.updated_by_id:
+                u2 = db.session.get(User, r.updated_by_id)
+                updater_name = u2.full_name if u2 else None
+            photo_url = None
+            if r.photo_file_id:
+                from app.models.file import File as _File
+                pf = db.session.get(_File, r.photo_file_id)
+                photo_url = pf.file_path if pf else None
             data_points.append({
                 'id': r.id,
                 'value': r.reading_value,
@@ -1031,6 +1177,14 @@ def get_readings_history(equipment_id):
                 'recorded_by': recorder,
                 'inspection_id': r.inspection_id,
                 'is_faulty': r.is_faulty or False,
+                # Audit trail (for admin edit UI)
+                'is_edited': (r.edit_count or 0) > 0,
+                'original_value': r.original_value,
+                'edit_count': r.edit_count or 0,
+                'edit_reason': r.edit_reason,
+                'updated_at': r.updated_at.isoformat() if r.updated_at else None,
+                'updated_by_name': updater_name,
+                'photo_url': photo_url,
             })
 
         stats = _compute_stats(values)

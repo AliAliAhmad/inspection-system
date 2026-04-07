@@ -120,6 +120,30 @@ export const equipmentApi = {
     );
   },
 
+  /** ADMIN ONLY: Correct a previously saved equipment reading.
+   *  Used to fix typos like 9000 vs 900 made by inspectors.
+   *  The original value is preserved in `original_value` for audit. */
+  editEquipmentReading(
+    equipmentId: number,
+    readingId: number,
+    payload: { reading_value: number; edit_reason: string },
+  ) {
+    return getApiClient().patch<ApiResponse<{
+      id: number;
+      equipment_id: number;
+      reading_value: number;
+      original_value: number | null;
+      edit_count: number;
+      edit_reason: string | null;
+      updated_at: string | null;
+      updated_by_name: string | null;
+      is_edited: boolean;
+    }>>(
+      `/api/equipment/${equipmentId}/readings/${readingId}`,
+      payload,
+    );
+  },
+
   // KPI and Analytics endpoints
   getKPIs() {
     return getApiClient().get<ApiResponse<EquipmentKPIs>>('/api/equipment/kpis');

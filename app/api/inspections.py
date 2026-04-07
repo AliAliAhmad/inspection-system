@@ -1816,15 +1816,29 @@ def _background_photo_analysis(inspection_id, answer_id, file_record_id, file_pa
             last_reading = EquipmentReading.get_latest_reading(inspection.equipment_id, reading_type)
             last_value = last_reading.reading_value if last_reading and not last_reading.is_faulty else None
 
-            # Validate: new reading must be >= last reading (running hours/twistlock count always increases)
+            # Validate using the history-based service:
+            #   1. New reading must be >= last reading (cannot decrease)
+            #   2. New reading cannot exceed the realistic upper bound based
+            #      on time elapsed × max-per-day (20h/day for RNR, 200/day for TWL).
+            # This catches inspector typos like 9000 instead of 900 BEFORE
+            # they pollute the equipment's reading history.
             reading_rejected = False
             rejection_reason = None
 
-            if reading_value is not None and last_value is not None:
-                if reading_value < last_value:
+            if reading_value is not None:
+                from app.services.equipment_reading_service import (
+                    validate_reading_against_history,
+                )
+                is_valid, reason, _max_realistic = validate_reading_against_history(
+                    inspection.equipment_id, reading_type, reading_value,
+                )
+                if not is_valid:
                     reading_rejected = True
-                    rejection_reason = f"Reading {reading_value} is less than last reading {last_value}. Running hours/twistlock count cannot decrease."
-                    logger.warning(f"Rejected {reading_type.upper()} reading: {reading_value} < {last_value} for equipment #{inspection.equipment_id}")
+                    rejection_reason = reason
+                    logger.warning(
+                        f"Rejected {reading_type.upper()} reading: {reading_value} "
+                        f"for equipment #{inspection.equipment_id} — {reason}"
+                    )
 
             # Build validation response for frontend
             reading_validation = {

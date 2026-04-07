@@ -10,6 +10,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { equipmentApi, type Equipment, type ReadingGroup } from '@inspection/shared';
+import { useAuth } from '../providers/AuthProvider';
 import ReadingChart from '../components/equipment/ReadingChart';
 import ReadingsHistoryTable from '../components/equipment/ReadingsHistoryTable';
 
@@ -27,6 +28,8 @@ export default function EquipmentDetailPage() {
   const equipmentId = Number(id);
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [days, setDays] = useState(90);
   const [activeTab, setActiveTab] = useState('charts');
   const [selectedGroup, setSelectedGroup] = useState<ReadingGroup | null>(null);
@@ -160,7 +163,7 @@ export default function EquipmentDetailPage() {
             ) : groups.length === 0 ? (
               <Empty description="No readings found" />
             ) : (
-              <ReadingsHistoryTable groups={groups} />
+              <ReadingsHistoryTable groups={groups} isAdmin={isAdmin} equipmentId={equipmentId} />
             ),
           },
           {

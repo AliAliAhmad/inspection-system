@@ -39,9 +39,20 @@ class EquipmentReading(db.Model):
     # AI analysis if available
     ai_analysis = db.Column(db.JSON, nullable=True)
 
+    # ── Audit trail for admin edits ──────────────────────────────────────
+    # When an admin corrects a wrong reading (e.g. a typo of 9000 vs 900),
+    # we keep the original value, who edited it, when, and why. The same
+    # row is updated in place — we don't create a duplicate.
+    updated_at = db.Column(db.DateTime, nullable=True)
+    updated_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    original_value = db.Column(db.Float, nullable=True)  # Set on FIRST edit only
+    edit_reason = db.Column(db.String(255), nullable=True)
+    edit_count = db.Column(db.Integer, default=0, nullable=False, server_default='0')
+
     # Relationships
     equipment = db.relationship('Equipment', backref=db.backref('readings', lazy='dynamic'))
-    recorded_by = db.relationship('User', backref=db.backref('recorded_readings', lazy='dynamic'))
+    recorded_by = db.relationship('User', foreign_keys=[recorded_by_id], backref=db.backref('recorded_readings', lazy='dynamic'))
+    updated_by = db.relationship('User', foreign_keys=[updated_by_id])
     inspection = db.relationship('Inspection', backref=db.backref('equipment_readings', lazy='dynamic'))
     photo_file = db.relationship('File', foreign_keys=[photo_file_id])
 
@@ -63,6 +74,14 @@ class EquipmentReading(db.Model):
             'inspection_id': self.inspection_id,
             'photo_url': self.photo_file.file_path if self.photo_file else None,
             'ai_analysis': self.ai_analysis,
+            # Audit trail (visible to admin)
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'updated_by_id': self.updated_by_id,
+            'updated_by_name': self.updated_by.full_name if self.updated_by else None,
+            'original_value': self.original_value,
+            'edit_reason': self.edit_reason,
+            'edit_count': self.edit_count or 0,
+            'is_edited': (self.edit_count or 0) > 0,
         }
 
     @classmethod

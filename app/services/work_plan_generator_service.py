@@ -974,8 +974,11 @@ AC_CAPACITY_BY_CATEGORY = {
     'other': 1,
 }
 
-# Defect team: max 3 different equipment with defect-only jobs per day per berth
-DEFECT_CAPACITY_PER_BERTH = 3
+# Defect team: max 4 different equipment with defect jobs per day per berth.
+# This includes pure-defect bundles AND defects that ride along with AC PM
+# bundles (because the AC specialist can't fix mech/elec defects — they go
+# to the defect team and consume real capacity).
+DEFECT_CAPACITY_PER_BERTH = 4
 
 # Urgent override: bundles with score >= URGENT_THRESHOLD can exceed capacity by +1
 URGENT_THRESHOLD = 85
@@ -1186,9 +1189,17 @@ def _step_distribute(
                 tracker['ac_category_locked'] = cat
             tracker['ac_count'] += 1
 
-        # Defect-only bundle: count against defect team
-        if not has_regular_pm and not has_ac_pm and eq_id:
-            tracker['defect_equipment'].add(eq_id)
+        # Defect-team capacity is consumed when:
+        #   - Pure defect bundle (no PM at all), OR
+        #   - AC PM bundle with defects (AC specialist can't fix defects)
+        # Regular PM bundles do NOT consume defect capacity (PM team handles
+        # the defects themselves on the same workshop visit).
+        bundle_has_defect = any(
+            m.get('job_type') == 'defect' for m in bundle.get('members', [])
+        )
+        if eq_id and bundle_has_defect:
+            if not has_regular_pm:  # Pure defect OR AC PM with defects
+                tracker['defect_equipment'].add(eq_id)
 
     # Build capacity utilization summary for the response
     capacity_utilization = _build_capacity_utilization(days, capacity_tracker)
@@ -1293,10 +1304,15 @@ def _check_capacity(
     Returns False if ANY required bucket is over capacity.
 
     Rules:
-    - PM (regular): pm_category lock must match (or empty), pm_count < cap
-    - PM (AC service): ac_category lock must match (or empty), ac_count < cap
-      AC excluded for trailers/small forklifts (cap = 0)
-    - Defect: defect_equipment count < DEFECT_CAPACITY_PER_BERTH
+    - PM (regular): pm_category lock must match (or empty), pm_count < cap.
+      Regular PM team also handles its own defects, so defects in a regular
+      PM bundle ride along for free (no defect team capacity used).
+    - PM (AC service): ac_category lock must match (or empty), ac_count < cap.
+      AC excluded for trailers/small forklifts (cap = 0). Defects in an AC
+      bundle do NOT ride free — they're done by the defect team and consume
+      defect_equipment capacity, because the AC specialist can't fix
+      mech/elec defects.
+    - Defect (pure): defect_equipment count < DEFECT_CAPACITY_PER_BERTH
     - Urgent override: allow +1 over capacity
     """
     berth = bundle.get('berth') or 'both'
@@ -1333,10 +1349,22 @@ def _check_capacity(
         if tracker['ac_count'] >= max_cap:
             return False
 
-    # Defect check (only if bundle has NO PM — pure defect bundle)
-    # If bundle has PM, defects ride along for free (same equipment, same visit)
-    if not has_regular_pm and not has_ac_pm and has_defect:
+    # Defect check — when defects are in this bundle, are they handled by
+    # the defect team and need to count against defect_equipment capacity?
+    #
+    # Case A — pure defect bundle (no PM at all): YES, count defect capacity.
+    # Case B — regular PM + defects: NO, the regular PM team handles them
+    #          for free during the same visit (existing ride-along behavior).
+    # Case C — AC PM + defects: YES, defect team handles them because the
+    #          AC specialist can only do AC work. They consume defect capacity.
+    needs_defect_capacity = has_defect and (
+        (not has_regular_pm and not has_ac_pm)  # Case A
+        or (has_ac_pm and not has_regular_pm)   # Case C
+    )
+
+    if needs_defect_capacity:
         defect_equip = tracker['defect_equipment']
+        # Same equipment already counted → free
         if eq_id and eq_id in defect_equip:
             return True
         if len(defect_equip) >= DEFECT_CAPACITY_PER_BERTH + extra_slots:
@@ -1384,8 +1412,13 @@ def _remaining_capacity(
             return 0
         capacities.append(max(0, max_cap - tracker['ac_count']))
 
-    if not has_regular_pm and not has_ac_pm:
-        # Defect-only
+    # Defect team capacity is the bottleneck for: pure defect bundles AND
+    # AC PM bundles with defects (since the defect team handles those defects).
+    bundle_has_defect = any(m.get('job_type') == 'defect' for m in bundle.get('members', []))
+    if not has_regular_pm and (
+        (not has_ac_pm)  # Pure defect bundle
+        or (has_ac_pm and bundle_has_defect)  # AC PM bundle with defects
+    ):
         capacities.append(max(0, DEFECT_CAPACITY_PER_BERTH - len(tracker['defect_equipment'])))
 
     return min(capacities) if capacities else 0

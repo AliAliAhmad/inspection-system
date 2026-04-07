@@ -2520,10 +2520,29 @@ export default function WorkPlanningPage() {
                                           );
                                         }
 
-                                        // Group jobs by equipment_id (jobs without equipment become individual orphan bundles)
+                                        // Group jobs by equipment_id, BUT split AC PM jobs into their
+                                        // own bundle. AC PMs are handled by a separate AC specialist
+                                        // (not the regular PM team), and the defects on the same equipment
+                                        // are handled by the defect team — they're operationally distinct
+                                        // even though they share the same equipment and same workshop visit.
+                                        // - Regular PM + defects → one bundle (PM team does both)
+                                        // - AC PM alone           → one bundle (AC specialist)
+                                        // - Defects only          → one bundle (defect team)
+                                        const isAcPmJob = (j: WorkPlanJob) => {
+                                          if (j.job_type !== 'pm') return false;
+                                          const desc = (j.description || '').toUpperCase();
+                                          return ` ${desc} `.includes(' AC ') || desc.includes('AC SYSTEM');
+                                        };
                                         const groups = new Map<string, WorkPlanJob[]>();
                                         for (const job of nonInspectionJobs) {
-                                          const key = job.equipment_id ? `eq-${job.equipment_id}` : `orphan-${job.id}`;
+                                          let key: string;
+                                          if (!job.equipment_id) {
+                                            key = `orphan-${job.id}`;
+                                          } else if (isAcPmJob(job)) {
+                                            key = `eq-${job.equipment_id}-ac`;
+                                          } else {
+                                            key = `eq-${job.equipment_id}`;
+                                          }
                                           if (!groups.has(key)) groups.set(key, []);
                                           groups.get(key)!.push(job);
                                         }

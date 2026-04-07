@@ -302,6 +302,15 @@ export interface ReadingDataPoint {
   recorded_by: string | null;
   inspection_id: number | null;
   is_faulty: boolean;
+  // Audit trail (populated only for EquipmentReading rows that admin has edited)
+  is_edited?: boolean;
+  original_value?: number | null;
+  edit_count?: number;
+  edit_reason?: string | null;
+  updated_at?: string | null;
+  updated_by_name?: string | null;
+  // Photo for editing
+  photo_url?: string | null;
 }
 
 export interface ReadingThresholds {
