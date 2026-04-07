@@ -1508,6 +1508,56 @@ def _step_assign(
         logger.warning("assign | no available workers found — %d jobs unassigned", total_jobs)
         return {'workers_assigned': 0, 'jobs_without_worker': total_jobs}
 
+    # ── Load roster + approved leaves for per-day availability ──
+    # roster_by_day_user[day_id][user_id] = 'day'|'night'|'off'|'leave'|None
+    # A user is AVAILABLE on a day if their roster shift is 'day' or 'night'
+    # (or no roster entry exists — default assume available).
+    roster_by_day_user: Dict[int, Dict[int, str]] = defaultdict(dict)
+    try:
+        from app.models.roster import RosterEntry
+        roster_entries = (
+            RosterEntry.query
+            .filter(
+                RosterEntry.date >= plan.week_start,
+                RosterEntry.date <= plan.week_end,
+            )
+            .all()
+        )
+        # Build a map by (date → day.id) for quick lookup
+        date_to_day_id = {d.date: d.id for d in plan.days}
+        for e in roster_entries:
+            day_id = date_to_day_id.get(e.date)
+            if day_id:
+                roster_by_day_user[day_id][e.user_id] = e.shift
+        logger.info("assign | loaded %d roster entries for plan week", len(roster_entries))
+    except Exception as e:
+        logger.warning("assign | could not load roster: %s", e)
+
+    # Load approved leaves covering the plan week
+    # leaves_by_user_day[user_id] = set of date strings when they're on leave
+    leaves_by_user_day: Dict[int, set] = defaultdict(set)
+    try:
+        from app.models.leave import Leave
+        from datetime import timedelta as _td
+        approved_leaves = (
+            Leave.query
+            .filter(
+                Leave.status == 'approved',
+                Leave.date_from <= plan.week_end,
+                Leave.date_to >= plan.week_start,
+            )
+            .all()
+        )
+        for lv in approved_leaves:
+            d = lv.date_from
+            while d <= lv.date_to:
+                if plan.week_start <= d <= plan.week_end:
+                    leaves_by_user_day[lv.user_id].add(d)
+                d += _td(days=1)
+        logger.info("assign | loaded %d approved leaves", len(approved_leaves))
+    except Exception as e:
+        logger.warning("assign | could not load leaves: %s", e)
+
     prev_assignments = _get_previous_week_assignments(plan)
 
     daily_worker_load: Dict[int, Dict[int, int]] = defaultdict(lambda: defaultdict(int))
@@ -1524,6 +1574,19 @@ def _step_assign(
     workers_assigned = 0
     jobs_without_worker = 0
 
+    # Build a set of (day_id, user_id) that are NOT available due to roster/leave
+    unavailable_by_day: Dict[int, set] = defaultdict(set)
+    for day in plan.days:
+        # Roster: anyone marked 'off' or 'leave' is unavailable
+        day_roster = roster_by_day_user.get(day.id, {})
+        for user_id, shift in day_roster.items():
+            if shift in ('off', 'leave'):
+                unavailable_by_day[day.id].add(user_id)
+        # Approved leaves: add all users on leave that day
+        for user_id, leave_dates in leaves_by_user_day.items():
+            if day.date in leave_dates:
+                unavailable_by_day[day.id].add(user_id)
+
     for day_id, jobs in day_map.items():
         for job in jobs:
             # Determine team_type from job
@@ -1537,11 +1600,14 @@ def _step_assign(
                 or rules_by_key.get((berth, team_type, 'all'))
             )
 
+            day_unavailable = unavailable_by_day.get(day_id, set())
+
             assigned_count = 0
             if rule:
-                # Use the configured rule for this job
+                # Use the configured rule for this job, skipping unavailable workers
                 assigned_count = _assign_from_rule(
                     job, rule, workers_by_id, daily_worker_load, weekly_worker_load, day_id,
+                    day_unavailable=day_unavailable,
                 )
                 if assigned_count == 0:
                     eq_name = job.equipment.name if job.equipment else 'unknown'
@@ -1627,21 +1693,27 @@ def _assign_from_rule(
     daily_load: Dict[int, Dict[int, int]],
     weekly_load: Dict[int, int],
     day_id: int,
+    day_unavailable: Optional[set] = None,
 ) -> int:
     """
     Assign workers to a job using a WorkerAssignmentRule.
     Picks primary lead (or successor if on leave), then fills with candidate workers.
+    Skips workers marked unavailable for this day (off shift or approved leave).
     Returns count of workers assigned.
     """
     assigned_count = 0
     assigned_user_ids = set()
     skipped_reasons = []  # debug: track why workers were rejected
+    day_unavailable = day_unavailable or set()
 
     def is_available(user_id):
         if user_id is None:
             return False
         if user_id in assigned_user_ids:
             skipped_reasons.append(f"uid={user_id}: already assigned to this job")
+            return False
+        if user_id in day_unavailable:
+            skipped_reasons.append(f"uid={user_id}: off/leave on this day")
             return False
         u = workers_by_id.get(user_id)
         if u is None:
@@ -1651,7 +1723,7 @@ def _assign_from_rule(
             skipped_reasons.append(f"uid={user_id} ({u.full_name}): inactive")
             return False
         if u.is_on_leave:
-            skipped_reasons.append(f"uid={user_id} ({u.full_name}): on leave")
+            skipped_reasons.append(f"uid={user_id} ({u.full_name}): globally on leave")
             return False
         return True
 
