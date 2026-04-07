@@ -975,7 +975,7 @@ export interface DayInspections {
 
 // ==================== SMART PLAN GENERATOR ====================
 
-export type PlanRecipe = 'priority_first' | 'travel_optimized' | 'team_balanced' | 'pm_compliance' | 'copy_last_week';
+export type PlanRecipe = 'priority_first' | 'travel_optimized' | 'team_balanced' | 'pm_compliance' | 'copy_last_week' | 'combined';
 
 export interface PlanRecipeInfo {
   key: PlanRecipe;
@@ -990,7 +990,7 @@ export interface PlanScore {
   overall: number;
   pm_coverage: number;
   priority_coverage: number;
-  travel_efficiency: number;
+  berth_balance: number;
   team_balance: number;
   capacity_fit: number;
 }

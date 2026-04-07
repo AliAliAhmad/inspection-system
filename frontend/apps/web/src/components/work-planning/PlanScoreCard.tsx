@@ -17,7 +17,7 @@ interface DimensionConfig {
 const DIMENSIONS: DimensionConfig[] = [
   { key: 'pm_coverage', label: 'PM Coverage', color: '#52c41a' },
   { key: 'priority_coverage', label: 'Priority', color: '#1890ff' },
-  { key: 'travel_efficiency', label: 'Travel', color: '#fa8c16' },
+  { key: 'berth_balance', label: 'Berth Balance', color: '#fa8c16' },
   { key: 'team_balance', label: 'Team Balance', color: '#722ed1' },
   { key: 'capacity_fit', label: 'Capacity', color: '#13c2c2' },
 ];

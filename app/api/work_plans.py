@@ -2361,10 +2361,27 @@ def download_day_pdf(plan_id, day_date):
 @bp.route('/<int:plan_id>/generate', methods=['POST'])
 @jwt_required()
 def generate_plan(plan_id):
-    """Auto-generate a weekly work plan using the 5-step pipeline."""
+    """Auto-generate a weekly work plan using the 5-step pipeline.
+
+    Request body:
+        recipe (str, optional): One of 'priority_first', 'travel_optimized',
+            'team_balanced', 'pm_compliance', 'copy_last_week', 'combined'.
+            Default: 'priority_first'.
+        clear_existing (bool, optional): If True, wipe ALL existing jobs first.
+            Default: False (only AI-generated jobs are wiped).
+        step (int, optional): 1, 2, or 3 — REQUIRED when recipe='combined'.
+            Step 1 = PMs + their defects. Step 2 = critical/high defects on
+            equipment without PM. Step 3 = medium/low defects on equipment
+            without PM.
+        additive (bool, optional): If True, do NOT clear previous AI jobs at
+            the start. Used for combined steps 2 and 3 to add to existing plan.
+            Default: False.
+    """
     data = request.get_json(silent=True) or {}
     recipe = data.get('recipe', 'priority_first')
     clear_existing = data.get('clear_existing', False)
+    step = data.get('step')
+    additive = data.get('additive', False)
 
     try:
         from app.services.work_plan_generator_service import WorkPlanGeneratorService
@@ -2372,6 +2389,8 @@ def generate_plan(plan_id):
             plan_id=plan_id,
             recipe=recipe,
             clear_existing=clear_existing,
+            step=step,
+            additive=additive,
         )
         return jsonify(result), 200
     except Exception as e:

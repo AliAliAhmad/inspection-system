@@ -71,9 +71,9 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
-| 2026-04-02 | Fix: AsyncStorage SQLite "disk full" error — auto-cleanup stale cache (24h TTL), old drafts (7d), dead queue items (3d). Runs on app launch via OfflineProvider. Prevents storage overflow on heavy-use Android devices | ✅ Done |
-| 2026-04-04 | Feat: Smart Work Plan Generator frontend — GeneratePlanButton (5 recipe dropdown + confirm modal), PlanScoreCard (5-dimension quality bars), GenerationActionBar (accept/reject/regenerate sticky bar). Shared types + API layer for /generate, /reject, /score endpoints. Integrated into WorkPlanningPage toolbar | ✅ Done |
 | 2026-04-06 | Feat: Adaptive capacity rules + AC service + Worker Assignment Rules — Strict capacity (no overflow), urgent override, balanced distribution, separate AC team bucket per berth, configurable worker rules per (berth, team_type, equipment_category) with primary lead + successor + candidate pools, settings page tab, Clear All Jobs button. Requires `flask db upgrade` on Render | ✅ Done |
+| 2026-04-07 | Feat: Replaced "Travel Efficiency" score with "Berth Balance" — measures workload split between East/West berths (since each berth has its own dedicated team, travel between berths is irrelevant). Formula: min(east,west)/max(east,west)*100. 3 files: work_plan_generator_service.py, work-plan.types.ts, PlanScoreCard.tsx. No DB migration needed | ✅ Done |
+| 2026-04-07 | Feat: Combined recipe (3-step manual stepper) — New recipe in Smart Plan Generator where user controls 3 sequential steps: PMs+defects → urgent defects on eq without PM → normal defects on eq without PM. Each step additive, assigns teams automatically, user reviews between steps. Backend: +`step`/`additive` params on generate_plan, new `_filter_candidates_for_combined_step` helper, relaxed populate to include 'low' severity. Frontend: new 3-card stepper modal in GeneratePlanButton. Materials stay manual (documented in UI). No DB migration | ✅ Done |
 
 
 ## Plugin Management

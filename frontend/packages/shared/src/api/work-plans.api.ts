@@ -637,8 +637,21 @@ export const workPlansApi = {
 
   // ==================== SMART PLAN GENERATOR ====================
 
-  generatePlan(planId: number, recipe: PlanRecipe = 'priority_first', clearExisting: boolean = false) {
-    return getApiClient().post<GenerationResult>(`/api/work-plans/${planId}/generate`, { recipe, clear_existing: clearExisting });
+  generatePlan(
+    planId: number,
+    recipe: PlanRecipe = 'priority_first',
+    clearExisting: boolean = false,
+    options?: { step?: 1 | 2 | 3; additive?: boolean },
+  ) {
+    return getApiClient().post<GenerationResult>(
+      `/api/work-plans/${planId}/generate`,
+      {
+        recipe,
+        clear_existing: clearExisting,
+        step: options?.step,
+        additive: options?.additive ?? false,
+      },
+    );
   },
 
   rejectGeneration(planId: number) {

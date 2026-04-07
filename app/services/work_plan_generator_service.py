@@ -67,6 +67,10 @@ RECIPES = {
         'description': "Clone last week's structure",
         'description_ar': 'نسخ هيكل الأسبوع الماضي',
     },
+    'combined': {
+        'description': 'Manual 3-step: PMs → urgent defects → normal defects',
+        'description_ar': 'يدوي 3 خطوات: الصيانة الوقائية ← الأعطال العاجلة ← الأعطال العادية',
+    },
 }
 
 # Severity → base score mapping for inspection-sourced defects
@@ -126,6 +130,8 @@ class WorkPlanGeneratorService:
         plan_id: int,
         recipe: str = 'priority_first',
         clear_existing: bool = False,
+        step: Optional[int] = None,
+        additive: bool = False,
     ) -> Dict[str, Any]:
         """
         Main entry point.  Runs the 5-step pipeline and commits.
@@ -136,6 +142,12 @@ class WorkPlanGeneratorService:
             clear_existing: If True, remove *all* existing jobs first.
                             If False (default), only remove AI-generated jobs
                             (ai_confidence IS NOT NULL).
+            step: Sub-step (1, 2, or 3) — REQUIRED when recipe='combined'.
+                  Step 1 = PMs + their defects.
+                  Step 2 = critical/high defects on equipment without PM.
+                  Step 3 = medium/low defects on equipment without PM.
+            additive: If True, do NOT clear previous AI jobs at the start.
+                      Used for combined steps 2 and 3 to add to existing plan.
 
         Returns:
             Generation result dict with summary, score, and jobs_by_day.
@@ -143,12 +155,18 @@ class WorkPlanGeneratorService:
         Raises:
             NotFoundError: Plan does not exist.
             BusinessError: Plan is not in draft status.
-            ValidationError: Unknown recipe.
+            ValidationError: Unknown recipe, or combined recipe missing step.
         """
         if recipe not in RECIPES:
             raise ValidationError(
                 f"Unknown recipe '{recipe}'. Valid: {', '.join(RECIPES.keys())}",
                 field='recipe',
+            )
+
+        if recipe == 'combined' and step not in (1, 2, 3):
+            raise ValidationError(
+                "Combined recipe requires 'step' to be 1, 2, or 3.",
+                field='step',
             )
 
         plan = db.session.get(WorkPlan, plan_id)
@@ -162,18 +180,25 @@ class WorkPlanGeneratorService:
             )
 
         logger.info(
-            "generate_plan START | plan_id=%s recipe=%s clear=%s",
-            plan_id, recipe, clear_existing,
+            "generate_plan START | plan_id=%s recipe=%s clear=%s step=%s additive=%s",
+            plan_id, recipe, clear_existing, step, additive,
         )
 
         # -- Ensure 7 WorkPlanDay rows exist ----------------------------------
         _ensure_plan_days(plan)
 
         # -- Housekeeping: clear previous generation --------------------------
-        _clear_generated_jobs(plan, clear_all=clear_existing)
+        # Skip clearing in additive mode so previous step's jobs survive.
+        if not additive:
+            _clear_generated_jobs(plan, clear_all=clear_existing)
 
         # -- Pipeline ---------------------------------------------------------
         candidates = _step_populate(plan)
+
+        # Combined recipe filters candidates per step.
+        if recipe == 'combined':
+            candidates = _filter_candidates_for_combined_step(candidates, plan, step)
+
         scored = _step_score(candidates, plan)
         bundles = _step_bundle(scored)
         day_map, unscheduled, capacity_utilization = _step_distribute(plan, bundles, recipe)
@@ -232,9 +257,9 @@ class WorkPlanGeneratorService:
         Dimensions (weighted):
             pm_coverage      (25%) — % of overdue PMs from pool that got scheduled
             priority_coverage (20%) — % of urgent/high jobs included
-            travel_efficiency (20%) — ratio of same-berth-per-day groupings
-            team_balance      (20%) — inverse of std-dev of jobs per worker
-            capacity_fit      (15%) — how evenly jobs spread across days
+            berth_balance    (20%) — how evenly jobs are split between East and West berths
+            team_balance     (20%) — inverse of std-dev of jobs per worker
+            capacity_fit     (15%) — how evenly jobs spread across days
 
         Returns:
             Dict with 'overall' and per-dimension scores.
@@ -259,8 +284,8 @@ class WorkPlanGeneratorService:
         # ---- Priority Coverage (20%) ----
         priority_coverage = _calc_priority_coverage(plan, all_jobs)
 
-        # ---- Travel Efficiency (20%) ----
-        travel_efficiency = _calc_travel_efficiency(plan)
+        # ---- Berth Balance (20%) ----
+        berth_balance = _calc_berth_balance(all_jobs)
 
         # ---- Team Balance (20%) ----
         team_balance = _calc_team_balance(all_jobs)
@@ -271,7 +296,7 @@ class WorkPlanGeneratorService:
         overall = round(
             pm_coverage * 0.25
             + priority_coverage * 0.20
-            + travel_efficiency * 0.20
+            + berth_balance * 0.20
             + team_balance * 0.20
             + capacity_fit * 0.15
         )
@@ -280,7 +305,7 @@ class WorkPlanGeneratorService:
             'overall': overall,
             'pm_coverage': round(pm_coverage),
             'priority_coverage': round(priority_coverage),
-            'travel_efficiency': round(travel_efficiency),
+            'berth_balance': round(berth_balance),
             'team_balance': round(team_balance),
             'capacity_fit': round(capacity_fit),
         }
@@ -530,7 +555,7 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
         Defect.query
         .filter(
             Defect.status.in_(['open', 'in_progress']),
-            Defect.severity.in_(['critical', 'high', 'medium']),
+            Defect.severity.in_(['critical', 'high', 'medium', 'low']),
             ~Defect.id.in_(already_scheduled_defect_ids) if already_scheduled_defect_ids else True,
         )
         .options(
@@ -654,6 +679,76 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
         sum(1 for c in candidates if c['source'] == 'carry_over'),
         len(candidates),
     )
+
+    return candidates
+
+
+def _filter_candidates_for_combined_step(
+    candidates: List[Dict[str, Any]],
+    plan: WorkPlan,
+    step: int,
+) -> List[Dict[str, Any]]:
+    """
+    Filter populated candidates based on which step of the Combined recipe
+    is running. The Combined recipe is a manual 3-step pipeline where each
+    step is run by the user (additive).
+
+    Step 1: All PMs + any defects on the same equipment as a PM (defects
+            ride along automatically via _step_bundle).
+    Step 2: critical/high severity defects on equipment that has NO job
+            scheduled in the plan yet (i.e., not picked up by Step 1).
+    Step 3: medium/low severity defects on equipment that still has no
+            scheduled job.
+
+    Args:
+        candidates: Output of _step_populate (all PMs, defects, carry-overs).
+        plan: The current WorkPlan (to check existing scheduled jobs).
+        step: 1, 2, or 3.
+
+    Returns:
+        Filtered candidate list — only those that match the current step.
+    """
+    # Equipment IDs that already have jobs scheduled in this plan.
+    # For step 1 this is empty (fresh start). For steps 2 and 3 this contains
+    # the equipment placed by previous steps.
+    scheduled_eq_ids = set()
+    for day in plan.days:
+        for job in day.jobs:
+            if job.equipment_id:
+                scheduled_eq_ids.add(job.equipment_id)
+
+    if step == 1:
+        # PMs + defects on the same equipment as those PMs.
+        # Carry-overs are also kept (they may include PMs or defects).
+        pm_eq_ids = {
+            c['equipment_id'] for c in candidates
+            if c.get('job_type') == 'pm' and c.get('equipment_id')
+        }
+        return [
+            c for c in candidates
+            if c.get('job_type') == 'pm'
+            or (
+                c.get('job_type') == 'defect'
+                and c.get('equipment_id') in pm_eq_ids
+            )
+            or c.get('source') == 'carry_over'
+        ]
+
+    if step == 2:
+        return [
+            c for c in candidates
+            if c.get('job_type') == 'defect'
+            and c.get('severity') in ('critical', 'high')
+            and c.get('equipment_id') not in scheduled_eq_ids
+        ]
+
+    if step == 3:
+        return [
+            c for c in candidates
+            if c.get('job_type') == 'defect'
+            and c.get('severity') in ('medium', 'low')
+            and c.get('equipment_id') not in scheduled_eq_ids
+        ]
 
     return candidates
 
@@ -1965,7 +2060,7 @@ def _empty_score() -> Dict[str, int]:
         'overall': 0,
         'pm_coverage': 0,
         'priority_coverage': 0,
-        'travel_efficiency': 0,
+        'berth_balance': 0,
         'team_balance': 0,
         'capacity_fit': 0,
     }
@@ -2026,32 +2121,50 @@ def _calc_priority_coverage(plan: WorkPlan, all_jobs: List[WorkPlanJob]) -> floa
     return min((scheduled_high / total_high) * 100, 100.0)
 
 
-def _calc_travel_efficiency(plan: WorkPlan) -> float:
+def _calc_berth_balance(all_jobs: List[WorkPlanJob]) -> float:
     """
-    Ratio of same-berth groupings per day.
-    For each day: if all jobs share the same berth → 100%.
-    Average across all days with jobs.
+    How evenly the workload is split between East and West berths.
+
+    Each berth has its own dedicated team, so we want both teams to have
+    similar amounts of work — neither team should be drowning while the
+    other sits idle.
+
+    Score = (smaller_berth_count / bigger_berth_count) * 100
+
+    Examples:
+        East=18, West=17 → 17/18 = 94% (well balanced)
+        East=25, West=12 → 12/25 = 48% (one team overloaded)
+        East=30, West=0  →  0/30 =  0% (one team idle)
+
+    Notes:
+        - 'both' jobs are counted toward both berths (they're flexible work).
+        - Jobs with no berth set are ignored.
+        - If only one berth has jobs, score is 0 (totally unbalanced).
+        - If neither berth has jobs, score is 100 (nothing to balance).
     """
-    scores = []
-    for day in plan.days:
-        if not day.jobs:
-            continue
+    east_count = 0
+    west_count = 0
 
-        jobs_with_berth = [j for j in day.jobs if j.berth]
-        if not jobs_with_berth:
-            scores.append(100.0)  # No berth info — not penalizing
-            continue
+    for job in all_jobs:
+        berth = (job.berth or '').lower()
+        if berth == 'east':
+            east_count += 1
+        elif berth == 'west':
+            west_count += 1
+        elif berth == 'both':
+            east_count += 1
+            west_count += 1
 
-        berth_counts = defaultdict(int)
-        for j in jobs_with_berth:
-            berth_counts[j.berth] += 1
+    if east_count == 0 and west_count == 0:
+        return 100.0  # No berth info on any job — don't penalize
 
-        # Dominant berth share
-        dominant = max(berth_counts.values())
-        total = len(jobs_with_berth)
-        scores.append((dominant / total) * 100)
+    smaller = min(east_count, west_count)
+    bigger = max(east_count, west_count)
 
-    return sum(scores) / len(scores) if scores else 100.0
+    if bigger == 0:
+        return 100.0  # Should not happen given check above, defensive
+
+    return (smaller / bigger) * 100
 
 
 def _calc_team_balance(all_jobs: List[WorkPlanJob]) -> float:
