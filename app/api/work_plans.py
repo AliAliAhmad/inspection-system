@@ -2056,10 +2056,13 @@ def get_available_jobs():
             ).count()
         } for eq in equipment_list]
 
-    # Get open defects
+    # Get open defects — ONLY defects from inspections (not field reports or safety reports)
     if not job_type or job_type == 'defect':
         from app.models.inspection import Inspection
-        defect_query = Defect.query.filter(Defect.status.in_(['open', 'in_progress']))
+        defect_query = Defect.query.filter(
+            Defect.status.in_(['open', 'in_progress']),
+            Defect.inspection_id.isnot(None),
+        )
 
         # Exclude defects already scheduled in the current work plan
         if plan_id:
@@ -2094,21 +2097,9 @@ def get_available_jobs():
             'equipment': d.inspection.equipment.to_dict() if d.inspection and d.inspection.equipment else None
         } for d in defects]
 
-    # Get pending inspection assignments (unassigned or assigned but not completed)
-    if not job_type or job_type == 'inspection':
-        from app.models.inspection_list import InspectionList
-        today = datetime.utcnow().date()
-        assignment_query = InspectionAssignment.query.join(
-            InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id
-        ).filter(
-            InspectionAssignment.status.in_(['unassigned', 'assigned', 'in_progress']),
-            InspectionList.target_date >= today
-        )
-        assignments = assignment_query.order_by(InspectionList.target_date).all()
-        result['inspection_jobs'] = [{
-            'assignment': a.to_dict(),
-            'job_type': 'inspection'
-        } for a in assignments]
+    # Inspection assignments are NOT shown in the work-plan pool.
+    # They have their own assignment system and appear in InspectionSummaryBar.
+    # result['inspection_jobs'] stays empty.
 
     return jsonify({
         'status': 'success',
