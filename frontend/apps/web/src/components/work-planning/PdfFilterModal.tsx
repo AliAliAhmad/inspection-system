@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Modal, Checkbox, Radio, Space, Divider, Typography, Tag, Button } from 'antd';
-import { FilePdfOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { FilePdfOutlined, InfoCircleOutlined, GlobalOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { PdfFilters, WorkPlanDay } from '@inspection/shared';
 
 const { Text } = Typography;
@@ -14,7 +15,12 @@ interface PdfFilterModalProps {
    */
   days: WorkPlanDay[];
   onCancel: () => void;
-  onGenerate: (filters: PdfFilters | undefined) => void;
+  /**
+   * Called when the user clicks Generate.
+   * - filters: the selected filter payload (undefined if all defaults)
+   * - lang: the language the PDF should be rendered in ('en' | 'ar')
+   */
+  onGenerate: (filters: PdfFilters | undefined, lang: string) => void;
 }
 
 type BerthChoice = 'both' | 'east' | 'west';
@@ -30,6 +36,8 @@ export const PdfFilterModal: React.FC<PdfFilterModalProps> = ({
   onCancel,
   onGenerate,
 }) => {
+  const { i18n } = useTranslation();
+
   // All days selected by default
   const allDayDates = useMemo(() => days.map((d) => d.date), [days]);
 
@@ -37,6 +45,10 @@ export const PdfFilterModal: React.FC<PdfFilterModalProps> = ({
   const [berth, setBerth] = useState<BerthChoice>('both');
   const [trade, setTrade] = useState<TradeChoice>('both');
   const [selectedJobTypes, setSelectedJobTypes] = useState<JobType[]>(ALL_JOB_TYPES);
+  // PDF language — defaults to the current UI language, user can override
+  const [pdfLang, setPdfLang] = useState<string>(
+    (i18n.language || 'en').startsWith('ar') ? 'ar' : 'en',
+  );
 
   // Re-sync day selection when the plan changes
   useEffect(() => {
@@ -45,8 +57,9 @@ export const PdfFilterModal: React.FC<PdfFilterModalProps> = ({
       setBerth('both');
       setTrade('both');
       setSelectedJobTypes(ALL_JOB_TYPES);
+      setPdfLang((i18n.language || 'en').startsWith('ar') ? 'ar' : 'en');
     }
-  }, [open, allDayDates]);
+  }, [open, allDayDates, i18n.language]);
 
   const totalSelectedJobs = useMemo(() => {
     return days
@@ -77,7 +90,7 @@ export const PdfFilterModal: React.FC<PdfFilterModalProps> = ({
     }
 
     const hasAnyFilter = Object.keys(filters).length > 0;
-    onGenerate(hasAnyFilter ? filters : undefined);
+    onGenerate(hasAnyFilter ? filters : undefined, pdfLang);
   };
 
   // Determine if this is a "default" request (no actual filters applied)
@@ -152,6 +165,20 @@ export const PdfFilterModal: React.FC<PdfFilterModalProps> = ({
             Defaults show the <strong>full week</strong>. The card layout stays the same.
           </div>
         </div>
+
+        {/* ── Language ─────────────────────────────────── */}
+        <div style={{ marginBottom: 14 }}>
+          <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 6 }}>
+            <GlobalOutlined style={{ marginRight: 4 }} />
+            Language / اللغة
+          </Text>
+          <Radio.Group value={pdfLang} onChange={(e) => setPdfLang(e.target.value)}>
+            <Radio.Button value="en">English</Radio.Button>
+            <Radio.Button value="ar">العربية</Radio.Button>
+          </Radio.Group>
+        </div>
+
+        <Divider style={{ margin: '10px 0' }} />
 
         {/* ── Days ─────────────────────────────────── */}
         <div style={{ marginBottom: 14 }}>

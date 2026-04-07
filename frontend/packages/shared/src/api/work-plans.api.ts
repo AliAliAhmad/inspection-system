@@ -616,9 +616,10 @@ export const workPlansApi = {
 
   // ==================== PDF GENERATION ====================
 
-  generatePdf(planId: number, filters?: PdfFilters) {
+  generatePdf(planId: number, filters?: PdfFilters, lang?: string) {
+    const langQuery = lang ? `?lang=${encodeURIComponent(lang)}` : '';
     return getApiClient().post<ApiResponse<{ pdf_url: string }>>(
-      `/api/work-plans/${planId}/generate-pdf`,
+      `/api/work-plans/${planId}/generate-pdf${langQuery}`,
       filters || {},
     );
   },

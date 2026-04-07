@@ -496,7 +496,7 @@ const SimpleJobRow: React.FC<{
 const fmtHours = (h: number | null | undefined) => parseFloat((h ?? 0).toFixed(1));
 
 export default function WorkPlanningPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
 
   const [weekOffset, setWeekOffset] = useState(0);
@@ -626,17 +626,26 @@ export default function WorkPlanningPage() {
   });
 
   const generatePdfMutation = useMutation({
-    mutationFn: async ({ planId, filters }: { planId: number; filters?: PdfFilters }) => {
+    mutationFn: async ({
+      planId,
+      filters,
+      lang = 'en',
+    }: {
+      planId: number;
+      filters?: PdfFilters;
+      lang?: string;
+    }) => {
       // Step 1: Generate canonical PDF on server (uploads to Cloudinary).
       //         Only when no filters — we don't want to overwrite the canonical
       //         copy with a filtered view.
       if (!filters) {
-        await workPlansApi.generatePdf(planId);
+        await workPlansApi.generatePdf(planId, undefined, lang);
       }
 
       // Step 2: Download PDF via proxy endpoint as blob. When filters are
-      // active, pass them as comma-separated query params.
-      const params: Record<string, string> = {};
+      // active, pass them as comma-separated query params. Language is
+      // always passed so the PDF renders in the user's chosen language.
+      const params: Record<string, string> = { lang };
       if (filters?.days?.length) params.days = filters.days.join(',');
       if (filters?.berths?.length) params.berths = filters.berths.join(',');
       if (filters?.work_centers?.length) params.work_centers = filters.work_centers.join(',');
@@ -1805,7 +1814,11 @@ export default function WorkPlanningPage() {
                     onClick: async () => {
                       if (currentPlan?.pdf_url) {
                         try {
-                          const resp = await getApiClient().get(`/api/work-plans/${currentPlan.id}/download-pdf`, { responseType: 'blob' });
+                          const lang = (i18n.language || 'en').startsWith('ar') ? 'ar' : 'en';
+                          const resp = await getApiClient().get(
+                            `/api/work-plans/${currentPlan.id}/download-pdf`,
+                            { responseType: 'blob', params: { lang } },
+                          );
                           const blob = new Blob([resp.data], { type: 'application/pdf' });
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');
@@ -1838,7 +1851,11 @@ export default function WorkPlanningPage() {
                     icon={<FilePdfOutlined />}
                     onClick={async () => {
                       try {
-                        const resp = await getApiClient().get(`/api/work-plans/${currentPlan.id}/download-pdf`, { responseType: 'blob' });
+                        const lang = (i18n.language || 'en').startsWith('ar') ? 'ar' : 'en';
+                        const resp = await getApiClient().get(
+                          `/api/work-plans/${currentPlan.id}/download-pdf`,
+                          { responseType: 'blob', params: { lang } },
+                        );
                         const blob = new Blob([resp.data], { type: 'application/pdf' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
@@ -3768,8 +3785,8 @@ export default function WorkPlanningPage() {
         loading={generatePdfMutation.isPending}
         days={currentPlan.days ?? []}
         onCancel={() => setPdfFilterModalOpen(false)}
-        onGenerate={(filters) => {
-          generatePdfMutation.mutate({ planId: currentPlan.id, filters });
+        onGenerate={(filters, lang) => {
+          generatePdfMutation.mutate({ planId: currentPlan.id, filters, lang });
         }}
       />
     )}

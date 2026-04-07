@@ -1419,13 +1419,30 @@ def _build_filter_note(filters, language='en'):
     parts = []
     is_ar = language == 'ar'
 
+    # Day name & month name maps for Arabic localization (strftime is always en_US)
+    AR_DAYS = {
+        'Monday': 'الإثنين', 'Tuesday': 'الثلاثاء', 'Wednesday': 'الأربعاء',
+        'Thursday': 'الخميس', 'Friday': 'الجمعة', 'Saturday': 'السبت',
+        'Sunday': 'الأحد',
+    }
+    AR_MONTHS = {
+        'Jan': 'يناير', 'Feb': 'فبراير', 'Mar': 'مارس', 'Apr': 'أبريل',
+        'May': 'مايو', 'Jun': 'يونيو', 'Jul': 'يوليو', 'Aug': 'أغسطس',
+        'Sep': 'سبتمبر', 'Oct': 'أكتوبر', 'Nov': 'نوفمبر', 'Dec': 'ديسمبر',
+    }
+
     # Days
     days = filters.get('days') or []
     if days:
         if len(days) == 1:
             try:
                 dt = datetime.strptime(days[0], '%Y-%m-%d')
-                parts.append(dt.strftime('%A, %d %b'))
+                if is_ar:
+                    day_name = AR_DAYS.get(dt.strftime('%A'), dt.strftime('%A'))
+                    month_name = AR_MONTHS.get(dt.strftime('%b'), dt.strftime('%b'))
+                    parts.append('%s, %d %s' % (day_name, dt.day, month_name))
+                else:
+                    parts.append(dt.strftime('%A, %d %b'))
             except Exception:
                 parts.append(days[0])
         elif len(days) < 7:
