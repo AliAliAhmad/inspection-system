@@ -1488,17 +1488,20 @@ def _step_assign(
     except Exception as e:
         logger.warning("assign | could not load worker assignment rules: %s", e)
 
-    # Query available workers (any role that can be assigned)
+    # Query available workers — accept ANY non-admin active user.
+    # The Worker Assignment Rules are the source of truth for who can be a lead.
+    # Restricting by role here would silently exclude leads with roles like
+    # 'mechanic', 'technician', 'inspector', etc.
     workers = (
         User.query
         .filter(
             User.is_active.is_(True),
             User.is_on_leave.is_(False),
-            User.role.in_(['specialist', 'engineer']),
         )
         .all()
     )
     workers_by_id = {w.id: w for w in workers}
+    logger.info("assign | loaded %d active workers (all roles)", len(workers))
 
     if not workers:
         total_jobs = sum(len(jobs) for jobs in day_map.values())
@@ -1540,8 +1543,29 @@ def _step_assign(
                 assigned_count = _assign_from_rule(
                     job, rule, workers_by_id, daily_worker_load, weekly_worker_load, day_id,
                 )
+                if assigned_count == 0:
+                    eq_name = job.equipment.name if job.equipment else 'unknown'
+                    logger.warning(
+                        "assign FAILED | job=%d eq=%s berth=%s team=%s cat=%s rule_id=%d "
+                        "mech_count=%d elec_count=%d primary_mech=%s primary_elec=%s "
+                        "succ_mech=%s succ_elec=%s pool_mech=%d pool_elec=%d",
+                        job.id, eq_name, berth, team_type, eq_cat, rule.id,
+                        rule.mech_count, rule.elec_count,
+                        rule.primary_mech_lead_id, rule.primary_elec_lead_id,
+                        rule.successor_mech_lead_id, rule.successor_elec_lead_id,
+                        len(rule.candidate_mech_workers or []),
+                        len(rule.candidate_elec_workers or []),
+                    )
             else:
-                # Fall back to scoring algorithm
+                eq_name = job.equipment.name if job.equipment else 'unknown'
+                logger.warning(
+                    "assign NO_RULE | job=%d eq=%s berth=%s team=%s cat=%s "
+                    "(no rule found for this combination)",
+                    job.id, eq_name, berth, team_type, eq_cat,
+                )
+
+            # If no rule was matched, fall back to scoring-based assignment
+            if not rule:
                 best_worker, _ = _score_workers_for_job(
                     job=job,
                     workers=workers,
@@ -1611,12 +1635,25 @@ def _assign_from_rule(
     """
     assigned_count = 0
     assigned_user_ids = set()
+    skipped_reasons = []  # debug: track why workers were rejected
 
     def is_available(user_id):
-        if user_id is None or user_id in assigned_user_ids:
+        if user_id is None:
+            return False
+        if user_id in assigned_user_ids:
+            skipped_reasons.append(f"uid={user_id}: already assigned to this job")
             return False
         u = workers_by_id.get(user_id)
-        return u is not None and u.is_active and not u.is_on_leave
+        if u is None:
+            skipped_reasons.append(f"uid={user_id}: not in active worker pool")
+            return False
+        if not u.is_active:
+            skipped_reasons.append(f"uid={user_id} ({u.full_name}): inactive")
+            return False
+        if u.is_on_leave:
+            skipped_reasons.append(f"uid={user_id} ({u.full_name}): on leave")
+            return False
+        return True
 
     # Pick MECH lead
     mech_lead_id = None
@@ -1700,6 +1737,13 @@ def _assign_from_rule(
             weekly_load[uid] += 1
             assigned_count += 1
             needed_elec -= 1
+
+    # Debug: if we couldn't fully fill the team, log why
+    if assigned_count == 0 and skipped_reasons:
+        logger.warning(
+            "_assign_from_rule | job=%d rule=%d zero workers assigned. Skip reasons: %s",
+            job.id, rule.id, '; '.join(skipped_reasons[:6])
+        )
 
     return assigned_count
 
