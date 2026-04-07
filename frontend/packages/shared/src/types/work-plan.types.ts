@@ -977,6 +977,18 @@ export interface DayInspections {
 
 export type PlanRecipe = 'priority_first' | 'travel_optimized' | 'team_balanced' | 'pm_compliance' | 'copy_last_week' | 'combined';
 
+/**
+ * Filters for the Work Plan PDF generator. All fields are optional —
+ * when empty, the PDF includes the full week with all berths/trades/types
+ * (same as the original unfiltered output).
+ */
+export interface PdfFilters {
+  days?: string[];                                        // ISO YYYY-MM-DD
+  berths?: ('east' | 'west')[];                           // 'both' jobs always kept
+  work_centers?: ('MECH' | 'ELEC')[];                     // ELME jobs always kept
+  job_types?: ('pm' | 'defect' | 'inspection')[];
+}
+
 export interface PlanRecipeInfo {
   key: PlanRecipe;
   label: string;

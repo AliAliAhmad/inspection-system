@@ -61,6 +61,7 @@ import {
   PlanRecipe,
   PlanScore,
   GenerationResult,
+  PdfFilters,
 } from '../types/work-plan.types';
 
 export interface WorkPlanListParams {
@@ -615,8 +616,11 @@ export const workPlansApi = {
 
   // ==================== PDF GENERATION ====================
 
-  generatePdf(planId: number) {
-    return getApiClient().post<ApiResponse<{ pdf_url: string }>>(`/api/work-plans/${planId}/generate-pdf`);
+  generatePdf(planId: number, filters?: PdfFilters) {
+    return getApiClient().post<ApiResponse<{ pdf_url: string }>>(
+      `/api/work-plans/${planId}/generate-pdf`,
+      filters || {},
+    );
   },
 
   getPdfDownloadUrl(planId: number) {

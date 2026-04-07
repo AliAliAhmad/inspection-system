@@ -2245,10 +2245,49 @@ def download_materials_template():
     )
 
 
+def _parse_pdf_filters_from_body(body):
+    """Extract filter dict from JSON body. Returns {} if no filters set."""
+    if not body:
+        return {}
+    filters = {
+        'days': body.get('days'),
+        'berths': body.get('berths'),
+        'work_centers': body.get('work_centers'),
+        'job_types': body.get('job_types'),
+    }
+    # Strip empty values so the service treats them as "no filter"
+    return {k: v for k, v in filters.items() if v}
+
+
+def _parse_pdf_filters_from_query():
+    """Extract filter dict from query string (comma-separated list values).
+    Used for GET requests where we cannot accept a JSON body.
+    Returns {} if no filters set."""
+    def _split(val):
+        if not val:
+            return None
+        return [v.strip() for v in val.split(',') if v.strip()]
+
+    filters = {
+        'days': _split(request.args.get('days')),
+        'berths': _split(request.args.get('berths')),
+        'work_centers': _split(request.args.get('work_centers')),
+        'job_types': _split(request.args.get('job_types')),
+    }
+    return {k: v for k, v in filters.items() if v}
+
+
 @bp.route('/<int:plan_id>/generate-pdf', methods=['POST'])
 @jwt_required()
 def generate_plan_pdf_now(plan_id):
-    """Generate PDF for a plan synchronously (not background). Returns error details if it fails."""
+    """Generate PDF for a plan synchronously (not background). Returns error details if it fails.
+
+    Optional JSON body for filtering (all keys optional):
+        days: ["2026-04-05", "2026-04-06"]     # ISO date list
+        berths: ["east", "west"]               # any of: east, west
+        work_centers: ["MECH", "ELEC"]         # any of: MECH, ELEC
+        job_types: ["pm", "defect"]            # any of: pm, defect, inspection
+    """
     user = get_current_user()
     plan = db.session.get(WorkPlan, plan_id)
     if not plan:
@@ -2263,8 +2302,11 @@ def generate_plan_pdf_now(plan_id):
         logger.info(f"Generating PDF for plan {plan.id}: {len(plan.days)} days — {days_info}")
 
         lang = request.args.get('lang', 'en')
+        filters = _parse_pdf_filters_from_body(request.get_json(silent=True) or {})
         from app.services.work_plan_pdf_service import WorkPlanPDFService
-        pdf_file = WorkPlanPDFService.generate_plan_pdf(plan, language=lang)
+        pdf_file = WorkPlanPDFService.generate_plan_pdf(
+            plan, language=lang, filters=filters or None,
+        )
         if not pdf_file:
             return jsonify({'status': 'error', 'message': 'PDF generation returned None — check Cloudinary config'}), 500
 
@@ -2292,22 +2334,51 @@ def generate_plan_pdf_now(plan_id):
 def download_plan_pdf(plan_id):
     """Generate and serve PDF directly with proper headers.
     No Cloudinary dependency — generates fresh PDF on demand.
+
+    Optional query string filters (comma-separated values):
+        ?days=2026-04-05,2026-04-06
+        ?berths=east,west
+        ?work_centers=MECH,ELEC
+        ?job_types=pm,defect,inspection
     """
 
     plan = db.session.get(WorkPlan, plan_id)
     if not plan:
         return jsonify({'status': 'error', 'message': 'Plan not found'}), 404
 
-    # Generate PDF fresh (no Cloudinary)
-    from app.services.work_plan_pdf_service import WorkPlanPDFService, WorkPlanPDF
-    import tempfile
+    # Generate PDF fresh (no Cloudinary) — applies filters inline
+    from app.services.work_plan_pdf_service import (
+        WorkPlanPDF,
+        _apply_filters_to_jobs,
+        _build_filter_note,
+    )
     lang = request.args.get('lang', 'en')
+    filters = _parse_pdf_filters_from_query() or None
     try:
+        # Pre-compute filtered jobs per day (mirror of service logic)
+        allowed_day_dates = set(filters['days']) if filters and filters.get('days') else None
+        filtered_jobs_by_day = {}
+        for day in plan.days:
+            if allowed_day_dates is not None and day.date.strftime('%Y-%m-%d') not in allowed_day_dates:
+                filtered_jobs_by_day[day.id] = []
+                continue
+            filtered_jobs_by_day[day.id] = _apply_filters_to_jobs(
+                list(day.jobs) if day.jobs else [], filters,
+            )
+
+        filter_note = _build_filter_note(filters, lang) if filters else ''
+
         pdf = WorkPlanPDF(plan, language=lang)
-        pdf.add_cover_page()
+        pdf.add_cover_page(
+            filtered_jobs_by_day=filtered_jobs_by_day if filters else None,
+            filter_note=filter_note,
+        )
         for day in sorted(plan.days, key=lambda d: d.date):
+            day_jobs = filtered_jobs_by_day.get(day.id)
+            if filters and not day_jobs:
+                continue  # Skip empty days under active filters
             try:
-                pdf.add_day_page(day)
+                pdf.add_day_page(day, filtered_jobs=day_jobs)
             except Exception as e:
                 logger.error(f"PDF day render error {day.date}: {e}")
                 pdf.current_day_label = day.date.strftime('%A, %d %B %Y') + ' (ERROR)'

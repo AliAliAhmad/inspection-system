@@ -73,7 +73,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType } from '@inspection/shared';
+import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType, type PdfFilters } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -97,6 +97,7 @@ import {
   BundleCard,
   PlanScoreCard,
   GenerationActionBar,
+  PdfFilterModal,
 } from '../../components/work-planning';
 import InspectionSummaryBar, { InspectionCountBadge } from '../../components/work-planning/InspectionSummaryBar';
 import VoiceTextArea from '../../components/VoiceTextArea';
@@ -528,6 +529,7 @@ export default function WorkPlanningPage() {
   const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null);
   const [smartPlanScore, setSmartPlanScore] = useState<PlanScoreType | null>(null);
   const [showActionBar, setShowActionBar] = useState(false);
+  const [pdfFilterModalOpen, setPdfFilterModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [addJobForm] = Form.useForm();
 
@@ -624,21 +626,36 @@ export default function WorkPlanningPage() {
   });
 
   const generatePdfMutation = useMutation({
-    mutationFn: async (planId: number) => {
-      // Step 1: Generate PDF on server (uploads to Cloudinary)
-      await workPlansApi.generatePdf(planId);
-      // Step 2: Download PDF via proxy endpoint as blob (sends auth header automatically)
-      const response = await getApiClient().get(`/api/work-plans/${planId}/download-pdf`, { responseType: 'blob' });
-      return { response, planId };
+    mutationFn: async ({ planId, filters }: { planId: number; filters?: PdfFilters }) => {
+      // Step 1: Generate canonical PDF on server (uploads to Cloudinary).
+      //         Only when no filters — we don't want to overwrite the canonical
+      //         copy with a filtered view.
+      if (!filters) {
+        await workPlansApi.generatePdf(planId);
+      }
+
+      // Step 2: Download PDF via proxy endpoint as blob. When filters are
+      // active, pass them as comma-separated query params.
+      const params: Record<string, string> = {};
+      if (filters?.days?.length) params.days = filters.days.join(',');
+      if (filters?.berths?.length) params.berths = filters.berths.join(',');
+      if (filters?.work_centers?.length) params.work_centers = filters.work_centers.join(',');
+      if (filters?.job_types?.length) params.job_types = filters.job_types.join(',');
+
+      const response = await getApiClient().get(
+        `/api/work-plans/${planId}/download-pdf`,
+        { responseType: 'blob', params },
+      );
+      return { response, planId, hasFilters: !!filters };
     },
-    onSuccess: ({ response, planId }) => {
-      message.success('PDF generated!');
+    onSuccess: ({ response, planId, hasFilters }) => {
+      message.success(hasFilters ? 'Filtered PDF generated!' : 'PDF generated!');
       // Create blob URL and trigger download via anchor click (popup-blocker safe)
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `work-plan-${planId}.pdf`;
+      a.download = `work-plan-${planId}${hasFilters ? '-filtered' : ''}.pdf`;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
@@ -647,6 +664,7 @@ export default function WorkPlanningPage() {
       // Revoke after a delay so the download/tab has time to start
       setTimeout(() => URL.revokeObjectURL(url), 10000);
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      setPdfFilterModalOpen(false);
     },
     onError: (err: any) => {
       const detail = err.response?.data?.message || 'PDF generation failed';
@@ -1843,7 +1861,7 @@ export default function WorkPlanningPage() {
                   size="small"
                   icon={<FilePdfOutlined />}
                   loading={generatePdfMutation.isPending}
-                  onClick={() => generatePdfMutation.mutate(currentPlan.id)}
+                  onClick={() => setPdfFilterModalOpen(true)}
                 >
                   {currentPlan.pdf_url ? 'Regenerate PDF' : 'Generate PDF'}
                 </Button>
@@ -3739,6 +3757,19 @@ export default function WorkPlanningPage() {
         onRegenerate={() => {
           setShowActionBar(false);
           // The user picks a new recipe from the button again
+        }}
+      />
+    )}
+
+    {/* PDF Filter Modal — opens when user clicks "Generate PDF" button */}
+    {currentPlan && (
+      <PdfFilterModal
+        open={pdfFilterModalOpen}
+        loading={generatePdfMutation.isPending}
+        days={currentPlan.days ?? []}
+        onCancel={() => setPdfFilterModalOpen(false)}
+        onGenerate={(filters) => {
+          generatePdfMutation.mutate({ planId: currentPlan.id, filters });
         }}
       />
     )}

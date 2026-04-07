@@ -372,8 +372,15 @@ class WorkPlanPDF(FPDF):
         self.cell(CW / 2, 4, '%s %d' % (self._t('page'), self.page_no()), align='R')
 
     # ── Cover Page ────────────────────────────────────────────────
-    def add_cover_page(self):
-        """Summary cover page with stats and weekly overview."""
+    def add_cover_page(self, filtered_jobs_by_day=None, filter_note=''):
+        """Summary cover page with stats and weekly overview.
+
+        Args:
+            filtered_jobs_by_day: Optional dict {day.id: [filtered jobs]}.
+                                  When present, stats reflect the filtered view.
+            filter_note: Optional short summary string shown under the title
+                         when filters are active (e.g. 'Filters: Monday · East').
+        """
         self.current_day_label = ''
         self.current_day_stats = ''
         self.add_page()
@@ -389,14 +396,28 @@ class WorkPlanPDF(FPDF):
             self.plan.week_start.strftime('%d %B %Y'),
             self.plan.week_end.strftime('%d %B %Y'),
         ), align='C', new_x='LMARGIN', new_y='NEXT')
+
+        # Filter note (only when filters are active)
+        if filter_note:
+            self._font('B', 10)
+            self.set_text_color(*BLUE)
+            self.cell(CW, 6, filter_note, align='C', new_x='LMARGIN', new_y='NEXT')
+            self.set_text_color(*TEXT)
+
         self.ln(10)
 
+        # Helper — use filtered jobs if provided, else raw day.jobs
+        def _jobs_for(day):
+            if filtered_jobs_by_day is not None:
+                return filtered_jobs_by_day.get(day.id, [])
+            return list(day.jobs) if day.jobs else []
+
         # Summary stats boxes (5 boxes)
-        total_jobs = sum(len(list(d.jobs)) for d in self.plan.days)
-        total_hours = sum(sum(j.estimated_hours or 0 for j in d.jobs) for d in self.plan.days)
-        pm_count = sum(1 for d in self.plan.days for j in d.jobs if j.job_type == 'pm')
-        defect_count = sum(1 for d in self.plan.days for j in d.jobs if j.job_type == 'defect')
-        insp_count = sum(1 for d in self.plan.days for j in d.jobs if j.job_type == 'inspection')
+        total_jobs = sum(len(_jobs_for(d)) for d in self.plan.days)
+        total_hours = sum(sum(j.estimated_hours or 0 for j in _jobs_for(d)) for d in self.plan.days)
+        pm_count = sum(1 for d in self.plan.days for j in _jobs_for(d) if j.job_type == 'pm')
+        defect_count = sum(1 for d in self.plan.days for j in _jobs_for(d) if j.job_type == 'defect')
+        insp_count = sum(1 for d in self.plan.days for j in _jobs_for(d) if j.job_type == 'inspection')
 
         boxes = [
             (str(total_jobs), self._t('total_jobs'), NAVY),
@@ -442,7 +463,7 @@ class WorkPlanPDF(FPDF):
         self.set_text_color(*TEXT)
 
         for idx, day in enumerate(sorted(self.plan.days, key=lambda d: d.date)):
-            all_j = list(day.jobs)
+            all_j = _jobs_for(day)
             dpm = sum(1 for j in all_j if j.job_type == 'pm')
             ddef = sum(1 for j in all_j if j.job_type == 'defect')
             dins = sum(1 for j in all_j if j.job_type == 'inspection')
@@ -473,7 +494,7 @@ class WorkPlanPDF(FPDF):
         # Team roster
         users_by_role = {}
         for day in self.plan.days:
-            for job in day.jobs:
+            for job in _jobs_for(day):
                 for a in (job.assignments or []):
                     if a.user and a.user.full_name:
                         role = (a.user.role or 'other').replace('_', ' ').title()
@@ -1001,9 +1022,19 @@ class WorkPlanPDF(FPDF):
         self._draw_ruled_lines(2, CW)
 
     # ── Day Page ──────────────────────────────────────────────────
-    def add_day_page(self, day):
-        """One or more pages per day: berth sections with card grids."""
-        all_jobs = list(day.jobs) if day.jobs else []
+    def add_day_page(self, day, filtered_jobs=None):
+        """One or more pages per day: berth sections with card grids.
+
+        Args:
+            day: WorkPlanDay instance.
+            filtered_jobs: Optional pre-filtered job list. When provided, used
+                           instead of day.jobs so berth sections only contain
+                           jobs matching the active PDF filter.
+        """
+        if filtered_jobs is not None:
+            all_jobs = list(filtered_jobs)
+        else:
+            all_jobs = list(day.jobs) if day.jobs else []
         total = len(all_jobs)
 
         self.current_day_label = day.date.strftime('%A, %d %B %Y')
@@ -1333,19 +1364,161 @@ class WorkPlanPDF(FPDF):
         self.ln()
 
 
+# ---------------------------------------------------------------------------
+# Filter helpers (used by generate_plan_pdf when filters are active)
+# ---------------------------------------------------------------------------
+
+def _apply_filters_to_jobs(jobs, filters):
+    """Filter a list of WorkPlanJob objects by berth, trade (work_center),
+    and job_type. Returns a new list preserving order.
+
+    filters keys (all optional):
+        berths:       list of 'east' | 'west'   ('both' jobs always kept)
+        work_centers: list of 'MECH' | 'ELEC'   (ELME jobs always kept)
+        job_types:    list of 'pm' | 'defect' | 'inspection'
+    """
+    if not filters:
+        return list(jobs)
+
+    berth_set = set(filters.get('berths') or [])
+    trade_set = set((w or '').upper() for w in (filters.get('work_centers') or []))
+    type_set = set((t or '').lower() for t in (filters.get('job_types') or []))
+
+    out = []
+    for j in jobs:
+        # Berth filter — 'both' is always kept because those jobs apply to both berths
+        if berth_set:
+            jb = (getattr(j, 'berth', None) or '').lower()
+            if jb not in berth_set and jb != 'both':
+                continue
+
+        # Trade filter — ELME (dual-trade) is always kept because it needs both teams
+        if trade_set:
+            wc = (getattr(j, 'work_center', None) or 'ELME').upper()
+            if wc != 'ELME' and wc not in trade_set:
+                continue
+
+        # Job type filter
+        if type_set:
+            jt = (getattr(j, 'job_type', None) or '').lower()
+            if jt not in type_set:
+                continue
+
+        out.append(j)
+
+    return out
+
+
+def _build_filter_note(filters, language='en'):
+    """Build a short human-readable filter summary like
+    'Filters: Monday only · East berth · Mechanical'. Returns empty string
+    if no filters are active."""
+    if not filters:
+        return ''
+
+    parts = []
+    is_ar = language == 'ar'
+
+    # Days
+    days = filters.get('days') or []
+    if days:
+        if len(days) == 1:
+            try:
+                dt = datetime.strptime(days[0], '%Y-%m-%d')
+                parts.append(dt.strftime('%A, %d %b'))
+            except Exception:
+                parts.append(days[0])
+        elif len(days) < 7:
+            parts.append(('%d أيام' if is_ar else '%d days') % len(days))
+
+    # Berths
+    berths = filters.get('berths') or []
+    if berths and len(berths) == 1:
+        b = berths[0].lower()
+        if b == 'east':
+            parts.append('الرصيف الشرقي' if is_ar else 'East berth')
+        elif b == 'west':
+            parts.append('الرصيف الغربي' if is_ar else 'West berth')
+
+    # Trades
+    trades = filters.get('work_centers') or []
+    if trades and len(trades) == 1:
+        t = trades[0].upper()
+        if t == 'MECH':
+            parts.append('ميكانيكي' if is_ar else 'Mechanical')
+        elif t == 'ELEC':
+            parts.append('كهربائي' if is_ar else 'Electrical')
+
+    # Job types
+    types = filters.get('job_types') or []
+    if types and len(types) < 3:
+        label_map_en = {'pm': 'PM', 'defect': 'Defects', 'inspection': 'Inspections'}
+        label_map_ar = {'pm': 'وقائية', 'defect': 'أعطال', 'inspection': 'فحوصات'}
+        mp = label_map_ar if is_ar else label_map_en
+        parts.append(' + '.join(mp.get(t, t) for t in types))
+
+    if not parts:
+        return ''
+
+    prefix = 'مرشحات: ' if is_ar else 'Filters: '
+    return prefix + ' \u00b7 '.join(parts)
+
+
 class WorkPlanPDFService:
     """Service for generating work plan PDFs."""
 
     @staticmethod
-    def generate_plan_pdf(plan, language='en', by_berth=True):
-        """Generate a PDF for a work plan. Cover + card-based day pages."""
-        try:
-            pdf = WorkPlanPDF(plan, language)
-            pdf.add_cover_page()
+    def generate_plan_pdf(plan, language='en', by_berth=True, filters=None):
+        """Generate a PDF for a work plan. Cover + card-based day pages.
 
+        Args:
+            plan: WorkPlan instance.
+            language: 'en' or 'ar'.
+            by_berth: Legacy flag (unused, kept for backward compatibility).
+            filters: Optional dict with keys days, berths, work_centers, job_types.
+                     See _apply_filters_to_jobs for details. When present, the
+                     PDF only includes days and jobs matching the filter, and
+                     the cover page shows a filter summary note.
+        """
+        try:
+            # Pre-compute filtered jobs per day so we can:
+            #   1. Show accurate stats on the cover page
+            #   2. Skip days with zero matching jobs entirely
+            allowed_day_dates = None
+            if filters and filters.get('days'):
+                allowed_day_dates = set(filters['days'])
+
+            filtered_jobs_by_day = {}
+            for day in plan.days:
+                # Day-level filter
+                if allowed_day_dates is not None:
+                    if day.date.strftime('%Y-%m-%d') not in allowed_day_dates:
+                        filtered_jobs_by_day[day.id] = []
+                        continue
+                # Job-level filter
+                filtered_jobs_by_day[day.id] = _apply_filters_to_jobs(
+                    list(day.jobs) if day.jobs else [], filters,
+                )
+
+            filter_note = _build_filter_note(filters, language) if filters else ''
+            total_filtered = sum(len(v) for v in filtered_jobs_by_day.values())
+
+            pdf = WorkPlanPDF(plan, language)
+            pdf.add_cover_page(
+                filtered_jobs_by_day=filtered_jobs_by_day if filters else None,
+                filter_note=filter_note,
+            )
+
+            # Walk days in order, skipping ones with zero filtered jobs
+            rendered_days = 0
             for day in sorted(plan.days, key=lambda d: d.date):
+                day_jobs = filtered_jobs_by_day.get(day.id)
+                # When filters are active, skip empty days entirely
+                if filters and not day_jobs:
+                    continue
                 try:
-                    pdf.add_day_page(day)
+                    pdf.add_day_page(day, filtered_jobs=day_jobs)
+                    rendered_days += 1
                 except Exception as day_err:
                     current_app.logger.error('PDF day render failed for %s: %s' % (day.date, day_err))
                     pdf.current_day_label = day.date.strftime('%A, %d %B %Y') + ' (ERROR)'

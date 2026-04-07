@@ -71,9 +71,9 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
-| 2026-04-06 | Feat: Adaptive capacity rules + AC service + Worker Assignment Rules — Strict capacity (no overflow), urgent override, balanced distribution, separate AC team bucket per berth, configurable worker rules per (berth, team_type, equipment_category) with primary lead + successor + candidate pools, settings page tab, Clear All Jobs button. Requires `flask db upgrade` on Render | ✅ Done |
 | 2026-04-07 | Feat: Replaced "Travel Efficiency" score with "Berth Balance" — measures workload split between East/West berths (since each berth has its own dedicated team, travel between berths is irrelevant). Formula: min(east,west)/max(east,west)*100. 3 files: work_plan_generator_service.py, work-plan.types.ts, PlanScoreCard.tsx. No DB migration needed | ✅ Done |
 | 2026-04-07 | Feat: Combined recipe (3-step manual stepper) — New recipe in Smart Plan Generator where user controls 3 sequential steps: PMs+defects → urgent defects on eq without PM → normal defects on eq without PM. Each step additive, assigns teams automatically, user reviews between steps. Backend: +`step`/`additive` params on generate_plan, new `_filter_candidates_for_combined_step` helper, relaxed populate to include 'low' severity. Frontend: new 3-card stepper modal in GeneratePlanButton. Materials stay manual (documented in UI). No DB migration | ✅ Done |
+| 2026-04-07 | Feat: Work Plan PDF filter panel — Clicking Generate PDF now opens a filter modal with 4 selectors: Days (multi-select), Berth (East/West/Both), Trade (Mechanical/Electrical/Both), Job Types (PM/Defect/Inspection multi-select). PDF only includes matching days+jobs; empty days are skipped; ELME jobs always appear in both trade filters. Same card layout, filter note printed on cover page. Backend: `_apply_filters_to_jobs`, `_build_filter_note`, extended `generate_plan_pdf()` signature, 2 endpoints updated. Frontend: new PdfFilterModal component + WorkPlanningPage wiring. No DB migration | ✅ Done |
 
 
 ## Plugin Management
