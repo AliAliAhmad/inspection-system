@@ -188,6 +188,8 @@ class WorkPlanPDF(FPDF):
         Returns True on success, False if download/decode/embed failed.
         Failures are logged but never raise — the PDF still generates
         without the thumbnail rather than crashing the whole report.
+        Every failure path logs a structured message so Render logs
+        show exactly why a thumbnail didn't appear.
         """
         if not url:
             return False
@@ -196,22 +198,46 @@ class WorkPlanPDF(FPDF):
             from io import BytesIO
             from PIL import Image as _PILImage
 
-            resp = requests.get(url, timeout=4, stream=True)
+            resp = requests.get(url, timeout=5, stream=True)
             if resp.status_code != 200:
+                try:
+                    current_app.logger.warning(
+                        'PDF thumbnail download failed | status=%s url=%s',
+                        resp.status_code, url,
+                    )
+                except Exception:
+                    pass
                 return False
             img_data = BytesIO(resp.content)
             # Validate the bytes are a real image PIL can decode
             try:
                 pil = _PILImage.open(img_data)
                 pil.load()  # Force decode to catch corrupt images
-            except Exception:
+            except Exception as decode_err:
+                try:
+                    current_app.logger.warning(
+                        'PDF thumbnail decode failed | url=%s err=%s',
+                        url, decode_err,
+                    )
+                except Exception:
+                    pass
                 return False
             img_data.seek(0)
             self.image(img_data, x=x, y=y, w=w, h=h)
+            try:
+                current_app.logger.info(
+                    'PDF thumbnail embedded | url=%s size=%dx%d',
+                    url, pil.width, pil.height,
+                )
+            except Exception:
+                pass
             return True
         except Exception as e:
             try:
-                current_app.logger.warning('PDF thumbnail embed failed for %s: %s' % (url, e))
+                current_app.logger.warning(
+                    'PDF thumbnail embed failed | url=%s err=%s (%s)',
+                    url, e, type(e).__name__,
+                )
             except Exception:
                 pass
             return False
@@ -294,6 +320,72 @@ class WorkPlanPDF(FPDF):
     # Keep backward compat alias
     def _s(self, text, max_len=0):
         return self._safe(text, max_len)
+
+    def _get_arabic_or_translate(self, model_type, model_id, field_name, english_text):
+        """Get Arabic text for an English source. Uses the Translation table
+        as a cache; translates on-demand via TranslationService when missing
+        (which itself falls through to free Google Translate if no AI
+        provider is configured).
+
+        Used to give SAPWorkOrder descriptions and User full_names an
+        Arabic rendering without needing DB migrations to add *_ar columns.
+
+        Returns the original English text as a safe fallback if anything
+        goes wrong — a PDF that falls back to English is better than no PDF.
+        """
+        if not english_text:
+            return english_text
+        try:
+            from app.services.translation_service import is_arabic, TranslationService
+            from app.utils.bilingual import get_bilingual_text
+            from app.models.translation import Translation
+            from app.extensions import db
+
+            # Already Arabic — nothing to do
+            if is_arabic(english_text):
+                return english_text
+
+            # Look up the cache
+            cached = get_bilingual_text(
+                model_type, model_id, field_name, english_text, language='ar',
+            )
+            if cached and cached != english_text and is_arabic(cached):
+                return cached
+
+            # Cache miss — translate and save
+            translated = TranslationService.translate_to_arabic(english_text)
+            if translated and is_arabic(translated):
+                existing = Translation.query.filter_by(
+                    model_type=model_type,
+                    model_id=model_id,
+                    field_name=field_name,
+                ).first()
+                if existing:
+                    existing.translated_text = translated
+                    existing.original_lang = 'en'
+                else:
+                    db.session.add(Translation(
+                        model_type=model_type,
+                        model_id=model_id,
+                        field_name=field_name,
+                        original_lang='en',
+                        translated_text=translated,
+                    ))
+                db.session.commit()
+                return translated
+        except Exception as e:
+            try:
+                current_app.logger.warning(
+                    'PDF on-demand translate failed | model=%s id=%s field=%s err=%s',
+                    model_type, model_id, field_name, e,
+                )
+            except Exception:
+                pass
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        return english_text  # safe fallback
 
     def _estimate_wrap_lines(self, text, width_mm, font_size=9, max_lines=3):
         """Estimate how many lines `text` will occupy when rendered at the
@@ -407,26 +499,34 @@ class WorkPlanPDF(FPDF):
     def _get_description(self, job):
         """Get job description, stripping equipment name prefix.
 
-        Defect descriptions: ALWAYS prefer defect.description_ar when it
-        exists, regardless of the PDF language setting. The user wants
-        defect descriptions in Arabic because that's what the Arabic
-        inspector originally typed; keeping it Arabic preserves the
-        source. The Arabic font fallback renders it correctly alongside
-        the English labels on the same card.
+        Three cases for defect jobs:
+          1. Inspection-sourced with description_ar → use it directly
+             (cached at defect creation time in defect_service.py).
+          2. Inspection-sourced without description_ar → use description.
+          3. SAP-sourced (job.defect is None because SAP defect jobs never
+             get a linked Defect row) → translate job.description on
+             demand via _get_arabic_or_translate. Result is cached in the
+             Translation table so subsequent PDFs are fast.
 
-        PM descriptions: always stay in their source language (usually
-        English from SAP). The user explicitly asked for PM descriptions
-        to remain English.
+        PM descriptions always stay in their source language — the user
+        explicitly asked for PMs to remain English (they come from SAP
+        and the team reads English).
         """
         desc = job.description or ''
+
         if job.defect:
-            # Defects: prefer the Arabic version if present, otherwise
-            # fall back to the English description.
+            # Inspection-sourced defect — prefer stored Arabic
             ar = getattr(job.defect, 'description_ar', None)
             if ar:
                 desc = ar
             elif not desc:
                 desc = job.defect.description or ''
+        elif job.job_type == 'defect' and job.description:
+            # SAP-sourced defect — no linked Defect row, translate on-demand
+            desc = self._get_arabic_or_translate(
+                'work_plan_job', job.id, 'description', job.description,
+            )
+
         # PM: use job.description as-is (which comes from SAP, usually English)
         eq_name = self._get_equipment_name(job)
         if eq_name and desc.startswith(eq_name):
@@ -449,11 +549,26 @@ class WorkPlanPDF(FPDF):
         """
         defect = job.defect
         if not defect:
+            # SAP-sourced defect — no linked Defect row at all
+            try:
+                current_app.logger.info(
+                    'PDF photo | job_id=%s no defect relationship (likely SAP)',
+                    job.id,
+                )
+            except Exception:
+                pass
             return None
 
-        # Source 1: defect.photo_url
+        # Source 1: defect.photo_url (ad-hoc / field-report defects)
         direct = getattr(defect, 'photo_url', None)
         if direct:
+            try:
+                current_app.logger.info(
+                    'PDF photo | job_id=%s defect_id=%s → direct defect.photo_url',
+                    job.id, defect.id,
+                )
+            except Exception:
+                pass
             return direct
 
         # Source 2: InspectionAnswer via (inspection_id, checklist_item_id)
@@ -464,21 +579,74 @@ class WorkPlanPDF(FPDF):
                     inspection_id=defect.inspection_id,
                     checklist_item_id=defect.checklist_item_id,
                 ).first()
-                if answer:
-                    if answer.photo_file and answer.photo_file.file_path:
-                        return answer.photo_file.file_path
-                    if answer.photo_path:
-                        return answer.photo_path
+                if answer and answer.photo_file and answer.photo_file.file_path:
+                    current_app.logger.info(
+                        'PDF photo | job_id=%s defect_id=%s → InspectionAnswer #%s photo_file',
+                        job.id, defect.id, answer.id,
+                    )
+                    return answer.photo_file.file_path
+                if answer and answer.photo_path:
+                    current_app.logger.info(
+                        'PDF photo | job_id=%s defect_id=%s → InspectionAnswer #%s photo_path',
+                        job.id, defect.id, answer.id,
+                    )
+                    return answer.photo_path
+        except Exception as e:
+            try:
+                current_app.logger.warning('PDF photo lookup source 2 error: %s', e)
+            except Exception:
+                pass
+
+        # Source 3: BROADER fallback — any InspectionAnswer with a photo on
+        # the same inspection. Useful when checklist_item_id doesn't match
+        # exactly (e.g. the defect was created from an ad-hoc finding).
+        try:
+            if defect.inspection_id:
+                from app.models.inspection import InspectionAnswer
+                any_answer = (
+                    InspectionAnswer.query
+                    .filter(
+                        InspectionAnswer.inspection_id == defect.inspection_id,
+                        InspectionAnswer.photo_file_id.isnot(None),
+                    )
+                    .first()
+                )
+                if any_answer and any_answer.photo_file and any_answer.photo_file.file_path:
+                    current_app.logger.info(
+                        'PDF photo | job_id=%s defect_id=%s → broader fallback via answer #%s',
+                        job.id, defect.id, any_answer.id,
+                    )
+                    return any_answer.photo_file.file_path
+        except Exception as e:
+            try:
+                current_app.logger.warning('PDF photo broader fallback error: %s', e)
+            except Exception:
+                pass
+
+        try:
+            current_app.logger.info(
+                'PDF photo | job_id=%s defect_id=%s NO photo found (inspection_id=%s, cli_id=%s)',
+                job.id, defect.id,
+                getattr(defect, 'inspection_id', None),
+                getattr(defect, 'checklist_item_id', None),
+            )
         except Exception:
             pass
-
         return None
 
     def _get_team_str(self, job):
         """Get team string with lead marked by *."""
         parts = []
         for a in (job.assignments or []):
-            name = a.user.full_name if a.user and a.user.full_name else '?'
+            if not (a.user and a.user.full_name):
+                parts.append('?')
+                continue
+            # Translate each full_name to Arabic on-demand. Cached after
+            # first use in the Translation table so subsequent PDFs are
+            # instant for the same user.
+            name = self._get_arabic_or_translate(
+                'user', a.user.id, 'full_name', a.user.full_name,
+            )
             if a.is_lead:
                 name = name + '*'
             parts.append(name)
@@ -741,10 +909,29 @@ class WorkPlanPDF(FPDF):
         desc_h = max(5, desc_lines * 4.5)
 
         # Compute team / materials wrap heights so the row grows as needed
-        # instead of truncating long lists. Each line is 4mm; max 3 lines.
+        # instead of truncating long lists. Use fpdf2's own split_only=True
+        # mode to get the EXACT line count at the actual render width — this
+        # is more accurate than a character-counting estimate and guarantees
+        # card_h matches what's actually drawn.
         half_w_for_estimate = (inner_w / 2 - 1)
-        team_lines = self._estimate_wrap_lines(team_str, half_w_for_estimate, font_size=9)
-        mat_lines = self._estimate_wrap_lines(mat_str, half_w_for_estimate, font_size=9)
+        self._font('', 9)  # Match the actual render font
+        try:
+            team_split = self.multi_cell(
+                half_w_for_estimate, 4,
+                self._safe(team_str or '-'),
+                split_only=True,
+            )
+            mat_split = self.multi_cell(
+                half_w_for_estimate, 4,
+                self._safe(mat_str or '-'),
+                split_only=True,
+            )
+            team_lines = max(1, min(len(team_split), 5))  # cap at 5 lines
+            mat_lines = max(1, min(len(mat_split), 5))
+        except Exception:
+            # Fallback to the character-counting estimate if split_only fails
+            team_lines = self._estimate_wrap_lines(team_str, half_w_for_estimate, font_size=9)
+            mat_lines = self._estimate_wrap_lines(mat_str, half_w_for_estimate, font_size=9)
         team_mat_lines = max(team_lines, mat_lines)
         # Row 4 total height = label header (4mm) + content lines (4mm each) + 2mm padding
         row4_h = 4 + (team_mat_lines * 4) + 2
@@ -840,12 +1027,17 @@ class WorkPlanPDF(FPDF):
         self.set_text_color(*TEXT)
         cy += 7
 
-        # Row 2: Equipment name (BIGGEST text)
+        # Row 2: Equipment name (BIGGEST text) + latest RNR reading.
+        # The user wants the current running hours right next to the
+        # equipment name so the team can see it at a glance without
+        # hunting for it on Row 5.
         self.set_xy(cx, cy)
         self._font('B', 13)
         self.set_text_color(*NAVY)
-        # Truncate if too long for card width
-        eq_display = self._safe(eq_name, 60)
+        eq_display = self._safe(eq_name, 50)
+        reading = self._get_reading(job)  # returns (type, value) or None
+        if reading and reading[0] == 'rnr' and reading[1] is not None:
+            eq_display = '%s  \u2022  %g h' % (eq_display, reading[1])
         self.cell(inner_w, 6, eq_display)
         self.set_text_color(*TEXT)
         cy += 9
@@ -910,19 +1102,18 @@ class WorkPlanPDF(FPDF):
         self.set_draw_color(*BORDER)
         self.line(mid_x, cy, mid_x, cy + row4_h - 1)
 
-        # Render team value with multi_cell so long lists wrap.
-        # Cap at the precomputed line count so we don't overflow the card.
+        # Render team value with multi_cell so long lists wrap to fit
+        # inside row4_h. No character truncation — we computed the exact
+        # number of lines needed above via split_only=True.
         self.set_xy(cx, cy + 4)
         self._font('', 9)
         self.set_text_color(*TEXT)
-        team_capped = self._safe(team_str, 200)  # 200 char hard cap (3 lines worth)
-        self.multi_cell(half_w, 4, team_capped, border=0, align='L')
+        self.multi_cell(half_w, 4, self._safe(team_str or '-'), border=0, align='L')
 
         # Materials value (right column) — same approach
         self.set_xy(cx + half_w + 2, cy + 4)
         self._font('', 9)
-        mat_capped = self._safe(mat_str, 200)
-        self.multi_cell(half_w, 4, mat_capped, border=0, align='L')
+        self.multi_cell(half_w, 4, self._safe(mat_str or '-'), border=0, align='L')
 
         cy += row4_h
 
