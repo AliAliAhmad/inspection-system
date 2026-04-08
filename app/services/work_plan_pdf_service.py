@@ -1735,7 +1735,15 @@ class WorkPlanPDF(FPDF):
                     self.ln()
 
     def _render_job_row(self, num, job, col_widths):
-        """Render a single dense job row."""
+        """Render a single job row in the day-page berth section.
+
+        This is the ACTUAL rendering path used for day pages (via
+        _berth_section → _render_job_row) — NOT the card renderers.
+        Previously this used cell() with hard character truncation at
+        30/35/40 chars, cutting off long text. Now it wraps the text
+        into multiple physical rows using _wrap_lines and renders
+        each wrapped line as a separate line inside the cell.
+        """
         # Page break check
         if self.get_y() > PH - 18:
             self.add_page()
@@ -1748,7 +1756,12 @@ class WorkPlanPDF(FPDF):
         team_parts = []
         for a in (job.assignments or []):
             if a.user and a.user.full_name:
-                name = a.user.full_name
+                if self.language == 'ar':
+                    name = self._get_arabic_or_translate(
+                        'user', a.user.id, 'full_name', a.user.full_name,
+                    )
+                else:
+                    name = a.user.full_name
                 if a.is_lead:
                     name = name + '*'
                 team_parts.append(name)
@@ -1758,7 +1771,7 @@ class WorkPlanPDF(FPDF):
         for wpm in (job.materials or []):
             if wpm.material:
                 code = wpm.material.code or wpm.material.name or ''
-                mat_parts.append('%s x%g' % (self._safe(code, 12), wpm.quantity or 0))
+                mat_parts.append('%s x%g' % (code, wpm.quantity or 0))
         mat_str = ', '.join(mat_parts) if mat_parts else '-'
         # Hours
         hours = job.estimated_hours or 0
@@ -1767,6 +1780,29 @@ class WorkPlanPDF(FPDF):
         if job.overdue_value and job.overdue_value > 0:
             unit = 'd' if (job.overdue_unit and 'day' in job.overdue_unit) else 'h'
             od_str = '%g%s' % (job.overdue_value, unit)
+
+        # ── Wrap each variable-length cell using _wrap_lines ──
+        # The column widths translate approximately to these char counts
+        # at font size 6.5-7 (char width ~1.2mm):
+        #   eq column (col_widths[1]) ~ 35-40 chars
+        #   desc column (col_widths[2]) ~ 40 chars
+        #   team column (col_widths[3]) ~ 40 chars
+        #   mat column (col_widths[4]) ~ 42 chars
+        eq_lines = self._wrap_lines(eq_name or '-', 35, max_lines=3)
+        desc_lines_wrapped = self._wrap_lines(desc or '-', 40, max_lines=4, separator=' ')
+        team_lines_wrapped = self._wrap_lines(team_str or '-', 40, max_lines=4)
+        mat_lines_wrapped = self._wrap_lines(mat_str or '-', 42, max_lines=4)
+
+        # Row height = max wrapped line count × 4mm per line, minimum 5.5mm
+        n_lines = max(
+            1,
+            len(eq_lines),
+            len(desc_lines_wrapped),
+            len(team_lines_wrapped),
+            len(mat_lines_wrapped),
+        )
+        line_h = 3.5
+        row_h = max(5.5, n_lines * line_h + 1)
 
         # Background — alternate + overdue tint
         if job.overdue_value and job.overdue_value > 0:
@@ -1777,49 +1813,81 @@ class WorkPlanPDF(FPDF):
             bg = WHITE
         self.set_fill_color(*bg)
 
-        # Calculate row height based on text length
-        row_x = LM
         row_y = self.get_y()
+
+        # Draw the background fill for the entire row upfront
+        self.rect(LM, row_y, sum(col_widths), row_h, 'F')
 
         self._font('', 7)
         self.set_text_color(*TEXT)
 
-        # Render each cell
-        # # column
-        self.cell(col_widths[0], 5.5, str(num), fill=True, align='C', border=0)
-        # Equipment
+        # ── # column ──
+        self.set_xy(LM, row_y)
+        self.cell(col_widths[0], row_h, str(num), align='C', border=0)
+
+        # ── Equipment column ──
+        eq_x = LM + col_widths[0]
         self._font('B', 7)
-        self.cell(col_widths[1], 5.5, self._safe(eq_name, 30), fill=True, border=0)
-        # Description
+        for i, line in enumerate(eq_lines):
+            self.set_xy(eq_x, row_y + (i * line_h))
+            self.cell(col_widths[1], line_h, self._safe(line), border=0)
+
+        # ── Description column ──
+        desc_x = eq_x + col_widths[1]
         self._font('', 6.5)
-        self.cell(col_widths[2], 5.5, self._safe(desc, 35), fill=True, border=0)
-        # Team
-        self.cell(col_widths[3], 5.5, self._safe(team_str, 35), fill=True, border=0)
-        # Materials
+        for i, line in enumerate(desc_lines_wrapped):
+            self.set_xy(desc_x, row_y + (i * line_h))
+            self.cell(col_widths[2], line_h, self._safe(line), border=0)
+
+        # ── Team column ──
+        team_x = desc_x + col_widths[2]
+        for i, line in enumerate(team_lines_wrapped):
+            self.set_xy(team_x, row_y + (i * line_h))
+            self.cell(col_widths[3], line_h, self._safe(line), border=0)
+
+        # ── Materials column ──
+        mat_x = team_x + col_widths[3]
         self._font('', 6)
-        self.cell(col_widths[4], 5.5, self._safe(mat_str, 40), fill=True, border=0)
-        # Hours
+        for i, line in enumerate(mat_lines_wrapped):
+            self.set_xy(mat_x, row_y + (i * line_h))
+            self.cell(col_widths[4], line_h, self._safe(line), border=0)
+
+        # ── Hours column ──
+        hours_x = mat_x + col_widths[4]
         self._font('', 7)
-        self.cell(col_widths[5], 5.5, '%g' % hours, fill=True, align='C', border=0)
-        # Overdue
+        self.set_xy(hours_x, row_y)
+        self.cell(col_widths[5], row_h, '%g' % hours, align='C', border=0)
+
+        # ── Overdue column ──
+        od_x = hours_x + col_widths[5]
         if od_str:
             self.set_text_color(*DANGER)
             self._font('B', 6.5)
         else:
             self._font('', 6.5)
-        self.cell(col_widths[6], 5.5, od_str or '-', fill=True, align='C', border=0)
+        self.set_xy(od_x, row_y)
+        self.cell(col_widths[6], row_h, od_str or '-', align='C', border=0)
         self.set_text_color(*TEXT)
-        # Done checkbox
-        chk_x = self.get_x() + 1
-        chk_y = self.get_y() + 1
-        self.cell(col_widths[7], 5.5, '', fill=True, border=0)
+
+        # ── Done checkbox column ──
+        chk_col_x = od_x + col_widths[6]
+        self.set_xy(chk_col_x, row_y)
+        self.cell(col_widths[7], row_h, '', border=0)
+        chk_x = chk_col_x + 1
+        chk_y = row_y + (row_h / 2) - 1.75
         self.set_draw_color(*BORDER)
         self.set_line_width(0.3)
         self.rect(chk_x, chk_y, 3.5, 3.5, 'D')
         self.set_line_width(0.2)
-        # Note placeholder
-        self.cell(col_widths[8], 5.5, '_____', fill=True, align='L', border=0)
-        self.ln()
+
+        # ── Note placeholder column ──
+        note_x = chk_col_x + col_widths[7]
+        self.set_xy(note_x, row_y)
+        self._font('', 6.5)
+        self.cell(col_widths[8], row_h, '_____', align='L', border=0)
+
+        # Advance cursor past the wrapped row
+        self.set_xy(LM, row_y + row_h)
 
 
 # ---------------------------------------------------------------------------
