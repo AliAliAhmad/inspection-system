@@ -2369,6 +2369,10 @@ def download_plan_pdf(plan_id):
         filter_note = _build_filter_note(filters, lang) if filters else ''
 
         pdf = WorkPlanPDF(plan, language=lang)
+        # Embed defect photo thumbnails when filters are active (per-day,
+        # per-berth, etc.) — skipped for full-week PDFs to avoid downloading
+        # hundreds of images.
+        pdf.filters_active = bool(filters)
         pdf.add_cover_page(
             filtered_jobs_by_day=filtered_jobs_by_day if filters else None,
             filter_note=filter_note,

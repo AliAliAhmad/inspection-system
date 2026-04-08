@@ -10,6 +10,47 @@ import os
 import tempfile
 from flask import current_app
 
+# ── Arabic shaping pipeline ────────────────────────────────────────────
+# fpdf2 renders glyphs but does NOT join Arabic letters or apply
+# right-to-left bidirectional ordering. Without this pipeline, Arabic
+# text appears as disconnected isolated letters in left-to-right order
+# (i.e. completely unreadable). The two libraries below fix that:
+#
+#   arabic_reshaper.reshape(text) — replaces isolated Arabic letters
+#       with their joined contextual forms (initial/medial/final).
+#   bidi.algorithm.get_display(text) — applies the Unicode bidi
+#       algorithm to put RTL runs in visual order.
+#
+# The libraries are optional at import time so the PDF still renders
+# (in raw form) even if they're missing — useful for local dev.
+try:
+    import arabic_reshaper as _arabic_reshaper
+    from bidi.algorithm import get_display as _bidi_get_display
+    _ARABIC_SHAPING_AVAILABLE = True
+except ImportError:
+    _ARABIC_SHAPING_AVAILABLE = False
+
+
+def _shape_arabic(text):
+    """Reshape + bidi-reorder Arabic text for fpdf2 rendering.
+
+    Safe to call on any string — returns the input unchanged when:
+        - the text is empty/None
+        - the text contains no Arabic characters (pure English)
+        - the shaping libraries are not installed
+    """
+    if not text or not _ARABIC_SHAPING_AVAILABLE:
+        return text
+    # Quick check: any character in the Arabic Unicode block?
+    has_arabic = any('\u0600' <= ch <= '\u06FF' for ch in text)
+    if not has_arabic:
+        return text
+    try:
+        reshaped = _arabic_reshaper.reshape(text)
+        return _bidi_get_display(reshaped)
+    except Exception:
+        return text
+
 
 # ── Color Palette ──────────────────────────────────────────────
 NAVY     = (20, 40, 80)
@@ -134,7 +175,46 @@ class WorkPlanPDF(FPDF):
         self.current_day_label = ''
         self.current_day_stats = ''
         self._rnr_cache = {}
+        # When True, defect cards will include a photo thumbnail. This is set
+        # by generate_plan_pdf() when filters are active — the user wanted
+        # photos in narrow filtered PDFs (per-day, per-berth, etc.) but NOT
+        # in the full-week PDF where they'd add too many pages.
+        self.filters_active = False
         self._load_fonts()
+
+    def _embed_image_from_url(self, url, x, y, w, h):
+        """Download an image from a URL and embed it into the PDF.
+
+        Returns True on success, False if download/decode/embed failed.
+        Failures are logged but never raise — the PDF still generates
+        without the thumbnail rather than crashing the whole report.
+        """
+        if not url:
+            return False
+        try:
+            import requests
+            from io import BytesIO
+            from PIL import Image as _PILImage
+
+            resp = requests.get(url, timeout=4, stream=True)
+            if resp.status_code != 200:
+                return False
+            img_data = BytesIO(resp.content)
+            # Validate the bytes are a real image PIL can decode
+            try:
+                pil = _PILImage.open(img_data)
+                pil.load()  # Force decode to catch corrupt images
+            except Exception:
+                return False
+            img_data.seek(0)
+            self.image(img_data, x=x, y=y, w=w, h=h)
+            return True
+        except Exception as e:
+            try:
+                current_app.logger.warning('PDF thumbnail embed failed for %s: %s' % (url, e))
+            except Exception:
+                pass
+            return False
 
     def _load_fonts(self):
         """Load Noto Sans + Noto Sans Arabic TTF fonts."""
@@ -166,8 +246,9 @@ class WorkPlanPDF(FPDF):
             self._has_arabic = False
 
     def _t(self, key):
-        """Get translated label."""
-        return LABELS.get(self.language, LABELS['en']).get(key, key)
+        """Get translated label, with Arabic shaping applied for Arabic mode."""
+        label = LABELS.get(self.language, LABELS['en']).get(key, key)
+        return _shape_arabic(label)
 
     def _font(self, style='', size=10):
         """Set the appropriate font for current language."""
@@ -179,17 +260,56 @@ class WorkPlanPDF(FPDF):
             self.set_font('Helvetica', style, size)
 
     def _safe(self, text, max_len=0):
-        """Unicode-safe text with optional truncation. No Latin-1 encoding."""
+        """Unicode-safe text with optional truncation. No Latin-1 encoding.
+        Also applies Arabic shaping (letter joining + bidi reordering) so any
+        Arabic text rendered through this helper looks correct in the PDF."""
         if text is None:
             return ''
         s = str(text).strip()
         if max_len and len(s) > max_len:
-            return s[:max_len - 1] + '\u2026'  # Unicode ellipsis
-        return s
+            s = s[:max_len - 1] + '\u2026'  # Unicode ellipsis
+        # Apply Arabic shaping AFTER truncation so we don't truncate joined glyphs
+        return _shape_arabic(s)
 
     # Keep backward compat alias
     def _s(self, text, max_len=0):
         return self._safe(text, max_len)
+
+    def _estimate_wrap_lines(self, text, width_mm, font_size=9, max_lines=3):
+        """Estimate how many lines `text` will occupy when rendered at the
+        current font in a column of `width_mm` width. Used to compute card
+        heights BEFORE rendering so the layout knows where to place the
+        next row.
+
+        Returns at least 1, never more than max_lines.
+        """
+        if not text:
+            return 1
+        # Use current font's actual character width for accuracy
+        self._font('', font_size)
+        # Average char width — use a representative set
+        char_w = self.get_string_width('abcdefghij') / 10.0 or 1.5
+        # Effective text width per line (small inner padding)
+        usable_w = max(1.0, width_mm - 1)
+        chars_per_line = max(1, int(usable_w / char_w))
+        # Word-aware line count: respect spaces so we don't over-estimate
+        words = str(text).split()
+        if not words:
+            return 1
+        line_count = 1
+        cur_len = 0
+        for word in words:
+            wlen = len(word)
+            if cur_len == 0:
+                cur_len = wlen
+            elif cur_len + 1 + wlen <= chars_per_line:
+                cur_len += 1 + wlen
+            else:
+                line_count += 1
+                cur_len = wlen
+                if line_count >= max_lines:
+                    break
+        return min(line_count, max_lines)
 
     def _pill(self, label, color, w=16, h=5):
         """Colored pill badge with text label (B&W safe)."""
@@ -254,23 +374,31 @@ class WorkPlanPDF(FPDF):
         return False
 
     def _get_equipment_name(self, job):
-        """Get equipment display name from job."""
+        """Get equipment display name from job. Returns just the name —
+        the serial number is intentionally NOT appended (it eats too much
+        space in the card layout, per user request 2026-04-08)."""
         if job.equipment:
-            name = job.equipment.name or job.equipment.serial_number or ''
-            sn = job.equipment.serial_number or ''
-            if sn and sn not in name:
-                return '%s (%s)' % (name, sn)
-            return name
+            return job.equipment.name or job.equipment.serial_number or ''
         if job.inspection_assignment and job.inspection_assignment.equipment:
             eq = job.inspection_assignment.equipment
             return eq.name or eq.serial_number or ''
         return job.description or ''
 
     def _get_description(self, job):
-        """Get job description, stripping equipment name prefix."""
+        """Get job description, stripping equipment name prefix.
+
+        For defect jobs in Arabic mode, prefer defect.description_ar when
+        available so the admin sees the Arabic version. PM descriptions
+        always stay in their original language (per user request — PM
+        questions are typically in English in the source data).
+        """
         desc = job.description or ''
-        if not desc and job.defect:
-            desc = job.defect.description or ''
+        if job.defect:
+            # For defects, check the language preference
+            if self.language == 'ar' and getattr(job.defect, 'description_ar', None):
+                desc = job.defect.description_ar
+            elif not desc:
+                desc = job.defect.description or ''
         eq_name = self._get_equipment_name(job)
         if eq_name and desc.startswith(eq_name):
             desc = desc[len(eq_name):].lstrip(' -_.')
@@ -542,14 +670,43 @@ class WorkPlanPDF(FPDF):
         desc_lines = min(desc_lines, 3)  # max 3 lines
         desc_h = max(5, desc_lines * 4.5)
 
+        # Compute team / materials wrap heights so the row grows as needed
+        # instead of truncating long lists. Each line is 4mm; max 3 lines.
+        half_w_for_estimate = (inner_w / 2 - 1)
+        team_lines = self._estimate_wrap_lines(team_str, half_w_for_estimate, font_size=9)
+        mat_lines = self._estimate_wrap_lines(mat_str, half_w_for_estimate, font_size=9)
+        team_mat_lines = max(team_lines, mat_lines)
+        # Row 4 total height = label header (4mm) + content lines (4mm each) + 2mm padding
+        row4_h = 4 + (team_mat_lines * 4) + 2
+
+        # Decide if this card should show a defect photo thumbnail.
+        # Triggered when:
+        #   - filters_active is True (per-day, per-berth, etc. PDF), AND
+        #   - this is a defect job, AND
+        #   - the defect has a photo URL
+        # Skipped for the full-week PDF to avoid downloading hundreds
+        # of images on Render's free tier.
+        defect_photo_url = None
+        if (
+            self.filters_active
+            and job.job_type == 'defect'
+            and job.defect
+            and getattr(job.defect, 'photo_url', None)
+        ):
+            defect_photo_url = job.defect.photo_url
+        photo_h = 26 if defect_photo_url else 0  # 26mm thumbnail row height
+
         # Build up card height
         card_h = 0
         card_h += 7    # Row 1: type + priority + flags
         card_h += 9    # Row 2: equipment name
         card_h += 0.5  # divider
         card_h += desc_h + 2  # Row 3: description
+        if photo_h:
+            card_h += 0.5  # divider
+            card_h += photo_h  # Row 3.5: defect photo thumbnail (filtered PDFs only)
         card_h += 0.5  # divider
-        card_h += 10   # Row 4: team + materials
+        card_h += row4_h    # Row 4: team + materials (DYNAMIC — wraps long lists)
         card_h += 0.5  # divider
         card_h += 6    # Row 5: SAP + hours + reading
         card_h += 0.5  # divider
@@ -636,12 +793,41 @@ class WorkPlanPDF(FPDF):
         self.multi_cell(inner_w, 4.5, desc_text, max_line_height=4.5)
         cy += desc_h + 2
 
+        # Row 3.5: Defect photo thumbnail (only when filters_active and the
+        # defect has a photo). Centered horizontally inside the card body.
+        # Height was pre-computed as photo_h above so card_h is correct.
+        if photo_h:
+            thumb_w = 38   # mm — large enough to read
+            thumb_h = photo_h - 4  # internal padding
+            thumb_x = cx + (inner_w - thumb_w) / 2
+            thumb_y = cy + 2
+            ok = self._embed_image_from_url(
+                defect_photo_url, thumb_x, thumb_y, thumb_w, thumb_h,
+            )
+            if not ok:
+                # Draw a placeholder so the layout doesn't shift if download fails
+                self.set_draw_color(*BORDER)
+                self.set_line_width(0.2)
+                self.rect(thumb_x, thumb_y, thumb_w, thumb_h, 'D')
+                self._font('', 7)
+                self.set_text_color(*MUTED)
+                self.set_xy(thumb_x, thumb_y + thumb_h / 2 - 2)
+                self.cell(thumb_w, 4, 'photo unavailable', align='C')
+                self.set_text_color(*TEXT)
+            cy += photo_h
+
+            # Thin divider after photo
+            self.set_draw_color(*BORDER)
+            self.line(cx, cy, card_x + CARD_W - CARD_PAD, cy)
+            cy += 0.5
+
         # Thin divider
         self.set_draw_color(*BORDER)
         self.line(cx, cy, card_x + CARD_W - CARD_PAD, cy)
         cy += 0.5
 
-        # Row 4: Team | Materials (side by side)
+        # Row 4: Team | Materials (side by side, both wrap to multiple lines
+        # if the content is long — height was pre-computed as row4_h above).
         half_w = inner_w / 2 - 1
         self.set_xy(cx, cy)
         self._font('B', 8)
@@ -650,20 +836,26 @@ class WorkPlanPDF(FPDF):
         self.set_x(cx + half_w + 2)
         self.cell(half_w, 4, '%s:' % self._t('materials'))
 
+        # Vertical divider — spans the full row4 height
+        mid_x = cx + half_w + 0.5
+        self.set_draw_color(*BORDER)
+        self.line(mid_x, cy, mid_x, cy + row4_h - 1)
+
+        # Render team value with multi_cell so long lists wrap.
+        # Cap at the precomputed line count so we don't overflow the card.
         self.set_xy(cx, cy + 4)
         self._font('', 9)
         self.set_text_color(*TEXT)
-        self.cell(half_w, 4, self._safe(team_str, 35))
+        team_capped = self._safe(team_str, 200)  # 200 char hard cap (3 lines worth)
+        self.multi_cell(half_w, 4, team_capped, border=0, align='L')
 
-        # Vertical divider
-        mid_x = cx + half_w + 0.5
-        self.set_draw_color(*BORDER)
-        self.line(mid_x, cy, mid_x, cy + 9)
-
+        # Materials value (right column) — same approach
         self.set_xy(cx + half_w + 2, cy + 4)
         self._font('', 9)
-        self.cell(half_w, 4, self._safe(mat_str, 35))
-        cy += 10
+        mat_capped = self._safe(mat_str, 200)
+        self.multi_cell(half_w, 4, mat_capped, border=0, align='L')
+
+        cy += row4_h
 
         # Thin divider
         self.set_draw_color(*BORDER)
@@ -1521,6 +1713,11 @@ class WorkPlanPDFService:
             total_filtered = sum(len(v) for v in filtered_jobs_by_day.values())
 
             pdf = WorkPlanPDF(plan, language)
+            # Tell the PDF to embed defect photos when ANY filter is active.
+            # We deliberately skip this for the full-week PDF because it
+            # would multiply the file size and trigger Cloudinary downloads
+            # for every defect on the plan.
+            pdf.filters_active = bool(filters)
             pdf.add_cover_page(
                 filtered_jobs_by_day=filtered_jobs_by_day if filters else None,
                 filter_note=filter_note,
