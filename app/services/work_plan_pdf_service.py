@@ -949,21 +949,12 @@ class WorkPlanPDF(FPDF):
         # Row 4 total height = label header (4mm) + content lines (4mm each) + 2mm padding
         row4_h = 4 + (team_mat_lines * 4) + 2
 
-        # Decide if this card should show a defect photo thumbnail.
-        # Triggered when:
-        #   - filters_active is True (per-day, per-berth, etc. PDF), AND
-        #   - this is a defect job, AND
-        #   - the defect has a photo URL
-        # Skipped for the full-week PDF to avoid downloading hundreds
-        # of images on Render's free tier.
+        # Defect photo thumbnails were removed per user request 2026-04-08:
+        # the feature wasn't reliably finding the photo URL (SAP defects
+        # have no inspection, checklist-item matches were spotty), and
+        # the admin decided the PDF was cleaner without it.
         defect_photo_url = None
-        if self.filters_active and job.job_type == 'defect' and job.defect:
-            # _get_defect_photo_url checks defect.photo_url first, then
-            # falls back to the originating inspection answer's photo
-            # (regular defects don't populate defect.photo_url — only
-            # ad-hoc/field-report defects do).
-            defect_photo_url = self._get_defect_photo_url(job)
-        photo_h = 26 if defect_photo_url else 0  # 26mm thumbnail row height
+        photo_h = 0
 
         # Build up card height
         card_h = 0
@@ -971,9 +962,6 @@ class WorkPlanPDF(FPDF):
         card_h += 9    # Row 2: equipment name
         card_h += 0.5  # divider
         card_h += desc_h + 2  # Row 3: description
-        if photo_h:
-            card_h += 0.5  # divider
-            card_h += photo_h  # Row 3.5: defect photo thumbnail (filtered PDFs only)
         card_h += 0.5  # divider
         card_h += row4_h    # Row 4: team + materials (DYNAMIC — wraps long lists)
         card_h += 0.5  # divider
@@ -1067,33 +1055,7 @@ class WorkPlanPDF(FPDF):
         self.multi_cell(inner_w, 4.5, desc_text, max_line_height=4.5)
         cy += desc_h + 2
 
-        # Row 3.5: Defect photo thumbnail (only when filters_active and the
-        # defect has a photo). Centered horizontally inside the card body.
-        # Height was pre-computed as photo_h above so card_h is correct.
-        if photo_h:
-            thumb_w = 38   # mm — large enough to read
-            thumb_h = photo_h - 4  # internal padding
-            thumb_x = cx + (inner_w - thumb_w) / 2
-            thumb_y = cy + 2
-            ok = self._embed_image_from_url(
-                defect_photo_url, thumb_x, thumb_y, thumb_w, thumb_h,
-            )
-            if not ok:
-                # Draw a placeholder so the layout doesn't shift if download fails
-                self.set_draw_color(*BORDER)
-                self.set_line_width(0.2)
-                self.rect(thumb_x, thumb_y, thumb_w, thumb_h, 'D')
-                self._font('', 7)
-                self.set_text_color(*MUTED)
-                self.set_xy(thumb_x, thumb_y + thumb_h / 2 - 2)
-                self.cell(thumb_w, 4, 'photo unavailable', align='C')
-                self.set_text_color(*TEXT)
-            cy += photo_h
-
-            # Thin divider after photo
-            self.set_draw_color(*BORDER)
-            self.line(cx, cy, card_x + CARD_W - CARD_PAD, cy)
-            cy += 0.5
+        # Photo thumbnail removed per user request 2026-04-08.
 
         # Thin divider
         self.set_draw_color(*BORDER)
