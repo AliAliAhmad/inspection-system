@@ -469,20 +469,19 @@ class WorkPlanPDF(FPDF):
         return indicators.get(priority, indicators['normal'])
 
     def _should_use_full_card(self, job):
-        """Determine if a job needs a full detail card or compact."""
-        if job.job_type == 'defect':
-            return True
-        priority = (job.priority or 'normal').lower()
-        if priority in ('high', 'urgent'):
-            return True
-        if job.overdue_value and job.overdue_value > 0:
-            return True
-        if job.notes and str(job.notes).strip():
-            return True
-        if getattr(job, 'is_split', False):
-            return True
-        if job.materials and len(list(job.materials)) > 3:
-            return True
+        """Always use the full detail card.
+
+        Previously we used a compact card for routine PM jobs to fit more
+        per page, but the compact card uses `cell()` with hard character
+        truncation (30/25/80 chars for team/material/description) which
+        cut off long content that the crew needs to read on-site.
+
+        The user explicitly asked multiple times for nothing to be
+        truncated — the full card uses multi_cell() everywhere and grows
+        to fit the content, so using it universally means zero truncation.
+        Slightly more pages, but every piece of information is visible.
+        """
+        return True
         return False
 
     def _get_equipment_name(self, job):
@@ -499,35 +498,36 @@ class WorkPlanPDF(FPDF):
     def _get_description(self, job):
         """Get job description, stripping equipment name prefix.
 
-        Three cases for defect jobs:
-          1. Inspection-sourced with description_ar → use it directly
-             (cached at defect creation time in defect_service.py).
-          2. Inspection-sourced without description_ar → use description.
-          3. SAP-sourced (job.defect is None because SAP defect jobs never
-             get a linked Defect row) → translate job.description on
-             demand via _get_arabic_or_translate. Result is cached in the
-             Translation table so subsequent PDFs are fast.
+        Respects self.language:
+        - language='en' → always use the English description field
+          (no translation, no _ar lookup). PM descriptions always use
+          this path regardless of language.
+        - language='ar' → for defects only, prefer description_ar
+          (inspection-sourced) or translate on-demand (SAP-sourced).
+          PM descriptions still stay in source language.
 
-        PM descriptions always stay in their source language — the user
-        explicitly asked for PMs to remain English (they come from SAP
-        and the team reads English).
+        The user wants the English PDF to be FULLY English and the
+        Arabic PDF to have Arabic descriptions + team names — two
+        distinct outputs for two different audiences.
         """
         desc = job.description or ''
 
-        if job.defect:
-            # Inspection-sourced defect — prefer stored Arabic
-            ar = getattr(job.defect, 'description_ar', None)
-            if ar:
-                desc = ar
-            elif not desc:
-                desc = job.defect.description or ''
-        elif job.job_type == 'defect' and job.description:
-            # SAP-sourced defect — no linked Defect row, translate on-demand
-            desc = self._get_arabic_or_translate(
-                'work_plan_job', job.id, 'description', job.description,
-            )
+        # Only translate/lookup Arabic when the user explicitly picked Arabic
+        if self.language == 'ar' and job.job_type == 'defect':
+            if job.defect:
+                # Inspection-sourced defect — prefer stored Arabic
+                ar = getattr(job.defect, 'description_ar', None)
+                if ar:
+                    desc = ar
+                elif not desc:
+                    desc = job.defect.description or ''
+            elif job.description:
+                # SAP-sourced defect — no linked Defect row, translate on-demand
+                desc = self._get_arabic_or_translate(
+                    'work_plan_job', job.id, 'description', job.description,
+                )
 
-        # PM: use job.description as-is (which comes from SAP, usually English)
+        # PM or English mode: use job.description as-is
         eq_name = self._get_equipment_name(job)
         if eq_name and desc.startswith(eq_name):
             desc = desc[len(eq_name):].lstrip(' -_.')
@@ -641,12 +641,15 @@ class WorkPlanPDF(FPDF):
             if not (a.user and a.user.full_name):
                 parts.append('?')
                 continue
-            # Translate each full_name to Arabic on-demand. Cached after
-            # first use in the Translation table so subsequent PDFs are
-            # instant for the same user.
-            name = self._get_arabic_or_translate(
-                'user', a.user.id, 'full_name', a.user.full_name,
-            )
+            # Only translate names when the user picked Arabic. The English
+            # PDF stays in English — the team's English names are exactly
+            # what should appear.
+            if self.language == 'ar':
+                name = self._get_arabic_or_translate(
+                    'user', a.user.id, 'full_name', a.user.full_name,
+                )
+            else:
+                name = a.user.full_name
             if a.is_lead:
                 name = name + '*'
             parts.append(name)
@@ -901,11 +904,21 @@ class WorkPlanPDF(FPDF):
         no_sap = not sap and job.job_type == 'pm'
         priority = (job.priority or 'normal').lower()
 
-        # Calculate description height (multi-line)
+        # Calculate description height via fpdf2's own splitter — same
+        # approach as team/materials below. Description is allowed up to
+        # 6 lines (more than team/materials because descriptions are
+        # the most information-dense row in the card).
         self._font('', 10)
-        desc_text = self._safe(desc, 200)
-        desc_lines = max(1, len(desc_text) * self.get_string_width('a') * 10 / (inner_w * 10) + 1)
-        desc_lines = min(desc_lines, 3)  # max 3 lines
+        desc_text = self._safe(desc)  # no truncation — let wrap handle it
+        try:
+            desc_split = self.multi_cell(
+                inner_w, 4.5,
+                desc_text or '-',
+                split_only=True,
+            )
+            desc_lines = max(1, min(len(desc_split), 6))
+        except Exception:
+            desc_lines = 1
         desc_h = max(5, desc_lines * 4.5)
 
         # Compute team / materials wrap heights so the row grows as needed
