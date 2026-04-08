@@ -1962,6 +1962,12 @@ class WorkPlanPDFService:
                      PDF only includes days and jobs matching the filter, and
                      the cover page shows a filter summary note.
         """
+        # Version stamp so the Render log tells us which code version is
+        # actually running. Bump this whenever the PDF service is edited.
+        current_app.logger.info(
+            'PDF VERSION round4 | plan_id=%s lang=%s filters=%s',
+            getattr(plan, 'id', None), language, bool(filters),
+        )
         try:
             # Pre-compute filtered jobs per day so we can:
             #   1. Show accurate stats on the cover page

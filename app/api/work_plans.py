@@ -2354,6 +2354,12 @@ def download_plan_pdf(plan_id):
     )
     lang = request.args.get('lang', 'en')
     filters = _parse_pdf_filters_from_query() or None
+    # Version stamp so the Render logs reveal which code version is live.
+    # Bump the suffix on every PDF-service edit.
+    logger.info(
+        'PDF VERSION round4 download-pdf | plan_id=%s lang=%s filters=%s',
+        plan_id, lang, bool(filters),
+    )
     try:
         # Pre-compute filtered jobs per day (mirror of service logic)
         allowed_day_dates = set(filters['days']) if filters and filters.get('days') else None
