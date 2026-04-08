@@ -1350,10 +1350,17 @@ def get_readings_history(equipment_id):
 
     for item_id, answer_pairs in ans_by_item.items():
         item = item_info[item_id]
-        # Skip if this is a running hours question (already covered by EquipmentReading)
+        # For running-hours questions, only skip if we ALREADY emitted an
+        # EquipmentReading group for this reading type (i.e. the AI-extracted
+        # path worked). When AI extraction fails (Gemini quota, etc.) the
+        # typed value in InspectionAnswer is the ONLY copy, and hiding it
+        # would leave the admin unable to see or correct it.
         q_lower = (item.question_text or '').lower()
-        if any(kw in q_lower for kw in ['rnr reading', 'running hour', 'running hours', 'rnr']):
-            continue
+        is_running_hours_question = any(
+            kw in q_lower for kw in ['rnr reading', 'running hour', 'running hours', 'rnr']
+        )
+        if is_running_hours_question and 'rnr' in er_by_type:
+            continue  # EquipmentReading already covers it — don't duplicate
 
         data_points = []
         values = []
@@ -1367,6 +1374,12 @@ def get_readings_history(equipment_id):
             if inspection.technician_id:
                 u = db.session.get(User, inspection.technician_id)
                 recorder = u.full_name if u else None
+            # Fetch the photo URL if the inspector attached one
+            photo_url = None
+            if answer.photo_file_id:
+                from app.models.file import File as _File
+                pf = db.session.get(_File, answer.photo_file_id)
+                photo_url = pf.file_path if pf else None
             data_points.append({
                 'id': answer.id,
                 'value': val,
@@ -1375,6 +1388,7 @@ def get_readings_history(equipment_id):
                 'recorded_by': recorder,
                 'inspection_id': inspection.id,
                 'is_faulty': False,
+                'photo_url': photo_url,
             })
 
         if not data_points:
