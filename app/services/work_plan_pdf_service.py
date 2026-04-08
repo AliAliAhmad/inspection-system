@@ -387,6 +387,54 @@ class WorkPlanPDF(FPDF):
                 pass
         return english_text  # safe fallback
 
+    def _wrap_lines(self, text, max_chars_per_line, max_lines=4, separator=', '):
+        """Split `text` into up to `max_lines` lines of at most
+        `max_chars_per_line` characters each. Word-aware: tries not to
+        break mid-word, using `separator` as the preferred break point.
+
+        This is a pure-Python word wrap that doesn't depend on fpdf2's
+        multi_cell behavior (which has been inconsistent across fpdf2
+        versions when fonts aren't set correctly).
+
+        Returns a list of strings (at least one, at most max_lines).
+        The last line ends with '...' if there are more words to fit.
+        """
+        if not text:
+            return ['']
+        text = str(text)
+        if len(text) <= max_chars_per_line:
+            return [text]
+
+        parts = text.split(separator)
+        lines = []
+        current = ''
+        for i, word in enumerate(parts):
+            # Reserve the separator length when joining
+            extra = len(separator) if current else 0
+            if len(current) + extra + len(word) <= max_chars_per_line:
+                current = current + (separator if current else '') + word
+            else:
+                if current:
+                    lines.append(current)
+                # If we've hit the line limit, mark truncation and stop
+                if len(lines) >= max_lines:
+                    if lines:
+                        last = lines[-1]
+                        if len(last) > max_chars_per_line - 3:
+                            last = last[:max_chars_per_line - 3]
+                        lines[-1] = last + '...'
+                    return lines
+                # If the word itself is longer than a line, hard-break it
+                while len(word) > max_chars_per_line:
+                    lines.append(word[:max_chars_per_line])
+                    word = word[max_chars_per_line:]
+                    if len(lines) >= max_lines:
+                        return lines
+                current = word
+        if current:
+            lines.append(current)
+        return lines[:max_lines] if lines else ['']
+
     def _estimate_wrap_lines(self, text, width_mm, font_size=9, max_lines=3):
         """Estimate how many lines `text` will occupy when rendered at the
         current font in a column of `width_mm` width. Used to compute card
@@ -904,47 +952,26 @@ class WorkPlanPDF(FPDF):
         no_sap = not sap and job.job_type == 'pm'
         priority = (job.priority or 'normal').lower()
 
-        # Calculate description height via fpdf2's own splitter — same
-        # approach as team/materials below. Description is allowed up to
-        # 6 lines (more than team/materials because descriptions are
-        # the most information-dense row in the card).
-        self._font('', 10)
-        desc_text = self._safe(desc)  # no truncation — let wrap handle it
-        try:
-            desc_split = self.multi_cell(
-                inner_w, 4.5,
-                desc_text or '-',
-                split_only=True,
-            )
-            desc_lines = max(1, min(len(desc_split), 6))
-        except Exception:
-            desc_lines = 1
+        # Wrap description using our own word-aware wrapper. Description
+        # spans the full card width (~129mm) so it fits ~75 chars per
+        # line at 10pt font. Cap at 6 lines.
+        DESC_CHARS_PER_LINE = 75
+        desc_wrapped = self._wrap_lines(
+            desc or '-', DESC_CHARS_PER_LINE, max_lines=6, separator=' ',
+        )
+        desc_lines = max(1, len(desc_wrapped))
         desc_h = max(5, desc_lines * 4.5)
 
-        # Compute team / materials wrap heights so the row grows as needed
-        # instead of truncating long lists. Use fpdf2's own split_only=True
-        # mode to get the EXACT line count at the actual render width — this
-        # is more accurate than a character-counting estimate and guarantees
-        # card_h matches what's actually drawn.
-        half_w_for_estimate = (inner_w / 2 - 1)
-        self._font('', 9)  # Match the actual render font
-        try:
-            team_split = self.multi_cell(
-                half_w_for_estimate, 4,
-                self._safe(team_str or '-'),
-                split_only=True,
-            )
-            mat_split = self.multi_cell(
-                half_w_for_estimate, 4,
-                self._safe(mat_str or '-'),
-                split_only=True,
-            )
-            team_lines = max(1, min(len(team_split), 5))  # cap at 5 lines
-            mat_lines = max(1, min(len(mat_split), 5))
-        except Exception:
-            # Fallback to the character-counting estimate if split_only fails
-            team_lines = self._estimate_wrap_lines(team_str, half_w_for_estimate, font_size=9)
-            mat_lines = self._estimate_wrap_lines(mat_str, half_w_for_estimate, font_size=9)
+        # Wrap team and materials strings using our own word-aware wrapper
+        # instead of relying on fpdf2's multi_cell which has been unreliable
+        # across versions. 36 characters per line at 9pt Noto fits within
+        # the half-column width of ~63mm. Cap at 5 lines.
+        TEAM_CHARS_PER_LINE = 36
+        MAT_CHARS_PER_LINE = 36
+        team_wrapped = self._wrap_lines(team_str or '-', TEAM_CHARS_PER_LINE, max_lines=5)
+        mat_wrapped = self._wrap_lines(mat_str or '-', MAT_CHARS_PER_LINE, max_lines=5)
+        team_lines = max(1, len(team_wrapped))
+        mat_lines = max(1, len(mat_wrapped))
         team_mat_lines = max(team_lines, mat_lines)
         # Row 4 total height = label header (4mm) + content lines (4mm each) + 2mm padding
         row4_h = 4 + (team_mat_lines * 4) + 2
@@ -1048,11 +1075,14 @@ class WorkPlanPDF(FPDF):
         self.line(cx, cy, card_x + CARD_W - CARD_PAD, cy)
         cy += 0.5
 
-        # Row 3: Description (multi-line, no truncation up to 3 lines)
-        self.set_xy(cx, cy + 1)
+        # Row 3: Description (multi-line, wrapped manually via _wrap_lines).
+        # Each wrapped line gets its own cell() call — bypasses multi_cell
+        # entirely for reliable wrapping.
         self._font('', 10)
         self.set_text_color(*TEXT)
-        self.multi_cell(inner_w, 4.5, desc_text, max_line_height=4.5)
+        for i, line in enumerate(desc_wrapped):
+            self.set_xy(cx, cy + 1 + (i * 4.5))
+            self.cell(inner_w, 4.5, self._safe(line))
         cy += desc_h + 2
 
         # Photo thumbnail removed per user request 2026-04-08.
@@ -1077,18 +1107,19 @@ class WorkPlanPDF(FPDF):
         self.set_draw_color(*BORDER)
         self.line(mid_x, cy, mid_x, cy + row4_h - 1)
 
-        # Render team value with multi_cell so long lists wrap to fit
-        # inside row4_h. No character truncation — we computed the exact
-        # number of lines needed above via split_only=True.
-        self.set_xy(cx, cy + 4)
+        # Render team value as multiple explicit cell() rows, one per
+        # wrapped line. This bypasses multi_cell entirely and guarantees
+        # the text splits correctly regardless of fpdf2 version or font.
         self._font('', 9)
         self.set_text_color(*TEXT)
-        self.multi_cell(half_w, 4, self._safe(team_str or '-'), border=0, align='L')
+        for i, line in enumerate(team_wrapped):
+            self.set_xy(cx, cy + 4 + (i * 4))
+            self.cell(half_w, 4, self._safe(line))
 
         # Materials value (right column) — same approach
-        self.set_xy(cx + half_w + 2, cy + 4)
-        self._font('', 9)
-        self.multi_cell(half_w, 4, self._safe(mat_str or '-'), border=0, align='L')
+        for i, line in enumerate(mat_wrapped):
+            self.set_xy(cx + half_w + 2, cy + 4 + (i * 4))
+            self.cell(half_w, 4, self._safe(line))
 
         cy += row4_h
 
