@@ -157,8 +157,8 @@ export default function ReadingsHistoryTable({
         return <Tag color={colors[v] || 'default'}>{v.replace(/_/g, ' ')}</Tag>;
       },
     },
-    // Admin-only edit column. Shows only when the row is from equipment_reading
-    // (the source we have a PATCH endpoint for) and the user is an admin.
+    // Admin-only edit column. Works for all 3 sources (equipment_reading,
+    // inspection_answer, running_hours) — the backend routes internally.
     ...(isAdmin && equipmentId
       ? [
           {
@@ -166,25 +166,15 @@ export default function ReadingsHistoryTable({
             key: 'actions',
             width: 80,
             fixed: 'right' as const,
-            render: (_: unknown, row: FlatReading) => {
-              const isEditable = row.source === 'equipment_reading';
-              return (
-                <Tooltip
-                  title={
-                    isEditable
-                      ? 'Correct this reading (admin only)'
-                      : 'Only readings from inspections can be edited'
-                  }
-                >
-                  <Button
-                    size="small"
-                    icon={<EditOutlined />}
-                    disabled={!isEditable}
-                    onClick={() => setEditingReading(row)}
-                  />
-                </Tooltip>
-              );
-            },
+            render: (_: unknown, row: FlatReading) => (
+              <Tooltip title="Correct this reading (admin only)">
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => setEditingReading(row)}
+                />
+              </Tooltip>
+            ),
           },
         ]
       : []),

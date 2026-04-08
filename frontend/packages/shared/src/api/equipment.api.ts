@@ -122,23 +122,22 @@ export const equipmentApi = {
 
   /** ADMIN ONLY: Correct a previously saved equipment reading.
    *  Used to fix typos like 9000 vs 900 made by inspectors.
-   *  The original value is preserved in `original_value` for audit. */
+   *
+   *  Routes to the right backend path based on `source`:
+   *    - 'equipment_reading': full audit trail preserved
+   *    - 'inspection_answer': updates InspectionAnswer.answer_value
+   *    - 'running_hours':     updates RunningHoursReading.hours
+   */
   editEquipmentReading(
     equipmentId: number,
     readingId: number,
-    payload: { reading_value: number; edit_reason: string },
-  ) {
-    return getApiClient().patch<ApiResponse<{
-      id: number;
-      equipment_id: number;
+    payload: {
       reading_value: number;
-      original_value: number | null;
-      edit_count: number;
-      edit_reason: string | null;
-      updated_at: string | null;
-      updated_by_name: string | null;
-      is_edited: boolean;
-    }>>(
+      edit_reason: string;
+      source?: 'equipment_reading' | 'inspection_answer' | 'running_hours';
+    },
+  ) {
+    return getApiClient().patch<ApiResponse<any>>(
       `/api/equipment/${equipmentId}/readings/${readingId}`,
       payload,
     );

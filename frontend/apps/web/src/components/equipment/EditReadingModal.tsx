@@ -7,10 +7,12 @@ import { message } from 'antd';
 
 const { Text, Title } = Typography;
 
+type ReadingSource = 'equipment_reading' | 'inspection_answer' | 'running_hours';
+
 interface EditReadingModalProps {
   open: boolean;
   equipmentId: number;
-  reading: (ReadingDataPoint & { group_label: string }) | null;
+  reading: (ReadingDataPoint & { group_label: string; source: string }) | null;
   /** The previous reading on this same equipment+type — used to compute the realistic max */
   previousReading: ReadingDataPoint | null;
   onClose: () => void;
@@ -51,7 +53,15 @@ export const EditReadingModal: React.FC<EditReadingModalProps> = ({
   const editMutation = useMutation({
     mutationFn: async (vars: { reading_value: number; edit_reason: string }) => {
       if (!reading) throw new Error('No reading selected');
-      const resp = await equipmentApi.editEquipmentReading(equipmentId, reading.id, vars);
+      // Pass the source so the backend routes to the right table.
+      // The source comes from the FlatReading row (equipment_reading,
+      // inspection_answer, or running_hours).
+      const source = (reading.source || 'equipment_reading') as ReadingSource;
+      const resp = await equipmentApi.editEquipmentReading(
+        equipmentId,
+        reading.id,
+        { ...vars, source },
+      );
       return resp.data;
     },
     onSuccess: () => {

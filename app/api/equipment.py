@@ -971,26 +971,159 @@ def get_reading_stats(equipment_id, reading_type):
     }), 200
 
 
+def _edit_inspection_answer_reading(equipment_id, answer_id, new_value, edit_reason):
+    """
+    Admin-only helper: correct a numeric InspectionAnswer.answer_value.
+
+    InspectionAnswer doesn't have dedicated audit columns, so we just
+    overwrite the value and log the edit to app.log. The admin still gets
+    the correction but without an in-UI "edited" tag.
+    """
+    from app.models.inspection import Inspection, InspectionAnswer
+
+    if new_value is None:
+        return jsonify({'status': 'error', 'message': 'reading_value is required'}), 400
+    if not edit_reason:
+        return jsonify({'status': 'error', 'message': 'edit_reason is required'}), 400
+    try:
+        new_value = float(new_value)
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'reading_value must be numeric'}), 400
+
+    answer = db.session.get(InspectionAnswer, answer_id)
+    if not answer:
+        return jsonify({'status': 'error', 'message': 'Answer not found'}), 404
+
+    # Verify the answer belongs to an inspection for THIS equipment
+    inspection = db.session.get(Inspection, answer.inspection_id) if answer.inspection_id else None
+    if not inspection or inspection.equipment_id != equipment_id:
+        return jsonify({
+            'status': 'error',
+            'message': 'Answer does not belong to this equipment',
+        }), 400
+
+    user = get_current_user()
+    old_value = answer.answer_value
+    # Store as string (the column is String(500))
+    # Use a minimal formatting — avoid trailing .0 for integers
+    answer.answer_value = (
+        f'{int(new_value)}' if new_value == int(new_value) else f'{new_value}'
+    )
+    db.session.commit()
+
+    logger.info(
+        f"Admin {user.id} corrected InspectionAnswer #{answer_id} "
+        f"for equipment #{equipment_id}: {old_value!r} → {answer.answer_value!r} "
+        f"({edit_reason!r})"
+    )
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'id': answer.id,
+            'source': 'inspection_answer',
+            'reading_value': new_value,
+            'old_value': old_value,
+            'edit_reason': edit_reason,
+        },
+    }), 200
+
+
+def _edit_running_hours_reading(equipment_id, reading_id, new_value, edit_reason):
+    """
+    Admin-only helper: correct a RunningHoursReading.hours value.
+
+    Like InspectionAnswer, this table has no dedicated audit columns, so
+    the edit is logged to app.log and the hours field is overwritten in place.
+    """
+    from app.models.running_hours import RunningHoursReading
+
+    if new_value is None:
+        return jsonify({'status': 'error', 'message': 'reading_value is required'}), 400
+    if not edit_reason:
+        return jsonify({'status': 'error', 'message': 'edit_reason is required'}), 400
+    try:
+        new_value = float(new_value)
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'reading_value must be numeric'}), 400
+
+    reading = db.session.get(RunningHoursReading, reading_id)
+    if not reading:
+        return jsonify({'status': 'error', 'message': 'Reading not found'}), 404
+    if reading.equipment_id != equipment_id:
+        return jsonify({
+            'status': 'error',
+            'message': 'Reading does not belong to this equipment',
+        }), 400
+
+    user = get_current_user()
+    old_value = reading.hours
+    reading.hours = new_value
+    db.session.commit()
+
+    logger.info(
+        f"Admin {user.id} corrected RunningHoursReading #{reading_id} "
+        f"for equipment #{equipment_id}: {old_value} → {new_value} "
+        f"({edit_reason!r})"
+    )
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'id': reading.id,
+            'source': 'running_hours',
+            'reading_value': new_value,
+            'old_value': old_value,
+            'edit_reason': edit_reason,
+        },
+    }), 200
+
+
 @bp.route('/<int:equipment_id>/readings/<int:reading_id>', methods=['PATCH'])
 @jwt_required()
 @admin_required()
 def edit_equipment_reading(equipment_id, reading_id):
     """
-    Admin-only: correct a previously saved EquipmentReading row.
+    Admin-only: correct a previously saved reading.
 
-    Used when an inspector typo'd a value (e.g. 9000 vs 900). Updates the
-    reading_value in place, preserves the original value on first edit,
-    and stamps an audit trail (updated_by, updated_at, edit_reason, edit_count).
+    Supports THREE source tables via the `source` body field:
+      - 'equipment_reading'  → EquipmentReading (has full audit trail)
+      - 'inspection_answer'  → InspectionAnswer.answer_value (no audit columns)
+      - 'running_hours'      → RunningHoursReading.hours (no audit columns)
+
+    Used when an inspector typo'd a value (e.g. 9000 vs 900). For the
+    EquipmentReading source the original value is preserved and the edit is
+    stamped (updated_by, updated_at, edit_reason, edit_count). For the other
+    two sources, the value is simply overwritten and logged to app.log.
 
     Body:
         reading_value (float, required) — the corrected value
         edit_reason (str, required) — short explanation, shown in the audit log
+        source (str, optional) — one of 'equipment_reading' (default),
+                                  'inspection_answer', 'running_hours'
     """
-    from app.models.equipment_reading import EquipmentReading
     from app.services.equipment_reading_service import (
         validate_reading_against_history,
     )
     from datetime import datetime
+
+    data = request.get_json(silent=True) or {}
+    new_value = data.get('reading_value')
+    edit_reason = (data.get('edit_reason') or '').strip()
+    source = (data.get('source') or 'equipment_reading').strip()
+
+    # ── Route to the right model based on source ──
+    if source == 'inspection_answer':
+        return _edit_inspection_answer_reading(
+            equipment_id, reading_id, new_value, edit_reason,
+        )
+    if source == 'running_hours':
+        return _edit_running_hours_reading(
+            equipment_id, reading_id, new_value, edit_reason,
+        )
+
+    # Default: equipment_reading (the original path with full audit trail)
+    from app.models.equipment_reading import EquipmentReading
 
     reading = db.session.get(EquipmentReading, reading_id)
     if not reading:
@@ -1000,10 +1133,6 @@ def edit_equipment_reading(equipment_id, reading_id):
             'status': 'error',
             'message': 'Reading does not belong to this equipment',
         }), 400
-
-    data = request.get_json(silent=True) or {}
-    new_value = data.get('reading_value')
-    edit_reason = (data.get('edit_reason') or '').strip()
 
     if new_value is None:
         return jsonify({
