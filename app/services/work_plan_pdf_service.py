@@ -246,18 +246,38 @@ class WorkPlanPDF(FPDF):
             self._has_arabic = False
 
     def _t(self, key):
-        """Get translated label, with Arabic shaping applied for Arabic mode."""
-        label = LABELS.get(self.language, LABELS['en']).get(key, key)
-        return _shape_arabic(label)
+        """Get label — ALWAYS English per user request 2026-04-08.
+
+        Even when language='ar' is selected for descriptions, the PDF
+        labels (headers, column titles, "Team", "Materials", etc.) stay
+        in English because the user's team doesn't read Arabic labels.
+        Only defect descriptions and team member names may contain
+        Arabic text, and those go through _safe() which applies shaping.
+        """
+        return LABELS['en'].get(key, key)
 
     def _font(self, style='', size=10):
-        """Set the appropriate font for current language."""
-        if self.language == 'ar' and self._has_arabic:
-            self.set_font('NotoAr', style, size)
-        elif self._has_noto:
+        """Set the font and register NotoAr as a fallback so any Arabic
+        glyphs embedded in otherwise-English text (e.g. a defect description
+        or an Arabic team-member name) render correctly without needing
+        per-call font switching.
+
+        fpdf2 >= 2.7 supports set_fallback_fonts which automatically picks
+        the fallback for any character not present in the primary font.
+        """
+        if self._has_noto:
             self.set_font('Noto', style, size)
         else:
             self.set_font('Helvetica', style, size)
+
+        # Register the Arabic font as a fallback for missing glyphs.
+        # Guarded because the method doesn't exist on older fpdf2 versions
+        # and because set_fallback_fonts only works after set_font was called.
+        if self._has_arabic and hasattr(self, 'set_fallback_fonts'):
+            try:
+                self.set_fallback_fonts(['NotoAr'])
+            except Exception:
+                pass
 
     def _safe(self, text, max_len=0):
         """Unicode-safe text with optional truncation. No Latin-1 encoding.
@@ -387,22 +407,72 @@ class WorkPlanPDF(FPDF):
     def _get_description(self, job):
         """Get job description, stripping equipment name prefix.
 
-        For defect jobs in Arabic mode, prefer defect.description_ar when
-        available so the admin sees the Arabic version. PM descriptions
-        always stay in their original language (per user request — PM
-        questions are typically in English in the source data).
+        Defect descriptions: ALWAYS prefer defect.description_ar when it
+        exists, regardless of the PDF language setting. The user wants
+        defect descriptions in Arabic because that's what the Arabic
+        inspector originally typed; keeping it Arabic preserves the
+        source. The Arabic font fallback renders it correctly alongside
+        the English labels on the same card.
+
+        PM descriptions: always stay in their source language (usually
+        English from SAP). The user explicitly asked for PM descriptions
+        to remain English.
         """
         desc = job.description or ''
         if job.defect:
-            # For defects, check the language preference
-            if self.language == 'ar' and getattr(job.defect, 'description_ar', None):
-                desc = job.defect.description_ar
+            # Defects: prefer the Arabic version if present, otherwise
+            # fall back to the English description.
+            ar = getattr(job.defect, 'description_ar', None)
+            if ar:
+                desc = ar
             elif not desc:
                 desc = job.defect.description or ''
+        # PM: use job.description as-is (which comes from SAP, usually English)
         eq_name = self._get_equipment_name(job)
         if eq_name and desc.startswith(eq_name):
             desc = desc[len(eq_name):].lstrip(' -_.')
         return desc
+
+    def _get_defect_photo_url(self, job):
+        """Resolve a photo URL for a defect job, with fallback.
+
+        Priority:
+          1. defect.photo_url — set for ad-hoc / field-report defects
+             created via defect_service.py. Regular defects from failed
+             checklist answers do NOT populate this field.
+          2. The originating inspection answer's photo_file. When the
+             defect has a checklist_item_id AND an inspection_id, we
+             look up the InspectionAnswer and use its photo_file.file_path.
+
+        Returns None if no photo can be found, in which case the card
+        renders a "photo unavailable" placeholder.
+        """
+        defect = job.defect
+        if not defect:
+            return None
+
+        # Source 1: defect.photo_url
+        direct = getattr(defect, 'photo_url', None)
+        if direct:
+            return direct
+
+        # Source 2: InspectionAnswer via (inspection_id, checklist_item_id)
+        try:
+            if defect.inspection_id and defect.checklist_item_id:
+                from app.models.inspection import InspectionAnswer
+                answer = InspectionAnswer.query.filter_by(
+                    inspection_id=defect.inspection_id,
+                    checklist_item_id=defect.checklist_item_id,
+                ).first()
+                if answer:
+                    if answer.photo_file and answer.photo_file.file_path:
+                        return answer.photo_file.file_path
+                    if answer.photo_path:
+                        return answer.photo_path
+        except Exception:
+            pass
+
+        return None
 
     def _get_team_str(self, job):
         """Get team string with lead marked by *."""
@@ -687,13 +757,12 @@ class WorkPlanPDF(FPDF):
         # Skipped for the full-week PDF to avoid downloading hundreds
         # of images on Render's free tier.
         defect_photo_url = None
-        if (
-            self.filters_active
-            and job.job_type == 'defect'
-            and job.defect
-            and getattr(job.defect, 'photo_url', None)
-        ):
-            defect_photo_url = job.defect.photo_url
+        if self.filters_active and job.job_type == 'defect' and job.defect:
+            # _get_defect_photo_url checks defect.photo_url first, then
+            # falls back to the originating inspection answer's photo
+            # (regular defects don't populate defect.photo_url — only
+            # ad-hoc/field-report defects do).
+            defect_photo_url = self._get_defect_photo_url(job)
         photo_h = 26 if defect_photo_url else 0  # 26mm thumbnail row height
 
         # Build up card height
