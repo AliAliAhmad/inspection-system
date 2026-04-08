@@ -1428,6 +1428,43 @@ export default function WorkPlanningPage() {
       }
     }
 
+    // Case 4b: Dragging an entire BUNDLE back to the pool to unschedule
+    // every constituent job in one motion. Same pointer-based detection
+    // as individual jobs since the pool panel overlaps the rightmost
+    // day column in the flex layout.
+    if (activeData.type === 'bundle') {
+      const poolRect = poolPanelRef.current?.getBoundingClientRect();
+      const ptr = lastPointerRef.current;
+      if (poolRect && ptr &&
+          ptr.x >= poolRect.left && ptr.x <= poolRect.right &&
+          ptr.y >= poolRect.top  && ptr.y <= poolRect.bottom) {
+        const bundleJobs = (activeData.jobs || []) as WorkPlanJob[];
+        if (bundleJobs.length > 0) {
+          bundleJobs.forEach((j) => {
+            removeJobMutation.mutate({ planId: currentPlan.id, jobId: j.id });
+          });
+          message.success(
+            `Unscheduled ${bundleJobs.length} job${bundleJobs.length !== 1 ? 's' : ''} — returned to pool`
+          );
+        }
+        return;
+      }
+    }
+
+    // Also support dropping a bundle onto the at-risk drawer to unschedule
+    if (activeData.type === 'bundle' && over?.id === 'at-risk-drop') {
+      const bundleJobs = (activeData.jobs || []) as WorkPlanJob[];
+      if (bundleJobs.length > 0) {
+        bundleJobs.forEach((j) => {
+          removeJobMutation.mutate({ planId: currentPlan.id, jobId: j.id });
+        });
+        message.success(
+          `Unscheduled ${bundleJobs.length} job${bundleJobs.length !== 1 ? 's' : ''}`
+        );
+      }
+      return;
+    }
+
     if (!over) return;
 
     const overData = over.data.current;
