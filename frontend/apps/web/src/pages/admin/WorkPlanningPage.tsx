@@ -1484,6 +1484,31 @@ export default function WorkPlanningPage() {
       }
     }
 
+    // Case 2b: Moving an ENTIRE BUNDLE between days
+    // A bundle is a group of jobs sharing the same equipment_id rendered
+    // as one card. Dragging it moves every constituent job to the target
+    // day in one motion — faster than dragging each job individually.
+    if (activeData.type === 'bundle' && overData.type === 'day') {
+      const bundleJobs = (activeData.jobs || []) as WorkPlanJob[];
+      const targetDay = overData.day as WorkPlanDay;
+      const sourceDayId = activeData.dayId;
+
+      if (sourceDayId !== targetDay.id && bundleJobs.length > 0) {
+        // Fire a moveMutation per job. React Query will batch the query
+        // invalidations so the day columns re-render once at the end.
+        bundleJobs.forEach((job) => {
+          moveMutation.mutate({
+            planId: currentPlan.id,
+            jobId: job.id,
+            targetDayId: targetDay.id,
+          });
+        });
+        message.success(
+          `Moved ${bundleJobs.length} job${bundleJobs.length !== 1 ? 's' : ''} to ${targetDay.day_name || 'new day'}`
+        );
+      }
+    }
+
     // Case 3: Dropping employee on a job
     if (activeData.type === 'employee' && overData.type === 'job') {
       const user = activeData.user;
