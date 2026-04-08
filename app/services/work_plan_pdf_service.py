@@ -1748,8 +1748,13 @@ class WorkPlanPDF(FPDF):
         if self.get_y() > PH - 18:
             self.add_page()
 
-        # Equipment name
+        # Equipment name with latest RNR reading inline.
+        # User requested the running hours be shown right next to the
+        # equipment name in the row view so the crew sees it at a glance.
         eq_name = self._get_equipment_name(job)
+        reading = self._get_reading(job)
+        if reading and reading[0] == 'rnr' and reading[1] is not None:
+            eq_name = '%s  \u2022  %g h' % (eq_name, reading[1])
         # Description (strip equipment prefix)
         desc = self._get_description(job)
         # Team string (assignments)
