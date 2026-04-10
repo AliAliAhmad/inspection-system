@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bundle Inline Expand — Preview</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy: #001529;
+    --navy-2: #0a2540;
+    --ink: #1f2937;
+    --ink-2: #374151;
+    --muted: #6b7280;
+    --muted-2: #9ca3af;
+    --line: #e5e7eb;
+    --line-2: #f0f1f3;
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --teal: #16a085;
+    --teal-bg: #e6f7f3;
+    --red: #c0392b;
+    --red-bg: #fdecea;
+    --orange: #f39c12;
+    --orange-bg: #fff4e0;
+    --yellow: #f1c40f;
+    --yellow-bg: #fff9db;
+    --blue: #2563eb;
+    --blue-bg: #eef2ff;
+    --mech-bg: #f0f5ff;
+    --mech-bd: #d6e4ff;
+    --elec-bg: #fff7e6;
+    --elec-bd: #ffe7ba;
+    --mat-bg: #eef4ff;
+    --mat-fg: #3b5bdb;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+    --shadow-md: 0 4px 14px rgba(16, 24, 40, 0.08);
+    --shadow-lg: 0 12px 28px rgba(16, 24, 40, 0.12);
+    --radius: 8px;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text",
+      "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== App Shell ===== */
+  .app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ===== Top bar ===== */
+  .topbar {
+    background: var(--navy);
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: var(--shadow-sm);
+  }
+  .topbar .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.2px;
+  }
+  .topbar .brand .dot {
+    width: 8px; height: 8px;
+    background: #52c41a;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(82, 196, 26, 0.2);
+  }
+  .topbar .crumbs {
+    color: rgba(255,255,255,0.6);
+    font-size: 12px;
+  }
+  .topbar .user {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.85);
+  }
+  .topbar .user .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1890ff, #52c41a);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 600;
+    font-size: 11px;
+    color: #fff;
+  }
+
+  /* ===== Page header ===== */
+  .page-header {
+    padding: 20px 24px 14px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+  }
+  .page-header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--navy-2);
+    letter-spacing: -0.2px;
+  }
+  .page-header .subtitle {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ===== Toolbar ===== */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 24px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: #fff;
+    font-size: 12.5px;
+    color: var(--ink-2);
+    cursor: pointer;
+    transition: all 160ms ease-out;
+    font-family: inherit;
+  }
+  .btn:hover {
+    border-color: #a3b3c9;
+    color: var(--navy-2);
+    box-shadow: var(--shadow-sm);
+  }
+  .btn.primary {
+    background: #1677ff;
+    border-color: #1677ff;
+    color: #fff;
+  }
+  .btn.primary:hover {
+    background: #0958d9;
+    border-color: #0958d9;
+  }
+  .btn.success {
+    background: #16a085;
+    border-color: #16a085;
+    color: #fff;
+  }
+  .btn.success:hover {
+    background: #0f8066;
+    border-color: #0f8066;
+  }
+  .btn.danger {
+    color: #c0392b;
+    border-color: #f3c1ba;
+  }
+  .btn.danger:hover {
+    background: #fdecea;
+  }
+  .btn.ghost {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+  }
+  .btn.sm {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .btn.xs {
+    padding: 2px 6px;
+    font-size: 10.5px;
+    border-radius: 4px;
+  }
+
+  .week-nav {
+    display: inline-flex;
+    align-items: center;
+    background: #f6f8fb;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .week-nav .arrow {
+    padding: 6px 10px;
+    cursor: pointer;
+    color: var(--ink-2);
+    background: #fff;
+    border: none;
+    font-size: 13px;
+  }
+  .week-nav .arrow:hover { background: #eef2f8; }
+  .week-nav .label {
+    padding: 6px 14px;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--navy-2);
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    background: #fff;
+  }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #e6f4ff;
+    color: #0958d9;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px solid #91caff;
+  }
+  .status-badge .pulse {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #0958d9;
+  }
+
+  .spacer { flex: 1; }
+
+  /* ===== Planner body ===== */
+  .planner {
+    padding: 18px 24px 40px;
+    background: var(--bg);
+  }
+
+  /* 7 day columns horizontally scrollable */
+  .days-wrap {
+    overflow-x: auto;
+    padding-bottom: 12px;
+  }
+  .days {
+    display: grid;
+    grid-template-columns: repeat(7, 210px);
+    gap: 8px;
+    align-items: flex-start;
+    min-width: min-content;
+  }
+
+  .day-col {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    width: 210px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .day-head {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #fbfcfe 0%, #fff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .day-head .left {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .day-head .dow {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .day-head .date {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--navy-2);
+  }
+  .day-head .count {
+    font-size: 10.5px;
+    color: var(--muted);
+    background: #f2f4f7;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .day-col.today .day-head {
+    background: linear-gradient(180deg, #e6f4ff 0%, #fff 100%);
+  }
+  .day-col.today .day-head .date {
+    color: #1677ff;
+  }
+
+  .day-body {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* ===== Compact bundle card ===== */
+  .bundle {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 8px 10px 8px 14px;
+    cursor: pointer;
+    transition: all 160ms ease-out;
+    font-size: 12px;
+    box-shadow: var(--shadow-sm);
+  }
+  .bundle::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    border-radius: 8px 0 0 8px;
+  }
+  .bundle.pm::before { background: var(--teal); }
+  .bundle.def::before { background: var(--red); }
+  .bundle:hover {
+    border-color: #a3b3c9;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+
+  .bundle .eq-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .bundle .eq-name {
+    font-weight: 700;
+    color: var(--navy-2);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bundle .eq-id {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 3px;
+    line-height: 1.4;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .tag.pm { background: var(--teal-bg); color: var(--teal); border: 1px solid #a8e3d0; }
+  .tag.def { background: var(--red-bg); color: var(--red); border: 1px solid #f3c1ba; }
+  .tag.def-med { background: var(--orange-bg); color: var(--orange); border: 1px solid #fcd68a; }
+  .tag.def-low { background: var(--yellow-bg); color: #9a7d0a; border: 1px solid #f5e29a; }
+
+  .bundle .meta-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .bundle .meta-row .time {
+    margin-left: auto;
+    font-size: 10.5px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .bundle .team-mini {
+    font-size: 10.5px;
+    color: var(--ink-2);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+  }
+  .bundle .team-mini .emoji { font-size: 10px; }
+  .bundle .team-mini .lead { color: var(--navy-2); font-weight: 600; }
+  .bundle .team-mini .star { color: #d4a017; }
+
+  .bundle .mat-mini {
+    font-size: 10px;
+    color: var(--mat-fg);
+    background: var(--mat-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-top: 4px;
+    display: inline-block;
+    font-weight: 600;
+  }
+
+  /* ===== EXPANDED bundle ===== */
+  .bundle.expanded {
+    cursor: default;
+    border-color: #1677ff;
+    box-shadow: 0 0 0 3px rgba(22,119,255,0.1), var(--shadow-lg);
+    padding: 0;
+    background: #fff;
+  }
+  .bundle.expanded:hover {
+    transform: none;
+  }
+  .bundle.expanded::before {
+    border-radius: 8px 0 0 8px;
+  }
+
+  .exp-header {
+    padding: 10px 12px 10px 16px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    background: linear-gradient(180deg, #fafbfd 0%, #fff 100%);
+    border-radius: 8px 8px 0 0;
+    transition: background 160ms;
+  }
+  .exp-header:hover {
+    background: #f4f6fa;
+  }
+  .exp-header .eq-name {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--navy-2);
+    display: block;
+    margin-bottom: 3px;
+    line-height: 1.3;
+  }
+  .exp-header .eq-id {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  .exp-header .tags-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .exp-header .tags-row .time {
+    margin-left: auto;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .exp-header .collapse-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--line);
+    font-size: 10.5px;
+    color: #1677ff;
+    font-weight: 600;
+  }
+  .exp-header .collapse-hint .arrow-up {
+    font-size: 12px;
+  }
+
+  .exp-body {
+    padding: 10px 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Sub-team block */
+  .subteam {
+    border-radius: 7px;
+    padding: 8px;
+    border: 1px solid transparent;
+  }
+  .subteam.mech {
+    background: var(--mech-bg);
+    border-color: var(--mech-bd);
+  }
+  .subteam.elec {
+    background: var(--elec-bg);
+    border-color: var(--elec-bd);
+  }
+
+  .subteam-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .subteam-head .title {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--navy-2);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .subteam-head .title .emoji { font-size: 12px; }
+  .subteam-head .edit-team {
+    background: #fff;
+    border: 1px solid var(--line);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+    cursor: pointer;
+    transition: all 160ms;
+    white-space: nowrap;
+  }
+  .subteam-head .edit-team:hover {
+    background: #1677ff;
+    color: #fff;
+    border-color: #1677ff;
+  }
+
+  .team-line {
+    font-size: 10.5px;
+    color: var(--ink-2);
+    line-height: 1.5;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(0,0,0,0.08);
+  }
+  .team-line .label {
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .team-line .lead {
+    color: var(--navy-2);
+    font-weight: 700;
+  }
+  .team-line .star {
+    color: #d4a017;
+  }
+  .team-line .count {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  /* Job row — individual draggable item */
+  .job {
+    position: relative;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 8px 7px 22px;
+    margin-bottom: 6px;
+    transition: all 160ms ease-out;
+    cursor: default;
+  }
+  .job:last-child { margin-bottom: 0; }
+  .job:hover {
+    border-color: #1677ff;
+    box-shadow: 0 2px 10px rgba(22,119,255,0.15);
+    transform: translateY(-1px);
+  }
+
+  .job .drag {
+    position: absolute;
+    left: 4px;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted-2);
+    font-size: 13px;
+    cursor: grab;
+    user-select: none;
+    border-right: 1px dashed var(--line);
+  }
+  .job .drag:hover { color: #1677ff; }
+  .job .drag:active { cursor: grabbing; }
+
+  .job .job-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 3px;
+  }
+  .job .job-head .time {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .job .job-head .edit-icon {
+    color: var(--muted-2);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 2px;
+    transition: color 160ms;
+  }
+  .job .job-head .edit-icon:hover { color: #1677ff; }
+
+  .job .job-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--navy-2);
+    line-height: 1.35;
+    margin-bottom: 5px;
+  }
+
+  .mat-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .mat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--mat-bg);
+    color: var(--mat-fg);
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid #d6e0fb;
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  .mat-chip .qty {
+    color: var(--navy-2);
+    font-weight: 700;
+  }
+
+  .job-notes {
+    margin-top: 5px;
+    padding: 4px 6px;
+    background: #fafbfc;
+    border-left: 2px solid #d6e0fb;
+    font-size: 10px;
+    color: var(--muted);
+    font-style: italic;
+    border-radius: 2px;
+    line-height: 1.4;
+  }
+
+  /* Drag tooltip (hover example) */
+  .drag-tip-wrap {
+    position: relative;
+  }
+  .drag-tip {
+    position: absolute;
+    top: -28px;
+    left: 18px;
+    background: var(--navy-2);
+    color: #fff;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-weight: 600;
+    box-shadow: var(--shadow-md);
+    z-index: 10;
+    pointer-events: none;
+  }
+  .drag-tip::after {
+    content: "";
+    position: absolute;
+    bottom: -4px;
+    left: 10px;
+    width: 8px; height: 8px;
+    background: var(--navy-2);
+    transform: rotate(45deg);
+  }
+
+  /* Bottom actions of expanded card */
+  .add-job-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 6px;
+    background: #fff;
+    border: 1px dashed #a3b3c9;
+    border-radius: 6px;
+    color: #1677ff;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 160ms;
+    margin-top: 2px;
+  }
+  .add-job-btn:hover {
+    background: #eef6ff;
+    border-color: #1677ff;
+    border-style: solid;
+  }
+
+  .bundle-notes {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    font-size: 11px;
+    font-family: inherit;
+    color: var(--ink-2);
+    resize: vertical;
+    min-height: 40px;
+    background: #fafbfc;
+  }
+  .bundle-notes::placeholder {
+    color: var(--muted-2);
+    font-style: italic;
+  }
+  .bundle-notes:focus {
+    outline: none;
+    border-color: #1677ff;
+    background: #fff;
+  }
+
+  .exp-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .exp-actions .btn { flex: 1; justify-content: center; }
+
+  /* Empty day */
+  .empty-day {
+    text-align: center;
+    padding: 20px 10px;
+    color: var(--muted-2);
+    font-size: 11px;
+    font-style: italic;
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    margin: 6px;
+  }
+
+  /* Scrollbar */
+  .days-wrap::-webkit-scrollbar { height: 10px; }
+  .days-wrap::-webkit-scrollbar-track { background: #eef1f5; border-radius: 6px; }
+  .days-wrap::-webkit-scrollbar-thumb { background: #c6cfdc; border-radius: 6px; }
+  .days-wrap::-webkit-scrollbar-thumb:hover { background: #a3b3c9; }
+
+  /* Small screen note */
+  .scroll-hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      Inspection System
+      <span class="crumbs">· Work Planning · Week 14</span>
+    </div>
+    <div class="user">
+      <span>Ali Ahmad</span>
+      <span class="avatar">AA</span>
+    </div>
+  </header>
+
+  <!-- Page header -->
+  <div class="page-header">
+    <h1>Bundle Inline Expand — Preview</h1>
+    <div class="subtitle">Click a bundle to expand it in place. Defects can be dragged out individually.</div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="week-nav">
+      <button class="arrow" title="Previous week">‹</button>
+      <div class="label">Apr 04 — Apr 10, 2026</div>
+      <button class="arrow" title="Next week">›</button>
+    </div>
+    <div class="status-badge">
+      <span class="pulse"></span>
+      Draft · 11 bundles
+    </div>
+    <div class="spacer"></div>
+    <button class="btn">↻ Refresh</button>
+    <button class="btn primary">⚡ Generate Plan</button>
+    <button class="btn danger">⌫ Clear All</button>
+    <button class="btn success">✓ Publish</button>
+  </div>
+
+  <!-- Planner -->
+  <main class="planner">
+    <div class="days-wrap">
+      <div class="days">
+
+        <!-- ============== MONDAY ============== -->
+        <div class="day-col today">
+          <div class="day-head">
+            <div class="left">
+              <span class="dow">Monday</span>
+              <span class="date">Apr 04</span>
+            </div>
+            <span class="count">4 bundles</span>
+          </div>
+          <div class="day-body">
+
+            <!-- ===== EXPANDED BUNDLE ===== -->
+            <div class="bundle expanded pm">
+              <!-- Header -->
+              <div class="exp-header">
+                <span class="eq-name">REACH STACKER SCC-800</span>
+                <span class="eq-id">#CR-003</span>
+                <div class="tags-row">
+                  <span class="tag pm">PM</span>
+                  <span class="tag def">3 DEF</span>
+                  <span class="time">· 6h</span>
+                </div>
+                <div class="collapse-hint">
+                  <span>Click to collapse</span>
+                  <span class="arrow-up">▲</span>
+                </div>
+              </div>
+
+              <!-- Body -->
+              <div class="exp-body">
+
+                <!-- Mech sub-team -->
+                <div class="subteam mech">
+                  <div class="subteam-head">
+                    <div class="title"><span class="emoji">🔧</span> Mech Sub-Team</div>
+                    <button class="edit-team">✎ Edit Team</button>
+                  </div>
+                  <div class="team-line">
+                    <span class="label">Lead:</span>
+                    <span class="lead">Zaki <span class="star">★</span></span>
+                    + Ahmad, Mohammed
+                    <span class="count">(3 workers)</span>
+                  </div>
+
+                  <!-- Job 1: PM mech — WITH DRAG TOOLTIP EXAMPLE -->
+                  <div class="job drag-tip-wrap">
+                    <span class="drag-tip">Drag to another day</span>
+                    <span class="drag" title="Drag to another day">≡</span>
+                    <div class="job-head">
+                      <span class="tag pm">PM</span>
+                      <span class="time">4h</span>
+                      <span class="edit-icon" title="Edit job">✏️</span>
+                    </div>
+                    <div class="job-title">PM Mechanical 6000hr — Replace hydraulic filters, check wire rope</div>
+                    <div class="mat-list">
+                      <span class="mat-chip">HYD-FILTER <span class="qty">×2</span></span>
+                      <span class="mat-chip">OIL-5L <span class="qty">×3</span></span>
+                      <span class="mat-chip">WIPE-RAG <span class="qty">×5</span></span>
+                    </div>
+                    <div class="job-notes">Inspect boom bushings during teardown</div>
+                  </div>
+
+                  <!-- Job 2: Defect mech 1 -->
+                  <div class="job">
+                    <span class="drag" title="Drag to another day">≡</span>
+                    <div class="job-head">
+                      <span class="tag def-med">DEF MEDIUM</span>
+                      <span class="time">1h</span>
+                      <span class="edit-icon" title="Edit job">✏️</span>
+                    </div>
+                    <div class="job-title">Defect: Hydraulic leak detected at port 2</div>
+                    <div class="mat-list">
+                      <span class="mat-chip">SEAL-KIT <span class="qty">×1</span></span>
+                      <span class="mat-chip">OIL-5L <span class="qty">×2</span></span>
+                    </div>
+                    <div class="job-notes">Found by Inspector Ali on 04 Apr</div>
+                  </div>
+
+                  <!-- Job 3: Defect mech 2 -->
+                  <div class="job">
+                    <span class="drag" title="Drag to another day">≡</span>
+                    <div class="job-head">
+                      <span class="tag def-low">DEF LOW</span>
+                      <span class="time">1h</span>
+                      <span class="edit-icon" title="Edit job">✏️</span>
+                    </div>
+                    <div class="job-title">Defect: Worn bushing — left wheel</div>
+                    <div class="mat-list">
+                      <span class="mat-chip">BUSHING-KIT <span class="qty">×1</span></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Elec sub-team -->
+                <div class="subteam elec">
+                  <div class="subteam-head">
+                    <div class="title"><span class="emoji">⚡</span> Elec Sub-Team</div>
+                    <button class="edit-team">✎ Edit Team</button>
+                  </div>
+                  <div class="team-line">
+                    <span class="label">Lead:</span>
+                    <span class="lead">Hyder <span class="star">★</span></span>
+                    + Hussein
+                    <span class="count">(2 workers)</span>
+                  </div>
+
+                  <!-- Job 1: PM elec -->
+                  <div class="job">
+                    <span class="drag" title="Drag to another day">≡</span>
+                    <div class="job-head">
+                      <span class="tag pm">PM</span>
+                      <span class="time">2h</span>
+                      <span class="edit-icon" title="Edit job">✏️</span>
+                    </div>
+                    <div class="job-title">PM Electrical 6000hr — Test wiring, check sensors</div>
+                    <div class="mat-list">
+                      <span class="mat-chip">WIRE-CONN <span class="qty">×2</span></span>
+                      <span class="mat-chip">MULTIMETER-BAT <span class="qty">×1</span></span>
+                    </div>
+                  </div>
+
+                  <!-- Job 2: Defect elec -->
+                  <div class="job">
+                    <span class="drag" title="Drag to another day">≡</span>
+                    <div class="job-head">
+                      <span class="tag def-low">DEF LOW</span>
+                      <span class="time">0.5h</span>
+                      <span class="edit-icon" title="Edit job">✏️</span>
+                    </div>
+                    <div class="job-title">Defect: Warning light flicker</div>
+                    <div class="mat-list">
+                      <span class="mat-chip">BULB-12V <span class="qty">×1</span></span>
+                    </div>
+                    <div class="job-notes">Intermittent — replace bulb</div>
+                  </div>
+                </div>
+
+                <!-- Add Job -->
+                <button class="add-job-btn">+ Add Job to this Bundle</button>
+
+                <!-- Bundle notes -->
+                <textarea class="bundle-notes" placeholder="Bundle notes (e.g., coordinate with yard crew)..."></textarea>
+
+                <!-- Actions -->
+                <div class="exp-actions">
+                  <button class="btn primary sm">Save Changes</button>
+                  <button class="btn sm">Reset</button>
+                </div>
+              </div>
+            </div>
+            <!-- ===== END EXPANDED BUNDLE ===== -->
+
+            <!-- Compact Bundle 2 -->
+            <div class="bundle pm">
+              <div class="eq-line">
+                <span class="eq-name">ECH 12</span>
+                <span class="eq-id">#EC-012</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag pm">PM</span>
+                <span class="tag def-med">1 DEF</span>
+                <span class="time">5h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">🔧</span> Ahmad <span class="star">★</span> +2</div>
+              <div class="team-mini"><span class="emoji">⚡</span> Hyder <span class="star">★</span> +1</div>
+              <span class="mat-mini">📦 8 materials</span>
+            </div>
+
+            <!-- Compact Bundle 3 -->
+            <div class="bundle def">
+              <div class="eq-line">
+                <span class="eq-name">TRUCK 45</span>
+                <span class="eq-id">#TK-045</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag def">3 DEF</span>
+                <span class="time">3h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">🔧</span> Ali Mahmoud <span class="star">★</span> +1</div>
+              <span class="mat-mini">📦 4 materials</span>
+            </div>
+
+            <!-- Compact Bundle 4 -->
+            <div class="bundle def">
+              <div class="eq-line">
+                <span class="eq-name">FORKLIFT 22</span>
+                <span class="eq-id">#FL-022</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag def-low">1 DEF</span>
+                <span class="time">1h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">⚡</span> Zulfikar <span class="star">★</span></div>
+              <span class="mat-mini">📦 2 materials</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ============== TUESDAY ============== -->
+        <div class="day-col">
+          <div class="day-head">
+            <div class="left">
+              <span class="dow">Tuesday</span>
+              <span class="date">Apr 05</span>
+            </div>
+            <span class="count">3 bundles</span>
+          </div>
+          <div class="day-body">
+
+            <div class="bundle pm">
+              <div class="eq-line">
+                <span class="eq-name">CRANE 07</span>
+                <span class="eq-id">#CR-007</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag pm">PM</span>
+                <span class="time">4h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">🔧</span> Zaki <span class="star">★</span> +2</div>
+              <div class="team-mini"><span class="emoji">⚡</span> Hyder <span class="star">★</span></div>
+              <span class="mat-mini">📦 6 materials</span>
+            </div>
+
+            <div class="bundle def">
+              <div class="eq-line">
+                <span class="eq-name">LOADER 03</span>
+                <span class="eq-id">#LD-003</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag def">2 DEF</span>
+                <span class="time">2h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">🔧</span> Ahmad <span class="star">★</span> +1</div>
+              <span class="mat-mini">📦 3 materials</span>
+            </div>
+
+            <div class="bundle pm">
+              <div class="eq-line">
+                <span class="eq-name">GENSET G-11</span>
+                <span class="eq-id">#GN-011</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag pm">PM</span>
+                <span class="time">3h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">⚡</span> Hussein <span class="star">★</span> +1</div>
+              <span class="mat-mini">📦 5 materials</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ============== WEDNESDAY ============== -->
+        <div class="day-col">
+          <div class="day-head">
+            <div class="left">
+              <span class="dow">Wednesday</span>
+              <span class="date">Apr 06</span>
+            </div>
+            <span class="count">2 bundles</span>
+          </div>
+          <div class="day-body">
+
+            <div class="bundle pm">
+              <div class="eq-line">
+                <span class="eq-name">EXCAVATOR 14</span>
+                <span class="eq-id">#EX-014</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag pm">PM</span>
+                <span class="tag def-med">2 DEF</span>
+                <span class="time">7h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">🔧</span> Mohammed <span class="star">★</span> +2</div>
+              <div class="team-mini"><span class="emoji">⚡</span> Zulfikar <span class="star">★</span></div>
+              <span class="mat-mini">📦 9 materials</span>
+            </div>
+
+            <div class="bundle def">
+              <div class="eq-line">
+                <span class="eq-name">COMPRESSOR 05</span>
+                <span class="eq-id">#CP-005</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag def-low">1 DEF</span>
+                <span class="time">1.5h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">⚡</span> Hyder <span class="star">★</span></div>
+              <span class="mat-mini">📦 2 materials</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ============== THURSDAY ============== -->
+        <div class="day-col">
+          <div class="day-head">
+            <div class="left">
+              <span class="dow">Thursday</span>
+              <span class="date">Apr 07</span>
+            </div>
+            <span class="count">1 bundle</span>
+          </div>
+          <div class="day-body">
+
+            <div class="bundle pm">
+              <div class="eq-line">
+                <span class="eq-name">REACH STACKER 02</span>
+                <span class="eq-id">#CR-002</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag pm">PM</span>
+                <span class="time">5h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">🔧</span> Zaki <span class="star">★</span> +2</div>
+              <div class="team-mini"><span class="emoji">⚡</span> Hyder <span class="star">★</span></div>
+              <span class="mat-mini">📦 7 materials</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ============== FRIDAY ============== -->
+        <div class="day-col">
+          <div class="day-head">
+            <div class="left">
+              <span class="dow">Friday</span>
+              <span class="date">Apr 08</span>
+            </div>
+            <span class="count">0 bundles</span>
+          </div>
+          <div class="day-body">
+            <div class="empty-day">No work scheduled</div>
+          </div>
+        </div>
+
+        <!-- ============== SATURDAY ============== -->
+        <div class="day-col">
+          <div class="day-head">
+            <div class="left">
+              <span class="dow">Saturday</span>
+              <span class="date">Apr 09</span>
+            </div>
+            <span class="count">1 bundle</span>
+          </div>
+          <div class="day-body">
+
+            <div class="bundle def">
+              <div class="eq-line">
+                <span class="eq-name">TRUCK 18</span>
+                <span class="eq-id">#TK-018</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag def">4 DEF</span>
+                <span class="time">4h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">🔧</span> Ali Mahmoud <span class="star">★</span> +1</div>
+              <span class="mat-mini">📦 5 materials</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ============== SUNDAY ============== -->
+        <div class="day-col">
+          <div class="day-head">
+            <div class="left">
+              <span class="dow">Sunday</span>
+              <span class="date">Apr 10</span>
+            </div>
+            <span class="count">1 bundle</span>
+          </div>
+          <div class="day-body">
+
+            <div class="bundle pm">
+              <div class="eq-line">
+                <span class="eq-name">FORKLIFT 09</span>
+                <span class="eq-id">#FL-009</span>
+              </div>
+              <div class="meta-row">
+                <span class="tag pm">PM</span>
+                <span class="time">3h</span>
+              </div>
+              <div class="team-mini"><span class="emoji">🔧</span> Mohammed <span class="star">★</span> +1</div>
+              <span class="mat-mini">📦 4 materials</span>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="scroll-hint">← scroll horizontally to see all 7 days →</div>
+  </main>
+
+</div>
+
+<script>
+  // Minimal JS: collapse expanded bundle on header click (visual only)
+  document.querySelectorAll('.exp-header').forEach(h => {
+    h.addEventListener('click', () => {
+      const card = h.closest('.bundle.expanded');
+      if (!card) return;
+      card.style.transition = 'opacity 180ms';
+      card.style.opacity = '0.5';
+      setTimeout(() => { card.style.opacity = '1'; }, 220);
+    });
+  });
+
+  // Click compact bundle → visual feedback
+  document.querySelectorAll('.bundle:not(.expanded)').forEach(b => {
+    b.addEventListener('click', () => {
+      b.style.transition = 'transform 120ms';
+      b.style.transform = 'scale(0.98)';
+      setTimeout(() => { b.style.transform = ''; }, 140);
+    });
+  });
+</script>
+</body>
+</html>

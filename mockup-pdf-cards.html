@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Design Preview — Work Plan Card Layout</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    background: #e8e8e8;
+    color: #1a1a1a;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    padding: 32px 0;
+  }
+
+  /* ── Preview Banner ── */
+  .preview-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #fff;
+    padding: 14px 32px;
+    text-align: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  }
+  .preview-banner h1 {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .preview-banner p {
+    font-size: 12px;
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+
+  /* ── Page Container ── */
+  .page-wrapper {
+    max-width: 1200px;
+    margin: 72px auto 0;
+    padding: 0 24px;
+  }
+  .page-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 40px 0 12px;
+    padding-left: 4px;
+  }
+  .page-label:first-of-type {
+    margin-top: 20px;
+  }
+
+  /* ── A4 Landscape Page ── */
+  .page {
+    width: 100%;
+    aspect-ratio: 297 / 210;
+    background: #fff;
+    border-radius: 3px;
+    box-shadow:
+      0 1px 3px rgba(0,0,0,0.08),
+      0 4px 16px rgba(0,0,0,0.06),
+      0 12px 40px rgba(0,0,0,0.04);
+    padding: 36px 44px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Footer ── */
+  .page-footer {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 0.5px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8px;
+    color: #999;
+    letter-spacing: 0.2px;
+  }
+
+  /* ═══════════════════════════════════════════
+     COVER PAGE
+     ═══════════════════════════════════════════ */
+
+  .cover-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cover-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+  .cover-logo {
+    font-size: 10px;
+    font-weight: 700;
+    color: #1B2A4A;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .cover-logo-sub {
+    font-size: 8px;
+    font-weight: 400;
+    color: #999;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  .cover-hero {
+    text-align: center;
+    padding: 28px 0 20px;
+  }
+  .cover-hero h1 {
+    font-size: 32px;
+    font-weight: 800;
+    color: #1B2A4A;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+  .cover-hero .date-range {
+    font-size: 16px;
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 12px;
+  }
+  .cover-hero .status-badge {
+    display: inline-block;
+    background: #27AE60;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    padding: 4px 16px;
+    border-radius: 3px;
+  }
+
+  /* Stat Boxes */
+  .stat-row {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin: 24px 0 20px;
+  }
+  .stat-box {
+    flex: 1;
+    max-width: 160px;
+    border-radius: 4px;
+    padding: 14px 12px 12px;
+    text-align: center;
+    color: #fff;
+  }
+  .stat-box .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-box .stat-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    opacity: 0.9;
+  }
+  .stat-navy { background: #1B2A4A; }
+  .stat-teal { background: #16A085; }
+  .stat-red { background: #C0392B; }
+  .stat-grey { background: #7F8C8D; }
+  .stat-blue { background: #2980B9; }
+
+  /* Daily Breakdown Table */
+  .daily-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9px;
+    margin-bottom: 16px;
+  }
+  .daily-table th {
+    background: #1B2A4A;
+    color: #fff;
+    padding: 6px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .daily-table th:not(:first-child) {
+    text-align: center;
+  }
+  .daily-table td {
+    padding: 5px 10px;
+    border-bottom: 0.5px solid #eee;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .daily-table td:first-child {
+    text-align: left;
+    font-weight: 600;
+    color: #333;
+  }
+  .daily-table tr:nth-child(even) td {
+    background: #fafafa;
+  }
+  .daily-table .total-row td {
+    font-weight: 700;
+    border-top: 1.5px solid #1B2A4A;
+    background: #f5f7fa;
+  }
+
+  /* Team Roster */
+  .roster-section {
+    margin-top: auto;
+  }
+  .roster-title {
+    font-size: 9px;
+    font-weight: 700;
+    color: #1B2A4A;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+  }
+  .roster-grid {
+    display: flex;
+    gap: 24px;
+    font-size: 8.5px;
+    color: #555;
+  }
+  .roster-group strong {
+    color: #333;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .roster-group ul {
+    list-style: none;
+    margin-top: 3px;
+  }
+  .roster-group li {
+    padding: 1px 0;
+  }
+
+  /* ═══════════════════════════════════════════
+     DAY PAGE
+     ═══════════════════════════════════════════ */
+
+  .day-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Day Header */
+  .day-header {
+    background: #1B2A4A;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+  }
+  .day-header h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .day-header .day-count {
+    font-size: 10px;
+    font-weight: 500;
+    opacity: 0.8;
+  }
+
+  /* Berth Header */
+  .berth-header {
+    padding: 5px 14px;
+    border-radius: 3px;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .berth-header .berth-count {
+    font-weight: 500;
+    font-size: 9px;
+    opacity: 0.85;
+  }
+  .berth-east { background: #27AE60; }
+  .berth-west { background: #8E44AD; }
+  .berth-insp { background: #7F8C8D; }
+
+  /* Card Grid */
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  /* ═══════════════════════════════════════════
+     JOB CARD — the star of the show
+     ═══════════════════════════════════════════ */
+
+  .job-card {
+    border: 0.5px solid #d9d9d9;
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    font-size: 8px;
+    line-height: 1.35;
+    background: #fff;
+  }
+
+  /* Left color stripe */
+  .card-stripe {
+    width: 4px;
+    flex-shrink: 0;
+  }
+  .stripe-pm { background: #16A085; }
+  .stripe-def { background: #C0392B; }
+  .stripe-insp { background: #7F8C8D; }
+
+  .card-body {
+    flex: 1;
+    padding: 7px 9px 6px;
+    min-width: 0;
+  }
+
+  /* Row 1: Type + Priority + Flags */
+  .card-row1 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .type-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 2px;
+    font-size: 7.5px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 0.5px;
+    line-height: 1.6;
+  }
+  .badge-pm { background: #16A085; }
+  .badge-def { background: #C0392B; }
+  .badge-insp { background: #7F8C8D; }
+
+  .priority-indicator {
+    font-size: 8px;
+    color: #555;
+    font-weight: 600;
+  }
+  .priority-high {
+    color: #E67E22;
+  }
+  .priority-urgent {
+    color: #C0392B;
+  }
+
+  .overdue-flag {
+    font-size: 7px;
+    font-weight: 700;
+    color: #C0392B;
+    background: #FDEDEC;
+    padding: 1px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.3px;
+  }
+
+  .no-sap-flag {
+    font-size: 7px;
+    font-weight: 700;
+    color: #E67E22;
+    background: #FEF5E7;
+    padding: 1px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.3px;
+  }
+
+  /* Row 2: Equipment Name */
+  .card-equip-name {
+    font-size: 11px;
+    font-weight: 800;
+    color: #1a1a1a;
+    line-height: 1.2;
+    margin-bottom: 1px;
+    letter-spacing: -0.2px;
+  }
+  .card-equip-id {
+    font-size: 7.5px;
+    color: #888;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  /* Dividers */
+  .card-divider {
+    border: none;
+    border-top: 0.5px solid #e8e8e8;
+    margin: 4px 0;
+  }
+
+  /* Row 3: Description */
+  .card-description {
+    font-size: 8px;
+    color: #444;
+    line-height: 1.4;
+  }
+
+  /* Row 4: Team + Materials */
+  .card-details-row {
+    display: flex;
+    gap: 12px;
+  }
+  .card-detail-col {
+    flex: 1;
+    min-width: 0;
+  }
+  .detail-label {
+    font-size: 7px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 1px;
+  }
+  .detail-value {
+    font-size: 7.5px;
+    color: #333;
+    line-height: 1.4;
+  }
+  .detail-value .lead-marker {
+    color: #16A085;
+    font-weight: 700;
+  }
+
+  /* Row 5: SAP / Hours / Reading */
+  .card-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 7.5px;
+    color: #666;
+  }
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .meta-item strong {
+    color: #333;
+    font-weight: 700;
+  }
+  .meta-sep {
+    color: #ccc;
+    margin: 0 2px;
+  }
+  .sap-blank {
+    display: inline-block;
+    width: 72px;
+    border-bottom: 0.5px solid #999;
+    height: 10px;
+    vertical-align: bottom;
+  }
+
+  /* Row 6: Notes lines */
+  .card-notes {
+    margin-top: 1px;
+  }
+  .notes-label {
+    font-size: 7px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .notes-line {
+    border-bottom: 0.8px dotted #bbb;
+    height: 11px;
+    margin-top: 1px;
+  }
+
+  /* Row 7: Checkbox + Done */
+  .card-done-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+  }
+  .done-checkbox {
+    width: 14px;
+    height: 14px;
+    border: 1.2px solid #555;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .done-label {
+    font-size: 8.5px;
+    font-weight: 800;
+    color: #333;
+    letter-spacing: 0.5px;
+  }
+  .done-time {
+    font-size: 7.5px;
+    color: #888;
+    margin-left: auto;
+  }
+  .time-blank {
+    display: inline-block;
+    width: 18px;
+    border-bottom: 0.5px solid #999;
+    height: 10px;
+    vertical-align: bottom;
+    margin: 0 1px;
+  }
+
+  /* ═══════════════════════════════════════════
+     INSPECTION CARD (lighter variant)
+     ═══════════════════════════════════════════ */
+  .insp-card .card-body {
+    padding: 6px 9px;
+  }
+  .insp-card .card-equip-name {
+    font-size: 10px;
+  }
+
+  /* ═══════════════════════════════════════════
+     SIGN-OFF SECTION
+     ═══════════════════════════════════════════ */
+  .signoff-section {
+    margin-top: auto;
+    border-top: 1px solid #1B2A4A;
+    padding-top: 8px;
+    display: flex;
+    gap: 32px;
+    flex-shrink: 0;
+  }
+  .signoff-block {
+    flex: 1;
+  }
+  .signoff-label {
+    font-size: 8px;
+    font-weight: 700;
+    color: #1B2A4A;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .signoff-line {
+    border-bottom: 0.8px solid #bbb;
+    height: 18px;
+  }
+  .signoff-notes-label {
+    font-size: 7px;
+    color: #888;
+    margin-top: 4px;
+    margin-bottom: 2px;
+  }
+  .signoff-notes-line {
+    border-bottom: 0.8px dotted #bbb;
+    height: 14px;
+  }
+
+  /* ═══════════════════════════════════════════
+     PAGE 3 — continued day
+     ═══════════════════════════════════════════ */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 12px;
+  }
+  .summary-box {
+    border: 0.5px solid #d9d9d9;
+    border-radius: 4px;
+    padding: 12px 14px;
+  }
+  .summary-box h4 {
+    font-size: 10px;
+    font-weight: 700;
+    color: #1B2A4A;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .summary-list {
+    list-style: none;
+    font-size: 8.5px;
+    color: #444;
+  }
+  .summary-list li {
+    padding: 3px 0;
+    border-bottom: 0.5px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+  }
+  .summary-list li:last-child {
+    border-bottom: none;
+  }
+
+</style>
+</head>
+<body>
+
+<!-- ── Preview Banner ── -->
+<div class="preview-banner">
+  <h1>PDF Design Preview -- Card Layout</h1>
+  <p>This mockup shows how the new work plan PDF will look when printed. Each section below represents one landscape A4 page.</p>
+</div>
+
+<div class="page-wrapper">
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 1: COVER PAGE
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-label">Page 1 -- Cover</div>
+<div class="page">
+  <div class="cover-content">
+
+    <!-- Top bar -->
+    <div class="cover-top">
+      <div>
+        <div class="cover-logo">TELLHAM GROUP</div>
+        <div class="cover-logo-sub">Inspection &amp; Maintenance Division</div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 8px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">Document Ref</div>
+        <div style="font-size: 10px; font-weight: 700; color: #333;">WP-2026-W14</div>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="cover-hero">
+      <h1>WEEKLY WORK PLAN</h1>
+      <div class="date-range">1 April -- 7 April 2026</div>
+      <div class="status-badge">PUBLISHED</div>
+    </div>
+
+    <!-- Stat Boxes -->
+    <div class="stat-row">
+      <div class="stat-box stat-navy">
+        <div class="stat-value">42</div>
+        <div class="stat-label">Total Jobs</div>
+      </div>
+      <div class="stat-box stat-teal">
+        <div class="stat-value">18</div>
+        <div class="stat-label">PM Jobs</div>
+      </div>
+      <div class="stat-box stat-red">
+        <div class="stat-value">12</div>
+        <div class="stat-label">Defect Repairs</div>
+      </div>
+      <div class="stat-box stat-grey">
+        <div class="stat-value">8</div>
+        <div class="stat-label">Inspections</div>
+      </div>
+      <div class="stat-box stat-blue">
+        <div class="stat-value">156h</div>
+        <div class="stat-label">Total Hours</div>
+      </div>
+    </div>
+
+    <!-- Daily Breakdown Table -->
+    <table class="daily-table">
+      <thead>
+        <tr>
+          <th style="width: 18%;">Day</th>
+          <th>PM</th>
+          <th>DEF</th>
+          <th>INSP</th>
+          <th>Total</th>
+          <th>Est Hours</th>
+          <th style="width: 28%;">Team</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Tuesday, 1 Apr</td>
+          <td>3</td>
+          <td>2</td>
+          <td>2</td>
+          <td style="font-weight:700;">7</td>
+          <td>26h</td>
+          <td style="text-align:left; font-size:7.5px;">Ahmad K., Hassan M., Ali R., Omar S., Kareem A.</td>
+        </tr>
+        <tr>
+          <td>Wednesday, 2 Apr</td>
+          <td>3</td>
+          <td>2</td>
+          <td>1</td>
+          <td style="font-weight:700;">6</td>
+          <td>22h</td>
+          <td style="text-align:left; font-size:7.5px;">Ahmad K., Hassan M., Ali R., Yousif N.</td>
+        </tr>
+        <tr>
+          <td>Thursday, 3 Apr</td>
+          <td>2</td>
+          <td>2</td>
+          <td>1</td>
+          <td style="font-weight:700;">5</td>
+          <td>20h</td>
+          <td style="text-align:left; font-size:7.5px;">Hassan M., Omar S., Kareem A.</td>
+        </tr>
+        <tr>
+          <td>Friday, 4 Apr</td>
+          <td>1</td>
+          <td>1</td>
+          <td>1</td>
+          <td style="font-weight:700;">3</td>
+          <td>12h</td>
+          <td style="text-align:left; font-size:7.5px;">Ahmad K., Ali R.</td>
+        </tr>
+        <tr>
+          <td>Saturday, 5 Apr</td>
+          <td>3</td>
+          <td>2</td>
+          <td>1</td>
+          <td style="font-weight:700;">6</td>
+          <td>24h</td>
+          <td style="text-align:left; font-size:7.5px;">Ahmad K., Hassan M., Omar S., Yousif N.</td>
+        </tr>
+        <tr>
+          <td>Sunday, 6 Apr</td>
+          <td>4</td>
+          <td>2</td>
+          <td>1</td>
+          <td style="font-weight:700;">7</td>
+          <td>28h</td>
+          <td style="text-align:left; font-size:7.5px;">Full crew</td>
+        </tr>
+        <tr>
+          <td>Monday, 7 Apr</td>
+          <td>2</td>
+          <td>1</td>
+          <td>1</td>
+          <td style="font-weight:700;">4</td>
+          <td>16h</td>
+          <td style="text-align:left; font-size:7.5px;">Ahmad K., Hassan M., Kareem A.</td>
+        </tr>
+        <tr class="total-row">
+          <td>TOTAL</td>
+          <td>18</td>
+          <td>12</td>
+          <td>8</td>
+          <td>42</td>
+          <td>156h</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Team Roster -->
+    <div class="roster-section">
+      <div class="roster-title">Team Roster</div>
+      <div class="roster-grid">
+        <div class="roster-group">
+          <strong>Mechanical Technicians</strong>
+          <ul>
+            <li>Ahmad Khalid (Lead)</li>
+            <li>Hassan Mahmoud</li>
+            <li>Omar Saleh</li>
+            <li>Yousif Nasser</li>
+          </ul>
+        </div>
+        <div class="roster-group">
+          <strong>Electrical Technicians</strong>
+          <ul>
+            <li>Ali Rashid (Lead)</li>
+            <li>Kareem Abbas</li>
+          </ul>
+        </div>
+        <div class="roster-group">
+          <strong>Inspectors</strong>
+          <ul>
+            <li>Yousif Murtada (Mech)</li>
+            <li>Samir Hameed (Elec)</li>
+          </ul>
+        </div>
+        <div class="roster-group">
+          <strong>Supervision</strong>
+          <ul>
+            <li>Eng. Mustafa Karim (Engineer)</li>
+            <li>Mohammed Jabbar (Supervisor)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="page-footer">
+    <span>Generated 05 Apr 2026 09:00 UTC</span>
+    <span>Inspection System -- Tellham Group</span>
+    <span>Page 1</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 2: TUESDAY, 1 APRIL — JOB CARDS
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-label">Page 2 -- Day Page (Tuesday, 1 April)</div>
+<div class="page">
+  <div class="day-content">
+
+    <!-- Day Header -->
+    <div class="day-header">
+      <h2>TUESDAY, 1 APRIL 2026</h2>
+      <span class="day-count">7 jobs</span>
+    </div>
+
+    <!-- ── EAST BERTH ── -->
+    <div class="berth-header berth-east">
+      <span>EAST BERTH</span>
+      <span class="berth-count">4 jobs</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- ─── Card 1: PM, Normal ─── -->
+      <div class="job-card">
+        <div class="card-stripe stripe-pm"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-pm">PM</span>
+            <span class="priority-indicator">&#9679; Normal</span>
+          </div>
+          <div class="card-equip-name">CRAWLER CRANE SCC-800</div>
+          <div class="card-equip-id">#CR-003 &mdash; East Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            6000hr service &mdash; replace hydraulic filters, check wire rope tension, inspect boom sections
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Ahmad K.<span class="lead-marker">*</span> (lead), Hassan M., Omar S.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">HYD-FILTER-01 &times;2, WIRE-ROPE-KIT &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012345</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 4h</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>RNR:</strong> 12,450</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Card 2: DEF, High, Overdue ─── -->
+      <div class="job-card">
+        <div class="card-stripe stripe-def"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-def">DEF</span>
+            <span class="priority-indicator priority-high">&#9650; High</span>
+            <span class="overdue-flag">OVERDUE 3d</span>
+          </div>
+          <div class="card-equip-name">PUMP STATION P-101</div>
+          <div class="card-equip-id">#PM-101 &mdash; East Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Main bearing failure &mdash; excessive vibration detected during last inspection. Replace bearing assembly and realign shaft
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Ali R.<span class="lead-marker">*</span> (lead), Kareem A.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">BEARING-ASY-04 &times;1, ALIGNMENT-KIT &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012389</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 6h</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>RNR:</strong> 8,230</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Card 3: PM, Normal ─── -->
+      <div class="job-card">
+        <div class="card-stripe stripe-pm"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-pm">PM</span>
+            <span class="priority-indicator">&#9679; Normal</span>
+          </div>
+          <div class="card-equip-name">SPREADER BEAM SPR-12</div>
+          <div class="card-equip-id">#SB-012 &mdash; East Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Quarterly inspection &mdash; check twist lock mechanisms, test limit switches, inspect hydraulic lines
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Hassan M.<span class="lead-marker">*</span> (lead), Yousif N.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">TWL-PIN-SET &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012401</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 3h</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>TWL:</strong> 340</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Card 4: PM, No SAP ─── -->
+      <div class="job-card">
+        <div class="card-stripe stripe-pm"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-pm">PM</span>
+            <span class="priority-indicator">&#9679; Normal</span>
+            <span class="no-sap-flag">&#9888; NO SAP#</span>
+          </div>
+          <div class="card-equip-name">GENERATOR SET GEN-03</div>
+          <div class="card-equip-id">#GN-003 &mdash; East Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Monthly oil change and filter replacement, check coolant level
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Omar S.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">ENGINE-OIL &times;20L, OIL-FILTER &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> <span class="sap-blank"></span></span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 2h</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /card-grid -->
+
+    <!-- ── WEST BERTH ── -->
+    <div class="berth-header berth-west">
+      <span>WEST BERTH</span>
+      <span class="berth-count">2 jobs</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- ─── Card 5: DEF, West ─── -->
+      <div class="job-card">
+        <div class="card-stripe stripe-def"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-def">DEF</span>
+            <span class="priority-indicator">&#9679; Normal</span>
+          </div>
+          <div class="card-equip-name">SHORE POWER PANEL SP-W2</div>
+          <div class="card-equip-id">#SP-W2 &mdash; West Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Circuit breaker trip &mdash; investigate intermittent tripping under load
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Kareem A.<span class="lead-marker">*</span> (lead)</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">CB-MODULE &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012445</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 3h</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Card 6: PM, High, West ─── -->
+      <div class="job-card">
+        <div class="card-stripe stripe-pm"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-pm">PM</span>
+            <span class="priority-indicator priority-high">&#9650; High</span>
+          </div>
+          <div class="card-equip-name">RTG CRANE RTG-05</div>
+          <div class="card-equip-id">#RT-005 &mdash; West Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Wheel bearing replacement &mdash; vibration exceeding limits on left rear assembly
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Ahmad K.<span class="lead-marker">*</span> (lead), Ali R., Hassan M.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">WHEEL-BRG-SET &times;4, GREASE-TUBE &times;2</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012467</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 8h</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>RNR:</strong> 15,890</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /card-grid -->
+
+    <!-- ── INSPECTIONS ── -->
+    <div class="berth-header berth-insp">
+      <span>INSPECTIONS</span>
+      <span class="berth-count">1 inspection</span>
+    </div>
+
+    <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+
+      <!-- ─── Inspection Card ─── -->
+      <div class="job-card insp-card">
+        <div class="card-stripe stripe-insp"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-insp">INSP</span>
+            <span class="priority-indicator" style="color:#7F8C8D;">Day Shift</span>
+          </div>
+          <div class="card-equip-name">QUAY CRANE QC-07</div>
+          <div class="card-equip-id">#QC-007 &mdash; East Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Daily Inspection Checklist (14 items)
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Inspector (Mech)</div>
+              <div class="detail-value">Yousif M.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Inspector (Elec)</div>
+              <div class="detail-value">Samir H.</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- empty second column for grid alignment -->
+      <div></div>
+
+    </div><!-- /card-grid -->
+
+    <!-- ── Sign-off ── -->
+    <div class="signoff-section">
+      <div class="signoff-block">
+        <div class="signoff-label">Supervisor</div>
+        <div class="signoff-line"></div>
+        <div style="font-size: 7px; color: #aaa; margin-top: 2px;">Name / Signature / Date</div>
+      </div>
+      <div class="signoff-block">
+        <div class="signoff-label">Engineer</div>
+        <div class="signoff-line"></div>
+        <div style="font-size: 7px; color: #aaa; margin-top: 2px;">Name / Signature / Date</div>
+      </div>
+      <div class="signoff-block">
+        <div class="signoff-label">Day Notes</div>
+        <div class="signoff-notes-line"></div>
+        <div class="signoff-notes-line"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="page-footer">
+    <span>Generated 05 Apr 2026 09:00 UTC</span>
+    <span>Inspection System -- Tellham Group</span>
+    <span>Page 2</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     PAGE 3: WEDNESDAY, 2 APRIL (next day)
+     ═══════════════════════════════════════════════════════ -->
+<div class="page-label">Page 3 -- Day Page (Wednesday, 2 April)</div>
+<div class="page">
+  <div class="day-content">
+
+    <!-- Day Header -->
+    <div class="day-header">
+      <h2>WEDNESDAY, 2 APRIL 2026</h2>
+      <span class="day-count">6 jobs</span>
+    </div>
+
+    <!-- ── EAST BERTH ── -->
+    <div class="berth-header berth-east">
+      <span>EAST BERTH</span>
+      <span class="berth-count">3 jobs</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- Card A: PM -->
+      <div class="job-card">
+        <div class="card-stripe stripe-pm"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-pm">PM</span>
+            <span class="priority-indicator">&#9679; Normal</span>
+          </div>
+          <div class="card-equip-name">QUAY CRANE QC-03</div>
+          <div class="card-equip-id">#QC-003 &mdash; East Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Hoist wire rope inspection &mdash; measure diameter at 3 points, check for broken strands, lubricate sheaves
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Ahmad K.<span class="lead-marker">*</span> (lead), Hassan M.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">WIRE-LUBE-5L &times;1, CALIPER-SET &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012502</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 5h</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>RNR:</strong> 22,100</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card B: DEF, Urgent -->
+      <div class="job-card">
+        <div class="card-stripe stripe-def"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-def">DEF</span>
+            <span class="priority-indicator priority-urgent">&#9670; Urgent</span>
+          </div>
+          <div class="card-equip-name">FUEL TRANSFER PUMP FTP-02</div>
+          <div class="card-equip-id">#FT-002 &mdash; East Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Mechanical seal leak &mdash; fuel dripping from pump housing, environmental risk. Isolate and replace seal assembly
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Ali R.<span class="lead-marker">*</span> (lead), Omar S.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">MECH-SEAL-KIT &times;1, GASKET-SET &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012518</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 4h</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>RNR:</strong> 3,780</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card C: PM -->
+      <div class="job-card">
+        <div class="card-stripe stripe-pm"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-pm">PM</span>
+            <span class="priority-indicator">&#9679; Normal</span>
+          </div>
+          <div class="card-equip-name">AIR COMPRESSOR AC-01</div>
+          <div class="card-equip-id">#AC-001 &mdash; East Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            500hr service &mdash; replace air filter, drain moisture trap, check belt tension and pulley alignment
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Yousif N.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">AIR-FILTER-02 &times;1, V-BELT-B68 &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012530</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 2h</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>RNR:</strong> 6,540</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- empty fourth slot -->
+      <div></div>
+
+    </div><!-- /card-grid -->
+
+    <!-- ── WEST BERTH ── -->
+    <div class="berth-header berth-west">
+      <span>WEST BERTH</span>
+      <span class="berth-count">2 jobs</span>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- Card D: DEF -->
+      <div class="job-card">
+        <div class="card-stripe stripe-def"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-def">DEF</span>
+            <span class="priority-indicator priority-high">&#9650; High</span>
+          </div>
+          <div class="card-equip-name">CONVEYOR BELT CB-W3</div>
+          <div class="card-equip-id">#CB-W3 &mdash; West Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Belt tracking misalignment &mdash; belt drifting to port side under load, adjust tracking rollers and tension
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Hassan M.<span class="lead-marker">*</span> (lead), Yousif N.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">TRACKING-ROLLER &times;2</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012548</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 3h</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card E: PM -->
+      <div class="job-card">
+        <div class="card-stripe stripe-pm"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-pm">PM</span>
+            <span class="priority-indicator">&#9679; Normal</span>
+          </div>
+          <div class="card-equip-name">LIGHTING TOWER LT-W5</div>
+          <div class="card-equip-id">#LT-W5 &mdash; West Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Lamp replacement and mast hydraulic check &mdash; 2 of 4 HID lamps failed, hydraulic fluid low
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Team</div>
+              <div class="detail-value">Kareem A.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Materials</div>
+              <div class="detail-value">HID-LAMP-400W &times;2, HYD-FLUID-5L &times;1</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-meta-row">
+            <span class="meta-item"><strong>SAP:</strong> 400012556</span>
+            <span class="meta-sep">|</span>
+            <span class="meta-item"><strong>Est:</strong> 2h</span>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /card-grid -->
+
+    <!-- ── INSPECTIONS ── -->
+    <div class="berth-header berth-insp">
+      <span>INSPECTIONS</span>
+      <span class="berth-count">1 inspection</span>
+    </div>
+
+    <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+      <div class="job-card insp-card">
+        <div class="card-stripe stripe-insp"></div>
+        <div class="card-body">
+          <div class="card-row1">
+            <span class="type-badge badge-insp">INSP</span>
+            <span class="priority-indicator" style="color:#7F8C8D;">Day Shift</span>
+          </div>
+          <div class="card-equip-name">RTG CRANE RTG-05</div>
+          <div class="card-equip-id">#RT-005 &mdash; West Berth</div>
+          <hr class="card-divider">
+          <div class="card-description">
+            Pre-operation Safety Checklist (18 items)
+          </div>
+          <hr class="card-divider">
+          <div class="card-details-row">
+            <div class="card-detail-col">
+              <div class="detail-label">Inspector (Mech)</div>
+              <div class="detail-value">Yousif M.</div>
+            </div>
+            <div class="card-detail-col">
+              <div class="detail-label">Inspector (Elec)</div>
+              <div class="detail-value">Samir H.</div>
+            </div>
+          </div>
+          <hr class="card-divider">
+          <div class="card-notes">
+            <div class="notes-label">Notes</div>
+            <div class="notes-line"></div>
+          </div>
+          <div class="card-done-row">
+            <div class="done-checkbox"></div>
+            <span class="done-label">DONE</span>
+            <span class="done-time">Time: <span class="time-blank"></span>:<span class="time-blank"></span></span>
+          </div>
+        </div>
+      </div>
+      <div></div>
+    </div>
+
+    <!-- ── Sign-off ── -->
+    <div class="signoff-section">
+      <div class="signoff-block">
+        <div class="signoff-label">Supervisor</div>
+        <div class="signoff-line"></div>
+        <div style="font-size: 7px; color: #aaa; margin-top: 2px;">Name / Signature / Date</div>
+      </div>
+      <div class="signoff-block">
+        <div class="signoff-label">Engineer</div>
+        <div class="signoff-line"></div>
+        <div style="font-size: 7px; color: #aaa; margin-top: 2px;">Name / Signature / Date</div>
+      </div>
+      <div class="signoff-block">
+        <div class="signoff-label">Day Notes</div>
+        <div class="signoff-notes-line"></div>
+        <div class="signoff-notes-line"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="page-footer">
+    <span>Generated 05 Apr 2026 09:00 UTC</span>
+    <span>Inspection System -- Tellham Group</span>
+    <span>Page 3</span>
+  </div>
+</div>
+
+
+</div><!-- /page-wrapper -->
+
+</body>
+</html>

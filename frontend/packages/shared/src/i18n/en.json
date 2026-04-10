@@ -1904,5 +1904,30 @@
     "submitting": "Submitting...",
     "submitted": "Work logged successfully",
     "failed": "Failed to submit"
+  },
+  "sync": {
+    "workingOffline": "Working Offline",
+    "changesSaved": "Changes saved locally",
+    "syncing": "Syncing...",
+    "itemsRemaining": "items remaining",
+    "syncFailed": "Sync Failed",
+    "itemsFailed": "items failed",
+    "pendingChanges": "pending changes",
+    "tapToSync": "Tap to sync now",
+    "view": "View",
+    "storageCritical": "Storage Almost Full",
+    "storageWarning": "Storage Getting Full",
+    "clearCacheHint": "Go to Profile to clear cache"
+  },
+  "storage": {
+    "title": "Storage",
+    "clearCache": "Clear Cache",
+    "clearCacheDesc": "Remove offline cache, expired drafts, and orphaned files",
+    "clearConfirm": "This will clear cached data and expired drafts. Active sync items will not be affected.",
+    "clearing": "Clearing...",
+    "cleared": "Cache cleared successfully",
+    "cacheCleared": "cache entries",
+    "draftsCleared": "old drafts",
+    "filesRemoved": "orphaned files"
   }
 }

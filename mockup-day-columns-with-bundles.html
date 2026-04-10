@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work Planning — Day Columns with Bundle Cards (Preview)</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: #f5f5f5;
+    color: #1f2937;
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ============ PAGE HEADER ============ */
+  .page-header {
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 20px 32px 16px;
+  }
+  .page-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f1e3d;
+    letter-spacing: -0.2px;
+  }
+  .page-subtitle {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+  }
+
+  /* ============ TOOLBAR ============ */
+  .toolbar {
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .week-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1f2937;
+  }
+  .week-nav button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 14px;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .week-nav button:hover { color: #0f1e3d; }
+
+  .status-badge {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+  }
+
+  .toolbar-spacer { flex: 1; }
+
+  .btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #d1d5db;
+    background: white;
+    color: #374151;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+  }
+  .btn:hover {
+    border-color: #9ca3af;
+    background: #f9fafb;
+  }
+  .btn-primary {
+    background: #16A085;
+    border-color: #16A085;
+    color: white;
+  }
+  .btn-primary:hover {
+    background: #138a72;
+    border-color: #138a72;
+  }
+  .btn-danger {
+    color: #b91c1c;
+  }
+  .btn-publish {
+    background: #0f1e3d;
+    border-color: #0f1e3d;
+    color: white;
+  }
+  .btn-publish:hover {
+    background: #1e3a5f;
+    border-color: #1e3a5f;
+  }
+
+  /* ============ BERTH TABS ============ */
+  .berth-tabs {
+    background: white;
+    padding: 0 32px;
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .berth-tab {
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+  }
+  .berth-tab:hover { color: #0f1e3d; }
+  .berth-tab.active {
+    color: #16A085;
+    border-bottom-color: #16A085;
+    font-weight: 600;
+  }
+
+  /* ============ DAY COLUMNS CONTAINER ============ */
+  .columns-wrapper {
+    padding: 20px 32px 40px;
+    overflow-x: auto;
+  }
+  .columns-row {
+    display: flex;
+    gap: 8px;
+    min-width: max-content;
+  }
+
+  .day-column {
+    width: 210px;
+    flex-shrink: 0;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 240px);
+    min-height: 600px;
+  }
+
+  /* Day header (navy bar) */
+  .day-header {
+    background: #0f1e3d;
+    color: white;
+    padding: 10px 12px;
+    border-bottom: 1px solid #0a1530;
+  }
+  .day-header-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+  .day-header-meta {
+    font-size: 10px;
+    color: #9eb5d6;
+    margin-top: 2px;
+    letter-spacing: 0.2px;
+  }
+
+  /* Day body (scrollable bundles area) */
+  .day-body {
+    flex: 1;
+    padding: 8px;
+    overflow-y: auto;
+    background: #fafbfc;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .day-body::-webkit-scrollbar { width: 6px; }
+  .day-body::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+  .day-body::-webkit-scrollbar-track { background: transparent; }
+
+  /* ============ BUNDLE CARD ============ */
+  .bundle-card {
+    position: relative;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 9px 10px 9px 14px;
+    box-shadow: 0 1px 2px rgba(15, 30, 61, 0.04);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    overflow: hidden;
+  }
+  .bundle-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(15, 30, 61, 0.10);
+    border-color: #d1d5db;
+  }
+
+  /* Left stripe */
+  .bundle-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+  }
+  .bundle-card.pm::before { background: #16A085; }
+  .bundle-card.defect::before { background: #C0392B; }
+
+  /* Equipment name */
+  .bundle-equipment {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f1e3d;
+    line-height: 1.25;
+    letter-spacing: -0.1px;
+    margin-bottom: 6px;
+    padding-right: 16px;
+    word-wrap: break-word;
+  }
+
+  /* Badges row */
+  .bundle-badges {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 7px;
+  }
+  .bundle-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.4px;
+    line-height: 1;
+  }
+  .badge-pm {
+    background: #d4f0e8;
+    color: #0e6b58;
+  }
+  .badge-def {
+    background: #fde2dd;
+    color: #8a2418;
+  }
+  .bundle-hours {
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-left: 2px;
+  }
+  .bundle-hours::before {
+    content: "·";
+    margin-right: 4px;
+    color: #d1d5db;
+  }
+
+  /* Team / material lines */
+  .bundle-line {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #374151;
+    line-height: 1.5;
+    padding: 1px 0;
+  }
+  .bundle-line .icon {
+    font-size: 11px;
+    width: 13px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .bundle-line .lead {
+    font-weight: 600;
+    color: #1f2937;
+  }
+  .bundle-line .star {
+    color: #f59e0b;
+    font-size: 9px;
+    margin-left: -2px;
+  }
+  .bundle-line .plus {
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  /* Checkbox bottom-right */
+  .bundle-checkbox {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 13px;
+    height: 13px;
+    border: 1.5px solid #d1d5db;
+    border-radius: 3px;
+    background: white;
+    transition: all 0.15s ease;
+  }
+  .bundle-card:hover .bundle-checkbox {
+    border-color: #16A085;
+  }
+
+  /* Empty day state */
+  .day-empty {
+    text-align: center;
+    padding: 40px 12px;
+    color: #9ca3af;
+    font-size: 11px;
+  }
+
+  /* Hide scrollbar styling for horizontal columns */
+  .columns-wrapper::-webkit-scrollbar { height: 10px; }
+  .columns-wrapper::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 5px;
+  }
+  .columns-wrapper::-webkit-scrollbar-track { background: #f3f4f6; }
+</style>
+</head>
+<body>
+
+<!-- Page Header -->
+<div class="page-header">
+  <div class="page-title">Work Planning — Day Columns with Bundle Cards (Preview)</div>
+  <div class="page-subtitle">This is how bundle cards look inside the actual day columns</div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <div class="week-nav">
+    <button>&larr;</button>
+    <span>Apr 6 &mdash; 12, 2026</span>
+    <button>&rarr;</button>
+  </div>
+  <div class="status-badge">DRAFT</div>
+  <div class="toolbar-spacer"></div>
+  <button class="btn btn-primary">&#10024; Generate Plan</button>
+  <button class="btn btn-danger">&#128465; Clear All</button>
+  <button class="btn btn-publish">Publish</button>
+</div>
+
+<!-- Berth Tabs -->
+<div class="berth-tabs">
+  <div class="berth-tab active">&#128674; East Berth</div>
+  <div class="berth-tab">&#9875; West Berth</div>
+</div>
+
+<!-- Day Columns -->
+<div class="columns-wrapper">
+  <div class="columns-row">
+
+    <!-- ============ MONDAY ============ -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-title">Monday, 6 Apr</div>
+        <div class="day-header-meta">4 bundles &middot; 9 jobs</div>
+      </div>
+      <div class="day-body">
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">REACH STACKER SCC-800</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">3 DEF</span>
+            <span class="bundle-hours">6h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Zaki</span><span class="star">&#9733;</span> <span class="plus">+ 2</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Hyder</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>12 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">ECH 12</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">1 DEF</span>
+            <span class="bundle-hours">4h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Ahmad</span><span class="star">&#9733;</span> <span class="plus">+ 2</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Hyder</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>8 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card defect">
+          <div class="bundle-equipment">TRUCK 45</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-def">3 DEF</span>
+            <span class="bundle-hours">3h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Ali M.</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>4 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card defect">
+          <div class="bundle-equipment">FORKLIFT 22</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-def">1 DEF</span>
+            <span class="bundle-hours">2h</span>
+          </div>
+          <div class="bundle-line">&#9889; <span class="lead">Zulfikar</span><span class="star">&#9733;</span></div>
+          <div class="bundle-line">&#128230; <span>2 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ TUESDAY ============ -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-title">Tuesday, 7 Apr</div>
+        <div class="day-header-meta">3 bundles &middot; 6 jobs</div>
+      </div>
+      <div class="day-body">
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">TRUCK 50</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">2 DEF</span>
+            <span class="bundle-hours">5h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Hassan</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Mishal</span><span class="star">&#9733;</span></div>
+          <div class="bundle-line">&#128230; <span>5 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">TRUCK 51</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-hours">3h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Hassan</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>3 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card defect">
+          <div class="bundle-equipment">TRAILER 88</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-def">2 DEF</span>
+            <span class="bundle-hours">3h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Safa</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>3 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ WEDNESDAY ============ -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-title">Wednesday, 8 Apr</div>
+        <div class="day-header-meta">4 bundles &middot; 8 jobs</div>
+      </div>
+      <div class="day-body">
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">FORKLIFT 8</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">1 DEF</span>
+            <span class="bundle-hours">4h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Omar</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Zulfikar</span><span class="star">&#9733;</span></div>
+          <div class="bundle-line">&#128230; <span>4 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">FORKLIFT 11</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">2 DEF</span>
+            <span class="bundle-hours">5h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Omar</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Hyder</span><span class="star">&#9733;</span></div>
+          <div class="bundle-line">&#128230; <span>5 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">FORKLIFT 15</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-hours">3h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Omar</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>3 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card defect">
+          <div class="bundle-equipment">ECH 5</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-def">1 DEF</span>
+            <span class="bundle-hours">2h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Ali M.</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>2 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ THURSDAY ============ -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-title">Thursday, 9 Apr</div>
+        <div class="day-header-meta">2 bundles &middot; 7 jobs</div>
+      </div>
+      <div class="day-body">
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">REACH STACKER 803</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">4 DEF</span>
+            <span class="bundle-hours">7h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Zaki</span><span class="star">&#9733;</span> <span class="plus">+ 2</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Hyder</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>14 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card defect">
+          <div class="bundle-equipment">TRUCK 60</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-def">2 DEF</span>
+            <span class="bundle-hours">3h</span>
+          </div>
+          <div class="bundle-line">&#9889; <span class="lead">Zulfikar</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>3 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ FRIDAY ============ -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-title">Friday, 10 Apr</div>
+        <div class="day-header-meta">3 bundles &middot; 4 jobs</div>
+      </div>
+      <div class="day-body">
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">TRAILER 90</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-hours">3h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Hassan</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>4 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">TRAILER 91</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-hours">3h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Hassan</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>4 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">TRAILER 92</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">1 DEF</span>
+            <span class="bundle-hours">4h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Hassan</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Mishal</span><span class="star">&#9733;</span></div>
+          <div class="bundle-line">&#128230; <span>5 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ SATURDAY ============ -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-title">Saturday, 11 Apr</div>
+        <div class="day-header-meta">3 bundles &middot; 5 jobs</div>
+      </div>
+      <div class="day-body">
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">ECH 7</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">1 DEF</span>
+            <span class="bundle-hours">5h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Ahmad</span><span class="star">&#9733;</span> <span class="plus">+ 2</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Hyder</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>9 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card defect">
+          <div class="bundle-equipment">TRUCK 30</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-def">1 DEF</span>
+            <span class="bundle-hours">2h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Safa</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>2 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card defect">
+          <div class="bundle-equipment">TRUCK 35</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-def">2 DEF</span>
+            <span class="bundle-hours">3h</span>
+          </div>
+          <div class="bundle-line">&#9889; <span class="lead">Zulfikar</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>3 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ SUNDAY ============ -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-title">Sunday, 12 Apr</div>
+        <div class="day-header-meta">3 bundles &middot; 6 jobs</div>
+      </div>
+      <div class="day-body">
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">REACH STACKER 805</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-badge badge-def">2 DEF</span>
+            <span class="bundle-hours">6h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Zaki</span><span class="star">&#9733;</span> <span class="plus">+ 2</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Hyder</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>11 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card pm">
+          <div class="bundle-equipment">ECH 8</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-pm">PM</span>
+            <span class="bundle-hours">4h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Ahmad</span><span class="star">&#9733;</span> <span class="plus">+ 2</span></div>
+          <div class="bundle-line">&#9889; <span class="lead">Hyder</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>6 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+        <div class="bundle-card defect">
+          <div class="bundle-equipment">FORKLIFT 27</div>
+          <div class="bundle-badges">
+            <span class="bundle-badge badge-def">1 DEF</span>
+            <span class="bundle-hours">2h</span>
+          </div>
+          <div class="bundle-line">&#128295; <span class="lead">Ali M.</span><span class="star">&#9733;</span> <span class="plus">+ 1</span></div>
+          <div class="bundle-line">&#128230; <span>2 items</span></div>
+          <div class="bundle-checkbox"></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

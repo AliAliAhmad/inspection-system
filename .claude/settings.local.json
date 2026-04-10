@@ -173,7 +173,24 @@
       "mcp__plugin_playwright_playwright__browser_navigate",
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_take_screenshot",
-      "mcp__playwright__browser_fill_form"
+      "mcp__playwright__browser_fill_form",
+      "WebFetch(domain:erproof.com)",
+      "WebFetch(domain:community.sap.com)",
+      "WebFetch(domain:leanx.eu)",
+      "WebFetch(domain:www.testingbrain.com)",
+      "WebFetch(domain:blogs.sap.com)",
+      "Bash(git log:*)",
+      "Bash(GIT_DIR=/Users/AliAliAhmad_1_2/Desktop/inspection_system/.git GIT_WORK_TREE=/Users/AliAliAhmad_1_2/Desktop/inspection_system git log:*)",
+      "Bash(node_modules/.bin/tsc --noEmit --project apps/mobile/tsconfig.json)",
+      "Bash(/opt/homebrew/bin/tsc --noEmit --project apps/mobile/tsconfig.json)",
+      "Bash(GIT_DIR=/Users/AliAliAhmad_1_2/Desktop/inspection_system/.git GIT_WORK_TREE=/Users/AliAliAhmad_1_2/Desktop/inspection_system git diff:*)",
+      "Bash(cat .git/HEAD)",
+      "Bash(ls .git/refs/heads/)",
+      "Bash(git:*)",
+      "Bash(GIT_DIR=/Users/AliAliAhmad_1_2/Desktop/inspection_system/.git git status:*)",
+      "Bash(/usr/bin/git:*)",
+      "Bash(GIT_TRACE=1 git status)",
+      "Bash(GIT_TRACE=1 GIT_TRACE_SETUP=1 git status)"
     ]
   }
 }

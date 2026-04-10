@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Work Plan PDF — Team-Sectioned Mini Cards</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body {
+    background: #e5e7eb;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    padding: 30px 20px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ===== A4 LANDSCAPE PAGE ===== */
+  .page {
+    width: 297mm;
+    height: 210mm;
+    background: #ffffff;
+    box-shadow:
+      0 1px 2px rgba(0,0,0,0.06),
+      0 8px 24px rgba(0,0,0,0.12),
+      0 24px 64px rgba(0,0,0,0.14);
+    padding: 10mm;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ===== PAGE HEADER ===== */
+  .top-bar {
+    height: 3mm;
+    background: #0b2744;
+    color: #ffffff;
+    font-size: 6pt;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 3mm;
+    border-radius: 1mm 1mm 0 0;
+  }
+
+  .top-bar .tb-left {
+    display: flex;
+    gap: 3mm;
+    align-items: center;
+  }
+  .top-bar .badge {
+    background: #10b981;
+    color: #ffffff;
+    padding: 0.3mm 1.2mm;
+    border-radius: 0.8mm;
+    font-size: 5.5pt;
+    letter-spacing: 0.1em;
+  }
+
+  .day-header {
+    height: 10mm;
+    background: linear-gradient(90deg, #0b2744 0%, #143b6b 60%, #1e5391 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    padding: 0 4mm;
+    border-radius: 0 0 1mm 1mm;
+    margin-bottom: 3mm;
+    position: relative;
+  }
+
+  .day-header .cal-icon {
+    width: 6mm;
+    height: 6mm;
+    border-radius: 1mm;
+    background: rgba(255,255,255,0.15);
+    border: 0.3mm solid rgba(255,255,255,0.35);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 6pt;
+    font-weight: 700;
+    line-height: 1;
+    margin-right: 3mm;
+  }
+  .day-header .cal-icon .cal-top {
+    font-size: 4pt;
+    background: #ef4444;
+    color: #ffffff;
+    width: 100%;
+    text-align: center;
+    padding: 0.2mm 0;
+    border-radius: 0.5mm 0.5mm 0 0;
+    letter-spacing: 0.05em;
+  }
+  .day-header .cal-icon .cal-day {
+    font-size: 7pt;
+    padding-top: 0.4mm;
+  }
+
+  .day-header .dh-title {
+    font-size: 12pt;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  .day-header .dh-sub {
+    font-size: 8pt;
+    font-weight: 400;
+    color: #cbd5e1;
+    margin-left: 3mm;
+  }
+  .day-header .dh-right {
+    margin-left: auto;
+    display: flex;
+    gap: 2mm;
+    align-items: center;
+  }
+  .day-header .dh-stat {
+    background: rgba(255,255,255,0.08);
+    border: 0.3mm solid rgba(255,255,255,0.25);
+    padding: 1mm 2mm;
+    border-radius: 1mm;
+    font-size: 7pt;
+    font-weight: 600;
+  }
+  .day-header .dh-stat strong {
+    font-size: 9pt;
+    margin-right: 0.8mm;
+  }
+
+  /* ===== CONTENT AREA ===== */
+  .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3mm;
+    min-height: 0;
+  }
+
+  /* ===== TEAM SECTION ===== */
+  .section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .section-header {
+    height: 7mm;
+    display: flex;
+    align-items: center;
+    padding: 0 3mm;
+    border-radius: 1.2mm 1.2mm 0 0;
+    border: 0.3mm solid transparent;
+    border-bottom: none;
+  }
+
+  .section-header .sh-icon {
+    font-size: 9pt;
+    margin-right: 2mm;
+  }
+  .section-header .sh-title {
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .section-header .sh-lead {
+    font-size: 7.5pt;
+    font-weight: 500;
+    margin-left: 2mm;
+    opacity: 0.85;
+  }
+  .section-header .sh-lead .star {
+    color: #f59e0b;
+    font-size: 8pt;
+  }
+  .section-header .sh-divider {
+    width: 0.3mm;
+    height: 4mm;
+    background: currentColor;
+    opacity: 0.25;
+    margin: 0 2.5mm;
+  }
+  .section-header .sh-meta {
+    font-size: 7.5pt;
+    font-weight: 600;
+  }
+  .section-header .sh-meta strong {
+    font-size: 8.5pt;
+  }
+  .section-header .sh-right {
+    margin-left: auto;
+    display: flex;
+    gap: 1mm;
+    align-items: center;
+  }
+  .section-header .worker-pill {
+    background: rgba(255,255,255,0.7);
+    border: 0.25mm solid rgba(0,0,0,0.08);
+    padding: 0.6mm 1.6mm;
+    border-radius: 3mm;
+    font-size: 6.5pt;
+    font-weight: 500;
+    color: #334155;
+  }
+
+  /* Section color themes */
+  .section.mech-pm .section-header {
+    background: #e6f4ff;
+    color: #0b3d82;
+    border-color: #bae0ff;
+    border-left: 0.8mm solid #1677ff;
+  }
+  .section.elec-pm .section-header {
+    background: #fff7e6;
+    color: #7c2d12;
+    border-color: #ffe4b3;
+    border-left: 0.8mm solid #fa8c16;
+  }
+  .section.ac-svc .section-header {
+    background: #e6fffb;
+    color: #0e5951;
+    border-color: #b5f5ec;
+    border-left: 0.8mm solid #13c2c2;
+  }
+  .section.defect-mech .section-header {
+    background: #fff1e6;
+    color: #7a2e0e;
+    border-color: #ffd8a8;
+    border-left: 0.8mm solid #d46b08;
+  }
+  .section.defect-elec .section-header {
+    background: #fff1f0;
+    color: #7a0c14;
+    border-color: #ffccc7;
+    border-left: 0.8mm solid #cf1322;
+  }
+
+  /* ===== CARDS ROW ===== */
+  .cards-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2mm;
+    padding: 2mm;
+    background: #fafafa;
+    border: 0.3mm solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 1.2mm 1.2mm;
+  }
+
+  /* ===== MINI CARD ===== */
+  .card {
+    height: 28mm;
+    background: #ffffff;
+    border: 0.3mm solid #e2e8f0;
+    border-radius: 1.2mm;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0.3mm 0.8mm rgba(0,0,0,0.04);
+  }
+
+  .card .stripe {
+    height: 1mm;
+    width: 100%;
+  }
+  .card.pm .stripe { background: #13c2c2; }
+  .card.def .stripe { background: #ef4444; }
+  .card.ac .stripe { background: #06b6d4; }
+
+  .card-body {
+    padding: 1.8mm 2mm 1.4mm;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5mm;
+    margin-bottom: 1mm;
+  }
+
+  .card-name {
+    font-size: 8.2pt;
+    font-weight: 700;
+    color: #0b2744;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+    flex: 1;
+    min-width: 0;
+    word-wrap: break-word;
+  }
+
+  .card-pill-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6mm;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+
+  .pill {
+    font-size: 5.5pt;
+    font-weight: 700;
+    padding: 0.4mm 1.3mm;
+    border-radius: 2mm;
+    letter-spacing: 0.05em;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  .pill.pm { background: #e6fffb; color: #0e5951; border: 0.25mm solid #87e8de; }
+  .pill.ac { background: #e0f2fe; color: #075985; border: 0.25mm solid #bae6fd; }
+  .pill.def { background: #fee2e2; color: #991b1b; border: 0.25mm solid #fecaca; }
+
+  .pill.hours {
+    background: #f1f5f9;
+    color: #0f172a;
+    border: 0.25mm solid #cbd5e1;
+    font-size: 6pt;
+  }
+
+  .card-materials {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8mm;
+    margin-top: 0.5mm;
+  }
+  .mat {
+    font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
+    font-size: 5.8pt;
+    font-weight: 600;
+    background: #f8fafc;
+    color: #334155;
+    border: 0.25mm solid #e2e8f0;
+    padding: 0.3mm 1.2mm;
+    border-radius: 0.8mm;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .mat .qty {
+    color: #64748b;
+    font-weight: 500;
+  }
+
+  .card-footer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 1.5mm;
+    padding-top: 1mm;
+  }
+
+  .notes-line {
+    flex: 1;
+    font-size: 5.5pt;
+    color: #94a3b8;
+    border-bottom: 0.25mm dotted #cbd5e1;
+    padding-bottom: 0.3mm;
+    letter-spacing: 0.02em;
+  }
+
+  .check {
+    width: 3mm;
+    height: 3mm;
+    border: 0.4mm solid #0f172a;
+    border-radius: 0.5mm;
+    background: #ffffff;
+    flex-shrink: 0;
+  }
+
+  /* Compact row for sections with few cards */
+  .cards-row.compact {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .cards-row.three {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* ===== FOOTER ===== */
+  .page-footer {
+    margin-top: 2mm;
+    padding-top: 1.5mm;
+    border-top: 0.3mm solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 6.5pt;
+    color: #64748b;
+  }
+  .page-footer .ft-right {
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #475569;
+  }
+
+  /* ===== ANNOTATIONS ===== */
+  .annotations {
+    width: 297mm;
+    margin-top: 20px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 18px 22px;
+    font-size: 12px;
+    color: #334155;
+    line-height: 1.6;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .annotations h3 {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0b2744;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .annotations .ann-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .annotations .ann-col h4 {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .annotations .pros h4 { color: #059669; }
+  .annotations .cons h4 { color: #b45309; }
+  .annotations ul { list-style: none; padding: 0; }
+  .annotations li {
+    position: relative;
+    padding-left: 14px;
+    margin-bottom: 4px;
+  }
+  .annotations li::before {
+    content: "•";
+    position: absolute;
+    left: 2px;
+    color: #94a3b8;
+    font-weight: 700;
+  }
+
+  @media print {
+    body { background: #ffffff; padding: 0; }
+    .page { box-shadow: none; }
+    .annotations { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="tb-left">
+      <span>WEEKLY WORK PLAN</span>
+      <span style="opacity:0.4;">|</span>
+      <span>6 – 12 APRIL 2026</span>
+    </div>
+    <span class="badge">PUBLISHED</span>
+  </div>
+
+  <!-- DAY HEADER -->
+  <div class="day-header">
+    <div class="cal-icon">
+      <div class="cal-top">APR</div>
+      <div class="cal-day">6</div>
+    </div>
+    <div class="dh-title">MONDAY, 6 APRIL 2026</div>
+    <div class="dh-sub">· East Berth · Shift A</div>
+    <div class="dh-right">
+      <div class="dh-stat"><strong>15</strong>bundles</div>
+      <div class="dh-stat"><strong>38</strong>hours</div>
+      <div class="dh-stat"><strong>5</strong>teams</div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- SECTION 1: MECH PM TEAM -->
+    <div class="section mech-pm">
+      <div class="section-header">
+        <span class="sh-icon">&#x1F527;</span>
+        <span class="sh-title">Mech PM Team</span>
+        <span class="sh-lead">Lead: Zaki <span class="star">&#9733;</span></span>
+        <span class="sh-divider"></span>
+        <span class="sh-meta"><strong>8</strong> bundles · <strong>19h</strong></span>
+        <div class="sh-right">
+          <span class="worker-pill">Ahmad</span>
+          <span class="worker-pill">Mohammed</span>
+          <span class="worker-pill">Hussein</span>
+        </div>
+      </div>
+      <div class="cards-row">
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Reach Stacker SCC-800</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM 6000h</span>
+                <span class="pill hours">4h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">HYD-FILTER <span class="qty">×2</span></span>
+              <span class="mat">OIL-5L <span class="qty">×3</span></span>
+              <span class="mat">GREASE <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Reach Stacker 802</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM 6000h</span>
+                <span class="pill hours">4h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">HYD-FILTER <span class="qty">×2</span></span>
+              <span class="mat">OIL-5L <span class="qty">×3</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">ECH 12</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM 3-WK</span>
+                <span class="pill hours">3h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">OIL-5L <span class="qty">×2</span></span>
+              <span class="mat">FILTER <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Truck 50</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM MTH</span>
+                <span class="pill hours">2h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">OIL-5L <span class="qty">×1</span></span>
+              <span class="mat">BRAKE-PAD <span class="qty">×2</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Truck 51</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM MTH</span>
+                <span class="pill hours">2h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">OIL-5L <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Forklift 8</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM MTH</span>
+                <span class="pill hours">1.5h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">GREASE <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Forklift 11</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM MTH</span>
+                <span class="pill hours">1.5h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">GREASE <span class="qty">×1</span></span>
+              <span class="mat">FILTER <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Forklift 15</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM MTH</span>
+                <span class="pill hours">1.5h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">GREASE <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SECTION 2: ELEC PM TEAM -->
+    <div class="section elec-pm">
+      <div class="section-header">
+        <span class="sh-icon">&#9889;</span>
+        <span class="sh-title">Elec PM Team</span>
+        <span class="sh-lead">Lead: Hyder <span class="star">&#9733;</span></span>
+        <span class="sh-divider"></span>
+        <span class="sh-meta"><strong>6</strong> bundles · <strong>8.5h</strong></span>
+        <div class="sh-right">
+          <span class="worker-pill">Hussein</span>
+          <span class="worker-pill">Karim</span>
+        </div>
+      </div>
+      <div class="cards-row">
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Reach Stacker SCC-800</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM ELEC</span>
+                <span class="pill hours">2h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">WIRE-CONN <span class="qty">×2</span></span>
+              <span class="mat">BULB-12V <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Reach Stacker 802</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM ELEC</span>
+                <span class="pill hours">2h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">WIRE-CONN <span class="qty">×2</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">ECH 12</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM ELEC</span>
+                <span class="pill hours">1.5h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">BULB-12V <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Truck 50</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM ELEC</span>
+                <span class="pill hours">1h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">WIRE-CONN <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Truck 51</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM ELEC</span>
+                <span class="pill hours">1h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">WIRE-CONN <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card pm">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Forklift 11</div>
+              <div class="card-pill-group">
+                <span class="pill pm">PM ELEC</span>
+                <span class="pill hours">1h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">BULB-12V <span class="qty">×2</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SECTION 3: AC SERVICE TEAM (single card compact) -->
+    <div class="section ac-svc">
+      <div class="section-header">
+        <span class="sh-icon">&#10052;</span>
+        <span class="sh-title">AC Service Team</span>
+        <span class="sh-lead">Lead: Akram <span class="star">&#9733;</span></span>
+        <span class="sh-divider"></span>
+        <span class="sh-meta"><strong>1</strong> bundle · <strong>2h</strong></span>
+        <div class="sh-right">
+          <span class="worker-pill">Akram</span>
+        </div>
+      </div>
+      <div class="cards-row">
+
+        <div class="card ac">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">ECH 14</div>
+              <div class="card-pill-group">
+                <span class="pill ac">AC SVC</span>
+                <span class="pill hours">2h</span>
+              </div>
+            </div>
+            <div class="card-materials">
+              <span class="mat">AC-FILTER <span class="qty">×1</span></span>
+              <span class="mat">REFRIGERANT <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Placeholder empty cells to maintain grid shape -->
+        <div style="opacity:0.35; font-size:6pt; color:#94a3b8; display:flex; align-items:center; justify-content:center; border:0.3mm dashed #e2e8f0; border-radius:1.2mm;">No additional AC jobs scheduled</div>
+        <div style="visibility:hidden;"></div>
+        <div style="visibility:hidden;"></div>
+
+      </div>
+    </div>
+
+    <!-- SECTION 4: DEFECT MECH TEAM -->
+    <div class="section defect-mech">
+      <div class="section-header">
+        <span class="sh-icon">&#x1F528;</span>
+        <span class="sh-title">Defect Mech Team</span>
+        <span class="sh-lead">Lead: Ali Mahmoud <span class="star">&#9733;</span></span>
+        <span class="sh-divider"></span>
+        <span class="sh-meta"><strong>6</strong> bundles · <strong>8h</strong></span>
+        <div class="sh-right">
+          <span class="worker-pill">Safa Mahmoud</span>
+          <span class="worker-pill">Kareem</span>
+        </div>
+      </div>
+      <div class="cards-row">
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Truck 45</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">2h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Bearing failure repair</div>
+            <div class="card-materials">
+              <span class="mat">BEARING-KIT <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Truck 45</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">1h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Hydraulic seal leak</div>
+            <div class="card-materials">
+              <span class="mat">SEAL-KIT <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Truck 45</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">1h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Worn bushing</div>
+            <div class="card-materials">
+              <span class="mat">BUSHING-KIT <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Trailer 88</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">2h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Wheel hub repair</div>
+            <div class="card-materials">
+              <span class="mat">HUB-NUT <span class="qty">×4</span></span>
+              <span class="mat">GREASE <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Trailer 88</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">1h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Brake assembly</div>
+            <div class="card-materials">
+              <span class="mat">BRAKE-PAD <span class="qty">×2</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Pump P-101</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">1h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Bearing replacement</div>
+            <div class="card-materials">
+              <span class="mat">BEARING-KIT <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="visibility:hidden;"></div>
+        <div style="visibility:hidden;"></div>
+
+      </div>
+    </div>
+
+    <!-- SECTION 5: DEFECT ELEC TEAM -->
+    <div class="section defect-elec">
+      <div class="section-header">
+        <span class="sh-icon">&#9889;</span>
+        <span class="sh-title">Defect Elec Team</span>
+        <span class="sh-lead">Lead: Zulfikar <span class="star">&#9733;</span></span>
+        <span class="sh-divider"></span>
+        <span class="sh-meta"><strong>3</strong> bundles · <strong>2h</strong></span>
+        <div class="sh-right">
+          <span class="worker-pill">Zulfikar</span>
+        </div>
+      </div>
+      <div class="cards-row">
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Forklift 11</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">0.5h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Warning light</div>
+            <div class="card-materials">
+              <span class="mat">BULB-12V <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Forklift 11</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">0.5h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Battery cable</div>
+            <div class="card-materials">
+              <span class="mat">BATT-CON <span class="qty">×2</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card def">
+          <div class="stripe"></div>
+          <div class="card-body">
+            <div class="card-top">
+              <div class="card-name">Forklift 22</div>
+              <div class="card-pill-group">
+                <span class="pill def">DEF</span>
+                <span class="pill hours">1h</span>
+              </div>
+            </div>
+            <div style="font-size:6pt; color:#64748b; margin-bottom:0.8mm; font-style:italic;">Sensor failure</div>
+            <div class="card-materials">
+              <span class="mat">SENSOR-PROX <span class="qty">×1</span></span>
+            </div>
+            <div class="card-footer">
+              <div class="notes-line">notes ______________</div>
+              <div class="check"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="visibility:hidden;"></div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="page-footer">
+    <div>Generated 7 Apr 2026 09:00 UTC · Inspection System · Page 1 of 1</div>
+    <div class="ft-right">DO NOT WRITE ON THIS COPY — MASTER FOR SUPERVISORS</div>
+  </div>
+
+</div>
+
+<!-- ANNOTATIONS -->
+<div class="annotations">
+  <h3>Design Notes — Team-Sectioned Mini Cards (Hybrid)</h3>
+  <div class="ann-grid">
+    <div class="ann-col pros">
+      <h4>Pros</h4>
+      <ul>
+        <li>Team-grouped for clarity — each lead knows exactly which cards belong to them</li>
+        <li>Visual mini cards stay scannable from arm's length on a clipboard</li>
+        <li>One page per day fits 15-20 bundles comfortably in landscape A4</li>
+        <li>Color-coded sections distinguish PM vs defect work at a glance</li>
+        <li>Hours totals per team help supervisors balance workload mid-shift</li>
+        <li>Material codes in mono font remain legible even at 5.8pt</li>
+      </ul>
+    </div>
+    <div class="ann-col cons">
+      <h4>Cons / Trade-offs</h4>
+      <ul>
+        <li>Less write-in space than a pure card layout — notes line is single-line only</li>
+        <li>Spacing gets tight on very busy days (20+ bundles) — may need overflow page</li>
+        <li>Tiny sections (1-2 cards) leave visible empty grid cells unless filled</li>
+        <li>Worker-pill list in the header truncates if a team has 5+ named workers</li>
+        <li>Defect descriptions compete with material pills for vertical space</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

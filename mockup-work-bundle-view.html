@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work Plan Day View — Bundle Design Preview</title>
+<style>
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --navy: #0f1e3d;
+    --navy-soft: #1a2a4a;
+    --teal: #16a085;
+    --teal-soft: #e8f6f3;
+    --teal-deep: #0e7060;
+    --red: #c0392b;
+    --red-soft: #fbeae8;
+    --red-deep: #8e2a1e;
+    --mech: #1677ff;
+    --mech-soft: #e6f0ff;
+    --elec: #fa8c16;
+    --elec-soft: #fff2e0;
+    --gray-50: #fafbfc;
+    --gray-100: #f5f6f8;
+    --gray-200: #eaecef;
+    --gray-300: #d9dce1;
+    --gray-400: #b4b8c0;
+    --gray-500: #8a8f99;
+    --gray-600: #5e6470;
+    --gray-700: #3d424d;
+    --gray-800: #21252e;
+    --gray-900: #11141b;
+    --shadow-sm: 0 1px 2px rgba(15, 30, 61, 0.04), 0 1px 3px rgba(15, 30, 61, 0.06);
+    --shadow-md: 0 2px 4px rgba(15, 30, 61, 0.05), 0 4px 12px rgba(15, 30, 61, 0.08);
+    --shadow-lg: 0 4px 8px rgba(15, 30, 61, 0.06), 0 12px 24px rgba(15, 30, 61, 0.10);
+    --radius: 10px;
+    --radius-sm: 6px;
+    --radius-lg: 14px;
+  }
+
+  html, body {
+    background: var(--gray-100);
+    color: var(--gray-800);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  /* ============ Header ============ */
+  .page-header {
+    margin-bottom: 24px;
+  }
+
+  .page-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--gray-900);
+    letter-spacing: -0.4px;
+    margin-bottom: 6px;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+    color: var(--gray-600);
+    margin-bottom: 20px;
+  }
+
+  .top-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .view-toggle {
+    display: inline-flex;
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 4px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .view-toggle button {
+    border: none;
+    background: transparent;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-600);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+
+  .view-toggle button.active {
+    background: var(--navy);
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(15, 30, 61, 0.2);
+  }
+
+  /* ============ Legend ============ */
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 12px 18px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--gray-700);
+    font-weight: 500;
+  }
+
+  .legend-stripe {
+    width: 4px;
+    height: 18px;
+    border-radius: 2px;
+  }
+
+  .legend-stripe.teal { background: var(--teal); }
+  .legend-stripe.red { background: var(--red); }
+
+  /* ============ Day Strip ============ */
+  .day-strip {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-soft) 100%);
+    color: #fff;
+    padding: 18px 24px;
+    border-radius: var(--radius);
+    margin: 24px 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: var(--shadow-md);
+  }
+
+  .day-strip-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .day-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .day-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  .day-subtitle {
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 2px;
+  }
+
+  .day-counter {
+    background: rgba(255,255,255,0.12);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  /* ============ Bundle Card ============ */
+  .bundle {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .bundle:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .bundle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 5px;
+  }
+
+  .bundle.pm::before { background: var(--teal); }
+  .bundle.defect::before { background: var(--red); }
+
+  .bundle-header {
+    padding: 18px 22px 14px 26px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--gray-100);
+  }
+
+  .bundle-header-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .bundle-type-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+  }
+
+  .bundle-type-tag.pm {
+    background: var(--teal-soft);
+    color: var(--teal-deep);
+  }
+
+  .bundle-type-tag.defect {
+    background: var(--red-soft);
+    color: var(--red-deep);
+  }
+
+  .equipment-name {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--gray-900);
+    letter-spacing: -0.3px;
+    line-height: 1.3;
+    margin-bottom: 4px;
+  }
+
+  .equipment-location {
+    font-size: 12.5px;
+    color: var(--gray-500);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .badge.pm {
+    background: var(--teal-soft);
+    color: var(--teal-deep);
+  }
+
+  .badge.def {
+    background: var(--red-soft);
+    color: var(--red-deep);
+  }
+
+  .badge.hours {
+    background: var(--gray-100);
+    color: var(--gray-700);
+  }
+
+  /* ============ Sub-Team Blocks ============ */
+  .sub-teams {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 16px 22px 16px 26px;
+  }
+
+  .sub-teams.single {
+    grid-template-columns: 1fr;
+  }
+
+  .sub-team {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    position: relative;
+  }
+
+  .sub-team.mech {
+    background: linear-gradient(180deg, #f6faff 0%, #fafbfc 100%);
+    border-color: #d6e6ff;
+  }
+
+  .sub-team.elec {
+    background: linear-gradient(180deg, #fff9f0 0%, #fafbfc 100%);
+    border-color: #ffe2c2;
+  }
+
+  .sub-team.defect-team {
+    background: linear-gradient(180deg, #fefafa 0%, #fafbfc 100%);
+    border-color: #f5d8d3;
+  }
+
+  .sub-team-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .sub-team-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray-800);
+  }
+
+  .sub-team-title .icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+  }
+
+  .sub-team.mech .icon {
+    background: var(--mech-soft);
+    color: var(--mech);
+  }
+
+  .sub-team.elec .icon {
+    background: var(--elec-soft);
+    color: var(--elec);
+  }
+
+  .sub-team.defect-team .icon {
+    background: var(--red-soft);
+    color: var(--red);
+  }
+
+  .team-count-pill {
+    background: rgba(255,255,255,0.7);
+    border: 1px solid var(--gray-200);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-600);
+  }
+
+  .team-roster {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--gray-200);
+  }
+
+  .roster-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--gray-700);
+    margin-bottom: 4px;
+  }
+
+  .roster-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .roster-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    min-width: 56px;
+    padding-top: 1px;
+  }
+
+  .roster-value {
+    flex: 1;
+    color: var(--gray-800);
+    font-weight: 500;
+  }
+
+  .lead-star {
+    color: var(--elec);
+    font-size: 11px;
+    margin-left: 2px;
+  }
+
+  .team-stats {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 11.5px;
+    color: var(--gray-600);
+  }
+
+  .stat {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+  }
+
+  .stat-icon {
+    font-size: 12px;
+  }
+
+  .stat-value {
+    color: var(--gray-800);
+    font-weight: 600;
+  }
+
+  /* ============ Expanded job list ============ */
+  .job-list {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--gray-200);
+  }
+
+  .job-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid var(--gray-200);
+    border-radius: 7px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+
+  .job-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .job-tag {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .job-tag.pm {
+    background: var(--teal);
+    color: #fff;
+  }
+
+  .job-tag.def-low {
+    background: #fff7e6;
+    color: #d48806;
+    border: 1px solid #ffd591;
+  }
+
+  .job-tag.def-medium {
+    background: #fff1e6;
+    color: #d4380d;
+    border: 1px solid #ffbb96;
+  }
+
+  .job-tag.def-high {
+    background: var(--red-soft);
+    color: var(--red-deep);
+    border: 1px solid #f5b3a8;
+  }
+
+  .job-title {
+    flex: 1;
+    color: var(--gray-800);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .job-time {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .materials-block {
+    margin-top: 10px;
+    padding: 9px 11px;
+    background: rgba(255,255,255,0.55);
+    border: 1px dashed var(--gray-300);
+    border-radius: 7px;
+  }
+
+  .materials-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .materials-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .material-pill {
+    display: inline-flex;
+    align-items: center;
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10.5px;
+    color: var(--gray-700);
+    font-weight: 500;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  }
+
+  .material-pill .qty {
+    color: var(--mech);
+    font-weight: 700;
+    margin-left: 4px;
+  }
+
+  /* ============ Bundle action bar ============ */
+  .bundle-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 22px 14px 26px;
+    border-top: 1px solid var(--gray-100);
+    background: var(--gray-50);
+  }
+
+  .action-btn {
+    border: 1px solid var(--gray-200);
+    background: #fff;
+    color: var(--gray-700);
+    padding: 6px 13px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+  }
+
+  .action-btn:hover {
+    border-color: var(--navy);
+    color: var(--navy);
+  }
+
+  .action-btn.primary {
+    background: var(--navy);
+    color: #fff;
+    border-color: var(--navy);
+  }
+
+  .action-btn.spacer {
+    margin-left: auto;
+  }
+
+  .done-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-600);
+    padding: 6px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    background: #fff;
+  }
+
+  .checkbox-square {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--gray-400);
+    border-radius: 3px;
+    background: #fff;
+  }
+
+  /* ============ Notes ============ */
+  .notes-section {
+    margin-top: 36px;
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 22px 26px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .notes-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .notes-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .note-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 13px;
+    color: var(--gray-700);
+    line-height: 1.55;
+    padding-left: 4px;
+  }
+
+  .note-bullet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: var(--navy);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* ============ Section divider ============ */
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin: 28px 0 10px;
+    padding-left: 4px;
+  }
+
+  /* ============ Responsive ============ */
+  @media (max-width: 720px) {
+    .sub-teams {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">Work Plan Day View — Bundle Design Preview</h1>
+    <p class="page-subtitle">How equipment work bundles will look in the new view</p>
+
+    <div class="top-controls">
+      <div class="view-toggle">
+        <button class="active">Compact View</button>
+        <button>Detailed View</button>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-stripe teal"></span>
+          <span>PM Bundle — PM team works equipment + its defects</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-stripe red"></span>
+          <span>Defect Bundle — Defect team handles equipment with no PM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Day Strip -->
+  <div class="day-strip">
+    <div class="day-strip-left">
+      <div class="day-icon">📅</div>
+      <div>
+        <div class="day-title">MONDAY, 6 APRIL 2026</div>
+        <div class="day-subtitle">East Berth · Day 1 of 7</div>
+      </div>
+    </div>
+    <div class="day-counter">4 BUNDLES</div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- BUNDLE 1 — PM Bundle (Compact)                 -->
+  <!-- ============================================== -->
+  <div class="section-label">Bundle 1 · PM Bundle (Compact)</div>
+
+  <div class="bundle pm">
+    <div class="bundle-header">
+      <div class="bundle-header-left">
+        <div class="bundle-type-tag pm">★ PM Bundle</div>
+        <div class="equipment-name">REACH STACKER SCC-800</div>
+        <div class="equipment-location">📍 Asset ID: CR-003 · Yard A</div>
+      </div>
+      <div class="badges">
+        <span class="badge pm">1 PM</span>
+        <span class="badge def">3 DEF</span>
+        <span class="badge hours">⏱ 6h</span>
+      </div>
+    </div>
+
+    <div class="sub-teams">
+      <!-- Mech sub-team -->
+      <div class="sub-team mech">
+        <div class="sub-team-header">
+          <div class="sub-team-title">
+            <div class="icon">🔧</div>
+            <span>Mech Sub-Team</span>
+          </div>
+          <span class="team-count-pill">3 people</span>
+        </div>
+
+        <div class="team-roster">
+          <div class="roster-row">
+            <span class="roster-label">Lead</span>
+            <span class="roster-value">Zaki<span class="lead-star">★</span></span>
+          </div>
+          <div class="roster-row">
+            <span class="roster-label">Workers</span>
+            <span class="roster-value">Ahmad, Mohammed</span>
+          </div>
+        </div>
+
+        <div class="team-stats">
+          <span class="stat"><span class="stat-icon">📋</span> <span class="stat-value">PM Mech + 2 def</span></span>
+          <span class="stat"><span class="stat-icon">📦</span> <span class="stat-value">8 items</span></span>
+        </div>
+      </div>
+
+      <!-- Elec sub-team -->
+      <div class="sub-team elec">
+        <div class="sub-team-header">
+          <div class="sub-team-title">
+            <div class="icon">⚡</div>
+            <span>Elec Sub-Team</span>
+          </div>
+          <span class="team-count-pill">2 people</span>
+        </div>
+
+        <div class="team-roster">
+          <div class="roster-row">
+            <span class="roster-label">Lead</span>
+            <span class="roster-value">Hyder<span class="lead-star">★</span></span>
+          </div>
+          <div class="roster-row">
+            <span class="roster-label">Workers</span>
+            <span class="roster-value">Hussein</span>
+          </div>
+        </div>
+
+        <div class="team-stats">
+          <span class="stat"><span class="stat-icon">📋</span> <span class="stat-value">PM Elec + 1 def</span></span>
+          <span class="stat"><span class="stat-icon">📦</span> <span class="stat-value">4 items</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bundle-actions">
+      <button class="action-btn">▾ Expand</button>
+      <button class="action-btn">👥 Edit Team</button>
+      <button class="action-btn">📦 Materials</button>
+      <button class="action-btn">📝 Notes</button>
+      <div class="done-checkbox spacer">
+        <span class="checkbox-square"></span>
+        <span>Done</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- BUNDLE 2 — PM Bundle (Expanded)                -->
+  <!-- ============================================== -->
+  <div class="section-label">Bundle 2 · PM Bundle (Expanded / Detailed)</div>
+
+  <div class="bundle pm">
+    <div class="bundle-header">
+      <div class="bundle-header-left">
+        <div class="bundle-type-tag pm">★ PM Bundle</div>
+        <div class="equipment-name">REACH STACKER SCC-800</div>
+        <div class="equipment-location">📍 Asset ID: CR-003 · Yard A</div>
+      </div>
+      <div class="badges">
+        <span class="badge pm">1 PM</span>
+        <span class="badge def">3 DEF</span>
+        <span class="badge hours">⏱ 6h</span>
+      </div>
+    </div>
+
+    <div class="sub-teams">
+      <!-- Mech sub-team expanded -->
+      <div class="sub-team mech">
+        <div class="sub-team-header">
+          <div class="sub-team-title">
+            <div class="icon">🔧</div>
+            <span>Mech Sub-Team</span>
+          </div>
+          <span class="team-count-pill">3 people</span>
+        </div>
+
+        <div class="team-roster">
+          <div class="roster-row">
+            <span class="roster-label">Lead</span>
+            <span class="roster-value">Zaki<span class="lead-star">★</span></span>
+          </div>
+          <div class="roster-row">
+            <span class="roster-label">Workers</span>
+            <span class="roster-value">Ahmad, Mohammed</span>
+          </div>
+        </div>
+
+        <div class="job-list">
+          <div class="job-row">
+            <span class="job-tag pm">PM</span>
+            <span class="job-title">PM Mechanical 6000hr — Replace hydraulic filters</span>
+            <span class="job-time">4h</span>
+          </div>
+          <div class="job-row">
+            <span class="job-tag def-medium">DEF MED</span>
+            <span class="job-title">Defect: Hydraulic leak detected</span>
+            <span class="job-time">1h</span>
+          </div>
+          <div class="job-row">
+            <span class="job-tag def-low">DEF LOW</span>
+            <span class="job-title">Defect: Worn bushing</span>
+            <span class="job-time">1h</span>
+          </div>
+        </div>
+
+        <div class="materials-block">
+          <div class="materials-label">📦 Materials</div>
+          <div class="materials-list">
+            <span class="material-pill">HYD-FILTER<span class="qty">×2</span></span>
+            <span class="material-pill">BUSHING-KIT<span class="qty">×1</span></span>
+            <span class="material-pill">OIL-5L<span class="qty">×3</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Elec sub-team expanded -->
+      <div class="sub-team elec">
+        <div class="sub-team-header">
+          <div class="sub-team-title">
+            <div class="icon">⚡</div>
+            <span>Elec Sub-Team</span>
+          </div>
+          <span class="team-count-pill">2 people</span>
+        </div>
+
+        <div class="team-roster">
+          <div class="roster-row">
+            <span class="roster-label">Lead</span>
+            <span class="roster-value">Hyder<span class="lead-star">★</span></span>
+          </div>
+          <div class="roster-row">
+            <span class="roster-label">Workers</span>
+            <span class="roster-value">Hussein</span>
+          </div>
+        </div>
+
+        <div class="job-list">
+          <div class="job-row">
+            <span class="job-tag pm">PM</span>
+            <span class="job-title">PM Electrical 6000hr — Test wiring</span>
+            <span class="job-time">2h</span>
+          </div>
+          <div class="job-row">
+            <span class="job-tag def-low">DEF LOW</span>
+            <span class="job-title">Defect: Warning light flicker</span>
+            <span class="job-time">0.5h</span>
+          </div>
+        </div>
+
+        <div class="materials-block">
+          <div class="materials-label">📦 Materials</div>
+          <div class="materials-list">
+            <span class="material-pill">WIRE-CONN<span class="qty">×2</span></span>
+            <span class="material-pill">BULB-12V<span class="qty">×1</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bundle-actions">
+      <button class="action-btn primary">▴ Collapse</button>
+      <button class="action-btn">👥 Edit Team</button>
+      <button class="action-btn">📦 Materials</button>
+      <button class="action-btn">📝 Notes</button>
+      <div class="done-checkbox spacer">
+        <span class="checkbox-square"></span>
+        <span>Done</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- BUNDLE 3 — Defect-Only Single Team             -->
+  <!-- ============================================== -->
+  <div class="section-label">Bundle 3 · Defect-Only Bundle (Single Team)</div>
+
+  <div class="bundle defect">
+    <div class="bundle-header">
+      <div class="bundle-header-left">
+        <div class="bundle-type-tag defect">▲ Defect Bundle</div>
+        <div class="equipment-name">TRUCK 45</div>
+        <div class="equipment-location">📍 Asset ID: TR-045 · Fleet Pool</div>
+      </div>
+      <div class="badges">
+        <span class="badge def">3 DEF</span>
+        <span class="badge hours">⏱ 3h</span>
+      </div>
+    </div>
+
+    <div class="sub-teams single">
+      <div class="sub-team defect-team">
+        <div class="sub-team-header">
+          <div class="sub-team-title">
+            <div class="icon">🔧</div>
+            <span>Defect Team</span>
+          </div>
+          <span class="team-count-pill">2 people</span>
+        </div>
+
+        <div class="team-roster">
+          <div class="roster-row">
+            <span class="roster-label">Lead</span>
+            <span class="roster-value">Ali Mahmoud<span class="lead-star">★</span></span>
+          </div>
+          <div class="roster-row">
+            <span class="roster-label">Workers</span>
+            <span class="roster-value">Safa Mahmoud</span>
+          </div>
+        </div>
+
+        <div class="team-stats">
+          <span class="stat"><span class="stat-icon">📋</span> <span class="stat-value">3 defects (2 mech + 1 elec)</span></span>
+          <span class="stat"><span class="stat-icon">📦</span> <span class="stat-value">4 items</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bundle-actions">
+      <button class="action-btn">▾ Expand</button>
+      <button class="action-btn">👥 Edit Team</button>
+      <button class="action-btn">📦 Materials</button>
+      <button class="action-btn">📝 Notes</button>
+      <div class="done-checkbox spacer">
+        <span class="checkbox-square"></span>
+        <span>Done</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- BUNDLE 4 — Defect-Only Both Teams              -->
+  <!-- ============================================== -->
+  <div class="section-label">Bundle 4 · Defect-Only Bundle (Both Teams)</div>
+
+  <div class="bundle defect">
+    <div class="bundle-header">
+      <div class="bundle-header-left">
+        <div class="bundle-type-tag defect">▲ Defect Bundle</div>
+        <div class="equipment-name">ECH 12</div>
+        <div class="equipment-location">📍 Asset ID: EH-012 · Quay 3</div>
+      </div>
+      <div class="badges">
+        <span class="badge def">4 DEF</span>
+        <span class="badge hours">⏱ 4h</span>
+      </div>
+    </div>
+
+    <div class="sub-teams">
+      <!-- Defect Mech -->
+      <div class="sub-team mech">
+        <div class="sub-team-header">
+          <div class="sub-team-title">
+            <div class="icon">🔧</div>
+            <span>Defect Mech Team</span>
+          </div>
+          <span class="team-count-pill">2 people</span>
+        </div>
+
+        <div class="team-roster">
+          <div class="roster-row">
+            <span class="roster-label">Lead</span>
+            <span class="roster-value">Ali Mahmoud<span class="lead-star">★</span></span>
+          </div>
+          <div class="roster-row">
+            <span class="roster-label">Workers</span>
+            <span class="roster-value">Safa Mahmoud</span>
+          </div>
+        </div>
+
+        <div class="team-stats">
+          <span class="stat"><span class="stat-icon">📋</span> <span class="stat-value">2 defects</span></span>
+          <span class="stat"><span class="stat-icon">📦</span> <span class="stat-value">3 items</span></span>
+        </div>
+      </div>
+
+      <!-- Defect Elec -->
+      <div class="sub-team elec">
+        <div class="sub-team-header">
+          <div class="sub-team-title">
+            <div class="icon">⚡</div>
+            <span>Defect Elec Team</span>
+          </div>
+          <span class="team-count-pill">2 people</span>
+        </div>
+
+        <div class="team-roster">
+          <div class="roster-row">
+            <span class="roster-label">Lead</span>
+            <span class="roster-value">Zulfikar<span class="lead-star">★</span></span>
+          </div>
+          <div class="roster-row">
+            <span class="roster-label">Workers</span>
+            <span class="roster-value">Karrar</span>
+          </div>
+        </div>
+
+        <div class="team-stats">
+          <span class="stat"><span class="stat-icon">📋</span> <span class="stat-value">2 defects</span></span>
+          <span class="stat"><span class="stat-icon">📦</span> <span class="stat-value">2 items</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bundle-actions">
+      <button class="action-btn">▾ Expand</button>
+      <button class="action-btn">👥 Edit Team</button>
+      <button class="action-btn">📦 Materials</button>
+      <button class="action-btn">📝 Notes</button>
+      <div class="done-checkbox spacer">
+        <span class="checkbox-square"></span>
+        <span>Done</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Annotation Notes ============ -->
+  <div class="notes-section">
+    <div class="notes-title">📐 Design Notes</div>
+    <ul class="notes-list">
+      <li class="note-item">
+        <span class="note-bullet">1</span>
+        <span>Within a <strong>PM bundle</strong>, mechanical and electrical work splits between sub-teams — they work in parallel on the same equipment, each lead managing their own roster, jobs, and materials.</span>
+      </li>
+      <li class="note-item">
+        <span class="note-bullet">2</span>
+        <span>All <strong>defects</strong> on an equipment that has a PM scheduled get bundled with the PM. The same PM team handles both, with mech defects routed to the Mech sub-team and elec defects routed to the Elec sub-team.</span>
+      </li>
+      <li class="note-item">
+        <span class="note-bullet">3</span>
+        <span>Equipment with <strong>no PM but defects</strong> → handled by the separate <strong>Defect Team</strong> in a Defect Bundle. If both mech and elec defects exist, the Defect Team also splits into Mech and Elec sub-teams.</span>
+      </li>
+    </ul>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -9,7 +9,7 @@ import {
   syncPendingMutations,
   getPendingCount as getMutationPendingCount,
 } from '../utils/offline-mutations';
-import { runStorageCleanup } from '../storage/storage-cleanup';
+import { runStorageCleanup, checkStorageHealth, type StorageHealth } from '../storage/storage-cleanup';
 
 export interface SyncDetails {
   operations: number;
@@ -37,6 +37,8 @@ interface OfflineContextValue {
   pendingDetails: SyncDetails | null;
   pendingItems: SyncItem[];
   lastSyncAt: string | null;
+  storageHealth: StorageHealth;
+  storageWarning: string | null;
   triggerSync: () => Promise<void>;
   retryItem: (id: string, isMedia: boolean) => Promise<void>;
   retryAllFailed: () => Promise<void>;
@@ -60,6 +62,8 @@ const OfflineContext = createContext<OfflineContextValue>({
   pendingDetails: null,
   pendingItems: [],
   lastSyncAt: null,
+  storageHealth: 'healthy',
+  storageWarning: null,
   triggerSync: async () => {},
   retryItem: async () => {},
   retryAllFailed: async () => {},
@@ -75,6 +79,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   const [pendingDetails, setPendingDetails] = useState<SyncDetails | null>(null);
   const [pendingItems, setPendingItems] = useState<SyncItem[]>([]);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [storageHealth, setStorageHealth] = useState<StorageHealth>('healthy');
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const syncInProgress = useRef(false);
   const wasOffline = useRef(false);
@@ -135,7 +141,13 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshPendingItems();
     // Cleanup stale cache/drafts/queues in the background (non-blocking)
-    runStorageCleanup().catch(() => {});
+    runStorageCleanup()
+      .then(() => checkStorageHealth())
+      .then((result) => {
+        setStorageHealth(result.health);
+        setStorageWarning(result.message || null);
+      })
+      .catch(() => {});
   }, [refreshPendingItems]);
 
   // Monitor network status
@@ -322,6 +334,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       pendingDetails,
       pendingItems,
       lastSyncAt,
+      storageHealth,
+      storageWarning,
       triggerSync,
       retryItem,
       retryAllFailed,
@@ -336,6 +350,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
       pendingDetails,
       pendingItems,
       lastSyncAt,
+      storageHealth,
+      storageWarning,
       triggerSync,
       retryItem,
       retryAllFailed,

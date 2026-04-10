@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Plan Generator — Design Preview</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+    background: #f0f2f5;
+    color: #262626;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Design Preview Banner ── */
+  .preview-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 20px 32px;
+    text-align: center;
+  }
+  .preview-banner h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+  }
+  .preview-banner p {
+    font-size: 13px;
+    opacity: 0.85;
+  }
+
+  /* ── Section Labels ── */
+  .section-label {
+    background: #fff;
+    border-left: 4px solid #667eea;
+    padding: 12px 20px;
+    margin: 24px 0 16px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #434343;
+    letter-spacing: -0.2px;
+  }
+  .section-label span {
+    font-size: 12px;
+    font-weight: 400;
+    color: #8c8c8c;
+    display: block;
+    margin-top: 2px;
+  }
+
+  /* ── App Shell ── */
+  .app-shell {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+  .app-header {
+    background: #001529;
+    padding: 0 24px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #fff;
+    border-radius: 0 0 8px 8px;
+  }
+  .app-header .logo {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .app-header .nav-items {
+    display: flex;
+    gap: 20px;
+    font-size: 13px;
+    opacity: 0.7;
+  }
+  .app-header .nav-items .active { opacity: 1; font-weight: 600; }
+  .app-header .user-info {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .app-header .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #1677ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    background: #fff;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #f0f0f0;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .week-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .week-label {
+    font-size: 13px;
+    font-weight: 600;
+    min-width: 170px;
+    text-align: center;
+    color: #262626;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    background: #fff;
+    color: #434343;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    height: 32px;
+    line-height: 1;
+  }
+  .btn:hover { border-color: #1677ff; color: #1677ff; }
+  .btn:active { transform: scale(0.97); }
+  .btn-sm { padding: 2px 8px; height: 26px; font-size: 12px; }
+  .btn-primary {
+    background: #1677ff;
+    border-color: #1677ff;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #4096ff; border-color: #4096ff; color: #fff; }
+  .btn-generate {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    padding: 5px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-generate:hover {
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);
+    transform: translateY(-1px);
+  }
+  .btn-generate::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+    animation: shimmer 3s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  .btn-success {
+    background: #52c41a;
+    border-color: #52c41a;
+    color: #fff;
+  }
+  .btn-success:hover { background: #73d13d; border-color: #73d13d; color: #fff; }
+  .btn-danger {
+    border-color: #ff4d4f;
+    color: #ff4d4f;
+  }
+  .btn-danger:hover { background: #fff1f0; }
+  .btn-ghost {
+    border: none;
+    background: transparent;
+    color: #8c8c8c;
+    padding: 4px 8px;
+  }
+  .btn-ghost:hover { color: #434343; background: #f5f5f5; }
+  .btn-icon-only {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+  .btn-icon-only.btn-sm {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* ── View Toggle ── */
+  .view-toggle {
+    display: flex;
+    background: #f5f5f5;
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .view-toggle .vt-btn {
+    padding: 3px 10px;
+    font-size: 12px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: #8c8c8c;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .view-toggle .vt-btn.active {
+    background: #fff;
+    color: #262626;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  /* ── Berth Tabs ── */
+  .berth-tabs {
+    display: flex;
+    border-bottom: 2px solid #f0f0f0;
+    background: #fff;
+    padding: 0 20px;
+  }
+  .berth-tab {
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    color: #8c8c8c;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+  }
+  .berth-tab:hover { color: #434343; }
+  .berth-tab.active {
+    color: #1677ff;
+    border-bottom-color: #1677ff;
+  }
+
+  /* ── AI Summary Card ── */
+  .ai-summary {
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: all 0.4s ease;
+    pointer-events: none;
+  }
+  .ai-summary.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .ai-summary-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+  }
+  .ai-summary-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .ai-summary-stats {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .ai-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .ai-stat .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .ai-stat .dot-green { background: #52c41a; }
+  .ai-stat .dot-amber { background: #faad14; }
+  .ai-stat .dot-red { background: #ff4d4f; }
+  .ai-stat .dot-blue { background: #1677ff; }
+  .ai-stat-value { font-weight: 600; color: #262626; }
+  .ai-stat-label { color: #8c8c8c; }
+  .ai-summary-right {
+    font-size: 12px;
+    color: #8c8c8c;
+    text-align: right;
+    flex-shrink: 0;
+    direction: rtl;
+    font-family: 'Segoe UI', 'Noto Sans Arabic', sans-serif;
+  }
+  .ai-score {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f6ffed;
+    border: 1px solid #b7eb8f;
+    border-radius: 20px;
+    padding: 4px 14px 4px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #389e0d;
+  }
+  .ai-score svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* ── Day Columns ── */
+  .day-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    padding: 0 20px;
+    flex: 1;
+    overflow-y: auto;
+    background: #fafafa;
+  }
+  .day-column {
+    border-right: 1px solid #f0f0f0;
+    min-height: 400px;
+  }
+  .day-column:last-child { border-right: none; }
+  .day-header {
+    padding: 8px 12px;
+    background: #fafafa;
+    border-bottom: 1px solid #f0f0f0;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .day-header-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #434343;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .day-header-date {
+    font-size: 11px;
+    color: #8c8c8c;
+  }
+  .day-header-hours {
+    font-size: 10px;
+    color: #8c8c8c;
+    margin-top: 2px;
+  }
+  .day-body {
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* ── Job Cards ── */
+  .job-card {
+    background: #fff;
+    border-radius: 6px;
+    padding: 8px 12px;
+    border-left: 4px solid #91d5ff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    position: relative;
+  }
+  .job-card:hover {
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+  }
+  .job-card.priority-high { border-left-color: #ffc53d; background: #fffbe6; }
+  .job-card.priority-critical { border-left-color: #ff4d4f; background: #fff1f0; }
+  .job-card.priority-normal { border-left-color: #91d5ff; background: #e6f7ff; }
+  .job-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .job-card-emoji { font-size: 14px; }
+  .job-card-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #262626;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .job-card-hours {
+    font-size: 11px;
+    color: #8c8c8c;
+    font-weight: 500;
+  }
+  .job-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .job-card-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+  .tag-pm { background: #e6f7ff; color: #1890ff; }
+  .tag-defect { background: #fff1f0; color: #ff4d4f; }
+  .tag-inspection { background: #f9f0ff; color: #722ed1; }
+  .tag-east { background: #f6ffed; color: #389e0d; }
+  .tag-west { background: #fff7e6; color: #d48806; }
+  .job-card-worker {
+    font-size: 11px;
+    color: #595959;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ── Confidence Badge ── */
+  .confidence-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: help;
+    transition: transform 0.15s;
+    z-index: 2;
+  }
+  .confidence-badge:hover {
+    transform: scale(1.5);
+  }
+  .confidence-green { background: #52c41a; box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2); }
+  .confidence-amber { background: #faad14; box-shadow: 0 0 0 2px rgba(250, 173, 20, 0.2); }
+  .confidence-red { background: #ff4d4f; box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2); }
+
+  /* ── Individual Accept/Reject ── */
+  .job-card-actions {
+    display: flex;
+    gap: 4px;
+    position: absolute;
+    bottom: 6px;
+    right: 8px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .job-card:hover .job-card-actions { opacity: 1; }
+  .job-action-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    border: 1px solid #d9d9d9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 11px;
+    background: #fff;
+    transition: all 0.15s;
+  }
+  .job-action-accept:hover { background: #f6ffed; border-color: #52c41a; color: #52c41a; }
+  .job-action-reject:hover { background: #fff1f0; border-color: #ff4d4f; color: #ff4d4f; }
+
+  /* ── Tooltip ── */
+  .tooltip-container {
+    position: relative;
+    display: inline-flex;
+  }
+  .tooltip-content {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #262626;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: nowrap;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    pointer-events: none;
+  }
+  .tooltip-content::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #262626;
+  }
+  .tooltip-container:hover .tooltip-content { display: block; }
+
+  /* ── Sticky Action Bar ── */
+  .action-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid #e8e8e8;
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+    z-index: 50;
+    opacity: 0;
+    transform: translateY(100%);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .action-bar.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .action-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .action-bar-right {
+    font-size: 12px;
+    color: #8c8c8c;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .action-bar-right .pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #52c41a;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+  .modal-overlay.open {
+    display: flex;
+    opacity: 1;
+  }
+  .modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 520px;
+    max-width: 95vw;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-overlay.open .modal {
+    transform: scale(1) translateY(0);
+  }
+  .modal-header {
+    padding: 20px 24px 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #262626;
+    letter-spacing: -0.3px;
+  }
+  .modal-subtitle {
+    font-size: 13px;
+    color: #8c8c8c;
+    margin-top: 2px;
+    font-family: 'Segoe UI', 'Noto Sans Arabic', sans-serif;
+    direction: rtl;
+  }
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: #f5f5f5;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #8c8c8c;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .modal-close:hover { background: #e8e8e8; color: #434343; }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  /* ── Toggle Row ── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-label {
+    display: flex;
+    flex-direction: column;
+  }
+  .toggle-label-primary {
+    font-size: 13px;
+    font-weight: 500;
+    color: #262626;
+  }
+  .toggle-label-secondary {
+    font-size: 11px;
+    color: #8c8c8c;
+    margin-top: 1px;
+    font-family: 'Segoe UI', 'Noto Sans Arabic', sans-serif;
+    direction: rtl;
+    text-align: right;
+  }
+  .toggle-switch {
+    width: 36px;
+    height: 20px;
+    background: #d9d9d9;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle-switch.on { background: #1677ff; }
+  .toggle-switch::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    top: 2px;
+    left: 2px;
+    transition: left 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .toggle-switch.on::after { left: 18px; }
+
+  /* ── Slider ── */
+  .slider-row {
+    padding: 14px 0 6px;
+  }
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .slider-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #262626;
+  }
+  .slider-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1677ff;
+    letter-spacing: -0.5px;
+  }
+  .slider-track {
+    width: 100%;
+    height: 6px;
+    background: #f0f0f0;
+    border-radius: 3px;
+    position: relative;
+    cursor: pointer;
+  }
+  .slider-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1677ff, #667eea);
+    border-radius: 3px;
+    transition: width 0.15s;
+  }
+  .slider-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #1677ff;
+    position: absolute;
+    top: -6px;
+    transform: translateX(-50%);
+    cursor: grab;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    transition: left 0.15s;
+  }
+  .slider-marks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #bfbfbf;
+  }
+
+  /* ── Loading Animation ── */
+  .loading-overlay {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+    gap: 20px;
+  }
+  .loading-overlay.visible { display: flex; }
+  .loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid #f0f0f0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+    width: 100%;
+    max-width: 300px;
+  }
+  .loading-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #8c8c8c;
+    transition: color 0.3s;
+  }
+  .loading-step.active { color: #262626; font-weight: 500; }
+  .loading-step.done { color: #52c41a; }
+  .loading-step-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    background: #f5f5f5;
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+  .loading-step.active .loading-step-icon { background: #e6f4ff; color: #1677ff; }
+  .loading-step.done .loading-step-icon { background: #f6ffed; color: #52c41a; }
+  .loading-progress {
+    width: 100%;
+    max-width: 300px;
+    height: 3px;
+    background: #f0f0f0;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .loading-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.5s ease;
+  }
+
+  /* ── Capacity Breakdown in Modal ── */
+  .option-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #8c8c8c;
+    font-weight: 600;
+    margin: 16px 0 8px;
+  }
+  .option-divider {
+    height: 1px;
+    background: #f0f0f0;
+    margin: 12px 0;
+  }
+
+  /* ── Mobile Section ── */
+  .mobile-frame {
+    width: 375px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    border: 8px solid #1a1a1a;
+  }
+  .mobile-status-bar {
+    background: #001529;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    font-size: 10px;
+    color: #fff;
+    font-weight: 600;
+  }
+  .mobile-header {
+    background: #001529;
+    padding: 8px 16px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #fff;
+  }
+  .mobile-header-title {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .mobile-summary-banner {
+    background: linear-gradient(135deg, rgba(102,126,234,0.04), rgba(118,75,162,0.06));
+    border-bottom: 1px solid #e8e8e8;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .mobile-summary-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .mobile-summary-text {
+    flex: 1;
+    font-size: 12px;
+    color: #434343;
+    line-height: 1.4;
+  }
+  .mobile-summary-score {
+    font-size: 18px;
+    font-weight: 700;
+    color: #389e0d;
+  }
+  .mobile-day-section {
+    padding: 12px 16px 0;
+  }
+  .mobile-day-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8c8c8c;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .mobile-job-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border-left: 4px solid #52c41a;
+    position: relative;
+  }
+  .mobile-job-card.confidence-amber-border { border-left-color: #faad14; }
+  .mobile-job-card.confidence-red-border { border-left-color: #ff4d4f; }
+  .mobile-job-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .mobile-job-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #262626;
+    flex: 1;
+  }
+  .mobile-job-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .mobile-fab {
+    position: absolute;
+    bottom: 80px;
+    right: 20px;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 20px rgba(102,126,234,0.4);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .mobile-fab:hover {
+    transform: scale(1.08);
+    box-shadow: 0 8px 28px rgba(102,126,234,0.5);
+  }
+  .mobile-action-bar {
+    background: #fff;
+    border-top: 1px solid #e8e8e8;
+    padding: 10px 16px;
+    display: flex;
+    gap: 8px;
+  }
+  .mobile-action-bar .btn { flex: 1; justify-content: center; font-size: 12px; height: 38px; }
+  .mobile-body {
+    background: #f5f5f5;
+    min-height: 500px;
+    position: relative;
+    overflow-y: auto;
+    padding-bottom: 60px;
+  }
+
+  /* ── Utility ── */
+  .pb-80 { padding-bottom: 80px; }
+  .badge-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 0 5px;
+  }
+  .badge-green { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+  .badge-amber { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
+  .badge-red { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
+
+  /* ── Legend ── */
+  .legend {
+    background: #fff;
+    border: 1px solid #f0f0f0;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin: 0 20px 12px;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    font-size: 12px;
+    color: #595959;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- DESIGN PREVIEW BANNER                              -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="preview-banner">
+  <h1>Smart Plan Generator &mdash; Design Preview</h1>
+  <p>This is a clickable design mockup for review. Not production code. Click "Generate Plan" to see the full flow.</p>
+</div>
+
+<div class="app-shell pb-80" id="desktop-section">
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION 1: Generate Plan Button            -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section-label">
+    1. "Generate Plan" Button in Toolbar
+    <span>Prominent gradient button with sparkle icon, positioned next to the existing Auto-Schedule button</span>
+  </div>
+
+  <!-- App Header -->
+  <div class="app-header">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+      Inspection System
+    </div>
+    <div class="nav-items">
+      <span>Dashboard</span>
+      <span>Equipment</span>
+      <span class="active">Work Planning</span>
+      <span>Reports</span>
+    </div>
+    <div class="user-info">
+      <span>Ali Ahmad</span>
+      <div class="avatar">A</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="week-nav">
+        <button class="btn btn-sm btn-icon-only">&lsaquo;</button>
+        <span class="week-label">Apr 6 &ndash; Apr 12, 2026</span>
+        <button class="btn btn-sm btn-icon-only">&rsaquo;</button>
+        <button class="btn btn-sm btn-ghost" style="font-size:11px; color:#1677ff;">Today</button>
+      </div>
+      <div class="view-toggle">
+        <button class="vt-btn active">Timeline</button>
+        <button class="vt-btn">Calendar</button>
+        <button class="vt-btn">Gantt</button>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <!-- THE NEW BUTTON -->
+      <button class="btn btn-generate" id="btn-generate-plan" onclick="openModal()">
+        <span style="font-size:15px;">&#10024;</span>
+        <span>Generate Plan</span>
+        <span style="font-size:11px; opacity:0.8; font-family:'Noto Sans Arabic',sans-serif;">/ &#1578;&#1608;&#1604;&#1610;&#1583; &#1575;&#1604;&#1582;&#1591;&#1577;</span>
+      </button>
+      <!-- Existing Auto-Schedule (faded to show contrast) -->
+      <button class="btn btn-primary btn-sm" style="background:linear-gradient(135deg,#667eea,#764ba2); border:none; opacity:0.5; font-size:11px; pointer-events:none;">Auto-Schedule</button>
+      <!-- Actions Dropdown -->
+      <button class="btn btn-sm">Actions &#9662;</button>
+    </div>
+  </div>
+
+  <!-- Berth Tabs -->
+  <div class="berth-tabs">
+    <div class="berth-tab active">East Berth &middot; &#1575;&#1604;&#1585;&#1589;&#1610;&#1601; &#1575;&#1604;&#1588;&#1585;&#1602;&#1610;</div>
+    <div class="berth-tab">West Berth &middot; &#1575;&#1604;&#1585;&#1589;&#1610;&#1601; &#1575;&#1604;&#1594;&#1585;&#1576;&#1610;</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION 3: AI Summary Card                 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section-label">
+    3. AI Summary Card (appears after generation completes)
+    <span>Compact horizontal bar with stats, colored indicators, score, and bilingual text. Animates in from top.</span>
+  </div>
+
+  <!-- AI Summary -->
+  <div class="ai-summary" id="ai-summary">
+    <div class="ai-summary-left">
+      <div class="ai-summary-icon">&#10024;</div>
+      <div class="ai-summary-stats">
+        <div class="ai-stat">
+          <div class="dot dot-green"></div>
+          <span class="ai-stat-value">45</span>
+          <span class="ai-stat-label">of 52 scheduled</span>
+        </div>
+        <div class="ai-stat">
+          <div class="dot dot-red"></div>
+          <span class="ai-stat-value">3</span>
+          <span class="ai-stat-label">conflicts</span>
+        </div>
+        <div class="ai-stat">
+          <div class="dot dot-amber"></div>
+          <span class="ai-stat-value">4</span>
+          <span class="ai-stat-label">need review</span>
+        </div>
+        <div class="ai-score">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          87 / 100
+        </div>
+      </div>
+    </div>
+    <div class="ai-summary-right">
+      <div style="font-size:12px; color:#389e0d; font-weight:600;">&#1578;&#1605; &#1580;&#1583;&#1608;&#1604;&#1577; 45 &#1605;&#1606; 52 &#1605;&#1607;&#1605;&#1577;</div>
+      <div style="font-size:11px; color:#8c8c8c;">3 &#1578;&#1593;&#1575;&#1585;&#1590;&#1575;&#1578; &middot; 4 &#1576;&#1581;&#1575;&#1580;&#1577; &#1605;&#1585;&#1575;&#1580;&#1593;&#1577;</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION 4: Confidence Badges               -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section-label">
+    4. Confidence Badges on Job Cards
+    <span>Colored dots in top-right corner. Hover to see AI placement reasoning. Cards also have accept/reject buttons on hover.</span>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <strong style="color:#434343;">Confidence:</strong>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#52c41a;"></div>
+      AI Confident (&ge;75%)
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#faad14;"></div>
+      Review Suggested (45&ndash;74%)
+    </div>
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#ff4d4f;"></div>
+      Needs Attention (&lt;45%)
+    </div>
+  </div>
+
+  <!-- Day Grid -->
+  <div class="day-grid" id="day-grid">
+
+    <!-- ── Monday ── -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-name">Mon &middot; &#1575;&#1604;&#1575;&#1579;&#1606;&#1610;&#1606;</div>
+        <div class="day-header-date">Apr 6</div>
+        <div class="day-header-hours">12.5h / 16h capacity</div>
+      </div>
+      <div class="day-body">
+
+        <!-- Job 1: Green confidence -->
+        <div class="job-card priority-normal">
+          <div class="tooltip-container">
+            <div class="confidence-badge confidence-green"></div>
+            <div class="tooltip-content">
+              <div style="font-weight:600; margin-bottom:4px; color:#52c41a;">AI Confident (92%)</div>
+              <div>Grouped with 2 other east-berth jobs</div>
+              <div>Last performed by Ahmed (3 times)</div>
+              <div style="color:#52c41a;">Materials: all in stock</div>
+            </div>
+          </div>
+          <div class="job-card-header">
+            <span class="job-card-emoji">&#128295;</span>
+            <span class="job-card-name">Crane #CR-04</span>
+            <span class="job-card-hours">4h</span>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-tag tag-pm">PM</span>
+            <span class="job-card-tag tag-east">East</span>
+            <span class="job-card-worker">&#128100; Ahmed K.</span>
+          </div>
+          <div class="job-card-actions">
+            <div class="job-action-btn job-action-accept" title="Accept placement">&#10003;</div>
+            <div class="job-action-btn job-action-reject" title="Reject placement">&#10005;</div>
+          </div>
+        </div>
+
+        <!-- Job 2: Amber confidence -->
+        <div class="job-card priority-high">
+          <div class="tooltip-container">
+            <div class="confidence-badge confidence-amber"></div>
+            <div class="tooltip-content">
+              <div style="font-weight:600; margin-bottom:4px; color:#faad14;">Review Suggested (62%)</div>
+              <div>Worker has 3 other jobs this day</div>
+              <div style="color:#faad14;">Material warning: Filter kit low stock</div>
+              <div>Alternative slot: Wednesday AM</div>
+            </div>
+          </div>
+          <div class="job-card-header">
+            <span class="job-card-emoji">&#128308;</span>
+            <span class="job-card-name">Generator #GN-12</span>
+            <span class="job-card-hours">3h</span>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-tag tag-defect">Defect</span>
+            <span class="job-card-tag tag-east">East</span>
+            <span class="job-card-worker">&#128100; Hassan M.</span>
+          </div>
+          <div class="job-card-actions">
+            <div class="job-action-btn job-action-accept" title="Accept placement">&#10003;</div>
+            <div class="job-action-btn job-action-reject" title="Reject placement">&#10005;</div>
+          </div>
+        </div>
+
+        <!-- Job 3: Green confidence -->
+        <div class="job-card priority-normal">
+          <div class="tooltip-container">
+            <div class="confidence-badge confidence-green"></div>
+            <div class="tooltip-content">
+              <div style="font-weight:600; margin-bottom:4px; color:#52c41a;">AI Confident (88%)</div>
+              <div>PM cycle due date matches</div>
+              <div>Low load day &mdash; good capacity fit</div>
+            </div>
+          </div>
+          <div class="job-card-header">
+            <span class="job-card-emoji">&#128295;</span>
+            <span class="job-card-name">Pump #PP-07</span>
+            <span class="job-card-hours">2.5h</span>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-tag tag-pm">PM</span>
+            <span class="job-card-tag tag-east">East</span>
+            <span class="job-card-worker">&#128100; Omar S.</span>
+          </div>
+          <div class="job-card-actions">
+            <div class="job-action-btn job-action-accept" title="Accept placement">&#10003;</div>
+            <div class="job-action-btn job-action-reject" title="Reject placement">&#10005;</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Tuesday ── -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-name">Tue &middot; &#1575;&#1604;&#1579;&#1604;&#1575;&#1579;&#1575;&#1569;</div>
+        <div class="day-header-date">Apr 7</div>
+        <div class="day-header-hours">14h / 16h capacity</div>
+      </div>
+      <div class="day-body">
+
+        <!-- Job 4: Red confidence -->
+        <div class="job-card priority-critical">
+          <div class="tooltip-container">
+            <div class="confidence-badge confidence-red"></div>
+            <div class="tooltip-content">
+              <div style="font-weight:600; margin-bottom:4px; color:#ff4d4f;">Needs Attention (38%)</div>
+              <div>No qualified worker available</div>
+              <div style="color:#ff4d4f;">Skill mismatch: requires electrical cert</div>
+              <div>Overdue by 120 running hours</div>
+            </div>
+          </div>
+          <div class="job-card-header">
+            <span class="job-card-emoji">&#128308;</span>
+            <span class="job-card-name">Compressor #CM-01</span>
+            <span class="job-card-hours">6h</span>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-tag tag-defect">Defect</span>
+            <span class="job-card-tag tag-east">East</span>
+            <span class="job-card-worker" style="color:#ff4d4f;">&#9888; Unassigned</span>
+          </div>
+          <div class="job-card-actions">
+            <div class="job-action-btn job-action-accept" title="Accept placement">&#10003;</div>
+            <div class="job-action-btn job-action-reject" title="Reject placement">&#10005;</div>
+          </div>
+        </div>
+
+        <!-- Job 5: Green -->
+        <div class="job-card priority-normal">
+          <div class="tooltip-container">
+            <div class="confidence-badge confidence-green"></div>
+            <div class="tooltip-content">
+              <div style="font-weight:600; margin-bottom:4px; color:#52c41a;">AI Confident (85%)</div>
+              <div>SAP order #4502891 linked</div>
+              <div>Materials pre-staged at berth</div>
+            </div>
+          </div>
+          <div class="job-card-header">
+            <span class="job-card-emoji">&#128295;</span>
+            <span class="job-card-name">Conveyor #CV-03</span>
+            <span class="job-card-hours">3h</span>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-tag tag-pm">PM</span>
+            <span class="job-card-tag tag-east">East</span>
+            <span class="job-card-worker">&#128100; Yusuf A.</span>
+            <span style="font-size:10px; color:#8c8c8c;">#4502891</span>
+          </div>
+          <div class="job-card-actions">
+            <div class="job-action-btn job-action-accept" title="Accept placement">&#10003;</div>
+            <div class="job-action-btn job-action-reject" title="Reject placement">&#10005;</div>
+          </div>
+        </div>
+
+        <!-- Job 6: Amber -->
+        <div class="job-card priority-normal">
+          <div class="tooltip-container">
+            <div class="confidence-badge confidence-amber"></div>
+            <div class="tooltip-content">
+              <div style="font-weight:600; margin-bottom:4px; color:#faad14;">Review Suggested (58%)</div>
+              <div>Inspection concurrent with PM &mdash; may conflict</div>
+              <div>Inspector schedule not confirmed</div>
+            </div>
+          </div>
+          <div class="job-card-header">
+            <span class="job-card-emoji">&#9989;</span>
+            <span class="job-card-name">Boiler #BL-02</span>
+            <span class="job-card-hours">2h</span>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-tag tag-inspection">Inspection</span>
+            <span class="job-card-tag tag-east">East</span>
+            <span class="job-card-worker">&#128100; Karim J.</span>
+          </div>
+          <div class="job-card-actions">
+            <div class="job-action-btn job-action-accept" title="Accept placement">&#10003;</div>
+            <div class="job-action-btn job-action-reject" title="Reject placement">&#10005;</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Wednesday ── -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-name">Wed &middot; &#1575;&#1604;&#1575;&#1585;&#1576;&#1593;&#1575;&#1569;</div>
+        <div class="day-header-date">Apr 8</div>
+        <div class="day-header-hours">10h / 16h capacity</div>
+      </div>
+      <div class="day-body">
+
+        <!-- Job 7: Green (carry-over) -->
+        <div class="job-card priority-normal">
+          <div class="tooltip-container">
+            <div class="confidence-badge confidence-green"></div>
+            <div class="tooltip-content">
+              <div style="font-weight:600; margin-bottom:4px; color:#52c41a;">AI Confident (91%)</div>
+              <div>Carry-over from last week (was deferred)</div>
+              <div>Same worker, same equipment</div>
+            </div>
+          </div>
+          <div class="job-card-header">
+            <span class="job-card-emoji">&#128295;</span>
+            <span class="job-card-name">Turbine #TB-05</span>
+            <span class="job-card-hours">5h</span>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-tag tag-pm">PM</span>
+            <span class="job-card-tag tag-east">East</span>
+            <span class="job-card-worker">&#128100; Ahmed K.</span>
+            <span style="font-size:10px; color:#722ed1;">&#8634; Carry-over</span>
+          </div>
+          <div class="job-card-actions">
+            <div class="job-action-btn job-action-accept" title="Accept placement">&#10003;</div>
+            <div class="job-action-btn job-action-reject" title="Reject placement">&#10005;</div>
+          </div>
+        </div>
+
+        <!-- Job 8: Amber -->
+        <div class="job-card priority-high">
+          <div class="tooltip-container">
+            <div class="confidence-badge confidence-amber"></div>
+            <div class="tooltip-content">
+              <div style="font-weight:600; margin-bottom:4px; color:#faad14;">Review Suggested (55%)</div>
+              <div>Open defect &mdash; needs engineer sign-off</div>
+              <div>Estimated hours may be underreported</div>
+              <div style="color:#faad14;">SAP order pending approval</div>
+            </div>
+          </div>
+          <div class="job-card-header">
+            <span class="job-card-emoji">&#128308;</span>
+            <span class="job-card-name">Valve #VL-09</span>
+            <span class="job-card-hours">3.5h</span>
+          </div>
+          <div class="job-card-meta">
+            <span class="job-card-tag tag-defect">Defect</span>
+            <span class="job-card-tag tag-west">West</span>
+            <span class="job-card-worker">&#128100; Hassan M.</span>
+          </div>
+          <div class="job-card-actions">
+            <div class="job-action-btn job-action-accept" title="Accept placement">&#10003;</div>
+            <div class="job-action-btn job-action-reject" title="Reject placement">&#10005;</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Thursday ── -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-name">Thu &middot; &#1575;&#1604;&#1582;&#1605;&#1610;&#1587;</div>
+        <div class="day-header-date">Apr 9</div>
+        <div class="day-header-hours">8h / 16h capacity</div>
+      </div>
+      <div class="day-body">
+        <div class="job-card priority-normal" style="opacity:0.3; border-left-style:dashed;">
+          <div class="job-card-header">
+            <span class="job-card-emoji" style="opacity:0.3;">&#128295;</span>
+            <span class="job-card-name" style="color:#bfbfbf; font-weight:400;">Awaiting generation...</span>
+          </div>
+        </div>
+        <div class="job-card priority-normal" style="opacity:0.2; border-left-style:dashed;">
+          <div class="job-card-header">
+            <span class="job-card-emoji" style="opacity:0.3;">&#128308;</span>
+            <span class="job-card-name" style="color:#bfbfbf; font-weight:400;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Friday ── -->
+    <div class="day-column">
+      <div class="day-header">
+        <div class="day-header-name">Fri &middot; &#1575;&#1604;&#1580;&#1605;&#1593;&#1577;</div>
+        <div class="day-header-date">Apr 10</div>
+        <div class="day-header-hours">0h / 16h capacity</div>
+      </div>
+      <div class="day-body">
+        <div style="text-align:center; padding:32px 8px; color:#bfbfbf; font-size:12px;">
+          <div style="font-size:28px; margin-bottom:6px; opacity:0.3;">&#128197;</div>
+          <div>Weekend</div>
+          <div style="font-size:11px; margin-top:2px; font-family:'Noto Sans Arabic',sans-serif; direction:rtl;">&#1593;&#1591;&#1604;&#1577; &#1606;&#1607;&#1575;&#1610;&#1577; &#1575;&#1604;&#1571;&#1587;&#1576;&#1608;&#1593;</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION 5: Generation Action Bar           -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section-label">
+    5. Generation Action Bar (sticky bottom)
+    <span>Accept All, Modify, Regenerate buttons with timestamp. Individual cards have accept/reject on hover.</span>
+  </div>
+
+  <!-- Placeholder to illustrate (actual bar is fixed-position) -->
+  <div style="background:#fff; border:1px solid #e8e8e8; border-radius:8px; padding:12px 20px; margin:0 20px 12px; display:flex; align-items:center; justify-content:space-between;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <button class="btn btn-success" onclick="alert('All placements accepted!')">
+        <span>&#10003;</span> Accept All
+        <span style="font-size:11px; opacity:0.85; font-family:'Noto Sans Arabic',sans-serif;">/ &#1602;&#1576;&#1608;&#1604; &#1575;&#1604;&#1603;&#1604;</span>
+      </button>
+      <button class="btn btn-primary">
+        <span>&#9998;</span> Modify
+        <span style="font-size:11px; opacity:0.85; font-family:'Noto Sans Arabic',sans-serif;">/ &#1578;&#1593;&#1583;&#1610;&#1604;</span>
+      </button>
+      <button class="btn" onclick="resetState(); openModal();">
+        <span>&#8635;</span> Regenerate
+        <span style="font-size:11px; opacity:0.7; font-family:'Noto Sans Arabic',sans-serif;">/ &#1573;&#1593;&#1575;&#1583;&#1577; &#1575;&#1604;&#1578;&#1608;&#1604;&#1610;&#1583;</span>
+      </button>
+    </div>
+    <div style="font-size:12px; color:#8c8c8c; display:flex; align-items:center; gap:8px;">
+      <div style="width:6px; height:6px; border-radius:50%; background:#52c41a; animation:pulse 2s ease-in-out infinite;"></div>
+      <span>Generated 2 min ago</span>
+      <span style="font-family:'Noto Sans Arabic',sans-serif; direction:rtl;">&middot; &#1578;&#1605; &#1575;&#1604;&#1578;&#1608;&#1604;&#1610;&#1583; &#1605;&#1606;&#1584; &#1583;&#1602;&#1610;&#1602;&#1578;&#1610;&#1606;</span>
+    </div>
+  </div>
+
+  <!-- Actual sticky action bar (hidden until generation) -->
+  <div class="action-bar" id="action-bar">
+    <div class="action-bar-left">
+      <button class="btn btn-success" onclick="alert('All placements accepted!')">
+        <span>&#10003;</span> Accept All
+        <span style="font-size:11px; opacity:0.85; font-family:'Noto Sans Arabic',sans-serif;">/ &#1602;&#1576;&#1608;&#1604; &#1575;&#1604;&#1603;&#1604;</span>
+      </button>
+      <button class="btn btn-primary">
+        <span>&#9998;</span> Modify
+        <span style="font-size:11px; opacity:0.85; font-family:'Noto Sans Arabic',sans-serif;">/ &#1578;&#1593;&#1583;&#1610;&#1604;</span>
+      </button>
+      <button class="btn" onclick="resetState(); openModal();">
+        <span>&#8635;</span> Regenerate
+        <span style="font-size:11px; opacity:0.7; font-family:'Noto Sans Arabic',sans-serif;">/ &#1573;&#1593;&#1575;&#1583;&#1577; &#1575;&#1604;&#1578;&#1608;&#1604;&#1610;&#1583;</span>
+      </button>
+    </div>
+    <div class="action-bar-right">
+      <div class="pulse-dot"></div>
+      <span>Generated 2 min ago</span>
+      <span style="font-family:'Noto Sans Arabic',sans-serif; direction:rtl;">&middot; &#1578;&#1605; &#1575;&#1604;&#1578;&#1608;&#1604;&#1610;&#1583; &#1605;&#1606;&#1584; &#1583;&#1602;&#1610;&#1602;&#1578;&#1610;&#1606;</span>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- SECTION 6: MOBILE VIEW                             -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <div class="section-label" style="margin-top:40px;">
+    6. Mobile View (375px)
+    <span>FAB for generation, collapsed banner summary, colored left borders instead of dots, simpler action bar</span>
+  </div>
+
+  <div style="display:flex; justify-content:center; padding:24px 0 80px;">
+    <div class="mobile-frame">
+
+      <!-- Status Bar -->
+      <div class="mobile-status-bar">
+        <span>9:41</span>
+        <span style="display:flex; gap:4px; align-items:center;">
+          <span style="font-size:8px;">&#9679;&#9679;&#9679;&#9679;</span>
+          <span style="font-size:9px;">100%</span>
+        </span>
+      </div>
+
+      <!-- Header -->
+      <div class="mobile-header">
+        <div>
+          <div class="mobile-header-title">Work Plan</div>
+          <div style="font-size:11px; opacity:0.7;">Apr 6 &ndash; 12, 2026</div>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center;">
+          <span style="font-size:16px; cursor:pointer;">&#9776;</span>
+        </div>
+      </div>
+
+      <!-- Summary Banner (collapsed) -->
+      <div class="mobile-summary-banner">
+        <div class="mobile-summary-icon">&#10024;</div>
+        <div class="mobile-summary-text">
+          <strong>45 of 52 jobs scheduled</strong><br>
+          <span style="color:#8c8c8c;">3 conflicts &middot; 4 need review</span>
+        </div>
+        <div class="mobile-summary-score">87</div>
+      </div>
+
+      <div class="mobile-body">
+
+        <!-- Monday -->
+        <div class="mobile-day-section">
+          <div class="mobile-day-title">Monday, Apr 6 &middot; &#1575;&#1604;&#1575;&#1579;&#1606;&#1610;&#1606;</div>
+
+          <!-- Green confidence -->
+          <div class="mobile-job-card">
+            <div class="mobile-job-card-header">
+              <span>&#128295;</span>
+              <span class="mobile-job-card-name">Crane #CR-04</span>
+              <span style="font-size:11px; color:#8c8c8c;">4h</span>
+            </div>
+            <div class="mobile-job-card-meta">
+              <span class="job-card-tag tag-pm">PM</span>
+              <span class="job-card-tag tag-east">East</span>
+              <span style="font-size:11px; color:#595959;">&#128100; Ahmed K.</span>
+              <span class="badge-count badge-green" style="margin-left:auto;">92%</span>
+            </div>
+          </div>
+
+          <!-- Amber confidence -->
+          <div class="mobile-job-card confidence-amber-border">
+            <div class="mobile-job-card-header">
+              <span>&#128308;</span>
+              <span class="mobile-job-card-name">Generator #GN-12</span>
+              <span style="font-size:11px; color:#8c8c8c;">3h</span>
+            </div>
+            <div class="mobile-job-card-meta">
+              <span class="job-card-tag tag-defect">Defect</span>
+              <span class="job-card-tag tag-east">East</span>
+              <span style="font-size:11px; color:#595959;">&#128100; Hassan M.</span>
+              <span class="badge-count badge-amber" style="margin-left:auto;">62%</span>
+            </div>
+          </div>
+
+          <!-- Green -->
+          <div class="mobile-job-card">
+            <div class="mobile-job-card-header">
+              <span>&#128295;</span>
+              <span class="mobile-job-card-name">Pump #PP-07</span>
+              <span style="font-size:11px; color:#8c8c8c;">2.5h</span>
+            </div>
+            <div class="mobile-job-card-meta">
+              <span class="job-card-tag tag-pm">PM</span>
+              <span class="job-card-tag tag-east">East</span>
+              <span style="font-size:11px; color:#595959;">&#128100; Omar S.</span>
+              <span class="badge-count badge-green" style="margin-left:auto;">88%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tuesday -->
+        <div class="mobile-day-section">
+          <div class="mobile-day-title">Tuesday, Apr 7 &middot; &#1575;&#1604;&#1579;&#1604;&#1575;&#1579;&#1575;&#1569;</div>
+
+          <!-- Red confidence -->
+          <div class="mobile-job-card confidence-red-border">
+            <div class="mobile-job-card-header">
+              <span>&#128308;</span>
+              <span class="mobile-job-card-name">Compressor #CM-01</span>
+              <span style="font-size:11px; color:#8c8c8c;">6h</span>
+            </div>
+            <div class="mobile-job-card-meta">
+              <span class="job-card-tag tag-defect">Defect</span>
+              <span class="job-card-tag tag-east">East</span>
+              <span style="font-size:11px; color:#ff4d4f;">&#9888; Unassigned</span>
+              <span class="badge-count badge-red" style="margin-left:auto;">38%</span>
+            </div>
+          </div>
+
+          <!-- Green -->
+          <div class="mobile-job-card">
+            <div class="mobile-job-card-header">
+              <span>&#128295;</span>
+              <span class="mobile-job-card-name">Conveyor #CV-03</span>
+              <span style="font-size:11px; color:#8c8c8c;">3h</span>
+            </div>
+            <div class="mobile-job-card-meta">
+              <span class="job-card-tag tag-pm">PM</span>
+              <span class="job-card-tag tag-east">East</span>
+              <span style="font-size:11px; color:#595959;">&#128100; Yusuf A.</span>
+              <span class="badge-count badge-green" style="margin-left:auto;">85%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAB -->
+        <div class="mobile-fab" title="Generate Plan">&#10024;</div>
+
+      </div>
+
+      <!-- Mobile Action Bar -->
+      <div class="mobile-action-bar">
+        <button class="btn btn-success" style="font-size:12px;">&#10003; Accept</button>
+        <button class="btn btn-primary" style="font-size:12px;">&#9998; Modify</button>
+        <button class="btn" style="font-size:12px;">&#8635; Redo</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- GENERATION OPTIONS MODAL (Section 2)               -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+
+    <!-- Form State -->
+    <div id="modal-form">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Smart Plan Generator</div>
+          <div class="modal-subtitle">&#1605;&#1608;&#1604;&#1583; &#1575;&#1604;&#1582;&#1591;&#1577; &#1575;&#1604;&#1584;&#1603;&#1610;</div>
+        </div>
+        <button class="modal-close" onclick="closeModalDirect()">&#10005;</button>
+      </div>
+      <div class="modal-body">
+
+        <div class="option-section-title">Data Sources &middot; &#1605;&#1589;&#1575;&#1583;&#1585; &#1575;&#1604;&#1576;&#1610;&#1575;&#1606;&#1575;&#1578;</div>
+
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <span class="toggle-label-primary">Include carry-overs</span>
+            <span class="toggle-label-secondary">&#1578;&#1590;&#1605;&#1610;&#1606; &#1575;&#1604;&#1605;&#1607;&#1575;&#1605; &#1575;&#1604;&#1605;&#1585;&#1581;&#1604;&#1577;</span>
+          </div>
+          <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <span class="toggle-label-primary">Include PM cycles due</span>
+            <span class="toggle-label-secondary">&#1578;&#1590;&#1605;&#1610;&#1606; &#1583;&#1608;&#1585;&#1575;&#1578; &#1575;&#1604;&#1589;&#1610;&#1575;&#1606;&#1577; &#1575;&#1604;&#1605;&#1587;&#1578;&#1581;&#1602;&#1577;</span>
+          </div>
+          <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <span class="toggle-label-primary">Include open defects</span>
+            <span class="toggle-label-secondary">&#1578;&#1590;&#1605;&#1610;&#1606; &#1575;&#1604;&#1593;&#1610;&#1608;&#1576; &#1575;&#1604;&#1605;&#1601;&#1578;&#1608;&#1581;&#1577;</span>
+          </div>
+          <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <span class="toggle-label-primary">Include SAP orders</span>
+            <span class="toggle-label-secondary">&#1578;&#1590;&#1605;&#1610;&#1606; &#1571;&#1608;&#1575;&#1605;&#1585; SAP</span>
+          </div>
+          <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <span class="toggle-label-primary">Include inspections</span>
+            <span class="toggle-label-secondary">&#1578;&#1590;&#1605;&#1610;&#1606; &#1593;&#1605;&#1604;&#1610;&#1575;&#1578; &#1575;&#1604;&#1601;&#1581;&#1589;</span>
+          </div>
+          <div class="toggle-switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+
+        <div class="option-divider"></div>
+        <div class="option-section-title">Target Capacity &middot; &#1575;&#1604;&#1587;&#1593;&#1577; &#1575;&#1604;&#1605;&#1587;&#1578;&#1607;&#1583;&#1601;&#1577;</div>
+
+        <div class="slider-row">
+          <div class="slider-header">
+            <span class="slider-label">Fill level per day</span>
+            <span class="slider-value" id="slider-value">80%</span>
+          </div>
+          <div class="slider-track" id="slider-track" onclick="handleSliderClick(event)">
+            <div class="slider-fill" id="slider-fill" style="width:60%"></div>
+            <div class="slider-thumb" id="slider-thumb" style="left:60%"></div>
+          </div>
+          <div class="slider-marks">
+            <span>50%</span>
+            <span>65%</span>
+            <span>80%</span>
+            <span>90%</span>
+            <span>100%</span>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModalDirect()">Cancel &middot; &#1573;&#1604;&#1594;&#1575;&#1569;</button>
+        <button class="btn btn-generate" onclick="startGeneration()" style="height:36px; padding:0 20px;">
+          <span style="font-size:15px;">&#10024;</span>
+          Generate &middot; &#1578;&#1608;&#1604;&#1610;&#1583;
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading-overlay" id="modal-loading">
+      <div class="loading-spinner"></div>
+      <div style="font-size:15px; font-weight:600; color:#262626;">Generating your plan...</div>
+      <div style="font-size:12px; color:#8c8c8c; font-family:'Noto Sans Arabic',sans-serif; direction:rtl;">&#1580;&#1575;&#1585;&#1610; &#1578;&#1608;&#1604;&#1610;&#1583; &#1575;&#1604;&#1582;&#1591;&#1577;...</div>
+      <div class="loading-progress">
+        <div class="loading-progress-bar" id="loading-progress-bar"></div>
+      </div>
+      <div class="loading-steps" id="loading-steps">
+        <div class="loading-step active" data-step="0">
+          <div class="loading-step-icon">1</div>
+          <span>Collecting carry-overs &amp; open defects...</span>
+        </div>
+        <div class="loading-step" data-step="1">
+          <div class="loading-step-icon">2</div>
+          <span>Checking PM cycles due this week...</span>
+        </div>
+        <div class="loading-step" data-step="2">
+          <div class="loading-step-icon">3</div>
+          <span>Matching workers to jobs by skill &amp; availability...</span>
+        </div>
+        <div class="loading-step" data-step="3">
+          <div class="loading-step-icon">4</div>
+          <span>Optimizing daily schedule &amp; berth balance...</span>
+        </div>
+        <div class="loading-step" data-step="4">
+          <div class="loading-step-icon">5</div>
+          <span>Scoring placements &amp; flagging conflicts...</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+  // ── State ──
+  let isGenerated = false;
+
+  // ── Modal Controls ──
+  function openModal() {
+    var overlay = document.getElementById('modal-overlay');
+    overlay.style.display = 'flex';
+    // Force reflow then animate
+    overlay.offsetHeight;
+    overlay.classList.add('open');
+    document.getElementById('modal-form').style.display = 'block';
+    document.getElementById('modal-loading').classList.remove('visible');
+  }
+
+  function closeModal(e) {
+    if (e.target === e.currentTarget) closeModalDirect();
+  }
+
+  function closeModalDirect() {
+    var overlay = document.getElementById('modal-overlay');
+    overlay.classList.remove('open');
+    setTimeout(function() { overlay.style.display = 'none'; }, 250);
+  }
+
+  // ── Slider ──
+  function handleSliderClick(e) {
+    var track = document.getElementById('slider-track');
+    var rect = track.getBoundingClientRect();
+    var pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    var val = Math.round(50 + pct * 50);
+    var fillPct = ((val - 50) / 50) * 100;
+    document.getElementById('slider-fill').style.width = fillPct + '%';
+    document.getElementById('slider-thumb').style.left = fillPct + '%';
+    document.getElementById('slider-value').textContent = val + '%';
+  }
+
+  // ── Generation Flow ──
+  function startGeneration() {
+    document.getElementById('modal-form').style.display = 'none';
+    var loading = document.getElementById('modal-loading');
+    loading.classList.add('visible');
+
+    var steps = document.querySelectorAll('#loading-steps .loading-step');
+    var progressBar = document.getElementById('loading-progress-bar');
+    var current = 0;
+
+    function advanceStep() {
+      if (current > 0) {
+        steps[current - 1].classList.remove('active');
+        steps[current - 1].classList.add('done');
+        steps[current - 1].querySelector('.loading-step-icon').innerHTML = '&#10003;';
+      }
+      if (current < steps.length) {
+        steps[current].classList.add('active');
+        progressBar.style.width = ((current + 1) / steps.length * 100) + '%';
+        current++;
+        setTimeout(advanceStep, 700 + Math.random() * 400);
+      } else {
+        progressBar.style.width = '100%';
+        setTimeout(function() {
+          closeModalDirect();
+          revealResults();
+        }, 500);
+      }
+    }
+
+    // Reset steps
+    steps.forEach(function(s) {
+      s.classList.remove('active', 'done');
+      var idx = parseInt(s.getAttribute('data-step'));
+      s.querySelector('.loading-step-icon').innerHTML = (idx + 1).toString();
+    });
+    progressBar.style.width = '0%';
+    current = 0;
+    setTimeout(advanceStep, 400);
+  }
+
+  function revealResults() {
+    isGenerated = true;
+    document.getElementById('ai-summary').classList.add('visible');
+    setTimeout(function() {
+      document.getElementById('action-bar').classList.add('visible');
+    }, 200);
+  }
+
+  function resetState() {
+    isGenerated = false;
+    document.getElementById('ai-summary').classList.remove('visible');
+    document.getElementById('action-bar').classList.remove('visible');
+  }
+
+  // ── Keyboard ──
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModalDirect();
+  });
+</script>
+
+</body>
+</html>

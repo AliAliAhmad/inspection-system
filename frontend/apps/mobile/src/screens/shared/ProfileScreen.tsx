@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -18,6 +19,7 @@ import { useTheme, createThemedStyles } from '../../hooks/useTheme';
 import { getRoleColor } from '../../theme/colors';
 import { ThemeMode } from '../../storage/theme-storage';
 import { minutesToTimeString } from '../../storage/theme-storage';
+import { clearAllCache } from '../../storage/storage-cleanup';
 import type { TextScale } from '../../storage/accessibility-storage';
 
 const THEME_MODE_I18N_KEYS: Record<ThemeMode, string> = {
@@ -50,6 +52,40 @@ export default function ProfileScreen() {
     isReduceMotion,
   } = useAccessibility();
   const styles = useStyles();
+
+  const [isClearing, setIsClearing] = useState(false);
+
+  const handleClearCache = useCallback(() => {
+    Alert.alert(
+      t('storage.clearCache'),
+      t('storage.clearConfirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('storage.clearCache'),
+          style: 'destructive',
+          onPress: async () => {
+            setIsClearing(true);
+            try {
+              const result = await clearAllCache();
+              const parts: string[] = [];
+              if (result.cacheCleared > 0) parts.push(`${result.cacheCleared} ${t('storage.cacheCleared')}`);
+              if (result.draftsCleared > 0) parts.push(`${result.draftsCleared} ${t('storage.draftsCleared')}`);
+              if (result.filesRemoved > 0) parts.push(`${result.filesRemoved} ${t('storage.filesRemoved')}`);
+              Alert.alert(
+                t('storage.cleared'),
+                parts.length > 0 ? parts.join('\n') : t('storage.cleared'),
+              );
+            } catch {
+              // Silent fail — cleanup is best-effort
+            } finally {
+              setIsClearing(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [t]);
 
   if (!user) return null;
 
@@ -303,6 +339,33 @@ export default function ProfileScreen() {
             {t('profile.notification_preferences', 'Notification Preferences')}
           </Text>
           <Text style={styles.quickLinkArrow}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Storage */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          {t('storage.title')}
+        </Text>
+        <TouchableOpacity
+          testID="clear-cache-btn"
+          style={styles.quickLinkRow}
+          onPress={handleClearCache}
+          disabled={isClearing}
+        >
+          <Text style={styles.quickLinkIcon}>{isClearing ? '' : '\uD83D\uDDD1\uFE0F'}</Text>
+          {isClearing ? (
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: scale(12) }} />
+          ) : null}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.langLabel}>
+              {isClearing ? t('storage.clearing') : t('storage.clearCache')}
+            </Text>
+            <Text style={[styles.dirText, { marginTop: vscale(2) }]}>
+              {t('storage.clearCacheDesc')}
+            </Text>
+          </View>
+          <Text style={styles.quickLinkArrow}>{isClearing ? '' : '\u203A'}</Text>
         </TouchableOpacity>
       </View>
 

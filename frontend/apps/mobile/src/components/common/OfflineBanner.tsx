@@ -23,6 +23,7 @@ const COLORS = {
   syncing: '#faad14',    // Yellow
   synced: '#52c41a',     // Green
   pending: '#1677ff',    // Blue
+  storage: '#fa541c',    // Orange — storage warning
   white: '#ffffff',
   textDark: '#1f1f1f',
 };
@@ -39,6 +40,8 @@ export default function OfflineBanner({ onPress }: OfflineBannerProps) {
     pendingCount,
     pendingDetails,
     triggerSync,
+    storageHealth,
+    storageWarning,
   } = useOffline();
 
   const [pulseAnim] = useState(new Animated.Value(1));
@@ -67,8 +70,13 @@ export default function OfflineBanner({ onPress }: OfflineBannerProps) {
     }
   }, [isSyncing, pulseAnim]);
 
-  // Don't show if online and no pending items
-  if (isOnline && pendingCount === 0) return null;
+  const [storageDismissed, setStorageDismissed] = useState(false);
+
+  // Show storage warning OR offline/sync banner
+  const showStorageWarning = !storageDismissed && storageHealth !== 'healthy' && storageWarning;
+
+  // Don't show if online, no pending items, and no storage warning
+  if (isOnline && pendingCount === 0 && !showStorageWarning) return null;
 
   const handlePress = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -195,14 +203,63 @@ export default function OfflineBanner({ onPress }: OfflineBannerProps) {
     );
   };
 
+  // Render storage warning
+  const renderStorageWarning = () => (
+    <TouchableOpacity
+      style={styles.row}
+      onPress={() => setStorageDismissed(true)}
+      activeOpacity={0.8}
+    >
+      <View style={styles.iconContainer}>
+        <View style={[styles.offlineIcon, { backgroundColor: 'rgba(255,255,255,0.3)' }]}>
+          <Text style={styles.iconText}>{storageHealth === 'critical' ? '!' : '~'}</Text>
+        </View>
+      </View>
+      <View style={styles.textContainer}>
+        <Text style={styles.title}>
+          {storageHealth === 'critical'
+            ? t('sync.storageCritical', 'Storage Almost Full')
+            : t('sync.storageWarning', 'Storage Getting Full')}
+        </Text>
+        <Text style={styles.subtitle}>
+          {t('sync.clearCacheHint', 'Go to Profile to clear cache')}
+        </Text>
+      </View>
+      <TouchableOpacity
+        onPress={() => setStorageDismissed(true)}
+        style={styles.retryButton}
+      >
+        <Text style={styles.retryButtonText}>
+          {t('common.dismiss', 'Dismiss')}
+        </Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  // If only storage warning (no offline/sync), show that
+  if (isOnline && pendingCount === 0 && showStorageWarning) {
+    return (
+      <View style={[styles.container, styles.storageWarning]}>
+        {renderStorageWarning()}
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.container, getBannerStyle()]}>
-      {!isOnline
-        ? renderOfflineContent()
-        : isSyncing
-          ? renderSyncingContent()
-          : renderPendingContent()}
-    </View>
+    <>
+      <View style={[styles.container, getBannerStyle()]}>
+        {!isOnline
+          ? renderOfflineContent()
+          : isSyncing
+            ? renderSyncingContent()
+            : renderPendingContent()}
+      </View>
+      {showStorageWarning && (
+        <View style={[styles.container, styles.storageWarning]}>
+          {renderStorageWarning()}
+        </View>
+      )}
+    </>
   );
 }
 
@@ -226,6 +283,9 @@ const styles = StyleSheet.create({
   },
   failed: {
     backgroundColor: COLORS.offline,
+  },
+  storageWarning: {
+    backgroundColor: COLORS.storage,
   },
   row: {
     flexDirection: 'row',

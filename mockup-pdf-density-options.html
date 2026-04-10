@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PDF Density Options — Work Plan Day Page</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy: #0a2540;
+    --navy-light: #1e3a5f;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --border: #cbd5e1;
+    --border-light: #e2e8f0;
+    --row-alt: #f8fafc;
+    --pm: #2563eb;
+    --def: #dc2626;
+    --elec: #f59e0b;
+    --mech: #059669;
+    --elme: #7c3aed;
+    --overdue: #dc2626;
+    --done-bg: #f1f5f9;
+    --paper: #ffffff;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: #e2e8f0;
+    padding: 40px 20px;
+    color: var(--ink);
+  }
+
+  .wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .intro {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .intro h1 {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--navy);
+    letter-spacing: -0.5px;
+  }
+  .intro p {
+    color: var(--muted);
+    font-size: 14px;
+    margin-top: 6px;
+  }
+
+  .option-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 50px 0 16px 0;
+    padding: 12px 20px;
+    background: var(--navy);
+    color: #fff;
+    border-radius: 8px;
+  }
+  .option-label .num {
+    font-size: 14px;
+    font-weight: 700;
+    background: #fff;
+    color: var(--navy);
+    padding: 4px 10px;
+    border-radius: 4px;
+  }
+  .option-label h2 {
+    font-size: 18px;
+    font-weight: 700;
+    flex: 1;
+  }
+  .option-label .est {
+    font-size: 12px;
+    opacity: 0.85;
+    background: rgba(255,255,255,0.1);
+    padding: 4px 10px;
+    border-radius: 4px;
+  }
+
+  /* A4 Landscape Page — 297mm × 210mm */
+  .page {
+    background: var(--paper);
+    width: 297mm;
+    height: 210mm;
+    margin: 0 auto 20px auto;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid #d1d5db;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 8.5pt;
+    color: var(--ink);
+  }
+
+  /* Headers */
+  .top-bar {
+    background: var(--navy);
+    color: #fff;
+    padding: 5px 14px;
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .top-bar .right {
+    font-size: 8pt;
+    opacity: 0.85;
+    font-weight: 500;
+  }
+
+  .day-bar {
+    background: var(--navy-light);
+    color: #fff;
+    padding: 7px 14px;
+    font-size: 10pt;
+    font-weight: 700;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .day-bar .count {
+    background: rgba(255,255,255,0.15);
+    padding: 2px 9px;
+    border-radius: 10px;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+
+  /* ============================================ */
+  /* OPTION 1: 2-COLUMN COMPACT CARDS             */
+  /* ============================================ */
+  .opt1-content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 5px;
+    background: #f1f5f9;
+  }
+  .opt1-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .opt1-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--pm);
+    border-radius: 3px;
+    padding: 5px 7px;
+    font-size: 7.5pt;
+    position: relative;
+  }
+  .opt1-card.def { border-left-color: var(--def); }
+  .opt1-card.elec { border-left-color: var(--elec); }
+  .opt1-card.mech { border-left-color: var(--mech); }
+  .opt1-card.elme { border-left-color: var(--elme); }
+  .opt1-card.overdue { background: #fef2f2; }
+
+  .opt1-card-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 3px;
+  }
+  .opt1-card-title {
+    font-weight: 700;
+    font-size: 8pt;
+    flex: 1;
+    color: var(--ink);
+  }
+  .opt1-badge {
+    font-size: 6.5pt;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: #fff;
+    background: var(--pm);
+    letter-spacing: 0.3px;
+  }
+  .opt1-badge.def { background: var(--def); }
+  .opt1-badge.elec { background: var(--elec); }
+  .opt1-badge.mech { background: var(--mech); }
+  .opt1-badge.elme { background: var(--elme); }
+
+  .opt1-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 7pt;
+    margin: 1px 0;
+    color: var(--ink);
+  }
+  .opt1-row .label {
+    font-weight: 700;
+    color: var(--muted);
+    min-width: 26px;
+    font-size: 6.5pt;
+  }
+  .opt1-row .mat {
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 6.5pt;
+    color: #334155;
+  }
+  .opt1-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 3px;
+    padding-top: 3px;
+    border-top: 1px dashed var(--border-light);
+    font-size: 7pt;
+  }
+  .opt1-meta .hrs {
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .opt1-meta .overdue-flag {
+    background: var(--overdue);
+    color: #fff;
+    font-size: 6pt;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  .opt1-meta .check {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 7pt;
+    font-weight: 600;
+  }
+  .opt1-meta .box {
+    width: 9px;
+    height: 9px;
+    border: 1.2px solid var(--ink);
+    display: inline-block;
+  }
+  .opt1-notes {
+    margin-top: 3px;
+    font-size: 6.5pt;
+    color: var(--muted);
+    border-bottom: 1px dotted #94a3b8;
+    padding-bottom: 1px;
+  }
+  .opt1-notes::before {
+    content: "Notes: ";
+    font-weight: 700;
+  }
+
+  /* ============================================ */
+  /* OPTION 2: DENSE TABLE                        */
+  /* ============================================ */
+  .opt2-content {
+    flex: 1;
+    padding: 6px 8px;
+    overflow: hidden;
+  }
+  .opt2-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5pt;
+    table-layout: fixed;
+  }
+  .opt2-table thead th {
+    background: var(--navy);
+    color: #fff;
+    font-weight: 700;
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    padding: 5px 4px;
+    text-align: left;
+    border: 1px solid var(--navy-light);
+  }
+  .opt2-table tbody td {
+    padding: 4px 4px;
+    border: 1px solid var(--border-light);
+    vertical-align: top;
+    font-size: 7pt;
+    line-height: 1.25;
+  }
+  .opt2-table tbody tr:nth-child(even) td {
+    background: var(--row-alt);
+  }
+  .opt2-table tbody tr.overdue td {
+    background: #fef2f2;
+  }
+
+  .col-num { width: 22px; text-align: center; font-weight: 700; color: var(--muted); }
+  .col-equip { width: 115px; }
+  .col-type { width: 40px; }
+  .col-wc { width: 44px; }
+  .col-mech { width: 130px; }
+  .col-elec { width: 130px; }
+  .col-mat { width: 150px; }
+  .col-hrs { width: 28px; text-align: center; }
+  .col-od { width: 26px; text-align: center; }
+  .col-done { width: 26px; text-align: center; }
+  .col-notes { width: auto; }
+
+  .equip-name { font-weight: 700; color: var(--ink); font-size: 7.5pt; }
+  .equip-sub { font-size: 6.5pt; color: var(--muted); display: block; }
+
+  .tag {
+    display: inline-block;
+    font-size: 6pt;
+    font-weight: 700;
+    padding: 1px 3px;
+    border-radius: 2px;
+    color: #fff;
+    background: var(--pm);
+    letter-spacing: 0.3px;
+  }
+  .tag.def { background: var(--def); }
+  .tag.elec { background: var(--elec); }
+  .tag.mech { background: var(--mech); }
+  .tag.elme { background: var(--elme); }
+
+  .team-cell {
+    font-size: 6.8pt;
+    line-height: 1.3;
+  }
+  .team-cell .lead {
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .team-cell .lead::after {
+    content: " ★";
+    color: #f59e0b;
+  }
+  .team-cell .workers {
+    color: #475569;
+    font-size: 6.5pt;
+  }
+  .team-cell.empty {
+    color: #cbd5e1;
+    font-style: italic;
+  }
+
+  .mat-cell {
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 6.2pt;
+    color: #334155;
+    line-height: 1.3;
+  }
+  .mat-cell.empty { color: #cbd5e1; font-style: italic; font-family: inherit; }
+
+  .hrs-val { font-weight: 700; color: var(--navy); font-size: 7.5pt; }
+  .od-yes {
+    background: var(--overdue);
+    color: #fff;
+    font-size: 6pt;
+    font-weight: 700;
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+  .check-box {
+    width: 11px;
+    height: 11px;
+    border: 1.4px solid var(--ink);
+    display: inline-block;
+  }
+  .notes-line {
+    border-bottom: 1px dotted #94a3b8;
+    height: 9px;
+  }
+
+  /* ============================================ */
+  /* OPTION 3: HYBRID SECTION BY TEAM             */
+  /* ============================================ */
+  .opt3-content {
+    flex: 1;
+    padding: 6px 10px 4px 10px;
+    overflow: hidden;
+  }
+
+  .opt3-section {
+    margin-bottom: 5px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .opt3-section-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    font-size: 8pt;
+    font-weight: 700;
+    color: #fff;
+  }
+  .opt3-section-head.mech { background: var(--mech); }
+  .opt3-section-head.elec { background: var(--elec); color: #fff; }
+  .opt3-section-head.defmech { background: #b45309; }
+  .opt3-section-head.defelec { background: var(--def); }
+
+  .opt3-section-head .icon {
+    font-size: 10pt;
+  }
+  .opt3-section-head .lead-label {
+    background: rgba(255,255,255,0.2);
+    font-size: 7pt;
+    padding: 1px 6px;
+    border-radius: 2px;
+  }
+  .opt3-section-head .count {
+    margin-left: auto;
+    font-size: 7pt;
+    opacity: 0.9;
+    font-weight: 600;
+  }
+
+  .opt3-row {
+    display: grid;
+    grid-template-columns: 22px 1fr 70px 40px 200px 35px 24px 22px 1fr;
+    gap: 6px;
+    align-items: center;
+    padding: 3px 8px;
+    font-size: 7pt;
+    border-bottom: 1px solid var(--border-light);
+    line-height: 1.3;
+  }
+  .opt3-row:last-child { border-bottom: none; }
+  .opt3-row:nth-child(even) { background: var(--row-alt); }
+  .opt3-row.overdue { background: #fef2f2; }
+
+  .opt3-row .arrow { color: var(--muted); font-weight: 700; text-align: center; }
+  .opt3-row .equip {
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 7.5pt;
+  }
+  .opt3-row .workers {
+    font-size: 6.5pt;
+    color: #475569;
+  }
+  .opt3-row .tag-cell { text-align: center; }
+  .opt3-row .mat-inline {
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 6.3pt;
+    color: #334155;
+  }
+  .opt3-row .mat-inline.empty { color: #cbd5e1; font-style: italic; font-family: inherit; }
+  .opt3-row .hrs-cell {
+    font-weight: 700;
+    color: var(--navy);
+    text-align: center;
+  }
+  .opt3-row .od-cell { text-align: center; }
+  .opt3-row .check-cell { text-align: center; }
+  .opt3-row .notes-cell {
+    border-bottom: 1px dotted #94a3b8;
+    height: 9px;
+  }
+
+  /* Annotation after each option */
+  .annotation {
+    max-width: 297mm;
+    margin: 0 auto 20px auto;
+    padding: 14px 18px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--navy);
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .annotation .pros { color: #059669; font-weight: 700; }
+  .annotation .cons { color: #dc2626; font-weight: 700; }
+  .annotation p { margin: 4px 0; color: #334155; }
+  .annotation strong { color: var(--ink); }
+
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+
+  <div class="intro">
+    <h1>Work Plan PDF — Density Options</h1>
+    <p>3 layouts for a full day (15 bundles) on landscape A4 — all retain full details</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- OPTION 1: 2-COLUMN COMPACT CARDS             -->
+  <!-- ============================================ -->
+  <div class="option-label">
+    <span class="num">OPTION 1</span>
+    <h2>2-Column Compact Cards</h2>
+    <span class="est">Estimated: 1-2 pages per day</span>
+  </div>
+
+  <div class="page">
+    <div class="top-bar">
+      <span>WEEKLY WORK PLAN · 6-12 April 2026 · PUBLISHED</span>
+      <span class="right">Page 1 of 1 · East Berth</span>
+    </div>
+    <div class="day-bar">
+      <span>MONDAY, 6 APRIL 2026 — EAST BERTH</span>
+      <span class="count">15 BUNDLES</span>
+    </div>
+
+    <div class="opt1-content">
+
+      <!-- LEFT COLUMN -->
+      <div class="opt1-col">
+
+        <!-- Card 1: REACH STACKER SCC-800 — PM -->
+        <div class="opt1-card elme overdue">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">REACH STACKER SCC-800</span>
+            <span class="opt1-badge elme">PM ELME</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Zaki ★</strong> + 2 (Hassan, Fareed)</span></div>
+          <div class="opt1-row"><span class="mat">HYD-FILTER×2 · OIL-5L×3 · GREASE×1</span></div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Hyder ★</strong> + 1 (Ahmad Abu)</span></div>
+          <div class="opt1-row"><span class="mat">WIRE-CONN×2 · BULB-12V×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">6.0h</span>
+            <span class="overdue-flag">OVERDUE</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 2: REACH STACKER SCC-800 — DEF MECH -->
+        <div class="opt1-card def">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">REACH STACKER SCC-800 — Hydraulic leak + Bushing wear</span>
+            <span class="opt1-badge def">DEF</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Ali Mahmoud ★</strong> + 1 (Safa Mahmoud)</span></div>
+          <div class="opt1-row"><span class="mat">SEAL-KIT×1 · BUSHING-KIT×1 · GREASE×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">3.0h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 3: REACH STACKER SCC-800 — DEF ELEC -->
+        <div class="opt1-card def">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">REACH STACKER SCC-800 — Warning light fault</span>
+            <span class="opt1-badge def">DEF</span>
+          </div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Zulfikar ★</strong> + 1 (Hussein)</span></div>
+          <div class="opt1-row"><span class="mat">BULB-12V×2 · WIRE-CONN×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">1.0h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 4: REACH STACKER 802 -->
+        <div class="opt1-card elme">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">REACH STACKER 802</span>
+            <span class="opt1-badge elme">PM ELME</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Zaki ★</strong> + 1 (Hassan)</span></div>
+          <div class="opt1-row"><span class="mat">HYD-FILTER×1 · OIL-5L×2</span></div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Hyder ★</strong> + 1 (Ahmad Abu)</span></div>
+          <div class="opt1-row"><span class="mat">WIRE-CONN×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">4.0h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 5: ECH 12 PM -->
+        <div class="opt1-card elme">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">ECH 12</span>
+            <span class="opt1-badge elme">PM ELME</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Zaki ★</strong> + 1 (Fareed)</span></div>
+          <div class="opt1-row"><span class="mat">OIL-5L×2 · HYD-FILTER×1 · GREASE×1</span></div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Hyder ★</strong></span></div>
+          <div class="opt1-row"><span class="mat">BULB-12V×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">4.5h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 6: ECH 12 DEF ELEC -->
+        <div class="opt1-card def">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">ECH 12 — Control panel fault</span>
+            <span class="opt1-badge def">DEF</span>
+          </div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Zulfikar ★</strong> + 1 (Omar)</span></div>
+          <div class="opt1-row"><span class="mat">WIRE-CONN×3 · BULB-12V×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">1.5h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 7: ECH 14 AC -->
+        <div class="opt1-card elec">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">ECH 14 — AC Service</span>
+            <span class="opt1-badge elec">ELEC</span>
+          </div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Akram ★</strong> + 1 (Kareem)</span></div>
+          <div class="opt1-row"><span class="mat">AC-FILTER×1 · WIRE-CONN×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">2.0h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 8: TRUCK 45 DEF -->
+        <div class="opt1-card def overdue">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">TRUCK 45 — Bearing/Brake/Steering defects</span>
+            <span class="opt1-badge def">DEF</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Ali Mahmoud ★</strong> + 2 (Safa Mahmoud, Hassan)</span></div>
+          <div class="opt1-row"><span class="mat">BEARING-KIT×2 · SEAL-KIT×1 · GREASE×2</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">4.0h</span>
+            <span class="overdue-flag">OVERDUE</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="opt1-col">
+
+        <!-- Card 9: TRUCK 50 PM -->
+        <div class="opt1-card elme">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">TRUCK 50</span>
+            <span class="opt1-badge elme">PM ELME</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Zaki ★</strong> + 1 (Fareed)</span></div>
+          <div class="opt1-row"><span class="mat">OIL-5L×2 · HYD-FILTER×1</span></div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Hyder ★</strong></span></div>
+          <div class="opt1-row"><span class="mat">WIRE-CONN×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">4.0h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 10: TRUCK 50 DEF MECH -->
+        <div class="opt1-card def">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">TRUCK 50 — Clutch adjustment</span>
+            <span class="opt1-badge def">DEF</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Ali Mahmoud ★</strong> + 1 (Safa Mahmoud)</span></div>
+          <div class="opt1-row"><span class="mat">SEAL-KIT×1 · GREASE×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">1.5h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 11: TRUCK 51 PM -->
+        <div class="opt1-card elme">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">TRUCK 51</span>
+            <span class="opt1-badge elme">PM ELME</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Zaki ★</strong> + 1 (Hassan)</span></div>
+          <div class="opt1-row"><span class="mat">OIL-5L×2 · HYD-FILTER×1</span></div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Hyder ★</strong></span></div>
+          <div class="opt1-row"><span class="mat">BULB-12V×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">4.0h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 12: FORKLIFT 8 PM -->
+        <div class="opt1-card elme">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">FORKLIFT 8</span>
+            <span class="opt1-badge elme">PM ELME</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Zaki ★</strong> + 1 (Fareed)</span></div>
+          <div class="opt1-row"><span class="mat">OIL-5L×1 · HYD-FILTER×1</span></div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Hyder ★</strong></span></div>
+          <div class="opt1-row"><span class="mat">WIRE-CONN×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">3.0h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 13: FORKLIFT 11 PM -->
+        <div class="opt1-card elme">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">FORKLIFT 11</span>
+            <span class="opt1-badge elme">PM ELME</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Zaki ★</strong> + 1 (Hassan)</span></div>
+          <div class="opt1-row"><span class="mat">OIL-5L×1</span></div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Hyder ★</strong> + 1 (Ahmad Abu)</span></div>
+          <div class="opt1-row"><span class="mat">WIRE-CONN×2 · BULB-12V×2</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">3.5h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 14: FORKLIFT 11 DEF ELEC (2 defects merged) -->
+        <div class="opt1-card def">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">FORKLIFT 11 — Battery + Headlight faults</span>
+            <span class="opt1-badge def">DEF</span>
+          </div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Zulfikar ★</strong> + 1 (Omar)</span></div>
+          <div class="opt1-row"><span class="mat">WIRE-CONN×2 · BULB-12V×2</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">1.5h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 15: FORKLIFT 15 PM -->
+        <div class="opt1-card elme">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">FORKLIFT 15</span>
+            <span class="opt1-badge elme">PM ELME</span>
+          </div>
+          <div class="opt1-row"><span class="label">MECH</span><span><strong>Zaki ★</strong> + 1 (Fareed)</span></div>
+          <div class="opt1-row"><span class="mat">OIL-5L×1 · GREASE×1</span></div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Hyder ★</strong></span></div>
+          <div class="opt1-row"><span class="mat">BULB-12V×1</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">3.0h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+        <!-- Card 16: FORKLIFT 22 DEF -->
+        <div class="opt1-card def">
+          <div class="opt1-card-head">
+            <span class="opt1-card-title">FORKLIFT 22 — Battery connection test</span>
+            <span class="opt1-badge def">DEF</span>
+          </div>
+          <div class="opt1-row"><span class="label">ELEC</span><span><strong>Zulfikar ★</strong></span></div>
+          <div class="opt1-row"><span class="mat">WIRE-CONN×2</span></div>
+          <div class="opt1-meta">
+            <span class="hrs">0.5h</span>
+            <span class="check"><span class="box"></span>Done</span>
+          </div>
+          <div class="opt1-notes">&nbsp;</div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <div class="annotation">
+    <p><span class="pros">PROS:</span> Cards keep the visual rhythm users know. Each bundle is a clear visual unit, easy to scan for the inspector in the field. Retains all details including notes write-in.</p>
+    <p><span class="cons">CONS:</span> Still the least dense of the 3 options — with defects counted separately, 16 cards barely fit. One day may spill to a second page if defects are heavy. Worker names must be truncated.</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- OPTION 2: DENSE TABLE                        -->
+  <!-- ============================================ -->
+  <div class="option-label">
+    <span class="num">OPTION 2</span>
+    <h2>Dense Table Format — One Row Per Bundle</h2>
+    <span class="est">Estimated: 1 page per day</span>
+  </div>
+
+  <div class="page">
+    <div class="top-bar">
+      <span>WEEKLY WORK PLAN · 6-12 April 2026 · PUBLISHED</span>
+      <span class="right">Page 1 of 1 · East Berth</span>
+    </div>
+    <div class="day-bar">
+      <span>MONDAY, 6 APRIL 2026 — EAST BERTH</span>
+      <span class="count">15 BUNDLES</span>
+    </div>
+
+    <div class="opt2-content">
+      <table class="opt2-table">
+        <thead>
+          <tr>
+            <th class="col-num">#</th>
+            <th class="col-equip">Equipment</th>
+            <th class="col-type">Type</th>
+            <th class="col-wc">WC</th>
+            <th class="col-mech">Mech Team</th>
+            <th class="col-elec">Elec Team</th>
+            <th class="col-mat">Materials</th>
+            <th class="col-hrs">Hrs</th>
+            <th class="col-od">OD</th>
+            <th class="col-done">✓</th>
+            <th class="col-notes">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="overdue">
+            <td class="col-num">1</td>
+            <td><span class="equip-name">REACH STACKER SCC-800</span><span class="equip-sub">PM 6000h service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +2<br><span class="workers">Hassan, Fareed</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span> +1<br><span class="workers">Ahmad Abu</span></td>
+            <td class="mat-cell">HYD-FILTER×2 · OIL-5L×3<br>GREASE×1 · WIRE-CONN×2 · BULB-12V×1</td>
+            <td><span class="hrs-val">6.0</span></td>
+            <td><span class="od-yes">OD</span></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">2</td>
+            <td><span class="equip-name">REACH STACKER SCC-800</span><span class="equip-sub">Hydraulic leak + Bushing wear</span></td>
+            <td><span class="tag def">DEF</span></td>
+            <td>MECH</td>
+            <td class="team-cell"><span class="lead">Ali Mahmoud</span> +1<br><span class="workers">Safa Mahmoud</span></td>
+            <td class="team-cell empty">—</td>
+            <td class="mat-cell">SEAL-KIT×1 · BUSHING-KIT×1<br>GREASE×1</td>
+            <td><span class="hrs-val">3.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">3</td>
+            <td><span class="equip-name">REACH STACKER SCC-800</span><span class="equip-sub">Warning light fault</span></td>
+            <td><span class="tag def">DEF</span></td>
+            <td>ELEC</td>
+            <td class="team-cell empty">—</td>
+            <td class="team-cell"><span class="lead">Zulfikar</span> +1<br><span class="workers">Hussein</span></td>
+            <td class="mat-cell">BULB-12V×2 · WIRE-CONN×1</td>
+            <td><span class="hrs-val">1.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">4</td>
+            <td><span class="equip-name">REACH STACKER 802</span><span class="equip-sub">PM 3000h service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Hassan</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span> +1<br><span class="workers">Ahmad Abu</span></td>
+            <td class="mat-cell">HYD-FILTER×1 · OIL-5L×2<br>WIRE-CONN×1</td>
+            <td><span class="hrs-val">4.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">5</td>
+            <td><span class="equip-name">ECH 12</span><span class="equip-sub">PM 3-week service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Fareed</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span></td>
+            <td class="mat-cell">OIL-5L×2 · HYD-FILTER×1<br>GREASE×1 · BULB-12V×1</td>
+            <td><span class="hrs-val">4.5</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">6</td>
+            <td><span class="equip-name">ECH 12</span><span class="equip-sub">Control panel fault</span></td>
+            <td><span class="tag def">DEF</span></td>
+            <td>ELEC</td>
+            <td class="team-cell empty">—</td>
+            <td class="team-cell"><span class="lead">Zulfikar</span> +1<br><span class="workers">Omar</span></td>
+            <td class="mat-cell">WIRE-CONN×3 · BULB-12V×1</td>
+            <td><span class="hrs-val">1.5</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">7</td>
+            <td><span class="equip-name">ECH 14</span><span class="equip-sub">AC service quarterly</span></td>
+            <td><span class="tag elec">ELEC</span></td>
+            <td>ELEC</td>
+            <td class="team-cell empty">—</td>
+            <td class="team-cell"><span class="lead">Akram</span> +1<br><span class="workers">Kareem</span></td>
+            <td class="mat-cell">AC-FILTER×1 · WIRE-CONN×1</td>
+            <td><span class="hrs-val">2.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr class="overdue">
+            <td class="col-num">8</td>
+            <td><span class="equip-name">TRUCK 45</span><span class="equip-sub">Bearing + Brake + Steering</span></td>
+            <td><span class="tag def">DEF</span></td>
+            <td>MECH</td>
+            <td class="team-cell"><span class="lead">Ali Mahmoud</span> +2<br><span class="workers">Safa Mahmoud, Hassan</span></td>
+            <td class="team-cell empty">—</td>
+            <td class="mat-cell">BEARING-KIT×2 · SEAL-KIT×1<br>GREASE×2</td>
+            <td><span class="hrs-val">4.0</span></td>
+            <td><span class="od-yes">OD</span></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">9</td>
+            <td><span class="equip-name">TRUCK 50</span><span class="equip-sub">PM 3000h service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Fareed</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span></td>
+            <td class="mat-cell">OIL-5L×2 · HYD-FILTER×1<br>WIRE-CONN×1</td>
+            <td><span class="hrs-val">4.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">10</td>
+            <td><span class="equip-name">TRUCK 50</span><span class="equip-sub">Clutch adjustment</span></td>
+            <td><span class="tag def">DEF</span></td>
+            <td>MECH</td>
+            <td class="team-cell"><span class="lead">Ali Mahmoud</span> +1<br><span class="workers">Safa Mahmoud</span></td>
+            <td class="team-cell empty">—</td>
+            <td class="mat-cell">SEAL-KIT×1 · GREASE×1</td>
+            <td><span class="hrs-val">1.5</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">11</td>
+            <td><span class="equip-name">TRUCK 51</span><span class="equip-sub">PM 3000h service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Hassan</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span></td>
+            <td class="mat-cell">OIL-5L×2 · HYD-FILTER×1<br>BULB-12V×1</td>
+            <td><span class="hrs-val">4.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">12</td>
+            <td><span class="equip-name">FORKLIFT 8</span><span class="equip-sub">PM 1500h service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Fareed</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span></td>
+            <td class="mat-cell">OIL-5L×1 · HYD-FILTER×1<br>WIRE-CONN×1</td>
+            <td><span class="hrs-val">3.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">13</td>
+            <td><span class="equip-name">FORKLIFT 11</span><span class="equip-sub">PM 1500h + 2 defects</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Hassan</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span> +1<br><span class="workers">Ahmad Abu</span></td>
+            <td class="mat-cell">OIL-5L×1 · WIRE-CONN×2<br>BULB-12V×2</td>
+            <td><span class="hrs-val">3.5</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">14</td>
+            <td><span class="equip-name">FORKLIFT 15</span><span class="equip-sub">PM 1500h service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Fareed</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span></td>
+            <td class="mat-cell">OIL-5L×1 · GREASE×1<br>BULB-12V×1</td>
+            <td><span class="hrs-val">3.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">15</td>
+            <td><span class="equip-name">FORKLIFT 22</span><span class="equip-sub">Battery connection test</span></td>
+            <td><span class="tag def">DEF</span></td>
+            <td>ELEC</td>
+            <td class="team-cell empty">—</td>
+            <td class="team-cell"><span class="lead">Zulfikar</span></td>
+            <td class="mat-cell">WIRE-CONN×2</td>
+            <td><span class="hrs-val">0.5</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">16</td>
+            <td><span class="equip-name">TRAILER 90</span><span class="equip-sub">PM 6-month service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Hassan</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span></td>
+            <td class="mat-cell">GREASE×2 · BEARING-KIT×1<br>WIRE-CONN×1</td>
+            <td><span class="hrs-val">2.5</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">17</td>
+            <td><span class="equip-name">TRAILER 91</span><span class="equip-sub">PM 6-month service</span></td>
+            <td><span class="tag elme">PM</span></td>
+            <td>ELME</td>
+            <td class="team-cell"><span class="lead">Zaki</span> +1<br><span class="workers">Fareed</span></td>
+            <td class="team-cell"><span class="lead">Hyder</span></td>
+            <td class="mat-cell">GREASE×2 · BEARING-KIT×1</td>
+            <td><span class="hrs-val">2.5</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">18</td>
+            <td><span class="equip-name">TRAILER 88</span><span class="equip-sub">Wheel hub + Axle bushing</span></td>
+            <td><span class="tag def">DEF</span></td>
+            <td>MECH</td>
+            <td class="team-cell"><span class="lead">Ali Mahmoud</span> +1<br><span class="workers">Safa Mahmoud</span></td>
+            <td class="team-cell empty">—</td>
+            <td class="mat-cell">BEARING-KIT×1 · BUSHING-KIT×1<br>GREASE×1</td>
+            <td><span class="hrs-val">2.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+          <tr>
+            <td class="col-num">19</td>
+            <td><span class="equip-name">PUMP P-101</span><span class="equip-sub">Hydraulic seal leak</span></td>
+            <td><span class="tag def">DEF</span></td>
+            <td>MECH</td>
+            <td class="team-cell"><span class="lead">Ali Mahmoud</span></td>
+            <td class="team-cell empty">—</td>
+            <td class="mat-cell">SEAL-KIT×1 · HYD-FILTER×1</td>
+            <td><span class="hrs-val">1.0</span></td>
+            <td></td>
+            <td><span class="check-box"></span></td>
+            <td><div class="notes-line"></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="annotation">
+    <p><span class="pros">PROS:</span> Most dense option — fits 18-20 bundles per page comfortably, so even heavy days stay on one sheet. Every column is scannable. Inspector can tick a row and move on. Materials, lead names, workers, hours, overdue, notes all visible in one glance.</p>
+    <p><span class="cons">CONS:</span> Feels more like a spreadsheet than a worksheet. Less warm/friendly than cards. Font is small (7pt) — some older users may struggle.</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- OPTION 3: HYBRID BY TEAM                     -->
+  <!-- ============================================ -->
+  <div class="option-label">
+    <span class="num">OPTION 3</span>
+    <h2>Hybrid — Section Headers by Team + Compact Rows</h2>
+    <span class="est">Estimated: 1 page per day</span>
+  </div>
+
+  <div class="page">
+    <div class="top-bar">
+      <span>WEEKLY WORK PLAN · 6-12 April 2026 · PUBLISHED</span>
+      <span class="right">Page 1 of 1 · East Berth</span>
+    </div>
+    <div class="day-bar">
+      <span>MONDAY, 6 APRIL 2026 — EAST BERTH</span>
+      <span class="count">15 BUNDLES · 4 TEAMS</span>
+    </div>
+
+    <div class="opt3-content">
+
+      <!-- MECH PM TEAM -->
+      <div class="opt3-section">
+        <div class="opt3-section-head mech">
+          <span class="icon">⚙</span>
+          <span>MECH PM TEAM</span>
+          <span class="lead-label">Lead: Zaki ★</span>
+          <span class="count">9 bundles · 34h · Workers: Hassan, Fareed</span>
+        </div>
+        <div class="opt3-row overdue">
+          <span class="arrow">→</span>
+          <div><div class="equip">REACH STACKER SCC-800</div><div class="workers">PM 6000h service · +Hassan, Fareed</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">HYD-FILTER×2 · OIL-5L×3 · GREASE×1</span>
+          <span class="hrs-cell">4.0h</span>
+          <span class="od-cell"><span class="od-yes">OD</span></span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">REACH STACKER 802</div><div class="workers">PM 3000h · +Hassan</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">HYD-FILTER×1 · OIL-5L×2</span>
+          <span class="hrs-cell">2.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">ECH 12</div><div class="workers">PM 3-week service · +Fareed</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">OIL-5L×2 · HYD-FILTER×1 · GREASE×1</span>
+          <span class="hrs-cell">3.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">TRUCK 50</div><div class="workers">PM 3000h · +Fareed</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">OIL-5L×2 · HYD-FILTER×1</span>
+          <span class="hrs-cell">2.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">TRUCK 51</div><div class="workers">PM 3000h · +Hassan</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">OIL-5L×2 · HYD-FILTER×1</span>
+          <span class="hrs-cell">2.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">FORKLIFT 8</div><div class="workers">PM 1500h · +Fareed</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">OIL-5L×1 · HYD-FILTER×1</span>
+          <span class="hrs-cell">2.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">FORKLIFT 11</div><div class="workers">PM 1500h · +Hassan</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">OIL-5L×1</span>
+          <span class="hrs-cell">2.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">FORKLIFT 15</div><div class="workers">PM 1500h · +Fareed</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">OIL-5L×1 · GREASE×1</span>
+          <span class="hrs-cell">2.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">TRAILER 90 + TRAILER 91</div><div class="workers">PM 6-month · +Hassan, Fareed</div></div>
+          <span class="tag-cell"><span class="tag elme">PM ELME</span></span>
+          <span>ELME</span>
+          <span class="mat-inline">GREASE×4 · BEARING-KIT×2</span>
+          <span class="hrs-cell">3.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+      </div>
+
+      <!-- ELEC PM TEAM -->
+      <div class="opt3-section">
+        <div class="opt3-section-head elec">
+          <span class="icon">⚡</span>
+          <span>ELEC PM TEAM</span>
+          <span class="lead-label">Lead: Hyder ★ · AC: Akram ★</span>
+          <span class="count">10 bundles · 15h · Workers: Ahmad Abu, Kareem</span>
+        </div>
+        <div class="opt3-row overdue">
+          <span class="arrow">→</span>
+          <div><div class="equip">REACH STACKER SCC-800</div><div class="workers">PM Elec · +Ahmad Abu</div></div>
+          <span class="tag-cell"><span class="tag elec">ELEC</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">WIRE-CONN×2 · BULB-12V×1</span>
+          <span class="hrs-cell">2.0h</span>
+          <span class="od-cell"><span class="od-yes">OD</span></span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">REACH STACKER 802</div><div class="workers">PM Elec · +Ahmad Abu</div></div>
+          <span class="tag-cell"><span class="tag elec">ELEC</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">WIRE-CONN×1</span>
+          <span class="hrs-cell">1.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">ECH 12</div><div class="workers">PM Elec</div></div>
+          <span class="tag-cell"><span class="tag elec">ELEC</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">BULB-12V×1</span>
+          <span class="hrs-cell">1.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">ECH 14</div><div class="workers">AC Service Q2 · Akram ★ +Kareem</div></div>
+          <span class="tag-cell"><span class="tag elec">AC</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">AC-FILTER×1 · WIRE-CONN×1</span>
+          <span class="hrs-cell">2.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">TRUCK 50 + TRUCK 51</div><div class="workers">PM Elec</div></div>
+          <span class="tag-cell"><span class="tag elec">ELEC</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">WIRE-CONN×2 · BULB-12V×1</span>
+          <span class="hrs-cell">3.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">FORKLIFT 8 + 11 + 15</div><div class="workers">PM Elec · +Ahmad Abu</div></div>
+          <span class="tag-cell"><span class="tag elec">ELEC</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">WIRE-CONN×4 · BULB-12V×4</span>
+          <span class="hrs-cell">3.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">TRAILER 90 + 91</div><div class="workers">PM Elec lights</div></div>
+          <span class="tag-cell"><span class="tag elec">ELEC</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">WIRE-CONN×1 · BULB-12V×2</span>
+          <span class="hrs-cell">1.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+      </div>
+
+      <!-- DEFECT MECH TEAM -->
+      <div class="opt3-section">
+        <div class="opt3-section-head defmech">
+          <span class="icon">🔧</span>
+          <span>DEFECT MECH TEAM</span>
+          <span class="lead-label">Lead: Ali Mahmoud ★</span>
+          <span class="count">6 defects · 11.5h · Workers: Safa Mahmoud, Hassan</span>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">REACH STACKER SCC-800</div><div class="workers">Hydraulic leak + Bushing wear · +Safa Mahmoud</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>MECH</span>
+          <span class="mat-inline">SEAL-KIT×1 · BUSHING-KIT×1 · GREASE×1</span>
+          <span class="hrs-cell">3.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row overdue">
+          <span class="arrow">→</span>
+          <div><div class="equip">TRUCK 45</div><div class="workers">Bearing + Brake + Steering · +Safa Mahmoud, Hassan</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>MECH</span>
+          <span class="mat-inline">BEARING-KIT×2 · SEAL-KIT×1 · GREASE×2</span>
+          <span class="hrs-cell">4.0h</span>
+          <span class="od-cell"><span class="od-yes">OD</span></span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">TRUCK 50</div><div class="workers">Clutch adjustment · +Safa Mahmoud</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>MECH</span>
+          <span class="mat-inline">SEAL-KIT×1 · GREASE×1</span>
+          <span class="hrs-cell">1.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">TRAILER 88</div><div class="workers">Wheel hub + Axle bushing · +Safa Mahmoud</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>MECH</span>
+          <span class="mat-inline">BEARING-KIT×1 · BUSHING-KIT×1 · GREASE×1</span>
+          <span class="hrs-cell">2.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">PUMP P-101</div><div class="workers">Hydraulic seal leak</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>MECH</span>
+          <span class="mat-inline">SEAL-KIT×1 · HYD-FILTER×1</span>
+          <span class="hrs-cell">1.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+      </div>
+
+      <!-- DEFECT ELEC TEAM -->
+      <div class="opt3-section">
+        <div class="opt3-section-head defelec">
+          <span class="icon">⚡</span>
+          <span>DEFECT ELEC TEAM</span>
+          <span class="lead-label">Lead: Zulfikar ★</span>
+          <span class="count">4 defects · 4.5h · Workers: Hussein, Omar</span>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">REACH STACKER SCC-800</div><div class="workers">Warning light fault · +Hussein</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">BULB-12V×2 · WIRE-CONN×1</span>
+          <span class="hrs-cell">1.0h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">ECH 12</div><div class="workers">Control panel fault · +Omar</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">WIRE-CONN×3 · BULB-12V×1</span>
+          <span class="hrs-cell">1.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">FORKLIFT 11</div><div class="workers">Battery + Headlight · +Omar</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">WIRE-CONN×2 · BULB-12V×2</span>
+          <span class="hrs-cell">1.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+        <div class="opt3-row">
+          <span class="arrow">→</span>
+          <div><div class="equip">FORKLIFT 22</div><div class="workers">Battery connection test</div></div>
+          <span class="tag-cell"><span class="tag def">DEF</span></span>
+          <span>ELEC</span>
+          <span class="mat-inline">WIRE-CONN×2</span>
+          <span class="hrs-cell">0.5h</span>
+          <span class="od-cell">—</span>
+          <span class="check-cell"><span class="check-box"></span></span>
+          <div class="notes-cell"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="annotation">
+    <p><span class="pros">PROS:</span> Best for team-based execution — each sub-team sees their own section with their lead at top. Workers know exactly where to look. Natural daily briefing format. Section totals (bundles · hours · workers) give instant overview. Very printable for whiteboards.</p>
+    <p><span class="cons">CONS:</span> Same equipment can appear 2-4 times (once per team touching it), which can feel duplicative. Slightly less total density than Option 2 due to section headers.</p>
+  </div>
+
+  <div style="text-align: center; margin-top: 60px; padding: 20px; color: var(--muted); font-size: 12px;">
+    Pick one option to become the new PDF format.<br>
+    All three preserve every required detail: equipment, type, work center, mech/elec leads + workers, materials, hours, overdue flag, done checkbox, notes line.
+  </div>
+
+</div>
+
+</body>
+</html>
