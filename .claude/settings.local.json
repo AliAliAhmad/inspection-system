@@ -190,7 +190,8 @@
       "Bash(GIT_DIR=/Users/AliAliAhmad_1_2/Desktop/inspection_system/.git git status:*)",
       "Bash(/usr/bin/git:*)",
       "Bash(GIT_TRACE=1 git status)",
-      "Bash(GIT_TRACE=1 GIT_TRACE_SETUP=1 git status)"
+      "Bash(GIT_TRACE=1 GIT_TRACE_SETUP=1 git status)",
+      "Bash(/opt/homebrew/bin/tsc --noEmit --project /Users/AliAliAhmad_1_2/Desktop/inspection_system/frontend/apps/mobile/tsconfig.json)"
     ]
   }
 }
