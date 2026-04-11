@@ -52,14 +52,13 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 };
 
 // 5. Exclude web app source files and nested react copies (e.g. @expo/cli canary)
-const exclusionList = require('metro-config/private/defaults/exclusionList').default;
-config.resolver.blockList = exclusionList([
+config.resolver.blockList = [
   // Exclude web app
   new RegExp(
     path.resolve(monorepoRoot, 'apps/web').replace(/[/\\]/g, '[/\\\\]') + '[/\\\\].*',
   ),
   // Block any nested react copies (e.g. @expo/cli/static/canary-full/node_modules/react)
   /.*[/\\]node_modules[/\\].*[/\\]node_modules[/\\]react[/\\].*/,
-]);
+];
 
 module.exports = config;
