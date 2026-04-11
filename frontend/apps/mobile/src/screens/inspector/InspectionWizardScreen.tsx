@@ -202,6 +202,19 @@ export default function InspectionWizardScreen() {
     return deduplicated.sort((a, b) => a.order_index - b.order_index);
   }, [inspection, inspectorCategory]);
 
+  // Items this inspector is RESPONSIBLE for validating before submit.
+  // Own category + shared (no category). Excludes the OTHER trade's items —
+  // those are visible for reference but not the current inspector's responsibility.
+  // Matches the backend _validate_completeness() filter in inspection_service.py.
+  const ownCategoryItems = useMemo(() => {
+    if (!inspectorCategory) return allChecklistItems;
+    const otherCategory = inspectorCategory === 'mechanical' ? 'electrical' : 'mechanical';
+    return allChecklistItems.filter((item) => {
+      const cat = (item as any).category;
+      return cat !== otherCategory; // keep own category + items with no category
+    });
+  }, [allChecklistItems, inspectorCategory]);
+
   // Group items by assembly
   const assemblyGroups = useMemo(() => {
     const groups: { assembly: string; startIndex: number; count: number }[] = [];
@@ -820,32 +833,28 @@ export default function InspectionWizardScreen() {
     return false;
   }, [localAnswers, isArabic, validateAnswer]);
 
-  // Check if all items are complete and offer to go to submit
+  // Check if all items are complete and offer to go to submit.
+  // Only considers the inspector's own-trade items — cross-trade is the colleague's
+  // responsibility and must never block this inspector's submit flow.
   const checkAllCompleteAndOfferSubmit = useCallback((updatedAnswers: Record<number, LocalAnswer>) => {
-    // Check if all items are answered
-    const otherCategory = inspectorCategory === 'mechanical' ? 'electrical'
-      : inspectorCategory === 'electrical' ? 'mechanical' : null;
-    const allAnswered = allChecklistItems.every(item => {
-      // Skipped items are OK
+    // Check if all own-trade items are answered (skipped is OK)
+    const allAnswered = ownCategoryItems.every(item => {
       if (skippedItems.has(item.id)) return true;
-      // Other category items that are unanswered are OK (they're skippable)
-      if (otherCategory && (item as any).category === otherCategory && !updatedAnswers[item.id]?.answer_value) return true;
-      // Must be answered
       return !!updatedAnswers[item.id]?.answer_value;
     });
 
     if (!allAnswered) return;
 
-    // Check if any items are missing urgency level
-    const anyMissingUrgency = allChecklistItems.some(item =>
+    // Check if any own-trade items are missing urgency level
+    const anyMissingUrgency = ownCategoryItems.some(item =>
       updatedAnswers[item.id]?.answer_value && !skippedItems.has(item.id) &&
       updatedAnswers[item.id]?.urgency_level === undefined
     );
 
     if (anyMissingUrgency) return;
 
-    // Check if any items are missing required media (using the updated answers)
-    const anyMissingMedia = allChecklistItems.some(item => {
+    // Check if any own-trade items are missing required media (using the updated answers)
+    const anyMissingMedia = ownCategoryItems.some(item => {
       const answer = updatedAnswers[item.id];
       if (!answer?.answer_value) return false;
 
@@ -900,7 +909,7 @@ export default function InspectionWizardScreen() {
         },
       ]
     );
-  }, [allChecklistItems, skippedItems, isArabic, validateAnswer, goToIndex, totalItems, t]);
+  }, [ownCategoryItems, skippedItems, isArabic, validateAnswer, goToIndex, totalItems, t]);
 
   // Check if an answered item is missing urgency level
   const itemMissingUrgency = useCallback((item: ChecklistItem) => {
@@ -908,27 +917,42 @@ export default function InspectionWizardScreen() {
     return !!answer?.answer_value && !skippedItems.has(item.id) && answer?.urgency_level === undefined;
   }, [localAnswers, skippedItems]);
 
-  // Find next unanswered or missing-media/urgency item starting from a given index
+  // Find next unanswered or missing-media/urgency item starting from a given index.
+  // Only considers items in the inspector's own trade — cross-trade items are not
+  // this inspector's responsibility and should not block navigation.
+  // Returns an index into allChecklistItems (used for goToIndex).
   const findNextIncomplete = useCallback((startFromIndex: number): number => {
+    // Build the set of own-trade item IDs for O(1) lookup
+    const ownIds = new Set(ownCategoryItems.map((it) => it.id));
+
+    const isUnansweredAt = (i: number) => {
+      const item = allChecklistItems[i];
+      if (!ownIds.has(item.id)) return false; // skip cross-trade items
+      return !localAnswers[item.id]?.answer_value || skippedItems.has(item.id);
+    };
+    const isMissingMediaOrUrgencyAt = (i: number) => {
+      const item = allChecklistItems[i];
+      if (!ownIds.has(item.id)) return false; // skip cross-trade items
+      return itemMissingMedia(item) || itemMissingUrgency(item);
+    };
+
     // First check unanswered from startFromIndex onwards
     for (let i = startFromIndex; i < allChecklistItems.length; i++) {
-      const item = allChecklistItems[i];
-      if (!localAnswers[item.id]?.answer_value || skippedItems.has(item.id)) return i;
+      if (isUnansweredAt(i)) return i;
     }
     // Then check missing media or urgency from startFromIndex onwards
     for (let i = startFromIndex; i < allChecklistItems.length; i++) {
-      if (itemMissingMedia(allChecklistItems[i]) || itemMissingUrgency(allChecklistItems[i])) return i;
+      if (isMissingMediaOrUrgencyAt(i)) return i;
     }
     // Wrap around: check from beginning
     for (let i = 0; i < startFromIndex; i++) {
-      const item = allChecklistItems[i];
-      if (!localAnswers[item.id]?.answer_value || skippedItems.has(item.id)) return i;
+      if (isUnansweredAt(i)) return i;
     }
     for (let i = 0; i < startFromIndex; i++) {
-      if (itemMissingMedia(allChecklistItems[i]) || itemMissingUrgency(allChecklistItems[i])) return i;
+      if (isMissingMediaOrUrgencyAt(i)) return i;
     }
     return -1; // All complete
-  }, [allChecklistItems, localAnswers, skippedItems, itemMissingMedia, itemMissingUrgency]);
+  }, [allChecklistItems, ownCategoryItems, localAnswers, skippedItems, itemMissingMedia, itemMissingUrgency]);
 
   // Navigate to next incomplete item, or go to submit if all done
   const goToNextIncomplete = useCallback(() => {
@@ -953,10 +977,27 @@ export default function InspectionWizardScreen() {
 
   // Handle submit
   const handleSubmit = useCallback(() => {
-    // Step 1: Check for skipped or unanswered items
-    const unanswered = allChecklistItems.filter((item) =>
-      !localAnswers[item.id]?.answer_value || skippedItems.has(item.id)
-    );
+    // Validation only checks items in the inspector's OWN trade (own + shared).
+    // The other trade's items are the colleague's responsibility and should not
+    // block this inspector's submit. This matches the backend _validate_completeness()
+    // filter in inspection_service.py (filters by ChecklistItem.category).
+
+    // Helper: jump to first item matching predicate, using ownCategoryItems to find
+    // the item but allChecklistItems to navigate (since goToIndex uses allChecklistItems).
+    const jumpToFirstMatching = (predicate: (item: ChecklistItem) => boolean) => {
+      const target = ownCategoryItems.find(predicate);
+      if (!target) return;
+      const navIndex = allChecklistItems.findIndex((it) => it.id === target.id);
+      if (navIndex >= 0) {
+        setFixingIncomplete(true);
+        goToIndex(navIndex);
+      }
+    };
+
+    // Step 1: Check for skipped or unanswered items (own trade only)
+    const isUnanswered = (item: ChecklistItem) =>
+      !localAnswers[item.id]?.answer_value || skippedItems.has(item.id);
+    const unanswered = ownCategoryItems.filter(isUnanswered);
 
     if (unanswered.length > 0) {
       Alert.alert(
@@ -965,15 +1006,7 @@ export default function InspectionWizardScreen() {
         [
           {
             text: t('inspection.goToFirst', 'Go to first unanswered'),
-            onPress: () => {
-              const firstUnansweredIndex = allChecklistItems.findIndex(
-                item => !localAnswers[item.id]?.answer_value || skippedItems.has(item.id)
-              );
-              if (firstUnansweredIndex >= 0) {
-                setFixingIncomplete(true);
-                goToIndex(firstUnansweredIndex);
-              }
-            }
+            onPress: () => jumpToFirstMatching(isUnanswered),
           },
           { text: t('common.cancel'), style: 'cancel' }
         ]
@@ -981,11 +1014,11 @@ export default function InspectionWizardScreen() {
       return;
     }
 
-    // Step 1.5: Check for items missing urgency level
-    const missingUrgency = allChecklistItems.filter((item) =>
-      localAnswers[item.id]?.answer_value && !skippedItems.has(item.id) &&
-      localAnswers[item.id]?.urgency_level === undefined
-    );
+    // Step 1.5: Check for items missing urgency level (own trade only)
+    const isMissingUrgency = (item: ChecklistItem) =>
+      !!localAnswers[item.id]?.answer_value && !skippedItems.has(item.id) &&
+      localAnswers[item.id]?.urgency_level === undefined;
+    const missingUrgency = ownCategoryItems.filter(isMissingUrgency);
 
     if (missingUrgency.length > 0) {
       Alert.alert(
@@ -994,16 +1027,7 @@ export default function InspectionWizardScreen() {
         [
           {
             text: t('inspection.goToFirst', 'Go to first missing'),
-            onPress: () => {
-              const firstMissingIndex = allChecklistItems.findIndex((item) =>
-                localAnswers[item.id]?.answer_value && !skippedItems.has(item.id) &&
-                localAnswers[item.id]?.urgency_level === undefined
-              );
-              if (firstMissingIndex >= 0) {
-                setFixingIncomplete(true);
-                goToIndex(firstMissingIndex);
-              }
-            }
+            onPress: () => jumpToFirstMatching(isMissingUrgency),
           },
           { text: t('common.cancel'), style: 'cancel' }
         ]
@@ -1011,8 +1035,8 @@ export default function InspectionWizardScreen() {
       return;
     }
 
-    // Step 2: Check for items missing required media
-    const missingMedia = allChecklistItems.filter(itemMissingMedia);
+    // Step 2: Check for items missing required media (own trade only)
+    const missingMedia = ownCategoryItems.filter(itemMissingMedia);
 
     if (missingMedia.length > 0) {
       Alert.alert(
@@ -1021,13 +1045,7 @@ export default function InspectionWizardScreen() {
         [
           {
             text: t('inspection.goToFirstMissing', 'Go to first missing'),
-            onPress: () => {
-              const firstMissingIndex = allChecklistItems.findIndex(itemMissingMedia);
-              if (firstMissingIndex >= 0) {
-                setFixingIncomplete(true);
-                goToIndex(firstMissingIndex);
-              }
-            }
+            onPress: () => jumpToFirstMatching(itemMissingMedia),
           },
           { text: t('common.cancel'), style: 'cancel' }
         ]
@@ -1047,7 +1065,7 @@ export default function InspectionWizardScreen() {
         },
       ],
     );
-  }, [t, submitMutation, allChecklistItems, localAnswers, skippedItems, goToIndex, itemMissingMedia]);
+  }, [t, submitMutation, allChecklistItems, ownCategoryItems, localAnswers, skippedItems, goToIndex, itemMissingMedia]);
 
   // Photo upload - show options (Camera or Gallery)
   const handleTakePhoto = useCallback(() => {
@@ -1729,9 +1747,12 @@ export default function InspectionWizardScreen() {
   ).length;
   const skippedCount = skippedItems.size;
 
-  // Check if there are incomplete items (unanswered or missing media) elsewhere
-  const hasIncompleteElsewhere = allChecklistItems.some((item, idx) => {
-    if (idx === currentIndex) return false; // Skip current
+  // Check if there are incomplete own-trade items (unanswered or missing media)
+  // elsewhere. Cross-trade items are the colleague's responsibility and must not
+  // raise an incomplete flag for this inspector.
+  const currentItemId = allChecklistItems[currentIndex]?.id;
+  const hasIncompleteElsewhere = ownCategoryItems.some((item) => {
+    if (item.id === currentItemId) return false; // Skip current
     if (!localAnswers[item.id]?.answer_value || skippedItems.has(item.id)) return true;
     return itemMissingMedia(item);
   });
