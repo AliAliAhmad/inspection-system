@@ -1495,17 +1495,19 @@ class WorkPlanPDF(FPDF):
             all_jobs = list(day.jobs) if day.jobs else []
         total = len(all_jobs)
 
+        # Always English day names — Arabic reshaping distorts them in PDF
         self.current_day_label = day.date.strftime('%A, %d %B %Y')
         self.current_day_stats = '%d %s' % (total, self._t('jobs'))
         self.add_page()
 
+        sort_key = lambda j: (0 if j.job_type == 'defect' else 1 if j.job_type == 'pm' else 2, j.position or 0)
         east = sorted(
             [j for j in all_jobs if getattr(j, 'berth', None) in ('east', 'both', None)],
-            key=lambda j: (0 if j.job_type == 'defect' else 1 if j.job_type == 'pm' else 2, j.position or 0)
+            key=sort_key,
         )
         west = sorted(
             [j for j in all_jobs if getattr(j, 'berth', None) == 'west'],
-            key=lambda j: (0 if j.job_type == 'defect' else 1 if j.job_type == 'pm' else 2, j.position or 0)
+            key=sort_key,
         )
 
         # East berth
@@ -1787,16 +1789,20 @@ class WorkPlanPDF(FPDF):
             od_str = '%g%s' % (job.overdue_value, unit)
 
         # ── Wrap each variable-length cell using _wrap_lines ──
-        # The column widths translate approximately to these char counts
-        # at font size 6.5-7 (char width ~1.2mm):
-        #   eq column (col_widths[1]) ~ 35-40 chars
-        #   desc column (col_widths[2]) ~ 40 chars
-        #   team column (col_widths[3]) ~ 40 chars
-        #   mat column (col_widths[4]) ~ 42 chars
-        eq_lines = self._wrap_lines(eq_name or '-', 35, max_lines=3)
-        desc_lines_wrapped = self._wrap_lines(desc or '-', 40, max_lines=4, separator=' ')
-        team_lines_wrapped = self._wrap_lines(team_str or '-', 40, max_lines=4)
-        mat_lines_wrapped = self._wrap_lines(mat_str or '-', 42, max_lines=4)
+        # Arabic glyphs are ~1.5× wider than Latin, so use fewer chars
+        # per line when Arabic content is detected.  Also cap at 2 lines
+        # to prevent tall rows that trigger excessive page breaks.
+        _has_ar = any('\u0600' <= ch <= '\u06FF' for ch in (
+            (eq_name or '') + (desc or '') + team_str + mat_str
+        ))
+        eq_cpl = 25 if _has_ar else 35
+        txt_cpl = 28 if _has_ar else 40
+        mat_cpl = 30 if _has_ar else 42
+        ml = 2 if _has_ar else 3
+        eq_lines = self._wrap_lines(eq_name or '-', eq_cpl, max_lines=ml)
+        desc_lines_wrapped = self._wrap_lines(desc or '-', txt_cpl, max_lines=ml, separator=' ')
+        team_lines_wrapped = self._wrap_lines(team_str or '-', txt_cpl, max_lines=ml)
+        mat_lines_wrapped = self._wrap_lines(mat_str or '-', mat_cpl, max_lines=ml)
 
         # Row height = max wrapped line count × 4mm per line, minimum 5.5mm
         n_lines = max(
@@ -1948,19 +1954,9 @@ def _build_filter_note(filters, language='en'):
         return ''
 
     parts = []
-    is_ar = language == 'ar'
 
-    # Day name & month name maps for Arabic localization (strftime is always en_US)
-    AR_DAYS = {
-        'Monday': 'الإثنين', 'Tuesday': 'الثلاثاء', 'Wednesday': 'الأربعاء',
-        'Thursday': 'الخميس', 'Friday': 'الجمعة', 'Saturday': 'السبت',
-        'Sunday': 'الأحد',
-    }
-    AR_MONTHS = {
-        'Jan': 'يناير', 'Feb': 'فبراير', 'Mar': 'مارس', 'Apr': 'أبريل',
-        'May': 'مايو', 'Jun': 'يونيو', 'Jul': 'يوليو', 'Aug': 'أغسطس',
-        'Sep': 'سبتمبر', 'Oct': 'أكتوبر', 'Nov': 'نوفمبر', 'Dec': 'ديسمبر',
-    }
+    # All filter labels kept in English — Arabic reshaping distorts
+    # day names, berth labels, and trade labels in the PDF renderer.
 
     # Days
     days = filters.get('days') or []
@@ -1968,42 +1964,35 @@ def _build_filter_note(filters, language='en'):
         if len(days) == 1:
             try:
                 dt = datetime.strptime(days[0], '%Y-%m-%d')
-                if is_ar:
-                    day_name = AR_DAYS.get(dt.strftime('%A'), dt.strftime('%A'))
-                    month_name = AR_MONTHS.get(dt.strftime('%b'), dt.strftime('%b'))
-                    parts.append('%s, %d %s' % (day_name, dt.day, month_name))
-                else:
-                    parts.append(dt.strftime('%A, %d %b'))
+                parts.append(dt.strftime('%A, %d %b'))
             except Exception:
                 parts.append(days[0])
         elif len(days) < 7:
-            parts.append(('%d أيام' if is_ar else '%d days') % len(days))
+            parts.append('%d days' % len(days))
 
-    # Berths
+    # Berths — always English labels
     berths = filters.get('berths') or []
     if berths and len(berths) == 1:
         b = berths[0].lower()
         if b == 'east':
-            parts.append('الرصيف الشرقي' if is_ar else 'East berth')
+            parts.append('East berth')
         elif b == 'west':
-            parts.append('الرصيف الغربي' if is_ar else 'West berth')
+            parts.append('West berth')
 
     # Trades
     trades = filters.get('work_centers') or []
     if trades and len(trades) == 1:
         t = trades[0].upper()
         if t == 'MECH':
-            parts.append('ميكانيكي' if is_ar else 'Mechanical')
+            parts.append('Mechanical')
         elif t == 'ELEC':
-            parts.append('كهربائي' if is_ar else 'Electrical')
+            parts.append('Electrical')
 
     # Job types
     types = filters.get('job_types') or []
     if types and len(types) < 3:
-        label_map_en = {'pm': 'PM', 'defect': 'Defects', 'inspection': 'Inspections'}
-        label_map_ar = {'pm': 'وقائية', 'defect': 'أعطال', 'inspection': 'فحوصات'}
-        mp = label_map_ar if is_ar else label_map_en
-        parts.append(' + '.join(mp.get(t, t) for t in types))
+        label_map = {'pm': 'PM', 'defect': 'Defects', 'inspection': 'Inspections'}
+        parts.append(' + '.join(label_map.get(t, t) for t in types))
 
     if not parts:
         return ''
