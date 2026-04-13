@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Avatar, Tooltip, Spin, Badge, Progress, Tag } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Avatar, Tooltip, Spin, Badge, Tag, Button } from 'antd';
 import { ReloadOutlined, WarningOutlined } from '@ant-design/icons';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -123,6 +123,7 @@ interface EmployeePoolProps {
 }
 
 export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = [], onRefresh, vertical = false }) => {
+  const [berthFilter, setBerthFilter] = useState<'all' | 'east' | 'west'>('all');
   // Fetch users
   const { data: usersData, isLoading: usersLoading, refetch: refetchUsers } = useQuery({
     queryKey: ['users', 'active'],
@@ -245,6 +246,21 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
     return total;
   }, [userHoursMap]);
 
+  // User IDs assigned to jobs on the selected berth (for berth filter)
+  const berthUserIds = useMemo(() => {
+    if (berthFilter === 'all') return null; // null = show all
+    const ids = new Set<number>();
+    jobs.forEach((job: any) => {
+      const jb = (job.berth || '').toLowerCase();
+      if (jb === berthFilter || jb === 'both') {
+        (job.assignments || []).forEach((a: any) => {
+          if (a.user_id) ids.add(a.user_id);
+        });
+      }
+    });
+    return ids;
+  }, [berthFilter, jobs]);
+
   // Get users on leave for display
   const usersOnLeave = useMemo(() => {
     const users: any[] = [];
@@ -289,12 +305,26 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
             👥 Team Pool {!vertical && <span style={{ fontWeight: 400, color: '#8c8c8c' }}>- Drag to assign</span>}
           </span>
           {/* Quick Stats */}
-          <div style={{ display: 'flex', gap: vertical ? 4 : 12, fontSize: 11, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: vertical ? 4 : 12, fontSize: 11, flexWrap: 'wrap', alignItems: 'center' }}>
             <Tag color="green" style={{ margin: 0 }}>✅ {totalUsers.available}</Tag>
             {totalUsers.onLeave > 0 && (
               <Tag color="orange" style={{ margin: 0 }}>🏖️ {totalUsers.onLeave}</Tag>
             )}
             <Tag color="blue" style={{ margin: 0 }}>⏱️ {totalAssignedHours}h</Tag>
+            {/* Berth filter */}
+            <div style={{ display: 'flex', gap: 2, marginLeft: 4 }}>
+              {(['all', 'east', 'west'] as const).map(b => (
+                <Button
+                  key={b}
+                  size="small"
+                  type={berthFilter === b ? 'primary' : 'default'}
+                  onClick={() => setBerthFilter(b)}
+                  style={{ fontSize: 10, minWidth: 0, padding: '0 6px', height: 22 }}
+                >
+                  {b === 'all' ? 'All' : b === 'east' ? 'East' : 'West'}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
         <Tooltip title="Refresh">
@@ -351,7 +381,9 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
                 {/* All employees for this role */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                   {(['mechanical', 'electrical', 'hvac', 'other'] as const).map(spec => {
-                    const users = (specs?.[spec] || []).filter((u: any) => !leaveUserIds.has(u.id));
+                    const users = (specs?.[spec] || []).filter((u: any) =>
+                      !leaveUserIds.has(u.id) && (berthUserIds === null || berthUserIds.has(u.id))
+                    );
                     return users.map((user: any) => (
                       <DraggableEmployee
                         key={user.id}
@@ -403,7 +435,9 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
                 {/* Specialization Groups */}
                 {(['mechanical', 'electrical', 'hvac', 'other'] as const).map(spec => {
                   const users = specs[spec] || [];
-                  const availableUsers = users.filter(u => !leaveUserIds.has(u.id));
+                  const availableUsers = users.filter(u =>
+                    !leaveUserIds.has(u.id) && (berthUserIds === null || berthUserIds.has(u.id))
+                  );
                   if (availableUsers.length === 0) return null;
                   const specConfig = SPEC_CONFIG[spec] || { label: spec, emoji: '📋' };
 

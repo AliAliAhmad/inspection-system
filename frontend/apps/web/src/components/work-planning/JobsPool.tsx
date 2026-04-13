@@ -213,7 +213,6 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   const [equipmentTypeFilter, setEquipmentTypeFilter] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [tradeFilter, setTradeFilter] = useState<'all' | 'mechanical' | 'electrical'>('all');
-  const [berthFilter, setBerthFilter] = useState<'all' | 'east' | 'west'>('all');
 
   // Droppable zone — accepts calendar jobs dragged back to remove them from the plan
   const { setNodeRef: setPoolDropRef, isOver: isPoolOver } = useDroppable({
@@ -291,13 +290,6 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       // Priority filter
       if (priorityFilter !== 'all' && job.priority !== priorityFilter) {
         return false;
-      }
-      // Berth filter
-      if (berthFilter !== 'all') {
-        const jobBerth = (job.berth || job.equipment?.berth || '').toLowerCase();
-        if (jobBerth && jobBerth !== 'both' && jobBerth !== berthFilter) {
-          return false;
-        }
       }
       return true;
     };
@@ -390,7 +382,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     });
 
     return { prmJobs: prm, defectJobs: defect };
-  }, [availableJobs, searchText, equipmentFilter, equipmentTypeFilter, priorityFilter, prmSubTab, tradeFilter, berthFilter]);
+  }, [availableJobs, searchText, equipmentFilter, equipmentTypeFilter, priorityFilter, prmSubTab, tradeFilter]);
 
   // Counts
   const prmCount = prmJobs.length;
@@ -548,38 +540,20 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
                 options={equipmentTypeList.map(t => ({ value: t, label: t }))}
               />
 
-              {/* Berth + Priority Filters */}
-              <div style={{ display: 'flex', gap: 6 }}>
-                {/* Berth filter */}
-                <div style={{ display: 'flex', gap: 3 }}>
-                  {(['all', 'east', 'west'] as const).map(b => (
-                    <Button
-                      key={b}
-                      size="small"
-                      type={berthFilter === b ? 'primary' : 'default'}
-                      onClick={() => setBerthFilter(b)}
-                      style={{ fontSize: 10, minWidth: 0, padding: '0 6px' }}
-                    >
-                      {b === 'all' ? 'All' : b === 'east' ? 'E' : 'W'}
-                    </Button>
-                  ))}
-                </div>
-                <div style={{ borderLeft: '1px solid #f0f0f0' }} />
-                {/* Priority filter */}
-                <div style={{ display: 'flex', gap: 3, flex: 1 }}>
-                  {['all', 'urgent', 'high', 'normal'].map(p => (
-                    <Button
-                      key={p}
-                      size="small"
-                      type={priorityFilter === p ? 'primary' : 'default'}
-                      danger={p === 'urgent' && priorityFilter === p}
-                      onClick={() => setPriorityFilter(p)}
-                      style={{ flex: 1, fontSize: 10 }}
-                    >
-                      {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
-                    </Button>
-                  ))}
-                </div>
+              {/* Priority Filter */}
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['all', 'urgent', 'high', 'normal'].map(p => (
+                  <Button
+                    key={p}
+                    size="small"
+                    type={priorityFilter === p ? 'primary' : 'default'}
+                    danger={p === 'urgent' && priorityFilter === p}
+                    onClick={() => setPriorityFilter(p)}
+                    style={{ flex: 1, fontSize: 10 }}
+                  >
+                    {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
+                  </Button>
+                ))}
               </div>
             </Space>
           </div>
