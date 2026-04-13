@@ -151,6 +151,16 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
             {cycleLabel}
           </Tag>
         )}
+        {/* Trade badge — show for defects */}
+        {(() => {
+          const wc = (job.work_center || '').toUpperCase();
+          const cat = (job.defect?.category || job.category || '').toLowerCase();
+          const trade = wc === 'ELEC' ? 'electrical' : wc === 'MECH' ? 'mechanical' : wc === 'ELME' ? 'both' : cat || null;
+          if (trade === 'mechanical') return <Tag color="blue" style={{ fontSize: 9, margin: 0, padding: '0 4px', lineHeight: '16px' }}>⚙️ Mech</Tag>;
+          if (trade === 'electrical') return <Tag color="orange" style={{ fontSize: 9, margin: 0, padding: '0 4px', lineHeight: '16px' }}>⚡ Elec</Tag>;
+          if (trade === 'both') return <Tag color="purple" style={{ fontSize: 9, margin: 0, padding: '0 4px', lineHeight: '16px' }}>⚙️⚡</Tag>;
+          return null;
+        })()}
       </div>
     </div>
   );
@@ -202,6 +212,8 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   const [equipmentFilter, setEquipmentFilter] = useState<string>('');
   const [equipmentTypeFilter, setEquipmentTypeFilter] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [tradeFilter, setTradeFilter] = useState<'all' | 'mechanical' | 'electrical'>('all');
+  const [berthFilter, setBerthFilter] = useState<'all' | 'east' | 'west'>('all');
 
   // Droppable zone — accepts calendar jobs dragged back to remove them from the plan
   const { setNodeRef: setPoolDropRef, isOver: isPoolOver } = useDroppable({
@@ -280,6 +292,13 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       if (priorityFilter !== 'all' && job.priority !== priorityFilter) {
         return false;
       }
+      // Berth filter
+      if (berthFilter !== 'all') {
+        const jobBerth = (job.berth || job.equipment?.berth || '').toLowerCase();
+        if (jobBerth && jobBerth !== 'both' && jobBerth !== berthFilter) {
+          return false;
+        }
+      }
       return true;
     };
 
@@ -340,6 +359,23 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       })),
     ].filter(filterJob);
 
+    // Trade filter for defects
+    if (tradeFilter !== 'all') {
+      defect = defect.filter((d: any) => {
+        // SAP defect orders use work_center (ELEC/MECH/ELME)
+        const wc = (d.work_center || '').toUpperCase();
+        // Regular defects use defect.category (mechanical/electrical)
+        const cat = (d.defect?.category || d.category || '').toLowerCase();
+        if (tradeFilter === 'mechanical') {
+          return wc === 'MECH' || wc === 'ELME' || cat === 'mechanical';
+        }
+        if (tradeFilter === 'electrical') {
+          return wc === 'ELEC' || wc === 'ELME' || cat === 'electrical';
+        }
+        return true;
+      });
+    }
+
     // Sort defects by priority (urgent first), then overdue
     defect = defect.sort((a: any, b: any) => {
       // Overdue first
@@ -354,7 +390,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     });
 
     return { prmJobs: prm, defectJobs: defect };
-  }, [availableJobs, searchText, equipmentFilter, equipmentTypeFilter, priorityFilter, prmSubTab]);
+  }, [availableJobs, searchText, equipmentFilter, equipmentTypeFilter, priorityFilter, prmSubTab, tradeFilter, berthFilter]);
 
   // Counts
   const prmCount = prmJobs.length;
@@ -512,20 +548,38 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
                 options={equipmentTypeList.map(t => ({ value: t, label: t }))}
               />
 
-              {/* Priority Filter */}
-              <div style={{ display: 'flex', gap: 4 }}>
-                {['all', 'urgent', 'high', 'normal'].map(p => (
-                  <Button
-                    key={p}
-                    size="small"
-                    type={priorityFilter === p ? 'primary' : 'default'}
-                    danger={p === 'urgent' && priorityFilter === p}
-                    onClick={() => setPriorityFilter(p)}
-                    style={{ flex: 1, fontSize: 10 }}
-                  >
-                    {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
-                  </Button>
-                ))}
+              {/* Berth + Priority Filters */}
+              <div style={{ display: 'flex', gap: 6 }}>
+                {/* Berth filter */}
+                <div style={{ display: 'flex', gap: 3 }}>
+                  {(['all', 'east', 'west'] as const).map(b => (
+                    <Button
+                      key={b}
+                      size="small"
+                      type={berthFilter === b ? 'primary' : 'default'}
+                      onClick={() => setBerthFilter(b)}
+                      style={{ fontSize: 10, minWidth: 0, padding: '0 6px' }}
+                    >
+                      {b === 'all' ? 'All' : b === 'east' ? 'E' : 'W'}
+                    </Button>
+                  ))}
+                </div>
+                <div style={{ borderLeft: '1px solid #f0f0f0' }} />
+                {/* Priority filter */}
+                <div style={{ display: 'flex', gap: 3, flex: 1 }}>
+                  {['all', 'urgent', 'high', 'normal'].map(p => (
+                    <Button
+                      key={p}
+                      size="small"
+                      type={priorityFilter === p ? 'primary' : 'default'}
+                      danger={p === 'urgent' && priorityFilter === p}
+                      onClick={() => setPriorityFilter(p)}
+                      style={{ flex: 1, fontSize: 10 }}
+                    >
+                      {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </Space>
           </div>
@@ -560,6 +614,29 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
               </div>
             ))}
           </div>
+
+          {/* Defect trade filter */}
+          {activeTab === 'defect' && (
+            <div style={{ padding: '6px 12px', borderBottom: '1px solid #f0f0f0' }}>
+              <Space size={4}>
+                {([
+                  { key: 'all', label: 'All', icon: null },
+                  { key: 'mechanical', label: '⚙️ Mech', icon: null },
+                  { key: 'electrical', label: '⚡ Elec', icon: null },
+                ] as const).map(t => (
+                  <Button
+                    key={t.key}
+                    size="small"
+                    type={tradeFilter === t.key ? 'primary' : 'default'}
+                    onClick={() => setTradeFilter(t.key)}
+                    style={{ fontSize: 11 }}
+                  >
+                    {t.label}
+                  </Button>
+                ))}
+              </Space>
+            </div>
+          )}
 
           {/* PRM Sub-tabs */}
           {activeTab === 'prm' && (

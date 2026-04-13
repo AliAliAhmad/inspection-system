@@ -761,6 +761,11 @@ def add_job(plan_id):
         if defect_obj:
             description = defect_obj.description
 
+    # Validate work_center if provided
+    work_center = data.get('work_center')
+    if work_center and work_center not in ('ELEC', 'MECH', 'ELME'):
+        raise ValidationError("work_center must be ELEC, MECH, or ELME")
+
     job = WorkPlanJob(
         work_plan_day_id=day.id,
         job_type=job_type,
@@ -776,6 +781,7 @@ def add_job(plan_id):
         notes=data.get('notes'),
         difficulty=difficulty,
         engineer_id=engineer_id,
+        work_center=work_center,
     )
 
     db.session.add(job)

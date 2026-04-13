@@ -1054,6 +1054,7 @@ export default function WorkPlanningPage() {
       notes?: string;
       difficulty: 'minor' | 'major';
       engineer_id?: number | null;
+      work_center?: 'ELEC' | 'MECH' | 'ELME' | null;
     }) => workPlansApi.addJob(currentPlan!.id, {
       day_id: values.day_id,
       job_type: values.job_type,
@@ -1066,6 +1067,7 @@ export default function WorkPlanningPage() {
       notes: values.notes,
       difficulty: values.difficulty,
       engineer_id: values.engineer_id || null,
+      work_center: values.work_center || null,
     }),
     onSuccess: () => {
       message.success('Job added successfully');
@@ -3424,7 +3426,30 @@ export default function WorkPlanningPage() {
               <Col span={8}>
                 <Card size="small">
                   <Text type="secondary">Berth</Text>
-                  <div style={{ fontWeight: 600 }}>{selectedJob.berth?.toUpperCase() || 'Both'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>{selectedJob.berth?.toUpperCase() || 'Both'}</span>
+                    {isDraft && selectedJob.berth !== 'both' && (
+                      <Tooltip title={`Transfer to ${selectedJob.berth === 'east' ? 'West' : 'East'}`}>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<SwapOutlined />}
+                          style={{ padding: 0, fontSize: 12 }}
+                          onClick={() => {
+                            if (!currentPlan) return;
+                            const newBerth = selectedJob.berth === 'east' ? 'west' : 'east';
+                            workPlansApi.updateJob(currentPlan.id, selectedJob.id, { berth: newBerth }).then(() => {
+                              message.success(`Transferred to ${newBerth.toUpperCase()}`);
+                              queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+                              setSelectedJob({ ...selectedJob, berth: newBerth });
+                            }).catch(() => message.error('Failed to transfer'));
+                          }}
+                        >
+                          {selectedJob.berth === 'east' ? '→ West' : '→ East'}
+                        </Button>
+                      </Tooltip>
+                    )}
+                  </div>
                 </Card>
               </Col>
             </Row>
@@ -3488,6 +3513,7 @@ export default function WorkPlanningPage() {
                 notes: values.notes,
                 difficulty: values.difficulty || 'minor',
                 engineer_id: values.engineer_id || null,
+                work_center: values.work_center || null,
               });
             }}
             initialValues={{
@@ -3565,7 +3591,7 @@ export default function WorkPlanningPage() {
 
             <Row gutter={16}>
               {/* Job Type */}
-              <Col span={8}>
+              <Col span={6}>
                 <Form.Item
                   name="job_type"
                   label="Job Type"
@@ -3578,8 +3604,19 @@ export default function WorkPlanningPage() {
                 </Form.Item>
               </Col>
 
+              {/* Trade */}
+              <Col span={6}>
+                <Form.Item name="work_center" label="Trade">
+                  <Select allowClear placeholder="Auto">
+                    <Select.Option value="MECH">⚙️ Mechanical</Select.Option>
+                    <Select.Option value="ELEC">⚡ Electrical</Select.Option>
+                    <Select.Option value="ELME">⚙️⚡ Both</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+
               {/* Berth */}
-              <Col span={8}>
+              <Col span={6}>
                 <Form.Item name="berth" label="Berth">
                   <Select>
                     <Select.Option value="east">East</Select.Option>
@@ -3590,7 +3627,7 @@ export default function WorkPlanningPage() {
               </Col>
 
               {/* Priority */}
-              <Col span={8}>
+              <Col span={6}>
                 <Form.Item name="priority" label="Priority">
                   <Select>
                     <Select.Option value="low">Low</Select.Option>

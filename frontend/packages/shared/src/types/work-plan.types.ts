@@ -205,6 +205,8 @@ export interface WorkPlanJob {
   difficulty?: 'minor' | 'major' | null;
   engineer_id?: number | null;
   engineer_name?: string | null;
+  // Trade / work center
+  work_center?: 'ELEC' | 'MECH' | 'ELME' | null;
 }
 
 export interface WorkPlanDay {
@@ -280,6 +282,7 @@ export interface AddJobPayload {
   notes?: string;
   difficulty?: 'minor' | 'major' | null;
   engineer_id?: number | null;
+  work_center?: 'ELEC' | 'MECH' | 'ELME' | null;
 }
 
 export interface UpdateJobPayload {
@@ -434,6 +437,7 @@ export interface SAPWorkOrder {
   overdue_unit: string | null;
   notes: string | null;
   status: 'pending' | 'scheduled';
+  work_center?: 'ELEC' | 'MECH' | 'ELME' | null;
   created_at: string;
 }
 
