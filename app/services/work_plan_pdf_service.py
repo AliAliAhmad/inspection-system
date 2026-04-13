@@ -1997,7 +1997,7 @@ def _build_filter_note(filters, language='en'):
     if not parts:
         return ''
 
-    prefix = 'مرشحات: ' if is_ar else 'Filters: '
+    prefix = 'Filters: '
     return prefix + ' \u00b7 '.join(parts)
 
 
