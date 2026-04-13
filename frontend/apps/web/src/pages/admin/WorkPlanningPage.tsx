@@ -523,6 +523,7 @@ export default function WorkPlanningPage() {
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
   const [atRiskDrawerOpen, setAtRiskDrawerOpen] = useState(false);
   const [teamPoolDisc, setTeamPoolDisc] = useState<'all' | 'mechanical' | 'electrical'>('all');
+  const [teamPoolBerth, setTeamPoolBerth] = useState<'all' | 'east' | 'west'>('all');
   const [addMaterialId, setAddMaterialId] = useState<number | null>(null);
   const [addMaterialQty, setAddMaterialQty] = useState<number>(1);
   // Smart Plan Generator state
@@ -1620,6 +1621,24 @@ export default function WorkPlanningPage() {
     { key: 'maintenance', label: 'Maintenance', emoji: '🛠️', color: '#fa8c16', users: teamColumns.maintenance },
     ...(teamColumns.other.length > 0 ? [{ key: 'other', label: 'Other', emoji: '👤', color: '#8c8c8c', users: teamColumns.other }] : []),
   ];
+
+  // User IDs assigned to jobs on the selected berth (for team pool berth filter)
+  const teamBerthUserIds = useMemo(() => {
+    if (teamPoolBerth === 'all') return null;
+    const ids = new Set<number>();
+    (currentPlan?.days || []).forEach((day: any) => {
+      const allJobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
+      allJobs.forEach((job: any) => {
+        const jb = (job.berth || '').toLowerCase();
+        if (jb === teamPoolBerth || jb === 'both') {
+          (job.assignments || []).forEach((a: any) => {
+            if (a.user_id) ids.add(a.user_id);
+          });
+        }
+      });
+    });
+    return ids;
+  }, [teamPoolBerth, currentPlan?.days]);
 
   // Pointer-first collision: if pointer is inside a droppable rect, prefer that over closest center.
   // This ensures dragging back to the Jobs Pool panel works even when calendar columns dominate.
@@ -2753,20 +2772,36 @@ export default function WorkPlanningPage() {
                   ),
                   children: (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 8 }}>
-                      {/* Discipline Filter */}
-                      <Space size={4} style={{ marginBottom: 8, flexShrink: 0 }}>
-                        {(['all', 'mechanical', 'electrical'] as const).map(d => (
-                          <Button
-                            key={d}
-                            size="small"
-                            type={teamPoolDisc === d ? 'primary' : 'default'}
-                            onClick={() => setTeamPoolDisc(d)}
-                            style={{ fontSize: 11 }}
-                          >
-                            {d === 'all' ? 'All' : d === 'mechanical' ? '🔧 Mech' : '⚡ Elec'}
-                          </Button>
-                        ))}
-                      </Space>
+                      {/* Discipline + Berth Filters */}
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexShrink: 0, alignItems: 'center' }}>
+                        <Space size={4}>
+                          {(['all', 'mechanical', 'electrical'] as const).map(d => (
+                            <Button
+                              key={d}
+                              size="small"
+                              type={teamPoolDisc === d ? 'primary' : 'default'}
+                              onClick={() => setTeamPoolDisc(d)}
+                              style={{ fontSize: 11 }}
+                            >
+                              {d === 'all' ? 'All' : d === 'mechanical' ? '🔧 Mech' : '⚡ Elec'}
+                            </Button>
+                          ))}
+                        </Space>
+                        <div style={{ borderLeft: '1px solid #e8e8e8', height: 20 }} />
+                        <Space size={4}>
+                          {(['all', 'east', 'west'] as const).map(b => (
+                            <Button
+                              key={b}
+                              size="small"
+                              type={teamPoolBerth === b ? 'primary' : 'default'}
+                              onClick={() => setTeamPoolBerth(b)}
+                              style={{ fontSize: 11 }}
+                            >
+                              {b === 'all' ? 'All' : b === 'east' ? 'East' : 'West'}
+                            </Button>
+                          ))}
+                        </Space>
+                      </div>
 
                       {/* Leave summary */}
                       {leaveDetails.length > 0 && (
@@ -2789,7 +2824,9 @@ export default function WorkPlanningPage() {
                             return ['specElec', 'inspElec'].includes(col.key);
                           })
                           .map(col => {
-                            const availableUsers = col.users.filter((u: any) => !leaveUserIds.has(u.id));
+                            const availableUsers = col.users.filter((u: any) =>
+                              !leaveUserIds.has(u.id) && (teamBerthUserIds === null || teamBerthUserIds.has(u.id))
+                            );
                             const fullLeaveUsers = col.users.filter((u: any) => leaveUserIds.has(u.id));
                             return (
                               <div key={col.key} style={{ marginBottom: 10 }}>
