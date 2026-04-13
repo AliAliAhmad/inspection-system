@@ -45,7 +45,7 @@ interface DraggableJobItemProps {
   onQuickSchedule?: (job: any, jobType: string, dayId: number) => void;
 }
 
-const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, days = [], onQuickSchedule }) => {
+const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, days = [], onQuickSchedule }) => {
   const id = `pool-${jobType}-${job.id || job.equipment?.id || job.defect?.id || job.assignment?.id}`;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -167,6 +167,8 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, jobType, onCli
     </div>
   );
 };
+
+const DraggableJobItem = React.memo(DraggableJobItemInner);
 
 interface JobsPoolProps {
   berth?: string;

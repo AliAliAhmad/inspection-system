@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TimelineJobBlock } from './TimelineJobBlock';
@@ -7,16 +7,23 @@ import type { WorkPlanJob } from '@inspection/shared';
 interface DraggableJobCardProps {
   job: WorkPlanJob;
   dayId: number;
-  onClick?: () => void;
+  /** Pass the parent handler directly — click is wrapped internally to avoid inline arrow breaking memo */
+  onJobClick?: (job: WorkPlanJob) => void;
   disabled?: boolean;
 }
 
-export const DraggableJobCard: React.FC<DraggableJobCardProps> = ({
+const DraggableJobCardInner: React.FC<DraggableJobCardProps> = ({
   job,
   dayId,
-  onClick,
+  onJobClick,
   disabled = false,
 }) => {
+  const sortableData = useMemo(() => ({
+    type: 'job' as const,
+    job,
+    dayId,
+  }), [job, dayId]);
+
   const {
     attributes,
     listeners,
@@ -26,13 +33,13 @@ export const DraggableJobCard: React.FC<DraggableJobCardProps> = ({
     isDragging,
   } = useSortable({
     id: `job-${job.id}`,
-    data: {
-      type: 'job',
-      job,
-      dayId,
-    },
+    data: sortableData,
     disabled,
   });
+
+  const handleClick = useCallback(() => {
+    onJobClick?.(job);
+  }, [onJobClick, job]);
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -49,11 +56,13 @@ export const DraggableJobCard: React.FC<DraggableJobCardProps> = ({
     >
       <TimelineJobBlock
         job={job}
-        onClick={onClick}
+        onClick={handleClick}
         isDragging={isDragging}
       />
     </div>
   );
 };
+
+export const DraggableJobCard = React.memo(DraggableJobCardInner);
 
 export default DraggableJobCard;

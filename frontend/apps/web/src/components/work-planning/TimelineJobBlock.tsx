@@ -38,7 +38,7 @@ interface TimelineJobBlockProps {
   inspectionEquipmentIds?: number[]; // Equipment IDs with inspections today
 }
 
-export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
+const TimelineJobBlockInner: React.FC<TimelineJobBlockProps> = ({
   job,
   onClick,
   isDragging = false,
@@ -259,5 +259,7 @@ export const TimelineJobBlock: React.FC<TimelineJobBlockProps> = ({
     </Tooltip>
   );
 };
+
+export const TimelineJobBlock = React.memo(TimelineJobBlockInner);
 
 export default TimelineJobBlock;

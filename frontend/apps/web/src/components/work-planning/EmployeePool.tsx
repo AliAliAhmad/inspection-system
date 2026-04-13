@@ -30,7 +30,7 @@ interface DraggableEmployeeProps {
   maxHours?: number;
 }
 
-const DraggableEmployee: React.FC<DraggableEmployeeProps> = ({ user, isOnLeave, assignedHours = 0, maxHours = 40 }) => {
+const DraggableEmployeeInner: React.FC<DraggableEmployeeProps> = ({ user, isOnLeave, assignedHours = 0, maxHours = 40 }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `employee-${user.id}`,
     data: { type: 'employee', user },
@@ -111,6 +111,8 @@ const DraggableEmployee: React.FC<DraggableEmployeeProps> = ({ user, isOnLeave, 
     </Tooltip>
   );
 };
+
+const DraggableEmployee = React.memo(DraggableEmployeeInner);
 
 interface EmployeePoolProps {
   weekStart?: string;

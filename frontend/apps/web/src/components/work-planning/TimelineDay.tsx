@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Badge, Typography } from 'antd';
@@ -15,7 +15,7 @@ interface TimelineDayProps {
   readOnly?: boolean;
 }
 
-export const TimelineDay: React.FC<TimelineDayProps> = ({
+const TimelineDayInner: React.FC<TimelineDayProps> = ({
   day,
   isToday,
   onJobClick,
@@ -30,13 +30,19 @@ export const TimelineDay: React.FC<TimelineDayProps> = ({
   });
 
   const date = dayjs(day.date);
-  const allJobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
-  const sortedJobs = allJobs.sort((a, b) => a.position - b.position);
-  const totalHours = sortedJobs.reduce((sum, job) => sum + job.estimated_hours, 0);
 
-  // Calculate priority counts
-  const criticalCount = sortedJobs.filter(j => j.computed_priority === 'critical').length;
-  const highCount = sortedJobs.filter(j => j.computed_priority === 'high').length;
+  const { sortedJobs, totalHours, criticalCount, highCount } = useMemo(() => {
+    const allJobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
+    const sorted = allJobs.sort((a, b) => a.position - b.position);
+    return {
+      sortedJobs: sorted,
+      totalHours: sorted.reduce((sum, job) => sum + job.estimated_hours, 0),
+      criticalCount: sorted.filter(j => j.computed_priority === 'critical').length,
+      highCount: sorted.filter(j => j.computed_priority === 'high').length,
+    };
+  }, [day.jobs_east, day.jobs_west, day.jobs_both]);
+
+  const sortableIds = useMemo(() => sortedJobs.map(j => `job-${j.id}`), [sortedJobs]);
 
   return (
     <div
@@ -109,7 +115,7 @@ export const TimelineDay: React.FC<TimelineDayProps> = ({
           </div>
         ) : (
           <SortableContext
-            items={sortedJobs.map(j => `job-${j.id}`)}
+            items={sortableIds}
             strategy={verticalListSortingStrategy}
           >
             {sortedJobs.map((job) => (
@@ -117,7 +123,7 @@ export const TimelineDay: React.FC<TimelineDayProps> = ({
                 key={job.id}
                 job={job}
                 dayId={day.id}
-                onClick={() => onJobClick?.(job)}
+                onJobClick={onJobClick}
                 disabled={readOnly}
               />
             ))}
@@ -127,5 +133,7 @@ export const TimelineDay: React.FC<TimelineDayProps> = ({
     </div>
   );
 };
+
+export const TimelineDay = React.memo(TimelineDayInner);
 
 export default TimelineDay;
