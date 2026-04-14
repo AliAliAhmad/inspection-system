@@ -507,6 +507,42 @@ export default function AllInspectionsPage() {
     { key: 'reviewed', label: t('inspections.reviewed', 'Reviewed') },
   ];
 
+  // "Select all across all pages" — fetches every submitted inspection
+  // matching the current filters (pagination walks the server in 100-row
+  // batches since the list endpoint caps per_page at 100).
+  const selectAllAcrossPages = async () => {
+    try {
+      const ids: number[] = [];
+      const statusById = new Map<number, string>();
+      let p = 1;
+      const PAGE = 100;
+      for (let safety = 0; safety < 50; safety++) {
+        const resp = await inspectionsApi.list({
+          page: p,
+          per_page: PAGE,
+          status: 'submitted', // only selectable rows
+          result: resultFilter,
+          date_from: dateRange?.[0]?.format('YYYY-MM-DD'),
+          date_to: dateRange?.[1]?.format('YYYY-MM-DD'),
+          has_defects: hasDefects,
+        });
+        const rows = (resp.data as any)?.data ?? [];
+        rows.forEach((i: Inspection) => {
+          ids.push(i.id);
+          statusById.set(i.id, i.status);
+        });
+        const pag = (resp.data as any)?.pagination;
+        if (!pag || p >= pag.pages || rows.length === 0) break;
+        p += 1;
+      }
+      setSelectedRowKeys(ids);
+      setSelectedStatusMap(statusById);
+      message.success(t('inspections.selectedAllAcrossPages', '{{count}} inspections selected', { count: ids.length }));
+    } catch {
+      message.error(t('common.error'));
+    }
+  };
+
   // Selection config — onChange gets both keys AND the rows that triggered
   // the change. We merge the status from those rows into `selectedStatusMap`
   // so the status is known for every selected id, even after page changes.
@@ -539,6 +575,16 @@ export default function AllInspectionsPage() {
     getCheckboxProps: (record: Inspection) => ({
       disabled: record.status !== 'submitted', // Only allow selecting submitted for bulk review
     }),
+    selections: [
+      Table.SELECTION_ALL,
+      Table.SELECTION_INVERT,
+      Table.SELECTION_NONE,
+      {
+        key: 'all-pages',
+        text: t('inspections.selectAllAcrossPages', 'Select all submitted (all pages)'),
+        onSelect: selectAllAcrossPages,
+      },
+    ],
   };
 
   const hasActiveFilters = statusFilter || resultFilter || dateRange || hasDefects !== undefined;
