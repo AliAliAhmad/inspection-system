@@ -182,8 +182,12 @@ export default function AllInspectionsPage() {
   const [hasDefects, setHasDefects] = useState<boolean | undefined>();
   const [nlQuery, setNlQuery] = useState('');
 
-  // Selection for bulk actions
+  // Selection for bulk actions — `selectedRowKeys` persists across pages.
+  // We also track each selected row's status in a Map so that bulk actions
+  // can filter by status (e.g. "submitted only") for items no longer on
+  // the current page's `inspections` array.
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const [selectedStatusMap, setSelectedStatusMap] = useState<Map<number, string>>(new Map());
 
   // Modals/Drawers
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -282,6 +286,7 @@ export default function AllInspectionsPage() {
       queryClient.invalidateQueries({ queryKey: ['inspections-stats'] });
       setBulkReviewOpen(false);
       setSelectedRowKeys([]);
+      setSelectedStatusMap(new Map());
       bulkReviewForm.resetFields();
     },
     onError: () => message.error(t('inspections.bulkReviewError', 'Failed to bulk review')),
@@ -502,10 +507,35 @@ export default function AllInspectionsPage() {
     { key: 'reviewed', label: t('inspections.reviewed', 'Reviewed') },
   ];
 
-  // Selection config
+  // Selection config — onChange gets both keys AND the rows that triggered
+  // the change. We merge the status from those rows into `selectedStatusMap`
+  // so the status is known for every selected id, even after page changes.
   const rowSelection = {
     selectedRowKeys,
-    onChange: (keys: React.Key[]) => setSelectedRowKeys(keys as number[]),
+    onChange: (keys: React.Key[], rows: Inspection[]) => {
+      const newKeys = keys as number[];
+      setSelectedRowKeys(newKeys);
+      setSelectedStatusMap(prev => {
+        const next = new Map(prev);
+        // Remove ids no longer selected
+        const keySet = new Set(newKeys);
+        for (const id of next.keys()) {
+          if (!keySet.has(id)) next.delete(id);
+        }
+        // Add/refresh status for currently selected rows
+        rows.forEach(r => { if (r?.id) next.set(r.id, r.status); });
+        // Fall back to current page `inspections` for any selected id we
+        // don't yet have a status for.
+        newKeys.forEach(id => {
+          if (!next.has(id)) {
+            const insp = inspections.find((i: Inspection) => i.id === id);
+            if (insp) next.set(id, insp.status);
+          }
+        });
+        return next;
+      });
+    },
+    preserveSelectedRowKeys: true,
     getCheckboxProps: (record: Inspection) => ({
       disabled: record.status !== 'submitted', // Only allow selecting submitted for bulk review
     }),
@@ -514,10 +544,10 @@ export default function AllInspectionsPage() {
   const hasActiveFilters = statusFilter || resultFilter || dateRange || hasDefects !== undefined;
   const selectedSubmittedCount = useMemo(() => {
     return selectedRowKeys.filter(key => {
-      const insp = inspections.find((i: Inspection) => i.id === key);
-      return insp?.status === 'submitted';
+      const status = selectedStatusMap.get(key) ?? inspections.find((i: Inspection) => i.id === key)?.status;
+      return status === 'submitted';
     }).length;
-  }, [selectedRowKeys, inspections]);
+  }, [selectedRowKeys, selectedStatusMap, inspections]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -801,9 +831,13 @@ export default function AllInspectionsPage() {
           form={bulkReviewForm}
           layout="vertical"
           onFinish={(v) => {
+            // Use the cross-page status map so selections from other pages
+            // are included. Fall back to current page data for anything the
+            // map doesn't have (edge case: selected before map existed).
             const submittedIds = selectedRowKeys.filter(key => {
-              const insp = inspections.find((i: Inspection) => i.id === key);
-              return insp?.status === 'submitted';
+              const status = selectedStatusMap.get(key)
+                ?? inspections.find((i: Inspection) => i.id === key)?.status;
+              return status === 'submitted';
             });
             bulkReviewMutation.mutate({
               inspection_ids: submittedIds,
