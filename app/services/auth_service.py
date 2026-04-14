@@ -33,26 +33,36 @@ class AuthService:
         if not email or not password:
             raise ValidationError("Email/username and password are required")
 
-        # Try to find user by email, then username, then role_id
-        user = User.query.filter_by(email=email).first()
+        # Strip whitespace from both fields — mobile keyboards often add a
+        # trailing space from autocomplete / autocorrect, which breaks login.
+        identifier = email.strip()
+        password = password.strip()
+
+        # Case-insensitive lookup — mobile keyboards auto-capitalize the
+        # first letter of usernames/emails. DB stores usernames lowercase
+        # and emails as provided, so we match with ILIKE for safety.
+        # Try email → username → role_id in order.
+        from sqlalchemy import func
+        ident_lower = identifier.lower()
+        user = User.query.filter(func.lower(User.email) == ident_lower).first()
         if not user:
-            user = User.query.filter_by(username=email).first()
+            user = User.query.filter(func.lower(User.username) == ident_lower).first()
         if not user:
-            user = User.query.filter_by(role_id=email).first()
+            user = User.query.filter(func.lower(User.role_id) == ident_lower).first()
 
         if not user or not user.check_password(password):
-            logger.warning("Login failed for identifier=%s: invalid credentials", email)
+            logger.warning("Login failed for identifier=%s: invalid credentials", identifier)
             raise UnauthorizedError("Invalid email/username or password")
 
         if not user.is_active:
-            logger.warning("Login failed for identifier=%s user_id=%s: account deactivated", email, user.id)
+            logger.warning("Login failed for identifier=%s user_id=%s: account deactivated", identifier, user.id)
             raise UnauthorizedError("Account is deactivated")
         
         # Create JWT tokens (convert user.id to string for JWT)
         access_token = create_access_token(identity=str(user.id))
         refresh_token = create_refresh_token(identity=str(user.id))
         
-        logger.info("Login successful for identifier=%s user_id=%s", email, user.id)
+        logger.info("Login successful for identifier=%s user_id=%s", identifier, user.id)
         return {
             'access_token': access_token,
             'refresh_token': refresh_token,
