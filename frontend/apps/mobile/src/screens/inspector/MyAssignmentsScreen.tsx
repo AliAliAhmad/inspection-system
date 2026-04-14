@@ -424,26 +424,54 @@ export default function MyAssignmentsScreen() {
     })();
   }, [allAssignments.length]);
 
-  // Status grouping
-  const IN_PROGRESS_STATUSES = ['in_progress', 'mech_complete', 'elec_complete', 'both_complete', 'assessment_pending'];
-  const COMPLETED_STATUSES = ['completed'];
-  const ASSIGNED_STATUSES = ['assigned', 'pending'];
+  // Per-inspector filter predicates — mirror the backend logic. An
+  // assignment's shared status means different things for each inspector,
+  // so we classify from the current user's perspective using the
+  // per-inspector completion timestamps (mech_completed_at / elec_completed_at).
+  const classifyForUser = (a: InspectionAssignment): 'assigned' | 'in_progress' | 'completed' | 'other' => {
+    const isMech = user?.id === a.mechanical_inspector_id;
+    const isElec = user?.id === a.electrical_inspector_id;
+    const myDone =
+      (isMech && !!a.mech_completed_at) || (isElec && !!a.elec_completed_at);
+
+    if (a.status === 'assigned') return 'assigned';
+
+    // Completed for me = I submitted my portion, OR the whole assignment
+    // is past per-inspector state (assessment / review).
+    if (myDone || a.status === 'both_complete' ||
+        a.status === 'assessment_pending' || a.status === 'completed') {
+      return 'completed';
+    }
+
+    // In progress for me = shared in_progress, OR other side finished
+    // but I haven't yet.
+    if (a.status === 'in_progress') return 'in_progress';
+    if (isMech && a.status === 'elec_complete' && !a.mech_completed_at) return 'in_progress';
+    if (isElec && a.status === 'mech_complete' && !a.elec_completed_at) return 'in_progress';
+
+    return 'other';
+  };
 
   // Compute counts for each filter
   const filterCounts = useMemo(() => {
-    const all = allAssignments.length;
-    const assigned = allAssignments.filter(a => ASSIGNED_STATUSES.includes(a.status)).length;
-    const inProgress = allAssignments.filter(a => IN_PROGRESS_STATUSES.includes(a.status)).length;
-    const completed = allAssignments.filter(a => COMPLETED_STATUSES.includes(a.status)).length;
-    return { all, assigned, inProgress, completed };
-  }, [allAssignments]);
+    const counts = { all: allAssignments.length, assigned: 0, inProgress: 0, completed: 0 };
+    allAssignments.forEach(a => {
+      const k = classifyForUser(a);
+      if (k === 'assigned') counts.assigned++;
+      else if (k === 'in_progress') counts.inProgress++;
+      else if (k === 'completed') counts.completed++;
+    });
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allAssignments, user?.id]);
 
   const assignments = useMemo(() => {
     return allAssignments.filter((a) => {
+      const bucket = classifyForUser(a);
       let statusMatch = true;
-      if (activeFilter === 'assigned') statusMatch = ASSIGNED_STATUSES.includes(a.status);
-      else if (activeFilter === 'in_progress') statusMatch = IN_PROGRESS_STATUSES.includes(a.status);
-      else if (activeFilter === 'completed') statusMatch = COMPLETED_STATUSES.includes(a.status);
+      if (activeFilter === 'assigned') statusMatch = bucket === 'assigned';
+      else if (activeFilter === 'in_progress') statusMatch = bucket === 'in_progress';
+      else if (activeFilter === 'completed') statusMatch = bucket === 'completed';
 
       let assessMatch = true;
       const finalStatus = a.assessment?.final_status;
@@ -460,7 +488,8 @@ export default function MyAssignmentsScreen() {
 
       return statusMatch && assessMatch;
     });
-  }, [allAssignments, activeFilter, assessmentFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allAssignments, activeFilter, assessmentFilter, user?.id]);
 
   const handlePress = useCallback(
     (assignment: InspectionAssignment) => {
