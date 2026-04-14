@@ -605,23 +605,63 @@ def my_assignments():
             InspectionList.target_date == date.fromisoformat(date_filter)
         )
 
-    # Status filter — map frontend tab values to the full set of DB states.
-    # An inspector's "completed" work covers 5 statuses as the assignment moves
-    # through mech_complete → elec_complete → both_complete → assessment_pending
-    # → completed. Exact-match filtering missed everything except the last step.
-    STATUS_GROUPS = {
-        'assigned': ['assigned'],
-        'in_progress': ['in_progress'],
-        'completed': ['mech_complete', 'elec_complete', 'both_complete',
-                      'assessment_pending', 'completed'],
-    }
+    # Status filter — from each inspector's personal perspective.
+    # An assignment's DB status is shared between both inspectors (mech + elec)
+    # but "done" means different things for each of them. For example:
+    #   status=mech_complete → mech inspector is DONE, elec still IN PROGRESS
+    #   status=elec_complete → elec inspector is DONE, mech still IN PROGRESS
+    #   status=both_complete / assessment_pending / completed → BOTH are done
+    # So we build the filter by combining (user-is-mech AND status-is-X-for-mech)
+    # with (user-is-elec AND status-is-X-for-elec).
     status = request.args.get('status')
-    if status:
-        values = STATUS_GROUPS.get(status, [status])
-        query = query.filter(InspectionAssignment.status.in_(values))
+    if status == 'in_progress':
+        # "In progress" for me = status in_progress, OR the OTHER inspector
+        # has finished but I haven't. My finish is marked by mech_completed_at
+        # / elec_completed_at timestamps (set when my portion is submitted).
+        query = query.filter(
+            or_(
+                InspectionAssignment.status == 'in_progress',
+                # I'm mech, elec already done, I haven't submitted yet
+                and_(
+                    InspectionAssignment.mechanical_inspector_id == user.id,
+                    InspectionAssignment.status == 'elec_complete',
+                    InspectionAssignment.mech_completed_at.is_(None),
+                ),
+                # I'm elec, mech already done, I haven't submitted yet
+                and_(
+                    InspectionAssignment.electrical_inspector_id == user.id,
+                    InspectionAssignment.status == 'mech_complete',
+                    InspectionAssignment.elec_completed_at.is_(None),
+                ),
+            )
+        )
+    elif status == 'assigned':
+        query = query.filter(InspectionAssignment.status == 'assigned')
+    elif status == 'completed':
+        # "Completed" for me = I submitted my portion. Determined by the
+        # per-inspector completion timestamp, not the shared status — so a
+        # mech inspector sees the assignment here even if elec hasn't
+        # submitted yet, and vice versa.
+        query = query.filter(
+            or_(
+                and_(
+                    InspectionAssignment.mechanical_inspector_id == user.id,
+                    InspectionAssignment.mech_completed_at.isnot(None),
+                ),
+                and_(
+                    InspectionAssignment.electrical_inspector_id == user.id,
+                    InspectionAssignment.elec_completed_at.isnot(None),
+                ),
+                InspectionAssignment.status.in_(
+                    ['both_complete', 'assessment_pending', 'completed']
+                ),
+            )
+        )
+    elif status:
+        # Any other explicit status → exact match (backward compat)
+        query = query.filter_by(status=status)
     else:
-        # Only auto-hide completed older than 1 day when NO filter is active
-        # (so "All" tab stays clean but "Completed" shows everything).
+        # No filter ("All" tab) — only auto-hide fully completed > 1 day old
         COMPLETED_HIDE_DAYS = 1
         cutoff = datetime.utcnow() - timedelta(days=COMPLETED_HIDE_DAYS)
         query = query.filter(
