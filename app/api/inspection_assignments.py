@@ -605,21 +605,49 @@ def my_assignments():
             InspectionList.target_date == date.fromisoformat(date_filter)
         )
 
+    # Status filter — map frontend tab values to the full set of DB states.
+    # An inspector's "completed" work covers 5 statuses as the assignment moves
+    # through mech_complete → elec_complete → both_complete → assessment_pending
+    # → completed. Exact-match filtering missed everything except the last step.
+    STATUS_GROUPS = {
+        'assigned': ['assigned'],
+        'in_progress': ['in_progress'],
+        'completed': ['mech_complete', 'elec_complete', 'both_complete',
+                      'assessment_pending', 'completed'],
+    }
     status = request.args.get('status')
     if status:
-        query = query.filter_by(status=status)
-
-    # Auto-hide completed assignments older than 1 day (reviewed by admin/engineer)
-    COMPLETED_HIDE_DAYS = 1
-    cutoff = datetime.utcnow() - timedelta(days=COMPLETED_HIDE_DAYS)
-    query = query.filter(
-        or_(
-            InspectionAssignment.status != 'completed',
-            InspectionAssignment.updated_at >= cutoff,
+        values = STATUS_GROUPS.get(status, [status])
+        query = query.filter(InspectionAssignment.status.in_(values))
+    else:
+        # Only auto-hide completed older than 1 day when NO filter is active
+        # (so "All" tab stays clean but "Completed" shows everything).
+        COMPLETED_HIDE_DAYS = 1
+        cutoff = datetime.utcnow() - timedelta(days=COMPLETED_HIDE_DAYS)
+        query = query.filter(
+            or_(
+                InspectionAssignment.status != 'completed',
+                InspectionAssignment.updated_at >= cutoff,
+            )
         )
-    )
 
-    assignments = query.order_by(InspectionAssignment.created_at.desc()).all()
+    # Pagination — frontend passes page & per_page; previously ignored.
+    try:
+        page_num = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page_num = 1
+    try:
+        per_page = max(1, min(200, int(request.args.get('per_page', 20))))
+    except (TypeError, ValueError):
+        per_page = 20
+
+    total = query.count()
+    assignments = (
+        query.order_by(InspectionAssignment.created_at.desc())
+        .offset((page_num - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
 
     # Build answer summaries and assessment for each assignment
     assignment_ids = [a.id for a in assignments]
@@ -724,7 +752,13 @@ def my_assignments():
 
     return jsonify({
         'status': 'success',
-        'data': result
+        'data': result,
+        'pagination': {
+            'page': page_num,
+            'per_page': per_page,
+            'total': total,
+            'pages': (total + per_page - 1) // per_page if per_page else 1,
+        },
     }), 200
 
 
