@@ -480,17 +480,40 @@ def my_stats():
     ).all()
     today_list_ids = [l.id for l in today_lists]
 
+    # Per-inspector logic — mirrors /my-assignments tab filters. A mech
+    # inspector whose portion is done (mech_completed_at set) is COMPLETED
+    # regardless of what the other inspector did, and vice versa.
+    is_mech = InspectionAssignment.mechanical_inspector_id == user_id
+    is_elec = InspectionAssignment.electrical_inspector_id == user_id
+    mech_done = and_(is_mech, InspectionAssignment.mech_completed_at.isnot(None))
+    elec_done = and_(is_elec, InspectionAssignment.electrical_inspector_id == user_id,
+                     InspectionAssignment.elec_completed_at.isnot(None))
+    i_am_done = or_(mech_done, elec_done)
+
     today_assigned = base_query.filter(
         InspectionAssignment.status == 'assigned'
     ).count()
 
+    # In progress = status in_progress, OR other side done but mine not yet
     today_in_progress = base_query.filter(
-        InspectionAssignment.status == 'in_progress'
+        or_(
+            InspectionAssignment.status == 'in_progress',
+            and_(is_mech, InspectionAssignment.status == 'elec_complete',
+                 InspectionAssignment.mech_completed_at.is_(None)),
+            and_(is_elec, InspectionAssignment.status == 'mech_complete',
+                 InspectionAssignment.elec_completed_at.is_(None)),
+        )
     ).count()
 
+    # Completed for THIS inspector, limited to today's lists
     today_completed = base_query.filter(
         InspectionAssignment.inspection_list_id.in_(today_list_ids),
-        InspectionAssignment.status.in_(['completed', 'mech_complete', 'elec_complete', 'both_complete'])
+        or_(
+            i_am_done,
+            InspectionAssignment.status.in_(
+                ['both_complete', 'assessment_pending', 'completed']
+            ),
+        ),
     ).count() if today_list_ids else 0
 
     today_total = today_assigned + today_in_progress + today_completed
@@ -508,7 +531,12 @@ def my_stats():
 
     week_completed = base_query.filter(
         InspectionAssignment.inspection_list_id.in_(week_list_ids),
-        InspectionAssignment.status == 'completed'
+        or_(
+            i_am_done,
+            InspectionAssignment.status.in_(
+                ['both_complete', 'assessment_pending', 'completed']
+            ),
+        ),
     ).count() if week_list_ids else 0
 
     # This month stats
@@ -524,7 +552,12 @@ def my_stats():
 
     month_completed = base_query.filter(
         InspectionAssignment.inspection_list_id.in_(month_list_ids),
-        InspectionAssignment.status == 'completed'
+        or_(
+            i_am_done,
+            InspectionAssignment.status.in_(
+                ['both_complete', 'assessment_pending', 'completed']
+            ),
+        ),
     ).count() if month_list_ids else 0
 
     # Backlog count
@@ -546,7 +579,12 @@ def my_stats():
             ).count()
             d_completed = base_query.filter(
                 InspectionAssignment.inspection_list_id.in_(d_list_ids),
-                InspectionAssignment.status == 'completed'
+                or_(
+                    i_am_done,
+                    InspectionAssignment.status.in_(
+                        ['both_complete', 'assessment_pending', 'completed']
+                    ),
+                ),
             ).count()
         else:
             d_total = 0
