@@ -295,6 +295,13 @@ def complete_job(job_id):
         'work_notes': data.get('work_notes')
     })
 
+    # Auto-resolve linked defect when a defect job is completed
+    if job.defect_id and job.defect and job.defect.status not in ('resolved', 'closed'):
+        job.defect.status = 'resolved'
+        job.defect.resolved_at = now
+        job.defect.resolution_notes = 'Auto-resolved: work plan job %s completed' % job_id
+        logger.info("Auto-resolved defect %s via job %s completion", job.defect_id, job_id)
+
     db.session.commit()
 
     logger.info("Job %s completed by user %s. Actual hours: %s", job_id, user.id, tracking.actual_hours)

@@ -392,14 +392,12 @@ export function DefectKanban({ onDefectClick, className }: DefectKanbanProps) {
   // Update defect status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ defectId, newStatus }: { defectId: number; newStatus: DefectStatus }) => {
-      // In production, this would call the API
       if (newStatus === 'resolved') {
-        return defectsApi.resolve(defectId);
+        return defectsApi.resolve(defectId, { resolution_notes: 'Resolved via kanban board' });
       } else if (newStatus === 'closed') {
         return defectsApi.close(defectId);
       }
-      // For other status changes, we'd need an update API
-      throw new Error('Status change not supported');
+      return defectsApi.updateStatus(defectId, { status: newStatus });
     },
     onSuccess: () => {
       message.success(t('defects.statusUpdated', 'Defect status updated'));

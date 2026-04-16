@@ -20,6 +20,7 @@ import {
   Drawer,
   Segmented,
   Tooltip,
+  Alert,
 } from 'antd';
 import {
   ToolOutlined,
@@ -29,6 +30,9 @@ import {
   TableOutlined,
   AppstoreOutlined,
   CloseOutlined,
+  CheckCircleOutlined,
+  LockOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -92,6 +96,21 @@ export default function DefectsPage() {
 
   const [equipmentFilter, setEquipmentFilter] = useState<number | undefined>();
 
+  // Row selection for bulk actions
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const [selectedStatusMap, setSelectedStatusMap] = useState<Map<number, string>>(new Map());
+
+  // Status action modal (single defect)
+  const [statusActionOpen, setStatusActionOpen] = useState(false);
+  const [statusAction, setStatusAction] = useState<'resolve' | 'close' | 'false_alarm' | null>(null);
+  const [statusActionDefect, setStatusActionDefect] = useState<Defect | null>(null);
+  const [statusActionForm] = Form.useForm();
+
+  // Bulk action modal
+  const [bulkActionOpen, setBulkActionOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<'resolve' | 'close' | null>(null);
+  const [bulkActionForm] = Form.useForm();
+
   // AI Panel drawer state
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [aiPanelDefect, setAiPanelDefect] = useState<Defect | null>(null);
@@ -144,6 +163,81 @@ export default function DefectsPage() {
       );
     },
   });
+
+  // Resolve defect mutation
+  const resolveMutation = useMutation({
+    mutationFn: ({ id, resolution_notes }: { id: number; resolution_notes: string }) =>
+      defectsApi.resolve(id, { resolution_notes }),
+    onSuccess: () => {
+      message.success(t('defects.resolveSuccess', 'Defect resolved'));
+      queryClient.invalidateQueries({ queryKey: ['defects'] });
+      setStatusActionOpen(false);
+      setStatusActionDefect(null);
+      statusActionForm.resetFields();
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to resolve'),
+  });
+
+  // Update status mutation (for close / false_alarm)
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status, notes }: { id: number; status: string; notes?: string }) =>
+      defectsApi.updateStatus(id, { status, notes }),
+    onSuccess: () => {
+      message.success(t('defects.statusUpdated', 'Status updated'));
+      queryClient.invalidateQueries({ queryKey: ['defects'] });
+      setStatusActionOpen(false);
+      setStatusActionDefect(null);
+      statusActionForm.resetFields();
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to update status'),
+  });
+
+  const openStatusAction = (action: 'resolve' | 'close' | 'false_alarm', defect: Defect) => {
+    setStatusAction(action);
+    setStatusActionDefect(defect);
+    statusActionForm.resetFields();
+    setStatusActionOpen(true);
+  };
+
+  const handleStatusAction = (values: any) => {
+    if (!statusActionDefect || !statusAction) return;
+    if (statusAction === 'resolve') {
+      resolveMutation.mutate({ id: statusActionDefect.id, resolution_notes: values.notes });
+    } else if (statusAction === 'close') {
+      updateStatusMutation.mutate({ id: statusActionDefect.id, status: 'closed', notes: values.notes });
+    } else if (statusAction === 'false_alarm') {
+      updateStatusMutation.mutate({ id: statusActionDefect.id, status: 'false_alarm', notes: values.notes });
+    }
+  };
+
+  // Bulk action handler
+  const handleBulkAction = async (action: 'resolve' | 'close', notes: string) => {
+    const targetStatuses = action === 'resolve' ? ['open', 'in_progress'] : ['resolved'];
+    const eligibleIds = selectedRowKeys.filter(key => {
+      const s = selectedStatusMap.get(key) ?? defects.find(d => d.id === key)?.status;
+      return targetStatuses.includes(s || '');
+    });
+    if (eligibleIds.length === 0) {
+      message.warning('No eligible defects for this action');
+      return;
+    }
+    const results = await Promise.allSettled(
+      eligibleIds.map(id =>
+        action === 'resolve'
+          ? defectsApi.resolve(id, { resolution_notes: notes || 'Bulk resolved' })
+          : defectsApi.updateStatus(id, { status: 'closed', notes: notes || 'Bulk closed' })
+      )
+    );
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (succeeded > 0) message.success(`${succeeded} defects updated`);
+    if (failed > 0) message.warning(`${failed} failed to update`);
+    queryClient.invalidateQueries({ queryKey: ['defects'] });
+    setBulkActionOpen(false);
+    setSelectedRowKeys([]);
+    setSelectedStatusMap(new Map());
+    bulkActionForm.resetFields();
+  };
 
   const specialists: any[] =
     specialistsData?.data?.data || (specialistsData?.data as any)?.data || [];
@@ -310,34 +404,42 @@ export default function DefectsPage() {
     {
       title: t('common.actions', 'Actions'),
       key: 'actions',
-      width: 180,
+      width: 280,
       render: (_: unknown, record: Defect) => {
         const hasJob = !!(record as any).specialist_job;
+        const canResolve = ['open', 'in_progress'].includes(record.status);
+        const canClose = record.status === 'resolved';
+        const canFalseAlarm = ['open', 'in_progress'].includes(record.status);
         return (
-          <Space>
-            <Tooltip title={t('defects.viewAIInsights', 'View AI Insights')}>
-              <Button
-                type="default"
-                size="small"
-                icon={<RobotOutlined />}
-                onClick={() => handleDefectClick(record)}
-              />
+          <Space size={4}>
+            <Tooltip title="AI Insights">
+              <Button size="small" icon={<RobotOutlined />}
+                onClick={() => handleDefectClick(record)} />
             </Tooltip>
-            <Button
-              type="primary"
-              size="small"
-              icon={<ToolOutlined />}
-              onClick={() => {
-                setSelectedDefect(record);
-                assignForm.resetFields();
-                setCategory(undefined);
-                setAssignOpen(true);
-              }}
-              disabled={hasJob || record.status === 'closed' || record.status === 'resolved'}
-            >
-              {hasJob
-                ? t('defects.assigned', 'Assigned')
-                : t('defects.assign', 'Assign')}
+            {canResolve && (
+              <Tooltip title="Resolve">
+                <Button size="small" icon={<CheckCircleOutlined />}
+                  style={{ color: '#52c41a', borderColor: '#52c41a' }}
+                  onClick={() => openStatusAction('resolve', record)} />
+              </Tooltip>
+            )}
+            {canClose && (
+              <Tooltip title="Close">
+                <Button size="small" icon={<LockOutlined />}
+                  onClick={() => openStatusAction('close', record)} />
+              </Tooltip>
+            )}
+            {canFalseAlarm && (
+              <Tooltip title="False Alarm">
+                <Button size="small" icon={<StopOutlined />}
+                  style={{ color: '#722ed1', borderColor: '#722ed1' }}
+                  onClick={() => openStatusAction('false_alarm', record)} />
+              </Tooltip>
+            )}
+            <Button type="primary" size="small" icon={<ToolOutlined />}
+              onClick={() => { setSelectedDefect(record); assignForm.resetFields(); setCategory(undefined); setAssignOpen(true); }}
+              disabled={hasJob || record.status === 'closed' || record.status === 'resolved'}>
+              {hasJob ? t('defects.assigned', 'Assigned') : t('defects.assign', 'Assign')}
             </Button>
           </Space>
         );
@@ -425,11 +527,48 @@ export default function DefectsPage() {
               </Space>
             </div>
 
+            {/* Bulk action bar */}
+            {selectedRowKeys.length > 0 && (
+              <div style={{ marginBottom: 12, padding: '8px 12px', background: '#e6f7ff', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Typography.Text strong>{selectedRowKeys.length} selected</Typography.Text>
+                <Button size="small" icon={<CheckCircleOutlined />}
+                  style={{ color: '#52c41a', borderColor: '#52c41a' }}
+                  onClick={() => { setBulkAction('resolve'); bulkActionForm.resetFields(); setBulkActionOpen(true); }}>
+                  Bulk Resolve
+                </Button>
+                <Button size="small" icon={<LockOutlined />}
+                  onClick={() => { setBulkAction('close'); bulkActionForm.resetFields(); setBulkActionOpen(true); }}>
+                  Bulk Close
+                </Button>
+                <Button size="small" type="text" onClick={() => { setSelectedRowKeys([]); setSelectedStatusMap(new Map()); }}>
+                  Clear
+                </Button>
+              </div>
+            )}
+
             <Table
               rowKey="id"
               columns={columns}
               dataSource={defects}
               loading={isLoading}
+              rowSelection={{
+                selectedRowKeys,
+                onChange: (keys: React.Key[], rows: Defect[]) => {
+                  const newKeys = keys as number[];
+                  setSelectedRowKeys(newKeys);
+                  setSelectedStatusMap(prev => {
+                    const next = new Map(prev);
+                    const keySet = new Set(newKeys);
+                    for (const id of next.keys()) { if (!keySet.has(id)) next.delete(id); }
+                    rows.forEach(r => { if (r?.id) next.set(r.id, r.status); });
+                    return next;
+                  });
+                },
+                preserveSelectedRowKeys: true,
+                getCheckboxProps: (record: Defect) => ({
+                  disabled: record.status === 'closed',
+                }),
+              }}
               locale={{ emptyText: isError ? t('common.error', 'Error loading data') : t('common.noData', 'No data') }}
               expandable={{
                 expandedRowRender: (record: Defect) => {
@@ -698,6 +837,63 @@ export default function DefectsPage() {
             style={{ padding: 40 }}
           />
         )}
+      </Modal>
+
+      {/* Status Action Modal (single defect) */}
+      <Modal
+        title={
+          statusAction === 'resolve' ? 'Resolve Defect' :
+          statusAction === 'close' ? 'Close Defect' : 'Mark as False Alarm'
+        }
+        open={statusActionOpen}
+        onCancel={() => { setStatusActionOpen(false); setStatusActionDefect(null); statusActionForm.resetFields(); }}
+        onOk={() => statusActionForm.submit()}
+        confirmLoading={resolveMutation.isPending || updateStatusMutation.isPending}
+      >
+        {statusActionDefect && (
+          <div style={{ marginBottom: 12 }}>
+            <Typography.Text strong>#{statusActionDefect.id}: </Typography.Text>
+            <Typography.Text>{statusActionDefect.description}</Typography.Text>
+          </div>
+        )}
+        <Form form={statusActionForm} layout="vertical" onFinish={handleStatusAction}>
+          <Form.Item
+            name="notes"
+            label={statusAction === 'resolve' ? 'Resolution Notes' : 'Notes'}
+            rules={statusAction === 'resolve' ? [{ required: true, message: 'Resolution notes are required' }] : []}
+          >
+            <VoiceTextArea rows={3} placeholder={
+              statusAction === 'resolve' ? 'Describe how the defect was resolved...' :
+              statusAction === 'false_alarm' ? 'Explain why this is a false alarm...' :
+              'Optional closing notes...'
+            } />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Bulk Action Modal */}
+      <Modal
+        title={bulkAction === 'resolve' ? 'Bulk Resolve Defects' : 'Bulk Close Defects'}
+        open={bulkActionOpen}
+        onCancel={() => { setBulkActionOpen(false); bulkActionForm.resetFields(); }}
+        onOk={() => bulkActionForm.submit()}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`You are about to ${bulkAction} ${selectedRowKeys.length} defects.`}
+        />
+        <Form form={bulkActionForm} layout="vertical"
+          onFinish={(v) => bulkAction && handleBulkAction(bulkAction, v.notes || '')}>
+          <Form.Item
+            name="notes"
+            label="Notes"
+            rules={bulkAction === 'resolve' ? [{ required: true, message: 'Notes required for resolve' }] : []}
+          >
+            <VoiceTextArea rows={3} placeholder="Notes for all defects in this batch..." />
+          </Form.Item>
+        </Form>
       </Modal>
 
       {/* AI Panel Drawer */}

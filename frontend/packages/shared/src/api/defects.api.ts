@@ -44,12 +44,16 @@ export const defectsApi = {
     return getApiClient().get<ApiResponse<Defect>>(`/api/defects/${id}`);
   },
 
-  resolve(id: number) {
-    return getApiClient().post<ApiResponse<Defect>>(`/api/defects/${id}/resolve`);
+  resolve(id: number, data: { resolution_notes: string }) {
+    return getApiClient().post<ApiResponse<Defect>>(`/api/defects/${id}/resolve`, data);
   },
 
   close(id: number) {
     return getApiClient().post<ApiResponse<Defect>>(`/api/defects/${id}/close`);
+  },
+
+  updateStatus(id: number, data: { status: string; notes?: string }) {
+    return getApiClient().put<ApiResponse<Defect>>(`/api/defects/${id}/status`, data);
   },
 
   assignSpecialist(id: number, payload: AssignSpecialistPayload) {
