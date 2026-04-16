@@ -312,6 +312,58 @@ def complete_job(job_id):
     }), 200
 
 
+@bp.route('/jobs/<int:job_id>/admin-complete', methods=['POST'])
+@jwt_required()
+def admin_complete_job(job_id):
+    """Admin/Engineer marks a job as completed directly, bypassing start requirement.
+
+    Used from the work planning page when admin wants to record that a job
+    was done without going through the full tracking flow (start→pause→complete).
+    """
+    user = get_authenticated_user()
+    if user.role not in ('admin', 'engineer'):
+        raise BusinessError("Only admin/engineer can use admin-complete")
+
+    job = get_job_or_404(job_id)
+    tracking = get_or_create_tracking(job_id)
+
+    if tracking.status == 'completed':
+        raise BusinessError("Job is already completed")
+
+    now = datetime.utcnow()
+    data = request.get_json() or {}
+
+    # If never started, set started_at so hours calc works
+    if not tracking.started_at:
+        tracking.started_at = now
+
+    tracking.status = 'completed'
+    tracking.completed_at = now
+    tracking.work_notes = data.get('notes')
+    tracking.actual_hours = tracking.calculate_actual_hours() or job.estimated_hours
+
+    create_log_entry(job_id, user.id, 'admin_completed', {
+        'actual_hours': float(tracking.actual_hours) if tracking.actual_hours else None,
+        'notes': data.get('notes'),
+    })
+
+    # Auto-resolve linked defect
+    if job.defect_id and job.defect and job.defect.status not in ('resolved', 'closed'):
+        job.defect.status = 'resolved'
+        job.defect.resolved_at = now
+        job.defect.resolution_notes = data.get('notes') or ('Completed via work plan job %s' % job_id)
+        logger.info("Auto-resolved defect %s via admin-complete job %s", job.defect_id, job_id)
+
+    db.session.commit()
+
+    logger.info("Job %s admin-completed by user %s", job_id, user.id)
+    return jsonify({
+        'status': 'success',
+        'message': 'Job marked as completed',
+        'tracking': tracking.to_dict(),
+    }), 200
+
+
 @bp.route('/jobs/<int:job_id>/incomplete', methods=['POST'])
 @jwt_required()
 def mark_incomplete(job_id):

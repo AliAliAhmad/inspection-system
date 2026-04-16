@@ -73,7 +73,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType, type PdfFilters } from '@inspection/shared';
+import { workPlansApi, workPlanTrackingApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType, type PdfFilters } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -3518,6 +3518,33 @@ export default function WorkPlanningPage() {
                 </Col>
               </Row>
             )}
+
+            {/* Mark Complete */}
+            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+              <Popconfirm
+                title="Mark this job as completed?"
+                description={selectedJob.defect ? 'This will also resolve the linked defect.' : undefined}
+                onConfirm={() => {
+                  if (!currentPlan) return;
+                  workPlanTrackingApi.adminCompleteJob(selectedJob.id, {
+                    notes: `Completed from work plan by admin`,
+                  }).then(() => {
+                    message.success('Job marked as completed');
+                    queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+                    setJobDetailsModalOpen(false);
+                    setSelectedJob(null);
+                  }).catch((err: any) => {
+                    message.error(err?.response?.data?.message || 'Failed to complete job');
+                  });
+                }}
+                okText="Complete"
+                cancelText="Cancel"
+              >
+                <Button type="primary" icon={<CheckSquareOutlined />}>
+                  Mark Complete
+                </Button>
+              </Popconfirm>
+            </div>
           </div>
         )}
       </Modal>

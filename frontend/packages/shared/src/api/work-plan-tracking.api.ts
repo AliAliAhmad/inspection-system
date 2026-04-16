@@ -45,6 +45,10 @@ export const workPlanTrackingApi = {
     return getApiClient().post<TrackingResponse>(`${BASE}/jobs/${jobId}/complete`, payload);
   },
 
+  adminCompleteJob(jobId: number, payload?: { notes?: string }) {
+    return getApiClient().post<TrackingResponse>(`${BASE}/jobs/${jobId}/admin-complete`, payload);
+  },
+
   markIncomplete(jobId: number, payload: IncompleteJobPayload) {
     return getApiClient().post<TrackingResponse>(`${BASE}/jobs/${jobId}/incomplete`, payload);
   },
