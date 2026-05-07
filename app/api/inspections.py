@@ -1740,6 +1740,10 @@ def _background_photo_analysis(inspection_id, answer_id, file_record_id, file_pa
                         prompt_text = (
                             "This is a photo of a meter, gauge, or counter reading. "
                             "Extract the numeric value shown on the display/dial. "
+                            "IMPORTANT — mechanical hour-meters: if the last digit is shown in a "
+                            "different colour (typically red on a white background), that digit is the "
+                            "TENTHS place, not part of the integer. Example: white '9533' + red '3' "
+                            "= 9533.3, NOT 95333. Always include the decimal point in this case. "
                             "Provide response in JSON: { \"en\": \"description\", \"ar\": \"وصف\", \"reading\": \"12345\" }"
                         )
                     else:

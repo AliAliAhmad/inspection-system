@@ -104,6 +104,10 @@ class DeepInfraVisionService:
                     "Look carefully at all dials, digital displays, analog gauges, and counter wheels. "
                     "Extract the exact number displayed. "
                     "If multiple numbers visible, extract the main reading. "
+                    "IMPORTANT — mechanical hour-meters: if the last digit is shown in a "
+                    "different colour (typically red on a white background), that digit is the "
+                    "TENTHS place, not part of the integer. Example: white '9533' + red '3' = "
+                    "9533.3, NOT 95333. Always include the decimal point in this case. "
                     "Format: Reading: [number if found], Description: [brief description]"
                 )
             else:

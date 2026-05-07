@@ -133,6 +133,10 @@ class OllamaVisionService:
                     "This is an industrial equipment inspection photo. "
                     "Look for any meter readings, gauge values, or numeric displays. "
                     "Extract any numbers you can see clearly. "
+                    "IMPORTANT — mechanical hour-meters: if the last digit is shown in a "
+                    "different colour (typically red on a white background), that digit is the "
+                    "TENTHS place, not part of the integer. Example: white '9533' + red '3' "
+                    "= 9533.3, NOT 95333. Always include the decimal point in this case. "
                     "Format: Reading: [number if found], Description: [brief description]"
                 )
             else:
