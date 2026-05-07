@@ -199,14 +199,12 @@ def list_suspicious_readings():
         # readings are compared against the plausible value, not the typo.
         baseline_by_equipment[equipment.id] = suggested
 
+    # Sort: high-confidence first, then newest within each confidence bucket.
+    # Two-step using stable sort: sort by date desc, then by confidence asc.
+    # ISO 8601 strings sort lexicographically the same way as chronologically.
     confidence_order = {'high': 0, 'medium': 1, 'low': 2}
-    flagged.sort(
-        key=lambda r: (
-            confidence_order[r['confidence']],
-            -(int((r['answered_at'] or '').replace('-', '').replace(':', '')[:14] or 0)
-              if r['answered_at'] else 0),
-        )
-    )
+    flagged.sort(key=lambda r: r['answered_at'] or '', reverse=True)
+    flagged.sort(key=lambda r: confidence_order[r['confidence']])
 
     return jsonify({
         'status': 'success',
