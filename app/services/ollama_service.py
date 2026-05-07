@@ -32,14 +32,32 @@ OLLAMA_API_URL = f"{OLLAMA_HOST}/api"
 # trust the configured vision model exists on the subscription.
 OLLAMA_API_KEY = os.getenv('OLLAMA_API_KEY')
 
-# Vision model preference — first in list is what we ask cloud for directly.
-# In local mode we walk the list against the installed-models response.
-VISION_MODELS = [
-    "llama3.2-vision:11b",   # Best quality vision
-    "llama3.2-vision",       # Default vision
-    "gemma3:4b",             # Lightweight multimodal
-    "qwen2.5-vl:7b",         # Qwen vision
+# Vision model preferences. Cloud and local lists are kept separate because
+# the cloud-only models (`-cloud` suffix) won't exist locally and vice versa.
+#
+# Why Qwen-VL over Llama-Vision: Qwen-VL is the SOTA open vision-language
+# model for OCR / text-in-image tasks. The mechanical-meter reading task
+# is fundamentally an OCR problem (digits + tens/tenths convention), and
+# OCR-bench scores put Qwen-VL well ahead of Llama 3.2 Vision.
+#
+# qwen3-vl:235b-instruct-cloud is preferred over the base because the
+# instruct variant is better at following structured prompts (e.g. our
+# red-tenths rule and "Reply in this EXACT format" directive).
+CLOUD_VISION_MODELS = [
+    "qwen3-vl:235b-instruct-cloud",   # Best — Qwen 3 VL 235B, instruct-tuned, strong OCR
+    "qwen3-vl:235b-cloud",             # Base model fallback
+    "kimi-k2.5",                       # Moonshot's frontier multimodal model
 ]
+
+LOCAL_VISION_MODELS = [
+    "qwen2.5vl:32b",         # Best for OCR if you have the GPU
+    "qwen2.5vl:7b",          # Smaller Qwen — still strong OCR
+    "llama3.2-vision:11b",   # Llama vision fallback
+    "gemma3:4b",             # Lightweight multimodal
+]
+
+# Backwards-compatible alias used by callers that don't know about cloud/local.
+VISION_MODELS = LOCAL_VISION_MODELS
 
 
 def _is_cloud_mode() -> bool:
@@ -92,7 +110,7 @@ def get_available_models():
         # Ollama Cloud doesn't expose a per-account model list through the
         # same /api/tags shape. Trust the configured preference list and
         # let the generate call surface 404 if the model isn't in the plan.
-        return list(VISION_MODELS)
+        return list(CLOUD_VISION_MODELS)
     try:
         response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
         if response.status_code == 200:
@@ -157,11 +175,14 @@ class OllamaVisionService:
             # (the subscription bills against it). In local mode we walk it
             # against `ollama list` to avoid asking for a model that isn't pulled.
             if _is_cloud_mode():
-                model = VISION_MODELS[0]
+                model = CLOUD_VISION_MODELS[0]
             else:
-                model = _find_available_model(VISION_MODELS)
+                model = _find_available_model(LOCAL_VISION_MODELS)
                 if not model:
-                    logger.warning("No vision model available in Ollama. Run: ollama pull llama3.2-vision:11b")
+                    logger.warning(
+                        "No vision model available in Ollama. "
+                        "Run: ollama pull qwen2.5vl:7b   (or qwen2.5vl:32b for best OCR)"
+                    )
                     return None
 
             # Convert image to base64
