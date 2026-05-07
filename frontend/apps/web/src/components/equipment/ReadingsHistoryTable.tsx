@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Table, Tag, Select, Space, Typography, Button, Tooltip } from 'antd';
-import { EditOutlined } from '@ant-design/icons';
+import { Table, Tag, Select, Space, Typography, Button, Tooltip, Image } from 'antd';
+import { EditOutlined, FileImageOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { ReadingGroup, ReadingDataPoint } from '@inspection/shared';
 import dayjs from 'dayjs';
@@ -124,6 +124,41 @@ export default function ReadingsHistoryTable({
         );
       },
       sorter: (a: FlatReading, b: FlatReading) => a.value - b.value,
+    },
+    {
+      title: t('readings.photo', 'Photo'),
+      dataIndex: 'photo_url',
+      key: 'photo',
+      width: 80,
+      align: 'center' as const,
+      render: (url: string | null | undefined) =>
+        url ? (
+          <Image
+            src={url}
+            width={48}
+            height={48}
+            style={{ objectFit: 'cover', borderRadius: 4, cursor: 'zoom-in' }}
+            preview={{ mask: <FileImageOutlined /> }}
+            placeholder={
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  background: '#f5f5f5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <FileImageOutlined style={{ color: '#bfbfbf' }} />
+              </div>
+            }
+          />
+        ) : (
+          <Tooltip title={t('readings.noPhoto', 'No photo attached')}>
+            <FileImageOutlined style={{ color: '#d9d9d9', fontSize: 18 }} />
+          </Tooltip>
+        ),
     },
     {
       title: t('readings.status', 'Status'),
