@@ -614,6 +614,21 @@ interface ChecklistItemCardProps {
   colleagueAnswerForUrgency?: any;
 }
 
+// Detect running-hours / RNR meter questions (mirror of backend
+// app/services/running_hours_detection.py — kept in sync with that file).
+const RNR_KEYWORDS = [
+  'rnr reading', 'running hour reading', 'rnr', 'running hours', 'running hour',
+  'runing hours', 'runing hour', 'eqt runing', 'eqt running',
+  'engine hour', 'operating hour', 'operating time',
+  'ساعات التشغيل', 'ساعة التشغيل', 'عداد الساعات', 'عداد ساعات',
+  'ساعات تشغيل', 'ساعات المعدة',
+];
+
+function isRunningHoursQuestion(en?: string | null, ar?: string | null): boolean {
+  const combined = `${(en || '').toLowerCase()} ${(ar || '').toLowerCase()}`;
+  return RNR_KEYWORDS.some((kw) => combined.includes(kw));
+}
+
 // Helper to extract analysis from comment
 function extractAnalysisFromComment(comment: string | null | undefined): {
   photoAnalysis: { en: string; ar: string } | null;
@@ -931,6 +946,27 @@ function ChecklistItemCard({
       setNumericAnomaly(null);
       return;
     }
+
+    // Specific 10x typo detection (mechanical "red tenths" meters):
+    // when inspectors type all visible digits as one integer instead of
+    // recognizing the last digit is the decimal place.
+    const lastValue = readingStats.last_value;
+    if (lastValue && lastValue > 0) {
+      const ratio = num / lastValue;
+      if (ratio >= 8 && ratio <= 12) {
+        const suggested = (num / 10).toFixed(1);
+        setNumericAnomaly({
+          type: 'error',
+          message: t(
+            'inspection.tenths_typo',
+            `Possible 10× typo. Did you mean ${suggested}? On mechanical meters the last digit (often red) is the tenths place.`,
+            { suggested }
+          ),
+        });
+        return;
+      }
+    }
+
     const deviation = Math.abs(num - readingStats.avg) / Math.abs(readingStats.avg);
     const pctStr = Math.round(deviation * 100);
     const direction = num > readingStats.avg
@@ -1314,6 +1350,21 @@ function ChecklistItemCard({
             </Typography.Text>
           </div>
         )}
+
+        {/* Red-tenths hint for mechanical hour-meter questions */}
+        {item.answer_type === 'numeric' &&
+          isRunningHoursQuestion(item.question_text, item.question_text_ar) && (
+            <Alert
+              type="info"
+              showIcon
+              banner
+              style={{ padding: '4px 12px', fontSize: 12, marginBottom: 4 }}
+              message={t(
+                'inspection.rnr_hint',
+                'Mechanical meter? The last digit (often red) is the tenths place — type 9533.3, not 95333.'
+              )}
+            />
+          )}
 
         {renderAnswerInput()}
 

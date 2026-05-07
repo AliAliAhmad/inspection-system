@@ -41,6 +41,21 @@ import { useOfflineMutation } from '../../hooks/useOfflineMutation';
 import StaleDataBanner from '../../components/StaleDataBanner';
 import AdHocDefectSheet from '../../components/AdHocDefectSheet';
 
+// Detect running-hours / RNR meter questions (mirror of backend
+// app/services/running_hours_detection.py — kept in sync).
+const RNR_KEYWORDS = [
+  'rnr reading', 'running hour reading', 'rnr', 'running hours', 'running hour',
+  'runing hours', 'runing hour', 'eqt runing', 'eqt running',
+  'engine hour', 'operating hour', 'operating time',
+  'ساعات التشغيل', 'ساعة التشغيل', 'عداد الساعات', 'عداد ساعات',
+  'ساعات تشغيل', 'ساعات المعدة',
+];
+
+function isRunningHoursQuestion(en?: string | null, ar?: string | null): boolean {
+  const combined = `${(en || '').toLowerCase()} ${(ar || '').toLowerCase()}`;
+  return RNR_KEYWORDS.some((kw) => combined.includes(kw));
+}
+
 /**
  * Optimize Cloudinary image URL with auto-format, auto-quality, and enhancement
  * - f_auto: Best format for device (WebP, JPEG)
@@ -911,6 +926,18 @@ export default function InspectionChecklistScreen() {
           </View>
         </View>
 
+        {item.answer_type === 'numeric' &&
+          isRunningHoursQuestion(item.question_text, item.question_text_ar) && (
+            <View style={styles.rnrHint}>
+              <Text style={styles.rnrHintText}>
+                {t(
+                  'inspection.rnr_hint',
+                  'Mechanical meter? The last digit (often red) is the tenths place — type 9533.3, not 95333.'
+                )}
+              </Text>
+            </View>
+          )}
+
         {renderAnswerInput(item)}
 
         <View style={styles.actionRow}>
@@ -1515,6 +1542,20 @@ const styles = StyleSheet.create({
   badgeRow: {
     flexDirection: 'row',
     gap: 6,
+  },
+  rnrHint: {
+    backgroundColor: '#e6f7ff',
+    borderColor: '#91d5ff',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  rnrHintText: {
+    fontSize: 12,
+    color: '#0050b3',
+    lineHeight: 16,
   },
   categoryChip: {
     paddingHorizontal: 8,
