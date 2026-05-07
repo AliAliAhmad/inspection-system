@@ -8,7 +8,11 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.models.running_hours import RunningHoursReading, ServiceInterval, RunningHoursAlert
 from app.models.equipment import Equipment
+from app.models.equipment_reading import EquipmentReading
+from app.models.inspection import Inspection, InspectionAnswer
+from app.models.checklist import ChecklistItem
 from app.models.user import User
+from app.services.running_hours_detection import is_running_hours_question
 
 bp = Blueprint('running_hours', __name__)
 
@@ -36,14 +40,124 @@ def get_service_status(current_hours, service_interval):
         return 'ok', hours_until, None, max(pct, 0)
 
 
-def build_running_hours_data(equipment):
-    """Build complete running hours data for an equipment item."""
-    latest_reading = RunningHoursReading.query.filter_by(
+def get_running_hours_item_ids():
+    """Return checklist_item IDs that represent running-hours questions.
+
+    Cached at the call-site by passing the result into build_running_hours_data()
+    so list_running_hours()/get_summary()/get_service_due() don't re-query
+    ChecklistItem once per equipment.
+    """
+    items = ChecklistItem.query.filter(ChecklistItem.answer_type == 'numeric').all()
+    return [
+        ci.id for ci in items
+        if is_running_hours_question(ci.question_text, ci.question_text_ar)
+    ]
+
+
+def _latest_inspection_answer_hours(equipment_id, rh_item_ids):
+    """Find the most recent inspector-typed numeric answer for a running-hours question.
+
+    Returns (value, answered_at_dt, answer_row) or None when nothing is found
+    or the most recent value isn't parseable as a float.
+    """
+    if not rh_item_ids:
+        return None
+    row = db.session.query(InspectionAnswer).join(
+        Inspection, InspectionAnswer.inspection_id == Inspection.id
+    ).filter(
+        Inspection.equipment_id == equipment_id,
+        Inspection.status.in_(('submitted', 'reviewed')),
+        InspectionAnswer.checklist_item_id.in_(rh_item_ids),
+        InspectionAnswer.answer_value.isnot(None),
+        InspectionAnswer.answer_value != '',
+    ).order_by(InspectionAnswer.answered_at.desc()).first()
+    if not row:
+        return None
+    try:
+        value = float(str(row.answer_value).replace(',', '').strip())
+    except (TypeError, ValueError):
+        return None
+    return value, row.answered_at, row
+
+
+def build_running_hours_data(equipment, rh_item_ids=None):
+    """Build complete running hours data for an equipment item.
+
+    Merges three sources (pick latest by timestamp):
+      1) EquipmentReading.rnr — written by inspections when AI extraction succeeds
+      2) RunningHoursReading — manual entries via the dashboard
+      3) InspectionAnswer.answer_value — inspector-typed numeric answers for
+         running-hours checklist items (used when AI extraction fails or
+         the question wording wasn't recognized as a meter-reading question)
+    """
+    if rh_item_ids is None:
+        rh_item_ids = get_running_hours_item_ids()
+
+    # Source 1: EquipmentReading (rnr)
+    latest_er = EquipmentReading.query.filter(
+        EquipmentReading.equipment_id == equipment.id,
+        EquipmentReading.reading_type == 'rnr',
+        EquipmentReading.is_faulty.is_(False),
+        EquipmentReading.reading_value.isnot(None),
+    ).order_by(
+        EquipmentReading.reading_date.desc(),
+        EquipmentReading.recorded_at.desc(),
+    ).first()
+
+    # Source 2: RunningHoursReading
+    latest_rhr = RunningHoursReading.query.filter_by(
         equipment_id=equipment.id
     ).order_by(RunningHoursReading.recorded_at.desc()).first()
 
+    # Source 3: InspectionAnswer.answer_value
+    latest_ia = _latest_inspection_answer_hours(equipment.id, rh_item_ids)
+
+    # Pick latest across all three sources
+    candidates = []
+    if latest_er:
+        ts = latest_er.recorded_at or (
+            datetime.combine(latest_er.reading_date, datetime.min.time())
+            if latest_er.reading_date else None
+        )
+        candidates.append(('equipment_reading', latest_er.reading_value, ts, latest_er))
+    if latest_rhr:
+        candidates.append(('running_hours_reading', latest_rhr.hours, latest_rhr.recorded_at, latest_rhr))
+    if latest_ia:
+        ia_value, ia_ts, ia_row = latest_ia
+        candidates.append(('inspection_answer', ia_value, ia_ts, ia_row))
+
+    # Drop candidates without a usable timestamp before sorting
+    candidates = [c for c in candidates if c[2] is not None]
+    candidates.sort(key=lambda c: c[2], reverse=True)
+
+    if candidates:
+        source_type, current_hours, latest_ts, latest_obj = candidates[0]
+    else:
+        source_type, current_hours, latest_ts, latest_obj = None, 0, None, None
+
+    # Shape last_reading consistently regardless of which source won
+    last_reading = None
+    if latest_obj is not None:
+        if source_type == 'running_hours_reading':
+            last_reading = latest_obj.to_dict()
+        elif source_type == 'equipment_reading':
+            last_reading = {
+                'id': latest_obj.id,
+                'hours': latest_obj.reading_value,
+                'recorded_at': latest_ts.isoformat() if latest_ts else None,
+                'source': 'equipment_reading',
+                'inspection_id': latest_obj.inspection_id,
+            }
+        elif source_type == 'inspection_answer':
+            last_reading = {
+                'id': latest_obj.id,
+                'hours': current_hours,
+                'recorded_at': latest_ts.isoformat() if latest_ts else None,
+                'source': 'inspection_answer',
+                'inspection_id': latest_obj.inspection_id,
+            }
+
     si = ServiceInterval.query.filter_by(equipment_id=equipment.id).first()
-    current_hours = latest_reading.hours if latest_reading else 0
     status, hours_until, hours_overdue, progress = get_service_status(current_hours, si)
 
     return {
@@ -51,7 +165,7 @@ def build_running_hours_data(equipment):
         'equipment_name': equipment.name,
         'equipment_type': equipment.equipment_type,
         'current_hours': current_hours,
-        'last_reading': latest_reading.to_dict() if latest_reading else None,
+        'last_reading': last_reading,
         'service_interval': si.to_dict() if si else None,
         'service_status': status,
         'hours_until_service': hours_until,
@@ -284,10 +398,11 @@ def list_running_hours():
         )
 
     equipment_list = query.all()
+    rh_item_ids = get_running_hours_item_ids()
     results = []
 
     for eq in equipment_list:
-        data = build_running_hours_data(eq)
+        data = build_running_hours_data(eq, rh_item_ids=rh_item_ids)
         if status_filter and data['service_status'] != status_filter:
             continue
         results.append(data)
@@ -322,13 +437,14 @@ def list_running_hours():
 @jwt_required()
 def get_summary():
     equipment_list = Equipment.query.filter(Equipment.is_scrapped.is_(False)).all()
+    rh_item_ids = get_running_hours_item_ids()
 
     summary = {'ok': [], 'approaching': [], 'overdue': []}
     total_hours = 0
     count_with_hours = 0
 
     for eq in equipment_list:
-        data = build_running_hours_data(eq)
+        data = build_running_hours_data(eq, rh_item_ids=rh_item_ids)
         summary[data['service_status']].append(data)
         if data['current_hours'] > 0:
             total_hours += data['current_hours']
@@ -355,10 +471,11 @@ def get_service_due():
     limit = request.args.get('limit', 20, type=int)
 
     equipment_list = Equipment.query.filter(Equipment.is_scrapped.is_(False)).all()
+    rh_item_ids = get_running_hours_item_ids()
     due_list = []
 
     for eq in equipment_list:
-        data = build_running_hours_data(eq)
+        data = build_running_hours_data(eq, rh_item_ids=rh_item_ids)
         if data['service_status'] == 'ok':
             continue
         if status_filter and data['service_status'] != status_filter:

@@ -1560,19 +1560,20 @@ def _background_photo_analysis(inspection_id, answer_id, file_record_id, file_pa
     is_twl_reading = False
 
     if checklist_item:
+        from app.services.running_hours_detection import (
+            is_running_hours_question,
+            is_twistlock_question,
+        )
         question_text = (checklist_item.question_text or '').lower()
         question_text_ar = (checklist_item.question_text_ar or '').lower()
         combined_text = question_text + ' ' + question_text_ar
 
-        is_rnr_reading = any(keyword in combined_text for keyword in [
-            'rnr reading', 'running hour reading', 'rnr', 'running hours', 'running hour',
-            'ساعات التشغيل', 'ساعة التشغيل'
-        ])
-
-        is_twl_reading = any(keyword in combined_text for keyword in [
-            'twl count', 'twistlock count', 'twl', 'twistlock', 'twist lock',
-            'تويست لوك', 'عدد التويست'
-        ])
+        is_rnr_reading = is_running_hours_question(
+            checklist_item.question_text, checklist_item.question_text_ar
+        )
+        is_twl_reading = is_twistlock_question(
+            checklist_item.question_text, checklist_item.question_text_ar
+        )
 
         is_reading_question = is_rnr_reading or is_twl_reading or any(keyword in combined_text for keyword in [
             'reading', 'قراءة', 'عداد', 'meter', 'gauge', 'counter'
