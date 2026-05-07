@@ -160,6 +160,8 @@ def create_app(config_name='development'):
         unplanned_jobs,
         # Smart Plan Generator — Worker Assignment Rules
         worker_assignment_rules,
+        # Data Cleanup (admin tooling — red-tenths typo correction etc.)
+        data_cleanup,
     )
 
     # Core
@@ -269,6 +271,9 @@ def create_app(config_name='development'):
 
     # Unplanned Jobs
     app.register_blueprint(unplanned_jobs.bp, url_prefix='/api/unplanned-jobs')
+
+    # Data Cleanup (admin tooling)
+    app.register_blueprint(data_cleanup.bp, url_prefix='/api/admin/cleanup')
 
     # Initialize Flask-SocketIO for WebSocket support
     socketio = init_socketio(app)
