@@ -32,7 +32,9 @@ import {
   UserOutlined,
   EnvironmentOutlined,
   ToolOutlined,
+  AuditOutlined,
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { runningHoursApi } from '@inspection/shared';
 import type { RunningHoursData, ServiceStatus, RunningHoursSummary } from '@inspection/shared';
@@ -77,6 +79,7 @@ const statusConfig: Record<ServiceStatus, {
 export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
   onEquipmentClick,
 }) => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [locationFilter, setLocationFilter] = useState<string | undefined>();
@@ -440,6 +443,14 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
               <Button icon={<ExportOutlined />} onClick={handleExport}>
                 Export
               </Button>
+              <Tooltip title="Review and fix 10x meter-reading typos">
+                <Button
+                  icon={<AuditOutlined />}
+                  onClick={() => navigate('/admin/readings-cleanup')}
+                >
+                  Cleanup
+                </Button>
+              </Tooltip>
             </Space>
           </Col>
         </Row>

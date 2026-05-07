@@ -301,6 +301,17 @@ export type {
   CreateHandoverPayload,
 } from '../types/shift-handover.types';
 
+// Data Cleanup (admin)
+export { dataCleanupApi } from './data-cleanup.api';
+export type {
+  CleanupConfidence,
+  SuspiciousReadingRow,
+  SuspiciousReadingsSummary,
+  SuspiciousReadingsResponse,
+  BulkCorrectPayload,
+  BulkCorrectResponse,
+} from '../types/data-cleanup.types';
+
 // Monitor Follow-Ups
 export { monitorFollowupsApi } from './monitor-followups.api';
 export type {
