@@ -1602,6 +1602,7 @@ def _background_photo_analysis(inspection_id, answer_id, file_record_id, file_pa
         from app.services.together_ai_service import get_vision_service as get_together_vision, is_together_configured
         from app.services.deepinfra_service import get_vision_service as get_deepinfra_vision, is_deepinfra_configured
         from app.services.sambanova_service import get_vision_service as get_sambanova_vision, is_sambanova_configured
+        from app.services.ollama_service import get_vision_service as get_ollama_vision, is_ollama_configured
 
         # Download image content (needed for most services)
         image_content = None
@@ -1627,6 +1628,22 @@ def _background_photo_analysis(inspection_id, answer_id, file_record_id, file_pa
 
         # ===== FALLBACK CHAIN =====
         result = None
+
+        # 0. Ollama (Cloud subscription or local) - PRIMARY when configured
+        # Tried first because the user pays for capacity and the prompts are
+        # tuned for Llama vision models (red-tenths rule etc.).
+        if not result and is_ollama_configured() and image_content:
+            try:
+                logger.info("Trying: Ollama Vision (cloud or local)")
+                vision_service = get_ollama_vision()
+                result = vision_service.analyze_image(image_content=image_content, is_reading_question=is_reading_question)
+                if process_vision_result(result, "Ollama"):
+                    pass
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning(f"Ollama failed: {e}, trying next...")
+                result = None
 
         # 1. Gemini (1,500 FREE/day) - PRIMARY
         if not result and is_gemini_configured() and image_content:

@@ -322,6 +322,7 @@ Format your response as JSON with keys: description, description_ar, severity, c
         """
         from app.services.gemini_service import is_gemini_configured, get_vision_service as get_gemini_vision
         from app.services.groq_service import is_groq_configured, get_vision_service as get_groq_vision
+        from app.services.ollama_service import is_ollama_configured, get_vision_service as get_ollama_vision
 
         # Download image
         image_content = None
@@ -332,7 +333,22 @@ Format your response as JSON with keys: description, description_ar, severity, c
         except Exception as e:
             logger.warning(f"Could not download image: {e}")
 
-        # Try Gemini first
+        # Try Ollama (cloud or local) first when configured
+        if is_ollama_configured() and image_content:
+            try:
+                ollama_vision = get_ollama_vision()
+                result = ollama_vision.analyze_image(image_content=image_content, is_reading_question=True)
+                if result and result.get('reading'):
+                    return {
+                        'success': True,
+                        'value': result.get('reading'),
+                        'description': result.get('en', ''),
+                        'provider': 'ollama'
+                    }
+            except Exception as e:
+                logger.warning(f"Ollama gauge reading failed: {e}")
+
+        # Try Gemini second
         if is_gemini_configured() and image_content:
             try:
                 gemini_vision = get_gemini_vision()

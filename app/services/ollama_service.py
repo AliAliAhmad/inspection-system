@@ -1,17 +1,20 @@
 """
-Ollama Local AI Services - 100% FREE, 100% Private.
-All processing happens locally, no data sent externally.
+Ollama AI Services — works against either a local Ollama daemon or
+Ollama Cloud (https://ollama.com).
 
-Supports:
-- Vision: llama3.2-vision, gemma3, qwen2.5-vl
-- Audio: whisper (via whisper.cpp)
-- Text: llama3.1, gemma3, mistral, deepseek
+Local mode (default):
+    OLLAMA_HOST=http://localhost:11434 (or unset)
+    Models must be pulled with `ollama pull <model>`.
 
-Setup:
-1. Install Ollama: brew install ollama (Mac) or curl -fsSL https://ollama.com/install.sh | sh (Linux)
-2. Pull models: ollama pull llama3.2-vision:11b
-3. Start server: ollama serve (runs on localhost:11434)
-4. Set OLLAMA_HOST env var if not default (optional)
+Cloud mode:
+    OLLAMA_HOST=https://ollama.com
+    OLLAMA_API_KEY=<key from ollama.com/settings/keys>
+    Models are billed against the Ollama subscription; no local pull needed.
+
+The same JSON wire format (`/api/generate` with base64 `images`) works for
+both, so most logic is shared. The only branches are: include the
+Authorization header in cloud mode, and skip the local-model-discovery
+step (since cloud doesn't expose `/api/tags` per-account in the same way).
 """
 
 import os
@@ -21,17 +24,34 @@ import base64
 
 logger = logging.getLogger(__name__)
 
-# Ollama API endpoint (default localhost)
+# Ollama API endpoint (default localhost; set to https://ollama.com for cloud)
 OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
 OLLAMA_API_URL = f"{OLLAMA_HOST}/api"
 
-# Vision models (in order of preference)
+# API key for Ollama Cloud (Bearer token). When set, we route to cloud and
+# trust the configured vision model exists on the subscription.
+OLLAMA_API_KEY = os.getenv('OLLAMA_API_KEY')
+
+# Vision model preference — first in list is what we ask cloud for directly.
+# In local mode we walk the list against the installed-models response.
 VISION_MODELS = [
     "llama3.2-vision:11b",   # Best quality vision
     "llama3.2-vision",       # Default vision
     "gemma3:4b",             # Lightweight multimodal
     "qwen2.5-vl:7b",         # Qwen vision
 ]
+
+
+def _is_cloud_mode() -> bool:
+    """True when OLLAMA_API_KEY is set — implies routing to Ollama Cloud."""
+    return bool(OLLAMA_API_KEY)
+
+
+def _auth_headers() -> dict:
+    """Authorization header for Ollama Cloud (empty in local mode)."""
+    if _is_cloud_mode():
+        return {'Authorization': f'Bearer {OLLAMA_API_KEY}'}
+    return {}
 
 # Text models (in order of preference)
 TEXT_MODELS = [
@@ -48,7 +68,17 @@ AUDIO_MODELS = [
 
 
 def is_ollama_configured():
-    """Check if Ollama server is running and accessible."""
+    """
+    Check if Ollama is usable.
+
+    Cloud mode (OLLAMA_API_KEY set): assume reachable — we'll discover real
+    issues at the actual generate call rather than wasting a probe round-trip.
+
+    Local mode: probe /api/tags so we don't try to call a daemon that isn't
+    running.
+    """
+    if _is_cloud_mode():
+        return True
     try:
         response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=2)
         return response.status_code == 200
@@ -57,7 +87,12 @@ def is_ollama_configured():
 
 
 def get_available_models():
-    """Get list of models available in local Ollama."""
+    """List models available locally (only meaningful in local mode)."""
+    if _is_cloud_mode():
+        # Ollama Cloud doesn't expose a per-account model list through the
+        # same /api/tags shape. Trust the configured preference list and
+        # let the generate call surface 404 if the model isn't in the plan.
+        return list(VISION_MODELS)
     try:
         response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
         if response.status_code == 200:
@@ -118,11 +153,16 @@ class OllamaVisionService:
                 logger.error("No image provided")
                 return None
 
-            # Find available vision model
-            model = _find_available_model(VISION_MODELS)
-            if not model:
-                logger.warning("No vision model available in Ollama. Run: ollama pull llama3.2-vision:11b")
-                return None
+            # Pick a vision model. In cloud mode we trust the preference list
+            # (the subscription bills against it). In local mode we walk it
+            # against `ollama list` to avoid asking for a model that isn't pulled.
+            if _is_cloud_mode():
+                model = VISION_MODELS[0]
+            else:
+                model = _find_available_model(VISION_MODELS)
+                if not model:
+                    logger.warning("No vision model available in Ollama. Run: ollama pull llama3.2-vision:11b")
+                    return None
 
             # Convert image to base64
             image_b64 = base64.b64encode(image_content).decode('utf-8')
@@ -158,12 +198,16 @@ class OllamaVisionService:
                 }
             }
 
-            logger.info(f"Calling Ollama Vision with model: {model}")
+            logger.info(
+                f"Calling Ollama Vision with model: {model} "
+                f"({'cloud' if _is_cloud_mode() else 'local'})"
+            )
 
             response = requests.post(
                 f"{OLLAMA_API_URL}/generate",
                 json=payload,
-                timeout=120  # Local inference can be slow
+                headers=_auth_headers(),
+                timeout=120  # Local inference can be slow; cloud usually faster
             )
 
             if response.status_code == 200:
