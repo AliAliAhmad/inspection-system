@@ -310,6 +310,8 @@ export type {
   SuspiciousReadingsResponse,
   BulkCorrectPayload,
   BulkCorrectResponse,
+  AIAgreement,
+  ReanalyzeResponse,
 } from '../types/data-cleanup.types';
 
 // Monitor Follow-Ups

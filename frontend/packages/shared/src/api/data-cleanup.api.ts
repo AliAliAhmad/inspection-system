@@ -4,6 +4,7 @@ import type {
   SuspiciousReadingsResponse,
   BulkCorrectPayload,
   BulkCorrectResponse,
+  ReanalyzeResponse,
 } from '../types/data-cleanup.types';
 
 export const dataCleanupApi = {
@@ -20,6 +21,13 @@ export const dataCleanupApi = {
     return getApiClient().post<ApiResponse<BulkCorrectResponse>>(
       '/api/admin/cleanup/bulk-correct-readings',
       payload
+    );
+  },
+
+  /** Re-run vision AI on a historical answer's photo to verify the typed value. */
+  reanalyzePhoto(answerId: number) {
+    return getApiClient().post<ApiResponse<ReanalyzeResponse>>(
+      `/api/admin/cleanup/reanalyze-photo/${answerId}`
     );
   },
 };

@@ -21,8 +21,13 @@ import {
 import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
+  EyeOutlined,
   FileImageOutlined,
+  QuestionCircleOutlined,
   ReloadOutlined,
+  RobotOutlined,
+  StopOutlined,
+  ThunderboltOutlined,
   ToolOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -32,6 +37,8 @@ import {
   dataCleanupApi,
   type SuspiciousReadingRow,
   type CleanupConfidence,
+  type AIAgreement,
+  type ReanalyzeResponse,
 } from '@inspection/shared';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -66,12 +73,66 @@ interface CorrectionDraft {
   new_value: number;
 }
 
+const AGREEMENT_META: Record<
+  AIAgreement,
+  { label: string; color: string; tagColor: string; icon: React.ReactNode; tooltip: string }
+> = {
+  matches_suggested: {
+    label: 'AI: ÷10 fix',
+    color: '#52c41a',
+    tagColor: 'success',
+    icon: <ThunderboltOutlined />,
+    tooltip: 'AI agrees with the ÷10 suggested fix — strong signal to apply.',
+  },
+  matches_typed: {
+    label: 'AI: as-typed',
+    color: '#faad14',
+    tagColor: 'warning',
+    icon: <EyeOutlined />,
+    tooltip:
+      'AI sees the same number the inspector typed — typed value is likely correct, NOT a typo.',
+  },
+  matches_both: {
+    label: 'AI: both close',
+    color: '#1890ff',
+    tagColor: 'processing',
+    icon: <QuestionCircleOutlined />,
+    tooltip: 'Typed and suggested values are within tolerance of AI — review manually.',
+  },
+  disagrees: {
+    label: 'AI: different',
+    color: '#ff4d4f',
+    tagColor: 'error',
+    icon: <StopOutlined />,
+    tooltip:
+      "AI's reading differs from both typed and suggested. Open the photo and decide manually.",
+  },
+  no_reading: {
+    label: 'AI: unclear',
+    color: '#8c8c8c',
+    tagColor: 'default',
+    icon: <QuestionCircleOutlined />,
+    tooltip: "AI couldn't extract a number from this photo (blurry, occluded, or no meter visible).",
+  },
+  no_photo: {
+    label: 'No photo',
+    color: '#bfbfbf',
+    tagColor: 'default',
+    icon: <FileImageOutlined />,
+    tooltip: 'No photo attached — AI verification not possible.',
+  },
+};
+
 export default function ReadingCleanupPage() {
   const queryClient = useQueryClient();
   const [includeLow, setIncludeLow] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [drafts, setDrafts] = useState<Record<number, number>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // AI verification state per row — keyed by answer_id
+  const [aiVerdicts, setAiVerdicts] = useState<Record<number, ReanalyzeResponse>>({});
+  const [verifyingIds, setVerifyingIds] = useState<Set<number>>(new Set());
+  const [batchVerifying, setBatchVerifying] = useState(false);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['data-cleanup-suspicious', includeLow],
@@ -114,6 +175,65 @@ export default function ReadingCleanupPage() {
       message.error(err?.response?.data?.message || 'Bulk correction failed');
     },
   });
+
+  const verifyOne = async (answerId: number, hasPhoto: boolean) => {
+    if (!hasPhoto) {
+      // No photo = AI can't help. Mark in state so UI shows the muted badge.
+      setAiVerdicts((prev) => ({
+        ...prev,
+        [answerId]: {
+          answer_id: answerId,
+          typed_value: null,
+          suggested_value: null,
+          ai_reading: null,
+          ai_description: '',
+          agreement: 'no_photo',
+          provider: 'none',
+        },
+      }));
+      return;
+    }
+    setVerifyingIds((prev) => new Set(prev).add(answerId));
+    try {
+      const res = await dataCleanupApi.reanalyzePhoto(answerId);
+      const verdict = res.data?.data;
+      if (verdict) {
+        setAiVerdicts((prev) => ({ ...prev, [answerId]: verdict }));
+        // If AI agreement is matches_suggested AND admin hasn't customized
+        // the draft, keep it. If admin set their own value, leave it alone.
+        // No autosave here — admin still presses Apply explicitly.
+      }
+    } catch (err: any) {
+      message.error(
+        err?.response?.data?.message ||
+        `AI verification failed for answer #${answerId}`
+      );
+    } finally {
+      setVerifyingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(answerId);
+        return next;
+      });
+    }
+  };
+
+  const verifyVisiblePage = async () => {
+    // Verify all rows on the currently rendered page that haven't been verified.
+    // We sequentialise to avoid hammering Ollama Cloud and to keep UI responsive
+    // (each call ~3-8s; parallel would burn rate limits and look chaotic).
+    setBatchVerifying(true);
+    try {
+      const targets = rows.filter(
+        (r) => !aiVerdicts[r.answer_id] && !verifyingIds.has(r.answer_id)
+      );
+      for (const row of targets) {
+        // eslint-disable-next-line no-await-in-loop
+        await verifyOne(row.answer_id, !!row.photo_url);
+      }
+    } finally {
+      setBatchVerifying(false);
+    }
+  };
 
   const getDraftValue = (row: SuspiciousReadingRow) =>
     drafts[row.answer_id] ?? row.suggested_value;
@@ -235,6 +355,60 @@ export default function ReadingCleanupPage() {
       ),
     },
     {
+      title: 'AI verify',
+      key: 'ai',
+      width: 180,
+      render: (_, row) => {
+        const verdict = aiVerdicts[row.answer_id];
+        const isVerifying = verifyingIds.has(row.answer_id);
+        if (isVerifying) {
+          return (
+            <Space size={4}>
+              <RobotOutlined spin style={{ color: '#1890ff' }} />
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                Reading photo…
+              </Text>
+            </Space>
+          );
+        }
+        if (!verdict) {
+          return (
+            <Button
+              size="small"
+              icon={<RobotOutlined />}
+              onClick={() => verifyOne(row.answer_id, !!row.photo_url)}
+              disabled={batchVerifying}
+            >
+              Verify
+            </Button>
+          );
+        }
+        const meta = AGREEMENT_META[verdict.agreement];
+        return (
+          <Tooltip
+            title={
+              <>
+                {meta.tooltip}
+                {verdict.ai_reading != null && (
+                  <div style={{ marginTop: 4 }}>
+                    AI read: <strong>{verdict.ai_reading}</strong>
+                    {verdict.provider !== 'none' && (
+                      <span style={{ opacity: 0.7 }}> ({verdict.provider})</span>
+                    )}
+                  </div>
+                )}
+              </>
+            }
+          >
+            <Tag color={meta.tagColor} icon={meta.icon}>
+              {meta.label}
+              {verdict.ai_reading != null && `: ${verdict.ai_reading}`}
+            </Tag>
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: 'Date',
       dataIndex: 'answered_at',
       key: 'date',
@@ -342,6 +516,16 @@ export default function ReadingCleanupPage() {
             >
               Refresh
             </Button>
+            <Tooltip title="Run vision AI on the photo of every visible row that hasn't been verified yet (~5s per row)">
+              <Button
+                icon={<RobotOutlined />}
+                onClick={verifyVisiblePage}
+                loading={batchVerifying}
+                disabled={rows.length === 0}
+              >
+                Verify visible
+              </Button>
+            </Tooltip>
             <Button
               type="primary"
               danger

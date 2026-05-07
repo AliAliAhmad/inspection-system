@@ -222,6 +222,161 @@ def list_suspicious_readings():
     })
 
 
+def _parse_ai_reading(raw_value):
+    """Coerce an AI-extracted reading (string or number) into float, or None."""
+    if raw_value is None:
+        return None
+    try:
+        return float(str(raw_value).replace(',', '').strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _classify_agreement(typed_value, suggested_value, ai_value, tolerance_pct=5):
+    """
+    Decide whether AI's reading agrees with the typed value, the suggested fix,
+    both, or neither.
+
+    Returns one of:
+        'matches_suggested' - AI strongly supports the ÷10 fix
+        'matches_typed'      - AI strongly supports the typed value as-is
+        'matches_both'       - typed and suggested are within tolerance of AI
+                               (usually a degenerate case — values are close)
+        'disagrees'          - AI's number is different from both
+        'no_reading'         - AI couldn't extract anything numeric
+    """
+    if ai_value is None:
+        return 'no_reading'
+
+    def _within(a, b):
+        if a == 0 or b == 0:
+            return abs(a - b) < 0.5  # avoid div-by-zero edge
+        return abs(a - b) / max(abs(a), abs(b)) <= tolerance_pct / 100.0
+
+    matches_typed = _within(ai_value, typed_value)
+    matches_suggested = (
+        suggested_value is not None and _within(ai_value, suggested_value)
+    )
+
+    if matches_typed and matches_suggested:
+        return 'matches_both'
+    if matches_suggested:
+        return 'matches_suggested'
+    if matches_typed:
+        return 'matches_typed'
+    return 'disagrees'
+
+
+@bp.route('/reanalyze-photo/<int:answer_id>', methods=['POST'])
+@jwt_required()
+@admin_required()
+def reanalyze_photo(answer_id):
+    """
+    Re-run AI vision analysis on the photo attached to a historical
+    inspection answer, and compare the AI's reading to the inspector's
+    typed value plus the dashboard's ÷10 suggestion.
+
+    Used by the admin Reading Cleanup page's "AI Verify" button to provide
+    photo-based ground truth before approving a correction.
+
+    Returns:
+      200 OK
+      {
+        "answer_id": int,
+        "typed_value": float,
+        "suggested_value": float,        // typed_value / 10
+        "ai_reading": float | null,
+        "ai_description": str,
+        "agreement": "matches_suggested" | "matches_typed" | "matches_both"
+                   | "disagrees" | "no_reading" | "no_photo",
+        "provider": str,                 // which AI service answered
+      }
+
+      404 — answer not found
+      400 — answer has no photo to analyze
+    """
+    from app.services.ollama_service import (
+        get_vision_service as get_ollama_vision,
+        is_ollama_configured,
+    )
+    from app.services.gemini_service import (
+        get_vision_service as get_gemini_vision,
+        is_gemini_configured,
+    )
+    import requests as http
+
+    answer = db.session.get(InspectionAnswer, answer_id)
+    if not answer:
+        return jsonify({'status': 'error', 'message': 'Answer not found'}), 404
+    if not answer.photo_file_id:
+        return jsonify({'status': 'error', 'message': 'No photo attached to this answer'}), 400
+
+    photo = db.session.get(File, answer.photo_file_id)
+    if not photo or not photo.file_path:
+        return jsonify({'status': 'error', 'message': 'Photo file not found'}), 404
+
+    typed_value = _parse_float(answer.answer_value)
+    suggested_value = round(typed_value / 10.0, 1) if typed_value is not None else None
+
+    # Download the photo bytes — same pattern as the inspection write path
+    image_content = None
+    try:
+        resp = http.get(photo.file_path, timeout=30)
+        resp.raise_for_status()
+        image_content = resp.content
+    except Exception as e:
+        logger.warning(f"Failed to download photo {photo.file_path}: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Could not download photo: {e}',
+        }), 500
+
+    # Try Ollama first when configured (cloud or local), then Gemini as fallback.
+    # Other providers in the chain are out of scope here — admin can re-click
+    # if the first two fail.
+    ai_result = None
+    provider_used = None
+
+    if is_ollama_configured() and image_content:
+        try:
+            ai_result = get_ollama_vision().analyze_image(
+                image_content=image_content, is_reading_question=True
+            )
+            if ai_result and ai_result.get('reading') is not None:
+                provider_used = 'ollama'
+        except Exception as e:
+            logger.warning(f"Ollama re-analysis failed: {e}")
+            ai_result = None
+
+    if (not ai_result or ai_result.get('reading') is None) and is_gemini_configured() and image_content:
+        try:
+            ai_result = get_gemini_vision().analyze_image(
+                image_content=image_content, is_reading_question=True
+            )
+            if ai_result and ai_result.get('reading') is not None:
+                provider_used = 'gemini'
+        except Exception as e:
+            logger.warning(f"Gemini re-analysis failed: {e}")
+
+    ai_value = _parse_ai_reading(ai_result.get('reading') if ai_result else None)
+    ai_description = (ai_result or {}).get('en') or ''
+
+    agreement = _classify_agreement(typed_value or 0, suggested_value, ai_value)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'answer_id': answer_id,
+            'typed_value': typed_value,
+            'suggested_value': suggested_value,
+            'ai_reading': ai_value,
+            'ai_description': ai_description,
+            'agreement': agreement,
+            'provider': provider_used or 'none',
+        },
+    })
+
+
 @bp.route('/bulk-correct-readings', methods=['POST'])
 @jwt_required()
 @admin_required()
