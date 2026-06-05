@@ -47,9 +47,9 @@ function SpecialistTabs({ t }: { t: (key: string) => string }) {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
-      <Tab.Screen name="Assignments" component={MyAssignmentsScreen} options={{ tabBarLabel: t('nav.my_assignments') }} />
       <Tab.Screen name="Jobs" component={SpecialistJobsScreen} options={{ tabBarLabel: t('nav.my_jobs') }} />
       <Tab.Screen name="Chat" component={ChannelListScreen} options={{ tabBarLabel: t('nav.chat') }} />
+      <Tab.Screen name="WorkPlan" component={MyWorkPlanScreen} options={{ tabBarLabel: t('nav.my_work_plan') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
   );
@@ -61,7 +61,7 @@ function EngineerTabs({ t }: { t: (key: string) => string }) {
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: t('nav.dashboard') }} />
       <Tab.Screen name="Jobs" component={EngineerJobsScreen} options={{ tabBarLabel: t('nav.my_jobs') }} />
       <Tab.Screen name="Chat" component={ChannelListScreen} options={{ tabBarLabel: t('nav.chat') }} />
-      <Tab.Screen name="WorkPlan" component={WorkPlanOverviewScreen} options={{ tabBarLabel: t('nav.work_planning') }} />
+      <Tab.Screen name="WorkPlan" component={MyWorkPlanScreen} options={{ tabBarLabel: t('nav.my_work_plan') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
   );
@@ -99,6 +99,7 @@ export default function MainTabNavigator() {
 
   switch (user.role) {
     case 'inspector':
+    case 'maintenance':
       return <InspectorTabs t={t} />;
     case 'specialist':
       return <SpecialistTabs t={t} />;

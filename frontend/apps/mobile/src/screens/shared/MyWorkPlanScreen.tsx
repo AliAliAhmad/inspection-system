@@ -72,18 +72,25 @@ const PRIORITY_COLORS: Record<JobPriority, string> = {
   urgent: '#F44336',
 };
 
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function getWeekStart(date: Date): string {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
   d.setDate(diff);
-  return d.toISOString().split('T')[0];
+  return toLocalDateString(d);
 }
 
 function addWeeks(dateStr: string, weeks: number): string {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + weeks * 7);
-  return d.toISOString().split('T')[0];
+  return toLocalDateString(d);
 }
 
 function formatDate(dateStr: string): string {

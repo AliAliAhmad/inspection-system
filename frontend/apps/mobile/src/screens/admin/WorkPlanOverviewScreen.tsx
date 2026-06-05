@@ -32,18 +32,25 @@ const PRIORITY_COLORS: Record<string, string> = {
   critical: '#F44336',
 };
 
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function getWeekStart(date: Date): string {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
-  return d.toISOString().split('T')[0];
+  return toLocalDateString(d);
 }
 
 function addWeeks(dateStr: string, weeks: number): string {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + weeks * 7);
-  return d.toISOString().split('T')[0];
+  return toLocalDateString(d);
 }
 
 function formatWeekRange(start: string, end: string): string {
@@ -53,8 +60,8 @@ function formatWeekRange(start: string, end: string): string {
 }
 
 function formatDayHeader(dateStr: string): { day: string; date: string; isToday: boolean } {
-  const d = new Date(dateStr);
-  const today = new Date().toISOString().split('T')[0];
+  const d = new Date(dateStr + 'T12:00:00');
+  const today = toLocalDateString(new Date());
   return {
     day: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
     date: d.getDate().toString(),
