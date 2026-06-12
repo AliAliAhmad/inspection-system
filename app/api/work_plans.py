@@ -1544,7 +1544,7 @@ def get_my_plan():
                             {
                                 'id': a.id,
                                 'user_id': a.user_id,
-                                'user_name': a.user.name if a.user else None,
+                                'user_name': a.user.full_name if a.user else None,
                                 'is_lead': a.is_lead
                             } for a in job.assignments
                         ],
