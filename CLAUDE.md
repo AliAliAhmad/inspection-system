@@ -71,4 +71,5 @@
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 
+- **2026-06-12** — Fixed published work plans not appearing in workers' "My Plan" (mobile + web). Web planner creates plans with Sunday `week_start`, but `/my-plan` normalized requests to Monday and exact-matched — so non-Monday plans were never found. Backend now matches the published plan whose `week_start..week_end` range contains the requested date (`app/api/work_plans.py` `get_my_plan`).
 - **2026-06-12** — Fixed very tall stat cards on mobile. Horizontal stats ScrollViews were absorbing leftover vertical space (RN ScrollView defaults to `flexGrow: 1`), stretching StatCards. Added `flexGrow: 0` in `SpecialistJobsScreen` (+ `alignItems: 'center'` on content) and `AllInspectionsScreen`; replaced the `maxHeight: 90` workaround with `flexGrow: 0` in `AllSpecialistJobsScreen`. Other StatCard screens verified safe (nested in vertical ScrollViews/list headers).

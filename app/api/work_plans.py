@@ -1470,14 +1470,11 @@ def get_my_plan():
         except ValueError:
             raise ValidationError("Invalid date format. Use YYYY-MM-DD")
     else:
-        # Current week
-        today = datetime.utcnow().date()
-        week_date = today - timedelta(days=today.weekday())
+        week_date = datetime.utcnow().date()
 
-    # Ensure it's a Monday
-    if week_date.weekday() != 0:
-        week_date = week_date - timedelta(days=week_date.weekday())
-
+    # Plans can start on any day of the week (e.g., Sunday from the web
+    # planner), so match the published plan whose date range contains the
+    # requested date instead of requiring an exact Monday week_start.
     # Optimized query with eager loading to prevent N+1 issues
     plan = WorkPlan.query.options(
         joinedload(WorkPlan.days)
@@ -1493,7 +1490,11 @@ def get_my_plan():
         .joinedload(WorkPlanDay.jobs)
         .joinedload(WorkPlanJob.tracking),
         joinedload(WorkPlan.pdf_file),
-    ).filter_by(week_start=week_date, status='published').first()
+    ).filter(
+        WorkPlan.week_start <= week_date,
+        WorkPlan.week_end >= week_date,
+        WorkPlan.status == 'published',
+    ).order_by(WorkPlan.week_start.desc()).first()
 
     if not plan:
         return jsonify({
