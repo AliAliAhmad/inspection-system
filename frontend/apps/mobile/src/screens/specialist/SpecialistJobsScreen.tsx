@@ -522,11 +522,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+    flexGrow: 0,
   },
   statsContent: {
     paddingHorizontal: 8,
     paddingVertical: 12,
     gap: 8,
+    alignItems: 'center',
   },
   filterRow: {
     flexDirection: 'row',

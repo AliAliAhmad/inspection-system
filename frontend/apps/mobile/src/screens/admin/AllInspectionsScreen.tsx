@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
   title: { fontSize: fontScale(22), fontWeight: 'bold', color: '#212121' },
   insightsButton: { backgroundColor: '#9C27B0', paddingHorizontal: scale(14), paddingVertical: vscale(8), borderRadius: mscale(20) },
   insightsButtonText: { color: '#fff', fontWeight: '600', fontSize: fontScale(14) },
-  statsRow: { paddingHorizontal: scale(12), paddingVertical: vscale(8) },
+  statsRow: { flexGrow: 0, paddingHorizontal: scale(12), paddingVertical: vscale(8) },
   statCard: {
     backgroundColor: '#fff',
     borderRadius: mscale(10),

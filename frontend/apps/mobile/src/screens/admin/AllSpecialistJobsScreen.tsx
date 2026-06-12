@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
   title: { fontSize: 22, fontWeight: 'bold', color: '#212121', padding: 16, paddingBottom: 8 },
-  statsRow: { maxHeight: 90, paddingVertical: 4 },
+  statsRow: { flexGrow: 0, paddingVertical: 4 },
   statsContent: { paddingHorizontal: 12 },
   filterScroll: { maxHeight: 48, paddingBottom: 4 },
   filterRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },

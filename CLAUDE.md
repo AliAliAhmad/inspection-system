@@ -70,3 +70,5 @@
 
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
+
+- **2026-06-12** — Fixed very tall stat cards on mobile. Horizontal stats ScrollViews were absorbing leftover vertical space (RN ScrollView defaults to `flexGrow: 1`), stretching StatCards. Added `flexGrow: 0` in `SpecialistJobsScreen` (+ `alignItems: 'center'` on content) and `AllInspectionsScreen`; replaced the `maxHeight: 90` workaround with `flexGrow: 0` in `AllSpecialistJobsScreen`. Other StatCard screens verified safe (nested in vertical ScrollViews/list headers).
