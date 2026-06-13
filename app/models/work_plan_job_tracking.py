@@ -67,7 +67,8 @@ class WorkPlanJobTracking(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships
-    work_plan_job = db.relationship('WorkPlanJob', foreign_keys=[work_plan_job_id], backref='tracking')
+    # work_plan_job_id is unique — one-to-one, so the backref must be scalar
+    work_plan_job = db.relationship('WorkPlanJob', foreign_keys=[work_plan_job_id], backref=db.backref('tracking', uselist=False))
     original_job = db.relationship('WorkPlanJob', foreign_keys=[original_job_id])
     completion_photo = db.relationship('File', foreign_keys=[completion_photo_id])
     handover_voice_file = db.relationship('File', foreign_keys=[handover_voice_file_id])
