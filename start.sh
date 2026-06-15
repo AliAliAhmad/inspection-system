@@ -813,6 +813,8 @@ with app.app_context():
         ('is_split', 'BOOLEAN DEFAULT FALSE'),
         ('split_from_id', 'INTEGER REFERENCES work_plan_jobs(id)'),
         ('split_part', 'INTEGER'),
+        ('planned_time_hours', 'NUMERIC(5,2)'),
+        ('planned_time_entered_at', 'TIMESTAMP'),
     ]
     for col_name, col_type in work_plan_job_cols:
         try:

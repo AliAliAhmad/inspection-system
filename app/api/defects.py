@@ -15,6 +15,19 @@ from app.utils.pagination import paginate
 bp = Blueprint('defects', __name__)
 
 
+def _defect_scheduled_in_active_plan(defect_id):
+    """True if the defect already has a WorkPlanJob in a draft/published plan."""
+    from app.models import WorkPlanJob, WorkPlanDay, WorkPlan
+    return db.session.query(WorkPlanJob.id).join(
+        WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id
+    ).join(
+        WorkPlan, WorkPlanDay.work_plan_id == WorkPlan.id
+    ).filter(
+        WorkPlanJob.defect_id == defect_id,
+        WorkPlan.status.in_(['draft', 'published']),
+    ).first() is not None
+
+
 @bp.route('', methods=['GET'])
 @jwt_required()
 def list_defects():
@@ -165,6 +178,15 @@ def assign_specialist(defect_id):
     if not defect:
         raise NotFoundError(f"Defect {defect_id} not found")
 
+    # Guard: a defect already scheduled in an active work plan must not also be
+    # directly assigned to a specialist (single home per defect). Work-plan
+    # scheduling is the default path; direct assignment is the urgent escape hatch.
+    if _defect_scheduled_in_active_plan(defect_id):
+        raise ValidationError(
+            "This defect is already scheduled in a work plan. "
+            "Remove it from the plan first, or let the planned job proceed."
+        )
+
     data = request.get_json()
     if not data:
         raise ValidationError("Request body is required")
@@ -222,10 +244,10 @@ def assign_specialist(defect_id):
             Defect.status == 'open'
         ).all()
 
-        # Filter out defects that already have specialist jobs
+        # Filter out defects that already have specialist jobs or are scheduled in a plan
         for rd in related_defects:
             has_job = SpecialistJob.query.filter_by(defect_id=rd.id).first()
-            if not has_job:
+            if not has_job and not _defect_scheduled_in_active_plan(rd.id):
                 defects_to_assign.append(rd)
 
     max_uid = db.session.query(db.func.max(SpecialistJob.universal_id)).scalar()

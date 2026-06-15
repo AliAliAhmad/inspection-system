@@ -1,5 +1,6 @@
 import { getApiClient } from './client';
 import { ApiResponse } from '../types';
+import { AITimeEstimate } from './specialist-jobs.api';
 import {
   TrackingResponse,
   JobTrackingDetailResponse,
@@ -27,8 +28,23 @@ const BASE = '/api/work-plan-tracking';
 export const workPlanTrackingApi = {
   // ─── Worker: Job Execution ──────────────────────────────────────
 
-  startJob(jobId: number) {
-    return getApiClient().post<TrackingResponse>(`${BASE}/jobs/${jobId}/start`);
+  startJob(jobId: number, plannedTimeHours?: number) {
+    const body = plannedTimeHours != null ? { planned_time_hours: plannedTimeHours } : undefined;
+    return getApiClient().post<TrackingResponse>(`${BASE}/jobs/${jobId}/start`, body);
+  },
+
+  // Worker enters their committed planned time before starting a job
+  enterPlannedTime(jobId: number, hours: number) {
+    return getApiClient().post<ApiResponse & { data: { job: any } }>(
+      `${BASE}/jobs/${jobId}/planned-time`, { planned_time_hours: hours }
+    );
+  },
+
+  // AI-suggested planned time, tuned per job type (defect/PM/SAP)
+  aiEstimateTime(jobId: number) {
+    return getApiClient().post<ApiResponse<AITimeEstimate>>(
+      `${BASE}/ai-estimate-time`, { job_id: jobId }
+    );
   },
 
   pauseJob(jobId: number, payload: PauseJobPayload) {

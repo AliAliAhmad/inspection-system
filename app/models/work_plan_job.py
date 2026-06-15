@@ -66,8 +66,13 @@ class WorkPlanJob(db.Model):
     actual_start_time = db.Column(db.DateTime)
     actual_end_time = db.Column(db.DateTime)
 
-    # Time estimate (required when adding job)
+    # Time estimate (required when adding job) — set by the engineer/planner
     estimated_hours = db.Column(db.Float, nullable=False)
+
+    # Worker's committed planned time (entered before starting, AI-assisted).
+    # Distinct from estimated_hours: this is the worker's commitment used for time_rating.
+    planned_time_hours = db.Column(db.Numeric(5, 2), nullable=True)
+    planned_time_entered_at = db.Column(db.DateTime, nullable=True)
 
     # Display order
     position = db.Column(db.Integer, default=0)
@@ -154,6 +159,10 @@ class WorkPlanJob(db.Model):
         ),
     )
 
+    def has_planned_time(self):
+        """Check if the worker has entered their committed planned time."""
+        return self.planned_time_hours is not None and self.planned_time_hours > 0
+
     def get_related_defects(self):
         """For PM jobs, get related open defects for the same equipment."""
         if self.job_type != 'pm' or not self.equipment_id:
@@ -207,6 +216,8 @@ class WorkPlanJob(db.Model):
                 'overdue_unit': self.overdue_unit,
                 'computed_priority': self.computed_priority,
                 'estimated_hours': self.estimated_hours,
+                'planned_time_hours': float(self.planned_time_hours) if self.planned_time_hours is not None else None,
+                'has_planned_time': self.has_planned_time(),
                 'priority': self.priority,
                 'checklist_required': self.checklist_required,
                 'checklist_completed': self.checklist_completed,
@@ -248,6 +259,9 @@ class WorkPlanJob(db.Model):
             'actual_start_time': self.actual_start_time.isoformat() if self.actual_start_time else None,
             'actual_end_time': self.actual_end_time.isoformat() if self.actual_end_time else None,
             'estimated_hours': self.estimated_hours,
+            'planned_time_hours': float(self.planned_time_hours) if self.planned_time_hours is not None else None,
+            'planned_time_entered_at': self.planned_time_entered_at.isoformat() if self.planned_time_entered_at else None,
+            'has_planned_time': self.has_planned_time(),
             'position': self.position,
             'priority': self.priority,
             'checklist_required': self.checklist_required,

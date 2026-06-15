@@ -15,7 +15,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
-import { workPlansApi, workPlanTrackingApi } from '@inspection/shared';
+import { workPlansApi, workPlanTrackingApi, AITimeEstimate } from '@inspection/shared';
 import type {
   MyWorkPlanDay,
   WorkPlanJob,
@@ -28,6 +28,8 @@ import type {
 // Extended job type with tracking info
 interface ExtendedWorkPlanJob extends WorkPlanJob {
   is_lead: boolean;
+  has_planned_time?: boolean;
+  planned_time_hours?: number | null;
   tracking?: {
     id: number;
     status: TrackingStatus;
@@ -128,6 +130,12 @@ export default function MyWorkPlanScreen() {
   const [reasonDetails, setReasonDetails] = useState('');
   const [workNotes, setWorkNotes] = useState('');
 
+  // Planned-time entry modal (worker commits time + AI estimate before starting)
+  const [showPlannedTimeModal, setShowPlannedTimeModal] = useState(false);
+  const [plannedHoursInput, setPlannedHoursInput] = useState('');
+  const [aiEstimate, setAiEstimate] = useState<AITimeEstimate | null>(null);
+  const [loadingEstimate, setLoadingEstimate] = useState(false);
+
   // Timer state for active jobs
   const [activeTimers, setActiveTimers] = useState<Record<number, number>>({});
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -141,10 +149,15 @@ export default function MyWorkPlanScreen() {
   const myJobs: MyWorkPlanDay[] = useMemo(() => data?.data?.my_jobs ?? [], [data?.data?.my_jobs]);
   const totalJobs = data?.data?.total_jobs ?? 0;
 
-  // Start mutation
+  // Start mutation (optionally sets the worker's planned time in the same call)
   const startMutation = useMutation({
-    mutationFn: (jobId: number) => workPlanTrackingApi.startJob(jobId),
+    mutationFn: ({ jobId, hours }: { jobId: number; hours?: number }) =>
+      workPlanTrackingApi.startJob(jobId, hours),
     onSuccess: () => {
+      setShowPlannedTimeModal(false);
+      setSelectedJobId(null);
+      setPlannedHoursInput('');
+      setAiEstimate(null);
       queryClient.invalidateQueries({ queryKey: ['my-work-plan'] });
       queryClient.invalidateQueries({ queryKey: ['my-jobs'] });
     },
@@ -242,16 +255,49 @@ export default function MyWorkPlanScreen() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }, []);
 
-  const handleStartJob = useCallback((jobId: number) => {
+  const fetchAIEstimate = useCallback(async (jobId: number) => {
+    setLoadingEstimate(true);
+    setAiEstimate(null);
+    try {
+      const res = await workPlanTrackingApi.aiEstimateTime(jobId);
+      const est = res.data?.data;
+      if (est) {
+        setAiEstimate(est);
+        setPlannedHoursInput(String(est.estimated_hours));
+      }
+    } catch {
+      // AI estimate is optional — worker can still type a value
+    } finally {
+      setLoadingEstimate(false);
+    }
+  }, []);
+
+  const handleStartJob = useCallback((job: ExtendedWorkPlanJob) => {
+    // Worker must commit a planned time before starting. If none yet, open the
+    // planned-time modal (with an AI suggestion); otherwise start directly.
+    if (!job.has_planned_time && job.planned_time_hours == null) {
+      setSelectedJobId(job.id);
+      setPlannedHoursInput('');
+      setAiEstimate(null);
+      setShowPlannedTimeModal(true);
+      fetchAIEstimate(job.id);
+      return;
+    }
     Alert.alert(
-      'Start Job',
-      'Are you ready to start working on this job?',
+      t('work_plan.start_job', 'Start Job'),
+      t('work_plan.start_job_confirm', 'Are you ready to start working on this job?'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Start', onPress: () => startMutation.mutate(jobId) },
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        { text: t('work_plan.start', 'Start'), onPress: () => startMutation.mutate({ jobId: job.id }) },
       ]
     );
-  }, [startMutation]);
+  }, [startMutation, fetchAIEstimate, t]);
+
+  const handleSubmitPlannedTime = useCallback(() => {
+    const hours = parseFloat(plannedHoursInput);
+    if (isNaN(hours) || hours <= 0 || selectedJobId == null) return;
+    startMutation.mutate({ jobId: selectedJobId, hours });
+  }, [plannedHoursInput, selectedJobId, startMutation]);
 
   const handlePauseJob = useCallback((jobId: number) => {
     setSelectedJobId(jobId);
@@ -309,7 +355,7 @@ export default function MyWorkPlanScreen() {
 
     // Check if any mutation is pending for this job
     const isJobLoading =
-      (startMutation.isPending && startMutation.variables === job.id) ||
+      (startMutation.isPending && startMutation.variables?.jobId === job.id) ||
       (pauseMutation.isPending && pauseMutation.variables?.jobId === job.id) ||
       (resumeMutation.isPending && resumeMutation.variables === job.id) ||
       (completeMutation.isPending && completeMutation.variables?.jobId === job.id);
@@ -426,11 +472,11 @@ export default function MyWorkPlanScreen() {
                   style={[styles.quickActionBtn, styles.startBtn]}
                   onPress={(e) => {
                     e.stopPropagation();
-                    handleStartJob(job.id);
+                    handleStartJob(job);
                   }}
                   disabled={isJobLoading}
                 >
-                  {isJobLoading && startMutation.variables === job.id ? (
+                  {isJobLoading && startMutation.variables?.jobId === job.id ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <>
@@ -785,6 +831,92 @@ export default function MyWorkPlanScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Planned-Time Modal (worker commits time + AI suggestion before starting) */}
+      <Modal visible={showPlannedTimeModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {t('work_plan.enter_planned_time', 'Enter Planned Time')}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              {t('work_plan.planned_time_hint', 'How many hours do you expect this job to take?')}
+            </Text>
+
+            {loadingEstimate ? (
+              <View style={styles.aiLoadingRow}>
+                <ActivityIndicator size="small" color="#1976D2" />
+                <Text style={styles.aiLoadingText}>{t('jobs.ai_estimating', 'AI analyzing...')}</Text>
+              </View>
+            ) : aiEstimate ? (
+              <View style={styles.aiBox}>
+                <View style={styles.aiHeaderRow}>
+                  <Text style={styles.aiTitle}>🤖 {t('jobs.ai_suggestion', 'AI Suggestion')}</Text>
+                  <View style={styles.aiConfidenceBadge}>
+                    <Text style={styles.aiConfidenceText}>{aiEstimate.confidence}</Text>
+                  </View>
+                </View>
+                <Text style={styles.aiRange}>
+                  {t('jobs.ai_range', 'Range')}: {aiEstimate.range.min}h - {aiEstimate.range.max}h
+                </Text>
+                <View style={styles.aiSuggestionsRow}>
+                  {aiEstimate.suggestions.map((s) => (
+                    <TouchableOpacity
+                      key={s.label}
+                      style={[
+                        styles.aiSuggestionBtn,
+                        plannedHoursInput === String(s.hours) && styles.aiSuggestionBtnActive,
+                      ]}
+                      onPress={() => setPlannedHoursInput(String(s.hours))}
+                    >
+                      <Text style={[
+                        styles.aiSuggestionHours,
+                        plannedHoursInput === String(s.hours) && styles.aiSuggestionTextActive,
+                      ]}>{s.hours}h</Text>
+                      <Text style={[
+                        styles.aiSuggestionLabel,
+                        plannedHoursInput === String(s.hours) && styles.aiSuggestionTextActive,
+                      ]}>{s.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            <TextInput
+              style={[styles.textInput, { textAlign: 'center' }]}
+              placeholder="0.0"
+              keyboardType="numeric"
+              value={plannedHoursInput}
+              onChangeText={setPlannedHoursInput}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => {
+                  setShowPlannedTimeModal(false);
+                  setSelectedJobId(null);
+                  setAiEstimate(null);
+                  setPlannedHoursInput('');
+                }}
+              >
+                <Text style={styles.modalCancelText}>{t('common.cancel', 'Cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirm]}
+                onPress={handleSubmitPlannedTime}
+                disabled={startMutation.isPending}
+              >
+                {startMutation.isPending ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>{t('work_plan.start', 'Start')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1078,4 +1210,19 @@ const styles = StyleSheet.create({
   modalConfirmDisabled: { opacity: 0.5 },
   completeConfirm: { backgroundColor: '#4CAF50' },
   modalConfirmText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  // AI planned-time estimate
+  aiLoadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, backgroundColor: '#E3F2FD', borderRadius: 8, marginBottom: 14 },
+  aiLoadingText: { fontSize: 13, color: '#1976D2' },
+  aiBox: { backgroundColor: '#E3F2FD', borderRadius: 8, padding: 12, marginBottom: 14 },
+  aiHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  aiTitle: { fontSize: 14, fontWeight: '600', color: '#1976D2' },
+  aiConfidenceBadge: { backgroundColor: '#fff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  aiConfidenceText: { fontSize: 11, fontWeight: '600', color: '#1976D2', textTransform: 'capitalize' },
+  aiRange: { fontSize: 12, color: '#616161', marginBottom: 10 },
+  aiSuggestionsRow: { flexDirection: 'row', gap: 8 },
+  aiSuggestionBtn: { flex: 1, backgroundColor: '#fff', paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#BBDEFB' },
+  aiSuggestionBtnActive: { backgroundColor: '#1976D2', borderColor: '#1976D2' },
+  aiSuggestionHours: { fontSize: 15, fontWeight: '700', color: '#1976D2' },
+  aiSuggestionLabel: { fontSize: 10, color: '#757575', marginTop: 2 },
+  aiSuggestionTextActive: { color: '#fff' },
 });

@@ -343,6 +343,9 @@
     "fromGallery": "From Gallery"
   },
   "jobs": {
+    "ai_estimating": "AI analyzing...",
+    "ai_suggestion": "AI Suggestion",
+    "ai_range": "Range",
     "planned_time": "Planned Time",
     "actual_time": "Actual Time",
     "enter_planned_time": "Enter Planned Time",
@@ -563,6 +566,11 @@
     "sat": "Sat"
   },
   "work_plan": {
+    "enter_planned_time": "Enter Planned Time",
+    "planned_time_hint": "How many hours do you expect this job to take?",
+    "start_job": "Start Job",
+    "start_job_confirm": "Are you ready to start working on this job?",
+    "start": "Start",
     "no_plan": "No Work Plan",
     "no_plan_message": "No work plan has been published for this week.",
     "no_jobs_this_day": "No jobs scheduled for this day",
@@ -1499,6 +1507,10 @@
     "daysRemaining": "{{days}} days remaining"
   },
   "defects": {
+    "assignUrgent": "Urgent Assign",
+    "assignUrgentTitle": "Urgent: Assign Directly",
+    "assignUrgentHint": "Prefer scheduling this defect in the Work Plan. Use direct assignment only for urgent repairs that cannot wait for planning.",
+    "assignUrgentNotice": "Direct assignment is for urgent repairs only. Normally, schedule this defect in the Work Plan so it is planned around the specialist’s workload.",
     "kanban": "Kanban View",
     "tableView": "Table View",
     "risk": "Risk Score",

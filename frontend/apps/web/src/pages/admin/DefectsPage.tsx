@@ -436,11 +436,13 @@ export default function DefectsPage() {
                   onClick={() => openStatusAction('false_alarm', record)} />
               </Tooltip>
             )}
-            <Button type="primary" size="small" icon={<ToolOutlined />}
-              onClick={() => { setSelectedDefect(record); assignForm.resetFields(); setCategory(undefined); setAssignOpen(true); }}
-              disabled={hasJob || record.status === 'closed' || record.status === 'resolved'}>
-              {hasJob ? t('defects.assigned', 'Assigned') : t('defects.assign', 'Assign')}
-            </Button>
+            <Tooltip title={t('defects.assignUrgentHint', 'Prefer scheduling this defect in the Work Plan. Use direct assignment only for urgent repairs that cannot wait for planning.')}>
+              <Button size="small" danger icon={<ToolOutlined />}
+                onClick={() => { setSelectedDefect(record); assignForm.resetFields(); setCategory(undefined); setAssignOpen(true); }}
+                disabled={hasJob || record.status === 'closed' || record.status === 'resolved'}>
+                {hasJob ? t('defects.assigned', 'Assigned') : t('defects.assignUrgent', 'Urgent Assign')}
+              </Button>
+            </Tooltip>
           </Space>
         );
       },
@@ -642,9 +644,9 @@ export default function DefectsPage() {
         )}
       </Card>
 
-      {/* Assign Specialist Modal */}
+      {/* Assign Specialist Modal (urgent direct path) */}
       <Modal
-        title={t('defects.assignSpecialist', 'Assign Specialist')}
+        title={t('defects.assignUrgentTitle', 'Urgent: Assign Directly')}
         open={assignOpen}
         onCancel={() => {
           setAssignOpen(false);
@@ -656,6 +658,15 @@ export default function DefectsPage() {
         confirmLoading={assignMutation.isPending}
         destroyOnClose
       >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t(
+            'defects.assignUrgentNotice',
+            'Direct assignment is for urgent repairs only. Normally, schedule this defect in the Work Plan so it is planned around the specialist’s workload.'
+          )}
+        />
         {selectedDefect && (
           <div style={{ marginBottom: 16 }}>
             <Typography.Text strong>Defect #{selectedDefect.id}: </Typography.Text>

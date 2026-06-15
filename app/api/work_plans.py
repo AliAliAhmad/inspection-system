@@ -53,6 +53,28 @@ def admin_required():
 ai_service = WorkPlanAIService()
 
 
+def _defect_ids_with_active_specialist_job(defect_ids=None):
+    """Return the set of defect_ids that already have an ACTIVE specialist job.
+
+    A defect should live in only one place. If it was directly assigned to a
+    specialist (and that job isn't cancelled/finished), it must not also be
+    schedulable in a work plan. 'completed'/'qc_approved'/'cancelled' are
+    excluded so a finished or cancelled job never blocks scheduling forever.
+    """
+    from app.models.specialist_job import SpecialistJob
+    q = db.session.query(SpecialistJob.defect_id).filter(
+        SpecialistJob.status.in_(['assigned', 'in_progress', 'paused', 'incomplete'])
+    )
+    if defect_ids is not None:
+        q = q.filter(SpecialistJob.defect_id.in_(defect_ids))
+    return {row[0] for row in q.all() if row[0] is not None}
+
+
+def _difficulty_from_severity(severity):
+    """Map a defect's severity to the work-plan job difficulty (for points)."""
+    return 'major' if severity in ('high', 'critical') else 'minor'
+
+
 def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_id=None):
     """Auto-add ALL related jobs for the same equipment to the same day.
     Includes: open defects (from inspections + direct) AND pending SAP orders.
@@ -86,7 +108,12 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
         )
     ).all()
 
+    # Don't auto-pull defects that are already assigned directly to a specialist
+    specialist_owned = _defect_ids_with_active_specialist_job([d.id for d in open_defects])
+
     for defect in open_defects:
+        if defect.id in specialist_owned:
+            continue
         max_pos += 1
         eq_id = defect.equipment_id_direct or (defect.inspection.equipment_id if defect.inspection else None)
         db.session.add(WorkPlanJob(
@@ -99,6 +126,7 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
             estimated_hours=2.0,
             position=max_pos,
             priority='normal',
+            difficulty=_difficulty_from_severity(defect.severity),
         ))
         added += 1
 
@@ -724,6 +752,13 @@ def add_job(plan_id):
         defect = db.session.get(Defect, defect_id)
         if not defect:
             raise NotFoundError("Defect not found")
+        # Guard: a defect already assigned directly to a specialist must not
+        # also be scheduled in a work plan (single home per defect).
+        if _defect_ids_with_active_specialist_job([defect_id]):
+            raise ValidationError(
+                "This defect is already assigned to a specialist. "
+                "Cancel that assignment first, or schedule a different defect."
+            )
 
     if inspection_assignment_id:
         assignment = db.session.get(InspectionAssignment, inspection_assignment_id)
@@ -745,6 +780,9 @@ def add_job(plan_id):
     difficulty = data.get('difficulty')
     if difficulty and difficulty not in ('minor', 'major'):
         raise ValidationError("difficulty must be 'minor' or 'major'")
+    # Default defect difficulty from severity so engineer-review points are accurate
+    if not difficulty and job_type == 'defect' and defect is not None:
+        difficulty = _difficulty_from_severity(defect.severity)
 
     # Validate engineer_id if provided
     engineer_id = data.get('engineer_id')
@@ -1532,6 +1570,8 @@ def get_my_plan():
                         'sap_order_number': job.sap_order_number,
                         'description': job.description,
                         'estimated_hours': job.estimated_hours,
+                        'planned_time_hours': float(job.planned_time_hours) if job.planned_time_hours is not None else None,
+                        'has_planned_time': job.has_planned_time(),
                         'priority': job.priority,
                         'notes': job.notes,
                         'checklist_required': job.checklist_required,
@@ -2070,6 +2110,15 @@ def get_available_jobs():
             Defect.status.in_(['open', 'in_progress']),
             Defect.inspection_id.isnot(None),
         )
+
+        # Exclude defects already assigned directly to a specialist (single home
+        # per defect — these are handled in "My Jobs", not the work plan).
+        from app.models.specialist_job import SpecialistJob as _SpecJob
+        specialist_owned_subq = db.session.query(_SpecJob.defect_id).filter(
+            _SpecJob.status.in_(['assigned', 'in_progress', 'paused', 'incomplete']),
+            _SpecJob.defect_id.isnot(None),
+        ).scalar_subquery()
+        defect_query = defect_query.filter(~Defect.id.in_(specialist_owned_subq))
 
         # Exclude defects already scheduled in the current work plan
         if plan_id:

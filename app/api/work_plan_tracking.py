@@ -132,6 +132,16 @@ def start_job(job_id):
     if tracking.status not in ['pending', 'not_started']:
         raise BusinessError(f"Cannot start job in '{tracking.status}' status")
 
+    # Worker must commit a planned time before starting. Accept it inline
+    # (combined start) or require it to have been entered beforehand.
+    data = request.get_json(silent=True) or {}
+    if not job.has_planned_time():
+        planned_time = data.get('planned_time_hours') or data.get('hours')
+        if not planned_time or float(planned_time) <= 0:
+            raise ValidationError("Planned time is required to start the job")
+        job.planned_time_hours = planned_time
+        job.planned_time_entered_at = datetime.utcnow()
+
     now = datetime.utcnow()
     tracking.status = 'in_progress'
     tracking.started_at = now
@@ -148,6 +158,149 @@ def start_job(job_id):
         'status': 'success',
         'message': 'Job started',
         'tracking': tracking.to_dict()
+    }), 200
+
+
+@bp.route('/jobs/<int:job_id>/planned-time', methods=['POST'])
+@jwt_required()
+def enter_planned_time(job_id):
+    """Worker enters their committed planned time for a job (before starting)."""
+    user = get_authenticated_user()
+    job = get_job_or_404(job_id)
+
+    if user.role not in ['admin', 'engineer']:
+        check_user_assigned_to_job(user.id, job_id)
+
+    if job.has_planned_time():
+        raise BusinessError("Planned time has already been entered for this job")
+
+    data = request.get_json(silent=True) or {}
+    planned_time = data.get('planned_time_hours') or data.get('hours')
+    if not planned_time or float(planned_time) <= 0:
+        raise ValidationError("Planned time must be greater than 0")
+
+    job.planned_time_hours = planned_time
+    job.planned_time_entered_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Planned time entered',
+        'data': {'job': job.to_dict()}
+    }), 200
+
+
+@bp.route('/ai-estimate-time', methods=['POST'])
+@jwt_required()
+def ai_estimate_time():
+    """AI-powered planned-time estimate for a work-plan job, tuned per job type.
+
+    Defect jobs learn from completed SpecialistJob history (where the actual-time
+    data lives); PM jobs match by template+equipment; SAP by order type+equipment.
+    Statistical average of similar past jobs, mirroring the specialist estimator.
+    """
+    from app.models.specialist_job import SpecialistJob
+    from app.models.defect import Defect
+
+    get_authenticated_user()
+    data = request.get_json(silent=True) or {}
+    job_id = data.get('job_id')
+    if not job_id:
+        raise ValidationError("job_id is required")
+
+    job = get_job_or_404(job_id)
+
+    equipment = job.equipment
+    equipment_type = equipment.equipment_type if equipment else None
+    # difficulty (minor/major) is the analog of SpecialistJob.category
+    difficulty = job.difficulty
+    match_key = None
+    times = []
+
+    if job.job_type == 'defect':
+        # Primary source: completed SpecialistJob history (real durations live here)
+        match_key = 'defect:difficulty+equipment'
+        q = SpecialistJob.query.filter(
+            SpecialistJob.status.in_(['completed', 'qc_approved']),
+            SpecialistJob.actual_time_hours.isnot(None),
+            SpecialistJob.actual_time_hours > 0,
+        )
+        if difficulty:
+            q = q.filter(SpecialistJob.category == difficulty)
+        if equipment_type:
+            q = q.join(Defect, SpecialistJob.defect_id == Defect.id).join(
+                Defect.inspection
+            ).filter(Defect.inspection.has(equipment=equipment))
+        rows = q.order_by(SpecialistJob.completed_at.desc()).limit(20).all()
+        times = [float(j.actual_time_hours) for j in rows]
+    else:
+        # PM / SAP / other: learn from completed work-plan jobs of the same kind.
+        # Query tracking rows joined to their job (single query, no N+1).
+        q = WorkPlanJobTracking.query.join(
+            WorkPlanJob,
+            WorkPlanJobTracking.work_plan_job_id == WorkPlanJob.id,
+        ).filter(
+            WorkPlanJobTracking.status == 'completed',
+            WorkPlanJobTracking.actual_hours.isnot(None),
+            WorkPlanJobTracking.actual_hours > 0,
+            WorkPlanJob.id != job.id,
+        )
+        if job.job_type == 'pm' and job.pm_template_id:
+            match_key = 'pm:template+equipment'
+            q = q.filter(WorkPlanJob.pm_template_id == job.pm_template_id)
+        elif job.sap_order_type:
+            match_key = 'sap:order_type+equipment'
+            q = q.filter(WorkPlanJob.sap_order_type == job.sap_order_type)
+        else:
+            match_key = 'type+equipment'
+            q = q.filter(WorkPlanJob.job_type == job.job_type)
+        if equipment_type:
+            q = q.filter(WorkPlanJob.equipment.has(equipment_type=equipment_type))
+        rows = q.order_by(WorkPlanJobTracking.completed_at.desc()).limit(20).all()
+        times = [float(t.actual_hours) for t in rows if t.actual_hours]
+
+    if not times:
+        # Fallback: difficulty defaults, then the engineer's own estimate
+        default_estimates = {'major': 4.0, 'minor': 2.0}
+        estimated_hours = default_estimates.get(difficulty) or float(job.estimated_hours or 3.0)
+        confidence = 'low'
+        sample_size = 0
+        min_time = round(estimated_hours * 0.5, 1)
+        max_time = round(estimated_hours * 1.5, 1)
+    else:
+        estimated_hours = round(sum(times) / len(times), 1)
+        sample_size = len(times)
+        if sample_size >= 10:
+            confidence = 'high'
+        elif sample_size >= 5:
+            confidence = 'medium'
+        else:
+            confidence = 'low'
+        if sample_size > 1:
+            variance = sum((t - estimated_hours) ** 2 for t in times) / len(times)
+            std_dev = variance ** 0.5
+            if std_dev > estimated_hours * 0.5 and confidence == 'medium':
+                confidence = 'low'
+        min_time = round(min(times), 1)
+        max_time = round(max(times), 1)
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'estimated_hours': estimated_hours,
+            'confidence': confidence,
+            'range': {'min': min_time, 'max': max_time},
+            'based_on': {
+                'sample_size': sample_size,
+                'match_key': match_key,
+                'equipment_type': equipment_type,
+            },
+            'suggestions': [
+                {'hours': round(estimated_hours * 0.75, 1), 'label': 'Optimistic'},
+                {'hours': estimated_hours, 'label': 'Average'},
+                {'hours': round(estimated_hours * 1.25, 1), 'label': 'Conservative'},
+            ],
+        }
     }), 200
 
 
@@ -793,10 +946,13 @@ def rate_job(review_id):
         )
         db.session.add(rating)
 
-    # Auto-calculate time rating if tracking has actual hours
-    if tracking and tracking.actual_hours and job.estimated_hours:
+    # Auto-calculate time rating if tracking has actual hours.
+    # Basis = the worker's committed planned time; fall back to the engineer's
+    # estimate for in-flight jobs created before planned-time entry existed.
+    time_basis = job.planned_time_hours or job.estimated_hours
+    if tracking and tracking.actual_hours and time_basis:
         rating.time_rating = WorkPlanJobRating.calculate_time_rating(
-            job.estimated_hours, tracking.actual_hours
+            time_basis, tracking.actual_hours
         )
 
     # QC rating (required reason if < 3 or > 4)
