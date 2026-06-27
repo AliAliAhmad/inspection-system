@@ -3,6 +3,7 @@ import { Tag, Tooltip, Typography, Badge } from 'antd';
 import { CSS } from '@dnd-kit/utilities';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { WorkPlanJob } from '@inspection/shared';
+import { getOverdueInfo, isJobOverdue } from '../../utils/overdue';
 
 const { Text } = Typography;
 
@@ -82,7 +83,8 @@ interface IndividualJobRowProps {
 }
 
 const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded }) => {
-  const isOverdue = (job as any).overdue_value && (job as any).overdue_value > 0;
+  const overdue = getOverdueInfo(job as any);
+  const isOverdue = overdue.isOverdue;
   const jobName = stripEquipmentPrefix(
     job.description || (job as any).defect?.description || '',
     equipmentDisplayName(job)
@@ -178,7 +180,7 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
           ) : null}
           {isOverdue && (
             <Text style={{ fontSize: 9, color: '#ff4d4f', fontWeight: 700 }}>
-              {(job as any).overdue_value}d!
+              {overdue.amount}{overdue.shortUnit}!
             </Text>
           )}
         </div>
@@ -321,7 +323,7 @@ export const BundleCard: React.FC<BundleCardProps> = ({
   const pmCount = jobs.filter((j) => j.job_type === 'pm').length;
   const defectCount = jobs.filter((j) => j.job_type === 'defect').length;
   const totalHours = jobs.reduce((sum, j) => sum + (j.estimated_hours || 0), 0);
-  const hasOverdue = jobs.some((j) => (j as any).overdue_value && (j as any).overdue_value > 0);
+  const hasOverdue = jobs.some((j) => isJobOverdue(j as any));
 
   // Determine bundle type — PM bundle if any PM, else defect bundle
   const isPmBundle = pmCount > 0;

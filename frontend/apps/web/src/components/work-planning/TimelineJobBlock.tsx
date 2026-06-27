@@ -3,6 +3,7 @@ import { Tooltip, Tag, Checkbox } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useDroppable } from '@dnd-kit/core';
 import type { WorkPlanJob, ComputedPriority } from '@inspection/shared';
+import { getOverdueInfo } from '../../utils/overdue';
 
 // Job type emojis
 const JOB_TYPE_EMOJI: Record<string, string> = {
@@ -59,7 +60,8 @@ const TimelineJobBlockInner: React.FC<TimelineJobBlockProps> = ({
 
   const priority = job.computed_priority || 'normal';
   const style = PRIORITY_STYLES[priority];
-  const isOverdue = job.overdue_value && job.overdue_value > 0;
+  const overdue = getOverdueInfo(job);
+  const isOverdue = overdue.isOverdue;
   const hasInspection = inspectionEquipmentIds && job.equipment_id && inspectionEquipmentIds.includes(job.equipment_id);
 
   const equipmentName = job.equipment?.name || job.equipment?.serial_number || '';
@@ -187,7 +189,7 @@ const TimelineJobBlockInner: React.FC<TimelineJobBlockProps> = ({
               lineHeight: compact ? '16px' : '18px'
             }}
           >
-            {PRIORITY_EMOJI[priority]} {job.overdue_value} {job.overdue_unit === 'hours' ? 'h' : 'd'}
+            {PRIORITY_EMOJI[priority]} {overdue.amount} {overdue.shortUnit}
           </Tag>
         )}
 
@@ -237,7 +239,7 @@ const TimelineJobBlockInner: React.FC<TimelineJobBlockProps> = ({
       <div>⏱️ {job.estimated_hours} hours</div>
       {isOverdue && (
         <div style={{ color: style.text }}>
-          ⚠️ Overdue: {job.overdue_value} {job.overdue_unit}
+          ⚠️ Overdue: {overdue.amount} {overdue.unit}
         </div>
       )}
       {teamCount > 0 && (

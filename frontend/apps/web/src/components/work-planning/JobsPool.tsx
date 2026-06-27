@@ -16,6 +16,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { workPlansApi, type AvailablePMJob, type AvailableDefectJob, type SAPWorkOrder } from '@inspection/shared';
+import { getOverdueInfo, isJobOverdue } from '../../utils/overdue';
 
 // Priority order for sorting
 const PRIORITY_ORDER: Record<string, number> = {
@@ -63,7 +64,8 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
     cursor: 'grab',
   };
 
-  const isOverdue = job.overdue_value && job.overdue_value > 0;
+  const overdue = getOverdueInfo(job);
+  const isOverdue = overdue.isOverdue;
   const priority = job.priority || 'normal';
 
   // Equipment name (never serial number)
@@ -128,7 +130,7 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
         </div>
         {isOverdue && (
           <span style={{ fontSize: 9, color: '#ff4d4f', fontWeight: 700, whiteSpace: 'nowrap' }}>
-            <WarningOutlined /> {job.overdue_value}{job.overdue_unit === 'hours' ? 'h' : 'd'}
+            <WarningOutlined /> {overdue.amount}{overdue.shortUnit}
           </span>
         )}
       </div>
@@ -302,8 +304,8 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     // Sort PRM jobs
     prm = prm.sort((a: SAPWorkOrder, b: SAPWorkOrder) => {
       // Overdue first
-      const aOverdue = (a.overdue_value || 0) > 0 ? 1 : 0;
-      const bOverdue = (b.overdue_value || 0) > 0 ? 1 : 0;
+      const aOverdue = isJobOverdue(a) ? 1 : 0;
+      const bOverdue = isJobOverdue(b) ? 1 : 0;
       if (bOverdue !== aOverdue) return bOverdue - aOverdue;
 
       // Then by cycle type
@@ -371,8 +373,8 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     // Sort defects by priority (urgent first), then overdue
     defect = defect.sort((a: any, b: any) => {
       // Overdue first
-      const aOverdue = (a.overdue_value || 0) > 0 ? 1 : 0;
-      const bOverdue = (b.overdue_value || 0) > 0 ? 1 : 0;
+      const aOverdue = isJobOverdue(a) ? 1 : 0;
+      const bOverdue = isJobOverdue(b) ? 1 : 0;
       if (bOverdue !== aOverdue) return bOverdue - aOverdue;
 
       // Then by priority

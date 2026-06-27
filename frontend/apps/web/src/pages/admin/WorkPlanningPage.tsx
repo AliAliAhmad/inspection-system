@@ -102,6 +102,7 @@ import {
 import InspectionSummaryBar, { InspectionCountBadge } from '../../components/work-planning/InspectionSummaryBar';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import { InputNumber } from 'antd';
+import { getOverdueInfo, isJobOverdue } from '../../utils/overdue';
 
 dayjs.extend(isoWeek);
 
@@ -259,7 +260,7 @@ const EquipmentGroupRow: React.FC<{
   const assignedCount = jobs.filter(j => (j.assignments || []).length > 0).length;
   const unassigned = jobs.length - assignedCount;
   const jobTypes = [...new Set(jobs.map(j => j.job_type))];
-  const hasOverdue = jobs.some(j => (j as any).overdue_value && (j as any).overdue_value > 0);
+  const hasOverdue = jobs.some(j => isJobOverdue(j as any));
   const typeColor = jobTypes[0] === 'defect' ? '#ff4d4f' : jobTypes[0] === 'inspection' ? '#722ed1' : '#1890ff';
 
   const popoverContent = (
@@ -400,7 +401,7 @@ const SimpleJobRow: React.FC<{
   dayId: number;
   onJobClick: (job: WorkPlanJob) => void;
 }> = ({ job, dayId, onJobClick }) => {
-  const isOverdue = (job as any).overdue_value && (job as any).overdue_value > 0;
+  const isOverdue = isJobOverdue(job as any);
   const isAssigned = (job.assignments || []).length > 0;
   const equipmentName =
     (job as any).equipment?.name ||
@@ -1217,7 +1218,7 @@ export default function WorkPlanningPage() {
         if (!job.assignments || job.assignments.length === 0) {
           risks.push({ id: job.id, dayId: day.id, reason: 'No team assigned', equipment: eqName, description: desc });
         }
-        if (job.computed_priority === 'critical' && job.overdue_value > 0) {
+        if (job.computed_priority === 'critical' && isJobOverdue(job)) {
           risks.push({ id: job.id, dayId: day.id, reason: 'Critical & overdue', equipment: eqName, description: desc });
         }
       });
@@ -1240,7 +1241,7 @@ export default function WorkPlanningPage() {
       const jobs = [...(day.jobs_east || []), ...(day.jobs_west || []), ...(day.jobs_both || [])];
       jobs.forEach((job: any) => {
         if (job.job_type === 'inspection') return;
-        if (!(job.overdue_value > 0) && !job.is_overdue) return;
+        if (!isJobOverdue(job) && !job.is_overdue) return;
         if (seen.has(job.id)) return;
         seen.add(job.id);
         const eqName = job.equipment?.name || job.equipment_name || job.equipment?.serial_number || job.equipment_serial || 'Unknown';
@@ -1252,7 +1253,7 @@ export default function WorkPlanningPage() {
         result.push({
           id: job.id,
           dayId: day.id,
-          reason: `Overdue by ${job.overdue_value || '?'}h`,
+          reason: `Overdue by ${getOverdueInfo(job).amount || '?'}${getOverdueInfo(job).shortUnit}`,
           equipment: eqName,
           description: desc || 'Overdue',
         });
@@ -2635,8 +2636,8 @@ export default function WorkPlanningPage() {
                                           const aHasPm = a[1].some(j => j.job_type === 'pm') ? 0 : 1;
                                           const bHasPm = b[1].some(j => j.job_type === 'pm') ? 0 : 1;
                                           if (aHasPm !== bHasPm) return aHasPm - bHasPm;
-                                          const aOver = Math.max(...a[1].map(j => (j as any).overdue_value || 0));
-                                          const bOver = Math.max(...b[1].map(j => (j as any).overdue_value || 0));
+                                          const aOver = Math.max(...a[1].map(j => getOverdueInfo(j as any).amount));
+                                          const bOver = Math.max(...b[1].map(j => getOverdueInfo(j as any).amount));
                                           return bOver - aOver;
                                         });
 
@@ -3267,10 +3268,10 @@ export default function WorkPlanningPage() {
             })()}
 
             {/* Overdue */}
-            {selectedJob.overdue_value && selectedJob.overdue_value > 0 && (
+            {isJobOverdue(selectedJob as any) && (
               <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fff7e6', borderColor: '#ffd591' }}>
                 <Text strong style={{ color: '#fa8c16' }}>
-                  Overdue by {selectedJob.overdue_value} {selectedJob.overdue_unit}
+                  Overdue by {getOverdueInfo(selectedJob as any).amount} {getOverdueInfo(selectedJob as any).unit}
                 </Text>
               </Card>
             )}

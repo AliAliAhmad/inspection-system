@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { WorkPlan, WorkPlanJob, WorkPlanDay } from '@inspection/shared';
+import { isJobOverdue } from '../../utils/overdue';
 
 const { Title, Text } = Typography;
 
@@ -153,7 +154,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ plan, weekStart })
     // Priority breakdown
     const criticalJobs = allJobs.filter(j => j.computed_priority === 'critical' || j.priority === 'urgent');
     const highPriorityJobs = allJobs.filter(j => j.computed_priority === 'high' || j.priority === 'high');
-    const overdueJobs = allJobs.filter(j => (j.overdue_value || 0) > 0);
+    const overdueJobs = allJobs.filter(j => isJobOverdue(j as any));
 
     // Totals
     const totalJobs = allJobs.length;
