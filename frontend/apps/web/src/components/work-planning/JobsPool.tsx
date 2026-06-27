@@ -74,7 +74,7 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
   const equipmentName = job.equipment?.name || job.defect?.equipment?.name || 'Unknown Equipment';
 
   // Description — strip equipment name prefix if the backend concatenated them, fall back to job type label
-  const jobTypeLabel = jobType === 'inspection' ? 'Inspection' : jobType === 'defect' ? 'Defect' : 'PM';
+  const jobTypeLabel = jobType === 'inspection' ? 'Inspection' : jobType === 'defect' ? 'Defect' : jobType === 'corrective' ? 'Corrective' : 'PM';
   const rawDesc = job.description || job.defect?.description || job.assignment?.description || '';
   const description = rawDesc && equipmentName !== 'Unknown Equipment' && rawDesc.startsWith(equipmentName)
     ? rawDesc.slice(equipmentName.length).replace(/^[\s\-_.]+/, '').trim() || jobTypeLabel
@@ -302,9 +302,10 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       return true;
     };
 
-    // PRM Jobs - from SAP orders with job_type === 'pm'
+    // PRM Jobs - from SAP orders with job_type === 'pm' (corrective jobs returned to
+    // the pool live here too, since they're manual non-defect maintenance work)
     let prm = sapOrders
-      .filter((j: SAPWorkOrder) => j.job_type === 'pm')
+      .filter((j: SAPWorkOrder) => j.job_type === 'pm' || j.job_type === 'corrective')
       .filter(filterJob);
 
     // Sort PRM jobs

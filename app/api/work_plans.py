@@ -725,19 +725,24 @@ def add_job(plan_id):
         raise ValidationError("estimated_hours is required")
 
     job_type = data['job_type']
-    if job_type not in ['pm', 'defect', 'inspection']:
-        raise ValidationError("job_type must be pm, defect, or inspection")
+    if job_type not in ['pm', 'defect', 'inspection', 'corrective']:
+        raise ValidationError("job_type must be pm, defect, inspection, or corrective")
 
     # Validate references based on job type
     equipment_id = data.get('equipment_id')
     defect_id = data.get('defect_id')
     inspection_assignment_id = data.get('inspection_assignment_id')
 
-    if job_type in ['pm', 'defect'] and not equipment_id:
-        raise ValidationError("equipment_id is required for PM and defect jobs")
+    # Corrective = a field-found fix on a piece of equipment that is NOT tied to an
+    # existing defect record. It needs equipment + a description, but no defect_id.
+    if job_type in ['pm', 'defect', 'corrective'] and not equipment_id:
+        raise ValidationError("equipment_id is required for PM, defect, and corrective jobs")
 
     if job_type == 'defect' and not defect_id:
         raise ValidationError("defect_id is required for defect jobs")
+
+    if job_type == 'corrective' and not (data.get('description') or '').strip():
+        raise ValidationError("description is required for corrective jobs")
 
     if job_type == 'inspection' and not inspection_assignment_id:
         raise ValidationError("inspection_assignment_id is required for inspection jobs")
@@ -1090,10 +1095,11 @@ def remove_job(plan_id, job_id):
         ).first()
         if sap_order and sap_order.status == 'scheduled':
             sap_order.status = 'pending'
-    # Otherwise, if it's a MANUAL PM job (not from SAP, not a defect), preserve it
-    # by returning it to the pool as a pending SAP order — so a manually-added job
-    # can be dragged back to the pool like any other job instead of vanishing.
-    elif job.job_type == 'pm' and not job.defect_id and job.equipment_id:
+    # Otherwise, if it's a MANUAL PM or corrective job (not from SAP, not a defect),
+    # preserve it by returning it to the pool as a pending SAP order — so a
+    # manually-added job can be dragged back to the pool like any other job
+    # instead of vanishing.
+    elif job.job_type in ('pm', 'corrective') and not job.defect_id and job.equipment_id:
         manual_order_number = f"MAN-{plan_id}-{job_id}"
         existing_manual = SAPWorkOrder.query.filter_by(
             work_plan_id=plan_id, order_number=manual_order_number
@@ -1103,7 +1109,7 @@ def remove_job(plan_id, job_id):
                 work_plan_id=plan_id,
                 order_number=manual_order_number,
                 order_type='MANUAL',
-                job_type='pm',
+                job_type=job.job_type,
                 equipment_id=job.equipment_id,
                 description=job.description,
                 estimated_hours=job.estimated_hours or 4.0,

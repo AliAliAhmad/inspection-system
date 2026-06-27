@@ -385,9 +385,9 @@ const DraggableRiskJob: React.FC<{
           <Text style={{ fontSize: 11, color: '#ff4d4f' }}>{risk.reason}</Text>
         </div>
         {job && (
-          <Tag color={job.job_type === 'defect' ? 'error' : job.job_type === 'inspection' ? 'purple' : 'blue'}
+          <Tag color={job.job_type === 'defect' ? 'error' : job.job_type === 'inspection' ? 'purple' : job.job_type === 'corrective' ? 'gold' : 'blue'}
             style={{ fontSize: 9, flexShrink: 0 }}>
-            {job.job_type?.toUpperCase()}
+            {job.job_type === 'corrective' ? 'CORR' : job.job_type?.toUpperCase()}
           </Tag>
         )}
       </div>
@@ -452,15 +452,15 @@ const SimpleJobRow: React.FC<{
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: job.job_type === 'defect' ? '#ff4d4f' : '#1890ff' }} />
+        <div style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: job.job_type === 'defect' ? '#ff4d4f' : job.job_type === 'corrective' ? '#faad14' : '#1890ff' }} />
         <Text style={{ fontSize: 14, fontWeight: 700, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#262626', background: '#fffbe6', borderRadius: 3, padding: '0 4px' }}>
           {equipmentName}
         </Text>
         <Tag
           style={{ fontSize: 9, margin: 0, padding: '0 3px', lineHeight: '16px' }}
-          color={job.job_type === 'defect' ? 'error' : 'blue'}
+          color={job.job_type === 'defect' ? 'error' : job.job_type === 'corrective' ? 'gold' : 'blue'}
         >
-          {job.job_type === 'defect' ? 'DEF' : 'PM'}
+          {job.job_type === 'defect' ? 'DEF' : job.job_type === 'corrective' ? 'CORR' : 'PM'}
         </Tag>
         {isOverdue && <span style={{ fontSize: 9, color: '#ff4d4f', fontWeight: 700 }}>!</span>}
       </div>
@@ -3175,7 +3175,7 @@ export default function WorkPlanningPage() {
           <Space>
             {getOverdueHeat(selectedJob as any, overdueMax).active && <span>{getOverdueHeat(selectedJob as any, overdueMax).isWorst ? '🔥' : '⚠️'}</span>}
             <span style={{ color: getOverdueHeat(selectedJob as any, overdueMax).active ? getOverdueHeat(selectedJob as any, overdueMax).stripe : undefined }}>
-              {selectedJob?.job_type === 'pm' ? 'PM' : selectedJob?.job_type === 'defect' ? 'Defect' : 'Inspection'}
+              {selectedJob?.job_type === 'pm' ? 'PM' : selectedJob?.job_type === 'defect' ? 'Defect' : selectedJob?.job_type === 'corrective' ? 'Corrective' : 'Inspection'}
             </span>
             <span style={{ color: getOverdueHeat(selectedJob as any, overdueMax).active ? getOverdueHeat(selectedJob as any, overdueMax).stripe : undefined }}>Job Details</span>
           </Space>
@@ -3204,7 +3204,7 @@ export default function WorkPlanningPage() {
                 <Col span={12}>
                   <Text type="secondary">Type</Text>
                   <div>
-                    <Badge status={selectedJob.job_type === 'pm' ? 'processing' : selectedJob.job_type === 'defect' ? 'error' : 'success'} />
+                    <Badge status={selectedJob.job_type === 'pm' ? 'processing' : selectedJob.job_type === 'defect' ? 'error' : selectedJob.job_type === 'corrective' ? 'warning' : 'success'} />
                     {selectedJob.job_type.toUpperCase()}
                   </div>
                 </Col>
@@ -3704,6 +3704,7 @@ export default function WorkPlanningPage() {
                   <Select onChange={() => addJobForm.setFieldValue('defect_id', undefined)}>
                     <Select.Option value="pm">PM</Select.Option>
                     <Select.Option value="defect">Defect</Select.Option>
+                    <Select.Option value="corrective">Corrective</Select.Option>
                   </Select>
                 </Form.Item>
               </Col>
@@ -3784,9 +3785,21 @@ export default function WorkPlanningPage() {
               <InputNumber min={0.5} max={24} step={0.5} style={{ width: '100%' }} />
             </Form.Item>
 
-            {/* Description */}
-            <Form.Item name="description" label="Description">
-              <Input.TextArea rows={2} placeholder="Job description" />
+            {/* Description — required for corrective (it has no defect record to describe it) */}
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.job_type !== cur.job_type}>
+              {({ getFieldValue }) => {
+                const isCorrective = getFieldValue('job_type') === 'corrective';
+                return (
+                  <Form.Item
+                    name="description"
+                    label="Description"
+                    rules={isCorrective ? [{ required: true, message: 'Describe the corrective work' }] : []}
+                    extra={isCorrective ? 'Corrective: a field-found fix not tied to a registered defect.' : undefined}
+                  >
+                    <Input.TextArea rows={2} placeholder="Job description" />
+                  </Form.Item>
+                );
+              }}
             </Form.Item>
 
             {/* Notes with Voice Recording */}

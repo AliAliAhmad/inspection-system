@@ -20,7 +20,7 @@ class WorkPlanJob(db.Model):
     work_plan_day_id = db.Column(db.Integer, db.ForeignKey('work_plan_days.id'), nullable=False)
 
     # Job type
-    job_type = db.Column(db.String(20), nullable=False)  # pm, defect, inspection
+    job_type = db.Column(db.String(20), nullable=False)  # pm, defect, inspection, corrective
 
     # Berth assignment
     berth = db.Column(db.String(10))  # east, west, both
@@ -146,7 +146,7 @@ class WorkPlanJob(db.Model):
     # Constraints
     __table_args__ = (
         db.CheckConstraint(
-            "job_type IN ('pm', 'defect', 'inspection')",
+            "job_type IN ('pm', 'defect', 'inspection', 'corrective')",
             name='check_job_type'
         ),
         db.CheckConstraint(

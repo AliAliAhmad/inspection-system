@@ -65,6 +65,7 @@ const JOB_TYPE_COLORS: Record<JobType, string> = {
   pm: '#1976D2',
   defect: '#E53935',
   inspection: '#4CAF50',
+  corrective: '#F9A825',
 };
 
 const PRIORITY_COLORS: Record<JobPriority, string> = {

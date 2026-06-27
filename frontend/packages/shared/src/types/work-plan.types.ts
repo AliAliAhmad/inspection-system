@@ -3,7 +3,7 @@ import { Equipment } from './equipment.types';
 import { Defect } from './defect.types';
 
 export type WorkPlanStatus = 'draft' | 'published';
-export type JobType = 'pm' | 'defect' | 'inspection';
+export type JobType = 'pm' | 'defect' | 'inspection' | 'corrective';
 export type JobPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type ComputedPriority = 'normal' | 'high' | 'critical';
 export type Berth = 'east' | 'west' | 'both';

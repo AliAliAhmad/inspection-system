@@ -116,6 +116,8 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
         : (job as any).defect?.severity === 'medium'
         ? 'orange'
         : 'gold'
+      : job.job_type === 'corrective'
+      ? 'gold'
       : isAcServiceJob(job)
       ? 'cyan'
       : 'blue';
@@ -123,6 +125,8 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
   const tagLabel =
     job.job_type === 'defect'
       ? 'DEF'
+      : job.job_type === 'corrective'
+      ? 'CORR'
       : isAcServiceJob(job)
       ? 'AC PM'
       : 'PM';
@@ -205,7 +209,7 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
             wordBreak: 'break-word',
           }}
         >
-          {jobName || (job.job_type === 'defect' ? 'Defect repair' : 'Preventive maintenance')}
+          {jobName || (job.job_type === 'defect' ? 'Defect repair' : job.job_type === 'corrective' ? 'Corrective work' : 'Preventive maintenance')}
         </Text>
 
         {/* Materials chips */}

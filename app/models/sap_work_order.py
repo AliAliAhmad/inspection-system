@@ -24,7 +24,7 @@ class SAPWorkOrder(db.Model):
     order_type = db.Column(db.String(20), nullable=False)  # PRM, COM, INS, etc.
 
     # Job type (our internal mapping)
-    job_type = db.Column(db.String(20), nullable=False)  # pm, defect, inspection
+    job_type = db.Column(db.String(20), nullable=False)  # pm, defect, inspection, corrective
 
     # Equipment
     equipment_id = db.Column(db.Integer, db.ForeignKey('equipment.id'), nullable=False)
@@ -71,7 +71,7 @@ class SAPWorkOrder(db.Model):
     __table_args__ = (
         db.UniqueConstraint('work_plan_id', 'order_number', name='unique_order_per_plan'),
         db.CheckConstraint(
-            "job_type IN ('pm', 'defect', 'inspection')",
+            "job_type IN ('pm', 'defect', 'inspection', 'corrective')",
             name='check_sap_job_type'
         ),
         db.CheckConstraint(

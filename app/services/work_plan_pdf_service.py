@@ -1003,7 +1003,7 @@ class WorkPlanPDF(FPDF):
             return -1  # Signal: needs page break
 
         # ── Draw card border ──
-        stripe_color = TEAL if job.job_type == 'pm' else RED if job.job_type == 'defect' else GREY
+        stripe_color = TEAL if job.job_type == 'pm' else RED if job.job_type == 'defect' else ORANGE if job.job_type == 'corrective' else GREY
         # Left stripe
         self.set_fill_color(*stripe_color)
         self.rect(card_x, card_y, 3, card_h, 'F')
@@ -1026,7 +1026,7 @@ class WorkPlanPDF(FPDF):
 
         # Row 1: Type badge + Priority + Flags
         self.set_xy(cx, cy)
-        type_label = 'PM' if job.job_type == 'pm' else 'DEF' if job.job_type == 'defect' else 'INSP'
+        type_label = 'PM' if job.job_type == 'pm' else 'DEF' if job.job_type == 'defect' else 'CORR' if job.job_type == 'corrective' else 'INSP'
         self._pill(type_label, stripe_color, w=16, h=5)
 
         self.set_x(cx + 18)
@@ -1201,7 +1201,7 @@ class WorkPlanPDF(FPDF):
         priority = (job.priority or 'normal').lower()
 
         # Card stripe + background
-        stripe_color = TEAL if job.job_type == 'pm' else RED if job.job_type == 'defect' else GREY
+        stripe_color = TEAL if job.job_type == 'pm' else RED if job.job_type == 'defect' else ORANGE if job.job_type == 'corrective' else GREY
         self.set_fill_color(*stripe_color)
         self.rect(card_x, card_y, 3, card_h, 'F')
         self.set_fill_color(*WHITE)
@@ -1216,7 +1216,7 @@ class WorkPlanPDF(FPDF):
 
         # Line 1: [PM] Equipment Name          ● Normal
         self.set_xy(cx, cy)
-        type_label = 'PM' if job.job_type == 'pm' else 'DEF' if job.job_type == 'defect' else 'INSP'
+        type_label = 'PM' if job.job_type == 'pm' else 'DEF' if job.job_type == 'defect' else 'CORR' if job.job_type == 'corrective' else 'INSP'
         self._pill(type_label, stripe_color, w=14, h=4.5)
 
         self.set_x(cx + 16)

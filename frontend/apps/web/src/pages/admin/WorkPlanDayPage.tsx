@@ -58,6 +58,7 @@ const JOB_TYPE_ICONS: Record<string, React.ReactNode> = {
   pm: <ToolOutlined />,
   defect: <ExperimentOutlined />,
   inspection: <EyeOutlined />,
+  corrective: <ToolOutlined />,
 };
 
 const JOB_TYPE_COLORS: Record<string, string> = {

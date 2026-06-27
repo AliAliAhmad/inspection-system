@@ -123,6 +123,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ plan, weekStart })
     const pmJobs = allJobs.filter(j => j.job_type === 'pm');
     const defectJobs = allJobs.filter(j => j.job_type === 'defect');
     const inspectionJobs = allJobs.filter(j => j.job_type === 'inspection');
+    const correctiveJobs = allJobs.filter(j => j.job_type === 'corrective');
 
     const jobTypeStats: JobTypeStats[] = [
       {
@@ -148,6 +149,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ plan, weekStart })
         hours: inspectionJobs.reduce((sum, j) => sum + (j.estimated_hours || 0), 0),
         color: '#52c41a',
         emoji: '✅',
+      },
+      {
+        type: 'corrective',
+        label: 'Corrective Work',
+        count: correctiveJobs.length,
+        hours: correctiveJobs.reduce((sum, j) => sum + (j.estimated_hours || 0), 0),
+        color: '#faad14',
+        emoji: '🛠️',
       },
     ];
 

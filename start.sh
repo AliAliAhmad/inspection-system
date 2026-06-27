@@ -411,6 +411,26 @@ with app.app_context():
         db.session.rollback()
         print('role constraint already up to date')
 
+    # Update work-plan job_type constraints to include 'corrective'
+    # (manual field-found fixes that are NOT tied to an existing defect record)
+    try:
+        db.session.execute(text('ALTER TABLE work_plan_jobs DROP CONSTRAINT IF EXISTS check_job_type'))
+        db.session.execute(text(\"\"\"ALTER TABLE work_plan_jobs ADD CONSTRAINT check_job_type CHECK (job_type IN ('pm', 'defect', 'inspection', 'corrective'))\"\"\"))
+        db.session.commit()
+        print('Updated work_plan_jobs job_type constraint to include corrective')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_jobs job_type constraint already up to date')
+
+    try:
+        db.session.execute(text('ALTER TABLE sap_work_orders DROP CONSTRAINT IF EXISTS check_sap_job_type'))
+        db.session.execute(text(\"\"\"ALTER TABLE sap_work_orders ADD CONSTRAINT check_sap_job_type CHECK (job_type IN ('pm', 'defect', 'inspection', 'corrective'))\"\"\"))
+        db.session.commit()
+        print('Updated sap_work_orders job_type constraint to include corrective')
+    except Exception:
+        db.session.rollback()
+        print('sap_work_orders job_type constraint already up to date')
+
     try:
         db.session.execute(text('ALTER TABLE users DROP CONSTRAINT IF EXISTS check_valid_minor_role'))
         db.session.execute(text(\"\"\"ALTER TABLE users ADD CONSTRAINT check_valid_minor_role CHECK (minor_role IN ('inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance') OR minor_role IS NULL)\"\"\"))
@@ -604,7 +624,7 @@ with app.app_context():
                 notes TEXT,
                 created_at TIMESTAMP DEFAULT NOW() NOT NULL,
                 updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
-                CONSTRAINT check_job_type CHECK (job_type IN ('pm', 'defect', 'inspection')),
+                CONSTRAINT check_job_type CHECK (job_type IN ('pm', 'defect', 'inspection', 'corrective')),
                 CONSTRAINT check_job_berth CHECK (berth IN ('east', 'west', 'both') OR berth IS NULL),
                 CONSTRAINT check_job_priority CHECK (priority IN ('low', 'normal', 'high', 'urgent'))
             )
@@ -781,7 +801,7 @@ with app.app_context():
                 status VARCHAR(20) DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT NOW() NOT NULL,
                 UNIQUE(work_plan_id, order_number),
-                CONSTRAINT check_sap_job_type CHECK (job_type IN ('pm', 'defect', 'inspection')),
+                CONSTRAINT check_sap_job_type CHECK (job_type IN ('pm', 'defect', 'inspection', 'corrective')),
                 CONSTRAINT check_sap_order_status CHECK (status IN ('pending', 'scheduled'))
             )
         '''))
