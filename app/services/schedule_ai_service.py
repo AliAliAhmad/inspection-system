@@ -916,8 +916,8 @@ class ScheduleAIService(AIServiceWrapper):
             on_leave_ids = set()
             leaves = Leave.query.filter(
                 Leave.status == 'approved',
-                Leave.start_date <= target_date,
-                Leave.end_date >= target_date
+                Leave.date_from <= target_date,
+                Leave.date_to >= target_date
             ).all()
             for leave in leaves:
                 on_leave_ids.add(leave.user_id)

@@ -303,8 +303,8 @@ class WorkPlanAIService:
                 leave = Leave.query.filter(
                     Leave.user_id == worker.id,
                     Leave.status == 'approved',
-                    Leave.start_date <= job_date,
-                    Leave.end_date >= job_date
+                    Leave.date_from <= job_date,
+                    Leave.date_to >= job_date
                 ).first()
                 if leave:
                     score -= 100  # Not available

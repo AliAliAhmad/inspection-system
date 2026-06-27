@@ -1337,13 +1337,13 @@ class NotificationAIService:
             leave = db.session.get(Leave, related_id)
             if leave:
                 # Check for affected assignments during leave period
-                if leave.start_date and leave.end_date:
+                if leave.date_from and leave.date_to:
                     affected_assignments = InspectionAssignment.query.join(InspectionList).filter(
                         or_(
                             InspectionAssignment.mechanical_inspector_id == leave.user_id,
                             InspectionAssignment.electrical_inspector_id == leave.user_id
                         ),
-                        InspectionList.target_date.between(leave.start_date, leave.end_date)
+                        InspectionList.target_date.between(leave.date_from, leave.date_to)
                     ).count()
 
                     if affected_assignments > 0:
