@@ -3,7 +3,7 @@ import { Tag, Tooltip, Typography, Badge } from 'antd';
 import { CSS } from '@dnd-kit/utilities';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { WorkPlanJob } from '@inspection/shared';
-import { getOverdueInfo, isJobOverdue } from '../../utils/overdue';
+import { getOverdueInfo, isJobOverdue, getOverdueHeat, type OverdueMax } from '../../utils/overdue';
 
 const { Text } = Typography;
 
@@ -17,6 +17,8 @@ interface BundleCardProps {
   onJobClick: (job: WorkPlanJob) => void;
   /** Initial expanded state (default false) */
   defaultExpanded?: boolean;
+  /** Worst overdue (per unit) across the plan, to normalise the overdue heat */
+  overdueMax?: OverdueMax;
 }
 
 /** Pull team category (mech / elec) from the assignment user.specialization */
@@ -80,11 +82,13 @@ interface IndividualJobRowProps {
   dayId: number;
   onJobClick: (job: WorkPlanJob) => void;
   expanded: boolean;
+  overdueMax?: OverdueMax;
 }
 
-const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded }) => {
+const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax }) => {
   const overdue = getOverdueInfo(job as any);
   const isOverdue = overdue.isOverdue;
+  const heat = getOverdueHeat(job as any, overdueMax);
   const jobName = stripEquipmentPrefix(
     job.description || (job as any).defect?.description || '',
     equipmentDisplayName(job)
@@ -140,12 +144,13 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
         gap: 4,
         padding: '4px 6px',
         marginBottom: 3,
-        background: isDragging ? '#e6f7ff' : isEmployeeOver ? '#f9f0ff' : isOverdue ? '#fff1f0' : '#fff',
-        border: `${isOverdue ? 1.5 : 1}px solid ${
-          isDragging ? '#1890ff' : isEmployeeOver ? '#722ed1' : isOverdue ? '#ff4d4f' : '#f0f0f0'
+        background: isDragging ? '#e6f7ff' : isEmployeeOver ? '#f9f0ff' : heat.active ? heat.cardTint : '#fff',
+        borderLeft: heat.active && !isDragging && !isEmployeeOver ? `4px solid ${heat.stripe}` : undefined,
+        border: `1px solid ${
+          isDragging ? '#1890ff' : isEmployeeOver ? '#722ed1' : heat.active ? heat.border : '#f0f0f0'
         }`,
         borderRadius: 4,
-        boxShadow: isOverdue ? '0 1px 5px rgba(255,77,79,0.30)' : undefined,
+        boxShadow: heat.active ? `0 1px 4px ${heat.stripe}40` : undefined,
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
         touchAction: 'none',
@@ -181,10 +186,11 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
           ) : null}
           {isOverdue && (
             <span style={{
-              fontSize: 9, fontWeight: 800, color: '#fff', background: '#ff4d4f',
+              fontSize: 9, fontWeight: 800, color: heat.badgeText, background: heat.badgeBg,
               padding: '0 5px', borderRadius: 8, lineHeight: '14px', flexShrink: 0,
+              border: `1px solid ${heat.stripe}`,
             }}>
-              ⚠️ {overdue.amount}{overdue.shortUnit}
+              {heat.isWorst ? '🔥 ' : ''}{overdue.amount}{overdue.shortUnit}
             </span>
           )}
         </div>
@@ -314,6 +320,7 @@ export const BundleCard: React.FC<BundleCardProps> = ({
   dayId,
   onJobClick,
   defaultExpanded = false,
+  overdueMax,
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -328,6 +335,10 @@ export const BundleCard: React.FC<BundleCardProps> = ({
   const defectCount = jobs.filter((j) => j.job_type === 'defect').length;
   const totalHours = jobs.reduce((sum, j) => sum + (j.estimated_hours || 0), 0);
   const hasOverdue = jobs.some((j) => isJobOverdue(j as any));
+  // Bundle heat = the hottest job in the bundle (most overdue)
+  const bundleHeat = jobs
+    .map((j) => getOverdueHeat(j as any, overdueMax))
+    .reduce((a, b) => (b.level > a.level ? b : a), getOverdueHeat(null, overdueMax));
 
   // Determine bundle type — PM bundle if any PM, else defect bundle
   const isPmBundle = pmCount > 0;
@@ -335,8 +346,8 @@ export const BundleCard: React.FC<BundleCardProps> = ({
   // Equipment name (from first job)
   const equipmentName = equipmentDisplayName(jobs[0]);
 
-  // Stripe color — red when the bundle contains an overdue job
-  const stripeColor = hasOverdue ? '#ff4d4f' : isPmBundle ? '#16a085' : '#c0392b';
+  // Stripe color — heat-tinted when the bundle contains an overdue job
+  const stripeColor = bundleHeat.active ? bundleHeat.stripe : isPmBundle ? '#16a085' : '#c0392b';
 
   // Group jobs into mech / elec sub-teams for the team summary.
   // Jobs with subTeam='both' (e.g. regular PM that needs both teams) appear in BOTH lists.
@@ -383,10 +394,10 @@ export const BundleCard: React.FC<BundleCardProps> = ({
       style={{
         display: 'flex',
         marginBottom: 4,
-        background: isDragging ? '#e6f7ff' : hasOverdue ? '#fff1f0' : '#fff',
+        background: isDragging ? '#e6f7ff' : bundleHeat.active ? bundleHeat.cardTint : '#fff',
         borderRadius: 5,
-        border: `${hasOverdue ? 1.5 : 1}px solid ${expanded ? '#1677ff' : hasOverdue ? '#ff4d4f' : '#e8e8e8'}`,
-        boxShadow: expanded ? '0 0 0 2px rgba(22,119,255,0.15)' : hasOverdue ? '0 1px 6px rgba(255,77,79,0.30)' : '0 1px 2px rgba(0,0,0,0.04)',
+        border: `1px solid ${expanded ? '#1677ff' : bundleHeat.active ? bundleHeat.border : '#e8e8e8'}`,
+        boxShadow: expanded ? '0 0 0 2px rgba(22,119,255,0.15)' : bundleHeat.active ? `0 1px 5px ${bundleHeat.stripe}40` : '0 1px 2px rgba(0,0,0,0.04)',
         cursor: isDragging ? 'grabbing' : 'pointer',
         opacity: isDragging ? 0.5 : 1,
         transform: CSS.Translate.toString(transform),
@@ -572,6 +583,7 @@ export const BundleCard: React.FC<BundleCardProps> = ({
                     dayId={dayId}
                     onJobClick={onJobClick}
                     expanded={true}
+                    overdueMax={overdueMax}
                   />
                 ))}
               </div>
@@ -617,6 +629,7 @@ export const BundleCard: React.FC<BundleCardProps> = ({
                     dayId={dayId}
                     onJobClick={onJobClick}
                     expanded={true}
+                    overdueMax={overdueMax}
                   />
                 ))}
               </div>

@@ -102,7 +102,7 @@ import {
 import InspectionSummaryBar, { InspectionCountBadge } from '../../components/work-planning/InspectionSummaryBar';
 import VoiceTextArea from '../../components/VoiceTextArea';
 import { InputNumber } from 'antd';
-import { getOverdueInfo, isJobOverdue } from '../../utils/overdue';
+import { getOverdueInfo, isJobOverdue, computeOverdueMax, getOverdueHeat } from '../../utils/overdue';
 
 dayjs.extend(isoWeek);
 
@@ -581,6 +581,16 @@ export default function WorkPlanningPage() {
 
   const currentPlan = plansData?.work_plans?.[0];
   const isDraft = currentPlan?.status === 'draft';
+
+  // Worst overdue (per unit) across the whole plan — used to normalise the
+  // overdue "heat" so the most-overdue jobs run hot and mild ones stay cool.
+  const overdueMax = useMemo(() => {
+    const all: any[] = [];
+    (currentPlan?.days || []).forEach((d: any) => {
+      all.push(...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || []), ...(d.jobs || []));
+    });
+    return computeOverdueMax(all);
+  }, [currentPlan]);
 
   // Create plan mutation
   const createMutation = useMutation({
@@ -2667,6 +2677,7 @@ export default function WorkPlanningPage() {
                                             equipmentId={bundleJobs[0]?.equipment_id || null}
                                             dayId={day.id}
                                             onJobClick={handleJobClick}
+                                            overdueMax={overdueMax}
                                           />
                                         ));
                                       })()}
@@ -3162,11 +3173,11 @@ export default function WorkPlanningPage() {
       <Modal
         title={
           <Space>
-            {isJobOverdue(selectedJob as any) && <span style={{ color: '#ff4d4f' }}>⚠️</span>}
-            <span style={isJobOverdue(selectedJob as any) ? { color: '#cf1322' } : undefined}>
+            {getOverdueHeat(selectedJob as any, overdueMax).active && <span>{getOverdueHeat(selectedJob as any, overdueMax).isWorst ? '🔥' : '⚠️'}</span>}
+            <span style={{ color: getOverdueHeat(selectedJob as any, overdueMax).active ? getOverdueHeat(selectedJob as any, overdueMax).stripe : undefined }}>
               {selectedJob?.job_type === 'pm' ? 'PM' : selectedJob?.job_type === 'defect' ? 'Defect' : 'Inspection'}
             </span>
-            <span style={isJobOverdue(selectedJob as any) ? { color: '#cf1322' } : undefined}>Job Details</span>
+            <span style={{ color: getOverdueHeat(selectedJob as any, overdueMax).active ? getOverdueHeat(selectedJob as any, overdueMax).stripe : undefined }}>Job Details</span>
           </Space>
         }
         open={jobDetailsModalOpen}
@@ -3176,8 +3187,8 @@ export default function WorkPlanningPage() {
         }}
         footer={null}
         width={700}
-        styles={isJobOverdue(selectedJob as any)
-          ? { content: { borderTop: '4px solid #ff4d4f', background: '#fff7f6' }, header: { background: '#fff7f6' } }
+        styles={getOverdueHeat(selectedJob as any, overdueMax).active
+          ? { content: { borderTop: `4px solid ${getOverdueHeat(selectedJob as any, overdueMax).stripe}`, background: getOverdueHeat(selectedJob as any, overdueMax).cardTint }, header: { background: getOverdueHeat(selectedJob as any, overdueMax).cardTint } }
           : undefined}
       >
         {selectedJob && (
@@ -3294,8 +3305,9 @@ export default function WorkPlanningPage() {
 
             {/* Overdue */}
             {isJobOverdue(selectedJob as any) && (
-              <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fff7e6', borderColor: '#ffd591' }}>
-                <Text strong style={{ color: '#fa8c16' }}>
+              <Card size="small" style={{ marginBottom: 16, backgroundColor: getOverdueHeat(selectedJob as any, overdueMax).cardTint, borderColor: getOverdueHeat(selectedJob as any, overdueMax).border }}>
+                <Text strong style={{ color: getOverdueHeat(selectedJob as any, overdueMax).stripe }}>
+                  {getOverdueHeat(selectedJob as any, overdueMax).isWorst ? '🔥 ' : '⚠️ '}
                   Overdue by {getOverdueInfo(selectedJob as any).amount} {getOverdueInfo(selectedJob as any).unit}
                 </Text>
               </Card>

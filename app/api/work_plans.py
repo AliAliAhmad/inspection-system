@@ -1090,6 +1090,31 @@ def remove_job(plan_id, job_id):
         ).first()
         if sap_order and sap_order.status == 'scheduled':
             sap_order.status = 'pending'
+    # Otherwise, if it's a MANUAL PM job (not from SAP, not a defect), preserve it
+    # by returning it to the pool as a pending SAP order — so a manually-added job
+    # can be dragged back to the pool like any other job instead of vanishing.
+    elif job.job_type == 'pm' and not job.defect_id and job.equipment_id:
+        manual_order_number = f"MAN-{plan_id}-{job_id}"
+        existing_manual = SAPWorkOrder.query.filter_by(
+            work_plan_id=plan_id, order_number=manual_order_number
+        ).first()
+        if not existing_manual:
+            db.session.add(SAPWorkOrder(
+                work_plan_id=plan_id,
+                order_number=manual_order_number,
+                order_type='MANUAL',
+                job_type='pm',
+                equipment_id=job.equipment_id,
+                description=job.description,
+                estimated_hours=job.estimated_hours or 4.0,
+                priority=job.priority or 'normal',
+                berth=job.berth,
+                cycle_id=job.cycle_id,
+                maintenance_base=job.maintenance_base,
+                work_center=getattr(job, 'work_center', None),
+                notes=job.notes,
+                status='pending',
+            ))
 
     # Detach job from ORM session so SQLAlchemy never lazy-loads its child
     # relationships (job_checklist_responses has columns not yet in the DB).
