@@ -69,13 +69,14 @@ const TimelineJobBlockInner: React.FC<TimelineJobBlockProps> = ({
   const leadUser = job.assignments?.find(a => a.is_lead)?.user;
 
   const containerStyle: React.CSSProperties = {
-    backgroundColor: selected ? '#e6f7ff' : isOver ? '#d9f7be' : style.bg,
-    borderLeft: `4px solid ${selected ? '#1890ff' : isOver ? '#52c41a' : style.border}`,
+    backgroundColor: selected ? '#e6f7ff' : isOver ? '#d9f7be' : isOverdue ? '#fff1f0' : style.bg,
+    border: isOverdue && !selected && !isOver ? '1.5px solid #ff4d4f' : undefined,
+    borderLeft: `4px solid ${selected ? '#1890ff' : isOver ? '#52c41a' : isOverdue ? '#ff4d4f' : style.border}`,
     borderRadius: '6px',
     padding: compact ? '6px 8px' : '8px 12px',
     cursor: onClick ? 'pointer' : 'default',
     opacity: isDragging ? 0.5 : 1,
-    boxShadow: selected ? '0 0 0 2px #1890ff40' : isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : isOver ? '0 0 0 2px #52c41a' : '0 1px 4px rgba(0,0,0,0.08)',
+    boxShadow: selected ? '0 0 0 2px #1890ff40' : isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : isOver ? '0 0 0 2px #52c41a' : isOverdue ? '0 1px 6px rgba(255,77,79,0.30)' : '0 1px 4px rgba(0,0,0,0.08)',
     transition: 'box-shadow 0.2s, opacity 0.2s, background-color 0.2s',
     marginBottom: '4px',
     position: 'relative',

@@ -507,6 +507,8 @@ export default function WorkPlanningPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [addJobModalOpen, setAddJobModalOpen] = useState(false);
+  // When the Add Job modal is opened from a specific day's "+" button, pre-select that day
+  const [addJobDayId, setAddJobDayId] = useState<number | null>(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [jobDetailsModalOpen, setJobDetailsModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
@@ -2573,6 +2575,23 @@ export default function WorkPlanningPage() {
                                             </Text>
                                           )}
                                           <InspectionCountBadge date={day.date} berth={berth} />
+                                          {isDraft && (
+                                            <Tooltip title="Add a job to this day">
+                                              <Button
+                                                type="link"
+                                                size="small"
+                                                icon={<PlusOutlined />}
+                                                style={{ padding: 0, height: 16, fontSize: 10 }}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setAddJobDayId(day.id);
+                                                  setAddJobModalOpen(true);
+                                                }}
+                                              >
+                                                Add
+                                              </Button>
+                                            </Tooltip>
+                                          )}
                                         </div>
                                       </div>
                                       {/* Stats shown without judgment colors */}
@@ -2728,7 +2747,7 @@ export default function WorkPlanningPage() {
                         berth={berth}
                         planId={currentPlan?.id}
                         days={currentPlan?.days?.map(d => ({ id: d.id, date: d.date, day_name: dayjs(d.date).format('ddd') })) || []}
-                        onAddJob={() => setAddJobModalOpen(true)}
+                        onAddJob={() => { setAddJobDayId(null); setAddJobModalOpen(true); }}
                         onJobClick={(job, type) => {
                           setSelectedJob({ ...job, job_type: type as JobType } as any);
                           setJobDetailsModalOpen(true);
@@ -3143,8 +3162,11 @@ export default function WorkPlanningPage() {
       <Modal
         title={
           <Space>
-            <span>{selectedJob?.job_type === 'pm' ? 'PM' : selectedJob?.job_type === 'defect' ? 'Defect' : 'Inspection'}</span>
-            <span>Job Details</span>
+            {isJobOverdue(selectedJob as any) && <span style={{ color: '#ff4d4f' }}>⚠️</span>}
+            <span style={isJobOverdue(selectedJob as any) ? { color: '#cf1322' } : undefined}>
+              {selectedJob?.job_type === 'pm' ? 'PM' : selectedJob?.job_type === 'defect' ? 'Defect' : 'Inspection'}
+            </span>
+            <span style={isJobOverdue(selectedJob as any) ? { color: '#cf1322' } : undefined}>Job Details</span>
           </Space>
         }
         open={jobDetailsModalOpen}
@@ -3154,6 +3176,9 @@ export default function WorkPlanningPage() {
         }}
         footer={null}
         width={700}
+        styles={isJobOverdue(selectedJob as any)
+          ? { content: { borderTop: '4px solid #ff4d4f', background: '#fff7f6' }, header: { background: '#fff7f6' } }
+          : undefined}
       >
         {selectedJob && (
           <div>
@@ -3563,6 +3588,7 @@ export default function WorkPlanningPage() {
       >
         {currentPlan && isDraft ? (
           <Form
+            key={`addjob-${addJobDayId ?? 'pool'}`}
             form={addJobForm}
             layout="vertical"
             onFinish={(values) => {
@@ -3587,6 +3613,7 @@ export default function WorkPlanningPage() {
               priority: 'normal',
               estimated_hours: 4,
               difficulty: 'minor',
+              day_id: addJobDayId ?? undefined,
             }}
           >
             {/* Day Selection */}

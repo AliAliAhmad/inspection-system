@@ -140,11 +140,12 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
         gap: 4,
         padding: '4px 6px',
         marginBottom: 3,
-        background: isDragging ? '#e6f7ff' : isEmployeeOver ? '#f9f0ff' : '#fff',
-        border: `1px solid ${
-          isDragging ? '#1890ff' : isEmployeeOver ? '#722ed1' : isOverdue ? '#ffccc7' : '#f0f0f0'
+        background: isDragging ? '#e6f7ff' : isEmployeeOver ? '#f9f0ff' : isOverdue ? '#fff1f0' : '#fff',
+        border: `${isOverdue ? 1.5 : 1}px solid ${
+          isDragging ? '#1890ff' : isEmployeeOver ? '#722ed1' : isOverdue ? '#ff4d4f' : '#f0f0f0'
         }`,
         borderRadius: 4,
+        boxShadow: isOverdue ? '0 1px 5px rgba(255,77,79,0.30)' : undefined,
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
         touchAction: 'none',
@@ -179,9 +180,12 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
             </Text>
           ) : null}
           {isOverdue && (
-            <Text style={{ fontSize: 9, color: '#ff4d4f', fontWeight: 700 }}>
-              {overdue.amount}{overdue.shortUnit}!
-            </Text>
+            <span style={{
+              fontSize: 9, fontWeight: 800, color: '#fff', background: '#ff4d4f',
+              padding: '0 5px', borderRadius: 8, lineHeight: '14px', flexShrink: 0,
+            }}>
+              ⚠️ {overdue.amount}{overdue.shortUnit}
+            </span>
           )}
         </div>
 
@@ -331,8 +335,8 @@ export const BundleCard: React.FC<BundleCardProps> = ({
   // Equipment name (from first job)
   const equipmentName = equipmentDisplayName(jobs[0]);
 
-  // Stripe color
-  const stripeColor = isPmBundle ? '#16a085' : '#c0392b';
+  // Stripe color — red when the bundle contains an overdue job
+  const stripeColor = hasOverdue ? '#ff4d4f' : isPmBundle ? '#16a085' : '#c0392b';
 
   // Group jobs into mech / elec sub-teams for the team summary.
   // Jobs with subTeam='both' (e.g. regular PM that needs both teams) appear in BOTH lists.
@@ -379,10 +383,10 @@ export const BundleCard: React.FC<BundleCardProps> = ({
       style={{
         display: 'flex',
         marginBottom: 4,
-        background: isDragging ? '#e6f7ff' : '#fff',
+        background: isDragging ? '#e6f7ff' : hasOverdue ? '#fff1f0' : '#fff',
         borderRadius: 5,
-        border: `1px solid ${expanded ? '#1677ff' : hasOverdue ? '#ffccc7' : '#e8e8e8'}`,
-        boxShadow: expanded ? '0 0 0 2px rgba(22,119,255,0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
+        border: `${hasOverdue ? 1.5 : 1}px solid ${expanded ? '#1677ff' : hasOverdue ? '#ff4d4f' : '#e8e8e8'}`,
+        boxShadow: expanded ? '0 0 0 2px rgba(22,119,255,0.15)' : hasOverdue ? '0 1px 6px rgba(255,77,79,0.30)' : '0 1px 2px rgba(0,0,0,0.04)',
         cursor: isDragging ? 'grabbing' : 'pointer',
         opacity: isDragging ? 0.5 : 1,
         transform: CSS.Translate.toString(transform),

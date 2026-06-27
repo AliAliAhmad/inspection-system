@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overdue Job — Red Card Mockup</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background:#f0f2f5; margin:0; padding:32px; color:#1f1f1f; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:#888; margin:0 0 24px; font-size:13px; }
+  .row { display:flex; gap:32px; flex-wrap:wrap; align-items:flex-start; }
+  .col { flex:1; min-width:300px; }
+  .label { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#999; margin:0 0 10px; }
+
+  /* base job card (as in the timeline/day column) */
+  .card { border-radius:8px; padding:10px 12px; margin-bottom:10px; background:#fff;
+          border:1px solid #e8e8e8; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  .card .top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .eq { font-weight:700; font-size:14px; }
+  .desc { color:#666; font-size:12px; margin-top:2px; }
+  .meta { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .tag { font-size:11px; padding:1px 8px; border-radius:10px; background:#f0f0f0; color:#555; }
+  .tag.team { background:#e6f4ff; color:#1677ff; }
+  .tag.hrs  { background:#f6ffed; color:#389e0d; }
+
+  /* NORMAL (not overdue) — subtle */
+  .normal .od { display:none; }
+
+  /* OVERDUE — whole card red */
+  .overdue { background:#fff1f0; border:1.5px solid #ff4d4f; box-shadow:0 1px 6px rgba(255,77,79,.25); }
+  .overdue .eq { color:#cf1322; }
+  .overdue .od { font-size:11px; font-weight:800; color:#fff; background:#ff4d4f;
+                 padding:2px 8px; border-radius:10px; display:inline-flex; align-items:center; gap:4px; }
+  .overdue.crit { border-color:#a8071a; background:#fff0f0; }
+
+  /* DETAIL panel red */
+  .detail { border-radius:10px; padding:18px; background:#fff; border:1px solid #eee; }
+  .detail.overdue { background:#fff1f0; border:1.5px solid #ff4d4f; }
+  .detail h2 { margin:0 0 2px; font-size:18px; }
+  .detail.overdue h2 { color:#cf1322; }
+  .banner { background:#ff4d4f; color:#fff; font-weight:700; padding:8px 12px; border-radius:8px;
+            display:flex; align-items:center; gap:8px; margin:12px 0; font-size:14px; }
+  .kv { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #f0d0d0; font-size:13px; }
+  .kv span:first-child { color:#999; }
+</style>
+</head>
+<body>
+  <h1>Overdue job → red card (mockup)</h1>
+  <p class="sub">How an overdue job would look in the day column and when opened. Compare normal vs overdue.</p>
+
+  <div class="row">
+    <div class="col">
+      <p class="label">Day column — cards</p>
+
+      <div class="card normal">
+        <div class="top"><span class="eq">⚙️ RS101 — STS Crane</span><span class="tag">🔧 PM</span></div>
+        <div class="desc">Quarterly greasing</div>
+        <div class="meta"><span class="tag team">👥 2</span><span class="tag hrs">⏱️ 3h</span></div>
+      </div>
+
+      <div class="card overdue">
+        <div class="top"><span class="eq">⚙️ RS108 — Reach Stacker</span><span class="od">⚠️ OVERDUE 20h</span></div>
+        <div class="desc">250-hr running-hours PM (past trigger)</div>
+        <div class="meta"><span class="tag team">👥 1</span><span class="tag hrs">⏱️ 4h</span><span class="tag">🔧 PM</span></div>
+      </div>
+
+      <div class="card overdue crit">
+        <div class="top"><span class="eq">⚙️ RS203 — Forklift</span><span class="od">🔴 OVERDUE 12d</span></div>
+        <div class="desc">Calendar PM — 12 days past due</div>
+        <div class="meta"><span class="tag team">👥 2</span><span class="tag hrs">⏱️ 2h</span><span class="tag">🔧 PM</span></div>
+      </div>
+
+      <div class="card normal">
+        <div class="top"><span class="eq">⚙️ RS104 — Gantry</span><span class="tag">🔴 Defect</span></div>
+        <div class="desc">Hydraulic leak repair</div>
+        <div class="meta"><span class="tag team">👥 1</span><span class="tag hrs">⏱️ 5h</span></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <p class="label">When opened — detail (overdue)</p>
+      <div class="detail overdue">
+        <h2>⚙️ RS108 — Reach Stacker</h2>
+        <div class="desc">250-hr running-hours PM</div>
+        <div class="banner">⚠️ Overdue by 20 hours</div>
+        <div class="kv"><span>Type</span><span>PM (running hours)</span></div>
+        <div class="kv"><span>Priority</span><span style="color:#cf1322;font-weight:700">HIGH</span></div>
+        <div class="kv"><span>Estimated</span><span>4 hours</span></div>
+        <div class="kv"><span>Team</span><span>1 assigned</span></div>
+        <div class="kv"><span>Berth</span><span>East</span></div>
+      </div>
+
+      <p class="label" style="margin-top:24px">For comparison — normal detail</p>
+      <div class="detail">
+        <h2>⚙️ RS101 — STS Crane</h2>
+        <div class="desc">Quarterly greasing</div>
+        <div class="kv"><span>Type</span><span>PM (calendar)</span></div>
+        <div class="kv"><span>Priority</span><span>Normal</span></div>
+        <div class="kv"><span>Estimated</span><span>3 hours</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
