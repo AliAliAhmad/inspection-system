@@ -100,6 +100,13 @@ _SCORE_TO_PRIORITY = [
 _CARRY_OVER_BOOST = 15
 _MAX_OVERDUE_BONUS = 20
 
+# Performance PM (running-hours) urgency window:
+# start awarding priority _PERF_LEAD_HOURS before the cycle trigger, and reach
+# the max overdue bonus _PERF_FULL_HOURS of "effective overdue" later — i.e. the
+# bonus maxes out ~1 day past the trigger (fast ramp).
+_PERF_LEAD_HOURS = 24.0
+_PERF_FULL_HOURS = 48.0
+
 
 def _score_to_priority(score: float) -> str:
     """Convert a numeric score to a priority label."""
@@ -527,8 +534,15 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
         status='pending',
     ).options(joinedload(SAPWorkOrder.equipment)).all()
 
+    today = datetime.utcnow().date()
     for sap in sap_orders:
         eq = sap.equipment
+        # Compute day-based overdue (today - order date) for everything except
+        # performance PMs, which keep their imported running-hours value.
+        ov_value, ov_unit = _resolve_overdue(
+            sap.job_type, sap.maintenance_base, sap.required_date,
+            sap.overdue_value, sap.overdue_unit, today,
+        )
         candidates.append({
             'source': 'sap',
             'job_type': sap.job_type,
@@ -539,8 +553,8 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
             'description': sap.description or '',
             'estimated_hours': sap.estimated_hours or 4.0,
             'priority': sap.priority or 'normal',
-            'overdue_value': sap.overdue_value,
-            'overdue_unit': sap.overdue_unit,
+            'overdue_value': ov_value,
+            'overdue_unit': ov_unit,
             'maintenance_base': sap.maintenance_base,
             'planned_date': sap.planned_date,
             'sap_order_id': sap.id,
@@ -823,13 +837,52 @@ def _overdue_bonus_days(overdue_days: Optional[float]) -> float:
 
 def _overdue_bonus_hours(overdue_hours: Optional[float]) -> float:
     """
-    Bonus for running-hours overdue.
-    overdue_value for running-hours PMs is typically *negative*
-    (hours past the trigger), so we take the absolute value.
+    Bonus for running-hours (performance PM) overdue.
+
+    overdue_hours = hours relative to the cycle trigger:
+      POSITIVE = hours still remaining before due,
+      ZERO     = exactly at the trigger,
+      NEGATIVE = hours past the trigger (overdue).
+
+    Priority starts to accrue once the order is within _PERF_LEAD_HOURS of the
+    trigger (a 24h early flag) and ramps up FAST, reaching the max bonus about a
+    day past due — so an overdue performance PM climbs quickly. Anything earlier
+    than the lead window gets no bonus.
     """
     if overdue_hours is None:
         return 0.0
-    return min(abs(overdue_hours) / 200.0, 1.0) * _MAX_OVERDUE_BONUS
+    effective = _PERF_LEAD_HOURS - overdue_hours   # > 0 once within the window/past due
+    if effective <= 0:
+        return 0.0
+    return min(effective / _PERF_FULL_HOURS, 1.0) * _MAX_OVERDUE_BONUS
+
+
+def _is_performance_pm(job_type: Optional[str], maintenance_base: Optional[str]) -> bool:
+    """Performance PM = a PM measured by running hours (not the calendar)."""
+    return job_type == 'pm' and 'running_hours' in (maintenance_base or '').lower()
+
+
+def _resolve_overdue(
+    job_type: Optional[str],
+    maintenance_base: Optional[str],
+    required_date,
+    stored_value: Optional[float],
+    stored_unit: Optional[str],
+    today,
+):
+    """Return (overdue_value, overdue_unit) used for scoring.
+
+    Performance PMs keep their imported hours value (negative = past trigger).
+    Everything else (calendar PMs, COM, DAM, INS, ...) is day-based and computed
+    by the system as today - order date, so it never relies on a manually-typed
+    column. Orders only appear after generation, so the result is clamped at >= 0.
+    """
+    if _is_performance_pm(job_type, maintenance_base):
+        return stored_value, (stored_unit or 'hours')
+    if required_date is not None:
+        return max(0, (today - required_date).days), 'days'
+    # No date to compute from — fall back to whatever was imported
+    return stored_value, (stored_unit or 'days')
 
 
 # ===========================================================================
