@@ -16,7 +16,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { workPlansApi, type AvailablePMJob, type AvailableDefectJob, type SAPWorkOrder } from '@inspection/shared';
-import { getOverdueInfo, isJobOverdue } from '../../utils/overdue';
+import { getOverdueInfo, isJobOverdue, getOverdueHeat, computeOverdueMax, type OverdueMax } from '../../utils/overdue';
 
 // Priority order for sorting
 const PRIORITY_ORDER: Record<string, number> = {
@@ -44,9 +44,10 @@ interface DraggableJobItemProps {
   onClick?: () => void;
   days?: { id: number; date: string; day_name: string }[];
   onQuickSchedule?: (job: any, jobType: string, dayId: number) => void;
+  overdueMax?: OverdueMax;
 }
 
-const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, days = [], onQuickSchedule }) => {
+const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, days = [], onQuickSchedule, overdueMax }) => {
   const id = `pool-${jobType}-${job.id || job.equipment?.id || job.defect?.id || job.assignment?.id}`;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -66,6 +67,7 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
 
   const overdue = getOverdueInfo(job);
   const isOverdue = overdue.isOverdue;
+  const heat = getOverdueHeat(job, overdueMax);
   const priority = job.priority || 'normal';
 
   // Equipment name (never serial number)
@@ -110,9 +112,9 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
       style={{
         marginBottom: 4,
         padding: '5px 8px',
-        borderLeft: `3px solid ${isOverdue ? '#ff4d4f' : priorityColors[priority] || '#1890ff'}`,
-        backgroundColor: isDragging ? '#f0f5ff' : '#fff',
-        border: `1px solid ${isOverdue ? '#ffccc7' : '#f0f0f0'}`,
+        borderLeft: `3px solid ${heat.active ? heat.stripe : priorityColors[priority] || '#1890ff'}`,
+        backgroundColor: isDragging ? '#f0f5ff' : heat.active ? heat.cardTint : '#fff',
+        border: `1px solid ${heat.active ? heat.border : '#f0f0f0'}`,
         borderLeftWidth: 3,
         borderRadius: 4,
         cursor: 'grab',
@@ -129,8 +131,12 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
           {equipmentName}
         </div>
         {isOverdue && (
-          <span style={{ fontSize: 9, color: '#ff4d4f', fontWeight: 700, whiteSpace: 'nowrap' }}>
-            <WarningOutlined /> {overdue.amount}{overdue.shortUnit}
+          <span style={{
+            fontSize: 9, fontWeight: 800, color: heat.badgeText, background: heat.badgeBg,
+            border: `1px solid ${heat.stripe}`, padding: '0 5px', borderRadius: 8,
+            whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            {heat.isWorst ? '🔥 ' : ''}{overdue.amount}{overdue.shortUnit}
           </span>
         )}
       </div>
@@ -385,6 +391,13 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
 
     return { prmJobs: prm, defectJobs: defect };
   }, [availableJobs, searchText, equipmentFilter, equipmentTypeFilter, priorityFilter, prmSubTab, tradeFilter]);
+
+  // Worst overdue (per unit) across the pool — normalises the overdue heat so the
+  // most-overdue pool items run hot, consistent with the day-column heat scale.
+  const poolOverdueMax = useMemo(
+    () => computeOverdueMax([...prmJobs, ...defectJobs] as any[]),
+    [prmJobs, defectJobs],
+  );
 
   // Counts
   const prmCount = prmJobs.length;
@@ -664,6 +677,7 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
                   onClick={() => onJobClick?.(job, currentJobType)}
                   days={days}
                   onQuickSchedule={onQuickSchedule}
+                  overdueMax={poolOverdueMax}
                 />
               ))
             )}

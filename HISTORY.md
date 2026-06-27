@@ -377,7 +377,6 @@
 - If you discover a new issue, add it to "What Needs Work" section
 - If you fix an issue, move it to "What's Working" section
 - Keep this file always up to date — it IS your memory
-See HISTORY.md for full changelog. Only keep last 3 entries here.
 
 | 2026-04-07 | Feat: Replaced "Travel Efficiency" score with "Berth Balance" — measures workload split between East/West berths (since each berth has its own dedicated team, travel between berths is irrelevant). Formula: min(east,west)/max(east,west)*100. 3 files: work_plan_generator_service.py, work-plan.types.ts, PlanScoreCard.tsx. No DB migration needed | ✅ Done |
 | 2026-04-07 | Feat: Combined recipe (3-step manual stepper) — New recipe in Smart Plan Generator where user controls 3 sequential steps: PMs+defects → urgent defects on eq without PM → normal defects on eq without PM. Each step additive, assigns teams automatically, user reviews between steps. Backend: +`step`/`additive` params on generate_plan, new `_filter_candidates_for_combined_step` helper, relaxed populate to include 'low' severity. Frontend: new 3-card stepper modal in GeneratePlanButton. Materials stay manual (documented in UI). No DB migration | ✅ Done |
@@ -413,7 +412,8 @@ Disable non-core plugins after use to keep performance fast.
 ## Second Brain
 - Save all project notes to ~/Documents/second-brain/raw/
 - Format: YYYY-MM-DD-inspection-topic.md
-See HISTORY.md for full changelog. Only keep last 3 entries here.
+
+## Detailed Change Log (bullet, newest first)
 
 - **2026-06-27** — Two work-plan UX builds. (1) **Overdue heat scale** (web): replaced the binary red overdue highlight (useless when ~every order is overdue) with a RELATIVE heat — each job is colored by how overdue it is vs the worst in the plan (per unit), via new `getOverdueHeat`/`computeOverdueMax` in `utils/overdue.ts`. Bundle cards + badges run pale-yellow→amber→orange→red→dark-red, a 🔥 marks the worst, and the detail modal + timeline match; `WorkPlanningPage` computes the plan-wide max and threads it to `BundleCard`. (2) **Manual jobs persist in the pool** (backend `work_plans.py` `remove_job`): removing a manual PM job (no SAP order / no defect) now returns it to the pool as a pending `order_type='MANUAL'` SAP order instead of deleting it, so it can be dragged back like any other job. Tests: `tests/test_work_plan_manual_pool.py` (2). Suite: 158 passed. Mockups: `mockup-overdue-heat.html`.
 - **2026-06-27** — Work-plan UX (web): (1) Overdue jobs now stand out as a full RED card — red bg/border + red left stripe + a white-on-red "⚠️ amount+unit" badge — in the bundle view (`BundleCard`), calendar view (`TimelineJobBlock`), and the job-detail modal (red title + red top accent) in `WorkPlanningPage`. (2) Added a per-day "+ Add" button on each day-column header (draft mode) that opens the manual Add Job modal with that day pre-selected (`addJobDayId` state + form `key`/initialValues); pool "Add Job" clears the pre-selection. Visual mockup: `mockup-overdue-red-card.html`. NOTE: "drag a scheduled job back to the pool" was discussed but NOT built (manual jobs have no pool home yet) — separate task if wanted.

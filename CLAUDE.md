@@ -70,3 +70,7 @@
 
 ## Change Log
 See HISTORY.md for full changelog. Only keep last 3 entries here.
+
+- **2026-06-27** — Overdue **heat scale** (web): replaced binary red overdue with a relative heat (color by how overdue vs the worst in the plan, per unit) + 🔥 on the worst; new `getOverdueHeat`/`computeOverdueMax` in `utils/overdue.ts`, applied in `BundleCard`/detail modal/timeline/**jobs pool** (pool normalises against its own worst item). Plus **manual jobs persist in the pool**: `remove_job` returns a manual PM job to the pool as a pending `MANUAL` SAP order instead of deleting it. Tests: `test_work_plan_manual_pool.py`. Suite 158 passed.
+- **2026-06-27** — Per-day **"+ Add"** button on each day-column header (draft) opens Add Job with that day pre-selected; web `WorkPlanningPage`. (Earlier same-day full-red card styling superseded by the heat scale above.)
+- **2026-06-27** — Fixed overdue **display** sign-blindness (web): UI flagged overdue via `overdue_value > 0`, backwards for running-hours PMs; unit-aware `getOverdueInfo`/`isJobOverdue` applied across plan UI so a not-yet-due performance PM (+58h) is no longer mislabeled overdue.
