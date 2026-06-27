@@ -248,13 +248,21 @@ export default function EquipmentPage() {
 
   const handleEditFinish = (values: Record<string, unknown>) => {
     if (!editingEquipment) return;
-    const payload: Partial<CreateEquipmentPayload> = {
-      ...values,
-      installation_date: values.installation_date
-        ? (values.installation_date as dayjs.Dayjs).format('YYYY-MM-DD')
-        : undefined,
-    };
-    updateMutation.mutate({ id: editingEquipment.id, payload });
+    // Only send fields the backend allows to change. Immutable fields
+    // (name, serial_number, equipment_type, manufacturer, model_number,
+    // installation_date) are pre-filled in the form but the API rejects the
+    // whole request if any are present — so build the payload from a whitelist.
+    const mutableFields = [
+      'equipment_type_2', 'capacity', 'berth', 'home_berth',
+      'location', 'location_ar', 'status', 'assigned_technician_id', 'is_scrapped',
+    ];
+    const payload: Record<string, unknown> = {};
+    for (const key of mutableFields) {
+      if (key in values && values[key] !== undefined) {
+        payload[key] = values[key];
+      }
+    }
+    updateMutation.mutate({ id: editingEquipment.id, payload: payload as Partial<CreateEquipmentPayload> });
   };
 
   const columns: ColumnsType<Equipment> = [
