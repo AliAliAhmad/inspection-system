@@ -1809,18 +1809,33 @@ export default function WorkPlanningPage() {
   // Pointer-first collision: if pointer is inside a droppable rect, prefer that over closest center.
   // This ensures dragging back to the Jobs Pool panel works even when calendar columns dominate.
   const customCollision = useCallback((args: Parameters<typeof pointerWithin>[0]) => {
-    const hits = pointerWithin(args);
+    let hits = pointerWithin(args);
     if (hits.length > 0) {
+      // Only an EMPLOYEE drag may land on a whole bundle (to staff every job on
+      // the card). For job / bundle / pool-job drags the bundle target must be
+      // invisible — otherwise dragging a job over a day that contains a bundle
+      // would resolve to the bundle instead of the day, overData.type would not
+      // be 'day', and handleDragEnd Case 1/2/2b would silently do nothing.
+      const activeType = args.active.data.current?.type;
+      if (activeType !== 'employee') {
+        hits = hits.filter(h => !String(h.id).startsWith('droppable-bundle-'));
+      }
+
       // Priority 1: Pool panel — drag job back to pool
       const poolHit = hits.find(h => h.id === 'job-pool-drop');
       if (poolHit) return [poolHit];
       // Priority 2: At-risk drawer — drag scheduled job to unschedule it
       const atRiskHit = hits.find(h => h.id === 'at-risk-drop');
       if (atRiskHit) return [atRiskHit];
-      // Priority 3: Job droppables — employee dragged onto a job card for assignment
+      // Priority 3: Job droppables — employee dragged onto ONE job card.
+      // Deliberately ABOVE the bundle target so per-job assignment still wins
+      // when the pointer is over a specific row.
       const jobHit = hits.find(h => String(h.id).startsWith('droppable-job-'));
       if (jobHit) return [jobHit];
-      return hits;
+      // Priority 4: Bundle target — employee dropped anywhere else on the card
+      const bundleHit = hits.find(h => String(h.id).startsWith('droppable-bundle-'));
+      if (bundleHit) return [bundleHit];
+      if (hits.length > 0) return hits;
     }
     return closestCenter(args);
   }, []);
