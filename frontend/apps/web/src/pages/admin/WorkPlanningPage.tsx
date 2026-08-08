@@ -496,6 +496,11 @@ const SimpleJobRow: React.FC<{
 
 const fmtHours = (h: number | null | undefined) => parseFloat((h ?? 0).toFixed(1));
 
+/** What the Lead/Member modal is about to assign — one job, or a whole bundle. */
+type PendingAssignment =
+  | { kind: 'job'; user: any; job: WorkPlanJob }
+  | { kind: 'bundle'; user: any; jobs: WorkPlanJob[]; equipmentName: string; dayId: number };
+
 // ==================== OPTIMISTIC CACHE HELPERS ====================
 // Drag & drop used to wait for two round-trips before a card visibly moved:
 // the write itself, then the full-plan refetch triggered by invalidateQueries.
@@ -597,7 +602,7 @@ export default function WorkPlanningPage() {
   const [jobDetailsModalOpen, setJobDetailsModalOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [selectedJob, setSelectedJob] = useState<WorkPlanJob | null>(null);
-  const [pendingAssignment, setPendingAssignment] = useState<{ job: WorkPlanJob; user: any } | null>(null);
+  const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null);
   const [activeItem, setActiveItem] = useState<{ type: string; data: any } | null>(null);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
   const [bulkMoveModalOpen, setBulkMoveModalOpen] = useState(false);
@@ -945,6 +950,21 @@ export default function WorkPlanningPage() {
     },
   });
 
+  // Bulk assign (worker dropped on a whole bundle) — one request for every job
+  const bulkAssignMutation = useMutation({
+    mutationFn: ({ planId, jobIds, userId, isLead }: { planId: number; jobIds: number[]; userId: number; isLead: boolean }) =>
+      workPlansApi.bulkAssignUsers(planId, { job_ids: jobIds, user_ids: [userId], is_lead: isLead }),
+    onSuccess: (_res, vars) => {
+      message.success(`Assigned to ${vars.jobIds.length} job${vars.jobIds.length !== 1 ? 's' : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      setAssignModalOpen(false);
+      setPendingAssignment(null);
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to assign user to bundle');
+    },
+  });
+
   const unassignMutation = useMutation({
     mutationFn: ({ planId, jobId, assignmentId }: { planId: number; jobId: number; assignmentId: number }) =>
       workPlansApi.unassignUser(planId, jobId, assignmentId),
@@ -1154,18 +1174,24 @@ export default function WorkPlanningPage() {
     const warnings: { type: 'error' | 'warning'; message: string }[] = [];
     if (!pendingAssignment || !currentPlan) return warnings;
 
-    const { job, user } = pendingAssignment;
+    const user = pendingAssignment.user;
+    const firstName = user.full_name?.split(' ')[0];
 
-    // Find the day for this job
-    const day = currentPlan.days?.find(d =>
-      [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])].some(j => j.id === job.id)
-    );
+    // Resolve the day. A bundle carries its dayId directly (all its jobs share
+    // one day); a single job has to be searched for.
+    const day =
+      pendingAssignment.kind === 'bundle'
+        ? currentPlan.days?.find(d => d.id === pendingAssignment.dayId)
+        : currentPlan.days?.find(d =>
+            [...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || [])]
+              .some(j => j.id === pendingAssignment.job.id)
+          );
 
     // Check if user is on leave
     if (day && isUserOnLeaveForDay(user.id, day.date)) {
       warnings.push({
         type: 'error',
-        message: `${user.full_name?.split(' ')[0]} is on leave on ${dayjs(day.date).format('ddd, MMM D')}!`,
+        message: `${firstName} is on leave on ${dayjs(day.date).format('ddd, MMM D')}!`,
       });
     }
 
@@ -1180,13 +1206,35 @@ export default function WorkPlanningPage() {
       }
     }
 
-    // Check if user is already assigned to this job
-    const existingAssignment = (job.assignments || []).find((a: any) => a.user_id === user.id);
-    if (existingAssignment) {
-      warnings.push({
-        type: 'error',
-        message: `${user.full_name?.split(' ')[0]} is already assigned to this job`,
-      });
+    // Already-assigned. The modal's disable check is a STRING MATCH on
+    // 'already assigned', so partial overlap must be a warning whose wording
+    // avoids that phrase — otherwise adding someone to the remaining jobs of a
+    // bundle would be blocked, defeating additive assignment.
+    if (pendingAssignment.kind === 'job') {
+      const existingAssignment = (pendingAssignment.job.assignments || []).find((a: any) => a.user_id === user.id);
+      if (existingAssignment) {
+        warnings.push({
+          type: 'error',
+          message: `${firstName} is already assigned to this job`,
+        });
+      }
+    } else {
+      const total = pendingAssignment.jobs.length;
+      const already = pendingAssignment.jobs.filter(j =>
+        (j.assignments || []).some((a: any) => a.user_id === user.id)
+      ).length;
+
+      if (already === total) {
+        warnings.push({
+          type: 'error',
+          message: `${firstName} is already assigned to all ${total} jobs`,
+        });
+      } else if (already > 0) {
+        warnings.push({
+          type: 'warning',
+          message: `${firstName} is already on ${already} of ${total} jobs — will be added to the other ${total - already}`,
+        });
+      }
     }
 
     return warnings;
@@ -1727,7 +1775,31 @@ export default function WorkPlanningPage() {
       }
 
       // Show modal to choose Lead or Member
-      setPendingAssignment({ job, user });
+      setPendingAssignment({ kind: 'job', job, user });
+      setAssignModalOpen(true);
+    }
+
+    // Case 3b: Dropping employee on a whole BUNDLE — staff every job on the card
+    if (activeData.type === 'employee' && overData.type === 'bundle-target') {
+      const user = activeData.user;
+      const bundleJobs = (overData.jobs || []) as WorkPlanJob[];
+      if (bundleJobs.length === 0) return;
+
+      // All jobs on a bundle share one day, so one leave check covers them all
+      const day = currentPlan?.days?.find((d: any) => d.id === overData.dayId);
+      const leaveDates = userLeaveDatesMap.get(user.id);
+      if (day && leaveDates?.has(day.date)) {
+        message.warning(`${user.full_name} is on leave on ${day.date}. Cannot assign to this day.`);
+        return;
+      }
+
+      setPendingAssignment({
+        kind: 'bundle',
+        user,
+        jobs: bundleJobs,
+        equipmentName: overData.equipmentName || 'this equipment',
+        dayId: overData.dayId,
+      });
       setAssignModalOpen(true);
     }
   }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, removeJobMutation,
@@ -1758,14 +1830,24 @@ export default function WorkPlanningPage() {
   }, []);
 
   const handleAssign = (isLead: boolean) => {
-    if (pendingAssignment && currentPlan) {
-      assignMutation.mutate({
+    if (!pendingAssignment || !currentPlan) return;
+
+    if (pendingAssignment.kind === 'bundle') {
+      bulkAssignMutation.mutate({
         planId: currentPlan.id,
-        jobId: pendingAssignment.job.id,
+        jobIds: pendingAssignment.jobs.map(j => j.id),
         userId: pendingAssignment.user.id,
         isLead,
       });
+      return;
     }
+
+    assignMutation.mutate({
+      planId: currentPlan.id,
+      jobId: pendingAssignment.job.id,
+      userId: pendingAssignment.user.id,
+      isLead,
+    });
   };
 
   // Get jobs for current berth
@@ -3179,10 +3261,27 @@ export default function WorkPlanningPage() {
       >
         {pendingAssignment && (
           <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: 15 }}>
-              Assign <strong>{pendingAssignment.user.full_name}</strong> to{' '}
-              <strong>{pendingAssignment.job.equipment?.name || 'this job'}</strong>
-            </p>
+            {pendingAssignment.kind === 'bundle' ? (
+              <>
+                <p style={{ fontSize: 15, marginBottom: 4 }}>
+                  Assign <strong>{pendingAssignment.user.full_name}</strong> to all{' '}
+                  <strong>{pendingAssignment.jobs.length} jobs</strong> on{' '}
+                  <strong>{pendingAssignment.equipmentName}</strong>
+                </p>
+                <ul style={{ textAlign: 'left', margin: '0 0 8px 0', paddingLeft: 20 }}>
+                  {pendingAssignment.jobs.map(j => (
+                    <li key={j.id} style={{ fontSize: 12, color: '#8c8c8c' }}>
+                      {j.description || `Job #${j.id}`}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p style={{ fontSize: 15 }}>
+                Assign <strong>{pendingAssignment.user.full_name}</strong> to{' '}
+                <strong>{pendingAssignment.job.equipment?.name || 'this job'}</strong>
+              </p>
+            )}
 
             {/* Conflict Warnings */}
             {assignmentWarnings.length > 0 && (
@@ -3206,7 +3305,7 @@ export default function WorkPlanningPage() {
                 type="primary"
                 size="large"
                 onClick={() => handleAssign(true)}
-                loading={assignMutation.isPending}
+                loading={assignMutation.isPending || bulkAssignMutation.isPending}
                 disabled={assignmentWarnings.some(w => w.type === 'error' && w.message.includes('already assigned'))}
               >
                 As Lead
@@ -3214,7 +3313,7 @@ export default function WorkPlanningPage() {
               <Button
                 size="large"
                 onClick={() => handleAssign(false)}
-                loading={assignMutation.isPending}
+                loading={assignMutation.isPending || bulkAssignMutation.isPending}
                 disabled={assignmentWarnings.some(w => w.type === 'error' && w.message.includes('already assigned'))}
               >
                 As Member
