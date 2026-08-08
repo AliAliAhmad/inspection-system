@@ -334,6 +334,24 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
     data: { type: 'bundle', jobs, dayId, equipmentId },
   });
 
+  // Bundle drop target — an employee dropped anywhere on the card (except on a
+  // specific job row, which wins in customCollision) staffs EVERY job here.
+  // customCollision hides this id from job/bundle drags so drag-to-move still
+  // resolves to the day column.
+  const { setNodeRef: setBundleDropRef, isOver: isEmployeeOverBundle } = useDroppable({
+    id: `droppable-bundle-${equipmentId || jobs[0]?.id}-${dayId}`,
+    data: {
+      type: 'bundle-target',
+      jobs,
+      dayId,
+      equipmentName: jobs[0] ? equipmentDisplayName(jobs[0]) : 'this equipment',
+    },
+  });
+  const setBundleRef = (el: HTMLElement | null) => {
+    setDragRef(el);
+    setBundleDropRef(el);
+  };
+
   // Pull stats
   const pmCount = jobs.filter((j) => j.job_type === 'pm').length;
   const defectCount = jobs.filter((j) => j.job_type === 'defect').length;
@@ -394,13 +412,27 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
 
   return (
     <div
-      ref={setDragRef}
+      ref={setBundleRef}
       style={{
         display: 'flex',
         marginBottom: 4,
-        background: isDragging ? '#e6f7ff' : bundleHeat.active ? bundleHeat.cardTint : '#fff',
+        background: isDragging
+          ? '#e6f7ff'
+          : isEmployeeOverBundle
+          ? '#f9f0ff'
+          : bundleHeat.active
+          ? bundleHeat.cardTint
+          : '#fff',
         borderRadius: 5,
-        border: `1px solid ${expanded ? '#1677ff' : bundleHeat.active ? bundleHeat.border : '#e8e8e8'}`,
+        border: `1px solid ${
+          isEmployeeOverBundle
+            ? '#722ed1'
+            : expanded
+            ? '#1677ff'
+            : bundleHeat.active
+            ? bundleHeat.border
+            : '#e8e8e8'
+        }`,
         boxShadow: expanded ? '0 0 0 2px rgba(22,119,255,0.15)' : bundleHeat.active ? `0 1px 5px ${bundleHeat.stripe}40` : '0 1px 2px rgba(0,0,0,0.04)',
         cursor: isDragging ? 'grabbing' : 'pointer',
         opacity: isDragging ? 0.5 : 1,
