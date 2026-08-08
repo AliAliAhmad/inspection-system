@@ -217,7 +217,12 @@ export interface WorkPlanDay {
   notes: string | null;
   total_jobs: number;
   total_hours: number;
-  jobs: WorkPlanJob[];
+  /**
+   * Jobs come ONLY in these per-berth arrays — there is no flat `jobs` list.
+   * It was removed because every job was serialized twice, roughly doubling
+   * the plan payload the planner refetches after each drag & drop.
+   * For "all jobs on this day": [...jobs_east, ...jobs_west, ...jobs_both]
+   */
   jobs_east: WorkPlanJob[];
   jobs_west: WorkPlanJob[];
   jobs_both: WorkPlanJob[];

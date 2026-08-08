@@ -1070,22 +1070,14 @@ def update_job(plan_id, job_id):
     }), 200
 
 
-@bp.route('/<int:plan_id>/jobs/<int:job_id>', methods=['DELETE'])
-@jwt_required()
-def remove_job(plan_id, job_id):
-    """Remove a job from a work plan."""
-    user = engineer_or_admin_required()
+def _delete_job_record(plan_id, job):
+    """Delete a single job from a plan, preserving pool semantics.
 
-    plan = db.session.get(WorkPlan, plan_id)
-    if not plan:
-        raise NotFoundError("Work plan not found")
-
-    if plan.status == 'published':
-        raise ForbiddenError("Cannot remove jobs from a published work plan")
-
-    job = db.session.get(WorkPlanJob, job_id)
-    if not job or job.day.work_plan_id != plan_id:
-        raise NotFoundError("Job not found in this plan")
+    Shared by remove_job (single) and bulk_delete_jobs (many) so both paths
+    behave identically. Does NOT commit — the caller owns the transaction so a
+    bulk delete is one commit instead of one per job.
+    """
+    job_id = job.id
 
     # If the job came from a SAP order, reset it back to 'pending' so it reappears in the pool
     if job.sap_order_number:
@@ -1133,11 +1125,152 @@ def remove_job(plan_id, job_id):
             {'jid': job_id}
         )
     db.session.execute(db.text('DELETE FROM work_plan_jobs WHERE id = :jid'), {'jid': job_id})
+
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>', methods=['DELETE'])
+@jwt_required()
+def remove_job(plan_id, job_id):
+    """Remove a job from a work plan."""
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot remove jobs from a published work plan")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    _delete_job_record(plan_id, job)
     db.session.commit()
 
     return jsonify({
         'status': 'success',
         'message': 'Job removed from plan'
+    }), 200
+
+
+# ==================== BULK JOB OPERATIONS ====================
+# Dragging a bundle (several jobs on the same equipment) used to fire one
+# request per job from the web planner, so a 5-job bundle cost 5 round-trips,
+# 5 commits and 5 full-plan refetches. These endpoints do the whole batch in
+# one transaction so the planner stays responsive.
+
+@bp.route('/<int:plan_id>/jobs/bulk-move', methods=['POST'])
+@jwt_required()
+def bulk_move_jobs(plan_id):
+    """Move several jobs to the same target day in one transaction.
+
+    Request body:
+        {"job_ids": [1, 2, 3], "target_day_id": 42}
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot move jobs in a published work plan")
+
+    data = request.get_json() or {}
+    job_ids = data.get('job_ids')
+    target_day_id = data.get('target_day_id')
+
+    if not job_ids or not isinstance(job_ids, list):
+        raise ValidationError("job_ids (non-empty list) is required")
+    if not target_day_id:
+        raise ValidationError("target_day_id is required")
+
+    target_day = db.session.get(WorkPlanDay, target_day_id)
+    if not target_day or target_day.work_plan_id != plan_id:
+        raise NotFoundError("Target day not found in this plan")
+
+    jobs = WorkPlanJob.query.filter(WorkPlanJob.id.in_(job_ids)).all()
+    found_ids = {j.id for j in jobs}
+    missing = [jid for jid in job_ids if jid not in found_ids]
+    if missing:
+        raise NotFoundError(f"Job(s) not found: {missing}")
+
+    # Every job must already belong to this plan — never move another plan's jobs
+    for job in jobs:
+        if job.day.work_plan_id != plan_id:
+            raise NotFoundError(f"Job {job.id} not found in this plan")
+
+    # One MAX() query for the whole batch instead of one per job
+    max_position = db.session.query(db.func.max(WorkPlanJob.position)).filter(
+        WorkPlanJob.work_plan_day_id == target_day.id,
+        ~WorkPlanJob.id.in_(job_ids)
+    ).scalar() or 0
+
+    moved = 0
+    for job in jobs:
+        if job.work_plan_day_id == target_day.id:
+            continue  # already there — nothing to do
+        job.work_plan_day_id = target_day.id
+        max_position += 1
+        job.position = max_position
+        moved += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Moved {moved} job(s) to {target_day.date.strftime("%A, %B %d")}',
+        'moved': moved,
+        'target_day_id': target_day.id
+    }), 200
+
+
+@bp.route('/<int:plan_id>/jobs/bulk-delete', methods=['POST'])
+@jwt_required()
+def bulk_delete_jobs(plan_id):
+    """Remove several jobs from a plan in one transaction.
+
+    Uses the same per-job semantics as remove_job (SAP orders return to
+    'pending', manual PM/corrective jobs are preserved back into the pool).
+
+    Request body:
+        {"job_ids": [1, 2, 3]}
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot remove jobs from a published work plan")
+
+    data = request.get_json() or {}
+    job_ids = data.get('job_ids')
+
+    if not job_ids or not isinstance(job_ids, list):
+        raise ValidationError("job_ids (non-empty list) is required")
+
+    jobs = WorkPlanJob.query.filter(WorkPlanJob.id.in_(job_ids)).all()
+    found_ids = {j.id for j in jobs}
+    missing = [jid for jid in job_ids if jid not in found_ids]
+    if missing:
+        raise NotFoundError(f"Job(s) not found: {missing}")
+
+    for job in jobs:
+        if job.day.work_plan_id != plan_id:
+            raise NotFoundError(f"Job {job.id} not found in this plan")
+
+    # Resolve every job's pool side-effects before any expunge/raw delete runs
+    for job in jobs:
+        _delete_job_record(plan_id, job)
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Removed {len(jobs)} job(s) from plan',
+        'deleted': len(jobs)
     }), 200
 
 

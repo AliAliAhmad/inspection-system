@@ -130,7 +130,7 @@ export default defineConfig({
     host: '127.0.0.1',
     proxy: {
       '/api': {
-        target: 'https://inspection-api-o3hz.onrender.com',
+        target: process.env.VITE_PROXY_TARGET || 'https://inspection-api-o3hz.onrender.com',
         changeOrigin: true,
       },
     },

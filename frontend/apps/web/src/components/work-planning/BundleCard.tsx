@@ -318,7 +318,7 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
   );
 };
 
-export const BundleCard: React.FC<BundleCardProps> = ({
+const BundleCardInner: React.FC<BundleCardProps> = ({
   jobs,
   equipmentId,
   dayId,
@@ -644,3 +644,24 @@ export const BundleCard: React.FC<BundleCardProps> = ({
     </div>
   );
 };
+
+// Memoized: `activeItem` state lives in WorkPlanningPage and DndContext wraps
+// the whole page, so without this every bundle card in every day column
+// re-renders on each drag start/end — the main source of drag lag.
+//
+// The default shallow compare isn't enough: the day columns rebuild the `jobs`
+// array on every render while grouping jobs by equipment, so the reference is
+// always new. The job objects themselves come from the React Query cache and
+// stay stable until the data actually changes, so comparing element-by-element
+// is both correct and cheap.
+const sameJobs = (a: WorkPlanJob[], b: WorkPlanJob[]) =>
+  a.length === b.length && a.every((job, i) => job === b[i]);
+
+export const BundleCard = React.memo(BundleCardInner, (prev, next) =>
+  prev.dayId === next.dayId &&
+  prev.equipmentId === next.equipmentId &&
+  prev.defaultExpanded === next.defaultExpanded &&
+  prev.onJobClick === next.onJobClick &&
+  prev.overdueMax === next.overdueMax &&
+  sameJobs(prev.jobs, next.jobs)
+);

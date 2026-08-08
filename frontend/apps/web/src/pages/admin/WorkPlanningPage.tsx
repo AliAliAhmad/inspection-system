@@ -496,6 +496,90 @@ const SimpleJobRow: React.FC<{
 
 const fmtHours = (h: number | null | undefined) => parseFloat((h ?? 0).toFixed(1));
 
+// ==================== OPTIMISTIC CACHE HELPERS ====================
+// Drag & drop used to wait for two round-trips before a card visibly moved:
+// the write itself, then the full-plan refetch triggered by invalidateQueries.
+// These helpers patch the cached plan directly so the card lands immediately;
+// the refetch still runs afterwards to reconcile with the server.
+
+// Jobs live ONLY in the three per-berth arrays — the API deliberately sends no
+// flat `jobs` list (it doubled the payload). Patch all three and recompute
+// total_jobs from them.
+const JOB_ARRAY_KEYS = ['jobs_east', 'jobs_west', 'jobs_both'] as const;
+
+const berthArrayKey = (job: any): 'jobs_east' | 'jobs_west' | 'jobs_both' =>
+  job?.berth === 'east' ? 'jobs_east' : job?.berth === 'west' ? 'jobs_west' : 'jobs_both';
+
+/** Every job on a day, across all berths. */
+const allDayJobs = (day: any): any[] => [
+  ...(day.jobs_east || []),
+  ...(day.jobs_west || []),
+  ...(day.jobs_both || []),
+];
+
+/** Immutably replace one plan's days inside the cached list payload. */
+function updatePlanDays(cache: any, planId: number, updateDays: (days: any[]) => any[]) {
+  if (!cache?.work_plans) return cache;
+  return {
+    ...cache,
+    work_plans: cache.work_plans.map((p: any) =>
+      p.id === planId ? { ...p, days: updateDays(p.days || []) } : p
+    ),
+  };
+}
+
+/** Strip the given job ids out of a day and recompute its count. */
+function stripJobs(day: any, ids: Set<number>) {
+  const next: any = { ...day };
+  for (const key of JOB_ARRAY_KEYS) {
+    next[key] = (day[key] || []).filter((j: any) => !ids.has(j.id));
+  }
+  return next;
+}
+
+/** Move jobs to `targetDayId` within the cached plan. */
+function applyOptimisticJobMove(cache: any, planId: number, jobIds: number[], targetDayId: number) {
+  const ids = new Set(jobIds);
+  return updatePlanDays(cache, planId, (days) => {
+    // Grab the job objects before stripping them out of their source day
+    const moving: any[] = [];
+    const seen = new Set<number>();
+    for (const day of days) {
+      for (const job of allDayJobs(day)) {
+        if (ids.has(job.id) && !seen.has(job.id)) {
+          seen.add(job.id);
+          moving.push(job);
+        }
+      }
+    }
+    if (moving.length === 0) return days;
+
+    return days.map((day) => {
+      const next = stripJobs(day, ids);
+      if (day.id === targetDayId) {
+        for (const job of moving) {
+          const bk = berthArrayKey(job);
+          next[bk] = [...next[bk], job];
+        }
+      }
+      next.total_jobs = allDayJobs(next).length;
+      return next;
+    });
+  });
+}
+
+/** Remove jobs from the cached plan (drag back to pool / at-risk drawer). */
+function applyOptimisticJobRemove(cache: any, planId: number, jobIds: number[]) {
+  const ids = new Set(jobIds);
+  return updatePlanDays(cache, planId, (days) =>
+    days.map((day) => {
+      const next = stripJobs(day, ids);
+      next.total_jobs = allDayJobs(next).length;
+      return next;
+    })
+  );
+}
+
 export default function WorkPlanningPage() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
@@ -547,9 +631,13 @@ export default function WorkPlanningPage() {
     useSensor(KeyboardSensor)
   );
 
+  // Single source of truth for this week's plan cache key — the optimistic
+  // drag handlers patch exactly this entry, so it must match the query below.
+  const planQueryKey = useMemo(() => ['work-plans', weekStartStr], [weekStartStr]);
+
   // Fetch work plan for current week with full details
   const { data: plansData, isLoading, refetch, error, isError } = useQuery({
-    queryKey: ['work-plans', weekStartStr],
+    queryKey: planQueryKey,
     queryFn: () => workPlansApi.list({ week_start: weekStartStr, include_days: true }).then((r) => r.data),
     staleTime: 30000, // Cache for 30 seconds to prevent excessive refetches
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
@@ -587,7 +675,7 @@ export default function WorkPlanningPage() {
   const overdueMax = useMemo(() => {
     const all: any[] = [];
     (currentPlan?.days || []).forEach((d: any) => {
-      all.push(...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || []), ...(d.jobs || []));
+      all.push(...(d.jobs_east || []), ...(d.jobs_west || []), ...(d.jobs_both || []));
     });
     return computeOverdueMax(all);
   }, [currentPlan]);
@@ -706,16 +794,48 @@ export default function WorkPlanningPage() {
     },
   });
 
-  // Move job mutation (for drag between days)
+  // Move job mutation (for drag between days).
+  // Optimistic: the card lands in the target day immediately, then the refetch
+  // in onSettled reconciles. No success toast — the card moving IS the feedback.
   const moveMutation = useMutation({
     mutationFn: ({ planId, jobId, targetDayId, position }: { planId: number; jobId: number; targetDayId: number; position?: number }) =>
       workPlansApi.moveJob(planId, jobId, { target_day_id: targetDayId, position }),
-    onSuccess: () => {
-      message.success('Job moved');
+    onMutate: async ({ planId, jobId, targetDayId }) => {
+      // Cancel in-flight refetches so a late response can't clobber our patch
+      await queryClient.cancelQueries({ queryKey: planQueryKey });
+      const previous = queryClient.getQueryData(planQueryKey);
+      queryClient.setQueryData(planQueryKey, (old: any) =>
+        applyOptimisticJobMove(old, planId, [jobId], targetDayId)
+      );
+      return { previous };
+    },
+    onError: (err: any, _vars, context: any) => {
+      if (context?.previous) queryClient.setQueryData(planQueryKey, context.previous);
+      message.error(err.response?.data?.message || 'Failed to move job');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
-    onError: (err: any) => {
-      message.error(err.response?.data?.message || 'Failed to move job');
+  });
+
+  // Bulk move (bundle drag / multi-select) — one request, one refetch, one toast
+  const bulkMoveJobsMutation = useMutation({
+    mutationFn: ({ planId, jobIds, targetDayId }: { planId: number; jobIds: number[]; targetDayId: number }) =>
+      workPlansApi.bulkMoveJobs(planId, { job_ids: jobIds, target_day_id: targetDayId }),
+    onMutate: async ({ planId, jobIds, targetDayId }) => {
+      await queryClient.cancelQueries({ queryKey: planQueryKey });
+      const previous = queryClient.getQueryData(planQueryKey);
+      queryClient.setQueryData(planQueryKey, (old: any) =>
+        applyOptimisticJobMove(old, planId, jobIds, targetDayId)
+      );
+      return { previous };
+    },
+    onError: (err: any, _vars, context: any) => {
+      if (context?.previous) queryClient.setQueryData(planQueryKey, context.previous);
+      message.error(err.response?.data?.message || 'Failed to move jobs');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
   });
 
@@ -723,13 +843,43 @@ export default function WorkPlanningPage() {
   const removeJobMutation = useMutation({
     mutationFn: ({ planId, jobId }: { planId: number; jobId: number }) =>
       workPlansApi.removeJob(planId, jobId),
-    onSuccess: () => {
-      message.success('Job removed from plan');
+    onMutate: async ({ planId, jobId }) => {
+      await queryClient.cancelQueries({ queryKey: planQueryKey });
+      const previous = queryClient.getQueryData(planQueryKey);
+      queryClient.setQueryData(planQueryKey, (old: any) =>
+        applyOptimisticJobRemove(old, planId, [jobId])
+      );
+      return { previous };
+    },
+    onError: (err: any, _vars, context: any) => {
+      if (context?.previous) queryClient.setQueryData(planQueryKey, context.previous);
+      message.error(err.response?.data?.message || 'Failed to remove job');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
       queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
     },
-    onError: (err: any) => {
-      message.error(err.response?.data?.message || 'Failed to remove job');
+  });
+
+  // Bulk remove (bundle dragged back to pool) — one request instead of N
+  const bulkRemoveJobsMutation = useMutation({
+    mutationFn: ({ planId, jobIds }: { planId: number; jobIds: number[] }) =>
+      workPlansApi.bulkDeleteJobs(planId, { job_ids: jobIds }),
+    onMutate: async ({ planId, jobIds }) => {
+      await queryClient.cancelQueries({ queryKey: planQueryKey });
+      const previous = queryClient.getQueryData(planQueryKey);
+      queryClient.setQueryData(planQueryKey, (old: any) =>
+        applyOptimisticJobRemove(old, planId, jobIds)
+      );
+      return { previous };
+    },
+    onError: (err: any, _vars, context: any) => {
+      if (context?.previous) queryClient.setQueryData(planQueryKey, context.previous);
+      message.error(err.response?.data?.message || 'Failed to unschedule jobs');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
     },
   });
 
@@ -1099,8 +1249,7 @@ export default function WorkPlanningPage() {
   const bulkDeleteMutation = useMutation({
     mutationFn: async (jobIds: number[]) => {
       if (!currentPlan) throw new Error('No plan');
-      // Delete jobs one by one (API doesn't have bulk delete yet)
-      await Promise.all(jobIds.map(jobId => workPlansApi.removeJob(currentPlan.id, jobId)));
+      await workPlansApi.bulkDeleteJobs(currentPlan.id, { job_ids: jobIds });
     },
     onSuccess: () => {
       message.success(`Deleted ${selectedJobIds.size} jobs`);
@@ -1117,8 +1266,7 @@ export default function WorkPlanningPage() {
   const bulkMoveMutation = useMutation({
     mutationFn: async ({ jobIds, targetDayId }: { jobIds: number[]; targetDayId: number }) => {
       if (!currentPlan) throw new Error('No plan');
-      // Move jobs one by one
-      await Promise.all(jobIds.map(jobId => workPlansApi.moveJob(currentPlan.id, jobId, { target_day_id: targetDayId })));
+      await workPlansApi.bulkMoveJobs(currentPlan.id, { job_ids: jobIds, target_day_id: targetDayId });
     },
     onSuccess: () => {
       message.success(`Moved ${selectedJobIds.size} jobs`);
@@ -1456,8 +1604,11 @@ export default function WorkPlanningPage() {
           ptr.y >= poolRect.top  && ptr.y <= poolRect.bottom) {
         const bundleJobs = (activeData.jobs || []) as WorkPlanJob[];
         if (bundleJobs.length > 0) {
-          bundleJobs.forEach((j) => {
-            removeJobMutation.mutate({ planId: currentPlan.id, jobId: j.id });
+          // One bulk request instead of one per job — the whole bundle
+          // disappears from the day in a single optimistic update.
+          bulkRemoveJobsMutation.mutate({
+            planId: currentPlan.id,
+            jobIds: bundleJobs.map((j) => j.id),
           });
           message.success(
             `Unscheduled ${bundleJobs.length} job${bundleJobs.length !== 1 ? 's' : ''} — returned to pool`
@@ -1471,8 +1622,9 @@ export default function WorkPlanningPage() {
     if (activeData.type === 'bundle' && over?.id === 'at-risk-drop') {
       const bundleJobs = (activeData.jobs || []) as WorkPlanJob[];
       if (bundleJobs.length > 0) {
-        bundleJobs.forEach((j) => {
-          removeJobMutation.mutate({ planId: currentPlan.id, jobId: j.id });
+        bulkRemoveJobsMutation.mutate({
+          planId: currentPlan.id,
+          jobIds: bundleJobs.map((j) => j.id),
         });
         message.success(
           `Unscheduled ${bundleJobs.length} job${bundleJobs.length !== 1 ? 's' : ''}`
@@ -1547,14 +1699,13 @@ export default function WorkPlanningPage() {
       const sourceDayId = activeData.dayId;
 
       if (sourceDayId !== targetDay.id && bundleJobs.length > 0) {
-        // Fire a moveMutation per job. React Query will batch the query
-        // invalidations so the day columns re-render once at the end.
-        bundleJobs.forEach((job) => {
-          moveMutation.mutate({
-            planId: currentPlan.id,
-            jobId: job.id,
-            targetDayId: targetDay.id,
-          });
+        // One bulk request for the whole bundle. Previously this fired one
+        // mutation per job, each with its own invalidation and refetch, so a
+        // 5-job bundle cost 5 round-trips before the cards settled.
+        bulkMoveJobsMutation.mutate({
+          planId: currentPlan.id,
+          jobIds: bundleJobs.map((j) => j.id),
+          targetDayId: targetDay.id,
         });
         message.success(
           `Moved ${bundleJobs.length} job${bundleJobs.length !== 1 ? 's' : ''} to ${targetDay.day_name || 'new day'}`
@@ -1579,7 +1730,8 @@ export default function WorkPlanningPage() {
       setPendingAssignment({ job, user });
       setAssignModalOpen(true);
     }
-  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, removeJobMutation, userLeaveDatesMap]);
+  }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, removeJobMutation,
+      bulkMoveJobsMutation, bulkRemoveJobsMutation, userLeaveDatesMap]);
 
   const handleCreatePlan = (values: any) => {
     const weekStart = values.week_start.startOf('week').format('YYYY-MM-DD');
@@ -1599,10 +1751,11 @@ export default function WorkPlanningPage() {
     return false;
   };
 
-  const handleJobClick = (job: WorkPlanJob) => {
+  // useCallback so memoized BundleCards don't re-render on every parent render
+  const handleJobClick = useCallback((job: WorkPlanJob) => {
     setSelectedJob(job);
     setJobDetailsModalOpen(true);
-  };
+  }, []);
 
   const handleAssign = (isLead: boolean) => {
     if (pendingAssignment && currentPlan) {

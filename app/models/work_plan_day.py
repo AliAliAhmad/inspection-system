@@ -54,16 +54,25 @@ class WorkPlanDay(db.Model):
         return sum(job.estimated_hours or 0 for job in self.jobs)
 
     def to_dict(self, language='en'):
-        """Convert to dictionary."""
+        """Convert to dictionary.
+
+        Jobs are returned ONLY in the per-berth arrays. There used to be an
+        additional flat 'jobs' list holding every job as well, which meant each
+        job was serialized into the JSON response twice and roughly doubled the
+        payload of `GET /work-plans?include_days=true` — the request the web
+        planner refetches after every drag & drop. Nothing consumed it: the web
+        planner and both mobile admin screens read the berth arrays, the PDF
+        service walks the ORM directly, and version snapshots build their own
+        structure. Use `jobs_east + jobs_west + jobs_both` for "all jobs".
+        """
         # Use compact mode if there are many jobs (> 10) to avoid timeout
         compact = len(self.jobs) > 10
 
-        # Serialize jobs ONCE and cache by ID to avoid double serialization
+        # Serialize each job ONCE, then reference it from its berth array
         jobs_dict = {}
         for job in self.jobs:
             jobs_dict[job.id] = job.to_dict(language, compact=compact)
 
-        # Group job IDs by berth (reuse cached serialization)
         east_ids = [j.id for j in self.jobs if j.berth == 'east']
         west_ids = [j.id for j in self.jobs if j.berth == 'west']
         both_ids = [j.id for j in self.jobs if j.berth == 'both' or j.berth is None]
@@ -76,7 +85,6 @@ class WorkPlanDay(db.Model):
             'notes': self.notes,
             'total_jobs': len(self.jobs),
             'total_hours': self.get_total_hours(),
-            'jobs': list(jobs_dict.values()),
             'jobs_east': [jobs_dict[jid] for jid in east_ids],
             'jobs_west': [jobs_dict[jid] for jid in west_ids],
             'jobs_both': [jobs_dict[jid] for jid in both_ids],
