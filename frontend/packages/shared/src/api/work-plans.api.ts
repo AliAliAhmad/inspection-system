@@ -565,8 +565,14 @@ export const workPlansApi = {
 
   // ==================== BULK OPERATIONS ====================
 
-  bulkAssignUsers(planId: number, payload: { job_ids: number[]; user_ids: number[] }) {
-    return getApiClient().post<ApiResponse<{ updated: number }>>(`/api/work-plans/${planId}/jobs/bulk-assign`, payload);
+  bulkAssignUsers(
+    planId: number,
+    payload: { job_ids: number[]; user_ids: number[]; is_lead?: boolean }
+  ) {
+    return getApiClient().post<ApiResponse<{ assigned: number }>>(
+      `/api/work-plans/${planId}/jobs/bulk-assign`,
+      payload
+    );
   },
 
   bulkMoveJobs(planId: number, payload: { job_ids: number[]; target_day_id: number }) {
