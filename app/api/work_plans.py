@@ -1154,6 +1154,11 @@ def remove_job(plan_id, job_id):
 
 
 # ==================== BULK JOB OPERATIONS ====================
+# Must mirror work_plan_jobs' check_job_priority CHECK constraint
+# (app/models/work_plan_job.py). Kept here so an invalid value is rejected as a
+# 400 before it reaches the database and surfaces as a 500.
+VALID_JOB_PRIORITIES = {'low', 'normal', 'high', 'urgent'}
+
 # Dragging a bundle (several jobs on the same equipment) used to fire one
 # request per job from the web planner, so a 5-job bundle cost 5 round-trips,
 # 5 commits and 5 full-plan refetches. These endpoints do the whole batch in
@@ -1271,6 +1276,62 @@ def bulk_delete_jobs(plan_id):
         'status': 'success',
         'message': f'Removed {len(jobs)} job(s) from plan',
         'deleted': len(jobs)
+    }), 200
+
+
+@bp.route('/<int:plan_id>/jobs/bulk-priority', methods=['POST'])
+@jwt_required()
+def bulk_update_priority(plan_id):
+    """Set the same priority on several jobs in one transaction.
+
+    Request body:
+        {"job_ids": [1, 2, 3], "priority": "urgent"}
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot modify a published work plan")
+
+    data = request.get_json() or {}
+    job_ids = data.get('job_ids')
+    priority = data.get('priority')
+
+    if not job_ids or not isinstance(job_ids, list):
+        raise ValidationError("job_ids (non-empty list) is required")
+    if not priority:
+        raise ValidationError("priority is required")
+
+    # work_plan_jobs has CHECK check_job_priority — validate here so a bad value
+    # is a clean 400 instead of an IntegrityError surfacing as a 500.
+    if priority not in VALID_JOB_PRIORITIES:
+        raise ValidationError(
+            f"Invalid priority '{priority}'. Must be one of: {', '.join(sorted(VALID_JOB_PRIORITIES))}"
+        )
+
+    jobs = WorkPlanJob.query.filter(WorkPlanJob.id.in_(job_ids)).all()
+    found_ids = {j.id for j in jobs}
+    missing = [jid for jid in job_ids if jid not in found_ids]
+    if missing:
+        raise NotFoundError(f"Job(s) not found: {missing}")
+
+    # Every job must already belong to this plan
+    for job in jobs:
+        if job.day.work_plan_id != plan_id:
+            raise NotFoundError(f"Job {job.id} not found in this plan")
+
+    for job in jobs:
+        job.priority = priority
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Set priority "{priority}" on {len(jobs)} job(s)',
+        'updated': len(jobs)
     }), 200
 
 
