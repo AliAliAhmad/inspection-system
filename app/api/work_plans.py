@@ -1274,7 +1274,103 @@ def bulk_delete_jobs(plan_id):
     }), 200
 
 
+@bp.route('/<int:plan_id>/jobs/bulk-assign', methods=['POST'])
+@jwt_required()
+def bulk_assign_users(plan_id):
+    """Assign user(s) to several jobs in one transaction.
+
+    Used when a worker is dropped onto a whole bundle card in the web planner.
+    Additive — never removes an existing assignment. No server-side leave
+    check, matching single assign; the client warns instead.
+
+    Request body:
+        {"job_ids": [1, 2, 3], "user_ids": [7], "is_lead": true}
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    if plan.status == 'published':
+        raise ForbiddenError("Cannot modify a published work plan")
+
+    data = request.get_json() or {}
+    job_ids = data.get('job_ids')
+    user_ids = data.get('user_ids')
+    is_lead = bool(data.get('is_lead', False))
+
+    if not job_ids or not isinstance(job_ids, list):
+        raise ValidationError("job_ids (non-empty list) is required")
+    if not user_ids or not isinstance(user_ids, list):
+        raise ValidationError("user_ids (non-empty list) is required")
+
+    jobs = WorkPlanJob.query.filter(WorkPlanJob.id.in_(job_ids)).all()
+    found_job_ids = {j.id for j in jobs}
+    missing_jobs = [jid for jid in job_ids if jid not in found_job_ids]
+    if missing_jobs:
+        raise NotFoundError(f"Job(s) not found: {missing_jobs}")
+
+    # Every job must already belong to this plan
+    for job in jobs:
+        if job.day.work_plan_id != plan_id:
+            raise NotFoundError(f"Job {job.id} not found in this plan")
+
+    users = User.query.filter(User.id.in_(user_ids)).all()
+    found_user_ids = {u.id for u in users}
+    missing_users = [uid for uid in user_ids if uid not in found_user_ids]
+    if missing_users:
+        raise NotFoundError(f"User(s) not found: {missing_users}")
+
+    assigned = 0
+    for job in jobs:
+        for assigned_user in users:
+            _assign_user_to_job(job.id, assigned_user.id, is_lead)
+            assigned += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Assigned {len(users)} user(s) to {len(jobs)} job(s)',
+        'assigned': assigned
+    }), 200
+
+
 # ==================== ASSIGNMENTS ====================
+
+def _assign_user_to_job(job_id, user_id, is_lead=None):
+    """Assign one user to one job, or update their role if already assigned.
+
+    Shared by assign_user (single) and bulk_assign_users (many) so the two can
+    never drift apart. Does NOT commit — the caller owns the transaction, so a
+    bulk assign is one commit instead of one per job.
+
+    This update-else-create behaviour is what makes bundle assignment additive:
+    dropping a worker on a bundle never removes anyone already on those jobs.
+
+    is_lead=None means "leave an existing assignment's role unchanged", which
+    matches the single-assign route (it only touches is_lead when the key is
+    present in the request body). A newly created assignment defaults to False.
+    """
+    existing = WorkPlanAssignment.query.filter_by(
+        work_plan_job_id=job_id,
+        user_id=user_id
+    ).first()
+
+    if existing:
+        if is_lead is not None:
+            existing.is_lead = is_lead
+        return existing
+
+    assignment = WorkPlanAssignment(
+        work_plan_job_id=job_id,
+        user_id=user_id,
+        is_lead=bool(is_lead),
+    )
+    db.session.add(assignment)
+    return assignment
+
 
 @bp.route('/<int:plan_id>/jobs/<int:job_id>/assignments', methods=['POST'])
 @jwt_required()
@@ -1309,37 +1405,27 @@ def assign_user(plan_id, job_id):
     if not assigned_user:
         raise NotFoundError("User not found")
 
-    # Check if already assigned
-    existing = WorkPlanAssignment.query.filter_by(
+    # is_lead absent → leave an existing assignment's role untouched
+    was_new = WorkPlanAssignment.query.filter_by(
         work_plan_job_id=job_id,
         user_id=data['user_id']
-    ).first()
+    ).first() is None
 
-    if existing:
-        # Update is_lead if provided
-        if 'is_lead' in data:
-            existing.is_lead = data['is_lead']
-        db.session.commit()
+    assignment = _assign_user_to_job(job_id, data['user_id'], data.get('is_lead'))
+    db.session.commit()
+
+    if was_new:
         return jsonify({
             'status': 'success',
-            'message': 'Assignment updated',
-            'assignment': existing.to_dict()
-        }), 200
-
-    assignment = WorkPlanAssignment(
-        work_plan_job_id=job_id,
-        user_id=data['user_id'],
-        is_lead=data.get('is_lead', False)
-    )
-
-    db.session.add(assignment)
-    db.session.commit()
+            'message': 'User assigned to job',
+            'assignment': assignment.to_dict()
+        }), 201
 
     return jsonify({
         'status': 'success',
-        'message': 'User assigned to job',
+        'message': 'Assignment updated',
         'assignment': assignment.to_dict()
-    }), 201
+    }), 200
 
 
 @bp.route('/<int:plan_id>/jobs/<int:job_id>/assignments/<int:assignment_id>', methods=['DELETE'])
