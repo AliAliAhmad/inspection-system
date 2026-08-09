@@ -382,7 +382,7 @@ export default function WorkPlanDayPage() {
                 displayedJobs.map(renderJobCard)
               )}
             </Card>
-            {date && <InspectionSummaryBar date={date} berth={selectedBerth as 'east' | 'west'} />}
+            {date && <InspectionSummaryBar date={date} berth={selectedBerth as 'east' | 'west'} weekStart={date} weekEnd={date} />}
           </Col>
 
           {/* Available Team */}

@@ -573,6 +573,80 @@ function applyOptimisticJobMove(cache: any, planId: number, jobIds: number[], ta
   });
 }
 
+/**
+ * Insert a placeholder job into a day so a pool→day drag lands instantly.
+ *
+ * The real id is assigned by the server, so the placeholder carries a negative
+ * one — negative ids can never collide with real rows, and `onSettled`'s refetch
+ * replaces the whole thing a moment later. The server may also auto-add related
+ * defects for the same equipment; those simply appear with that refetch.
+ */
+function applyOptimisticJobAdd(cache: any, planId: number, targetDayId: number, placeholder: any) {
+  return updatePlanDays(cache, planId, (days) =>
+    days.map((day) => {
+      if (day.id !== targetDayId) return day;
+      const next: any = { ...day };
+      const bk = berthArrayKey(placeholder);
+      for (const key of JOB_ARRAY_KEYS) next[key] = [...(day[key] || [])];
+      next[bk] = [...next[bk], placeholder];
+      next.total_jobs = allDayJobs(next).length;
+      return next;
+    })
+  );
+}
+
+/** Add an assignment to the given jobs so a technician drop lands instantly. */
+function applyOptimisticAssign(
+  cache: any,
+  planId: number,
+  jobIds: number[],
+  user: any,
+  isLead: boolean
+) {
+  const ids = new Set(jobIds);
+  return updatePlanDays(cache, planId, (days) =>
+    days.map((day) => {
+      const next: any = { ...day };
+      for (const key of JOB_ARRAY_KEYS) {
+        next[key] = (day[key] || []).map((job: any) => {
+          if (!ids.has(job.id)) return job;
+          const existing = (job.assignments || []).find((a: any) => a.user_id === user.id);
+          if (existing) {
+            // Already on the job — only the role can change.
+            return {
+              ...job,
+              assignments: (job.assignments || []).map((a: any) =>
+                a.user_id === user.id ? { ...a, is_lead: isLead } : a
+              ),
+            };
+          }
+          return {
+            ...job,
+            assignments: [
+              ...(job.assignments || []),
+              {
+                // Negative placeholder id; the refetch supplies the real row.
+                id: -Math.floor(Math.random() * 1e9) - 1,
+                work_plan_job_id: job.id,
+                user_id: user.id,
+                is_lead: isLead,
+                user: {
+                  id: user.id,
+                  full_name: user.full_name,
+                  role: user.role,
+                  role_id: user.role_id,
+                  specialization: user.specialization,
+                },
+              },
+            ],
+          };
+        });
+      }
+      return next;
+    })
+  );
+}
+
 /** Remove jobs from the cached plan (drag back to pool / at-risk drawer). */
 function applyOptimisticJobRemove(cache: any, planId: number, jobIds: number[]) {
   const ids = new Set(jobIds);
@@ -674,6 +748,16 @@ export default function WorkPlanningPage() {
 
   const currentPlan = plansData?.work_plans?.[0];
   const isDraft = currentPlan?.status === 'draft';
+
+  // Range covering the plan's own days. Every day column passes this identical
+  // pair to the inspection components, so their React Query keys match and the
+  // seven columns share ONE /week-inspections request instead of firing one
+  // /day-inspections each.
+  const planRangeStart = currentPlan?.week_start || weekStartStr;
+  const planRangeEnd =
+    currentPlan?.week_end ||
+    currentPlan?.days?.[(currentPlan?.days?.length || 1) - 1]?.date ||
+    weekStartStr;
 
   // Worst overdue (per unit) across the whole plan — used to normalise the
   // overdue "heat" so the most-overdue jobs run hot and mild ones stay cool.
@@ -890,7 +974,7 @@ export default function WorkPlanningPage() {
 
   // Add job mutation (for drag from pool - non-SAP jobs)
   const addJobMutation = useMutation({
-    mutationFn: (payload: { planId: number; dayId: number; jobType: JobType; berth: Berth; equipmentId?: number; defectId?: number; inspectionAssignmentId?: number; estimatedHours: number }) =>
+    mutationFn: (payload: { planId: number; dayId: number; jobType: JobType; berth: Berth; equipmentId?: number; defectId?: number; inspectionAssignmentId?: number; estimatedHours: number; sourceJob?: any }) =>
       workPlansApi.addJob(payload.planId, {
         day_id: payload.dayId,
         job_type: payload.jobType,
@@ -900,68 +984,147 @@ export default function WorkPlanningPage() {
         inspection_assignment_id: payload.inspectionAssignmentId,
         estimated_hours: payload.estimatedHours,
       }),
+    // Dragging from the pool is THE core planning action, so it must land
+    // instantly like the day-to-day drags do.
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: planQueryKey });
+      const previous = queryClient.getQueryData(planQueryKey);
+      const src = vars.sourceJob || {};
+      const placeholder = {
+        id: -Math.floor(Math.random() * 1e9) - 1,
+        work_plan_day_id: vars.dayId,
+        job_type: vars.jobType,
+        berth: vars.berth,
+        equipment_id: vars.equipmentId,
+        equipment: src.equipment || (src.equipment_name ? { id: vars.equipmentId, name: src.equipment_name } : null),
+        equipment_name: src.equipment_name || src.equipment?.name,
+        defect_id: vars.defectId,
+        defect: src.defect || null,
+        description: src.description || src.defect?.description || '',
+        estimated_hours: vars.estimatedHours,
+        priority: src.priority || 'normal',
+        assignments: [],
+        materials: [],
+        _optimistic: true,
+      };
+      queryClient.setQueryData(planQueryKey, (old: any) =>
+        applyOptimisticJobAdd(old, vars.planId, vars.dayId, placeholder)
+      );
+      return { previous };
+    },
     onSuccess: (data: any) => {
       const autoAdded = data?.data?.auto_added_defects || 0;
-      message.success(autoAdded > 0
-        ? `Job added (+${autoAdded} related defect${autoAdded > 1 ? 's' : ''} auto-added)`
-        : 'Job added to plan'
-      );
+      if (autoAdded > 0) {
+        message.success(`+${autoAdded} related defect${autoAdded > 1 ? 's' : ''} auto-added`);
+      }
+    },
+    onError: (err: any, _vars, context: any) => {
+      if (context?.previous) queryClient.setQueryData(planQueryKey, context.previous);
+      message.error(err.response?.data?.message || 'Failed to add job');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
       queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
-    },
-    onError: (err: any) => {
-      message.error(err.response?.data?.message || 'Failed to add job');
     },
   });
 
   // Schedule SAP order mutation (for drag SAP orders from pool)
   const scheduleSAPMutation = useMutation({
-    mutationFn: (payload: { planId: number; sapOrderId: number; dayId: number }) =>
+    mutationFn: (payload: { planId: number; sapOrderId: number; dayId: number; berth?: Berth; sourceJob?: any }) =>
       workPlansApi.scheduleSAPOrder(payload.planId, {
         sap_order_id: payload.sapOrderId,
         day_id: payload.dayId,
       }),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: planQueryKey });
+      const previous = queryClient.getQueryData(planQueryKey);
+      const src = vars.sourceJob || {};
+      const placeholder = {
+        id: -Math.floor(Math.random() * 1e9) - 1,
+        work_plan_day_id: vars.dayId,
+        job_type: src.job_type || 'pm',
+        berth: vars.berth ?? src.berth ?? 'both',
+        equipment_id: src.equipment?.id || src.equipment_id,
+        equipment: src.equipment || (src.equipment_name ? { id: src.equipment_id, name: src.equipment_name } : null),
+        equipment_name: src.equipment_name || src.equipment?.name,
+        sap_order_number: src.order_number,
+        description: src.description || '',
+        estimated_hours: src.estimated_hours || 4,
+        priority: src.priority || 'normal',
+        assignments: [],
+        materials: [],
+        _optimistic: true,
+      };
+      queryClient.setQueryData(planQueryKey, (old: any) =>
+        applyOptimisticJobAdd(old, vars.planId, vars.dayId, placeholder)
+      );
+      return { previous };
+    },
     onSuccess: (data: any) => {
       const autoAdded = data?.data?.auto_added_defects || 0;
-      message.success(autoAdded > 0
-        ? `SAP order scheduled (+${autoAdded} related defect${autoAdded > 1 ? 's' : ''} auto-added)`
-        : 'SAP order scheduled'
-      );
+      if (autoAdded > 0) {
+        message.success(`+${autoAdded} related defect${autoAdded > 1 ? 's' : ''} auto-added`);
+      }
+    },
+    onError: (err: any, _vars, context: any) => {
+      if (context?.previous) queryClient.setQueryData(planQueryKey, context.previous);
+      message.error(err.response?.data?.message || 'Failed to schedule SAP order');
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
       queryClient.invalidateQueries({ queryKey: ['available-jobs'] });
-    },
-    onError: (err: any) => {
-      message.error(err.response?.data?.message || 'Failed to schedule SAP order');
     },
   });
 
   // Assign user mutation (for drag employee to job)
   const assignMutation = useMutation({
-    mutationFn: ({ planId, jobId, userId, isLead }: { planId: number; jobId: number; userId: number; isLead: boolean }) =>
+    mutationFn: ({ planId, jobId, userId, isLead }: { planId: number; jobId: number; userId: number; isLead: boolean; user?: any }) =>
       workPlansApi.assignUser(planId, jobId, { user_id: userId, is_lead: isLead }),
-    onSuccess: () => {
-      message.success('User assigned');
-      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: planQueryKey });
+      const previous = queryClient.getQueryData(planQueryKey);
+      if (vars.user) {
+        queryClient.setQueryData(planQueryKey, (old: any) =>
+          applyOptimisticAssign(old, vars.planId, [vars.jobId], vars.user, vars.isLead)
+        );
+      }
+      // Close the modal straight away — the name is already on the card.
       setAssignModalOpen(false);
       setPendingAssignment(null);
+      return { previous };
     },
-    onError: (err: any) => {
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any, _vars, context: any) => {
+      if (context?.previous) queryClient.setQueryData(planQueryKey, context.previous);
       message.error(err.response?.data?.message || 'Failed to assign user');
     },
   });
 
   // Bulk assign (worker dropped on a whole bundle) — one request for every job
   const bulkAssignMutation = useMutation({
-    mutationFn: ({ planId, jobIds, userId, isLead }: { planId: number; jobIds: number[]; userId: number; isLead: boolean }) =>
+    mutationFn: ({ planId, jobIds, userId, isLead }: { planId: number; jobIds: number[]; userId: number; isLead: boolean; user?: any }) =>
       workPlansApi.bulkAssignUsers(planId, { job_ids: jobIds, user_ids: [userId], is_lead: isLead }),
-    onSuccess: (_res, vars) => {
-      message.success(`Assigned to ${vars.jobIds.length} job${vars.jobIds.length !== 1 ? 's' : ''}`);
-      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: planQueryKey });
+      const previous = queryClient.getQueryData(planQueryKey);
+      if (vars.user) {
+        queryClient.setQueryData(planQueryKey, (old: any) =>
+          applyOptimisticAssign(old, vars.planId, vars.jobIds, vars.user, vars.isLead)
+        );
+      }
+      // Close immediately — the names are already on the cards.
       setAssignModalOpen(false);
       setPendingAssignment(null);
+      return { previous };
     },
-    onError: (err: any) => {
+    onError: (err: any, _vars, context: any) => {
+      if (context?.previous) queryClient.setQueryData(planQueryKey, context.previous);
       message.error(err.response?.data?.message || 'Failed to assign user to bundle');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
   });
 
@@ -1700,6 +1863,8 @@ export default function WorkPlanningPage() {
           planId: currentPlan.id,
           sapOrderId: job.id,
           dayId: targetDay.id,
+          berth: targetBerth,
+          sourceJob: job,   // used to render the optimistic placeholder card
         });
       } else {
         // Regular job from pool — resolve equipment_id even for defect pool items
@@ -1718,6 +1883,7 @@ export default function WorkPlanningPage() {
           defectId,
           inspectionAssignmentId,
           estimatedHours,
+          sourceJob: job,   // used to render the optimistic placeholder card
         });
       }
     }
@@ -1838,6 +2004,7 @@ export default function WorkPlanningPage() {
         jobIds: pendingAssignment.jobs.map(j => j.id),
         userId: pendingAssignment.user.id,
         isLead,
+        user: pendingAssignment.user,   // rendered optimistically on the cards
       });
       return;
     }
@@ -1847,6 +2014,7 @@ export default function WorkPlanningPage() {
       jobId: pendingAssignment.job.id,
       userId: pendingAssignment.user.id,
       isLead,
+      user: pendingAssignment.user,   // rendered optimistically on the card
     });
   };
 
@@ -2796,7 +2964,7 @@ export default function WorkPlanningPage() {
                                         style={{ backgroundColor: workloadColor || '#1890ff' }}
                                       />
                                     )}
-                                    <InspectionCountBadge date={day.date} berth={berth} />
+                                    <InspectionCountBadge date={day.date} berth={berth} weekStart={planRangeStart} weekEnd={planRangeEnd} />
                                   </div>
                                 ) : (
                                   <>
@@ -2834,7 +3002,7 @@ export default function WorkPlanningPage() {
                                               {fmtHours(totalHours)}h
                                             </Text>
                                           )}
-                                          <InspectionCountBadge date={day.date} berth={berth} />
+                                          <InspectionCountBadge date={day.date} berth={berth} weekStart={planRangeStart} weekEnd={planRangeEnd} />
                                           {isDraft && (
                                             <Tooltip title="Add a job to this day">
                                               <Button
@@ -2932,7 +3100,7 @@ export default function WorkPlanningPage() {
                                         ));
                                       })()}
                                       {/* Inspection Summary — inside scroll area so cards are scrollable */}
-                                      {isExpanded && <InspectionSummaryBar date={day.date} berth={berth} />}
+                                      {isExpanded && <InspectionSummaryBar date={day.date} berth={berth} weekStart={planRangeStart} weekEnd={planRangeEnd} />}
                                     </div>
 
                                     {/* Capacity Bar */}

@@ -21,22 +21,38 @@ const STATUS_COLORS: Record<string, string> = {
 interface InspectionSummaryBarProps {
   date: string; // YYYY-MM-DD
   berth: 'east' | 'west';
+  /** Range of the plan being viewed. Every day column asks for the SAME range,
+   *  so React Query dedupes them into ONE request instead of one per day. */
+  weekStart: string;
+  weekEnd: string;
 }
 
-export default function InspectionSummaryBar({ date, berth }: InspectionSummaryBarProps) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
-
-  const { data: inspections, isLoading, isError } = useQuery({
-    queryKey: ['day-inspections', date, berth],
-    queryFn: async (): Promise<DayInspections> => {
-      const r = await workPlansApi.getDayInspections(date, berth);
-      return r.data.data as DayInspections;
+/**
+ * One week of inspections, shared by every day column.
+ *
+ * All callers pass the same weekStart/weekEnd, so the query key is identical
+ * across the seven columns and React Query issues a single request. This
+ * replaced a per-day query that cost 7 round-trips on every planner load.
+ */
+function useWeekInspections(weekStart: string, weekEnd: string, berth: 'east' | 'west') {
+  return useQuery({
+    queryKey: ['week-inspections', weekStart, weekEnd, berth],
+    queryFn: async (): Promise<Record<string, DayInspections>> => {
+      const r = await workPlansApi.getWeekInspections(weekStart, weekEnd, berth);
+      return (r.data.data || {}) as Record<string, DayInspections>;
     },
-    enabled: !!date,
+    enabled: !!weekStart && !!weekEnd,
     staleTime: 30_000,
     retry: 1,
   });
+}
+
+export default function InspectionSummaryBar({ date, berth, weekStart, weekEnd }: InspectionSummaryBarProps) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: week, isLoading, isError } = useWeekInspections(weekStart, weekEnd, berth);
+  const inspections: DayInspections | undefined = week?.[date];
 
   const berthData: DayInspectionsBerth | undefined = inspections?.[berth];
   const count = berthData?.count ?? 0;
@@ -83,19 +99,23 @@ export default function InspectionSummaryBar({ date, berth }: InspectionSummaryB
   );
 }
 
-/** Small badge component showing inspection count — shares React Query cache with InspectionSummaryBar */
-export function InspectionCountBadge({ date, berth, style }: { date: string; berth: 'east' | 'west'; style?: React.CSSProperties }) {
-  const { data } = useQuery({
-    queryKey: ['day-inspections', date, berth],
-    queryFn: async (): Promise<DayInspections> => {
-      const r = await workPlansApi.getDayInspections(date, berth);
-      return r.data.data as DayInspections;
-    },
-    enabled: !!date,
-    staleTime: 30_000,
-    retry: 1,
-  });
-  const count = data?.[berth]?.count ?? 0;
+/** Small badge showing the inspection count — shares the same week query, so it
+ *  adds no extra request. */
+export function InspectionCountBadge({
+  date,
+  berth,
+  weekStart,
+  weekEnd,
+  style,
+}: {
+  date: string;
+  berth: 'east' | 'west';
+  weekStart: string;
+  weekEnd: string;
+  style?: React.CSSProperties;
+}) {
+  const { data } = useWeekInspections(weekStart, weekEnd, berth);
+  const count = data?.[date]?.[berth]?.count ?? 0;
   if (count === 0) return null;
   return (
     <Tooltip title={`${count} inspection${count !== 1 ? 's' : ''} scheduled`}>

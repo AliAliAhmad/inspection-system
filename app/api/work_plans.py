@@ -2314,6 +2314,115 @@ def get_day_inspections():
     return jsonify({'status': 'success', 'data': result}), 200
 
 
+def _inspection_berth(assignment):
+    """Resolve an assignment's berth, defaulting to east."""
+    eq = assignment.equipment
+    berth = getattr(assignment, 'berth', None) or getattr(eq, 'berth', None) or 'east'
+    if isinstance(berth, str):
+        berth = berth.lower()
+    return berth if berth in ('east', 'west') else 'east'
+
+
+def _inspection_entry(assignment):
+    """One row of the inspection summary. Shared by the day and week endpoints
+    so the two can never drift apart."""
+    eq = assignment.equipment
+    return {
+        'equipment_name': eq.name if eq else 'Unknown',
+        'equipment_serial': eq.serial_number if eq else None,
+        'equipment_type': getattr(eq, 'equipment_type', None) or getattr(eq, 'equipment_type_2', None) or '',
+        'status': assignment.status or 'unassigned',
+        'mechanical_inspector': assignment.mechanical_inspector.full_name if assignment.mechanical_inspector else None,
+        'electrical_inspector': assignment.electrical_inspector.full_name if assignment.electrical_inspector else None,
+        'engineer': assignment.engineer.full_name if assignment.engineer else None,
+        'shift': getattr(assignment, 'shift', 'day') or 'day',
+    }
+
+
+@bp.route('/week-inspections', methods=['GET'])
+@jwt_required()
+def get_week_inspections():
+    """Inspection assignments for a DATE RANGE, grouped by date then berth.
+
+    The web planner renders one summary bar per day column, which previously
+    meant seven separate /day-inspections requests per page load — measured, and
+    the single biggest source of latency on that screen from a distant region.
+    This returns the whole range in one request.
+
+    /day-inspections is deliberately left untouched: the mobile app (including
+    builds already installed on phones) still uses it.
+
+    Query params:
+        - start: YYYY-MM-DD (required)
+        - end:   YYYY-MM-DD (required)
+        - berth: optional 'east' or 'west'
+
+    Response data shape:
+        {"2026-08-09": {"east": {"count": n, "assignments": [...]},
+                        "west": {"count": n, "assignments": [...]}}, ...}
+    """
+    from app.models.inspection_assignment import InspectionAssignment
+    from app.models.inspection_list import InspectionList
+    from datetime import date as date_type, timedelta as _timedelta
+
+    start_str = request.args.get('start')
+    end_str = request.args.get('end')
+    berth_filter = request.args.get('berth')
+
+    if not start_str or not end_str:
+        return jsonify({'status': 'error', 'message': 'start and end parameters required'}), 400
+
+    try:
+        start_date = date_type.fromisoformat(start_str)
+        end_date = date_type.fromisoformat(end_str)
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid date format (use YYYY-MM-DD)'}), 400
+
+    if end_date < start_date:
+        return jsonify({'status': 'error', 'message': 'end must not be before start'}), 400
+    if (end_date - start_date).days > 31:
+        return jsonify({'status': 'error', 'message': 'Range too large (max 31 days)'}), 400
+
+    assignments = db.session.query(InspectionAssignment).join(
+        InspectionList, InspectionAssignment.inspection_list_id == InspectionList.id
+    ).options(
+        joinedload(InspectionAssignment.equipment),
+        joinedload(InspectionAssignment.mechanical_inspector),
+        joinedload(InspectionAssignment.electrical_inspector),
+        joinedload(InspectionAssignment.engineer),
+        joinedload(InspectionAssignment.inspection_list),
+    ).filter(
+        InspectionList.target_date >= start_date,
+        InspectionList.target_date <= end_date,
+    ).all()
+
+    # Pre-seed every date in the range so the client gets a predictable shape
+    result = {}
+    cursor = start_date
+    while cursor <= end_date:
+        result[cursor.isoformat()] = {
+            'east': {'count': 0, 'assignments': []},
+            'west': {'count': 0, 'assignments': []},
+        }
+        cursor += _timedelta(days=1)
+
+    for a in assignments:
+        try:
+            berth = _inspection_berth(a)
+            if berth_filter and berth != berth_filter:
+                continue
+            day_key = a.inspection_list.target_date.isoformat()
+            if day_key not in result:
+                continue
+            result[day_key][berth]['assignments'].append(_inspection_entry(a))
+            result[day_key][berth]['count'] += 1
+        except Exception as e:
+            logger.error(f"Error processing inspection assignment {a.id}: {e}")
+            continue
+
+    return jsonify({'status': 'success', 'data': result}), 200
+
+
 @bp.route('/day-inspection-equipment', methods=['GET'])
 @jwt_required()
 def get_day_inspection_equipment():

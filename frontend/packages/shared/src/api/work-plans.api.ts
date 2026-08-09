@@ -642,6 +642,20 @@ export const workPlansApi = {
     return getApiClient().get<ApiResponse<DayInspections>>('/api/work-plans/day-inspections', { params });
   },
 
+  /**
+   * Inspections for a whole date range, keyed by date.
+   * The web planner uses this so seven day columns cost ONE request instead of
+   * seven. Mobile still uses getDayInspections above.
+   */
+  getWeekInspections(start: string, end: string, berth?: string) {
+    const params: Record<string, string> = { start, end };
+    if (berth) params.berth = berth;
+    return getApiClient().get<ApiResponse<Record<string, DayInspections>>>(
+      '/api/work-plans/week-inspections',
+      { params }
+    );
+  },
+
   getDayInspectionEquipment(date: string) {
     return getApiClient().get<ApiResponse<number[]>>('/api/work-plans/day-inspection-equipment', { params: { date } });
   },
