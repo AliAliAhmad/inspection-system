@@ -12,6 +12,8 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
@@ -82,46 +84,59 @@ function toLocalDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function getWeekStart(date: Date): string {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
-  d.setDate(diff);
+
+/** Parse a YYYY-MM-DD as a LOCAL date.
+ *  `new Date('2026-08-09')` is parsed as UTC midnight and then rendered in local
+ *  time, which lands on the previous day for negative offsets. Anchoring at noon
+ *  keeps the calendar date stable in every timezone. */
+function parseLocalDate(dateStr: string): Date {
+  return new Date(dateStr + 'T12:00:00');
+}
+
+/** Today as YYYY-MM-DD in the DEVICE's timezone.
+ *  Never use toISOString() for this: it is UTC, so in Baghdad (UTC+3) it returns
+ *  YESTERDAY between 00:00 and 03:00 local — which would open this screen on the
+ *  wrong day for night and early shifts. */
+function todayLocal(): string {
+  return toLocalDateString(new Date());
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = parseLocalDate(dateStr);
+  d.setDate(d.getDate() + days);
   return toLocalDateString(d);
 }
 
-function addWeeks(dateStr: string, weeks: number): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  d.setDate(d.getDate() + weeks * 7);
-  return toLocalDateString(d);
+/** "Sunday, 9 August" — the headline for the day being viewed. */
+function formatDayHeadline(dateStr: string): string {
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+/** Short weekday initial-ish label for the day strip: SUN, MON, ... */
+function formatDayStripLabel(dateStr: string): string {
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
 }
 
-function formatWeekRange(start: string, end: string): string {
-  const s = new Date(start);
-  const e = new Date(end);
-  const sMonth = s.toLocaleDateString('en-US', { month: 'short' });
-  const eMonth = e.toLocaleDateString('en-US', { month: 'short' });
-  const sDay = s.getDate();
-  const eDay = e.getDate();
-  const year = e.getFullYear();
-
-  if (sMonth === eMonth) {
-    return `${sMonth} ${sDay} - ${eDay}, ${year}`;
-  }
-  return `${sMonth} ${sDay} - ${eMonth} ${eDay}, ${year}`;
+function dayOfMonth(dateStr: string): string {
+  return String(parseLocalDate(dateStr).getDate());
 }
+
 
 export default function MyWorkPlanScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
-  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
-  const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  // This screen shows ONE day at a time and opens on today.
+  const [selectedDate, setSelectedDate] = useState<string>(() => todayLocal());
+  // Any date inside the plan we want loaded. /my-plan matches the plan whose
+  // range CONTAINS this date, so we can hand it a plain day and never guess
+  // whether weeks start Sunday or Monday. (Computing a Monday here used to load
+  // the PREVIOUS week's plan on Sundays, so today wasn't even in it.)
+  const [anchorDate, setAnchorDate] = useState<string>(() => todayLocal());
 
   // Modal states
   const [showPauseModal, setShowPauseModal] = useState(false);
@@ -142,13 +157,74 @@ export default function MyWorkPlanScreen() {
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['my-work-plan', weekStart],
-    queryFn: () => workPlansApi.getMyPlan(weekStart),
+    queryKey: ['my-work-plan', anchorDate],
+    queryFn: () => workPlansApi.getMyPlan(anchorDate),
   });
 
   const workPlan = data?.data?.work_plan;
   const myJobs: MyWorkPlanDay[] = useMemo(() => data?.data?.my_jobs ?? [], [data?.data?.my_jobs]);
   const totalJobs = data?.data?.total_jobs ?? 0;
+
+  // The day strip is built from the days the PLAN actually contains, not from a
+  // locally computed week. Mobile used to assume weeks start Monday while the
+  // web planner creates Sunday-based plans, so the header and the content
+  // disagreed. Trusting the server's days removes that whole class of bug.
+  const planDays: string[] = useMemo(() => myJobs.map(d => d.date), [myJobs]);
+
+  // Keep the selected day valid whenever a different plan arrives. Normally the
+  // selected date is already inside it (we anchor the fetch on that very date);
+  // this only catches gaps, e.g. no plan published for that week.
+  useEffect(() => {
+    if (planDays.length === 0) return;
+    if (!planDays.includes(selectedDate)) {
+      const today = todayLocal();
+      setSelectedDate(planDays.includes(today) ? today : planDays[0]);
+    }
+  }, [planDays, selectedDate]);
+
+  const selectedIndex = planDays.indexOf(selectedDate);
+  const selectedDay: MyWorkPlanDay | undefined = myJobs[selectedIndex];
+
+  /** Step one day. Past either edge, load the neighbouring week and land on its
+   *  matching edge day. */
+  const goToDay = useCallback((delta: -1 | 1) => {
+    const idx = planDays.indexOf(selectedDate);
+    const next = idx + delta;
+    if (idx !== -1 && next >= 0 && next < planDays.length) {
+      setSelectedDate(planDays[next]);   // still inside the loaded plan
+      return;
+    }
+    // Stepped past the edge — re-anchor the fetch on the new day itself.
+    const nextDate = addDays(selectedDate, delta);
+    setSelectedDate(nextDate);
+    setAnchorDate(nextDate);
+  }, [planDays, selectedDate]);
+
+  const goToToday = useCallback(() => {
+    const today = todayLocal();
+    setSelectedDate(today);
+    setAnchorDate(today);
+  }, []);
+
+  const isTodaySelected = selectedDate === todayLocal();
+  const selectedDayJobCount = selectedDay?.jobs?.length ?? 0;
+
+  // Swipe left = next day, swipe right = previous day. runOnJS because the
+  // gesture callback runs on the UI thread and setState must not.
+  const swipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-20, 20])   // don't hijack vertical scrolling of the list
+        .failOffsetY([-15, 15])
+        .onEnd((e) => {
+          if (e.translationX < -50) {
+            runOnJS(goToDay)(1);
+          } else if (e.translationX > 50) {
+            runOnJS(goToDay)(-1);
+          }
+        }),
+    [goToDay]
+  );
 
   // Start mutation (optionally sets the worker's planned time in the same call)
   const startMutation = useMutation({
@@ -318,23 +394,11 @@ export default function MyWorkPlanScreen() {
     navigation.navigate('JobExecution', { jobId });
   }, [navigation]);
 
-  const weekEnd = useMemo(() => {
-    if (workPlan?.week_end) return workPlan.week_end;
-    return addWeeks(weekStart, 0).replace(/-(\d{2})$/, (_, d) => `-${String(Number(d) + 6).padStart(2, '0')}`);
-  }, [weekStart, workPlan]);
-
-  const handlePrevWeek = () => setWeekStart(prev => addWeeks(prev, -1));
-  const handleNextWeek = () => setWeekStart(prev => addWeeks(prev, 1));
-  const handleToday = () => setWeekStart(getWeekStart(new Date()));
 
   const handleDownloadPDF = () => {
     if (workPlan?.pdf_url) {
       Linking.openURL(workPlan.pdf_url);
     }
-  };
-
-  const toggleDay = (date: string) => {
-    setExpandedDay(prev => prev === date ? null : date);
   };
 
   const renderJobCard = useCallback((job: ExtendedWorkPlanJob) => {
@@ -570,65 +634,6 @@ export default function MyWorkPlanScreen() {
     );
   }, [t, activeTimers, formatElapsedTime, handleStartJob, handlePauseJob, handleResumeJob, handleCompleteJob, handleViewDetails, startMutation, pauseMutation, resumeMutation, completeMutation]);
 
-  const renderDaySection = useCallback(({ item }: { item: MyWorkPlanDay }) => {
-    const isExpanded = expandedDay === item.date;
-    const isToday = item.date === new Date().toISOString().split('T')[0];
-    const jobCount = item.jobs.length;
-
-    // Count jobs by status
-    const inProgressCount = item.jobs.filter((j: any) => j.tracking?.status === 'in_progress').length;
-    const completedCount = item.jobs.filter((j: any) => j.tracking?.status === 'completed').length;
-
-    return (
-      <View style={styles.daySection}>
-        <TouchableOpacity
-          style={[styles.dayHeader, isToday && styles.dayHeaderToday]}
-          onPress={() => toggleDay(item.date)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.dayTitleRow}>
-            <Text style={[styles.dayName, isToday && styles.dayNameToday]}>
-              {item.day_name}
-            </Text>
-            <Text style={[styles.dayDate, isToday && styles.dayDateToday]}>
-              {formatDate(item.date)}
-            </Text>
-          </View>
-          <View style={styles.dayCountRow}>
-            {/* Show status summary */}
-            {jobCount > 0 && (
-              <View style={styles.daySummary}>
-                {inProgressCount > 0 && (
-                  <Text style={styles.summaryText}>\uD83D\uDD35 {inProgressCount}</Text>
-                )}
-                {completedCount > 0 && (
-                  <Text style={styles.summaryText}>\u2705 {completedCount}</Text>
-                )}
-              </View>
-            )}
-            <View style={[styles.countBadge, jobCount === 0 && styles.countBadgeEmpty]}>
-              <Text style={[styles.countBadgeText, jobCount === 0 && styles.countBadgeTextEmpty]}>
-                {jobCount} {t('work_plan.jobs', 'jobs')}
-              </Text>
-            </View>
-            <Text style={styles.expandIcon}>{isExpanded ? '\u25BC' : '\u25B6'}</Text>
-          </View>
-        </TouchableOpacity>
-
-        {isExpanded && (
-          <View style={styles.jobsContainer}>
-            {jobCount === 0 ? (
-              <Text style={styles.noJobsText}>
-                {t('work_plan.no_jobs_this_day', 'No jobs scheduled for this day')}
-              </Text>
-            ) : (
-              item.jobs.map(job => renderJobCard(job as ExtendedWorkPlanJob))
-            )}
-          </View>
-        )}
-      </View>
-    );
-  }, [expandedDay, t, renderJobCard]);
 
   const renderEmpty = () => {
     if (isLoading) return null;
@@ -639,6 +644,24 @@ export default function MyWorkPlanScreen() {
         </Text>
         <Text style={styles.emptySubtitle}>
           {t('work_plan.no_plan_message', 'No work plan has been published for this week.')}
+        </Text>
+      </View>
+    );
+  };
+
+  /** Shown when the plan exists but this particular day has nothing on it. */
+  const renderNoJobsForDay = () => {
+    if (isLoading) return null;
+    return (
+      <View testID="my-plan-no-jobs" style={styles.emptyContainer}>
+        <Text style={styles.emptyDayIcon}>☕</Text>
+        <Text style={styles.emptyTitle}>
+          {isTodaySelected
+            ? t('work_plan.no_jobs_today', 'No jobs today')
+            : t('work_plan.no_jobs_this_day', 'No jobs on this day')}
+        </Text>
+        <Text style={styles.emptySubtitle}>
+          {t('work_plan.swipe_hint', 'Swipe left or right to see another day.')}
         </Text>
       </View>
     );
@@ -667,52 +690,114 @@ export default function MyWorkPlanScreen() {
     <View testID="my-work-plan-screen" style={styles.container}>
       <Text style={styles.title}>{t('nav.my_work_plan', 'My Work Plan')}</Text>
 
-      {/* Week Navigation */}
-      <View style={styles.weekNav}>
-        <TouchableOpacity style={styles.navButton} onPress={handlePrevWeek}>
-          <Text style={styles.navButtonText}>{'<'}</Text>
+      {/* ── Day header: one day at a time, opens on today ── */}
+      <View style={styles.dayNav}>
+        <TouchableOpacity
+          testID="my-plan-prev-day"
+          style={styles.navButton}
+          onPress={() => goToDay(-1)}
+        >
+          <Text style={styles.navButtonText}>{'‹'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.weekDisplay} onPress={handleToday}>
-          <Text style={styles.weekText}>
-            {workPlan ? formatWeekRange(workPlan.week_start, workPlan.week_end) : formatWeekRange(weekStart, addWeeks(weekStart, 0))}
-          </Text>
-          <Text style={styles.tapToday}>{t('work_plan.tap_for_today', 'Tap for today')}</Text>
+
+        <TouchableOpacity style={styles.dayDisplay} onPress={goToToday} activeOpacity={0.7}>
+          <Text style={styles.dayHeadline}>{formatDayHeadline(selectedDate)}</Text>
+          <View style={styles.dayHeadlineMeta}>
+            {isTodaySelected && (
+              <View style={styles.todayPill}>
+                <Text style={styles.todayPillText}>{t('work_plan.today', 'TODAY')}</Text>
+              </View>
+            )}
+            <Text style={styles.dayJobCount}>
+              {selectedDayJobCount === 0
+                ? t('work_plan.no_jobs_short', 'No jobs')
+                : `${selectedDayJobCount} ${selectedDayJobCount === 1 ? t('work_plan.job', 'job') : t('work_plan.jobs', 'jobs')}`}
+            </Text>
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={handleNextWeek}>
-          <Text style={styles.navButtonText}>{'>'}</Text>
+
+        <TouchableOpacity
+          testID="my-plan-next-day"
+          style={styles.navButton}
+          onPress={() => goToDay(1)}
+        >
+          <Text style={styles.navButtonText}>{'›'}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Week Status Bar */}
-      {workPlan && (
+      {/* ── Day strip: jump to any day in this plan ── */}
+      {planDays.length > 0 && (
+        <View style={styles.dayStrip}>
+          {myJobs.map((d) => {
+            const isSel = d.date === selectedDate;
+            const isTdy = d.date === todayLocal();
+            return (
+              <TouchableOpacity
+                key={d.date}
+                testID={`my-plan-day-${d.date}`}
+                style={[styles.dayStripItem, isSel && styles.dayStripItemSelected]}
+                onPress={() => setSelectedDate(d.date)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.dayStripLabel, isSel && styles.dayStripTextSelected]}>
+                  {formatDayStripLabel(d.date)}
+                </Text>
+                <Text
+                  style={[
+                    styles.dayStripNum,
+                    isSel && styles.dayStripTextSelected,
+                    !isSel && isTdy && styles.dayStripNumToday,
+                  ]}
+                >
+                  {dayOfMonth(d.date)}
+                </Text>
+                <View
+                  style={[
+                    styles.dayStripDot,
+                    d.jobs.length > 0 && styles.dayStripDotActive,
+                    isSel && d.jobs.length > 0 && styles.dayStripDotOnSelected,
+                  ]}
+                />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {/* PDF stays available for the whole plan */}
+      {workPlan?.pdf_url && (
         <View style={styles.weekStatusBar}>
           <View style={styles.statusInfo}>
             <Text style={styles.statusLabel}>{t('work_plan.total_jobs', 'Total Jobs')}:</Text>
             <Text style={styles.statusValue}>{totalJobs}</Text>
           </View>
-          {workPlan.pdf_url && (
-            <TouchableOpacity style={styles.pdfButton} onPress={handleDownloadPDF}>
-              <Text style={styles.pdfButtonText}>{t('work_plan.download_pdf', 'PDF')}</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={styles.pdfButton} onPress={handleDownloadPDF}>
+            <Text style={styles.pdfButtonText}>{t('work_plan.download_pdf', 'PDF')}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* Days List */}
+      {/* ── The selected day's jobs (swipe left/right to change day) ── */}
       {!workPlan ? (
         renderEmpty()
       ) : (
-        <FlatList
-          testID="my-work-plan-list"
-          data={myJobs}
-          keyExtractor={(item) => item.date}
-          renderItem={renderDaySection}
-          contentContainerStyle={myJobs.length === 0 ? styles.emptyListContainer : styles.listContent}
-          ListEmptyComponent={renderEmpty}
-          refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
-          }
-        />
+        <GestureDetector gesture={swipeGesture}>
+          <View style={styles.dayJobsWrapper}>
+            <FlatList
+              testID="my-work-plan-list"
+              data={(selectedDay?.jobs ?? []) as ExtendedWorkPlanJob[]}
+              keyExtractor={(job) => String(job.id)}
+              renderItem={({ item }) => renderJobCard(item)}
+              contentContainerStyle={
+                (selectedDay?.jobs?.length ?? 0) === 0 ? styles.emptyListContainer : styles.listContent
+              }
+              ListEmptyComponent={renderNoJobsForDay}
+              refreshControl={
+                <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+              }
+            />
+          </View>
+        </GestureDetector>
       )}
 
       {/* Pause Modal */}
@@ -928,6 +1013,105 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: 'bold', color: '#212121', padding: 16, paddingBottom: 8 },
 
   // Week Navigation
+  // ── Single-day view ──────────────────────────────────────────────
+  dayNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+  },
+  dayDisplay: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dayHeadline: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    textAlign: 'center',
+  },
+  dayHeadlineMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 8,
+  },
+  todayPill: {
+    backgroundColor: '#1677ff',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  todayPillText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  dayJobCount: {
+    fontSize: 13,
+    color: '#8c8c8c',
+    fontWeight: '500',
+  },
+  dayStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e8e8e8',
+  },
+  dayStripItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    marginHorizontal: 2,
+    borderRadius: 10,
+  },
+  dayStripItemSelected: {
+    backgroundColor: '#1677ff',
+  },
+  dayStripLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#8c8c8c',
+    letterSpacing: 0.3,
+  },
+  dayStripNum: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginTop: 2,
+  },
+  dayStripNumToday: {
+    color: '#1677ff',
+  },
+  dayStripTextSelected: {
+    color: '#fff',
+  },
+  dayStripDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  dayStripDotActive: {
+    backgroundColor: '#52c41a',
+  },
+  dayStripDotOnSelected: {
+    backgroundColor: '#fff',
+  },
+  dayJobsWrapper: {
+    flex: 1,
+  },
+  emptyDayIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
   weekNav: {
     flexDirection: 'row',
     alignItems: 'center',
