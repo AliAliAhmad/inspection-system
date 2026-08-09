@@ -207,7 +207,9 @@
       "Bash(find . -name:*)",
       "Bash(pkill -f \"flask --app run.py\":*)",
       "Bash(pkill -f \"vite --port\":*)",
-      "Bash(./venv/bin/python -c ' *)"
+      "Bash(./venv/bin/python -c ' *)",
+      "Bash(./venv/bin/python *)",
+      "Bash(git push *)"
     ],
     "deny": [
       "Bash(rm -rf /*)",
