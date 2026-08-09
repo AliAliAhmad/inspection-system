@@ -55,3 +55,10 @@ frontend/apps/web/e2e/screenshots/
 # Lighthouse reports
 *.report.html
 screenshots/
+
+# Training docs build env
+docs/training/.venv/
+
+# Re-include training screenshots (overrides the global screenshots/ ignore on line ~57)
+!docs/training/screenshots/
+!docs/training/screenshots/**
