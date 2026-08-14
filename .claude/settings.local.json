@@ -209,7 +209,14 @@
       "Bash(pkill -f \"vite --port\":*)",
       "Bash(./venv/bin/python -c ' *)",
       "Bash(./venv/bin/python *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(awk \"/def get_my_plan/,/'total_jobs'/\" app/api/work_plans.py)",
+      "Bash(awk \"/def get_my_plan/,/'total_jobs': sum/\" app/api/work_plans.py)",
+      "Bash(python3 -)",
+      "Bash(./../../../../../venv/bin/python -c ' *)",
+      "Bash(python3 -c ' *)",
+      "Bash(sqlite3 /private/tmp/claude-501/-Users-AliAliAhmad-1-2-Desktop-inspection-system/c354a537-ee92-443c-8d61-2946e0b29f9f/scratchpad/planner_test.db 'select count\\(*\\) from sqlite_master where type='\\\\''table'\\\\'';')",
+      "Bash(awk '{print \"  db size:\", $5}')"
     ],
     "deny": [
       "Bash(rm -rf /*)",
