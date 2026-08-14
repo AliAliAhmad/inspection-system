@@ -216,7 +216,8 @@
       "Bash(./../../../../../venv/bin/python -c ' *)",
       "Bash(python3 -c ' *)",
       "Bash(sqlite3 /private/tmp/claude-501/-Users-AliAliAhmad-1-2-Desktop-inspection-system/c354a537-ee92-443c-8d61-2946e0b29f9f/scratchpad/planner_test.db 'select count\\(*\\) from sqlite_master where type='\\\\''table'\\\\'';')",
-      "Bash(awk '{print \"  db size:\", $5}')"
+      "Bash(awk '{print \"  db size:\", $5}')",
+      "Bash(npx eas *)"
     ],
     "deny": [
       "Bash(rm -rf /*)",
