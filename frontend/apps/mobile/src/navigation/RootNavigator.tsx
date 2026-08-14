@@ -79,6 +79,7 @@ import UnassignedJobsScreen from '../screens/admin/UnassignedJobsScreen';
 
 // Work Plan Tracking & Performance screens
 import JobExecutionScreen from '../screens/shared/JobExecutionScreen';
+import JobDetailsScreen from '../screens/shared/JobDetailsScreen';
 import WorkerPerformanceScreen from '../screens/shared/WorkerPerformanceScreen';
 import DailyReviewScreen from '../screens/engineer/DailyReviewScreen';
 
@@ -176,6 +177,7 @@ export type RootStackParamList = {
   UnassignedJobs: { planId: number };
   // Work Plan Tracking & Performance
   JobExecution: { jobId: number };
+  JobDetails: { jobId: number };
   WorkerPerformance: undefined;
   DailyReview: undefined;
   // Enhanced modules
@@ -265,6 +267,7 @@ export default function RootNavigator() {
         <Stack.Screen name="UnassignedJobs" component={UnassignedJobsScreen} options={{ headerShown: true, title: 'Unassigned Jobs' }} />
         {/* Work Plan Tracking & Performance */}
         <Stack.Screen name="JobExecution" component={JobExecutionScreen} options={{ headerShown: true, title: 'Job Execution' }} />
+        <Stack.Screen name="JobDetails" component={JobDetailsScreen} options={{ headerShown: true, title: 'Job Details' }} />
         <Stack.Screen name="WorkerPerformance" component={WorkerPerformanceScreen} options={{ headerShown: true, title: 'My Performance' }} />
         <Stack.Screen name="DailyReview" component={DailyReviewScreen} options={{ headerShown: true, title: 'Daily Review' }} />
         {/* Enhanced module screens */}

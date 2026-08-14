@@ -5,6 +5,7 @@ import {
   WorkPlanJob,
   WorkPlanAssignment,
   WorkPlanMaterial,
+  JobDetails,
   MyWorkPlanResponse,
   AvailableJobsResponse,
   CreateWorkPlanPayload,
@@ -635,6 +636,18 @@ export const workPlansApi = {
   },
 
   // ==================== DAY INSPECTIONS (Read-Only Visibility) ====================
+
+  /**
+   * Everything a worker needs to understand ONE job: SAP block or defect block
+   * (photo, voice note, severity), equipment, times, team.
+   *
+   * Separate from getMyPlan on purpose — details are needed one job at a time,
+   * and putting photos and translated text on every job in the week would bloat
+   * the plan payload.
+   */
+  getJobDetails(jobId: number) {
+    return getApiClient().get<ApiResponse<JobDetails>>(`/api/work-plans/jobs/${jobId}/details`);
+  },
 
   getDayInspections(date: string, berth?: string) {
     const params: Record<string, string> = { date };

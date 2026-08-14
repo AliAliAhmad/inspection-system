@@ -1030,3 +1030,70 @@ export interface GenerationResult {
   score: PlanScore;
   jobs_by_day: Record<string, number>;
 }
+
+/**
+ * Full details for ONE job, from GET /work-plans/jobs/<id>/details.
+ * Backs the mobile job details screen.
+ *
+ * `sap` and `defect` are null when not applicable — branch on presence, not on
+ * job_type, since a SAP order and a defect can both be absent.
+ */
+export interface JobDetailsEquipment {
+  id: number;
+  name: string;
+  name_ar: string | null;
+  serial_number: string | null;
+  equipment_type: string | null;
+  equipment_type_ar: string | null;
+  location: string | null;
+  location_ar: string | null;
+}
+
+export interface JobDetailsSap {
+  order_number: string;
+  order_type: string | null;
+  work_center: string | null;
+  maintenance_base: string | null;
+  cycle: string | null;
+}
+
+export interface JobDetailsInspection {
+  id: number;
+  date: string | null;
+  inspector: string | null;
+}
+
+export interface JobDetailsDefect {
+  id: number;
+  /** Arabic when the user's language is ar and a translation exists/succeeded. */
+  description: string | null;
+  /** Always the original English, so it is never lost behind a translation. */
+  description_en: string | null;
+  severity: string | null;
+  category: string | null;
+  hazard_type: string | null;
+  report_source: string | null;
+  status: string | null;
+  due_date: string | null;
+  photo_url: string | null;
+  voice_note_url: string | null;
+  reported_by: string | null;
+  inspection: JobDetailsInspection | null;
+}
+
+export interface JobDetails {
+  id: number;
+  job_type: JobType;
+  description: string | null;
+  description_en: string | null;
+  estimated_hours: number | null;
+  planned_time_hours: number | null;
+  priority: JobPriority | null;
+  berth: Berth | null;
+  day_date: string | null;
+  notes: string | null;
+  equipment: JobDetailsEquipment | null;
+  sap: JobDetailsSap | null;
+  defect: JobDetailsDefect | null;
+  assignments: { user_id: number; full_name: string | null; is_lead: boolean }[];
+}

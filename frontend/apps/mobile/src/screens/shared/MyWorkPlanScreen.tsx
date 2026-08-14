@@ -391,7 +391,7 @@ export default function MyWorkPlanScreen() {
   }, []);
 
   const handleViewDetails = useCallback((jobId: number) => {
-    navigation.navigate('JobExecution', { jobId });
+    navigation.navigate('JobDetails', { jobId });
   }, [navigation]);
 
 
