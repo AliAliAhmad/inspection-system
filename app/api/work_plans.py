@@ -1153,6 +1153,157 @@ def remove_job(plan_id, job_id):
     }), 200
 
 
+def _arabic_or_original(text, cached_ar, on_translated=None):
+    """Return Arabic text for `text`, translating once and caching if needed.
+
+    `cached_ar` is an already-stored Arabic translation (e.g.
+    defect.description_ar). When it is empty we translate and hand the result to
+    `on_translated` so the caller can persist it — every later request is then
+    instant and free.
+
+    Translation must never break the screen: any failure returns the original
+    English rather than raising.
+    """
+    if not text:
+        return text
+    if cached_ar:
+        return cached_ar
+    try:
+        from app.services.translation_service import TranslationService
+        translated = TranslationService.translate_to_arabic(text)
+        if translated and translated != text:
+            if on_translated:
+                on_translated(translated)
+            return translated
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Arabic translation failed, serving English: {e}")
+    return text
+
+
+@bp.route('/jobs/<int:job_id>/details', methods=['GET'])
+@jwt_required()
+def get_job_details(job_id):
+    """Everything a worker needs to understand ONE job.
+
+    Deliberately a separate endpoint rather than more fields on /my-plan: details
+    are needed for one job at a time, and putting photos, voice URLs and
+    translated text on every job in the week would undo the payload trimming done
+    on 2026-08-08.
+
+    `sap` and `defect` are null when not applicable — clients branch on presence,
+    not on job_type strings.
+    """
+    user = get_current_user()
+    language = user.language or 'en'
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job:
+        raise NotFoundError("Job not found")
+
+    # A worker may only open jobs they are assigned to; admins/engineers may open
+    # any. Without this, job ids could be enumerated.
+    if user.role not in ('admin', 'engineer'):
+        assigned = any(a.user_id == user.id for a in job.assignments)
+        if not assigned:
+            raise ForbiddenError("You are not assigned to this job")
+
+    want_ar = language == 'ar'
+
+    def job_desc():
+        # work_plan_jobs has no description_ar column, so this is translated per
+        # request. Only the long-lived defect text is worth caching.
+        return _arabic_or_original(job.description, None) if want_ar else job.description
+
+    eq = job.equipment
+    equipment = None
+    if eq:
+        equipment = {
+            'id': eq.id,
+            'name': eq.name,
+            'name_ar': getattr(eq, 'name_ar', None),
+            'serial_number': eq.serial_number,
+            'equipment_type': getattr(eq, 'equipment_type', None),
+            'equipment_type_ar': getattr(eq, 'equipment_type_ar', None),
+            'location': getattr(eq, 'location', None),
+            'location_ar': getattr(eq, 'location_ar', None),
+        }
+
+    sap = None
+    if job.sap_order_number:
+        sap = {
+            'order_number': job.sap_order_number,
+            'order_type': job.sap_order_type,
+            'work_center': getattr(job, 'work_center', None),
+            'maintenance_base': job.maintenance_base,
+            'cycle': job.cycle.name if job.cycle else None,
+        }
+
+    defect = None
+    if job.defect:
+        d = job.defect
+
+        def _cache_ar(translated):
+            d.description_ar = translated
+            db.session.commit()
+
+        defect_desc = (
+            _arabic_or_original(d.description, d.description_ar, _cache_ar)
+            if want_ar else d.description
+        )
+
+        inspection = None
+        if getattr(d, 'inspection', None):
+            insp = d.inspection
+            inspection = {
+                'id': insp.id,
+                'date': insp.created_at.date().isoformat() if insp.created_at else None,
+                'inspector': insp.technician.full_name if getattr(insp, 'technician', None) else None,
+            }
+
+        defect = {
+            'id': d.id,
+            'description': defect_desc,
+            'description_en': d.description,
+            'severity': d.severity,
+            'category': d.category,
+            'hazard_type': getattr(d, 'hazard_type', None),
+            'report_source': getattr(d, 'report_source', None),
+            'status': d.status,
+            'due_date': d.due_date.isoformat() if d.due_date else None,
+            'photo_url': getattr(d, 'photo_url', None),
+            'voice_note_url': getattr(d, 'voice_note_url', None),
+            'reported_by': d.reported_by.full_name if getattr(d, 'reported_by', None) else None,
+            'inspection': inspection,
+        }
+
+    return jsonify({
+        'status': 'success',
+        'data': {
+            'id': job.id,
+            'job_type': job.job_type,
+            'description': job_desc(),
+            'description_en': job.description,
+            'estimated_hours': job.estimated_hours,
+            'planned_time_hours': float(job.planned_time_hours) if job.planned_time_hours is not None else None,
+            'priority': job.priority,
+            'berth': job.berth,
+            'day_date': job.day.date.isoformat() if job.day and job.day.date else None,
+            'notes': job.notes,
+            'equipment': equipment,
+            'sap': sap,
+            'defect': defect,
+            'assignments': [
+                {
+                    'user_id': a.user_id,
+                    'full_name': a.user.full_name if a.user else None,
+                    'is_lead': a.is_lead,
+                }
+                for a in job.assignments
+            ],
+        }
+    }), 200
+
+
 # ==================== BULK JOB OPERATIONS ====================
 # Must mirror work_plan_jobs' check_job_priority CHECK constraint
 # (app/models/work_plan_job.py). Kept here so an invalid value is rejected as a
