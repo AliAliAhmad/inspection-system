@@ -4,6 +4,13 @@ import { ITokenStorage } from '../utils/token-storage';
 let apiClient: AxiosInstance;
 let tokenStorage: ITokenStorage;
 let isRefreshing = false;
+
+// Held at module level, NOT on apiClient.defaults, so that setLanguage() works
+// before initApiClient() has run. LanguageProvider is mounted OUTSIDE
+// AuthProvider (which is what calls initApiClient), so writing straight to
+// apiClient.defaults silently no-ops on a cold start and the backend never
+// learns the user reads Arabic.
+let currentLanguage: 'en' | 'ar' = 'en';
 let failedQueue: Array<{
   resolve: (token: string) => void;
   reject: (error: unknown) => void;
@@ -36,6 +43,9 @@ export function initApiClient(baseURL: string, storage: ITokenStorage): AxiosIns
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Resolved per request rather than once at init, so a language change takes
+    // effect immediately and never depends on provider mount order.
+    config.headers['Accept-Language'] = currentLanguage;
     // Don't set Content-Type for FormData - let browser/RN set it with boundary
     // Increase timeout for file uploads (voice notes, photos, documents)
     if (config.data instanceof FormData) {
@@ -104,10 +114,15 @@ export function initApiClient(baseURL: string, storage: ITokenStorage): AxiosIns
 }
 
 /**
- * Set the Accept-Language header for all requests.
+ * Set the language sent as Accept-Language on every request.
+ *
+ * Safe to call before initApiClient() — the value is stored at module level and
+ * read by the request interceptor each time a request goes out.
  */
 export function setLanguage(lang: 'en' | 'ar') {
+  currentLanguage = lang;
   if (apiClient) {
+    // Kept in sync for any code reading defaults directly.
     apiClient.defaults.headers['Accept-Language'] = lang;
   }
 }

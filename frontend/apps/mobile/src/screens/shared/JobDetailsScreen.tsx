@@ -24,7 +24,7 @@ import {
   Modal,
   RefreshControl,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { Audio, Video, ResizeMode } from 'expo-av';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useRoute } from '@react-navigation/native';
@@ -223,6 +223,21 @@ export default function JobDetailsScreen() {
         </View>
       )}
 
+      {/* ── Video from the inspection ── */}
+      {!!data.defect?.video_url && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('job_details.video', 'Video')}</Text>
+          <Video
+            testID="job-details-video"
+            source={{ uri: data.defect.video_url }}
+            style={styles.video}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            isLooping={false}
+          />
+        </View>
+      )}
+
       {/* ── Voice note the inspector recorded ── */}
       {!!data.defect?.voice_note_url && (
         <View style={styles.card}>
@@ -238,6 +253,13 @@ export default function JobDetailsScreen() {
               {isPlaying ? t('job_details.pause', 'Pause') : t('job_details.play', 'Play')}
             </Text>
           </TouchableOpacity>
+          {/* Already in the worker's language — lets them read the note in a
+              noisy yard where playing audio is not practical. */}
+          {!!data.defect.voice_transcription && (
+            <Text style={[styles.transcription, isAr && styles.transcriptionRtl]}>
+              {data.defect.voice_transcription}
+            </Text>
+          )}
         </View>
       )}
 
@@ -306,6 +328,15 @@ const styles = StyleSheet.create({
 
   photo: { width: '100%', height: 200, borderRadius: 8, backgroundColor: '#f0f0f0' },
   photoHint: { fontSize: 11, color: '#8c8c8c', textAlign: 'center', marginTop: 6 },
+  video: { width: '100%', height: 220, borderRadius: 8, backgroundColor: '#000' },
+  transcription: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#595959',
+    marginTop: 10,
+    fontStyle: 'italic',
+  },
+  transcriptionRtl: { textAlign: 'right', writingDirection: 'rtl' },
   photoOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' },
   photoFull: { width: '100%', height: '80%' },
   photoCloseHint: { color: '#fff', marginTop: 16, fontSize: 14 },

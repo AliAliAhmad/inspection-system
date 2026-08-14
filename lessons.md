@@ -1,30 +1,60 @@
-LESSON: A query fix made previously-unreachable serialization code run for the first time, crashing prod with `User has no attribute 'name'` (real field: `full_name`) → When a fix makes dead code reachable (e.g., a query now returns rows where it never did), trace and verify the newly-executed path — attribute names, null handling — before pushing; don't assume downstream code was ever exercised.
-LESSON: `backref='tracking'` on a unique (one-to-one) FK silently created a list relationship, so `job.tracking.id` crashed with `InstrumentedList has no attribute id` → For one-to-one relationships always pass `backref=db.backref('name', uselist=False)`; a unique FK column does NOT auto-imply a scalar backref.
-LESSON: `_overdue_bonus_hours` used `abs(overdue)` for performance PMs, so a not-yet-due order (positive "hours remaining") outranked a truly-overdue one (negative "past trigger") → Never `abs()` a value whose SIGN carries meaning. When +/- encodes a real-world state (not-due vs overdue), branch on the sign; only take magnitude after you've confirmed the sign means "overdue".
-LESSON: Equipment Edit silently never saved — the edit form pre-filled immutable fields (name/serial/etc.) and submitted them via {...values}, and the backend rejects the whole request if ANY immutable field is present → When an edit form spreads all form values, whitelist the server's MUTABLE fields before submitting; never blindly POST/PUT the entire form when the API forbids some fields.
-LESSON: Work-planner drag & drop felt slow because every drop waited for TWO sequential round-trips — the write, then the `invalidateQueries` refetch of the full plan — before the card visibly moved → For drag & drop (or any direct-manipulation UI), the visual result must NOT wait on the network. Add React Query `onMutate` optimistic patching + `onError` rollback + `onSettled` reconcile, and always `cancelQueries` first so an in-flight refetch can't land after your patch and undo it.
-LESSON: A comment claimed "React Query will batch the query invalidations" for a loop firing one mutation per job, but mutations resolve at staggered times, so a 5-job bundle caused 5 POSTs, 5 refetches and 5 toasts → React Query dedupes CONCURRENT refetches of the same key; it does NOT batch invalidations triggered at different times. For any multi-item action, add a real bulk endpoint (one transaction, one commit) instead of looping single-item calls — and don't trust a comment asserting a batching behaviour you haven't verified.
-LESSON: `React.memo` on BundleCard would have been a no-op because the parent rebuilds the `jobs` array every render (grouping by equipment) and passed a non-`useCallback` click handler → `React.memo` only pays off if EVERY prop is referentially stable. Before adding it, check each prop: freshly-built arrays/objects and inline functions defeat the default shallow compare. Fix the prop stability (useCallback/useMemo) or supply a custom comparator.
-LESSON: `work-plans.api.ts` declared bulkMoveJobs/bulkDeleteJobs/bulkAssignUsers/bulkUpdatePriority but the backend had NO bulk routes — all four would have 404'd → A typed API client method is NOT proof the endpoint exists. When wiring up a client method you didn't just write, grep the backend for the actual route before relying on it.
-LESSON: An E2E drag test asserted the card landed on "Wednesday" but the drop actually went to Tuesday — the locator `text=/Drag job here/`.first() matched the FIRST empty day, and every empty day column shares that placeholder text → When selecting a drop target in a grid/board UI, select by stable index or a unique id, never by placeholder text that repeats across cells. Log the outgoing request payload (`target_day_id`) to confirm WHERE the drop actually landed before concluding the product code is broken.
-LESSON: Verifying a UI fix locally nearly ran against PRODUCTION — `vite.config.ts` hardcoded its `/api` proxy to the Render production API, so drag & drop testing would have moved real jobs in the live work plan → Before browser-testing any mutating UI, CHECK the proxy/API target and point it at a local backend with a seeded scratch DB. Never exercise create/update/delete flows against a production proxy.
-LESSON: E2E login started failing with 429 after a few runs because BOTH the API and the web app rate-limit login attempts, and Playwright retries multiplied the attempts → For E2E suites, log in ONCE and inject the token (localStorage/storageState) instead of driving the login form per test; set `retries: 0` on auth-heavy specs so a failure doesn't cascade into a rate-limit lockout that masks the real error.
-LESSON: An API payload serialized every job twice (a flat `jobs` list plus per-berth arrays), doubling the response the planner refetches on every drag → Before deleting a field from an API response, enumerate EVERY consumer across all clients — web, mobile, PDF/report services, and stored JSON snapshots. Here the ORM-based PDF service and the version snapshots had their own structures and only LOOKED like consumers because they used the same key name `jobs`. Matching key names are not proof of a shared data source; trace where each dict is actually built.
-LESSON: A cross-platform type change (removing `jobs` from the shared `WorkPlanDay`) needed BOTH web and mobile typechecked; mobile tsc reporting zero errors about that field was itself the strongest evidence mobile never used it → After editing anything in `packages/shared`, run tsc for every app that imports it. A clean typecheck on the other platform doubles as proof-of-non-usage, not just a safety check.
-LESSON: Adding a full-card droppable to a component that is ALSO draggable nearly broke an unrelated, already-shipped flow — dragging a job onto a day column would have resolved to the bundle card instead, so overData.type was not 'day' and the drop silently did nothing → When adding a drop target that overlaps an existing one, gate collision detection on what is being DRAGGED (`args.active.data.current?.type`), not just on target priority. Filter irrelevant targets out entirely for other drag types, and land that gating in its own commit BEFORE the new droppable so no commit ever ships the regression.
-LESSON: A modal's buttons were disabled via `warnings.some(w => w.message.includes('already assigned'))` — a string match on user-facing copy — so a naturally-worded new warning would have silently blocked the feature → Never gate behaviour on the TEXT of a message. When you must work with such code, encode the distinction structurally (severity/type) and pin the exact wording in the spec with the reason, so a future copy edit cannot break logic.
-LESSON: Two E2E "product bugs" were both wrong locators: the Team Pool shows FIRST NAMES only, and an expanded bundle renders every job TWICE (compact summary line + real droppable row), so `.first()` hit the non-droppable summary → Before concluding a UI feature is broken, log the actual state: the outgoing request payload, and for drag & drop the pointer coordinates plus the measured droppable rects. Assert the expected match COUNT (e.g. toHaveCount(2)) so a locator cannot silently drift onto a lookalike element.
-LESSON: A bulk endpoint would have returned 500 (IntegrityError) instead of 400 for an invalid priority, because the value is guarded only by a DB CHECK constraint → When a column has a CHECK constraint, mirror its allowed values in the API layer and validate BEFORE touching the session. A DB constraint is a last line of defence, not input validation — letting it fire turns a user error into a server error.
-LESSON: Four client methods in one API file pointed at backend routes that never existed (bulkMoveJobs, bulkDeleteJobs, bulkAssignUsers, bulkUpdatePriority) — each a latent 404 → A typed API client gives NO guarantee the endpoint exists; TypeScript only checks the call site. Periodically diff the client's declared paths against the framework's registered routes. Automate it if possible, but treat the output as a lead to verify, not a verdict: naive path extraction mis-handles string concatenation and interpolated query suffixes, producing false positives.
-LESSON: `flask db upgrade` died on the local SQLite DB with "duplicate column name: team_number", and the real cause turned out to be far bigger — 10 tables missing entirely and 20 missing columns, i.e. the DB had drifted from the models, not just from Alembic → When a migration fails on an "already exists" error, do NOT just stamp past it. Stamping skips whatever ELSE that migration does (this one also widened a unique constraint). First measure the true gap by diffing db.metadata against the live schema; if many tables/columns are missing, repair the schema to match the models and stamp head, rather than hand-patching migrations one at a time.
-LESSON: A migration used `op.drop_constraint(..., type_='unique')`, which cannot work on SQLite (table-level UNIQUE is an unnamed sqlite_autoindex), and `op.batch_alter_table` was no help either because it reflects foreign keys and crashes on any table missing from a partial dev DB → Migrations that alter CONSTRAINTS are dialect-specific. If production is PostgreSQL but developers run SQLite, branch on `op.get_bind().dialect.name` and make the SQLite path a documented no-op rather than letting the whole chain break.
-LESSON: A "week end" date was produced by string-replacing the day number with day+6, so 2026-08-31 became the impossible 2026-08-37 and any week near a month boundary rendered garbage → NEVER do date arithmetic on the string form of a date. Parse to a Date, use setDate(), format back. If a date helper contains .replace() or string concatenation on the day/month, treat it as a bug.
-LESSON: `new Date().toISOString().split('T')[0]` was used to mean "today" — but toISOString() is UTC, so in Baghdad (UTC+3) it returns YESTERDAY between midnight and 3am → For "what calendar day is it for the USER", always build the string from getFullYear/getMonth/getDate. Reserve toISOString() for timestamps sent to a server. This matters most on screens that DEFAULT to today, where being wrong opens the whole screen on the wrong day for night and early shifts.
-LESSON: Mobile computed Monday-start weeks while the web created Sunday-start plans; the backend had quietly been patched to match "the plan containing this date", which hid the clash and left mobile showing correct jobs under a wrong date range → When two clients disagree about a domain convention, don't pick a side in each client — remove the need to know. Here the fix was to anchor the request on a plain date and render the days the SERVER returns, so neither client has to guess where a week starts.
-LESSON: I "fixed" slow drag & drop, but only made the actions I happened to reproduce optimistic — moving jobs BETWEEN days. Dragging FROM THE POOL (the main planning action) and assigning a technician were left waiting on the network, so the user reported it slow again days later → When fixing a performance problem, enumerate EVERY action in that class and check each one, rather than fixing the path your repro exercised. A grep for `onMutate` across all mutations in the file would have caught this in seconds.
-LESSON: I deferred optimistic updates on assignment as "a modal click, a short wait is normal" — the user disagreed and reported it as slow → YAGNI is about unbuilt features, not about latency the user will actually feel. If an action is on a hot path, treat "it's only one round trip" with suspicion, especially when the server is on another continent (~300ms RTT before any work).
-LESSON: An instrumented page load showed 22 API requests, seven of them the SAME endpoint fired once per day column — a client-side N+1 that no backend query analysis would ever reveal → Count REQUESTS, not just query time. When a component that fetches its own data is rendered inside a list, you have an N+1 at the HTTP layer. Fix by hoisting to one range request; if every instance uses an identical React Query key, the dedupe is automatic and the components barely change.
-LESSON: A duplicate /api/auth/me looked like a bug but was React.StrictMode double-invoking effects in DEV only → Before "fixing" a duplicated request seen on a dev server, check for StrictMode. Working around it would have been the wrong change; production builds do not double-invoke. Measure perf against a production build when the number itself is the finding.
-LESSON: A feature looked like pure frontend work ("show the photo and voice note on the job card") but the data never reached the client — /my-plan sent only 3 of the defect's fields → Before designing any "just display X" screen, check what the API ACTUALLY sends, not what the database contains. The columns existing is not the same as the endpoint returning them.
-LESSON: Adding details to an existing list endpoint would have undone earlier payload-trimming work — details are needed for ONE item, not all of them → When a detail view needs heavy fields (photos, media URLs, translated text), give it its own per-item endpoint. Keeping the list lean matters more than saving a round trip, especially when the list is refetched after every mutation.
-LESSON: Translating user content with an AI on every request would be slow and costly, and the providers are known flaky → Translate once and write the result back to the *_ar column, so the first read pays and every later read is free; always fall back to the original text on failure so a dead provider degrades the content rather than breaking the screen. Tests should assert BOTH the write-back and that a cache hit makes zero AI calls.
+# Lessons Learned
+
+Format: `LESSON: [what went wrong] → [rule to follow]`
+
+---
+
+## 2026-08-14 — Job details shipped without Arabic or media
+
+**LESSON: I wrote `language = user.language or 'en'` in a new endpoint while 16 other
+API modules already used the shared `get_language(user)` helper → Before resolving
+language, tenancy, permissions, or any other cross-cutting concern in a NEW endpoint,
+grep for how existing endpoints resolve it and reuse that helper. A hand-rolled version
+of an existing convention is a bug that passes its own tests.**
+
+Why it broke: `users.language` defaults to `'en'` and is only ever written by an admin
+editing a user. A worker switching the app to Arabic never changes it. The real signal
+is the `Accept-Language` header, which `get_language()` checks first.
+
+---
+
+## 2026-08-14 — Media read from the wrong table
+
+**LESSON: I read `defect.photo_url` and assumed defects carry their own media, without
+checking every code path that CREATES a defect → When surfacing a field, find every
+write site for it before trusting the read. If some creation paths leave it NULL, the
+read needs a documented fallback.**
+
+Only the ad-hoc/field-report path copies media onto the defect row.
+`DefectService.create_from_failed_item` — the main inspection path — leaves
+`photo_url`/`voice_note_url` NULL because the photo, video and voice live on the
+`InspectionAnswer`. So the exact case the user cared about ("jobs from inspection
+findings") was the one case with no media.
+
+Corollary: the model comment said `# Quick field report fields` directly above
+`voice_note_url` / `photo_url`. The scoping was documented in the schema and I read
+past it.
+
+---
+
+## 2026-08-14 — A client "setter" that silently no-ops
+
+**LESSON: `setLanguage()` wrote to `apiClient.defaults` guarded by `if (apiClient)`,
+so it did nothing when called before init → A setter that silently no-ops when its
+dependency is missing hides ordering bugs forever. Store the value at module level and
+apply it at USE time (in the request interceptor), so call order stops mattering.**
+
+Mobile's `LanguageProvider` never called it at all, and it is mounted OUTSIDE the
+`AuthProvider` that calls `initApiClient`. Two independent faults with one symptom.
+Note the request interceptor's own comment claimed it attached "token + language" —
+it only ever attached the token. **When a comment describes behaviour the code does not
+have, trust the code and fix the drift.**
+
+---
+
+## 2026-08-14 — Verify a regression test actually regresses
+
+**LESSON: New tests for a bug fix are worthless until proven to fail without the fix →
+Stash the fix, run the new tests, confirm they fail with the SYMPTOM THE USER REPORTED,
+then restore. 5 of 6 new tests failed against the old code, one returning the literal
+English string the user complained about.**

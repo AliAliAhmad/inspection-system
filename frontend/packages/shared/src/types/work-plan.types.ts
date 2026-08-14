@@ -1075,8 +1075,15 @@ export interface JobDetailsDefect {
   report_source: string | null;
   status: string | null;
   due_date: string | null;
+  /**
+   * Media falls back to the originating InspectionAnswer: defects raised from a
+   * failed checklist item never copy photo/voice onto the defect row itself.
+   */
   photo_url: string | null;
+  video_url: string | null;
   voice_note_url: string | null;
+  /** Already resolved to the caller's language by the backend. */
+  voice_transcription: string | null;
   reported_by: string | null;
   inspection: JobDetailsInspection | null;
 }

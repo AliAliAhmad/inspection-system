@@ -3,7 +3,7 @@ import { I18nManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { Language, resources } from '@inspection/shared';
+import { Language, resources, setLanguage as setApiLanguage } from '@inspection/shared';
 
 const LANG_KEY = 'app_language';
 
@@ -32,6 +32,9 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         if (saved === 'en' || saved === 'ar') {
           setLang(saved as Language);
           i18n.changeLanguage(saved);
+          // Without this the backend never learns the user reads Arabic and
+          // serves English on every screen, not just this one.
+          setApiLanguage(saved as Language);
           const rtl = saved === 'ar';
           if (I18nManager.isRTL !== rtl) I18nManager.forceRTL(rtl);
         }
@@ -42,6 +45,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const setLanguage = useCallback((lang: Language) => {
     setLang(lang);
     i18n.changeLanguage(lang);
+    setApiLanguage(lang);
     const rtl = lang === 'ar';
     if (I18nManager.isRTL !== rtl) I18nManager.forceRTL(rtl);
     AsyncStorage.setItem(LANG_KEY, lang).catch(() => {});

@@ -20,10 +20,10 @@ from app.models import (
     # Enhanced Work Planning models
     JobTemplate, JobTemplateMaterial, JobTemplateChecklist, JobDependency,
     CapacityConfig, WorkerSkill, EquipmentRestriction, WorkPlanVersion,
-    SchedulingConflict, JobChecklistResponse
+    SchedulingConflict, JobChecklistResponse, InspectionAnswer
 )
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
-from app.utils.decorators import get_current_user, admin_required as admin_decorator
+from app.utils.decorators import get_current_user, get_language, admin_required as admin_decorator
 from app.services.notification_service import NotificationService
 from app.services.work_plan_ai_service import WorkPlanAIService
 from datetime import datetime, timedelta, date
@@ -1180,6 +1180,64 @@ def _arabic_or_original(text, cached_ar, on_translated=None):
     return text
 
 
+def _file_url(file_obj, raw_path=None):
+    """Best available URL for an uploaded file.
+
+    `File.get_url()` returns None for anything that is not already an absolute
+    URL, so fall back to the stored path — older rows predate Cloudinary and keep
+    the URL directly in `file_path` / the `*_path` column.
+    """
+    if file_obj:
+        url = file_obj.get_url()
+        if url:
+            return url
+        if file_obj.file_path:
+            return file_obj.file_path
+    return raw_path or None
+
+
+def _defect_media(defect):
+    """Photo / video / voice for a defect, falling back to the inspection answer.
+
+    Defects raised from a FAILED CHECKLIST ITEM (`DefectService.create_from_failed_item`)
+    never copy media onto the defect row — the photo, video and voice note stay on
+    the `InspectionAnswer` for that item. Only the ad-hoc field-report path copies
+    them across. So reading `defect.photo_url` alone returns nothing for exactly
+    the "job came from an inspection finding" case.
+
+    The answer lookup is keyed on inspection_id AND checklist_item_id. Matching on
+    inspection_id alone would attach an unrelated question's photo to this defect;
+    a NULL checklist_item_id (ad-hoc finding) is therefore never looked up — those
+    defects already carry their own media.
+    """
+    media = {
+        'photo_url': defect.photo_url,
+        'video_url': None,
+        'voice_note_url': defect.voice_note_url,
+        'voice_transcription': None,
+    }
+
+    if not defect.inspection_id or defect.checklist_item_id is None:
+        return media
+
+    answer = InspectionAnswer.query.filter_by(
+        inspection_id=defect.inspection_id,
+        checklist_item_id=defect.checklist_item_id,
+    ).first()
+    if not answer:
+        return media
+
+    if not media['photo_url']:
+        media['photo_url'] = _file_url(answer.photo_file, answer.photo_path)
+    if not media['voice_note_url']:
+        media['voice_note_url'] = _file_url(answer.voice_note)
+    media['video_url'] = _file_url(answer.video_file, answer.video_path)
+    # Already stored bilingual as {'en': ..., 'ar': ...} — no AI call needed.
+    media['voice_transcription'] = answer.voice_transcription
+
+    return media
+
+
 @bp.route('/jobs/<int:job_id>/details', methods=['GET'])
 @jwt_required()
 def get_job_details(job_id):
@@ -1194,7 +1252,12 @@ def get_job_details(job_id):
     not on job_type strings.
     """
     user = get_current_user()
-    language = user.language or 'en'
+    # Must be get_language(), not user.language: `users.language` defaults to 'en'
+    # and is only ever set by an admin editing the user, so a worker who switches
+    # the app to Arabic still has 'en' stored. get_language() checks ?lang= and the
+    # Accept-Language header the client actually sends, then falls back to the
+    # stored preference.
+    language = get_language(user)
 
     job = db.session.get(WorkPlanJob, job_id)
     if not job:
@@ -1260,6 +1323,20 @@ def get_job_details(job_id):
                 'inspector': insp.technician.full_name if getattr(insp, 'technician', None) else None,
             }
 
+        media = _defect_media(d)
+
+        # voice_transcription is stored bilingual; hand the worker their language
+        # and fall back to whatever exists rather than showing nothing.
+        transcription = None
+        if isinstance(media['voice_transcription'], dict):
+            transcription = (
+                media['voice_transcription'].get(language)
+                or media['voice_transcription'].get('en')
+                or media['voice_transcription'].get('ar')
+            )
+        elif media['voice_transcription']:
+            transcription = str(media['voice_transcription'])
+
         defect = {
             'id': d.id,
             'description': defect_desc,
@@ -1270,8 +1347,10 @@ def get_job_details(job_id):
             'report_source': getattr(d, 'report_source', None),
             'status': d.status,
             'due_date': d.due_date.isoformat() if d.due_date else None,
-            'photo_url': getattr(d, 'photo_url', None),
-            'voice_note_url': getattr(d, 'voice_note_url', None),
+            'photo_url': media['photo_url'],
+            'video_url': media['video_url'],
+            'voice_note_url': media['voice_note_url'],
+            'voice_transcription': transcription,
             'reported_by': d.reported_by.full_name if getattr(d, 'reported_by', None) else None,
             'inspection': inspection,
         }
