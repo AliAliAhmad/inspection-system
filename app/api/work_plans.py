@@ -23,7 +23,9 @@ from app.models import (
     SchedulingConflict, JobChecklistResponse, InspectionAnswer
 )
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
-from app.utils.decorators import get_current_user, get_language, admin_required as admin_decorator
+from app.utils.decorators import (get_current_user, get_language,
+                                  planning_today as get_planning_today,
+                                  admin_required as admin_decorator)
 from app.services.notification_service import NotificationService
 from app.services.work_plan_ai_service import WorkPlanAIService
 from datetime import datetime, timedelta, date
@@ -3412,7 +3414,7 @@ def auto_schedule(plan_id):
 
         # Earlier required date = higher priority
         if order.required_date:
-            days_until = (order.required_date - datetime.utcnow().date()).days
+            days_until = (order.required_date - get_planning_today()).days
             if days_until < 0:
                 score += 200  # Past due
             elif days_until < 3:

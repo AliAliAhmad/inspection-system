@@ -170,3 +170,22 @@ def get_language(user=None):
         return user.language
 
     return 'en'
+
+
+def planning_today():
+    """Today's date in the yard's timezone.
+
+    Planning is a Baghdad operation (UTC+3), but the server runs UTC. Using
+    utcnow().date() meant that every day between 00:00 and 03:00 local, the
+    planner believed it was still yesterday — a PM due today read as not-yet-due,
+    and everything overdue was counted one day short.
+
+    ZoneInfo is stdlib since 3.9; the fallback keeps this working on a container
+    without tzdata rather than failing at import.
+    """
+    from datetime import datetime, timedelta, timezone
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo('Asia/Baghdad')).date()
+    except Exception:  # noqa: BLE001 - no tzdata in the image
+        return (datetime.now(timezone.utc) + timedelta(hours=3)).date()

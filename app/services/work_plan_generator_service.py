@@ -534,7 +534,8 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
         status='pending',
     ).options(joinedload(SAPWorkOrder.equipment)).all()
 
-    today = datetime.utcnow().date()
+    from app.utils.decorators import planning_today
+    today = planning_today()
     for sap in sap_orders:
         eq = sap.equipment
         # Compute day-based overdue (today - order date) for everything except
@@ -590,7 +591,8 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
         # Calculate overdue days from due_date
         overdue_days = None
         if defect.due_date:
-            delta = (date.today() - defect.due_date).days
+            from app.utils.decorators import planning_today
+            delta = (planning_today() - defect.due_date).days
             overdue_days = max(delta, 0)
 
         # Map defect category to work_center

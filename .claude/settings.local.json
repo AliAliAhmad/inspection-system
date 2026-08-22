@@ -232,7 +232,10 @@
       "Bash(dropdb:*)",
       "Bash(psql:*)",
       "Bash(eas build:*)",
-      "Bash(eas submit:*)"
+      "Bash(eas submit:*)",
+      "Bash(say Mockup ready, check your browser:*)",
+      "Bash(pip3 show:*)",
+      "Bash(pip show:*)"
     ]
   }
 }
