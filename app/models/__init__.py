@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.equipment import Equipment
 from app.models.checklist import ChecklistTemplate, ChecklistItem, ChecklistItemEquipmentType
 from app.models.inspection import Inspection, InspectionAnswer
+from app.models.sap_sync_file import SapSyncFile
 from app.models.defect import Defect
 from app.models.defect_occurrence import DefectOccurrence
 from app.models.schedule import InspectionSchedule, InspectionRoutine, WeeklyCompletion
@@ -316,4 +317,6 @@ __all__ = [
     # Rating & EPI System
     'StarHistory',
     'EPISnapshot',
+    # SAP file sync (Windows courier)
+    'SapSyncFile',
 ]

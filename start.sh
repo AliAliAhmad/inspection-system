@@ -19,6 +19,15 @@ from app.extensions import db
 from sqlalchemy import text
 app = create_app('production')
 with app.app_context():
+    # SAP courier table. Created here as well as in its migration because this
+    # repo has multiple alembic heads, so 'flask db upgrade' above may not reach
+    # it. checkfirst makes this a no-op once the table exists.
+    try:
+        from app.models import SapSyncFile
+        SapSyncFile.__table__.create(db.engine, checkfirst=True)
+        print('sap_sync_files table ensured')
+    except Exception as e:
+        print(f'sap_sync_files ensure failed: {e}')
     cols = [
         ('description', 'TEXT'),
         ('function', 'VARCHAR(200)'),

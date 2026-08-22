@@ -33,10 +33,18 @@ import json
 bp = Blueprint('work_plans', __name__)
 
 
+# Roles allowed to touch work planning. Deliberately NOT quality_engineer:
+# QEs review work, they do not author plans. Nobody holds it as a primary role
+# today (it exists only as the auto-paired minor role of engineer, see
+# User.get_minor_role), so removing it locks nobody out — but _log_excluded_roles()
+# at startup will shout if that ever stops being true.
+PLANNING_ROLES = ('admin', 'engineer')
+
+
 def engineer_or_admin_required():
     """Check if user is engineer or admin."""
     user = get_current_user()
-    if user.role not in ['admin', 'engineer', 'quality_engineer']:
+    if user.role not in PLANNING_ROLES:
         raise ForbiddenError("Only engineers and admins can access this resource")
     return user
 
@@ -366,17 +374,32 @@ def clear_all_jobs(week_start_str):
         from app.models.work_plan_assignment import WorkPlanAssignment
         from app.models.work_plan_material import WorkPlanMaterial
 
-        # Collect ALL job IDs and SAP order numbers in one pass
+        # Collect job IDs and SAP order numbers in one pass.
+        #
+        # Jobs carrying a record of real work are KEPT, not cleared — one button
+        # must not quietly destroy a week of the crew's tracking, checklists and
+        # materials. They are reported back so nothing disappears silently.
         scheduled_sap_numbers = set()
         job_ids = []
+        kept = []
         for day in plan.days:
             for job in day.jobs:
+                state = job_work_state(job)
+                if state is not None:
+                    kept.append({'job_id': job.id, 'state': state,
+                                 'sap_order_number': job.sap_order_number})
+                    continue
                 if job.sap_order_number:
                     scheduled_sap_numbers.add(job.sap_order_number)
                 job_ids.append(job.id)
 
         if not job_ids:
-            return jsonify({'status': 'ok', 'deleted': 0, 'sap_orders_reset': 0}), 200
+            return jsonify({
+                'status': 'ok', 'deleted': 0, 'sap_orders_reset': 0,
+                'kept': len(kept), 'kept_jobs': kept,
+                'message': (f'Nothing cleared — {len(kept)} job(s) have work recorded.'
+                            if kept else 'No jobs to clear.'),
+            }), 200
 
         # Delete child records FIRST to avoid FK violations
         # 1. Tracking rows (NOT NULL FK, no cascade)
@@ -399,6 +422,13 @@ def clear_all_jobs(week_start_str):
             WorkPlanMaterial.work_plan_job_id.in_(job_ids)
         ).delete(synchronize_session=False)
 
+        # 3b. Ratings — NOT NULL FK to work_plan_jobs. Previously missing, which
+        # made clearing a week containing any rated job fail with an IntegrityError.
+        from app.models.work_plan_job_rating import WorkPlanJobRating
+        WorkPlanJobRating.query.filter(
+            WorkPlanJobRating.work_plan_job_id.in_(job_ids)
+        ).delete(synchronize_session=False)
+
         # 4. Now delete the jobs themselves
         from app.models.work_plan_job import WorkPlanJob as WPJ
         deleted = WPJ.query.filter(WPJ.id.in_(job_ids)).delete(synchronize_session=False)
@@ -413,12 +443,16 @@ def clear_all_jobs(week_start_str):
             ).update({'status': 'pending'}, synchronize_session=False)
 
         db.session.commit()
-        logger.info(f'clear_all_jobs | plan_id={plan.id} deleted={deleted} sap_reset={sap_reset}')
+        logger.info(f'clear_all_jobs | plan_id={plan.id} deleted={deleted} sap_reset={sap_reset} kept={len(kept)}')
 
         return jsonify({
             'status': 'ok',
             'deleted': deleted,
             'sap_orders_reset': sap_reset,
+            'kept': len(kept),
+            'kept_jobs': kept,
+            'message': (f'Cleared {deleted}. Kept {len(kept)} job(s) that have work recorded.'
+                        if kept else f'Cleared {deleted} job(s).'),
         }), 200
 
     except Exception as e:
@@ -1070,13 +1104,72 @@ def update_job(plan_id, job_id):
     }), 200
 
 
+# Tracking statuses that mean a human actually did something on this job.
+# 'pending' and 'not_started' are placeholders created alongside the job, so they
+# do NOT count as work.
+WORKED_TRACKING_STATUSES = ('in_progress', 'paused', 'completed', 'incomplete')
+
+# Of those, the ones that are finished and must never leave the board — removing
+# them would understate what the yard actually did that week.
+FINISHED_TRACKING_STATUSES = ('completed', 'incomplete')
+
+
+def job_work_state(job):
+    """What a worker has actually done on this job, or None if untouched.
+
+    Used to decide whether a job may be removed from a plan. Removing a worked
+    job used to hard-DELETE its tracking row, assignments, checklist responses
+    and materials — silently destroying the record of who did the work, how long
+    it took, and what they found.
+
+    Points and stars survive regardless (point_history / star_history key on
+    users.id and carry no FK to the job), but the evidence behind them does not.
+    """
+    tracking = getattr(job, 'tracking', None)
+    if tracking is not None and tracking.status in WORKED_TRACKING_STATUSES:
+        return tracking.status
+
+    # A rating without tracking shouldn't happen, but if it does the job has been
+    # judged and is certainly not untouched.
+    from app.models.work_plan_job_rating import WorkPlanJobRating
+    if WorkPlanJobRating.query.filter_by(work_plan_job_id=job.id).first():
+        return 'rated'
+    return None
+
+
+def assert_job_removable(job):
+    """Refuse to remove a job that carries a record of real work.
+
+    Deliberately a hard block rather than a warn-and-override: `work_plan_day_id`
+    is NOT NULL, so there is nowhere for a job to live once it leaves a day. Until
+    the job pool becomes a first-class place a job can sit (the "one big box"
+    work), forcing a removal would mean deleting the record — the exact thing this
+    is here to prevent.
+    """
+    state = job_work_state(job)
+    if state is None:
+        return
+    if state in FINISHED_TRACKING_STATUSES or state == 'rated':
+        raise ForbiddenError(
+            f"Job #{job.id} is finished and cannot be removed from the plan. "
+            "Finished work stays on the plan as a record of what was done."
+        )
+    raise ForbiddenError(
+        f"Job #{job.id} has work in progress ({state}) and cannot be removed. "
+        "Removing it would erase the worker's time, checklist and materials."
+    )
+
+
 def _delete_job_record(plan_id, job):
     """Delete a single job from a plan, preserving pool semantics.
 
     Shared by remove_job (single) and bulk_delete_jobs (many) so both paths
     behave identically. Does NOT commit — the caller owns the transaction so a
     bulk delete is one commit instead of one per job.
+
+    Raises ForbiddenError if the job carries a record of real work.
     """
+    assert_job_removable(job)
     job_id = job.id
 
     # If the job came from a SAP order, reset it back to 'pending' so it reappears in the pool
@@ -1119,7 +1212,16 @@ def _delete_job_record(plan_id, job):
     db.session.expunge(job)
 
     # Delete child records + job entirely via raw SQL — no ORM cascade, no lazy-load.
-    for table in ['job_checklist_responses', 'work_plan_assignments', 'work_plan_materials', 'work_plan_job_trackings']:
+    #
+    # work_plan_job_ratings MUST be in this list. Its work_plan_job_id is a
+    # NOT NULL FK to work_plan_jobs. Omitting it broke differently per database:
+    # Postgres (production) enforced the FK and raised IntegrityError -> 500 with
+    # the job not removed; SQLite (tests, foreign_keys=0) deleted the job anyway
+    # and left the rating row dangling.
+    # Unreachable from the single-job path now that rated jobs are blocked
+    # outright, but clear_all_jobs and any future caller still need it.
+    for table in ['job_checklist_responses', 'work_plan_assignments', 'work_plan_materials',
+                  'work_plan_job_ratings', 'work_plan_job_trackings']:
         db.session.execute(
             db.text(f'DELETE FROM {table} WHERE work_plan_job_id = :jid'),
             {'jid': job_id}
@@ -3164,6 +3266,10 @@ def generate_plan(plan_id):
             the start. Used for combined steps 2 and 3 to add to existing plan.
             Default: False.
     """
+    # Planning-only. Placed before the try block on purpose: these handlers
+    # catch bare Exception, which would turn a 403 into a 500.
+    engineer_or_admin_required()
+
     data = request.get_json(silent=True) or {}
     recipe = data.get('recipe', 'priority_first')
     clear_existing = data.get('clear_existing', False)
@@ -3181,15 +3287,19 @@ def generate_plan(plan_id):
         )
         return jsonify(result), 200
     except Exception as e:
-        logger.error(f"Plan generation failed: {e}")
-        import traceback
-        return jsonify({'status': 'error', 'message': str(e), 'traceback': traceback.format_exc()}), 500
+        # Log the traceback, never return it — it leaks file paths and internals.
+        logger.exception("Plan generation failed for plan_id=%s", plan_id)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @bp.route('/<int:plan_id>/generate/reject', methods=['POST'])
 @jwt_required()
 def reject_generation(plan_id):
     """Remove all AI-generated jobs and reset SAP orders to pending."""
+    # Planning-only. Placed before the try block on purpose: these handlers
+    # catch bare Exception, which would turn a 403 into a 500.
+    engineer_or_admin_required()
+
     try:
         from app.services.work_plan_generator_service import WorkPlanGeneratorService
         result = WorkPlanGeneratorService.reject_generation(plan_id)
@@ -3203,6 +3313,10 @@ def reject_generation(plan_id):
 @jwt_required()
 def get_plan_score(plan_id):
     """Score an existing plan on 5 dimensions."""
+    # Planning-only. Placed before the try block on purpose: these handlers
+    # catch bare Exception, which would turn a 403 into a 500.
+    engineer_or_admin_required()
+
     try:
         from app.services.work_plan_generator_service import WorkPlanGeneratorService
         result = WorkPlanGeneratorService.score_plan(plan_id)
@@ -3216,6 +3330,10 @@ def get_plan_score(plan_id):
 @jwt_required()
 def preview_candidates(plan_id):
     """Preview what would be scheduled without creating jobs."""
+    # Planning-only. Placed before the try block on purpose: these handlers
+    # catch bare Exception, which would turn a 403 into a 500.
+    engineer_or_admin_required()
+
     try:
         from app.services.work_plan_generator_service import WorkPlanGeneratorService
         result = WorkPlanGeneratorService.get_candidates(plan_id)

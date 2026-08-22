@@ -217,6 +217,8 @@ def create_app(config_name='development'):
 
     # Work Planning
     app.register_blueprint(work_plans.bp, url_prefix='/api/work-plans')
+    from app.api import sap_sync
+    app.register_blueprint(sap_sync.bp, url_prefix='/api/sap-sync')
     app.register_blueprint(materials.bp, url_prefix='/api/materials')
     app.register_blueprint(cycles.bp, url_prefix='/api/cycles')
     app.register_blueprint(pm_templates.bp, url_prefix='/api/pm-templates')
@@ -911,6 +913,37 @@ def create_app(config_name='development'):
         except Exception as e:
             db.session.rollback()
             print(f'\n❌ Commit failed: {e}')
+
+    @app.before_request
+    def _warn_once_about_excluded_planning_roles():
+        """Shout if anyone holds a role the planner excludes.
+
+        Planning is admin+engineer only. That is safe today because nobody holds
+        'quality_engineer' as a PRIMARY role — it exists only as the auto-paired
+        minor role of engineer. If that ever stops being true, the affected user
+        would hit an unexplained 403 with nothing to point at. This surfaces it
+        in the logs instead of on a Monday morning.
+        """
+        if getattr(app, '_planning_roles_checked', False):
+            return
+        app._planning_roles_checked = True
+        try:
+            from app.models import User
+            from app.api.work_plans import PLANNING_ROLES
+            blocked = User.query.filter(
+                User.is_active.is_(True),
+                User.role.notin_(PLANNING_ROLES),
+                User.minor_role.in_(PLANNING_ROLES),
+            ).all()
+            if blocked:
+                app.logger.warning(
+                    'PLANNING ACCESS: %d active user(s) hold a planning role only as a '
+                    'MINOR role and cannot reach the planner: %s',
+                    len(blocked),
+                    ', '.join(f'{u.full_name} (role={u.role}, minor={u.minor_role})' for u in blocked),
+                )
+        except Exception:  # noqa: BLE001 - never let a diagnostic break startup
+            app.logger.debug('Planning-role check skipped', exc_info=True)
 
     return app
 

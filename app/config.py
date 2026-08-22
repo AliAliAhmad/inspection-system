@@ -26,6 +26,11 @@ class Config:
     # File uploads
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', os.path.join(basedir, 'instance', 'uploads'))
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size (videos can be large)
+
+    # Shared secret for the Windows SAP file courier. Machine-to-machine, kept
+    # separate from the human JWT login. Unset means the sync endpoint refuses
+    # everything rather than accepting anything.
+    SAP_SYNC_ROBOT_KEY = os.getenv('SAP_SYNC_ROBOT_KEY', '')
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
 
     # Rate limiting
