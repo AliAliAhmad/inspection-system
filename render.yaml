@@ -33,8 +33,19 @@ services:
         value: production
       - key: CORS_ORIGINS
         value: https://inspection-web.onrender.com,https://inspection-web-*.onrender.com
+      # ONE worker. gunicorn.conf.py says why in its own comment: "Render
+      # starter (512MB) can only handle 1 worker due to heavy AI service
+      # imports" — and this file was overriding that warning with 2.
+      #
+      # Two workers plus the SAP parse does not fit: each worker holds pandas,
+      # SQLAlchemy and the AI service imports, and the parse adds ~156 MB on
+      # top of whichever worker runs it. The pool rebuild was being killed by
+      # the kernel with no traceback, which reads as a job that never finished.
+      #
+      # Concurrency is unaffected in practice — worker_class is gthread with 8
+      # threads, and this API is I/O bound.
       - key: GUNICORN_WORKERS
-        value: "2"
+        value: "1"
       - key: GUNICORN_THREADS
         value: "4"
       - key: LOG_LEVEL

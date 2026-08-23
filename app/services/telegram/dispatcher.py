@@ -202,6 +202,7 @@ POOL_WORDS = {
         'gone': 'gone from SAP', 'equipment': 'equipment matched',
         'unmatched': 'NOT FOUND IN THE APP', 'dropped': 'orders dropped',
         'skipped': 'Rebuild could not run', 'delivered': 'Files delivered',
+        'crashed': 'Rebuild crashed',
         'missing': 'not on disk', 'stale': 'superseded',
     },
     'ar': {
@@ -212,6 +213,7 @@ POOL_WORDS = {
         'gone': 'خرج من SAP', 'equipment': 'معدات مطابقة',
         'unmatched': 'غير موجودة في التطبيق', 'dropped': 'أوامر مهملة',
         'skipped': 'تعذّر تشغيل التحديث', 'delivered': 'الملفات المستلمة',
+        'crashed': 'تعطّل التحديث',
         'missing': 'غير موجود على القرص', 'stale': 'مستبدل',
     },
 }
@@ -257,6 +259,10 @@ def _pool_summary(language):
     lines.append('')
     if not report:
         lines.append(f"{words['last_rebuild']}: {words['never']}")
+    elif report.get('status') == 'error':
+        # A crash used to leave nothing at all, so /pool said "never run" —
+        # identical to "nobody has asked for one yet".
+        lines.append(f"❌ {words['crashed']}: {report.get('reason')}")
     elif report.get('status') == 'skipped':
         # A rebuild that declined to run has a REASON, and the reason is the
         # answer. Before this it saved nothing and read as "never run" — the

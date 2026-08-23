@@ -286,9 +286,19 @@ def rebuild_pool():
                                 removal.get('jobs_removed'),
                                 removal.get('jobs_left_in_progress'),
                                 removal.get('questions_raised'))
-                except Exception:  # noqa: BLE001
+                except Exception as e:  # noqa: BLE001
                     db.session.rollback()
                     logger.exception('Pool rebuild failed')
+                    # Without this a crash leaves no report, so /pool says
+                    # "never run" — the same words as "it has not been asked
+                    # to yet". Three different failures reading identically is
+                    # how an afternoon disappears into a shell.
+                    try:
+                        from app.services.sap_pool_sync import _save_report
+                        _save_report({'status': 'error', 'dry_run': False,
+                                      'reason': f'{type(e).__name__}: {e}'[:400]})
+                    except Exception:  # noqa: BLE001
+                        logger.exception('Could not record the rebuild failure')
 
     threading.Thread(target=run, daemon=True, name='sap-pool-rebuild').start()
     return jsonify({

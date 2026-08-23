@@ -637,6 +637,18 @@ class TestThePoolCommand:
 
         assert '(nothing)' in text
 
+    def test_a_crashed_rebuild_says_crashed_not_never_run(self, bot, admin_user,
+                                                          db_session):
+        """Three different failures used to read identically."""
+        self._report(bot, status='error',
+                     reason='MemoryError: cannot allocate')
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert 'crashed' in text.lower()
+        assert 'MemoryError' in text
+        assert 'never run' not in text
+
     def test_no_rebuild_yet_says_never_run(self, bot, admin_user, db_session):
         import os
         from app.services.sap_pool_sync import _report_path

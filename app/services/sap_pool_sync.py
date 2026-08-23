@@ -93,6 +93,23 @@ def _equipment_lookup(plant_codes):
     return lookup
 
 
+def _rss_mb():
+    """Resident memory, for the log line either side of the parse.
+
+    The container ceiling is 512 MB and an OOM kill produces no traceback — so
+    without a number before and after, "it stopped" and "it was killed" are
+    indistinguishable. Returns None rather than raising on a platform without
+    the counter.
+    """
+    try:
+        import resource
+        import sys
+        value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return round(value / 1e6 if sys.platform == 'darwin' else value / 1e3)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _delivered_summary(limit=12):
     """What the courier has actually delivered, as the rebuild sees it.
 
@@ -126,7 +143,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     Returns a report. Nothing is written when `dry_run` is set, which is how a
     change gets inspected before it touches a live pool.
     """
-    logger.info('SAP pool sync: starting (dry_run=%s)', dry_run)
+    logger.info('SAP pool sync: starting (dry_run=%s, rss=%s MB)', dry_run, _rss_mb())
 
     iw39, iw39_record = _current_file_bytes(sheet_name='IW39')
     if not iw39:
@@ -250,6 +267,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         dry_run=dry_run,
     )
 
+    logger.info('SAP pool sync: parse done (peak rss=%s MB)', _rss_mb())
     matched = len(codes) - len(unmatched_codes)
     report = {
         'status': 'ok',
