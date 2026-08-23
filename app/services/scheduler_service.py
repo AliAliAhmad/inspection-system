@@ -966,6 +966,33 @@ def init_scheduler(app):
         from app.utils.decorators import planning_today
         push_day_to_planners(planning_today(), kind='today')
 
+    # 05:00 Baghdad -> rebuild the pool from whatever the courier delivered
+    # overnight, so the 06:00 push an hour later reads fresh data rather than
+    # yesterday's. Automatic because the alternative was a shell session that
+    # drops on a weak connection, on a step that has to happen every single day.
+    @run_with_context
+    def rebuild_pool_nightly():
+        from app.services.run_once import CrossWorkerLock
+        from app.services.sap_pool_sync import sync_pool_from_delivered_files
+        with CrossWorkerLock(app, 'sap-pool-rebuild') as lock:
+            if not lock.acquired:
+                logger.info('Nightly pool rebuild skipped — one is already running')
+                return
+            report = sync_pool_from_delivered_files()
+            logger.info('Nightly pool rebuild: created=%s updated=%s removed=%s '
+                        'unmatched_equipment=%s',
+                        report.get('created'), report.get('updated'),
+                        report.get('removed_from_pool'),
+                        report.get('equipment_unmatched'))
+
+    scheduler.add_job(
+        rebuild_pool_nightly,
+        CronTrigger(hour=5, minute=0, timezone='Asia/Baghdad'),
+        id='rebuild_pool_nightly',
+        name='Rebuild the SAP job pool at 05:00 Baghdad',
+        replace_existing=True
+    )
+
     scheduler.add_job(
         telegram_push_tomorrow,
         CronTrigger(hour=16, minute=0, timezone='Asia/Baghdad'),

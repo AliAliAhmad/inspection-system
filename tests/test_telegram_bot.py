@@ -526,6 +526,112 @@ class TestTheCommands:
         assert len(chunks) == 1 and 'went wrong' in chunks[0]
 
 
+class TestThePoolCommand:
+    """Answers "did my SAP files turn into jobs" without a laptop."""
+
+    def _order(self, db_session, number, priority='normal', job_type='pm',
+               work_plan_id=None):
+        from app.models import SAPWorkOrder
+        equipment = make_equipment(db_session, f'EQ{number}', f'S{number}')
+        db_session.session.add(SAPWorkOrder(
+            work_plan_id=work_plan_id, order_number=number, order_type='PRM',
+            job_type=job_type, equipment_id=equipment.id, estimated_hours=4.0,
+            priority=priority, status='pending'))
+        db_session.session.commit()
+
+    def _report(self, app, **fields):
+        import json, os
+        from app.services.sap_pool_sync import _report_path
+        base = {'created': 12, 'updated': 197, 'removed_from_pool': 4,
+                'equipment_matched': 26, 'equipment_unmatched': 0,
+                'unmatched_codes': [], 'orders_skipped_no_equipment': 0,
+                'dry_run': False, 'written_at': '2026-08-23T05:00:11'}
+        base.update(fields)
+        with open(_report_path(False), 'w') as handle:
+            json.dump(base, handle)
+
+    def test_an_empty_box_says_so_rather_than_showing_zero(self, bot, admin_user,
+                                                           db_session):
+        text = handle(_update('/pool'), admin_user)[0]
+        assert 'box is empty' in text
+
+    def test_it_counts_what_is_waiting_and_splits_by_priority(self, bot, admin_user,
+                                                              db_session):
+        self._order(db_session, '700000000001', priority='urgent')
+        self._order(db_session, '700000000002', priority='urgent')
+        self._order(db_session, '700000000003', priority='normal')
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert '3 jobs waiting' in text
+        assert '2 urgent' in text
+        assert '1 normal' in text
+
+    def test_scheduled_orders_are_not_in_the_box(self, bot, admin_user, db_session,
+                                                 week):
+        """Planned into a week means it has LEFT the box — that is the whole model."""
+        plan, day = week
+        self._order(db_session, '700000000001')
+        self._order(db_session, '700000000002', work_plan_id=plan.id)
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert '1 jobs waiting' in text
+
+    def test_it_reports_what_the_last_rebuild_did(self, bot, admin_user, db_session):
+        self._report(bot)
+        self._order(db_session, '700000000001')
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert '+12 new' in text
+        assert '197 updated' in text
+        assert '-4 gone from SAP' in text
+
+    def test_unmatched_equipment_is_NAMED_not_just_counted(self, bot, admin_user,
+                                                           db_session):
+        """The one failure in this pipeline that is otherwise invisible.
+
+        Orders whose equipment is not in the app are dropped, and the planner
+        simply looks empty with nothing explaining why.
+        """
+        self._report(bot, equipment_unmatched=3, equipment_matched=23,
+                     unmatched_codes=['RS999', 'TT888', 'ECH77'],
+                     orders_skipped_no_equipment=9)
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert 'RS999' in text and 'TT888' in text and 'ECH77' in text
+        assert '9 orders dropped' in text
+        assert '⚠️' in text
+
+    def test_no_rebuild_yet_says_never_run(self, bot, admin_user, db_session):
+        import os
+        from app.services.sap_pool_sync import _report_path
+        path = _report_path(False)
+        if os.path.exists(path):
+            os.remove(path)
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert 'never run' in text
+
+    def test_a_dry_run_never_overwrites_the_real_record(self, bot, db_session):
+        """Otherwise "what did the robot do last night" answers "a rehearsal"."""
+        from app.services.sap_pool_sync import _report_path
+        assert _report_path(True) != _report_path(False)
+
+    def test_it_carries_the_freshness_stamp_like_every_other_answer(
+            self, bot, admin_user, db_session):
+        text = handle(_update('/pool'), admin_user)[0]
+        assert 'SAP data' in text
+
+    def test_arabic(self, bot, admin_user, db_session):
+        self._order(db_session, '700000000001')
+        text = handle(_update('/pool', language_code='ar'), admin_user)[0]
+        assert 'صندوق المهام' in text
+
+
 class TestTheScheduledPushes:
     def test_the_sixteen_hundred_push_sends_tomorrow(self, bot, db_session, week,
                                                      admin_user):

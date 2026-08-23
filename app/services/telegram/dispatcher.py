@@ -14,6 +14,7 @@ allowlist is ever defeated.
 import logging
 from datetime import timedelta
 
+from app.extensions import db
 from app.models import SapReconciliationEvent, SapSyncFile, WorkPlan
 from app.services.telegram.renderer import (
     format_date,
@@ -32,6 +33,7 @@ HELP = {
         '/plan east — one berth only\n'
         '/today — today\n'
         '/tomorrow — tomorrow\n'
+        '/pool — what is waiting in the job box\n'
         '/sap — what changed in SAP that affects the plan\n'
         '/ping — check I am awake\n\n'
         'Every job carries a #number. That is its handle.'
@@ -42,6 +44,7 @@ HELP = {
         '/plan east — رصيف واحد فقط\n'
         '/today — اليوم\n'
         '/tomorrow — غداً\n'
+        '/pool — ما ينتظر في صندوق المهام\n'
         '/sap — ما تغيّر في SAP ويؤثر على الخطة\n'
         '/ping — للتأكد أنني أعمل\n\n'
         'كل مهمة تحمل رقم #. هذا هو معرّفها.'
@@ -166,10 +169,102 @@ def _dispatch(command, argument, language):
                 date=format_date(target, language))]
         return [render_day(day, language), _freshness(language)]
 
+    if command in ('pool', 'box'):
+        return [_pool_summary(language)]
+
     if command in ('sap', 'alerts'):
         return [_sap_events(language)]
 
     return [UNKNOWN.get(language, UNKNOWN['en'])]
+
+
+POOL_WORDS = {
+    'en': {
+        'title': '📦 JOB POOL', 'waiting': 'jobs waiting', 'empty':
+        'The box is empty. Either no rebuild has run yet, or SAP has no open '
+        'work for MES.', 'by_type': 'By type', 'last_rebuild': 'Last rebuild',
+        'never': 'never run', 'new': 'new', 'updated': 'updated',
+        'gone': 'gone from SAP', 'equipment': 'equipment matched',
+        'unmatched': 'NOT FOUND IN THE APP', 'dropped': 'orders dropped',
+    },
+    'ar': {
+        'title': '📦 صندوق المهام', 'waiting': 'مهمة في الانتظار', 'empty':
+        'الصندوق فارغ. إما لم يتم التحديث بعد، أو لا يوجد عمل مفتوح في SAP.',
+        'by_type': 'حسب النوع', 'last_rebuild': 'آخر تحديث',
+        'never': 'لم يعمل بعد', 'new': 'جديد', 'updated': 'محدّث',
+        'gone': 'خرج من SAP', 'equipment': 'معدات مطابقة',
+        'unmatched': 'غير موجودة في التطبيق', 'dropped': 'أوامر مهملة',
+    },
+}
+
+PRIORITY_ORDER = (('urgent', '🔴'), ('high', '🟠'), ('normal', '⚪'), ('low', '·'))
+
+
+def _pool_summary(language):
+    """What is in the box, and what the last rebuild did to it.
+
+    Exists because the alternative was reading Render's logs through an SSH
+    shell that drops on a weak connection — the answer to "did my SAP files
+    turn into jobs" should not need a laptop.
+    """
+    from app.models import SAPWorkOrder
+    from app.services.sap_pool_sync import load_last_report
+
+    words = POOL_WORDS.get(language, POOL_WORDS['en'])
+    in_box = SAPWorkOrder.query.filter(SAPWorkOrder.work_plan_id.is_(None))
+    total = in_box.count()
+
+    lines = [words['title'], '']
+    if not total:
+        lines.append(words['empty'])
+    else:
+        lines.append(f"{total} {words['waiting']}")
+        counts = dict(db.session.query(SAPWorkOrder.priority, db.func.count())
+                      .filter(SAPWorkOrder.work_plan_id.is_(None))
+                      .group_by(SAPWorkOrder.priority).all())
+        for name, icon in PRIORITY_ORDER:
+            if counts.get(name):
+                lines.append(f"  {icon} {counts[name]} {name}")
+
+        types = dict(db.session.query(SAPWorkOrder.job_type, db.func.count())
+                     .filter(SAPWorkOrder.work_plan_id.is_(None))
+                     .group_by(SAPWorkOrder.job_type).all())
+        if types:
+            lines.append('')
+            lines.append(words['by_type'] + ': ' +
+                         ' · '.join(f'{k} {v}' for k, v in sorted(types.items())))
+
+    report = load_last_report()
+    lines.append('')
+    if not report:
+        lines.append(f"{words['last_rebuild']}: {words['never']}")
+    else:
+        when = str(report.get('written_at') or '')[:16].replace('T', ' ')
+        lines.append(f"{words['last_rebuild']}: {when}")
+        lines.append(f"  +{report.get('created', 0)} {words['new']} · "
+                     f"{report.get('updated', 0)} {words['updated']} · "
+                     f"-{report.get('removed_from_pool', 0)} {words['gone']}")
+
+        matched = report.get('equipment_matched', 0)
+        unmatched = report.get('equipment_unmatched', 0)
+        lines.append(f"  {words['equipment']}: {matched}/{matched + unmatched}")
+
+        # The one failure in this pipeline that is otherwise invisible: orders
+        # whose equipment is not in the app are dropped, and the planner simply
+        # looks empty with nothing explaining why. Named, never counted only.
+        if unmatched:
+            codes = report.get('unmatched_codes') or []
+            lines.append('')
+            lines.append(f"⚠️ {unmatched} {words['unmatched']}:")
+            lines.append('  ' + ', '.join(codes[:40]))
+            if len(codes) > 40:
+                lines.append(f'  ... +{len(codes) - 40}')
+            lines.append(f"  {report.get('orders_skipped_no_equipment', 0)} "
+                         f"{words['dropped']}")
+
+    lines.append('')
+    lines.append(_freshness(language))
+    return '\n'.join(lines)
 
 
 def _sap_events(language):

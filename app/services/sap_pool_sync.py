@@ -19,6 +19,7 @@ Two safety rules shape everything here:
 import gc
 import logging
 import os
+from datetime import datetime
 from collections import Counter
 
 from flask import current_app
@@ -230,7 +231,57 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     }
     logger.info('SAP pool sync: %s',
                 {k: v for k, v in report.items() if k not in ('parse', 'removal_rules')})
+    _save_report(report)
     return report
+
+
+# The rebuild runs unattended in a background thread, so its report has nowhere
+# to be returned to. Kept as a file on the persistent disk rather than a table:
+# start.sh runs `flask db upgrade || echo WARNING`, so a migration that fails
+# does not stop the boot and the table would silently not exist.
+REPORT_FILENAME = 'last_report.json'
+DRY_RUN_REPORT_FILENAME = 'last_dry_run.json'
+
+
+def _report_path(dry_run=False):
+    folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'sap_sync')
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder,
+                        DRY_RUN_REPORT_FILENAME if dry_run else REPORT_FILENAME)
+
+
+def _save_report(report):
+    """Persist the report so /pool and the web can read it without a shell.
+
+    Dry runs are kept SEPARATELY: a dry run is a diagnostic, and letting it
+    overwrite the record of the last real rebuild would mean "what did the robot
+    actually do last night" could be answered with "nothing, it was a rehearsal".
+
+    Written to a temporary name and renamed, so a crash mid-write leaves the
+    previous report intact rather than a half-file that parses as nothing.
+    """
+    try:
+        import json
+        stored = {k: v for k, v in report.items() if k != 'parse'}
+        stored['written_at'] = datetime.utcnow().isoformat()
+        path = _report_path(report.get('dry_run', False))
+        tmp = f'{path}.tmp'
+        with open(tmp, 'w') as handle:
+            json.dump(stored, handle, default=str)
+        os.replace(tmp, path)
+    except Exception as e:  # noqa: BLE001
+        # Never let bookkeeping fail a rebuild that already succeeded.
+        logger.warning('Could not save the pool report: %s', e)
+
+
+def load_last_report(dry_run=False):
+    """The last rebuild's report, or None if one has never finished."""
+    try:
+        import json
+        with open(_report_path(dry_run)) as handle:
+            return json.load(handle)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _priority_for(candidate, meters, last_completion, breakdowns, cluster):
