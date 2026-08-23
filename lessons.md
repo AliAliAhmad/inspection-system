@@ -208,3 +208,41 @@ caller is a feature that can be entirely absent while looking present.
 
 Corollary: `try/except` around an optional enhancement is reasonable; **doing it without a
 test that proves the enhancement actually happens is not.**
+
+---
+
+## 2026-08-23 — The error handler was the second error
+
+**LESSON: `except Exception: logger.exception('failed for plan %s', plan.id)` — reading
+`plan.id` AFTER a failed flush raised `PendingRollbackError` from inside the handler →
+Roll back FIRST, and capture any identifier you need for the message BEFORE the call that
+can fail. A handler that touches the session it is reporting on becomes a second
+exception, and the second one is the one the user sees.**
+
+The real cause was a `UniqueViolation` with an exact, actionable message. What reached
+the phone was "Something went wrong reading the plan. It is logged." — the outer
+catch-all, because the code written to explain the failure had itself crashed.
+
+Corollary, and the second half of the same lesson: **"it is logged" is not a report.** It
+confirms a failure, refuses to name it, and sends the reader to a shell. On a private,
+single-user tool the exception text IS the useful answer.
+
+---
+
+## 2026-08-23 — Matching on a subset of rows creates duplicates
+
+**LESSON: The pool sync looked up existing orders among BOX rows only
+(`work_plan_id IS NULL`), so an order currently scheduled into a week was not found and a
+SECOND row was created for it → When reconciling against a natural key, look it up across
+ALL rows. Scoping the lookup to the subset you intend to modify silently converts "skip
+this one" into "create a duplicate".**
+
+`UniqueConstraint('work_plan_id', 'order_number')` then fired the moment the generator
+tried to stamp the box copy with that plan — `/generate` died with a UniqueViolation, and
+production had accumulated 2,375 rows where ~200 were real.
+
+The fix distinguishes two different questions that had been collapsed into one query:
+**"what is in the box"** (all box rows — needed for staleness) and **"is this order
+already planned"** (all rows for the candidate numbers). The sync now also deletes box
+copies whose order number is already stamped to a plan, so the existing damage heals on
+the next run.

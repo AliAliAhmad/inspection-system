@@ -139,15 +139,25 @@ def generate(user, language='en', recipe='priority_first', when=None):
 
     week = f'{plan.week_start.isoformat()} → {plan.week_end.isoformat()}'
 
+    plan_id = plan.id
     try:
         from app.services.work_plan_generator_service import WorkPlanGeneratorService
-        WorkPlanGeneratorService.generate_plan(plan_id=plan.id, recipe=recipe)
+        WorkPlanGeneratorService.generate_plan(plan_id=plan_id, recipe=recipe)
     except Exception as e:  # noqa: BLE001
-        logger.exception('Telegram plan generation failed for plan %s', plan.id)
-        return [_t(language, 'failed', error=str(e)[:200])]
+        # ROLLBACK FIRST, and use the id captured before the call.
+        #
+        # A failed flush leaves the session unusable, so touching plan.id here
+        # re-raised PendingRollbackError from inside the handler — the error
+        # reporter became a second error, and the real UniqueViolation was
+        # swallowed by the outer catch-all. The message on the phone said
+        # "something went wrong" precisely because the code meant to explain it
+        # had crashed.
+        db.session.rollback()
+        logger.exception('Telegram plan generation failed for plan %s', plan_id)
+        return [_t(language, 'failed', error=f'{type(e).__name__}: {e}'[:400])]
 
     db.session.expire_all()
-    plan = db.session.get(WorkPlan, plan.id)
+    plan = db.session.get(WorkPlan, plan_id)
     jobs = sum(len(day.jobs or []) for day in plan.days)
 
     if not jobs:
@@ -170,11 +180,13 @@ def undo(user, language='en', when=None):
     if plan.status == 'published':
         return [_t(language, 'published')]
 
+    plan_id = plan.id
     try:
         from app.services.work_plan_generator_service import WorkPlanGeneratorService
-        WorkPlanGeneratorService.reject_generation(plan.id)
+        WorkPlanGeneratorService.reject_generation(plan_id)
     except Exception as e:  # noqa: BLE001
-        logger.exception('Telegram undo failed for plan %s', plan.id)
-        return [_t(language, 'failed', error=str(e)[:200])]
+        db.session.rollback()
+        logger.exception('Telegram undo failed for plan %s', plan_id)
+        return [_t(language, 'failed', error=f'{type(e).__name__}: {e}'[:400])]
 
     return [_t(language, 'undone')]

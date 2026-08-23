@@ -205,10 +205,42 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
                 Equipment.id.in_(set(equipment_by_code.values()))).all():
             berth_by_equipment[equipment.id] = equipment.berth
 
-    existing = {o.order_number: o
-                for o in SAPWorkOrder.query.filter(SAPWorkOrder.work_plan_id.is_(None)).all()}
+    # Keyed on order number across ALL rows, not just the box.
+    #
+    # Matching only box rows meant an order currently scheduled into a week was
+    # not found, so the sync created a SECOND row for it. The same order number
+    # then existed twice — once at work_plan_id NULL, once at the plan — and the
+    # moment the generator tried to stamp the box copy with that plan it hit
+    # UniqueConstraint('work_plan_id', 'order_number'). That is where 2,375 rows
+    # came from, and why /generate died with a UniqueViolation.
+    numbers = [c['order_number'] for c in candidates]
 
-    created = updated = skipped_no_equipment = 0
+    # EVERY box row, not just the candidates' — staleness is decided by what is
+    # in the box and NOT in today's export, so narrowing this to the candidate
+    # numbers would mean an order that left SAP could never be detected.
+    existing = {row.order_number: row
+                for row in SAPWorkOrder.query.filter(
+                    SAPWorkOrder.work_plan_id.is_(None)).all()}
+
+    # Planned work, possibly already started. Never touched here — it belongs to
+    # the removal rules. Only the candidates' numbers matter for this check.
+    scheduled_numbers = {row.order_number for row in SAPWorkOrder.query.filter(
+        SAPWorkOrder.work_plan_id.isnot(None),
+        SAPWorkOrder.order_number.in_(numbers)).all()}
+
+    # Self-heal the duplicates already created. A box row whose order number is
+    # ALSO stamped to a plan is the spurious copy: the planned one is the record
+    # of real work, so the box copy is the one that goes.
+    duplicates = [row.id for number, row in existing.items()
+                  if number in scheduled_numbers]
+    if duplicates and not dry_run:
+        SAPWorkOrder.query.filter(SAPWorkOrder.id.in_(duplicates)).delete(
+            synchronize_session=False)
+    for number in list(existing):
+        if number in scheduled_numbers:
+            del existing[number]
+
+    created = updated = skipped_no_equipment = skipped_scheduled = 0
     unmatched_codes = set()
     seen = set()
 
@@ -252,6 +284,11 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
             'required_date': _as_date(candidate.get('required_date')),
             'berth': berth_by_equipment.get(equipment_id),
         }
+
+        if order_number in scheduled_numbers:
+            # Already planned into a week. Leave it exactly as it is.
+            skipped_scheduled += 1
+            continue
 
         order = existing.get(order_number)
         if order is None:
@@ -302,6 +339,8 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         'created': created,
         'updated': updated,
         'removed_from_pool': len(stale),
+        'left_alone_because_scheduled': skipped_scheduled,
+        'duplicate_box_rows_removed': len(duplicates),
         'equipment_matched': matched,
         'equipment_unmatched': len(unmatched_codes),
         'unmatched_codes': sorted(unmatched_codes),

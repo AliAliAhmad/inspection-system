@@ -242,3 +242,82 @@ class TestASkippedRebuildStillReports:
         assert delivered[0]['sheet'] == 'IW39'
         assert delivered[0]['is_current'] is True
         assert delivered[0]['on_disk'] is True
+
+
+class TestAScheduledOrderIsNeverDuplicated:
+    """The bug that killed /generate with a UniqueViolation.
+
+    The sync matched existing orders only among BOX rows, so an order already
+    scheduled into a week was not found and a SECOND row was created for it.
+    The same order number then existed twice — once at work_plan_id NULL, once
+    at the plan — and UniqueConstraint('work_plan_id', 'order_number') fired the
+    moment the generator tried to stamp the box copy with that plan.
+    """
+
+    def _scheduled(self, db_session, equipment, number='700000000001'):
+        from datetime import date, timedelta
+        plan = WorkPlan(week_start=date(2026, 8, 17), week_end=date(2026, 8, 23),
+                        status='draft', created_by_id=1)
+        db_session.session.add(plan)
+        db_session.session.flush()
+        db_session.session.add(SAPWorkOrder(
+            work_plan_id=plan.id, order_number=number, order_type='PRM',
+            job_type='pm', equipment_id=equipment.id, estimated_hours=4.0,
+            status='scheduled'))
+        db_session.session.commit()
+        return plan
+
+    def test_no_second_row_is_created_for_a_scheduled_order(self, client,
+                                                            db_session, admin_user):
+        equipment = Equipment(name='TT001', serial_number='SN-TT001',
+                              equipment_type='tractor')
+        db_session.session.add(equipment)
+        db_session.session.commit()
+        self._scheduled(db_session, equipment)
+        _deliver(client, _iw39([_open_order('700000000001')]))
+
+        report = sync_pool_from_delivered_files(today='2026-08-23')
+
+        assert SAPWorkOrder.query.filter_by(order_number='700000000001').count() == 1
+        assert report['created'] == 0
+        assert report['left_alone_because_scheduled'] == 1
+
+    def test_the_scheduled_row_is_not_modified(self, client, db_session, admin_user):
+        """It is planned work, possibly started. The removal rules own it."""
+        equipment = Equipment(name='TT001', serial_number='SN-TT001',
+                              equipment_type='tractor')
+        db_session.session.add(equipment)
+        db_session.session.commit()
+        plan = self._scheduled(db_session, equipment)
+        _deliver(client, _iw39([_open_order('700000000001')]))
+
+        sync_pool_from_delivered_files(today='2026-08-23')
+
+        row = SAPWorkOrder.query.filter_by(order_number='700000000001').first()
+        assert row.work_plan_id == plan.id
+        assert row.status == 'scheduled'
+
+    def test_duplicates_already_in_the_database_are_cleaned_up(self, client,
+                                                               db_session, admin_user):
+        """Self-healing: production already had thousands of these."""
+        equipment = Equipment(name='TT001', serial_number='SN-TT001',
+                              equipment_type='tractor')
+        db_session.session.add(equipment)
+        db_session.session.commit()
+        self._scheduled(db_session, equipment)
+        # The spurious box copy a previous sync created.
+        db_session.session.add(SAPWorkOrder(
+            work_plan_id=None, order_number='700000000001', order_type='PRM',
+            job_type='pm', equipment_id=equipment.id, estimated_hours=4.0,
+            status='pending'))
+        db_session.session.commit()
+        assert SAPWorkOrder.query.filter_by(order_number='700000000001').count() == 2
+        _deliver(client, _iw39([_open_order('700000000001')]))
+
+        report = sync_pool_from_delivered_files(today='2026-08-23')
+
+        # The PLANNED one survives — it is the record of real work.
+        remaining = SAPWorkOrder.query.filter_by(order_number='700000000001').all()
+        assert len(remaining) == 1
+        assert remaining[0].work_plan_id is not None
+        assert report['duplicate_box_rows_removed'] == 1
