@@ -144,3 +144,128 @@ class TestPlannedLeavesTheBoxAndUnplannedReturns:
         resp = client.get(f'/api/work-plans/available-jobs?plan_id={week_b.id}', headers=headers)
         numbers = {o['order_number'] for o in resp.get_json()['sap_orders']}
         assert '700000000050' in numbers, 'a job that came back must be visible everywhere'
+
+
+@pytest.fixture
+def plan_day(db_session, admin_user):
+    start = date.today()
+    plan = WorkPlan(week_start=start, week_end=start + timedelta(days=6),
+                    status='draft', created_by_id=admin_user.id)
+    db_session.session.add(plan)
+    db_session.session.flush()
+    day = WorkPlanDay(work_plan_id=plan.id, date=start)
+    db_session.session.add(day)
+    db_session.session.commit()
+    return plan, day
+
+
+class TestEveryPoolReaderSeesTheSharedBox:
+    """Three queries still matched work_plan_id == plan.id after the box went global.
+
+    Each one silently found nothing, because a robot-fed order carries NULL.
+    Found when the planner UI showed an empty pool while /pool on the phone
+    reported 202 waiting — the same question answered two different ways.
+    """
+
+    def _in_the_box(self, db_session, equipment, number='700000000900'):
+        order = SAPWorkOrder(
+            work_plan_id=None, order_number=number, order_type='PRM',
+            job_type='pm', equipment_id=equipment.id, estimated_hours=4.0,
+            priority='normal', status='pending')
+        db_session.session.add(order)
+        db_session.session.commit()
+        return order
+
+    def test_the_plan_detail_count_includes_the_box(self, client, admin_user,
+                                                    db_session, plan_day):
+        """The planner said "0 waiting" while the box held 202.
+
+        Exercised through the ENDPOINT, not through pool_orders_query. An
+        earlier version of this test called the helper directly, so reverting
+        the call site to the per-plan filter left it green — it was testing the
+        helper that was already correct, not the line that was wrong.
+        """
+        plan, day = plan_day
+        equipment = make_equipment(db_session, 'BOX01', 'SB01')
+        self._in_the_box(db_session, equipment)
+
+        response = client.get(
+            f'/api/work-plans/debug/{plan.week_start.isoformat()}',
+            headers=get_auth_header(client, admin_user.email, 'admin123'))
+
+        assert response.status_code == 200
+        assert response.get_json()['sap_orders_in_pool'] == 1
+
+    def test_auto_schedule_sees_the_box(self, client, admin_user, db_session,
+                                        plan_day):
+        """It matched this plan only, so it reported nothing to schedule."""
+        plan, day = plan_day
+        equipment = make_equipment(db_session, 'BOX02', 'SB02')
+        self._in_the_box(db_session, equipment, '700000000901')
+
+        # include_weekends because the fixture's single day is whatever today
+        # is, and the endpoint refuses a plan whose only day is a weekend —
+        # which would make this test pass or fail depending on the day it runs.
+        response = client.post(
+            f'/api/work-plans/{plan.id}/auto-schedule',
+            json={'include_weekends': True},
+            headers=get_auth_header(client, admin_user.email, 'admin123'))
+
+        assert response.status_code == 200
+        body = response.get_json()
+        # With the per-plan filter this returned "No jobs to schedule" and
+        # total_in_pool 0, while the box held the order all along.
+        assert body['total_in_pool'] == 1
+        assert body['scheduled'] == 1
+
+    def test_scheduling_one_order_pulls_in_the_machine_s_other_box_work(
+            self, client, admin_user, db_session, plan_day):
+        """"Also add the other open work on this machine" added nothing.
+
+        Reached through schedule-sap-order, which is the only caller — testing
+        the helper directly would not have noticed the per-plan filter.
+        """
+        plan, day = plan_day
+        equipment = make_equipment(db_session, 'BOX05', 'SB05')
+        first = self._in_the_box(db_session, equipment, '700000000904')
+        self._in_the_box(db_session, equipment, '700000000905')
+
+        response = client.post(
+            f'/api/work-plans/{plan.id}/schedule-sap-order',
+            json={'sap_order_id': first.id, 'day_id': day.id},
+            headers=get_auth_header(client, admin_user.email, 'admin123'))
+
+        assert response.status_code == 201
+        # The second order on the same machine is pulled onto the day with it.
+        assert response.get_json()['auto_added_defects'] == 1
+
+    def test_available_jobs_lists_the_box_for_a_plan(self, client, admin_user,
+                                                    db_session, plan_day):
+        """The planner's pool panel reads this, and it is gated on plan_id."""
+        plan, day = plan_day
+        equipment = make_equipment(db_session, 'BOX03', 'SB03')
+        self._in_the_box(db_session, equipment, '700000000902')
+
+        response = client.get(
+            f'/api/work-plans/available-jobs?plan_id={plan.id}',
+            headers=get_auth_header(client, admin_user.email, 'admin123'))
+
+        assert response.status_code == 200
+        numbers = [o['order_number'] for o in response.get_json()['sap_orders']]
+        assert '700000000902' in numbers
+
+    def test_available_jobs_without_a_plan_id_returns_no_sap_orders(
+            self, client, admin_user, db_session):
+        """WHY the planner screen looked empty: the pool panel is scoped to a
+        week, and no plan existed for the current week, so the UI sent no
+        plan_id and the endpoint returned nothing. The box was full the whole
+        time."""
+        equipment = make_equipment(db_session, 'BOX04', 'SB04')
+        self._in_the_box(db_session, equipment, '700000000903')
+
+        response = client.get(
+            '/api/work-plans/available-jobs',
+            headers=get_auth_header(client, admin_user.email, 'admin123'))
+
+        assert response.status_code == 200
+        assert response.get_json()['sap_orders'] == []

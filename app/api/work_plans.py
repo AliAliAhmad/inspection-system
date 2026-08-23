@@ -141,10 +141,12 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
         added += 1
 
     # ── 2. Pending SAP orders for same equipment (PM + defect types) ──
-    pending_sap = SAPWorkOrder.query.filter(
-        SAPWorkOrder.work_plan_id == plan_id,
+    # pool_orders_query, not work_plan_id == plan_id. Since the pool became one
+    # global box, robot-fed orders carry work_plan_id NULL — an exact-plan match
+    # finds none of them, so "also add the other open work on this machine"
+    # silently added nothing at all.
+    pending_sap = pool_orders_query(plan_id).filter(
         SAPWorkOrder.equipment_id == equipment_id,
-        SAPWorkOrder.status == 'pending',
     ).all()
 
     for sap in pending_sap:
@@ -178,7 +180,11 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
             priority='normal',
         ))
         sap.status = 'scheduled'
-        sap.work_plan_id = plan.id  # leaves the box, into this week
+        # plan_id, not plan.id — this function only ever receives the id. The
+        # NameError this raised was swallowed by the caller's
+        # `except Exception: logger.warning(...)`, so auto-adding a machine's
+        # other open work has been silently doing nothing since f50e3c8.
+        sap.work_plan_id = plan_id  # leaves the box, into this week
         added += 1
 
     return added
@@ -286,10 +292,9 @@ def debug_work_plan(week_start_str):
                 })
 
         # Get pending SAP orders in the pool
-        pending_sap_orders = SAPWorkOrder.query.filter_by(
-            work_plan_id=plan.id,
-            status='pending'
-        ).count()
+        # Counts the shared box as well, or the planner reports "0 waiting"
+        # while /pool on the phone reports 202 — same question, two answers.
+        pending_sap_orders = pool_orders_query(plan.id).count()
 
         scheduled_sap_orders = SAPWorkOrder.query.filter_by(
             work_plan_id=plan.id,
@@ -3446,8 +3451,9 @@ def auto_schedule(plan_id):
     max_hours_per_day = data.get('max_hours_per_day', 8)
     berth_filter = data.get('berth')
 
-    # Get pending SAP orders
-    sap_query = SAPWorkOrder.query.filter_by(work_plan_id=plan.id, status='pending')
+    # Get pending SAP orders — from the shared box as well as this week's own,
+    # otherwise auto-schedule sees an empty pool and reports nothing to do.
+    sap_query = pool_orders_query(plan.id)
     if berth_filter and berth_filter != 'both':
         sap_query = sap_query.filter(
             db.or_(SAPWorkOrder.berth == berth_filter, SAPWorkOrder.berth == 'both', SAPWorkOrder.berth == None)

@@ -186,3 +186,25 @@ tuples — the data as it actually arrives, not as a writer would re-encode it.
 
 **Generalisation: if a test's fixture goes through the same library that normalises the
 input, the test is checking the library, not the code.**
+
+---
+
+## 2026-08-23 — A test that exercised the helper, not the caller
+
+**LESSON: I "verified" three widened pool queries by calling `pool_orders_query()` directly
+→ reverting all three CALL SITES to the old per-plan filter left the suite green, because
+the helper was never the thing that was wrong. Test the line you changed, through the
+entry point that reaches it.**
+
+Rewritten to go through the endpoints (`/debug/<week>`, `/auto-schedule`,
+`/schedule-sap-order`), each mutation then failed — and the third test immediately
+exposed a **live NameError**: `sap.work_plan_id = plan.id` inside a function whose only
+parameter is `plan_id`.
+
+**It had been broken since f50e3c8 and nobody could see it**, because the caller wraps it
+in `except Exception: logger.warning(...)`. "Auto-add the machine's other open work" had
+been silently adding nothing for a day. A swallowed exception plus no test through the
+caller is a feature that can be entirely absent while looking present.
+
+Corollary: `try/except` around an optional enhancement is reasonable; **doing it without a
+test that proves the enhancement actually happens is not.**
