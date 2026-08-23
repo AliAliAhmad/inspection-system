@@ -21,6 +21,83 @@ logger = logging.getLogger(__name__)
 _ARABIC_RE = re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+')
 
 
+
+# ── Cache and circuit breaker ────────────────────────────────────────────────
+#
+# Both exist because of one production log: eight providers failing in sequence
+# for EVERY notification — gemini 429, groq 401, openrouter dead, ollama absent
+# (it is a cloud container), openai out of credit — roughly six seconds of
+# network waiting per message, on a single gunicorn worker.
+#
+# And the same two strings over and over: "Work Plan Under Revision" and "The
+# work plan for week ... is being revised". Notification templates repeat by
+# nature, so a cache removes almost all of the traffic on its own.
+#
+# In-memory and per-worker on purpose: no migration, no table, and the cost of
+# losing it on restart is one repeated translation.
+
+import threading as _threading
+import time as _time
+
+_MISS = object()
+
+# Bounded so a long-running worker cannot grow without limit. Notification text
+# is short and highly repetitive, so a few thousand entries covers everything.
+_CACHE_MAX = 2000
+_CACHE_TTL_OK = 24 * 60 * 60      # a good translation does not go stale
+_CACHE_TTL_FAIL = 5 * 60          # a failure might be a quota that resets
+
+_cache = {}
+_cache_lock = _threading.Lock()
+
+# A provider that just failed is skipped rather than retried. Without this,
+# every single message pays the full cost of discovering the same dead keys.
+_BREAKER_SECONDS = 300
+_failed_at = {}
+
+
+def _cache_get(key):
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is None:
+            return _MISS
+        value, expires = entry
+        if _time.time() > expires:
+            _cache.pop(key, None)
+            return _MISS
+        return value
+
+
+def _cache_put(key, value):
+    ttl = _CACHE_TTL_OK if value else _CACHE_TTL_FAIL
+    with _cache_lock:
+        if len(_cache) >= _CACHE_MAX:
+            # Oldest-expiring first — cheap, and good enough for short strings.
+            oldest = min(_cache, key=lambda k: _cache[k][1])
+            _cache.pop(oldest, None)
+        _cache[key] = (value, _time.time() + ttl)
+
+
+def _recently_failed(provider):
+    failed = _failed_at.get(provider)
+    return failed is not None and (_time.time() - failed) < _BREAKER_SECONDS
+
+
+def _mark_failed(provider):
+    _failed_at[provider] = _time.time()
+
+
+def _mark_ok(provider):
+    _failed_at.pop(provider, None)
+
+
+def reset_translation_cache():
+    """For tests, and for a manual flush after fixing an API key."""
+    with _cache_lock:
+        _cache.clear()
+    _failed_at.clear()
+
+
 def is_arabic(text):
     """Check if text is primarily Arabic."""
     if not text:
@@ -114,6 +191,17 @@ class TranslationService:
 
     @staticmethod
     def _translate(text, target_lang):
+        """Cached wrapper — see _translate_uncached for the chain itself."""
+        key = (target_lang, text)
+        hit = _cache_get(key)
+        if hit is not _MISS:
+            return hit
+        result = TranslationService._translate_uncached(text, target_lang)
+        _cache_put(key, result)
+        return result
+
+    @staticmethod
+    def _translate_uncached(text, target_lang):
         """
         Core translation method using FULL FALLBACK CHAIN.
         Order: 1.Gemini → 2.Groq → 3.OpenRouter → 4.DeepInfra → 5.Ollama → 6.OpenAI → 7.Google/MyMemory
@@ -135,8 +223,10 @@ class TranslationService:
             else TranslationService.SYSTEM_PROMPT_AR_TO_EN
         )
 
-        # 1-6. Try AI providers in order
+        # 1-6. Try AI providers in order, skipping ones that just failed.
         for provider in providers:
+            if _recently_failed(provider):
+                continue
             try:
                 logger.debug(f"Trying translation with: {provider}")
                 if provider == 'gemini':
@@ -155,8 +245,11 @@ class TranslationService:
                     continue
 
                 if result and result.strip():
+                    _mark_ok(provider)
                     return result
+                _mark_failed(provider)
             except Exception as e:
+                _mark_failed(provider)
                 logger.warning(f"Translation failed with {provider}: {e}, trying next...")
                 continue
 
