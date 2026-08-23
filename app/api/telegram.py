@@ -111,9 +111,16 @@ def health():
     """
     config = current_app.config
     from app.services.telegram.auth import allowlist
+    from app.services.telegram.client import valid_secret_token
+
+    secret = config.get('TELEGRAM_WEBHOOK_SECRET')
     return jsonify({
         'enabled': bool(config.get('TELEGRAM_ENABLED')),
         'token_configured': bool(config.get('TELEGRAM_BOT_TOKEN')),
-        'webhook_secret_configured': bool(config.get('TELEGRAM_WEBHOOK_SECRET')),
+        'webhook_secret_configured': bool(secret),
+        # Present is not the same as usable. Telegram allows only A-Z a-z 0-9 _ -
+        # in a secret token, and the same value is the webhook URL's last path
+        # segment, so a base64 secret passes "configured" and still fails.
+        'webhook_secret_valid': valid_secret_token(secret),
         'allowlist_size': len(allowlist()),
     }), 200

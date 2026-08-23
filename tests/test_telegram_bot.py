@@ -574,6 +574,60 @@ class TestTheScheduledPushes:
         assert push_day_to_planners(date.today(), client=recorder)['sent'] == 0
 
 
+class TestTheWebhookSecretMustBeUsable:
+    """Telegram allows only A-Z a-z 0-9 _ - and the value is also a URL path."""
+
+    def test_a_base64_secret_is_rejected_before_telegram_sees_it(self):
+        from app.services.telegram.client import valid_secret_token
+        assert valid_secret_token('abc+def/ghi=') is False
+
+    def test_a_hex_secret_is_accepted(self):
+        from app.services.telegram.client import valid_secret_token
+        assert valid_secret_token('a3f9' * 16) is True
+
+    def test_empty_and_oversized_are_rejected(self):
+        from app.services.telegram.client import valid_secret_token
+        assert valid_secret_token('') is False
+        assert valid_secret_token(None) is False
+        assert valid_secret_token('a' * 257) is False
+
+    def test_health_separates_present_from_usable(self, client, app):
+        """A base64 secret reads as 'configured' and still fails registration."""
+        app.config['TELEGRAM_WEBHOOK_SECRET'] = 'abc+def/ghi='
+        body = client.get('/api/telegram/health').get_json()
+
+        assert body['webhook_secret_configured'] is True
+        assert body['webhook_secret_valid'] is False
+
+    def test_a_refusal_reports_telegram_s_own_words(self, app):
+        """Inventing a reason sends people looking in the wrong place.
+
+        The first version of this script printed "It must be HTTPS on a public
+        host" for every failure. Telegram had actually said "secret token
+        contains unallowed characters", and that answer was thrown away.
+        """
+        from app.services.telegram.client import TelegramClient
+
+        class Refusal:
+            status_code = 400
+            text = '{"ok":false,"description":"secret token contains unallowed characters"}'
+
+            def json(self):
+                return {'ok': False,
+                        'description': 'secret token contains unallowed characters'}
+
+        import requests
+        original = requests.post
+        requests.post = lambda *a, **k: Refusal()
+        try:
+            app.config['TELEGRAM_BOT_TOKEN'] = 'test-token'
+            client = TelegramClient()
+            assert client.set_webhook('https://example.com/x', secret_token='bad') is None
+            assert client.last_error == 'secret token contains unallowed characters'
+        finally:
+            requests.post = original
+
+
 class TestTheHealthEndpoint:
     def test_it_reports_presence_never_values(self, client, bot):
         body = client.get('/api/telegram/health').get_json()

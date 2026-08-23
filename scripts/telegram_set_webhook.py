@@ -23,7 +23,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app  # noqa: E402
-from app.services.telegram.client import TelegramClient  # noqa: E402
+from app.services.telegram.client import (  # noqa: E402
+    TelegramClient,
+    valid_secret_token,
+)
 
 
 def main():
@@ -68,13 +71,24 @@ def main():
                   'working bot.')
             return 1
 
+        # Checked HERE rather than left to Telegram, because the same value is
+        # also the last segment of the webhook URL. A '/' in the secret would
+        # silently change the path even if Telegram accepted it.
+        if not valid_secret_token(secret):
+            print('TELEGRAM_WEBHOOK_SECRET contains characters Telegram will not '
+                  'accept. Allowed: A-Z a-z 0-9 _ - (1-256 characters).')
+            print('Generate a safe one with:  openssl rand -hex 32')
+            return 1
+
         url = f'{args.url.rstrip("/")}/api/telegram/webhook/{secret}'
         if client.set_webhook(url, secret_token=secret):
             print('Webhook registered.')
             print(f'  {url[:url.rindex("/") + 1]}<secret>')
             return 0
 
-        print('Telegram refused the webhook. It must be HTTPS on a public host.')
+        # Telegram's own words. An invented reason sends people looking in the
+        # wrong place, which costs more than saying nothing.
+        print(f'Telegram refused the webhook: {client.last_error or "no reason given"}')
         return 1
 
 

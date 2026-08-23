@@ -8,12 +8,31 @@ library is forty async modules to avoid writing them.
 """
 
 import logging
+import re
 
 from flask import current_app
 
 logger = logging.getLogger(__name__)
 
 API_ROOT = 'https://api.telegram.org'
+
+# Telegram's rule for secret_token: 1-256 chars, only A-Z a-z 0-9 _ and -.
+# The same value is also the last segment of the webhook URL, so anything
+# outside this set breaks in two places at once — a base64 secret containing
+# '/' would silently change the path.
+SECRET_TOKEN_RE = re.compile(r'^[A-Za-z0-9_-]{1,256}$')
+
+
+def valid_secret_token(value):
+    return bool(value) and bool(SECRET_TOKEN_RE.match(str(value)))
+
+
+def _describe(response):
+    """Telegram's own explanation of a failure, or the raw body."""
+    try:
+        return response.json().get('description') or response.text[:200]
+    except Exception:  # noqa: BLE001
+        return response.text[:200]
 
 # Telegram rejects anything longer. The renderer splits on a job boundary well
 # before this, but a hand-written reply could still run over.
@@ -29,6 +48,7 @@ class TelegramClient:
 
     def __init__(self, token=None):
         self._token = token
+        self.last_error = None
 
     @property
     def token(self):
@@ -50,12 +70,19 @@ class TelegramClient:
                                      json=payload, timeout=TIMEOUT_SECONDS)
         except Exception as e:  # noqa: BLE001
             logger.warning('Telegram %s failed: %s', method, e)
+            self.last_error = str(e)
             return None
 
         if response.status_code != 200:
             logger.warning('Telegram %s returned %s: %s',
                            method, response.status_code, response.text[:300])
+            # Telegram's own description says exactly what is wrong ("secret
+            # token contains unallowed characters"). Keep it so callers can show
+            # it instead of guessing — a guessed reason sends people looking in
+            # the wrong place, which is worse than no reason at all.
+            self.last_error = _describe(response)
             return None
+        self.last_error = None
         return response.json().get('result')
 
     def send_message(self, chat_id, text, reply_markup=None):
