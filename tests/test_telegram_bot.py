@@ -555,6 +555,46 @@ class TestThePoolCommand:
         text = handle(_update('/pool'), admin_user)[0]
         assert 'box is empty' in text
 
+    def test_inspection_findings_count_as_being_in_the_box(self, bot, admin_user,
+                                                          db_session):
+        """Ali's own words: "the big box that has all jobs from SAP AND
+        inspection results". Counting only SAP made /pool disagree with the
+        planner screen, which lists both."""
+        from app.models import Defect, Inspection, InspectionAssignment
+        equipment = make_equipment(db_session, 'FIND1', 'SF1')
+        self._order(db_session, '700000000001')
+        defect = Defect(equipment_id_direct=equipment.id, description='Oil leak',
+                        severity='medium', status='open',
+                        due_date=date.today() + timedelta(days=7))
+        db_session.session.add(defect)
+        db_session.session.commit()
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert '2 jobs waiting' in text
+        assert 'from SAP: 1' in text
+        assert 'from inspections: 1' in text
+
+    def test_a_finding_already_on_a_day_is_not_still_waiting(self, bot, admin_user,
+                                                             db_session, week):
+        """Planned means it has LEFT the box — same rule as a SAP order."""
+        from app.models import Defect, WorkPlanJob
+        plan, day = week
+        equipment = make_equipment(db_session, 'FIND2', 'SF2')
+        defect = Defect(equipment_id_direct=equipment.id, description='Brake wear',
+                        severity='high', status='open',
+                        due_date=date.today() + timedelta(days=3))
+        db_session.session.add(defect)
+        db_session.session.flush()
+        db_session.session.add(WorkPlanJob(
+            work_plan_day_id=day.id, job_type='defect', defect_id=defect.id,
+            equipment_id=equipment.id, estimated_hours=2.0, position=1))
+        db_session.session.commit()
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert 'box is empty' in text
+
     def test_it_counts_what_is_waiting_and_splits_by_priority(self, bot, admin_user,
                                                               db_session):
         self._order(db_session, '700000000001', priority='urgent')

@@ -202,7 +202,8 @@ POOL_WORDS = {
         'gone': 'gone from SAP', 'equipment': 'equipment matched',
         'unmatched': 'NOT FOUND IN THE APP', 'dropped': 'orders dropped',
         'skipped': 'Rebuild could not run', 'delivered': 'Files delivered',
-        'crashed': 'Rebuild crashed',
+        'crashed': 'Rebuild crashed', 'from_sap': 'from SAP:',
+        'from_inspection': 'from inspections:',
         'missing': 'not on disk', 'stale': 'superseded',
     },
     'ar': {
@@ -213,12 +214,34 @@ POOL_WORDS = {
         'gone': 'خرج من SAP', 'equipment': 'معدات مطابقة',
         'unmatched': 'غير موجودة في التطبيق', 'dropped': 'أوامر مهملة',
         'skipped': 'تعذّر تشغيل التحديث', 'delivered': 'الملفات المستلمة',
-        'crashed': 'تعطّل التحديث',
+        'crashed': 'تعطّل التحديث', 'from_sap': 'من SAP:',
+        'from_inspection': 'من الفحوصات:',
         'missing': 'غير موجود على القرص', 'stale': 'مستبدل',
     },
 }
 
 PRIORITY_ORDER = (('urgent', '🔴'), ('high', '🟠'), ('normal', '⚪'), ('low', '·'))
+
+
+def _open_findings_count():
+    """Inspection findings still waiting to be planned.
+
+    Mirrors what the planner's pool panel lists, so the two agree: an open or
+    in-progress defect that is not already on a day of a live plan.
+    """
+    from app.models import Defect, WorkPlanJob, WorkPlanDay, WorkPlan
+    from app.utils.decorators import planning_today
+
+    scheduled = (db.session.query(WorkPlanJob.defect_id)
+                 .join(WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id)
+                 .join(WorkPlan, WorkPlanDay.work_plan_id == WorkPlan.id)
+                 .filter(WorkPlan.week_end >= planning_today(),
+                         WorkPlanJob.defect_id.isnot(None))
+                 .subquery())
+    return (Defect.query
+            .filter(Defect.status.in_(['open', 'in_progress']),
+                    ~Defect.id.in_(db.session.query(scheduled.c.defect_id)))
+            .count())
 
 
 def _pool_summary(language):
@@ -232,14 +255,22 @@ def _pool_summary(language):
     from app.services.sap_pool_sync import load_last_report
 
     words = POOL_WORDS.get(language, POOL_WORDS['en'])
-    in_box = SAPWorkOrder.query.filter(SAPWorkOrder.work_plan_id.is_(None))
-    total = in_box.count()
+    total = SAPWorkOrder.query.filter(SAPWorkOrder.work_plan_id.is_(None),
+                                      SAPWorkOrder.status == 'pending').count()
+    # Ali's own definition: "the big box that has all jobs from SAP AND
+    # inspection results". Counting only SAP made /pool disagree with the
+    # planner screen, which shows both — and the findings are the half he
+    # raised himself, so leaving them out made the box look wrong.
+    findings = _open_findings_count()
 
     lines = [words['title'], '']
-    if not total:
+    if not total and not findings:
         lines.append(words['empty'])
     else:
-        lines.append(f"{total} {words['waiting']}")
+        lines.append(f"{total + findings} {words['waiting']}")
+        if findings:
+            lines.append(f"  {words['from_sap']} {total} · "
+                         f"{words['from_inspection']} {findings}")
         counts = dict(db.session.query(SAPWorkOrder.priority, db.func.count())
                       .filter(SAPWorkOrder.work_plan_id.is_(None))
                       .group_by(SAPWorkOrder.priority).all())

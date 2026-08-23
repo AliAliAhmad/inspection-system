@@ -196,6 +196,14 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
 
     codes = {c['plant_code'] for c in candidates if c['plant_code']}
     equipment_by_code = _equipment_lookup(codes)
+    # The app already stores which berth a machine works — the asset list maps
+    # every plant number to East or West. Copying it onto the order is what lets
+    # the planner split a day into two crews.
+    berth_by_equipment = {}
+    if equipment_by_code:
+        for equipment in Equipment.query.filter(
+                Equipment.id.in_(set(equipment_by_code.values()))).all():
+            berth_by_equipment[equipment.id] = equipment.berth
 
     existing = {o.order_number: o
                 for o in SAPWorkOrder.query.filter(SAPWorkOrder.work_plan_id.is_(None)).all()}
@@ -212,7 +220,8 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
                 unmatched_codes.add(candidate['plant_code'])
             continue
 
-        priority = _priority_for(candidate, meters, last_completion, breakdowns, cluster)
+        priority, overdue_value, overdue_unit = _priority_for(
+            candidate, meters, last_completion, breakdowns, cluster)
         hours = (candidate['estimated_hours'] if candidate['hours_from_iw49']
                  else estimate_hours(durations, candidate['activity_type'], candidate['plant_code']))
 
@@ -227,6 +236,21 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
             'priority': priority,
             'work_center': candidate['work_center'],
             'status': 'pending',
+            # Everything below was computed by the parser and then thrown away,
+            # which quietly disabled four things in the planner:
+            #
+            #   maintenance_base -> the PRM pool's Hourly sub-tab filters on
+            #     'running_hours', so every hourly PM was invisible there.
+            #   overdue_value/unit -> the red overdue heat scale reads these, so
+            #     nothing ever ran hot however late it was.
+            #   required_date -> the pool sorts by it, and an all-NULL column
+            #     means the order on screen is arbitrary.
+            #   berth -> the planner splits east/west, and NULL cannot.
+            'maintenance_base': _maintenance_base(candidate),
+            'overdue_value': overdue_value,
+            'overdue_unit': overdue_unit,
+            'required_date': _as_date(candidate.get('required_date')),
+            'berth': berth_by_equipment.get(equipment_id),
         }
 
         order = existing.get(order_number)
@@ -342,20 +366,59 @@ def load_last_report(dry_run=False):
         return None
 
 
+def _maintenance_base(candidate):
+    """The app's word for what the parser calls pm_basis.
+
+    'running_hours' is what the planner's Hourly sub-tab filters on, so the
+    exact string matters — anything else and those PMs are invisible there.
+    """
+    basis = candidate.get('pm_basis')
+    if basis == 'hourly':
+        return 'running_hours'
+    if basis == 'calendar':
+        return 'calendar'
+    return None
+
+
+def _as_date(value):
+    """SAP dates arrive as '2026-08-01 00:00:00' strings; the column is a DATE."""
+    if not value:
+        return None
+    try:
+        import pandas as pd
+        parsed = pd.to_datetime(value, errors='coerce')
+        return None if pd.isna(parsed) else parsed.date()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _priority_for(candidate, meters, last_completion, breakdowns, cluster):
-    """Route a candidate to the rule for its kind of work."""
+    """Route a candidate to the rule for its kind of work.
+
+    Returns (priority, overdue_value, overdue_unit). The overdue figure was
+    being computed and discarded, which left the planner's red heat scale dark
+    no matter how late a job was.
+    """
     basis = candidate['pm_basis']
 
     if basis == 'calendar':
-        return candidate['priority']
+        # Ali's rule counts days since the order was created, with days since
+        # this service last finished as the overriding second signal. The larger
+        # of the two is what the card should run hot on.
+        overdue = max(candidate.get('age_days') or 0,
+                      candidate.get('days_since_last_pm') or 0)
+        return candidate['priority'], (overdue or None), ('days' if overdue else None)
 
     if basis == 'hourly':
         hours_run = hours_run_since(meters, candidate['plant_code'],
                                     last_completion.get(candidate['maintenance_plan']))
-        priority, _ = hourly_pm_priority(hours_run)
+        priority, hours_past_due = hourly_pm_priority(hours_run)
         # None means the meter was replaced and the figure is unknowable. Leave
         # it at normal rather than guessing — reported, not hidden.
-        return priority or 'normal'
+        if priority is None:
+            return 'normal', None, None
+        past = hours_past_due if (hours_past_due or 0) > 0 else None
+        return priority, (round(past, 1) if past else None), ('hours' if past else None)
 
     priority, _ = corrective_priority(
         is_released=candidate['is_released'],
@@ -363,4 +426,7 @@ def _priority_for(candidate, meters, last_completion, breakdowns, cluster):
         open_defects_on_equipment=cluster.get(candidate['plant_code'], 0),
         description=candidate['description'],
     )
-    return priority
+    # Correctives have no due date in SAP; age is the only honest number, and
+    # it is the signal Ali chose for them.
+    age = candidate.get('age_days') or 0
+    return priority, (age or None), ('days' if age else None)
