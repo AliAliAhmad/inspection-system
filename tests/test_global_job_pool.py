@@ -254,12 +254,15 @@ class TestEveryPoolReaderSeesTheSharedBox:
         numbers = [o['order_number'] for o in response.get_json()['sap_orders']]
         assert '700000000902' in numbers
 
-    def test_available_jobs_without_a_plan_id_returns_no_sap_orders(
+    def test_available_jobs_shows_the_box_even_with_no_plan(
             self, client, admin_user, db_session):
-        """WHY the planner screen looked empty: the pool panel is scoped to a
-        week, and no plan existed for the current week, so the UI sent no
-        plan_id and the endpoint returned nothing. The box was full the whole
-        time."""
+        """This is WHY the planner screen showed no SAP jobs.
+
+        plan_id used to be required, from when every week owned its own pool.
+        The box is now global and exists whether or not a week has been
+        created — so gating on plan_id meant the screen showed nothing while
+        the box held 202, and the only way to see them was to create a plan.
+        """
         equipment = make_equipment(db_session, 'BOX04', 'SB04')
         self._in_the_box(db_session, equipment, '700000000903')
 
@@ -268,4 +271,30 @@ class TestEveryPoolReaderSeesTheSharedBox:
             headers=get_auth_header(client, admin_user.email, 'admin123'))
 
         assert response.status_code == 200
-        assert response.get_json()['sap_orders'] == []
+        numbers = [o['order_number'] for o in response.get_json()['sap_orders']]
+        assert numbers == ['700000000903']
+
+    def test_with_a_plan_it_hides_what_is_already_on_a_day(
+            self, client, admin_user, db_session, plan_day):
+        """The pool shows what is still available to drag, not what is placed."""
+        plan, day = plan_day
+        # Two DIFFERENT machines on purpose. Putting both orders on one machine
+        # made this fail in a way that proved the opposite of a bug: scheduling
+        # the first auto-pulled the second onto the same day, because they are
+        # the same machine. That is _auto_group_equipment_jobs doing its job.
+        placed = self._in_the_box(
+            db_session, make_equipment(db_session, 'BOX06', 'SB06'), '700000000906')
+        self._in_the_box(
+            db_session, make_equipment(db_session, 'BOX07', 'SB07'), '700000000907')
+
+        client.post(f'/api/work-plans/{plan.id}/schedule-sap-order',
+                    json={'sap_order_id': placed.id, 'day_id': day.id},
+                    headers=get_auth_header(client, admin_user.email, 'admin123'))
+
+        response = client.get(
+            f'/api/work-plans/available-jobs?plan_id={plan.id}',
+            headers=get_auth_header(client, admin_user.email, 'admin123'))
+
+        numbers = [o['order_number'] for o in response.get_json()['sap_orders']]
+        assert '700000000906' not in numbers
+        assert '700000000907' in numbers

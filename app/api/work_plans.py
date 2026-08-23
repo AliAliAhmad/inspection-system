@@ -2887,13 +2887,23 @@ def get_available_jobs():
     }
 
     # Get pending SAP orders from pool (most important - show first)
+    #
+    # plan_id is OPTIONAL. It used to be required, from when every week owned
+    # its own pool and there was nothing to show without one. The pool is now a
+    # single global box that exists whether or not a week has been created, so
+    # gating on plan_id left the planner showing an empty pool while the box
+    # held 202 jobs — and the only way to see them was to create a plan first.
+    #
+    # With a plan_id the answer is additionally narrowed to that week: orders
+    # already placed on one of its days drop out, so the pool shows what is
+    # still available to drag rather than what is already placed.
     if not job_type or job_type in ['sap', 'pm', 'defect']:
+        sap_query = pool_orders_query(int(plan_id) if plan_id else None)
+        if berth and berth != 'both':
+            sap_query = sap_query.filter(
+                db.or_(SAPWorkOrder.berth == berth, SAPWorkOrder.berth == 'both', SAPWorkOrder.berth == None)
+            )
         if plan_id:
-            sap_query = pool_orders_query(int(plan_id))
-            if berth and berth != 'both':
-                sap_query = sap_query.filter(
-                    db.or_(SAPWorkOrder.berth == berth, SAPWorkOrder.berth == 'both', SAPWorkOrder.berth == None)
-                )
             # Defensive: also exclude any SAP order whose order_number is already
             # used by a WorkPlanJob in this plan (in case the status field drifted out of sync)
             scheduled_order_numbers = db.session.query(WorkPlanJob.sap_order_number).join(
@@ -2903,8 +2913,8 @@ def get_available_jobs():
                 WorkPlanJob.sap_order_number.isnot(None),
             ).subquery()
             sap_query = sap_query.filter(~SAPWorkOrder.order_number.in_(scheduled_order_numbers))
-            sap_orders = sap_query.order_by(SAPWorkOrder.required_date, SAPWorkOrder.order_number).all()
-            result['sap_orders'] = [o.to_dict(language) for o in sap_orders]
+        sap_orders = sap_query.order_by(SAPWorkOrder.required_date, SAPWorkOrder.order_number).all()
+        result['sap_orders'] = [o.to_dict(language) for o in sap_orders]
 
     # Get equipment for PM jobs (all running equipment) - only if no SAP orders or explicitly requested
     if (not job_type or job_type == 'pm') and not result['sap_orders']:
