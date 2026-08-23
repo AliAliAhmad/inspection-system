@@ -142,12 +142,17 @@ def handle(update, user):
 
     try:
         return _dispatch(command, argument, language, user)
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         # A crash here would leave Ali staring at a bot that received his
         # message and said nothing, which is indistinguishable from being
-        # blocked. Say something, and put the detail in the log.
+        # blocked. Say something — and say WHAT, not just "it is logged".
+        #
+        # The generic version cost an evening: the bot reported a failure it
+        # would not name, and the only way to learn the reason was a shell
+        # session on a connection that keeps dropping. This is a private bot
+        # with an allowlist of one, so the error itself is the useful answer.
         logger.exception('Telegram command failed: %r', text)
-        return ['Something went wrong reading the plan. It is logged.']
+        return [f'/{command} failed: {type(e).__name__}: {e}'[:600]]
 
 
 def _dispatch(command, argument, language, user=None):

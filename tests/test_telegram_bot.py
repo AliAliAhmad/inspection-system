@@ -523,7 +523,12 @@ class TestTheCommands:
 
         chunks = handle(_update('/plan'), admin_user)
 
-        assert len(chunks) == 1 and 'went wrong' in chunks[0]
+        # The error itself, not "it is logged". A bot that reports a failure it
+        # will not name sends you to a shell to find out — which is exactly the
+        # evening this rule was learned in.
+        assert len(chunks) == 1
+        assert 'RuntimeError' in chunks[0]
+        assert 'database on fire' in chunks[0]
 
 
 class TestThePoolCommand:
