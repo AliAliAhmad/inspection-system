@@ -237,6 +237,18 @@ POOL_WORDS = {
 PRIORITY_ORDER = (('urgent', '🔴'), ('high', '🟠'), ('normal', '⚪'), ('low', '·'))
 
 
+def _as_planning_clock(iso_text):
+    """A stored UTC ISO timestamp shown on the yard's clock."""
+    from datetime import datetime
+    if not iso_text:
+        return '?'
+    try:
+        stamp = datetime.fromisoformat(str(iso_text).split('.')[0])
+    except ValueError:
+        return str(iso_text)[:16].replace('T', ' ')
+    return to_planning_time(stamp).strftime('%Y-%m-%d %H:%M')
+
+
 def _open_findings_count():
     """Inspection findings still waiting to be planned.
 
@@ -327,7 +339,11 @@ def _pool_summary(language):
         if not report.get('delivered'):
             lines.append('  (nothing)')
     else:
-        when = str(report.get('written_at') or '')[:16].replace('T', ' ')
+        # written_at is stored with utcnow(), like everything else in this
+        # database. Printing it raw made ONE line of the message UTC while the
+        # freshness stamp below it was Baghdad — the same report appearing to
+        # be three hours older than it was.
+        when = _as_planning_clock(report.get('written_at'))
         lines.append(f"{words['last_rebuild']}: {when}")
         lines.append(f"  +{report.get('created', 0)} {words['new']} · "
                      f"{report.get('updated', 0)} {words['updated']} · "

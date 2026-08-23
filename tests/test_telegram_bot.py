@@ -623,6 +623,17 @@ class TestThePoolCommand:
 
         assert '1 jobs waiting' in text
 
+    def test_the_rebuild_time_is_shown_on_the_yard_clock(self, bot, admin_user,
+                                                         db_session):
+        """One line of the message was UTC while the line below it was Baghdad,
+        so the same report looked three hours older than it was."""
+        self._report(bot, written_at='2026-08-23T18:11:00')
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert '21:11' in text
+        assert '18:11' not in text
+
     def test_it_reports_what_the_last_rebuild_did(self, bot, admin_user, db_session):
         self._report(bot)
         self._order(db_session, '700000000001')
