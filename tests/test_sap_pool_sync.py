@@ -254,9 +254,18 @@ class TestAScheduledOrderIsNeverDuplicated:
     moment the generator tried to stamp the box copy with that plan.
     """
 
-    def _scheduled(self, db_session, equipment, number='700000000001'):
+    def _scheduled(self, db_session, equipment, number='700000000001',
+                   week_start=None, with_job=True):
+        """An order genuinely planned: stamped AND on a day of a live week.
+
+        Both halves matter. "Carries a work_plan_id" is a different question,
+        and answering it instead is what emptied the pool — ~2,000 legacy rows
+        are stamped to plans from weeks long gone.
+        """
         from datetime import date, timedelta
-        plan = WorkPlan(week_start=date(2026, 8, 17), week_end=date(2026, 8, 23),
+        from app.models import WorkPlanDay, WorkPlanJob
+        start = week_start or date(2026, 8, 23)
+        plan = WorkPlan(week_start=start, week_end=start + timedelta(days=6),
                         status='draft', created_by_id=1)
         db_session.session.add(plan)
         db_session.session.flush()
@@ -264,6 +273,13 @@ class TestAScheduledOrderIsNeverDuplicated:
             work_plan_id=plan.id, order_number=number, order_type='PRM',
             job_type='pm', equipment_id=equipment.id, estimated_hours=4.0,
             status='scheduled'))
+        if with_job:
+            day = WorkPlanDay(work_plan_id=plan.id, date=start)
+            db_session.session.add(day)
+            db_session.session.flush()
+            db_session.session.add(WorkPlanJob(
+                work_plan_day_id=day.id, job_type='pm', equipment_id=equipment.id,
+                sap_order_number=number, estimated_hours=4.0, position=1))
         db_session.session.commit()
         return plan
 
@@ -321,3 +337,45 @@ class TestAScheduledOrderIsNeverDuplicated:
         assert len(remaining) == 1
         assert remaining[0].work_plan_id is not None
         assert report['duplicate_box_rows_removed'] == 1
+
+    def test_a_legacy_stamp_from_an_OLD_week_does_not_block_the_box(
+            self, client, db_session, admin_user):
+        """The bug that emptied the pool from 202 to 21.
+
+        ~2,000 rows are legacy per-week imports stamped to plans from weeks
+        long gone. Reading "carries a work_plan_id" as "already planned" meant
+        every fresh box copy was deleted as a duplicate.
+        """
+        from datetime import date
+        equipment = Equipment(name='TT001', serial_number='SN-TT001',
+                              equipment_type='tractor')
+        db_session.session.add(equipment)
+        db_session.session.commit()
+        # A plan whose week ended months ago, with a job on it.
+        self._scheduled(db_session, equipment, week_start=date(2026, 1, 5))
+        _deliver(client, _iw39([_open_order('700000000001')]))
+
+        report = sync_pool_from_delivered_files(today='2026-08-23')
+
+        in_box = SAPWorkOrder.query.filter(
+            SAPWorkOrder.work_plan_id.is_(None),
+            SAPWorkOrder.order_number == '700000000001').count()
+        assert in_box == 1, 'a finished week must not keep an order out of the box'
+        assert report['duplicate_box_rows_removed'] == 0
+
+    def test_a_stamp_with_no_job_does_not_block_the_box_either(
+            self, client, db_session, admin_user):
+        """Stranded rows: stamped to a plan whose jobs were cleared. Plan 40 had
+        69 of these, holding orders hostage outside the box."""
+        equipment = Equipment(name='TT001', serial_number='SN-TT001',
+                              equipment_type='tractor')
+        db_session.session.add(equipment)
+        db_session.session.commit()
+        self._scheduled(db_session, equipment, with_job=False)
+        _deliver(client, _iw39([_open_order('700000000001')]))
+
+        sync_pool_from_delivered_files(today='2026-08-23')
+
+        assert SAPWorkOrder.query.filter(
+            SAPWorkOrder.work_plan_id.is_(None),
+            SAPWorkOrder.order_number == '700000000001').count() == 1

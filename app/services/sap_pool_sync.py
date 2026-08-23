@@ -19,7 +19,7 @@ Two safety rules shape everything here:
 import gc
 import logging
 import os
-from datetime import datetime
+from datetime import date, datetime
 from collections import Counter
 
 from flask import current_app
@@ -42,6 +42,7 @@ from app.services.sap_order_parser import (
     parse_operation_hours,
 )
 from app.services.sap_removal_rules import reconcile_scheduled_orders
+from app.utils.decorators import planning_today
 
 logger = logging.getLogger(__name__)
 
@@ -223,10 +224,25 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
                     SAPWorkOrder.work_plan_id.is_(None)).all()}
 
     # Planned work, possibly already started. Never touched here — it belongs to
-    # the removal rules. Only the candidates' numbers matter for this check.
-    scheduled_numbers = {row.order_number for row in SAPWorkOrder.query.filter(
-        SAPWorkOrder.work_plan_id.isnot(None),
-        SAPWorkOrder.order_number.in_(numbers)).all()}
+    # the removal rules.
+    #
+    # "Planned" means there is a REAL JOB on a day of a week that has not ended.
+    # An earlier version asked only "does this row carry a work_plan_id", which
+    # is a completely different question: ~2,000 rows are legacy per-week
+    # imports stamped to plans from weeks long gone (6, 7, 8, 9, 11, ...). That
+    # read every one of them as "already planned" and deleted the fresh box copy
+    # — the pool collapsed from 202 to 21 in a single rebuild.
+    from app.models import WorkPlan, WorkPlanDay, WorkPlanJob
+    today_date = today or planning_today()
+    if hasattr(today_date, 'date') and not isinstance(today_date, date):
+        today_date = today_date.date()
+
+    scheduled_numbers = {row[0] for row in db.session.query(WorkPlanJob.sap_order_number)
+                         .join(WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id)
+                         .join(WorkPlan, WorkPlanDay.work_plan_id == WorkPlan.id)
+                         .filter(WorkPlan.week_end >= today_date,
+                                 WorkPlanJob.sap_order_number.isnot(None))
+                         .all()}
 
     # Self-heal the duplicates already created. A box row whose order number is
     # ALSO stamped to a plan is the spurious copy: the planned one is the record
@@ -321,7 +337,6 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     # already LEFT the box and are sitting on somebody's day — the removal rules.
     # Run second so that a closed order is never re-created by the box sync after
     # reconciliation has just taken it off a plan.
-    from app.utils.decorators import planning_today
     removal = reconcile_scheduled_orders(
         build_order_status_index(iw39_frame),
         today=today or planning_today(),

@@ -246,3 +246,26 @@ The fix distinguishes two different questions that had been collapsed into one q
 already planned"** (all rows for the candidate numbers). The sync now also deletes box
 copies whose order number is already stamped to a plan, so the existing damage heals on
 the next run.
+
+---
+
+## 2026-08-23 — "Has a foreign key" is not "is being used"
+
+**LESSON: My duplicate cleanup deleted any box row whose order number was "already stamped
+to a plan" — I implemented that as `work_plan_id IS NOT NULL` → ~2,000 rows are LEGACY
+per-week imports stamped to plans from weeks long finished, so every fresh row was deleted
+as a duplicate and the pool collapsed from 202 to 21 in one rebuild.**
+
+**When a cleanup asks "is this in use?", define in-use by the thing that would actually
+break — here, a real `WorkPlanJob` on a day of a week that has not ended — not by the
+presence of a foreign key. A stale FK is exactly what a cleanup is supposed to remove, so
+using it as the protection makes the rule protect its own targets.**
+
+Made worse because it was a DELETE: the previous version of this bug (creating duplicates)
+was recoverable; this one destroyed rows, and only the nightly rebuild rebuilding them
+from SAP made it survivable.
+
+Corollary: **a self-healing cleanup deserves the same suspicion as a migration.** It runs
+unattended, every night, against production, and I shipped it the same afternoon I wrote
+it, on a rule I had not checked against the real shape of the data — which the
+`orders by plan` histogram would have shown in one query.
