@@ -144,3 +144,45 @@ workbook, not at the removal rules that caused it.
 The strictness was kept deliberately: a missing `User Status` column would silently
 disable cancellation detection, and a loud failure on a changed SAP layout is correct
 when every downstream number depends on the columns being what we think they are.
+
+---
+
+## 2026-08-23 — `usecols` does not mean "read less"
+
+**LESSON: I wrote `pd.read_excel(..., usecols=15_columns)` and a comment reasoning about
+the 15-column FRAME being small, on a 512 MB container → `usecols` filters what pandas
+RETURNS, not what the engine READS. openpyxl builds the entire worksheet first. Measure
+peak RSS of a parse before assuming a column filter bounds it.**
+
+Measured on the real exports: IW39 + IW49 + IK17 peaked at **647 MB** against a 512 MB
+ceiling. The process was killed by the kernel — no traceback, no error, just a log file
+that stopped after the startup lines. It looked exactly like a job that never finished,
+and three rounds of shell diagnostics went into "is it still running?" before anyone
+measured memory.
+
+`openpyxl.load_workbook(read_only=True)` + streaming rows: **276 MB**, byte-identical
+frames across 305,000 rows of five real exports.
+
+Corollary: **a silent kill is the worst failure mode to debug.** The parse now runs in a
+process that also serves HTTP, so an OOM there takes the API down with it — worth
+remembering before adding another heavy step to the same worker.
+
+---
+
+## 2026-08-23 — A fixture that cannot reproduce the bug
+
+**LESSON: I tested "a row of empty STRINGS counts as blank" by writing `''` into a
+workbook with pandas and reading it back → BOTH pandas and openpyxl normalise `''` to
+None when WRITING a file, so the fixture produced Nones and the test passed even with
+the fix deleted. When a bug comes from data you did not create, check that your fixture
+can still express it.**
+
+Caught by mutation: removing the `value != ''` check left the suite green at 90/90. The
+condition only exists coming IN from SAP's exports, never on a round-trip through a
+library that writes them.
+
+Fix was to extract the row-consuming logic (`rows_to_frame`) so it could be fed plain
+tuples — the data as it actually arrives, not as a writer would re-encode it.
+
+**Generalisation: if a test's fixture goes through the same library that normalises the
+input, the test is checking the library, not the code.**

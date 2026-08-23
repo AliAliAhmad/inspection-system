@@ -16,6 +16,7 @@ Two safety rules shape everything here:
      nothing explaining why.
 """
 
+import gc
 import logging
 import os
 from collections import Counter
@@ -101,18 +102,31 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     if not iw39:
         return {'status': 'skipped', 'reason': 'no IW39 delivered yet'}
 
-    iw49, _ = _current_file_bytes(sheet_name='IW49')
-    ik17, _ = _current_file_bytes(sheet_name='IK17')
-    plan_file, _ = _current_file_bytes(filename_contains=MAINTENANCE_PLAN_FILENAME_HINT)
-
     # IW39 feeds four separate steps. Parse it ONCE and share the frame —
     # re-reading a 10 MB, 144-column workbook four times dominated the runtime.
     iw39_frame = load_iw39(iw39)
+    del iw39
 
+    # Each raw workbook is 10-25 MB and is needed only until it is parsed.
+    # Holding all four for the whole run added ~50 MB of dead weight to a
+    # process with a 512 MB ceiling, so each is released as soon as it is read.
+    iw49, _ = _current_file_bytes(sheet_name='IW49')
+    had_iw49 = bool(iw49)
     hours_by_order, _ = parse_operation_hours(iw49) if iw49 else ({}, {})
-    plan_types = load_maintenance_plan_types(plan_file) if plan_file else {}
-    last_completion = build_last_completion_index(iw39_frame)
+    del iw49
+
+    ik17, _ = _current_file_bytes(sheet_name='IK17')
+    had_ik17 = bool(ik17)
     meters = build_meter_index(ik17) if ik17 else {}
+    del ik17
+
+    plan_file, _ = _current_file_bytes(filename_contains=MAINTENANCE_PLAN_FILENAME_HINT)
+    had_plan_file = bool(plan_file)
+    plan_types = load_maintenance_plan_types(plan_file) if plan_file else {}
+    del plan_file
+
+    gc.collect()
+    last_completion = build_last_completion_index(iw39_frame)
     breakdowns = build_breakdown_index(iw39_frame, today=today)
     durations = build_duration_index(iw39_frame, hours_by_order)
 
@@ -210,7 +224,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         'equipment_unmatched': len(unmatched_codes),
         'unmatched_codes': sorted(unmatched_codes),
         'orders_skipped_no_equipment': skipped_no_equipment,
-        'inputs': {'iw49': bool(iw49), 'ik17': bool(ik17), 'maintenance_plan': bool(plan_file)},
+        'inputs': {'iw49': had_iw49, 'ik17': had_ik17, 'maintenance_plan': had_plan_file},
         'removal_rules': removal,
         'parse': parse_report,
     }

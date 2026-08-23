@@ -489,3 +489,131 @@ class TestWhatSapNowSaysAboutAnOrder:
         assert index['700000000002']['state'] == 'open'
         # The crane side is another team's work and stays out of this entirely.
         assert '700000000003' not in index
+
+
+class TestReadingWithoutRunningOutOfMemory:
+    """The reader streams rows instead of loading the workbook.
+
+    pd.read_excel(usecols=...) does NOT save memory — openpyxl builds the whole
+    worksheet first. Measured on the real exports, IW39 + IW49 + IK17 peaked at
+    647 MB inside a 512 MB container: the parse was killed with no traceback,
+    which looked exactly like a job that simply never finished.
+
+    Streaming brought the same three files to 276 MB, producing byte-identical
+    frames across 305,000 rows of real data. These tests pin the two behaviours
+    that differed at first and had to be matched deliberately.
+    """
+
+    def _book(self, rows, columns):
+        frame = pd.DataFrame(rows, columns=columns)
+        buffer = io.BytesIO()
+        frame.to_excel(buffer, index=False)
+        return buffer.getvalue()
+
+    def test_only_the_asked_for_columns_come_back(self):
+        from app.services.sap_order_parser import _stream_excel
+        book = self._book([{'a': '1', 'b': '2', 'c': '3'}], ['a', 'b', 'c'])
+
+        out = _stream_excel(book, ['c', 'a'])
+
+        assert list(out.columns) == ['c', 'a']
+        assert out.iloc[0]['c'] == '3'
+
+    def test_a_missing_column_is_loud_not_silent(self):
+        """A quietly absent column disables a rule while the numbers still look fine."""
+        from app.services.sap_order_parser import _stream_excel
+        book = self._book([{'a': '1'}], ['a'])
+
+        with pytest.raises(KeyError):
+            _stream_excel(book, ['a', 'User Status'])
+
+    def test_a_trailing_blank_row_is_dropped(self):
+        """A worksheet's declared range over-reports; IW49 gained one phantom row."""
+        from app.services.sap_order_parser import _stream_excel
+        book = self._book([{'a': '1'}, {'a': '2'}, {'a': None}], ['a'])
+
+        assert len(_stream_excel(book, ['a'])) == 2
+
+    def test_a_row_of_empty_STRINGS_is_also_blank(self):
+        """IK17's last row is 85 empty STRINGS, not 85 Nones.
+
+        Tested through rows_to_frame rather than a written workbook, because
+        both openpyxl and pandas normalise '' to None on the way OUT to a file.
+        A fixture therefore cannot reproduce the condition — the first version
+        of this test passed even with the fix removed.
+        """
+        from app.services.sap_order_parser import rows_to_frame
+
+        out = rows_to_frame(('a', 'b'),
+                            iter([('1', 'x'), ('', '')]),
+                            ['a', 'b'])
+
+        assert len(out) == 1
+
+    def test_an_empty_string_cell_becomes_missing(self):
+        """Same reason: only reachable through the row data, not a fixture."""
+        from app.services.sap_order_parser import rows_to_frame
+
+        out = rows_to_frame(('a', 'b'),
+                            iter([('1', ''), ('2', 'y')]),
+                            ['a', 'b'])
+
+        assert pd.isna(out.iloc[0]['b'])
+        assert out.iloc[1]['b'] == 'y'
+
+    def test_a_short_row_is_padded_rather_than_crashing(self):
+        """Streaming yields ragged rows; a missing tail cell is missing data."""
+        from app.services.sap_order_parser import rows_to_frame
+
+        out = rows_to_frame(('a', 'b', 'c'),
+                            iter([('1', '2', '3'), ('4',)]),
+                            ['a', 'c'])
+
+        assert len(out) == 2
+        assert pd.isna(out.iloc[1]['c'])
+
+    def test_a_blank_row_in_the_MIDDLE_survives(self):
+        """Only trailing blanks are trimmed — a gap in the middle is real data."""
+        from app.services.sap_order_parser import _stream_excel
+        book = self._book([{'a': '1'}, {'a': None}, {'a': '3'}], ['a'])
+
+        out = _stream_excel(book, ['a'])
+
+        assert len(out) == 3
+        assert out['a'].isna().sum() == 1
+
+    def test_an_empty_cell_reads_as_missing_not_as_empty_text(self):
+        """The module is written around NaN meaning 'not filled in'.
+
+        Returning '' would make .fillna() and the isinstance(x, float) NaN
+        checks quietly stop working on exactly the cells they guard.
+        """
+        from app.services.sap_order_parser import _stream_excel
+        book = self._book([{'a': '1', 'b': ''}, {'a': '2', 'b': 'y'}], ['a', 'b'])
+
+        out = _stream_excel(book, ['a', 'b'])
+
+        assert pd.isna(out.iloc[0]['b'])
+
+    def test_a_twelve_digit_order_number_does_not_become_scientific_notation(self):
+        """700001479825 rendered as 7.000015e+11 matches no order in the app."""
+        from app.services.sap_order_parser import _stream_excel
+        frame = pd.DataFrame([{'Order': 700001479825}])
+        buffer = io.BytesIO()
+        frame.to_excel(buffer, index=False)
+
+        out = _stream_excel(buffer.getvalue(), ['Order'])
+
+        assert out.iloc[0]['Order'] == '700001479825'
+
+    def test_a_date_cell_reads_the_way_the_rest_of_the_module_expects(self):
+        """Every date rule re-parses a string, as read_excel(dtype=str) produced."""
+        from datetime import datetime
+        from app.services.sap_order_parser import _stream_excel
+        frame = pd.DataFrame([{'Created on': datetime(2026, 8, 23)}])
+        buffer = io.BytesIO()
+        frame.to_excel(buffer, index=False)
+
+        out = _stream_excel(buffer.getvalue(), ['Created on'])
+
+        assert pd.to_datetime(out.iloc[0]['Created on']).date().isoformat() == '2026-08-23'

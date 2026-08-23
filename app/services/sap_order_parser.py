@@ -206,7 +206,106 @@ def _read_excel(source, usecols):
         if missing:
             raise KeyError(f'pre-parsed frame is missing columns: {missing}')
         return source[list(usecols)]
-    return pd.read_excel(io.BytesIO(source), sheet_name=0, usecols=usecols, dtype=str)
+    return _stream_excel(source, usecols)
+
+
+def _cell_to_str(value):
+    """Match what pandas `dtype=str` produces, cell for cell.
+
+    The streaming reader below returns native types where read_excel returned
+    strings, and the rest of this module was written against strings — dates
+    arrive as '2025-08-31 00:00:00' and are re-parsed with pd.to_datetime,
+    order numbers as '700001479825'. Converting here keeps every downstream
+    rule untouched instead of rewriting nine functions around a new dtype.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        # An empty cell reaches openpyxl as '' but reaches pandas as NaN, and
+        # the whole module is written around NaN meaning "not filled in".
+        # Returning '' here would make .fillna() and isinstance(x, float)
+        # checks quietly stop working on exactly the blank cells they guard.
+        return value if value else None
+    return str(value)
+
+
+def _stream_excel(raw_bytes, usecols):
+    """Read only the wanted columns, one row at a time.
+
+    pd.read_excel(usecols=...) does NOT save memory: openpyxl still builds the
+    whole worksheet before pandas selects columns. Measured on the real exports,
+    the three files peaked at 647 MB — on a 512 MB container, with two gunicorn
+    workers already resident. The parse was killed outright, leaving no
+    traceback, which is why it looked like the job simply never finished.
+
+    read_only=True makes openpyxl stream rows instead of building an object
+    tree, so peak memory becomes the size of the columns actually kept rather
+    than the size of the workbook.
+    """
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+    try:
+        rows = workbook[workbook.sheetnames[0]].iter_rows(values_only=True)
+        try:
+            header = next(rows)
+        except StopIteration:
+            raise ValueError('worksheet is empty')
+        return rows_to_frame(header, rows, usecols)
+    finally:
+        workbook.close()
+
+
+def rows_to_frame(header, rows, usecols):
+    """Build the frame from a header row and an iterator of row tuples.
+
+    Separate from the workbook so it can be tested with plain tuples. Both bugs
+    that showed up here — the phantom trailing row and empty-string cells — are
+    invisible through a written fixture, because both openpyxl and pandas
+    normalise '' to None on the way OUT to a file. They only exist coming IN
+    from SAP's exports.
+    """
+    import pandas as pd
+
+    position = {}
+    for index, name in enumerate(header):
+        if name is not None and name not in position:
+            position[name] = index
+
+    missing = [c for c in usecols if c not in position]
+    if missing:
+        # Loud on purpose. A silently missing column would disable a rule
+        # (cancellation detection, hours, the plant code) while every number
+        # downstream still looked plausible.
+        raise KeyError(f'export is missing columns: {missing}')
+
+    wanted = [position[c] for c in usecols]
+    width = max(wanted) + 1
+    columns = [[] for _ in usecols]
+
+    # A worksheet's declared dimensions routinely over-report the used range, so
+    # streaming yields trailing rows that hold nothing. read_excel drops them,
+    # and the row counts must match or every check against the old behaviour is
+    # off by one. Only TRAILING blanks go: a blank row in the middle is real
+    # data shaped like a gap, and read_excel keeps it.
+    last_populated = -1
+    for count, row in enumerate(rows):
+        if len(row) < width:
+            row = tuple(row) + (None,) * (width - len(row))
+        for slot, index in enumerate(wanted):
+            columns[slot].append(_cell_to_str(row[index]))
+        # '' counts as blank, not content. IK17's final row is 85 empty STRINGS
+        # rather than 85 Nones, and an `is not None` test kept it — one phantom
+        # row, enough to put every row count out by one.
+        if any(value is not None and value != '' for value in row):
+            last_populated = count
+
+    keep = last_populated + 1
+    if keep < len(columns[0]):
+        columns = [values[:keep] for values in columns]
+
+    return pd.DataFrame({name: values for name, values in zip(usecols, columns)},
+                        columns=list(usecols))
 
 
 # Every IW39 column any consumer in this module needs. Read once, shared.
