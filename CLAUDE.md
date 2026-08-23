@@ -66,7 +66,6 @@
 ### Other
 - Full QA testing needed (496 passing)
 - Add TOGETHER_API_KEY on Render (key ready)
-- Add TOGETHER_API_KEY on Render (key ready)
 - GROQ_API_KEY returns 401 and OPENAI has no credits — Arabic notification text
   falls back to English (cached + circuit-broken now, so it is quiet, not fixed)
 - Google Gemini 429 quota: free tier limited to 5 RPM (known issue since Dec 2025)
