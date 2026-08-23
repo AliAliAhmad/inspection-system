@@ -27,6 +27,7 @@ Contract (fixed by the courier, do not change unilaterally):
 
 import hashlib
 import hmac
+import threading
 import logging
 import os
 from datetime import datetime
@@ -39,6 +40,10 @@ from app.models import SapSyncFile
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('sap_sync', __name__)
+
+# One rebuild at a time — two racing reconciliations of the same files would
+# fight over the same rows for no benefit.
+_REBUILD_LOCK = threading.Lock()
 
 # Subdirectory of UPLOAD_FOLDER. On Render, UPLOAD_FOLDER is the mount point of
 # the 1 GB persistent disk, which is the only place bytes survive a deploy.
@@ -224,3 +229,64 @@ def sap_sync_status():
         'stored_mb': round(total_bytes / 1048576, 1),
         'last_received_at': newest.isoformat() if newest else None,
     }), 200
+
+
+@bp.route('/rebuild-pool', methods=['POST'])
+def rebuild_pool():
+    """Re-read the delivered SAP files and refresh the job pool.
+
+    Safe to call repeatedly — it is a reconciliation, not an append.
+
+    Runs in a BACKGROUND THREAD and returns 202 immediately. A full rebuild
+    parses roughly 50 MB of Excel and takes over a minute; holding an HTTP
+    request open that long invites a proxy timeout, and the caller would then
+    retry work that is already running.
+
+    ?dry_run=true runs synchronously and returns the full report — it is a
+    manual diagnostic, and the whole point is to see what WOULD change.
+
+    Uses the same robot key as the upload: machine-triggered work run after a
+    delivery, not a user action.
+    """
+    denied = _require_robot_key()
+    if denied:
+        return denied
+
+    from app.services.sap_pool_sync import sync_pool_from_delivered_files
+
+    if str(request.args.get('dry_run', '')).lower() in ('1', 'true', 'yes'):
+        try:
+            return jsonify(sync_pool_from_delivered_files(dry_run=True)), 200
+        except Exception as e:  # noqa: BLE001
+            db.session.rollback()
+            logger.exception('Pool rebuild dry run failed')
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    if _REBUILD_LOCK.locked():
+        # A rebuild is a full reconciliation of the same files; a second one
+        # racing the first would fight over the same rows for no benefit.
+        return jsonify({'status': 'busy',
+                        'message': 'a pool rebuild is already running'}), 409
+
+    app = current_app._get_current_object()
+
+    def run():
+        with _REBUILD_LOCK:
+            with app.app_context():
+                try:
+                    report = sync_pool_from_delivered_files()
+                    logger.info('Pool rebuild finished: created=%s updated=%s removed=%s '
+                                'unmatched_equipment=%s',
+                                report.get('created'), report.get('updated'),
+                                report.get('removed_from_pool'),
+                                report.get('equipment_unmatched'))
+                except Exception:  # noqa: BLE001
+                    db.session.rollback()
+                    logger.exception('Pool rebuild failed')
+
+    threading.Thread(target=run, daemon=True, name='sap-pool-rebuild').start()
+    return jsonify({
+        'status': 'accepted',
+        'message': ('Rebuild started in the background. It parses ~50 MB of Excel and '
+                    'takes a minute or two; check the logs or /status for the result.'),
+    }), 202

@@ -98,9 +98,61 @@ def is_plannable_status(system_status):
     return bool(tokens & set(PLANNABLE_STATUS_TOKENS))
 
 
-def _read_excel(raw_bytes, usecols):
+
+def _today_naive(today=None):
+    """A timezone-NAIVE timestamp for today in the yard's timezone.
+
+    Naive on purpose: the dates parsed out of SAP exports are naive, and
+    pandas refuses to compare naive against aware. pd.Timestamp.utcnow() is
+    AWARE, so using it here raised "Cannot compare tz-naive and tz-aware" —
+    but only when no explicit `today` was passed, i.e. only in production.
+
+    Baghdad rather than UTC for the same reason planning_today() exists: at
+    UTC+3 the server believes it is still yesterday until 03:00 local, which
+    silently shifts every window by a day.
+    """
     import pandas as pd
-    return pd.read_excel(io.BytesIO(raw_bytes), sheet_name=0, usecols=usecols, dtype=str)
+    if today is not None:
+        return pd.Timestamp(today)
+    from datetime import datetime, timedelta, timezone
+    return pd.Timestamp((datetime.now(timezone.utc) + timedelta(hours=3)).date())
+
+
+def _read_excel(source, usecols):
+    """Parse an export, or reuse an already-parsed one.
+
+    Accepts raw bytes OR a DataFrame. IW39 is consumed by four separate
+    functions (last completion, breakdowns, durations, and the main parse), and
+    re-reading a 10 MB / 144-column workbook four times dominated the runtime.
+    Callers that need it more than once parse it ONCE with the union of columns
+    and pass the frame.
+
+    Reading the union rather than caching whole workbooks is deliberate: IW39
+    holds 19,283 rows x 144 columns, and holding all of that as object dtype
+    would be hundreds of MB on a 512 MB instance. Fifteen columns is nothing.
+    """
+    import pandas as pd
+
+    if isinstance(source, pd.DataFrame):
+        missing = [c for c in usecols if c not in source.columns]
+        if missing:
+            raise KeyError(f'pre-parsed frame is missing columns: {missing}')
+        return source[list(usecols)]
+    return pd.read_excel(io.BytesIO(source), sheet_name=0, usecols=usecols, dtype=str)
+
+
+# Every IW39 column any consumer in this module needs. Read once, shared.
+IW39_COLUMNS = (
+    'Order', 'MaintActivityType', 'Main work center', 'System status',
+    'Functional Location', 'Description', 'Basic start date', 'Priority',
+    'Work Center', 'Equipment', 'Maintenance Plan', 'Created on',
+    'Actual Order Finish Date',
+)
+
+
+def load_iw39(iw39_bytes):
+    """Parse IW39 once, with every column this module needs."""
+    return _read_excel(iw39_bytes, list(IW39_COLUMNS))
 
 
 def parse_operation_hours(iw49_bytes):
@@ -161,7 +213,7 @@ def parse_open_orders(iw39_bytes, hours_by_order=None, plan_types=None,
 
     plan_types = plan_types or {}
     last_completion = last_completion or {}
-    now = pd.Timestamp(today) if today else pd.Timestamp.utcnow().normalize()
+    now = _today_naive(today)
 
     report = {'total_rows': len(df)}
 
@@ -660,7 +712,7 @@ def build_breakdown_index(iw39_bytes, today=None, window_days=BREAKDOWN_WINDOW_D
     mes = frame[frame['Main work center'].fillna('').str.upper().str.startswith(MES_PREFIX)]
     breakdowns = mes[mes['MaintActivityType'] == 'BDM'].copy()
 
-    now = pd.Timestamp(today) if today else pd.Timestamp.utcnow().normalize()
+    now = _today_naive(today)
     created = pd.to_datetime(breakdowns['Created on'], errors='coerce')
     recent = breakdowns[created >= now - pd.Timedelta(days=window_days)]
 
@@ -670,3 +722,82 @@ def build_breakdown_index(iw39_bytes, today=None, window_days=BREAKDOWN_WINDOW_D
         if code:
             counts[code] = counts.get(code, 0) + 1
     return counts
+
+
+# ---------------------------------------------------------------------------
+# Learned job durations
+# ---------------------------------------------------------------------------
+#
+# IW39 carries no hours at all, and IW49 has them for 5,539 of 5,548 FINISHED
+# MES orders but ZERO of the open ones — so the pool cannot be estimated from
+# SAP directly. The history can estimate it instead.
+#
+# A flat default is not a neutral choice. Measured on Ali's real data, the true
+# medians are PRM on TR = 18.0h, ECH = 14.6h, RS = 10.6h, TT = 8.2h against the
+# app's blanket 4.0h. Planning a TR service as 4 hours puts four of them on one
+# day and none of them finish.
+#
+# Median, not mean: one 40-hour disaster must not drag a whole family's estimate.
+
+MIN_SAMPLES_FOR_DURATION = 5
+
+
+def build_duration_index(iw39_bytes, hours_by_order):
+    """Median hours per (activity type, equipment family), learned from history.
+
+    Falls back through progressively wider buckets so there is always an answer
+    and none of it is invented:
+        (PRM, TT) -> (PRM, *) -> overall median -> DEFAULT_HOURS
+    """
+    import statistics
+
+    frame = _read_excel(iw39_bytes, ['Order', 'MaintActivityType', 'Main work center',
+                                     'System status', 'Functional Location'])
+    mes = frame[frame['Main work center'].fillna('').str.upper().str.startswith(MES_PREFIX)]
+    finished = mes[~mes['System status'].map(is_plannable_status)]
+
+    by_pair, by_activity, overall = {}, {}, []
+    for order, activity, location in zip(finished['Order'],
+                                         finished['MaintActivityType'],
+                                         finished['Functional Location']):
+        if order is None or isinstance(order, float):
+            continue
+        hours = hours_by_order.get(str(order).strip())
+        if not hours or hours <= 0:
+            continue
+        code = extract_plant_code(location)
+        family = re.match(r'^([A-Z]{2,4})', code).group(1) if code else None
+        act = (activity or '').strip().upper()
+        overall.append(hours)
+        by_activity.setdefault(act, []).append(hours)
+        if family:
+            by_pair.setdefault((act, family), []).append(hours)
+
+    def median_of(samples):
+        return round(statistics.median(samples), 2) if len(samples) >= MIN_SAMPLES_FOR_DURATION else None
+
+    return {
+        'by_pair': {k: median_of(v) for k, v in by_pair.items() if median_of(v)},
+        'by_activity': {k: median_of(v) for k, v in by_activity.items() if median_of(v)},
+        'overall': median_of(overall),
+    }
+
+
+def estimate_hours(duration_index, activity_type, plant_code):
+    """Best learned estimate for one job, widening the bucket until something fits."""
+    if not duration_index:
+        return DEFAULT_HOURS
+    act = (activity_type or '').strip().upper()
+    family = None
+    if plant_code:
+        match = re.match(r'^([A-Z]{2,4})', plant_code)
+        family = match.group(1) if match else None
+
+    if family:
+        specific = duration_index.get('by_pair', {}).get((act, family))
+        if specific:
+            return specific
+    by_activity = duration_index.get('by_activity', {}).get(act)
+    if by_activity:
+        return by_activity
+    return duration_index.get('overall') or DEFAULT_HOURS
