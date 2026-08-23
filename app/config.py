@@ -33,6 +33,23 @@ class Config:
     SAP_SYNC_ROBOT_KEY = os.getenv('SAP_SYNC_ROBOT_KEY', '')
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
 
+    # --- Telegram planning bot -------------------------------------------------
+    # Kill switch. False skips blueprint registration entirely, so a misbehaving
+    # bot can be turned off with an env var and a restart rather than a deploy.
+    TELEGRAM_ENABLED = os.getenv('TELEGRAM_ENABLED', 'true').lower() != 'false'
+
+    # From BotFather. Absent means the bot cannot send anything, and the webhook
+    # refuses every update — a missing token must never mean "open to all".
+    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+
+    # Telegram echoes this back in X-Telegram-Bot-Api-Secret-Token on every
+    # update, which is how we know a POST really came from Telegram.
+    TELEGRAM_WEBHOOK_SECRET = os.getenv('TELEGRAM_WEBHOOK_SECRET', '')
+
+    # "<telegram_user_id>:<app_user_id>,..." — one setting that does BOTH
+    # authorization and identity. A sender not listed here is ignored in silence.
+    TELEGRAM_ALLOWED_USERS = os.getenv('TELEGRAM_ALLOWED_USERS', '')
+
     # Rate limiting
     RATELIMIT_STORAGE_URI = os.getenv('RATELIMIT_STORAGE_URI', 'memory://')
     RATELIMIT_DEFAULT = '200 per minute'

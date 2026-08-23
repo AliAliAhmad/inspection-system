@@ -33,9 +33,10 @@ import os
 from datetime import datetime
 
 from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import jwt_required
 
 from app.extensions import db
-from app.models import SapSyncFile
+from app.models import SapReconciliationEvent, SapSyncFile
 
 logger = logging.getLogger(__name__)
 
@@ -275,11 +276,16 @@ def rebuild_pool():
             with app.app_context():
                 try:
                     report = sync_pool_from_delivered_files()
+                    removal = report.get('removal_rules') or {}
                     logger.info('Pool rebuild finished: created=%s updated=%s removed=%s '
-                                'unmatched_equipment=%s',
+                                'unmatched_equipment=%s | removal rules: '
+                                'jobs_removed=%s left_in_progress=%s questions=%s',
                                 report.get('created'), report.get('updated'),
                                 report.get('removed_from_pool'),
-                                report.get('equipment_unmatched'))
+                                report.get('equipment_unmatched'),
+                                removal.get('jobs_removed'),
+                                removal.get('jobs_left_in_progress'),
+                                removal.get('questions_raised'))
                 except Exception:  # noqa: BLE001
                     db.session.rollback()
                     logger.exception('Pool rebuild failed')
@@ -290,3 +296,60 @@ def rebuild_pool():
         'message': ('Rebuild started in the background. It parses ~50 MB of Excel and '
                     'takes a minute or two; check the logs or /status for the result.'),
     }), 202
+
+
+@bp.route('/events', methods=['GET'])
+@jwt_required()
+def list_reconciliation_events():
+    """What the robot noticed that a person needs to know about.
+
+    A human endpoint, not a courier one — JWT and the planning roles, because
+    these events name jobs, workers and equipment. `?status=open` by default:
+    the resolved ones are history and are only asked for deliberately.
+    """
+    from app.api.work_plans import engineer_or_admin_required
+    engineer_or_admin_required()
+
+    query = SapReconciliationEvent.query
+    status = request.args.get('status', 'open')
+    if status in ('open', 'resolved'):
+        query = query.filter(SapReconciliationEvent.status == status)
+
+    event_type = request.args.get('event_type')
+    if event_type:
+        query = query.filter(SapReconciliationEvent.event_type == event_type)
+
+    limit = min(int(request.args.get('limit', 100)), 500)
+    events = (query.order_by(SapReconciliationEvent.created_at.desc())
+              .limit(limit).all())
+
+    return jsonify({
+        'status': 'success',
+        'count': len(events),
+        'events': [event.to_dict() for event in events],
+    }), 200
+
+
+@bp.route('/events/<int:event_id>/resolve', methods=['POST'])
+@jwt_required()
+def resolve_reconciliation_event(event_id):
+    """Mark an event dealt with.
+
+    Necessary, not cosmetic: an open event is suppressed as a duplicate on every
+    later sync, so a question nobody can close would silence itself forever
+    while never being answered. Resolving it lets the same situation be raised
+    again if it recurs.
+    """
+    from app.api.work_plans import engineer_or_admin_required
+    engineer_or_admin_required()
+
+    event = db.session.get(SapReconciliationEvent, event_id)
+    if not event:
+        return jsonify({'status': 'error', 'message': 'Event not found'}), 404
+
+    if event.status != 'resolved':
+        event.status = 'resolved'
+        event.resolved_at = datetime.utcnow()
+        db.session.commit()
+
+    return jsonify({'status': 'success', 'event': event.to_dict()}), 200

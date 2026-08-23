@@ -930,8 +930,46 @@ def init_scheduler(app):
         replace_existing=True
     )
 
+    # --- Telegram planning pushes ---------------------------------------------
+    # 16:00 Baghdad -> TOMORROW's jobs. Early enough that an unassigned job can
+    # still be given to somebody before the day starts.
+    # 06:00 Baghdad -> TODAY's jobs.
+    #
+    # timezone= is NOT optional. Render runs UTC, and every other trigger in this
+    # file is therefore a UTC hour; leaving it off would land these three hours
+    # early, which for the 06:00 push means 03:00 in the yard.
+    @run_with_context
+    def telegram_push_tomorrow():
+        from app.services.telegram.push import push_day_to_planners
+        from datetime import timedelta
+        from app.utils.decorators import planning_today
+        push_day_to_planners(planning_today() + timedelta(days=1), kind='tomorrow')
+
+    @run_with_context
+    def telegram_push_today():
+        from app.services.telegram.push import push_day_to_planners
+        from app.utils.decorators import planning_today
+        push_day_to_planners(planning_today(), kind='today')
+
+    scheduler.add_job(
+        telegram_push_tomorrow,
+        CronTrigger(hour=16, minute=0, timezone='Asia/Baghdad'),
+        id='telegram_push_tomorrow',
+        name="Telegram: tomorrow's jobs at 16:00 Baghdad",
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        telegram_push_today,
+        CronTrigger(hour=6, minute=0, timezone='Asia/Baghdad'),
+        id='telegram_push_today',
+        name="Telegram: today's jobs at 06:00 Baghdad",
+        replace_existing=True
+    )
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
-    logger.info("Background scheduler started with 26 scheduled jobs")
+    logger.info("Background scheduler started with %s scheduled jobs",
+                len(scheduler.get_jobs()))
 
     return scheduler

@@ -32,7 +32,7 @@ def _iw39(rows):
     columns = ['Order', 'MaintActivityType', 'Main work center', 'System status',
                'Functional Location', 'Description', 'Basic start date', 'Priority',
                'Work Center', 'Equipment', 'Maintenance Plan', 'Created on',
-               'Actual Order Finish Date']
+               'Actual Order Finish Date', 'User Status', 'Deletion flag']
     frame = pd.DataFrame([{**{c: None for c in columns}, **row} for row in rows],
                          columns=columns)
     buffer = io.BytesIO()

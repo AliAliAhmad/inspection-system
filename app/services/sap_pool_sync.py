@@ -26,6 +26,7 @@ from app.extensions import db
 from app.models import Equipment, SapSyncFile, SAPWorkOrder
 from app.services.sap_order_parser import (
     build_breakdown_index,
+    build_order_status_index,
     load_iw39,
     build_duration_index,
     build_last_completion_index,
@@ -38,6 +39,7 @@ from app.services.sap_order_parser import (
     parse_open_orders,
     parse_operation_hours,
 )
+from app.services.sap_removal_rules import reconcile_scheduled_orders
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +185,17 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     if not dry_run:
         db.session.commit()
 
+    # The box is now current. The other half of the job is the orders that have
+    # already LEFT the box and are sitting on somebody's day — the removal rules.
+    # Run second so that a closed order is never re-created by the box sync after
+    # reconciliation has just taken it off a plan.
+    from app.utils.decorators import planning_today
+    removal = reconcile_scheduled_orders(
+        build_order_status_index(iw39_frame),
+        today=today or planning_today(),
+        dry_run=dry_run,
+    )
+
     matched = len(codes) - len(unmatched_codes)
     report = {
         'status': 'ok',
@@ -198,9 +211,11 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         'unmatched_codes': sorted(unmatched_codes),
         'orders_skipped_no_equipment': skipped_no_equipment,
         'inputs': {'iw49': bool(iw49), 'ik17': bool(ik17), 'maintenance_plan': bool(plan_file)},
+        'removal_rules': removal,
         'parse': parse_report,
     }
-    logger.info('SAP pool sync: %s', {k: v for k, v in report.items() if k != 'parse'})
+    logger.info('SAP pool sync: %s',
+                {k: v for k, v in report.items() if k not in ('parse', 'removal_rules')})
     return report
 
 

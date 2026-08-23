@@ -219,6 +219,12 @@ def create_app(config_name='development'):
     app.register_blueprint(work_plans.bp, url_prefix='/api/work-plans')
     from app.api import sap_sync
     app.register_blueprint(sap_sync.bp, url_prefix='/api/sap-sync')
+
+    # Kill switch: TELEGRAM_ENABLED=false and the routes do not exist at all,
+    # so a misbehaving bot is turned off with an env var and a restart.
+    if app.config.get('TELEGRAM_ENABLED'):
+        from app.api import telegram as telegram_api
+        app.register_blueprint(telegram_api.bp, url_prefix='/api/telegram')
     app.register_blueprint(materials.bp, url_prefix='/api/materials')
     app.register_blueprint(cycles.bp, url_prefix='/api/cycles')
     app.register_blueprint(pm_templates.bp, url_prefix='/api/pm-templates')

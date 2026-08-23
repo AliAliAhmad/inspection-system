@@ -98,6 +98,74 @@ def is_plannable_status(system_status):
     return bool(tokens & set(PLANNABLE_STATUS_TOKENS))
 
 
+# SAP marks a cancelled order with the user status CNCL. Verified on the real
+# export: 2 of 9,124 MES orders carry it, and BOTH also carry CLSD in the system
+# status — so cancellation must be tested FIRST or a cancelled order is
+# indistinguishable from a finished one.
+CANCELLED_USER_STATUS_TOKENS = ('CNCL',)
+
+
+def order_sap_state(system_status, user_status=None, deletion_flag=None):
+    """What SAP now says about one order: cancelled, done, open or unknown.
+
+    The inverse of is_plannable_status(). That answers "may this enter the pool";
+    this answers "what happened to the one already on Tuesday's plan".
+
+    'unknown' is a real answer and deliberately triggers nothing. An order can be
+    absent from an export, carry a status nobody has seen before, or belong to a
+    work centre outside MES. Acting on any of those would mean treating silence
+    as evidence, and the whole point of these rules is that a job on someone's
+    day never vanishes without a reason we can name.
+    """
+    flag = '' if (deletion_flag is None or isinstance(deletion_flag, float)) else str(deletion_flag).strip()
+    user_tokens = set() if (user_status is None or isinstance(user_status, float)) \
+        else set(str(user_status).upper().split())
+    if flag or (user_tokens & set(CANCELLED_USER_STATUS_TOKENS)):
+        return 'cancelled'
+
+    if system_status is None or isinstance(system_status, float):
+        return 'unknown'
+    tokens = set(str(system_status).upper().split())
+    if tokens & set(BLOCKING_STATUS_TOKENS):
+        return 'done'
+    if tokens & set(PLANNABLE_STATUS_TOKENS):
+        return 'open'
+    return 'unknown'
+
+
+def build_order_status_index(iw39_bytes):
+    """order number -> what SAP says about it now.
+
+    Covers EVERY MES order in the export, open or closed — unlike
+    parse_open_orders, which keeps only the plannable ones. Reconciliation needs
+    the closed rows: they are the evidence that a scheduled job is finished.
+    """
+    import pandas as pd
+
+    wanted = ['Order', 'Main work center', 'System status', 'User Status',
+              'Deletion flag', 'Actual Order Finish Date']
+    df = _read_excel(iw39_bytes, wanted)
+    mes = df[df['Main work center'].fillna('').str.upper().str.startswith(MES_PREFIX)]
+
+    finish_dates = pd.to_datetime(mes['Actual Order Finish Date'], errors='coerce')
+
+    index = {}
+    for order, system_status, user_status, flag, finished in zip(
+            mes['Order'], mes['System status'], mes['User Status'],
+            mes['Deletion flag'], finish_dates):
+        if order is None or isinstance(order, float):
+            continue
+        number = str(order).strip()
+        if not number:
+            continue
+        index[number] = {
+            'state': order_sap_state(system_status, user_status, flag),
+            'system_status': None if isinstance(system_status, float) else system_status,
+            'finished_on': None if pd.isna(finished) else finished.date(),
+        }
+    return index
+
+
 
 def _today_naive(today=None):
     """A timezone-NAIVE timestamp for today in the yard's timezone.
@@ -146,7 +214,7 @@ IW39_COLUMNS = (
     'Order', 'MaintActivityType', 'Main work center', 'System status',
     'Functional Location', 'Description', 'Basic start date', 'Priority',
     'Work Center', 'Equipment', 'Maintenance Plan', 'Created on',
-    'Actual Order Finish Date',
+    'Actual Order Finish Date', 'User Status', 'Deletion flag',
 )
 
 

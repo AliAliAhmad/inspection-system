@@ -426,3 +426,66 @@ class TestPlanningToday:
         from app.utils.decorators import planning_today
 
         assert planning_today() >= datetime.now(timezone.utc).date()
+
+
+class TestWhatSapNowSaysAboutAnOrder:
+    """The inverse of is_plannable_status, used by the removal rules.
+
+    Classification ORDER is the whole point here. Verified on the real export:
+    both cancelled MES orders (700001289489, 700001232239) also carry CLSD in
+    their system status, so testing "is it closed" before "was it cancelled"
+    reports a cancelled order as finished work.
+    """
+
+    def test_cancelled_beats_closed(self):
+        from app.services.sap_order_parser import order_sap_state
+        assert order_sap_state('CLSD CSER NCMP NMAT PRC', user_status='CNCL') == 'cancelled'
+
+    def test_a_deletion_flag_also_means_cancelled(self):
+        from app.services.sap_order_parser import order_sap_state
+        assert order_sap_state('CRTD CSER PRC', deletion_flag='X') == 'cancelled'
+
+    def test_teco_or_cnf_or_clsd_means_done(self):
+        from app.services.sap_order_parser import order_sap_state
+        for status in ('TECO CNF CSER PRC', 'CNF CSER NMAT', 'CLSD CSER PRC'):
+            assert order_sap_state(status) == 'done'
+
+    def test_crtd_or_rel_means_still_open(self):
+        from app.services.sap_order_parser import order_sap_state
+        assert order_sap_state('CRTD CSER NMAT PRC') == 'open'
+        assert order_sap_state('REL CSER MACM PRC') == 'open'
+
+    def test_a_status_carrying_neither_is_unknown_not_guessed(self):
+        """Unknown triggers nothing. Silence must never look like evidence."""
+        from app.services.sap_order_parser import order_sap_state
+        assert order_sap_state('CSER NMAT PRC') == 'unknown'
+        assert order_sap_state(None) == 'unknown'
+
+    def test_tokens_are_matched_whole(self):
+        """'REL' must not match inside another code."""
+        from app.services.sap_order_parser import order_sap_state
+        assert order_sap_state('RELX CSER') == 'unknown'
+
+    def test_the_index_covers_closed_orders_not_just_plannable_ones(self):
+        """parse_open_orders drops these rows; reconciliation needs them."""
+        from app.services.sap_order_parser import build_order_status_index
+
+        frame = pd.DataFrame([
+            {'Order': '700000000001', 'Main work center': 'MES-MECH',
+             'System status': 'TECO CNF PRC', 'User Status': 'MCOM',
+             'Deletion flag': None, 'Actual Order Finish Date': '2026-08-01'},
+            {'Order': '700000000002', 'Main work center': 'MES-ELEC',
+             'System status': 'CRTD CSER', 'User Status': 'INIT',
+             'Deletion flag': None, 'Actual Order Finish Date': None},
+            {'Order': '700000000003', 'Main work center': 'CMS-MECH',
+             'System status': 'TECO CNF', 'User Status': None,
+             'Deletion flag': None, 'Actual Order Finish Date': '2026-08-02'},
+        ])
+
+        index = build_order_status_index(frame)
+
+        assert index['700000000001']['state'] == 'done'
+        assert index['700000000001']['finished_on'].isoformat() == '2026-08-01'
+        assert index['700000000002']['state'] == 'open'
+        # The crane side is another team's work and stays out of this entirely.
+        assert '700000000003' not in index

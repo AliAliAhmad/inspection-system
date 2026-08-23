@@ -89,3 +89,58 @@ the test expecting a crash saw a cheerful `200`.
 
 Corollary: **the stash-and-rerun discipline paid for itself again.** It did not just prove
 the tests were real — it corrected the description of the bug I thought I was fixing.
+
+---
+
+## 2026-08-23 — A security test that could not fail
+
+**LESSON: `test_an_unconfigured_bot_refuses_everything` POSTed to `/api/telegram/webhook/`
+with an empty path segment, which 404s in Flask's router BEFORE any auth check runs →
+A test that asserts "this is refused" must be shown to FAIL when the check it names is
+deleted. Otherwise it proves only that the request did not succeed, which a 404, a typo
+in the URL, or a missing fixture all satisfy equally.**
+
+Found by mutating `secret_header_ok` to `return True` when no secret is configured — the
+suite stayed green at 45/45. Four other mutations (deleting the header check, the
+allowlist, the private-chat gate, the `update_id` dedupe) each broke a test, so the
+suite was strong everywhere except the one place it claimed to be strongest.
+
+Corollary: **mutation-test the gates, not the features.** A wrong renderer is
+embarrassing; a wrong gate is exploitable, and it is exactly the code that never runs
+in the happy path, so ordinary tests never touch it.
+
+---
+
+## 2026-08-23 — Overlapping categories need an explicit classification ORDER
+
+**LESSON: I classified SAP orders as cancelled-or-done by testing "is it closed" first,
+because that is the common case → When two categories can BOTH be true of one row, the
+order of the tests is part of the specification, not an implementation detail. Establish
+it from the data, then write down why.**
+
+Both cancelled MES orders in the real export (700001289489, 700001232239) also carry
+`CLSD` in their system status. Testing closed-first would have reported every cancelled
+order as finished work — and finished work is exactly what the removal rules refuse to
+touch, so the wrong branch is also the one that hides the mistake.
+
+The check ran against all 9,124 MES rows: 8,912 done, 210 open, 2 cancelled, **zero
+unknown**. A total that accounts for every row is what makes a classification claim
+worth believing.
+
+---
+
+## 2026-08-23 — Adding a column to a shared read broke the sharing
+
+**LESSON: `IW39_COLUMNS` is read once and the frame passed to four consumers, but
+`_read_excel` raises `KeyError` when a pre-parsed frame lacks a requested column → When
+a module reads a fixed column list ONCE and shares the result, adding a consumer that
+needs a new column means extending that list FIRST. Every fixture built from the old
+list fails, and the failure surfaces far from the change.**
+
+Adding `User Status` and `Deletion flag` for the removal rules broke all 9 pool-sync
+tests with `Usecols do not match columns` — a clear message pointing at a synthetic
+workbook, not at the removal rules that caused it.
+
+The strictness was kept deliberately: a missing `User Status` column would silently
+disable cancellation detection, and a loud failure on a changed SAP layout is correct
+when every downstream number depends on the columns being what we think they are.

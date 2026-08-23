@@ -39,6 +39,24 @@ services:
         value: "4"
       - key: LOG_LEVEL
         value: INFO
+      # Shared secret for the Windows SAP file courier. sync: false means Render
+      # asks for the value in the dashboard instead of putting it in this file.
+      - key: SAP_SYNC_ROBOT_KEY
+        sync: false
+      # ── Telegram planning bot ──
+      # The BotFather token goes straight into the dashboard and never into the
+      # repo, a chat message, or a command line.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      # Used twice: the last segment of the webhook URL, and the value Telegram
+      # echoes back in X-Telegram-Bot-Api-Secret-Token.
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      # "<telegram_user_id>:<app_user_id>" — authorization AND identity.
+      - key: TELEGRAM_ALLOWED_USERS
+        sync: false
+      - key: TELEGRAM_ENABLED
+        value: "true"
 
   # ── Frontend (React Static Site) ──────────────────────────
   - type: web

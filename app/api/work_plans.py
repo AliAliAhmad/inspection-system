@@ -1260,21 +1260,36 @@ def _delete_job_record(plan_id, job):
                 status='pending',
             ))
 
+    purge_job_rows(job)
+
+
+# Every table whose rows die with a job.
+#
+# work_plan_job_ratings MUST be in this list. Its work_plan_job_id is a NOT NULL
+# FK to work_plan_jobs. Omitting it broke differently per database: Postgres
+# (production) enforced the FK and raised IntegrityError -> 500 with the job not
+# removed; SQLite (tests, foreign_keys=0) deleted the job anyway and left the
+# rating row dangling.
+JOB_CHILD_TABLES = ('job_checklist_responses', 'work_plan_assignments',
+                    'work_plan_materials', 'work_plan_job_ratings',
+                    'work_plan_job_trackings')
+
+
+def purge_job_rows(job):
+    """Delete a job row and its children. Does NOT commit, and does NOT check safety.
+
+    Split out of _delete_job_record so the robot's removal rules delete a job the
+    same way the planner does. Callers own the decision about whether removal is
+    allowed; this only carries it out.
+    """
+    job_id = job.id
+
     # Detach job from ORM session so SQLAlchemy never lazy-loads its child
     # relationships (job_checklist_responses has columns not yet in the DB).
     db.session.expunge(job)
 
-    # Delete child records + job entirely via raw SQL — no ORM cascade, no lazy-load.
-    #
-    # work_plan_job_ratings MUST be in this list. Its work_plan_job_id is a
-    # NOT NULL FK to work_plan_jobs. Omitting it broke differently per database:
-    # Postgres (production) enforced the FK and raised IntegrityError -> 500 with
-    # the job not removed; SQLite (tests, foreign_keys=0) deleted the job anyway
-    # and left the rating row dangling.
-    # Unreachable from the single-job path now that rated jobs are blocked
-    # outright, but clear_all_jobs and any future caller still need it.
-    for table in ['job_checklist_responses', 'work_plan_assignments', 'work_plan_materials',
-                  'work_plan_job_ratings', 'work_plan_job_trackings']:
+    # Raw SQL — no ORM cascade, no lazy-load.
+    for table in JOB_CHILD_TABLES:
         db.session.execute(
             db.text(f'DELETE FROM {table} WHERE work_plan_job_id = :jid'),
             {'jid': job_id}

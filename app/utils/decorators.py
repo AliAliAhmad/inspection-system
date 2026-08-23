@@ -183,9 +183,35 @@ def planning_today():
     ZoneInfo is stdlib since 3.9; the fallback keeps this working on a container
     without tzdata rather than failing at import.
     """
+    return planning_now().date()
+
+
+def planning_now():
+    """The current NAIVE wall-clock time in the yard.
+
+    Naive on purpose: it is compared against, and formatted alongside, the naive
+    UTC timestamps this codebase stores everywhere (datetime.utcnow()). Mixing an
+    aware value in raises rather than converting.
+
+    ZoneInfo is stdlib since 3.9; the fallback keeps this working on a container
+    without tzdata rather than failing at import.
+    """
     from datetime import datetime, timedelta, timezone
     try:
         from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo('Asia/Baghdad')).date()
+        return datetime.now(ZoneInfo('Asia/Baghdad')).replace(tzinfo=None)
     except Exception:  # noqa: BLE001 - no tzdata in the image
-        return (datetime.now(timezone.utc) + timedelta(hours=3)).date()
+        return (datetime.now(timezone.utc) + timedelta(hours=3)).replace(tzinfo=None)
+
+
+def to_planning_time(utc_naive):
+    """A stored (naive UTC) timestamp as the yard's wall clock.
+
+    Everything in this database is written with datetime.utcnow(), so a delivery
+    at 09:14 Baghdad is stored as 06:14. Printing that raw to a man standing in
+    Baghdad is the same off-by-three-hours family of bug as utcnow().date().
+    """
+    from datetime import timedelta
+    if utc_naive is None:
+        return None
+    return utc_naive + timedelta(hours=3)
