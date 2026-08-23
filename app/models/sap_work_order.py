@@ -17,7 +17,19 @@ class SAPWorkOrder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Work plan this order belongs to
-    work_plan_id = db.Column(db.Integer, db.ForeignKey('work_plans.id'), nullable=False)
+    # NULL means "in the global pool" — outstanding work belonging to no
+    # particular week. A value means the order is currently scheduled INTO that
+    # week's plan.
+    #
+    # Ali's model: "The job pool is the big box that has all jobs from SAP and
+    # inspection results. When it is planned in the week it is removed from the
+    # box. If the week finishes and the job is not done, it goes back to the box."
+    #
+    # Previously this was NOT NULL, so every week had its OWN separate pool. An
+    # order dropped into week 34's pool and never planned was invisible in week
+    # 35 — still open in SAP, seen by nobody, able to hide for months. One shared
+    # box means a job can only ever be planned or waiting, never lost.
+    work_plan_id = db.Column(db.Integer, db.ForeignKey('work_plans.id'), nullable=True, index=True)
 
     # SAP information
     order_number = db.Column(db.String(50), nullable=False)

@@ -178,6 +178,7 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
             priority='normal',
         ))
         sap.status = 'scheduled'
+        sap.work_plan_id = plan.id  # leaves the box, into this week
         added += 1
 
     return added
@@ -472,7 +473,17 @@ def clear_all_jobs(week_start_str):
 @jwt_required()
 @admin_decorator()
 def clear_sap_pool(week_start_str):
-    """Remove ALL SAP orders from the pool for a plan. Admin only, destructive operation."""
+    """Remove SAP orders that were imported into THIS week. Admin only, destructive.
+
+    Deliberately does NOT empty the shared pool. Since the pool became one global
+    box, "clear" would otherwise mean deleting every outstanding order in the
+    yard from one week's screen — and the robot would refill it within ten
+    minutes anyway, so the destruction would be both total and pointless.
+
+    What it still does: remove orders stamped with this plan, i.e. legacy
+    per-week imports and anything currently scheduled into this week. The
+    response says plainly how many were removed and how many remain in the box.
+    """
     try:
         week_date = datetime.strptime(week_start_str, '%Y-%m-%d').date()
         plan = WorkPlan.query.filter_by(week_start=week_date).first()
@@ -480,11 +491,20 @@ def clear_sap_pool(week_start_str):
             return jsonify({'status': 'no_plan'}), 404
 
         deleted = SAPWorkOrder.query.filter_by(work_plan_id=plan.id).delete()
+        remaining = SAPWorkOrder.query.filter(
+            SAPWorkOrder.work_plan_id.is_(None),
+            SAPWorkOrder.status == 'pending',
+        ).count()
         db.session.commit()
 
         return jsonify({
             'status': 'ok',
-            'deleted': deleted
+            'deleted': deleted,
+            'remaining_in_pool': remaining,
+            'message': (f'Removed {deleted} order(s) belonging to this week. '
+                        f'{remaining} order(s) remain in the shared pool — those are '
+                        f'outstanding work for the whole yard and are managed by the '
+                        f'SAP sync, not by this button.'),
         }), 200
 
     except Exception as e:
@@ -942,8 +962,13 @@ def schedule_sap_order(plan_id):
 
     # Get the SAP order
     sap_order = db.session.get(SAPWorkOrder, sap_order_id)
-    if not sap_order or sap_order.work_plan_id != plan_id:
-        raise NotFoundError("SAP order not found in this plan")
+    # An order is schedulable if it is waiting in the shared box (work_plan_id
+    # NULL) or was imported into THIS week the old way. Requiring an exact plan
+    # match would make every order in the global pool unschedulable — the pool
+    # would list jobs the planner then could not place.
+    if not sap_order or (sap_order.work_plan_id is not None
+                         and sap_order.work_plan_id != plan_id):
+        raise NotFoundError("SAP order not found in the pool")
 
     if sap_order.status != 'pending':
         raise ValidationError("SAP order has already been scheduled")
@@ -1028,6 +1053,7 @@ def schedule_sap_order(plan_id):
 
     # Mark SAP order as scheduled
     sap_order.status = 'scheduled'
+    sap_order.work_plan_id = plan_id  # leaves the box, into this week
 
     # Auto-add open defects for same equipment
     auto_defect_count = 0
@@ -1162,6 +1188,27 @@ def assert_job_removable(job):
     )
 
 
+def pool_orders_query(plan_id=None):
+    """Every SAP order currently sitting in the job pool.
+
+    The pool is ONE global box, not one box per week. `work_plan_id IS NULL`
+    means "waiting in the box"; a value means the order is scheduled into that
+    week. Both are matched so that orders imported the old way — into a specific
+    week's pool — keep appearing exactly as they did before.
+
+    Without the NULL branch a robot-fed order would belong to no week and be
+    invisible everywhere. Without the plan branch every order imported before
+    this change would vanish from the planner.
+    """
+    from sqlalchemy import or_
+
+    query = SAPWorkOrder.query.filter(SAPWorkOrder.status == 'pending')
+    if plan_id is None:
+        return query.filter(SAPWorkOrder.work_plan_id.is_(None))
+    return query.filter(or_(SAPWorkOrder.work_plan_id.is_(None),
+                            SAPWorkOrder.work_plan_id == plan_id))
+
+
 def _delete_job_record(plan_id, job):
     """Delete a single job from a plan, preserving pool semantics.
 
@@ -1181,7 +1228,11 @@ def _delete_job_record(plan_id, job):
             order_number=job.sap_order_number
         ).first()
         if sap_order and sap_order.status == 'scheduled':
+            # Back into the shared box, not this week's — the job is outstanding
+            # work again and belongs to whenever it gets done, not to the week it
+            # happened to be pulled from.
             sap_order.status = 'pending'
+            sap_order.work_plan_id = None
     # Otherwise, if it's a MANUAL PM or corrective job (not from SAP, not a defect),
     # preserve it by returning it to the pool as a pending SAP order — so a
     # manually-added job can be dragged back to the pool like any other job
@@ -2818,7 +2869,7 @@ def get_available_jobs():
     # Get pending SAP orders from pool (most important - show first)
     if not job_type or job_type in ['sap', 'pm', 'defect']:
         if plan_id:
-            sap_query = SAPWorkOrder.query.filter_by(work_plan_id=int(plan_id), status='pending')
+            sap_query = pool_orders_query(int(plan_id))
             if berth and berth != 'both':
                 sap_query = sap_query.filter(
                     db.or_(SAPWorkOrder.berth == berth, SAPWorkOrder.berth == 'both', SAPWorkOrder.berth == None)
@@ -3538,6 +3589,7 @@ def auto_schedule(plan_id):
 
         # Mark SAP order as scheduled
         order.status = 'scheduled'
+        order.work_plan_id = plan.id  # leaves the box, into this week
 
         # Update hours tracking
         hours_per_day[best_day.id][order_berth] += order_hours

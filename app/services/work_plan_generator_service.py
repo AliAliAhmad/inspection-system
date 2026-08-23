@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from statistics import stdev
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
@@ -456,10 +456,11 @@ def _clear_generated_jobs(plan: WorkPlan, clear_all: bool = False) -> int:
 
     # Reset SAP orders back to pending
     if sap_numbers:
+        # Released back to the shared box, not this week's — an unplanned job is
+        # outstanding work again and belongs to whenever it gets done.
         SAPWorkOrder.query.filter(
-            SAPWorkOrder.work_plan_id == plan.id,
             SAPWorkOrder.order_number.in_(sap_numbers),
-        ).update({'status': 'pending'}, synchronize_session=False)
+        ).update({'status': 'pending', 'work_plan_id': None}, synchronize_session=False)
 
     # Delete child records FIRST to avoid FK violations on tracking
     WorkPlanJobTracking.query.filter(
@@ -529,9 +530,12 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
     )
 
     # ── 1. SAP orders (pending in this plan's pool) ──────────────────────
-    sap_orders = SAPWorkOrder.query.filter_by(
-        work_plan_id=plan.id,
-        status='pending',
+    # The pool is one global box. NULL work_plan_id means "waiting"; a value
+    # means it was imported into a specific week the old way. Both are candidates
+    # for this plan — see pool_orders_query in app/api/work_plans.py.
+    sap_orders = SAPWorkOrder.query.filter(
+        SAPWorkOrder.status == 'pending',
+        or_(SAPWorkOrder.work_plan_id.is_(None), SAPWorkOrder.work_plan_id == plan.id),
     ).options(joinedload(SAPWorkOrder.equipment)).all()
 
     from app.utils.decorators import planning_today
@@ -1987,6 +1991,7 @@ def _create_jobs_for_bundle(
             sap = db.session.get(SAPWorkOrder, sap_order_id)
             if sap:
                 sap.status = 'scheduled'
+                sap.work_plan_id = plan.id  # leaves the box, into this week
 
     db.session.flush()
     return created
@@ -2504,7 +2509,7 @@ def _empty_score() -> Dict[str, int]:
 def _calc_pm_coverage(plan: WorkPlan, all_jobs: List[WorkPlanJob]) -> float:
     """% of overdue PMs from SAP pool that got scheduled."""
     overdue_pms_in_pool = SAPWorkOrder.query.filter(
-        SAPWorkOrder.work_plan_id == plan.id,
+        or_(SAPWorkOrder.work_plan_id.is_(None), SAPWorkOrder.work_plan_id == plan.id),
         SAPWorkOrder.job_type == 'pm',
         SAPWorkOrder.overdue_value.isnot(None),
         SAPWorkOrder.overdue_value != 0,
@@ -2519,7 +2524,7 @@ def _calc_pm_coverage(plan: WorkPlan, all_jobs: List[WorkPlanJob]) -> float:
     }
 
     overdue_pms_scheduled = SAPWorkOrder.query.filter(
-        SAPWorkOrder.work_plan_id == plan.id,
+        or_(SAPWorkOrder.work_plan_id.is_(None), SAPWorkOrder.work_plan_id == plan.id),
         SAPWorkOrder.job_type == 'pm',
         SAPWorkOrder.overdue_value.isnot(None),
         SAPWorkOrder.overdue_value != 0,
@@ -2533,7 +2538,7 @@ def _calc_priority_coverage(plan: WorkPlan, all_jobs: List[WorkPlanJob]) -> floa
     """% of urgent/high priority candidates that got scheduled."""
     # Count high-priority SAP orders in pool
     high_sap = SAPWorkOrder.query.filter(
-        SAPWorkOrder.work_plan_id == plan.id,
+        or_(SAPWorkOrder.work_plan_id.is_(None), SAPWorkOrder.work_plan_id == plan.id),
         SAPWorkOrder.priority.in_(['urgent', 'high']),
     ).count()
 
