@@ -926,3 +926,53 @@ class TestGeneratingFromThePhone:
     def test_help_mentions_it_is_a_draft(self, bot, admin_user, db_session):
         chunks = handle(_update('/help'), admin_user)
         assert 'draft' in chunks[0].lower()
+
+
+class TestOverlappingWeeks:
+    """Two plans can contain the same day, and the older one must not win.
+
+    Plan 40 ran Mon 17 -> Sun 23 and plan 41 runs Sun 23 -> Sat 29, so Sunday
+    the 23rd sits in both. An unordered .first() picked the OLDER one, and
+    /generate built a week that ended the same day it was asked for.
+    """
+
+    def _plans(self, db_session, admin_user, today):
+        old = WorkPlan(week_start=today - timedelta(days=6), week_end=today,
+                       status='draft', created_by_id=admin_user.id)
+        new = WorkPlan(week_start=today, week_end=today + timedelta(days=6),
+                       status='draft', created_by_id=admin_user.id)
+        db_session.session.add_all([old, new])
+        db_session.session.flush()
+        for plan in (old, new):
+            for offset in range(7):
+                db_session.session.add(WorkPlanDay(
+                    work_plan_id=plan.id, date=plan.week_start + timedelta(days=offset)))
+        db_session.session.commit()
+        return old, new
+
+    def test_the_week_that_started_most_recently_wins(self, bot, db_session,
+                                                      admin_user):
+        from app.services.telegram.dispatcher import plan_for_date
+        today = date.today()
+        old, new = self._plans(db_session, admin_user, today)
+
+        assert plan_for_date(today).id == new.id
+
+    def test_generate_does_not_build_the_week_that_ends_today(self, bot, db_session,
+                                                              admin_user):
+        from app.models import SAPWorkOrder
+        from app.services.telegram.generate import ensure_plan
+        today = date.today()
+        old, new = self._plans(db_session, admin_user, today)
+
+        plan, created = ensure_plan(today, admin_user)
+
+        assert plan.id == new.id
+        assert created is False
+        assert plan.week_end > today
+
+    def test_with_only_one_plan_it_still_finds_it(self, bot, db_session, admin_user,
+                                                  week):
+        from app.services.telegram.dispatcher import plan_for_date
+        plan, day = week
+        assert plan_for_date(date.today()).id == plan.id

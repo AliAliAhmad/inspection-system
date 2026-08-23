@@ -86,8 +86,12 @@ def ensure_plan(target, user):
     Creating it here rather than making Ali open the planner first is the whole
     point: "plan this week" should not require a laptop to get started.
     """
-    plan = WorkPlan.query.filter(WorkPlan.week_start <= target,
-                                 WorkPlan.week_end >= target).first()
+    # Newest first — see plan_for_date. Overlapping weeks made "plan this week"
+    # build the week that ended today.
+    plan = (WorkPlan.query
+            .filter(WorkPlan.week_start <= target, WorkPlan.week_end >= target)
+            .order_by(WorkPlan.week_start.desc())
+            .first())
     if plan:
         return plan, False
 
@@ -101,6 +105,15 @@ def ensure_plan(target, user):
                                    date=week_start + timedelta(days=offset)))
     db.session.commit()
     return plan, True
+
+
+def ensure_plan_lookup(target):
+    """The plan covering `target`, newest-starting first. Creates nothing."""
+    plan = (WorkPlan.query
+            .filter(WorkPlan.week_start <= target, WorkPlan.week_end >= target)
+            .order_by(WorkPlan.week_start.desc())
+            .first())
+    return plan, plan is not None
 
 
 def pool_size():
@@ -173,8 +186,7 @@ def undo(user, language='en', when=None):
         return [_t(language, 'denied')]
 
     target = when or planning_today()
-    plan = WorkPlan.query.filter(WorkPlan.week_start <= target,
-                                 WorkPlan.week_end >= target).first()
+    plan, _ = ensure_plan_lookup(target)
     if not plan:
         return [_t(language, 'nothing_to_undo')]
     if plan.status == 'published':

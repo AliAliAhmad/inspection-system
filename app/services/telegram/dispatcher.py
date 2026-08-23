@@ -92,9 +92,18 @@ def language_for(user, update):
 
 
 def plan_for_date(target):
-    """The plan whose week contains this date, or None."""
-    return WorkPlan.query.filter(WorkPlan.week_start <= target,
-                                 WorkPlan.week_end >= target).first()
+    """The plan whose week contains this date, or None.
+
+    Ordered by week_start DESCENDING because weeks overlap here: plan 40 ran
+    Mon 17 -> Sun 23 and plan 41 runs Sun 23 -> Sat 29, so Sunday the 23rd sits
+    in both. Taking .first() unordered picked the OLDER one, and /generate
+    cheerfully built a week that ended the same day. The plan that STARTED most
+    recently is the one being worked.
+    """
+    return (WorkPlan.query
+            .filter(WorkPlan.week_start <= target, WorkPlan.week_end >= target)
+            .order_by(WorkPlan.week_start.desc())
+            .first())
 
 
 def day_for_date(target):
