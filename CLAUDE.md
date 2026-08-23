@@ -49,10 +49,26 @@
 - Together AI API key ready to add on Render
 
 ## What Needs Work
-- ~~Arabic language support for AI analysis~~ ✅ Fixed
-- Full QA testing needed (137 passing, 0 skipped, 15 remote-only deselected)
+
+### NEXT UP (agreed 2026-08-23) — make the plan realistic
+- **Jobs-per-day / capacity rules.** The first real generate put **52 jobs · 143h on one
+  Monday**. Decide what a day can actually hold — per berth, per trade, per crew — and
+  make the generator respect it instead of overflowing into the first available day.
+- **Rank WITHIN urgent.** 40 of 133 SAP orders are urgent and 33 more are high, so the
+  label has stopped sorting anything. The numbers to rank by are already stored:
+  `overdue_value` (days for calendar PMs and correctives, hours past 250 for hourly).
+- **~2,000 legacy `sap_work_orders`** stamped to plans 6-38. Invisible to the box but
+  they broke one cleanup already. `UniqueConstraint('work_plan_id','order_number')` is a
+  leftover from per-week pools — one order should mean one row.
+- **Removal-rule recipients:** all 8 admins+engineers today; Ali is meant to be the
+  filter. Undecided.
+
+### Other
+- Full QA testing needed (496 passing)
 - Add TOGETHER_API_KEY on Render (key ready)
-- Add GROQ_API_KEY on Render (biggest gap — free, 14,400 RPD audio)
+- Add TOGETHER_API_KEY on Render (key ready)
+- GROQ_API_KEY returns 401 and OPENAI has no credits — Arabic notification text
+  falls back to English (cached + circuit-broken now, so it is quiet, not fixed)
 - Google Gemini 429 quota: free tier limited to 5 RPM (known issue since Dec 2025)
 - ~~New EAS build needed~~ ✅ Done — Build 934e89de (Android APK, preview profile)
 
