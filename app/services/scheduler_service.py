@@ -18,9 +18,24 @@ def init_scheduler(app):
     """Initialize and start the background scheduler."""
 
     def run_with_context(fn):
-        """Wrapper to run jobs within Flask app context."""
+        """Run a job inside the app context, and only in ONE worker.
+
+        init_scheduler is called from create_app, and production runs
+        GUNICORN_WORKERS=2 — so without the claim every cron trigger fires in
+        both workers. The older jobs mostly tolerated that because they are
+        idempotent; the Telegram pushes are not, and a doubled message is the
+        nag failure the bot exists to avoid.
+
+        The claim fails OPEN: if it cannot be recorded the job runs, because
+        running twice is today's behaviour and silently running never is worse.
+        """
         def wrapper():
             with app.app_context():
+                from app.services.run_once import claim
+                if not claim(app, fn.__name__):
+                    logger.debug('Scheduled task %s already claimed by another worker',
+                                 fn.__name__)
+                    return
                 try:
                     fn()
                 except Exception as e:

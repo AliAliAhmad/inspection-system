@@ -42,9 +42,11 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint('sap_sync', __name__)
 
-# One rebuild at a time — two racing reconciliations of the same files would
-# fight over the same rows for no benefit.
-_REBUILD_LOCK = threading.Lock()
+# One rebuild at a time. threading.Lock only covers ONE process, and production
+# runs GUNICORN_WORKERS=2 — so a per-process lock let the other worker run the
+# same reconciliation simultaneously, two passes writing the same rows. The file
+# lock spans workers because they share the container's disk.
+REBUILD_LOCK_NAME = 'sap-pool-rebuild'
 
 # Subdirectory of UPLOAD_FOLDER. On Render, UPLOAD_FOLDER is the mount point of
 # the 1 GB persistent disk, which is the only place bytes survive a deploy.
@@ -263,16 +265,14 @@ def rebuild_pool():
             logger.exception('Pool rebuild dry run failed')
             return jsonify({'status': 'error', 'message': str(e)}), 500
 
-    if _REBUILD_LOCK.locked():
-        # A rebuild is a full reconciliation of the same files; a second one
-        # racing the first would fight over the same rows for no benefit.
-        return jsonify({'status': 'busy',
-                        'message': 'a pool rebuild is already running'}), 409
-
     app = current_app._get_current_object()
 
     def run():
-        with _REBUILD_LOCK:
+        from app.services.run_once import CrossWorkerLock
+        with CrossWorkerLock(app, REBUILD_LOCK_NAME) as lock:
+            if not lock.acquired:
+                logger.info('Pool rebuild skipped — another one is already running')
+                return
             with app.app_context():
                 try:
                     report = sync_pool_from_delivered_files()
