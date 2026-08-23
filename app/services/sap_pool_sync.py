@@ -93,15 +93,54 @@ def _equipment_lookup(plant_codes):
     return lookup
 
 
+def _delivered_summary(limit=12):
+    """What the courier has actually delivered, as the rebuild sees it.
+
+    Deliberately reports is_current and whether the bytes are still ON DISK.
+    The freshness stamp only asks "is there an IW39 row", while the rebuild also
+    needs the row to be current and the file readable — so the two could
+    disagree, and did: the bot said "SAP data: today 12:44" while the rebuild
+    found nothing to read.
+    """
+    rows = (SapSyncFile.query.order_by(SapSyncFile.received_at.desc())
+            .limit(limit).all())
+    folder = current_app.config['UPLOAD_FOLDER']
+    out = []
+    for row in rows:
+        on_disk = bool(row.stored_path) and os.path.exists(
+            os.path.join(folder, row.stored_path))
+        out.append({
+            'sheet': row.sheet_name,
+            'file': row.source_filename,
+            'received_at': row.received_at.isoformat() if row.received_at else None,
+            'size': row.file_size,
+            'is_current': bool(row.is_current),
+            'on_disk': on_disk,
+        })
+    return out
+
+
 def sync_pool_from_delivered_files(today=None, dry_run=False):
     """Refresh the job pool from the most recent delivered SAP files.
 
     Returns a report. Nothing is written when `dry_run` is set, which is how a
     change gets inspected before it touches a live pool.
     """
+    logger.info('SAP pool sync: starting (dry_run=%s)', dry_run)
+
     iw39, iw39_record = _current_file_bytes(sheet_name='IW39')
     if not iw39:
-        return {'status': 'skipped', 'reason': 'no IW39 delivered yet'}
+        # This return used to save nothing, so /pool reported "never run" — the
+        # same words a crash produces. A rebuild that decided not to run has a
+        # reason, and that reason is the answer.
+        reason = ('IW39 has been delivered but its stored file is missing or '
+                  'unreadable' if iw39_record else
+                  'no file labelled IW39 has been delivered yet')
+        report = {'status': 'skipped', 'reason': reason,
+                  'dry_run': dry_run, 'delivered': _delivered_summary()}
+        logger.warning('SAP pool sync skipped: %s', reason)
+        _save_report(report)
+        return report
 
     # IW39 feeds four separate steps. Parse it ONCE and share the frame —
     # re-reading a 10 MB, 144-column workbook four times dominated the runtime.
@@ -226,6 +265,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         'unmatched_codes': sorted(unmatched_codes),
         'orders_skipped_no_equipment': skipped_no_equipment,
         'inputs': {'iw49': had_iw49, 'ik17': had_ik17, 'maintenance_plan': had_plan_file},
+        'delivered': _delivered_summary(),
         'removal_rules': removal,
         'parse': parse_report,
     }

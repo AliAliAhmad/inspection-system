@@ -605,6 +605,38 @@ class TestThePoolCommand:
         assert '9 orders dropped' in text
         assert '⚠️' in text
 
+    def test_a_skipped_rebuild_says_WHY_not_never_run(self, bot, admin_user,
+                                                      db_session):
+        """"Never run" and "ran and declined" are different problems.
+
+        The early return used to save nothing, so both showed as "never run" —
+        and an afternoon went into telling them apart through a shell.
+        """
+        self._report(bot, status='skipped',
+                     reason='IW39 has been delivered but its stored file is '
+                            'missing or unreadable',
+                     delivered=[{'sheet': 'IW39', 'file': 'IW39 YTD.XLSX',
+                                 'received_at': '2026-08-23T09:44:00',
+                                 'size': 11000000, 'is_current': True,
+                                 'on_disk': False}])
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert 'could not run' in text.lower()
+        assert 'unreadable' in text
+        assert 'IW39' in text
+        assert 'not on disk' in text
+
+    def test_a_skipped_rebuild_with_nothing_delivered_says_so(self, bot, admin_user,
+                                                              db_session):
+        self._report(bot, status='skipped',
+                     reason='no file labelled IW39 has been delivered yet',
+                     delivered=[])
+
+        text = handle(_update('/pool'), admin_user)[0]
+
+        assert '(nothing)' in text
+
     def test_no_rebuild_yet_says_never_run(self, bot, admin_user, db_session):
         import os
         from app.services.sap_pool_sync import _report_path
@@ -742,3 +774,98 @@ class TestTheHealthEndpoint:
         assert body['allowlist_size'] == 1
         assert 'test-token' not in str(body)
         assert SECRET not in str(body)
+
+
+class TestGeneratingFromThePhone:
+    """The bot's only mutating command, and deliberately the only one.
+
+    Generating produces a DRAFT: nobody is notified, no worker sees it, and
+    /undo removes it. Publishing turns a plan into instructions for the whole
+    crew and stays a deliberate act at a computer.
+    """
+
+    def _pool(self, db_session, count=3):
+        from app.models import SAPWorkOrder
+        for i in range(count):
+            equipment = make_equipment(db_session, f'GEN{i}', f'SG{i}')
+            db_session.session.add(SAPWorkOrder(
+                work_plan_id=None, order_number=f'70000000010{i}',
+                order_type='PRM', job_type='pm', equipment_id=equipment.id,
+                estimated_hours=4.0, priority='normal', status='pending'))
+        db_session.session.commit()
+
+    def test_an_empty_box_is_said_before_anything_is_built(self, bot, admin_user,
+                                                           db_session):
+        """Otherwise the generator succeeds at producing an empty week."""
+        chunks = handle(_update('/generate'), admin_user)
+
+        assert 'box is empty' in chunks[0]
+        assert WorkPlan.query.count() == 0
+
+    def test_a_non_planner_is_refused(self, bot, db_session, specialist):
+        """The allowlist says who may TALK to the bot. That is a different
+        question from who may plan, and the bot must never route around a
+        permission the web enforces."""
+        self._pool(db_session)
+
+        chunks = handle(_update('/generate'), specialist)
+
+        assert 'Only engineers and admins' in chunks[0]
+        assert WorkPlan.query.count() == 0
+
+    def test_a_plan_is_created_when_none_exists(self, bot, admin_user, db_session):
+        """"Plan this week" should not require opening a laptop first."""
+        self._pool(db_session)
+
+        handle(_update('/generate'), admin_user)
+
+        plan = WorkPlan.query.first()
+        assert plan is not None
+        assert plan.status == 'draft'
+        assert len(plan.days) == 7
+
+    def test_it_never_publishes(self, bot, admin_user, db_session):
+        self._pool(db_session)
+
+        handle(_update('/generate'), admin_user)
+
+        assert WorkPlan.query.first().status == 'draft'
+
+    def test_a_published_week_is_refused(self, bot, admin_user, db_session, week):
+        """Regenerating would silently change work people were already told to do."""
+        plan, day = week
+        plan.status = 'published'
+        db_session.session.commit()
+        self._pool(db_session)
+
+        chunks = handle(_update('/generate'), admin_user)
+
+        assert 'already published' in chunks[0]
+
+    def test_an_unknown_recipe_is_refused_rather_than_guessed(self, bot, admin_user,
+                                                              db_session):
+        self._pool(db_session)
+
+        chunks = handle(_update('/generate frobnicate'), admin_user)
+
+        assert 'do not know that recipe' in chunks[0]
+        assert WorkPlan.query.count() == 0
+
+    def test_undo_is_refused_for_a_non_planner(self, bot, db_session, specialist):
+        chunks = handle(_update('/undo'), specialist)
+        assert 'Only engineers and admins' in chunks[0]
+
+    def test_undo_with_no_plan_says_so(self, bot, admin_user, db_session):
+        chunks = handle(_update('/undo'), admin_user)
+        assert 'nothing' in chunks[0].lower()
+
+    def test_publish_is_not_a_command(self, bot, admin_user, db_session):
+        """Not implemented, and not to be — the bot must not be the way to
+        notify the entire crew."""
+        chunks = handle(_update('/publish'), admin_user)
+
+        assert '/help' in chunks[0]
+
+    def test_help_mentions_it_is_a_draft(self, bot, admin_user, db_session):
+        chunks = handle(_update('/help'), admin_user)
+        assert 'draft' in chunks[0].lower()

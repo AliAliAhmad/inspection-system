@@ -191,3 +191,54 @@ class TestEndpoint:
                            headers={'X-Robot-Key': KEY})
         assert resp.status_code == 200
         assert resp.get_json()['dry_run'] is True
+
+
+class TestASkippedRebuildStillReports:
+    """A rebuild that declines to run has a reason, and the reason is the answer.
+
+    The early return used to save nothing, so /pool showed "never run" — the
+    same words a crash produces. Distinguishing them cost an afternoon of shell
+    sessions on a connection that kept dropping.
+    """
+
+    def test_nothing_delivered_saves_a_report_saying_so(self, app, db_session):
+        from app.services.sap_pool_sync import load_last_report
+
+        report = sync_pool_from_delivered_files(today='2026-08-23')
+
+        assert report['status'] == 'skipped'
+        assert 'delivered' in report['reason']
+        saved = load_last_report()
+        assert saved is not None
+        assert saved['status'] == 'skipped'
+
+    def test_a_delivered_but_unreadable_file_is_named_as_such(self, app, client,
+                                                              db_session):
+        """is_current and stored_path are checked by the rebuild but NOT by the
+        freshness stamp, so the bot could say "SAP data: today 12:44" while the
+        rebuild found nothing to read."""
+        import os
+        from app.models import SapSyncFile
+        from app.services.sap_pool_sync import load_last_report
+
+        _deliver(client, _iw39([_open_order()]))
+        record = SapSyncFile.query.filter_by(sheet_name='IW39').first()
+        os.remove(os.path.join(app.config['UPLOAD_FOLDER'], record.stored_path))
+
+        report = sync_pool_from_delivered_files(today='2026-08-23')
+
+        assert report['status'] == 'skipped'
+        assert 'unreadable' in report['reason']
+        assert load_last_report()['delivered'][0]['on_disk'] is False
+
+    def test_the_delivered_list_reports_what_the_rebuild_actually_checks(
+            self, client, db_session):
+        from app.services.sap_pool_sync import _delivered_summary
+
+        _deliver(client, _iw39([_open_order()]))
+
+        delivered = _delivered_summary()
+
+        assert delivered[0]['sheet'] == 'IW39'
+        assert delivered[0]['is_current'] is True
+        assert delivered[0]['on_disk'] is True

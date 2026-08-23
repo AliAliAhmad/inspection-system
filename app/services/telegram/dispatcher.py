@@ -33,6 +33,8 @@ HELP = {
         '/plan east — one berth only\n'
         '/today — today\n'
         '/tomorrow — tomorrow\n'
+        '/generate — build this week from the box (draft only)\n'
+        '/undo — remove what the generator just added\n'
         '/pool — what is waiting in the job box\n'
         '/sap — what changed in SAP that affects the plan\n'
         '/ping — check I am awake\n\n'
@@ -44,6 +46,8 @@ HELP = {
         '/plan east — رصيف واحد فقط\n'
         '/today — اليوم\n'
         '/tomorrow — غداً\n'
+        '/generate — بناء خطة الأسبوع من الصندوق (مسودة فقط)\n'
+        '/undo — حذف ما أضافه المولّد\n'
         '/pool — ما ينتظر في صندوق المهام\n'
         '/sap — ما تغيّر في SAP ويؤثر على الخطة\n'
         '/ping — للتأكد أنني أعمل\n\n'
@@ -137,7 +141,7 @@ def handle(update, user):
     argument = argument.strip().lower()
 
     try:
-        return _dispatch(command, argument, language)
+        return _dispatch(command, argument, language, user)
     except Exception:  # noqa: BLE001
         # A crash here would leave Ali staring at a bot that received his
         # message and said nothing, which is indistinguishable from being
@@ -146,7 +150,7 @@ def handle(update, user):
         return ['Something went wrong reading the plan. It is logged.']
 
 
-def _dispatch(command, argument, language):
+def _dispatch(command, argument, language, user=None):
     if command in ('ping', 'start'):
         return [f'pong · {_freshness(language)}']
 
@@ -169,6 +173,17 @@ def _dispatch(command, argument, language):
                 date=format_date(target, language))]
         return [render_day(day, language), _freshness(language)]
 
+    if command == 'generate':
+        # The bot's only mutating command, and deliberately the only one.
+        # It produces a DRAFT: nobody is notified, no worker sees it, and
+        # /undo removes it. Publishing is not here and will not be.
+        from app.services.telegram.generate import generate
+        return generate(user, language, recipe=argument or 'priority_first')
+
+    if command == 'undo':
+        from app.services.telegram.generate import undo
+        return undo(user, language)
+
     if command in ('pool', 'box'):
         return [_pool_summary(language)]
 
@@ -186,6 +201,8 @@ POOL_WORDS = {
         'never': 'never run', 'new': 'new', 'updated': 'updated',
         'gone': 'gone from SAP', 'equipment': 'equipment matched',
         'unmatched': 'NOT FOUND IN THE APP', 'dropped': 'orders dropped',
+        'skipped': 'Rebuild could not run', 'delivered': 'Files delivered',
+        'missing': 'not on disk', 'stale': 'superseded',
     },
     'ar': {
         'title': '📦 صندوق المهام', 'waiting': 'مهمة في الانتظار', 'empty':
@@ -194,6 +211,8 @@ POOL_WORDS = {
         'never': 'لم يعمل بعد', 'new': 'جديد', 'updated': 'محدّث',
         'gone': 'خرج من SAP', 'equipment': 'معدات مطابقة',
         'unmatched': 'غير موجودة في التطبيق', 'dropped': 'أوامر مهملة',
+        'skipped': 'تعذّر تشغيل التحديث', 'delivered': 'الملفات المستلمة',
+        'missing': 'غير موجود على القرص', 'stale': 'مستبدل',
     },
 }
 
@@ -238,6 +257,24 @@ def _pool_summary(language):
     lines.append('')
     if not report:
         lines.append(f"{words['last_rebuild']}: {words['never']}")
+    elif report.get('status') == 'skipped':
+        # A rebuild that declined to run has a REASON, and the reason is the
+        # answer. Before this it saved nothing and read as "never run" — the
+        # same words a crash produces, which is how an afternoon disappears.
+        lines.append(f"⚠️ {words['skipped']}: {report.get('reason')}")
+        lines.append('')
+        lines.append(words['delivered'] + ':')
+        for item in (report.get('delivered') or [])[:10]:
+            flags = []
+            if not item.get('on_disk'):
+                flags.append(words['missing'])
+            if not item.get('is_current'):
+                flags.append(words['stale'])
+            when = str(item.get('received_at') or '')[:16].replace('T', ' ')
+            note = f"  ⚠️ {', '.join(flags)}" if flags else ''
+            lines.append(f"  {item.get('sheet') or '?'} · {when}{note}")
+        if not report.get('delivered'):
+            lines.append('  (nothing)')
     else:
         when = str(report.get('written_at') or '')[:16].replace('T', ' ')
         lines.append(f"{words['last_rebuild']}: {when}")
