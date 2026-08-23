@@ -28,6 +28,16 @@ with app.app_context():
         print('sap_sync_files table ensured')
     except Exception as e:
         print(f'sap_sync_files ensure failed: {e}')
+    # Same belt-and-braces for the robot's notes. The 'flask db upgrade' above
+    # is followed by '|| echo WARNING', so a failed migration does not stop the
+    # boot — and a missing table here means the daily pool rebuild 500s on the
+    # first order SAP has closed, in a background thread nobody is watching.
+    try:
+        from app.models import SapReconciliationEvent
+        SapReconciliationEvent.__table__.create(db.engine, checkfirst=True)
+        print('sap_reconciliation_events table ensured')
+    except Exception as e:
+        print(f'sap_reconciliation_events ensure failed: {e}')
     cols = [
         ('description', 'TEXT'),
         ('function', 'VARCHAR(200)'),
