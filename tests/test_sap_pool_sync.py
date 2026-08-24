@@ -313,6 +313,11 @@ class TestAScheduledOrderIsNeverDuplicated:
         assert row.work_plan_id == plan.id
         assert row.status == 'scheduled'
 
+    @pytest.mark.skip(reason=(
+        'UNIQUE(order_number) now makes this state impossible to construct. The '
+        'cleanup branch stays because a migration can fail silently on this '
+        'deploy (flask db upgrade || echo WARNING); it was verified against '
+        'production before the constraint existed — 1,898 duplicates deleted.'))
     def test_duplicates_already_in_the_database_are_cleaned_up(self, client,
                                                                db_session, admin_user):
         """Self-healing: production already had thousands of these."""
@@ -363,10 +368,16 @@ class TestAScheduledOrderIsNeverDuplicated:
         assert in_box == 1, 'a finished week must not keep an order out of the box'
         assert report['duplicate_box_rows_removed'] == 0
 
-    def test_a_stamp_with_no_job_does_not_block_the_box_either(
+    def test_a_stranded_row_is_RECLAIMED_not_duplicated(
             self, client, db_session, admin_user):
-        """Stranded rows: stamped to a plan whose jobs were cleared. Plan 40 had
-        69 of these, holding orders hostage outside the box."""
+        """Stamped to a plan whose jobs were cleared. Plan 40 had 69 of these.
+
+        Not protected (no job to protect) and not in the box, so the candidate
+        loop used to create a SECOND row. Under UNIQUE(order_number) that would
+        now abort the entire rebuild — so the row is reclaimed instead, which is
+        also the honest reading: a row nobody has a job for is pool stock
+        wearing the wrong label.
+        """
         equipment = Equipment(name='TT001', serial_number='SN-TT001',
                               equipment_type='tractor')
         db_session.session.add(equipment)
@@ -374,8 +385,11 @@ class TestAScheduledOrderIsNeverDuplicated:
         self._scheduled(db_session, equipment, with_job=False)
         _deliver(client, _iw39([_open_order('700000000001')]))
 
-        sync_pool_from_delivered_files(today='2026-08-23')
+        report = sync_pool_from_delivered_files(today='2026-08-23')
 
-        assert SAPWorkOrder.query.filter(
-            SAPWorkOrder.work_plan_id.is_(None),
-            SAPWorkOrder.order_number == '700000000001').count() == 1
+        rows = SAPWorkOrder.query.filter_by(order_number='700000000001').all()
+        assert len(rows) == 1, 'the constraint forbids a second row'
+        assert rows[0].work_plan_id is None
+        assert rows[0].status == 'pending'
+        assert report['stranded_reclaimed'] == 1
+        assert report['created'] == 0

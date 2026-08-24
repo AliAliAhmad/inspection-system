@@ -266,6 +266,32 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         if number in scheduled_numbers:
             del existing[number]
 
+    # STRANDED rows: stamped to a plan but with no job on any day of it. Plan 40
+    # had 69 this morning, left behind when its jobs were cleared.
+    #
+    # They are not protected (no job to protect) and not in the box, so the
+    # candidate loop below would CREATE a second row — which UNIQUE(order_number)
+    # now rejects, taking the whole rebuild down with it. Reclaiming them is both
+    # the fix and the honest behaviour: a row nobody has a job for is not planned
+    # work, it is pool stock wearing the wrong label.
+    stranded = [row for row in SAPWorkOrder.query.filter(
+        SAPWorkOrder.work_plan_id.isnot(None),
+        SAPWorkOrder.order_number.in_(numbers)).all()
+        if row.order_number not in scheduled_numbers]
+    for row in stranded:
+        if row.order_number in existing:
+            # A box copy already exists from before the constraint. Drop the
+            # stranded one rather than end up with two.
+            if not dry_run:
+                db.session.delete(row)
+            continue
+        if not dry_run:
+            row.work_plan_id = None
+            row.status = 'pending'
+        existing[row.order_number] = row
+    if stranded and not dry_run:
+        db.session.flush()
+
     created = updated = skipped_no_equipment = skipped_scheduled = 0
     unmatched_codes = set()
     seen = set()
@@ -365,6 +391,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         'updated': updated,
         'removed_from_pool': len(stale),
         'left_alone_because_scheduled': skipped_scheduled,
+        'stranded_reclaimed': len(stranded),
         'carry_over': carry_over,
         'duplicate_box_rows_removed': len(duplicates),
         'equipment_matched': matched,

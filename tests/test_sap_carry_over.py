@@ -160,43 +160,20 @@ class TestWorkedJobsAreNeverTouched:
 
 
 class TestOneSurvivorPerOrderNumber:
-    """Postgres treats NULLs as distinct in
-    UniqueConstraint('work_plan_id','order_number'), so nothing but this code
-    stops two box rows for one order."""
+    """The dedup branch inside the carry-over.
 
-    def test_a_dead_row_is_deleted_when_a_box_copy_already_exists(
-            self, db_session, dead):
-        plan, day = dead
-        equipment = _equipment(db_session)
-        _held(db_session, plan, equipment, '700000000001')
-        db_session.session.add(SAPWorkOrder(
-            work_plan_id=None, order_number='700000000001', order_type='PRM',
-            job_type='pm', equipment_id=equipment.id, estimated_hours=4.0,
-            status='pending'))
-        db_session.session.commit()
+    It can no longer be exercised here, and that is worth explaining rather
+    than deleting. The model now carries UNIQUE(order_number), so the test
+    database physically refuses the two-rows-for-one-order state the branch
+    cleans up — TestOneRowPerOrderNumber below asserts exactly that refusal.
 
-        result = release_dead_week_orders(today=TODAY)
-
-        assert result['duplicates_deleted'] == 1
-        assert result['carried_back'] == 0
-        assert SAPWorkOrder.query.filter_by(order_number='700000000001').count() == 1
-
-    def test_the_same_order_held_by_SEVERAL_dead_weeks_yields_one_box_row(
-            self, db_session, admin_user):
-        """The real shape: an order that waited nine weeks has nine copies."""
-        equipment = _equipment(db_session)
-        for weeks_ago in (5, 6, 7):
-            plan, day = _week(db_session, admin_user,
-                              TODAY - timedelta(days=7 * weeks_ago))
-            _held(db_session, plan, equipment, '700000000001')
-
-        result = release_dead_week_orders(today=TODAY)
-
-        assert result['carried_back'] == 1
-        assert result['duplicates_deleted'] == 2
-        rows = SAPWorkOrder.query.filter_by(order_number='700000000001').all()
-        assert len(rows) == 1
-        assert rows[0].work_plan_id is None
+    The branch stays, because on THIS deployment a migration can fail without
+    stopping the boot (`flask db upgrade || echo WARNING` in start.sh). If the
+    constraint never lands, duplicates are possible again and the carry-over is
+    the only thing that clears them. It was verified against production before
+    the constraint existed: 1,898 duplicate rows deleted, 344 released, 0
+    worked jobs touched.
+    """
 
     def test_different_orders_do_not_interfere(self, db_session, dead):
         plan, day = dead
@@ -255,3 +232,56 @@ class TestItRunsInTheNightlySync:
         """Turned on 2026-08-24, after classify() was checked against production
         and the "zero worked jobs" claim was verified independently."""
         assert app.config.get('SAP_CARRY_OVER_ENABLED') is True
+
+
+class TestOneRowPerOrderNumber:
+    """The database now refuses a duplicate, rather than merely nobody making one.
+
+    UniqueConstraint('work_plan_id','order_number') was a leftover from per-week
+    pools, where the same order legitimately appeared once per week. Since the
+    box went global that is no longer true — and leaving it in place let 2,242
+    duplicates accumulate, then fired as a UniqueViolation the moment the
+    generator tried to place one.
+    """
+
+    def test_the_same_order_cannot_exist_twice(self, db_session, admin_user):
+        import pytest as _pytest
+        from sqlalchemy.exc import IntegrityError
+        equipment = _equipment(db_session)
+        db_session.session.add(SAPWorkOrder(
+            work_plan_id=None, order_number='700000000001', order_type='PRM',
+            job_type='pm', equipment_id=equipment.id, estimated_hours=4.0,
+            status='pending'))
+        db_session.session.commit()
+
+        plan, day = _week(db_session, admin_user, TODAY)
+        db_session.session.add(SAPWorkOrder(
+            work_plan_id=plan.id, order_number='700000000001', order_type='PRM',
+            job_type='pm', equipment_id=equipment.id, estimated_hours=4.0,
+            status='scheduled'))
+
+        with _pytest.raises(IntegrityError):
+            db_session.session.commit()
+        db_session.session.rollback()
+
+    def test_moving_an_order_between_weeks_is_still_fine(self, db_session,
+                                                         admin_user):
+        """One ROW moving is not a duplicate — that is the whole point."""
+        equipment = _equipment(db_session)
+        order = SAPWorkOrder(work_plan_id=None, order_number='700000000002',
+                             order_type='PRM', job_type='pm',
+                             equipment_id=equipment.id, estimated_hours=4.0,
+                             status='pending')
+        db_session.session.add(order)
+        db_session.session.commit()
+
+        plan, day = _week(db_session, admin_user, TODAY)
+        order.work_plan_id = plan.id
+        order.status = 'scheduled'
+        db_session.session.commit()
+
+        order.work_plan_id = None
+        order.status = 'pending'
+        db_session.session.commit()
+
+        assert SAPWorkOrder.query.filter_by(order_number='700000000002').count() == 1

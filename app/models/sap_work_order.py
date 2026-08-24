@@ -81,7 +81,16 @@ class SAPWorkOrder(db.Model):
 
     # Constraints
     __table_args__ = (
-        db.UniqueConstraint('work_plan_id', 'order_number', name='unique_order_per_plan'),
+        # ONE order number, ONE row — wherever it currently sits.
+        #
+        # This used to be UNIQUE(work_plan_id, order_number), from when every
+        # week owned its own pool and the same order legitimately appeared once
+        # per week. Since the pool became a single global box that is no longer
+        # true: an order is either waiting or planned, never both and never
+        # twice. Leaving the old shape in place let 2,242 duplicate rows build
+        # up across ten finished weeks, then fired as a UniqueViolation the
+        # moment the generator tried to place one — killing /generate.
+        db.UniqueConstraint('order_number', name='unique_sap_order_number'),
         db.CheckConstraint(
             "job_type IN ('pm', 'defect', 'inspection', 'corrective')",
             name='check_sap_job_type'

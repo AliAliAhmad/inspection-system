@@ -38,6 +38,20 @@ with app.app_context():
         print('sap_reconciliation_events table ensured')
     except Exception as e:
         print(f'sap_reconciliation_events ensure failed: {e}')
+    # One order number, one row. Same belt-and-braces as the tables above,
+    # because 'flask db upgrade' is followed by '|| echo WARNING' and a
+    # migration that fails does not stop the boot. Fails harmlessly if
+    # duplicates still exist, which is the correct behaviour.
+    try:
+        db.session.execute(text('ALTER TABLE sap_work_orders DROP CONSTRAINT IF EXISTS \"sap_work_orders_work_plan_id_order_number_key\"'))
+        db.session.execute(text('ALTER TABLE sap_work_orders DROP CONSTRAINT IF EXISTS \"unique_order_per_plan\"'))
+        db.session.commit()
+        db.session.execute(text('ALTER TABLE sap_work_orders ADD CONSTRAINT \"unique_sap_order_number\" UNIQUE (order_number)'))
+        db.session.commit()
+        print('unique_sap_order_number ensured')
+    except Exception as e:
+        db.session.rollback()
+        print(f'unique_sap_order_number already set or not applicable: {str(e)[:120]}')
     cols = [
         ('description', 'TEXT'),
         ('function', 'VARCHAR(200)'),
