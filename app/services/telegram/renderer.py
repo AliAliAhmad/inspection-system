@@ -59,7 +59,7 @@ PRIORITY_LABELS = {
 
 WORDS = {
     'en': {
-        'jobs': 'jobs', 'job': 'job', 'hours': 'h', 'unassigned': 'unassigned',
+        'inspections': 'Inspections today', 'jobs': 'jobs', 'job': 'job', 'hours': 'h', 'unassigned': 'unassigned',
         'nothing': 'No jobs planned.', 'no_plan': 'No plan for that week yet.',
         'draft': 'DRAFT — not published yet', 'published': 'PUBLISHED',
         'total': 'Total', 'sap_data': 'SAP data', 'today': 'today',
@@ -67,7 +67,7 @@ WORDS = {
         'From inspection', 'week': 'Week',
     },
     'ar': {
-        'jobs': 'مهام', 'job': 'مهمة', 'hours': 'س', 'unassigned': 'بدون تعيين',
+        'inspections': 'الفحوصات اليوم', 'jobs': 'مهام', 'job': 'مهمة', 'hours': 'س', 'unassigned': 'بدون تعيين',
         'nothing': 'لا توجد مهام مخططة.', 'no_plan': 'لا توجد خطة لهذا الأسبوع بعد.',
         'draft': 'مسودة — غير منشورة', 'published': 'منشورة',
         'total': 'الإجمالي', 'sap_data': 'بيانات SAP', 'today': 'اليوم',
@@ -166,6 +166,19 @@ def render_day(day, language='en', berth=None):
         jobs = [job for job in jobs
                 if (job.berth or 'both') == berth or (job.berth or 'both') == 'both']
 
+    # Inspections are OUT OF SCOPE for planning — the generator already refuses
+    # to schedule them, because inspectors get their work through the inspection
+    # assignment flow instead. But rendering them as full cards was five lines
+    # each, with an "unassigned" warning that is not a problem and a #id nobody
+    # will ever quote. Twenty of them would drown the day.
+    #
+    # So: one line at the foot, no card, no warning, and OUT of the day's job
+    # count and hours — the header should say how much WORK the day holds.
+    # Ali: "when they come in the telegram they make the message crowd, but
+    # also i do not need to loose them in the day".
+    inspections = [job for job in jobs if job.job_type == 'inspection']
+    jobs = [job for job in jobs if job.job_type != 'inspection']
+
     total = sum(job.estimated_hours or 0 for job in jobs)
     count = len(jobs)
     noun = _t(language, 'jobs') if count != 1 else _t(language, 'job')
@@ -177,8 +190,11 @@ def render_day(day, language='en', berth=None):
         RULE,
     ]
 
+    tail = _inspection_line(inspections, language)
+
     if not jobs:
-        return '\n'.join(header + ['', _t(language, 'nothing')])
+        body = ['', _t(language, 'nothing')]
+        return '\n'.join(header + body + (['', tail] if tail else []))
 
     body = []
     groups = {'east': [], 'west': [], 'both': []}
@@ -196,7 +212,39 @@ def render_day(day, language='en', berth=None):
             body.append('')
             body.append(render_job(job, language))
 
+    if tail:
+        body.append('')
+        body.append(tail)
+
     return '\n'.join(header + body)
+
+
+# Beyond this many, names stop being readable and become a wall.
+INSPECTION_NAMES_SHOWN = 8
+
+
+def _inspection_line(inspections, language='en'):
+    """Every inspection on the day, in one line. Empty string if there are none."""
+    if not inspections:
+        return ''
+
+    names = []
+    for job in inspections:
+        equipment = job.equipment
+        if equipment is None and job.inspection_assignment:
+            equipment = job.inspection_assignment.equipment
+        if equipment is not None and equipment.name:
+            names.append(equipment.name)
+
+    label = _t(language, 'inspections')
+    if not names:
+        return f'🔍 {label}: {len(inspections)}'
+
+    shown = ', '.join(names[:INSPECTION_NAMES_SHOWN])
+    if len(names) > INSPECTION_NAMES_SHOWN:
+        return (f'🔍 {label} ({len(names)}): {shown} '
+                f'+{len(names) - INSPECTION_NAMES_SHOWN}')
+    return f'🔍 {label}: {shown}'
 
 
 def render_week(plan, language='en', berth=None):
@@ -216,7 +264,8 @@ def render_week(plan, language='en', berth=None):
     blocks = [head] + [render_day(day, language, berth) for day in plan.days]
 
     total = sum(job.estimated_hours or 0
-                for day in plan.days for job in (day.jobs or []))
+                for day in plan.days for job in (day.jobs or [])
+                if job.job_type != 'inspection')
     blocks.append(f'{RULE}\n{_t(language, "total")}: '
                   f'{_hours(total)}{_t(language, "hours")}')
 

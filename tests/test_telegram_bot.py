@@ -987,3 +987,109 @@ class TestOverlappingWeeks:
         from app.services.telegram.dispatcher import plan_for_date
         plan, day = week
         assert plan_for_date(date.today()).id == plan.id
+
+
+class TestInspectionsDoNotCrowdTheDay:
+    """Ali: "when they come in the telegram they make the message crowd, but
+    also i do not need to loose them in the day".
+
+    The generator already refuses to schedule inspections — inspectors get
+    their work through the assignment flow. But rendering each as a full card
+    was five lines, an "unassigned" warning that is not a problem, and a #id
+    nobody will ever quote.
+    """
+
+    def _inspection(self, db_session, day, name, position=1):
+        from app.models import InspectionAssignment
+        equipment = make_equipment(db_session, name, f'S{name}')
+        job = WorkPlanJob(work_plan_day_id=day.id, job_type='inspection',
+                          equipment_id=equipment.id, estimated_hours=1.0,
+                          berth='both', position=position)
+        db_session.session.add(job)
+        db_session.session.commit()
+        return job
+
+    def test_an_inspection_is_one_line_not_a_card(self, db_session, week):
+        plan, day = week
+        job = self._inspection(db_session, day, 'TT006')
+        db_session.session.refresh(day)
+
+        text = renderer.render_day(day)
+
+        assert 'TT006' in text
+        assert f'#{job.id}' not in text
+        assert 'unassigned' not in text
+
+    def test_several_inspections_share_the_single_line(self, db_session, week):
+        plan, day = week
+        for i, name in enumerate(['TT006', 'TT021', 'RS110']):
+            self._inspection(db_session, day, name, position=i)
+        db_session.session.refresh(day)
+
+        text = renderer.render_day(day)
+
+        line = [l for l in text.splitlines() if l.startswith('🔍')]
+        assert len(line) == 1
+        for name in ('TT006', 'TT021', 'RS110'):
+            assert name in line[0]
+
+    def test_a_long_list_collapses_rather_than_becoming_a_wall(self, db_session,
+                                                               week):
+        plan, day = week
+        for i in range(14):
+            self._inspection(db_session, day, f'TT{i:03d}', position=i)
+        db_session.session.refresh(day)
+
+        line = [l for l in renderer.render_day(day).splitlines()
+                if l.startswith('🔍')][0]
+
+        assert '(14)' in line
+        assert '+6' in line
+
+    def test_they_are_out_of_the_day_s_job_count_and_hours(self, db_session, week):
+        """The header should say how much WORK the day holds."""
+        plan, day = week
+        equipment = make_equipment(db_session, 'ECH02', 'SE1')
+        db_session.session.add(WorkPlanJob(
+            work_plan_day_id=day.id, job_type='pm', equipment_id=equipment.id,
+            estimated_hours=4.0, berth='east', position=1))
+        db_session.session.commit()
+        self._inspection(db_session, day, 'TT006', position=2)
+        db_session.session.refresh(day)
+
+        header = renderer.render_day(day).splitlines()[1]
+
+        assert '1 job' in header
+        assert '4.0h' in header
+
+    def test_a_day_with_ONLY_inspections_still_shows_them(self, db_session, week):
+        """Nothing to plan is not the same as nothing happening."""
+        plan, day = week
+        self._inspection(db_session, day, 'TT006')
+        db_session.session.refresh(day)
+
+        text = renderer.render_day(day)
+
+        assert 'No jobs planned' in text
+        assert 'TT006' in text
+
+    def test_the_week_total_matches_the_day_headers(self, db_session, week):
+        plan, day = week
+        equipment = make_equipment(db_session, 'ECH02', 'SE2')
+        db_session.session.add(WorkPlanJob(
+            work_plan_day_id=day.id, job_type='pm', equipment_id=equipment.id,
+            estimated_hours=4.0, berth='east', position=1))
+        db_session.session.commit()
+        self._inspection(db_session, day, 'TT006', position=2)
+        db_session.session.refresh(plan)
+
+        text = '\n'.join(renderer.render_week(plan))
+
+        assert 'Total: 4.0h' in text
+
+    def test_arabic(self, db_session, week):
+        plan, day = week
+        self._inspection(db_session, day, 'TT006')
+        db_session.session.refresh(day)
+
+        assert 'الفحوصات اليوم' in renderer.render_day(day, language='ar')
