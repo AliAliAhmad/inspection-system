@@ -33,6 +33,13 @@ class Config:
     SAP_SYNC_ROBOT_KEY = os.getenv('SAP_SYNC_ROBOT_KEY', '')
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
 
+    # When a week ends, its UNFINISHED work returns to the box — Ali's rule,
+    # never implemented, which is why ten finished weeks were still holding
+    # 2,242 orders. Off by default: it deletes redundant rows in production and
+    # the last unattended cleanup emptied the pool, so this one runs only after
+    # its read-only classification has been looked at.
+    SAP_CARRY_OVER_ENABLED = os.getenv('SAP_CARRY_OVER_ENABLED', 'false').lower() == 'true'
+
     # --- Telegram planning bot -------------------------------------------------
     # Kill switch. False skips blueprint registration entirely, so a misbehaving
     # bot can be turned off with an env var and a restart rather than a deploy.

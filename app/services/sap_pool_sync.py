@@ -216,6 +216,15 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     # came from, and why /generate died with a UniqueViolation.
     numbers = [c['order_number'] for c in candidates]
 
+    # BEFORE the box snapshot, deliberately. Released rows have to land in
+    # `existing` so the candidate loop refreshes their fields and stale-removal
+    # can drop the ones SAP has closed. Running it afterwards would leave them
+    # invisible until tomorrow — and manufacture a duplicate for each one.
+    carry_over = {'skipped': 'disabled'}
+    if current_app.config.get('SAP_CARRY_OVER_ENABLED'):
+        from app.services.sap_carry_over import release_dead_week_orders
+        carry_over = release_dead_week_orders(today=today, dry_run=dry_run)
+
     # EVERY box row, not just the candidates' — staleness is decided by what is
     # in the box and NOT in today's export, so narrowing this to the candidate
     # numbers would mean an order that left SAP could never be detected.
@@ -233,14 +242,15 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     # read every one of them as "already planned" and deleted the fresh box copy
     # — the pool collapsed from 202 to 21 in a single rebuild.
     from app.models import WorkPlan, WorkPlanDay, WorkPlanJob
-    today_date = today or planning_today()
-    if hasattr(today_date, 'date') and not isinstance(today_date, date):
-        today_date = today_date.date()
+    from app.services.sap_carry_over import live_week_filter
 
+    # live_week_filter is shared with the carry-over, which releases orders held
+    # by a DEAD week. The two must be exact complements, or an order on the
+    # boundary is either protected by both rules or claimed by both.
     scheduled_numbers = {row[0] for row in db.session.query(WorkPlanJob.sap_order_number)
                          .join(WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id)
                          .join(WorkPlan, WorkPlanDay.work_plan_id == WorkPlan.id)
-                         .filter(WorkPlan.week_end >= today_date,
+                         .filter(live_week_filter(today),
                                  WorkPlanJob.sap_order_number.isnot(None))
                          .all()}
 
@@ -355,6 +365,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         'updated': updated,
         'removed_from_pool': len(stale),
         'left_alone_because_scheduled': skipped_scheduled,
+        'carry_over': carry_over,
         'duplicate_box_rows_removed': len(duplicates),
         'equipment_matched': matched,
         'equipment_unmatched': len(unmatched_codes),

@@ -308,6 +308,22 @@ def rebuild_pool():
     }), 202
 
 
+@bp.route('/carry-over/preview', methods=['GET'])
+@jwt_required()
+def preview_carry_over():
+    """What releasing finished weeks WOULD do. Changes nothing.
+
+    Read-only on purpose. The previous cleanup shipped the same afternoon it was
+    written, ran unattended against production, and emptied the pool from 202
+    rows to 21. This one gets looked at before it is switched on.
+    """
+    from app.api.work_plans import engineer_or_admin_required
+    engineer_or_admin_required()
+
+    from app.services.sap_carry_over import classify
+    return jsonify({'status': 'success', 'preview': classify()}), 200
+
+
 @bp.route('/events', methods=['GET'])
 @jwt_required()
 def list_reconciliation_events():
