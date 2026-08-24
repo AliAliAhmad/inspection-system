@@ -38,7 +38,13 @@ class Config:
     # 2,242 orders. Off by default: it deletes redundant rows in production and
     # the last unattended cleanup emptied the pool, so this one runs only after
     # its read-only classification has been looked at.
-    SAP_CARRY_OVER_ENABLED = os.getenv('SAP_CARRY_OVER_ENABLED', 'false').lower() == 'true'
+    # Enabled 2026-08-24 after the read-only classify() was checked against
+    # production: 2,242 rows held by 10 finished weeks, 344 to release, 1,898
+    # redundant duplicates, and ZERO with a worked job. That last number was
+    # verified separately rather than trusted — the only 4 worked jobs in those
+    # weeks are defect/manual jobs carrying no SAP order, so there is no staging
+    # row for the rule to protect and "0" was honest.
+    SAP_CARRY_OVER_ENABLED = os.getenv('SAP_CARRY_OVER_ENABLED', 'true').lower() == 'true'
 
     # --- Telegram planning bot -------------------------------------------------
     # Kill switch. False skips blueprint registration entirely, so a misbehaving

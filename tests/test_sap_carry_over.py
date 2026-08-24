@@ -250,6 +250,8 @@ class TestLookBeforeTouching:
         assert order.work_plan_id == plan.id
 
 
-class TestItIsOffUntilAskedFor:
-    def test_the_sync_does_not_run_it_by_default(self, app):
-        assert app.config.get('SAP_CARRY_OVER_ENABLED') is False
+class TestItRunsInTheNightlySync:
+    def test_it_is_enabled(self, app):
+        """Turned on 2026-08-24, after classify() was checked against production
+        and the "zero worked jobs" claim was verified independently."""
+        assert app.config.get('SAP_CARRY_OVER_ENABLED') is True
