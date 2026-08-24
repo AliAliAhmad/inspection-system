@@ -25,6 +25,9 @@ from app.extensions import db
 from app.models.defect import Defect
 from app.models.equipment import Equipment
 from app.models.inspection import Inspection
+from app.services.job_durations import (MAN_HOURS_PER_DAY, MIN_CREW,
+                                        hours_for, pm_hours, urgent_max_crew)
+from app.services.day_budget import build_week_wallets
 from app.models.inspection_assignment import InspectionAssignment
 from app.models.inspection_list import InspectionList
 from app.models.pm_template import PMTemplate
@@ -96,6 +99,61 @@ _SCORE_TO_PRIORITY = [
     (30, 'normal'),
     (0, 'low'),
 ]
+
+# ── What belongs to the defect team ────────────────────────────────────────
+#
+# Ali, 2026-08-24: "there is two things — PRM, or a defect. First the generator
+# should do the PM: he puts the PM, and any order or any defect related to the
+# machine that has the PM, with it — even if it is COM, ACD, inspection or
+# damage, and only the preventive maintenance guy does it. And then after this
+# he does the defects ... the defect team, which are the inspectors and the
+# specialists."
+#
+# So PRM is the only anchor, and every other letter is defect-team work.
+#
+# Before this, only job_type 'defect' (COM) was recognised as such. 'corrective'
+# (DAM, ACD) and 'inspection' (INS) were counted against NO capacity bucket at
+# all — a machine whose only open work was one of those formed a bundle that
+# passed every check and could be placed on any day, any number of times. It was
+# the only work in the system with no ceiling.
+#
+# App-raised inspections are deliberately excluded: they carry no order number,
+# they belong to the inspector's own assignment flow, and they are not the
+# planner's to schedule. Same discriminator the Telegram renderer uses.
+DEFECT_TEAM_JOB_TYPES = ('defect', 'corrective')
+
+
+def _is_defect_team_work(job_type: Optional[str], sap_order_number=None) -> bool:
+    if job_type in DEFECT_TEAM_JOB_TYPES:
+        return True
+    return job_type == 'inspection' and bool(sap_order_number)
+
+
+def _member_is_defect_work(member: Dict[str, Any]) -> bool:
+    return _is_defect_team_work(member.get('job_type'), member.get('sap_order_number'))
+
+
+def _bundle_has_defect_work(bundle: Dict[str, Any]) -> bool:
+    return any(_member_is_defect_work(m) for m in bundle.get('members', []))
+
+
+def _job_is_defect_work(job) -> bool:
+    return _is_defect_team_work(job.job_type, getattr(job, 'sap_order_number', None))
+
+
+def _is_high_urgency(candidate: Dict[str, Any]) -> bool:
+    """Splits step 2 from step 3 of the Combined recipe.
+
+    Inspection-raised defects carry `severity`; SAP orders carry `priority` and
+    no severity at all. Filtering on severity alone therefore dropped every SAP
+    fault out of both steps, so a SAP COM could only ever reach a day by riding
+    along with a PM.
+    """
+    severity = (candidate.get('severity') or '').lower()
+    if severity:
+        return severity in ('critical', 'high')
+    return (candidate.get('priority') or '').lower() in ('urgent', 'critical', 'high')
+
 
 _CARRY_OVER_BOOST = 15
 _MAX_OVERDUE_BONUS = 20
@@ -415,6 +473,10 @@ def _ensure_plan_days(plan: WorkPlan) -> None:
         current += timedelta(days=1)
 
     db.session.flush()
+    # plan.days was read (and cached) BEFORE the new rows were added, so a plan
+    # that arrived with no days would keep showing an empty collection — and
+    # every bundle would be silently deferred. Expire so the next read reloads.
+    db.session.expire(plan, ['days'])
 
 
 def _clear_generated_jobs(plan: WorkPlan, clear_all: bool = False) -> int:
@@ -748,7 +810,7 @@ def _filter_candidates_for_combined_step(
             c for c in candidates
             if c.get('job_type') == 'pm'
             or (
-                c.get('job_type') == 'defect'
+                _member_is_defect_work(c)
                 and c.get('equipment_id') in pm_eq_ids
             )
             or c.get('source') == 'carry_over'
@@ -757,16 +819,16 @@ def _filter_candidates_for_combined_step(
     if step == 2:
         return [
             c for c in candidates
-            if c.get('job_type') == 'defect'
-            and c.get('severity') in ('critical', 'high')
+            if _member_is_defect_work(c)
+            and _is_high_urgency(c)
             and c.get('equipment_id') not in scheduled_eq_ids
         ]
 
     if step == 3:
         return [
             c for c in candidates
-            if c.get('job_type') == 'defect'
-            and c.get('severity') in ('medium', 'low')
+            if _member_is_defect_work(c)
+            and not _is_high_urgency(c)
             and c.get('equipment_id') not in scheduled_eq_ids
         ]
 
@@ -798,8 +860,11 @@ def _step_score(
             base = _DEFECT_SEVERITY_SCORE.get(severity, 50)
             overdue_bonus = _overdue_bonus_days(c.get('overdue_value'))
 
-        elif source == 'sap' and job_type == 'defect':
-            # SAP-sourced defect orders: score by SAP priority
+        elif source == 'sap' and _is_defect_team_work(job_type, c.get('sap_order_number')):
+            # SAP-sourced fault orders — COM, DAM, ACD and SAP inspections alike.
+            # Recognising only 'defect' meant a DAM marked urgent fell through to
+            # the flat default of 30, which the app then relabelled 'normal',
+            # while the identical urgency on a COM scored 90 and showed red.
             base = _SAP_PRIORITY_SCORE.get(c.get('priority', 'normal'), 40)
             overdue_bonus = _overdue_bonus_days(c.get('overdue_value'))
 
@@ -922,21 +987,25 @@ def _step_bundle(
         berths = [m.get('berth') for m in members if m.get('berth')]
         berth = max(set(berths), key=berths.count) if berths else None
 
-        bundles.append({
+        bundle = {
             'equipment_id': eq_id,
             'berth': berth,
             'score': max_score,
             'members': members,
-        })
+        }
+        _price_bundle(bundle)
+        bundles.append(bundle)
 
     # Each orphan candidate is its own bundle
     for c in no_equip:
-        bundles.append({
+        bundle = {
             'equipment_id': None,
             'berth': c.get('berth'),
             'score': c.get('score', 0),
             'members': [c],
-        })
+        }
+        _price_bundle(bundle)
+        bundles.append(bundle)
 
     # Sort descending by score for downstream distribution
     bundles.sort(key=lambda b: b['score'], reverse=True)
@@ -947,6 +1016,59 @@ def _step_bundle(
     )
 
     return bundles
+
+
+
+def _price_bundle(bundle: Dict[str, Any]) -> None:
+    """Set every member's hours from Ali's table, in place.
+
+    This runs at BUNDLE time and not earlier, because one of the numbers depends
+    on the company a job keeps: a fault costs less when the PM team is already on
+    the machine than when the defect team makes its own trip for it. Nothing
+    knows that until the machine's work has been grouped onto one day.
+
+    Carry-overs are left alone. Their hours are the REMAINING hours of work
+    somebody already started, which is a fact about a specific job and not a
+    price from a table.
+    """
+    with_pm = _bundle_has_regular_pm(bundle)
+    for member in bundle.get('members', []):
+        if member.get('source') == 'carry_over':
+            member.setdefault('crew', MIN_CREW)
+            continue
+        family = _get_category(member.get('equipment_type') or '')
+        member['estimated_hours'] = hours_for(
+            member.get('job_type'),
+            activity_type=member.get('sap_order_type'),
+            family=family,
+            with_pm=with_pm,
+            description=member.get('description'),
+        )
+        # How many people the job takes — the other half of its price. A day
+        # is budgeted in MAN-hours, so a 4.5h truck PM with a pair costs 9.
+        if member.get('job_type') == 'pm':
+            member['crew'] = pm_hours(family, description=member.get('description'))[0]
+        else:
+            member['crew'] = MIN_CREW
+
+
+def _member_is_ac_pm(member: Dict[str, Any]) -> bool:
+    from app.services.job_durations import is_ac_service
+    return member.get('job_type') == 'pm' and is_ac_service(member.get('description'))
+
+
+def bundle_man_hours(bundle: Dict[str, Any]) -> float:
+    """What this bundle costs the day, in man-hours (duration x crew).
+
+    AC-PM members are excluded: the AC team is separate, keeps its own
+    machine-count rules, and never charges the maintenance/defect wallets.
+    """
+    total = 0.0
+    for member in bundle.get('members', []):
+        if _member_is_ac_pm(member):
+            continue
+        total += (member.get('estimated_hours') or 0.0) * (member.get('crew') or MIN_CREW)
+    return total
 
 
 # ===========================================================================
@@ -1011,44 +1133,40 @@ EQUIPMENT_CATEGORIES = {
     'TRAILER': 'trailer',
 }
 
-# Max bundles per day per berth — Regular PM service (mechanical+electrical team)
-PM_CAPACITY_BY_CATEGORY = {
-    'reach_stacker': 1,
-    'ech': 1,
-    'truck': 2,
-    'forklift': 3,
-    'trailer': 3,
-    'other': 1,  # Conservative default for unknown equipment
-}
+# The regular teams' machine-count capacity rules are GONE (2026-08-25).
+# PM_CAPACITY_BY_CATEGORY, the one-family-per-berth-day lock,
+# DEFECT_CAPACITY_PER_BERTH, MAX_PM_BUNDLES_PER_WORKER_PER_DAY and the
+# specialist group constants were all proxies for one number nobody had
+# written down: how many hours the men who showed up can work. That number is
+# now computed directly (app/services/day_budget.py: day-shift men x 8h per
+# team per berth) and bundles are charged against it in man-hours. Ali's own
+# week broke the family lock — "1st day you put 1 reach stacker, second day
+# you keep the reach stacker and put TT" — and the counts died with it.
 
-# Max bundles per day per berth — AC service (separate AC team of 2 guys)
-# AC team is faster and works independently from regular service team.
-# Small forklifts and trailers don't have AC, so they're excluded.
+# The AC team is the exception, kept exactly as it was ("keep the ac as it
+# is" — Ali). Max AC bundles per day per berth; the AC team is a separate
+# 2-man crew, faster, and independent of the maintenance wallets. Small
+# forklifts and trailers have no AC, so they are absent.
 AC_CAPACITY_BY_CATEGORY = {
     'reach_stacker': 2,
     'ech': 2,
     'truck': 3,
     'forklift': 2,  # Only big forklifts have AC
-    # 'trailer': not allowed (no AC system)
     'other': 1,
 }
 
-# Defect team: max 4 different equipment with defect jobs per day per berth.
-# This includes pure-defect bundles AND defects that ride along with AC PM
-# bundles (because the AC specialist can't fix mech/elec defects — they go
-# to the defect team and consume real capacity).
-DEFECT_CAPACITY_PER_BERTH = 4
-
-# Urgent override: bundles with score >= URGENT_THRESHOLD can exceed capacity by +1
+# Urgency classification threshold (score >= this = urgent). Urgency buys the
+# EARLIEST day and, for RS/ECH, extra men (job_durations.urgent_max_crew) —
+# never a way past the wallet. The old "+1 machine" override survives only
+# for the AC team's caps.
 URGENT_THRESHOLD = 85
 
-# ── Workforce capacity constants ──
-# PM team: max equipment bundles a single maintenance worker can handle per day
-MAX_PM_BUNDLES_PER_WORKER_PER_DAY = 2
-# Specialist team: specialists work in groups of this size
-SPECIALIST_GROUP_SIZE = 2
-# Specialist team: max equipment each group can handle per day
-MAX_SPECIALIST_EQUIP_PER_GROUP_PER_DAY = 2
+
+def _ac_capacity(category: str) -> int:
+    """How many AC bundles of this category the AC team handles per day per berth."""
+    if category not in AC_CAPACITY_BY_CATEGORY:
+        return 0  # Trailers and small forklifts don't have AC
+    return AC_CAPACITY_BY_CATEGORY[category]
 
 
 def _get_equipment_type_key(bundle: Dict[str, Any]) -> str:
@@ -1073,16 +1191,6 @@ def _get_category(equipment_type: str) -> str:
         if pattern in eq_key or eq_key in pattern:
             return category
     return 'other'
-
-
-def _get_pm_category_capacity(category: str, is_ac: bool = False) -> int:
-    """How many bundles of this category can the relevant team handle per day per berth."""
-    if is_ac:
-        # AC service has different limits and excludes some categories
-        if category not in AC_CAPACITY_BY_CATEGORY:
-            return 0  # Trailers and small forklifts don't have AC
-        return AC_CAPACITY_BY_CATEGORY[category]
-    return PM_CAPACITY_BY_CATEGORY.get(category, PM_CAPACITY_BY_CATEGORY['other'])
 
 
 def _is_ac_service(bundle: Dict[str, Any]) -> bool:
@@ -1142,240 +1250,20 @@ def _is_urgent_bundle(bundle: Dict[str, Any]) -> bool:
 
 # ── Workforce capacity helpers ──────────────────────────────────────────
 
-def _build_workforce_pools(
-    plan: WorkPlan,
-    days: List,
-) -> Dict[int, Dict[str, Dict[str, set]]]:
-    """
-    Pre-compute available PM-team and Specialist-team workers per day per berth.
-
-    Returns {day_id: {berth: {
-        'pm_mech': set_of_user_ids,
-        'pm_elec': set_of_user_ids,
-        'spec_mech': set_of_user_ids,
-        'spec_elec': set_of_user_ids,
-    }}}
-
-    Returns empty dict if no WorkerAssignmentRules exist (backward compatible).
-    """
-    from datetime import timedelta as _td
-
-    # Load rules — if table missing, return empty → all checks skipped
-    try:
-        from app.models.worker_assignment_rule import WorkerAssignmentRule
-        all_rules = WorkerAssignmentRule.query.filter_by(is_active=True).all()
-    except Exception:
-        return {}
-    if not all_rules:
-        return {}
-
-    # Build worker sets per berth, split by PM team vs Specialist team
-    # PM team = rules with team_type in (regular_pm, ac_pm)
-    # Specialist team = rules with team_type in (defect_mech, defect_elec)
-    pm_team_types = {'regular_pm', 'ac_pm'}
-    spec_team_types = {'defect_mech', 'defect_elec'}
-
-    pool_by_berth: Dict[str, Dict[str, set]] = {}
-    for berth in ('east', 'west'):
-        pool_by_berth[berth] = {
-            'pm_mech': set(), 'pm_elec': set(),
-            'spec_mech': set(), 'spec_elec': set(),
-        }
-
-    for r in all_rules:
-        berth = r.berth
-        if berth not in pool_by_berth:
-            continue
-
-        # Collect ALL user IDs from this rule (leads + candidates)
-        mech_ids = set(r.candidate_mech_workers or [])
-        for uid in (r.primary_mech_lead_id, r.successor_mech_lead_id):
-            if uid:
-                mech_ids.add(uid)
-
-        elec_ids = set(r.candidate_elec_workers or [])
-        for uid in (r.primary_elec_lead_id, r.successor_elec_lead_id):
-            if uid:
-                elec_ids.add(uid)
-
-        if r.team_type in pm_team_types:
-            pool_by_berth[berth]['pm_mech'].update(mech_ids)
-            pool_by_berth[berth]['pm_elec'].update(elec_ids)
-        elif r.team_type in spec_team_types:
-            pool_by_berth[berth]['spec_mech'].update(mech_ids)
-            pool_by_berth[berth]['spec_elec'].update(elec_ids)
-
-    # 'both' berth = union of east + west
-    pool_by_berth['both'] = {
-        'pm_mech': pool_by_berth['east']['pm_mech'] | pool_by_berth['west']['pm_mech'],
-        'pm_elec': pool_by_berth['east']['pm_elec'] | pool_by_berth['west']['pm_elec'],
-        'spec_mech': pool_by_berth['east']['spec_mech'] | pool_by_berth['west']['spec_mech'],
-        'spec_elec': pool_by_berth['east']['spec_elec'] | pool_by_berth['west']['spec_elec'],
-    }
-
-    # Load roster + approved leaves to build unavailable set per date
-    unavailable_by_date: Dict = defaultdict(set)
-
-    try:
-        from app.models.roster import RosterEntry
-        roster_entries = (
-            RosterEntry.query
-            .filter(
-                RosterEntry.date >= plan.week_start,
-                RosterEntry.date <= plan.week_end,
-            )
-            .all()
-        )
-        for e in roster_entries:
-            if e.shift in ('off', 'leave'):
-                unavailable_by_date[e.date].add(e.user_id)
-    except Exception:
-        pass
-
-    try:
-        from app.models.leave import Leave
-        approved_leaves = (
-            Leave.query
-            .filter(
-                Leave.status == 'approved',
-                Leave.date_from <= plan.week_end,
-                Leave.date_to >= plan.week_start,
-            )
-            .all()
-        )
-        for lv in approved_leaves:
-            d = lv.date_from
-            while d <= lv.date_to:
-                if plan.week_start <= d <= plan.week_end:
-                    unavailable_by_date[d].add(lv.user_id)
-                d += _td(days=1)
-    except Exception:
-        pass
-
-    # Also get globally inactive/on-leave user IDs to filter out
-    inactive_ids = set()
-    try:
-        inactive_users = User.query.filter(
-            db.or_(User.is_active.is_(False), User.is_on_leave.is_(True))
-        ).with_entities(User.id).all()
-        inactive_ids = {u.id for u in inactive_users}
-    except Exception:
-        pass
-
-    # Build per-day-per-berth availability
-    result: Dict[int, Dict[str, Dict[str, set]]] = {}
-    for day in days:
-        result[day.id] = {}
-        day_unavail = unavailable_by_date.get(day.date, set()) | inactive_ids
-        for berth in ('east', 'west', 'both'):
-            pool = pool_by_berth.get(berth, {})
-            result[day.id][berth] = {
-                'pm_mech': pool.get('pm_mech', set()) - day_unavail,
-                'pm_elec': pool.get('pm_elec', set()) - day_unavail,
-                'spec_mech': pool.get('spec_mech', set()) - day_unavail,
-                'spec_elec': pool.get('spec_elec', set()) - day_unavail,
-            }
-
-    logger.info(
-        "workforce_pools | built pools for %d days. Sample east day1: pm_mech=%d pm_elec=%d spec_mech=%d spec_elec=%d",
-        len(days),
-        len(result[days[0].id]['east']['pm_mech']) if days else 0,
-        len(result[days[0].id]['east']['pm_elec']) if days else 0,
-        len(result[days[0].id]['east']['spec_mech']) if days else 0,
-        len(result[days[0].id]['east']['spec_elec']) if days else 0,
-    )
-
-    return result
-
-
-def _get_bundle_workforce_requirement(
-    bundle: Dict[str, Any],
-    rules_by_key: Dict[Tuple[str, str, str], list],
-) -> Dict[str, int]:
-    """
-    Determine how many worker-slots a bundle needs from each workforce pool.
-
-    Returns dict with keys: pm_mech, pm_elec, spec_mech, spec_elec (all ints).
-    Returns all zeros if no matching rule found (check skipped for this bundle).
-    """
-    req = {'pm_mech': 0, 'pm_elec': 0, 'spec_mech': 0, 'spec_elec': 0}
-
-    berth = bundle.get('berth') or 'east'  # rules only exist for east/west
-    if berth == 'both':
-        berth = 'east'  # use east as proxy (rules are symmetric by default)
-    eq_id = bundle.get('equipment_id')
-    eq_cat = _get_category(_get_equipment_type_key(bundle)) if eq_id else 'all'
-
-    has_regular_pm = _bundle_has_regular_pm(bundle)
-    has_ac_pm = _bundle_has_ac_pm(bundle)
-    has_defect = any(m.get('job_type') == 'defect' for m in bundle.get('members', []))
-
-    # PM team requirement (regular PM or AC PM)
-    if has_regular_pm:
-        rule_list = rules_by_key.get((berth, 'regular_pm', eq_cat)) or rules_by_key.get((berth, 'regular_pm', 'all')) or []
-        if rule_list:
-            rule = rule_list[0]  # use first team's counts as the requirement
-            req['pm_mech'] = rule.mech_count or 0
-            req['pm_elec'] = rule.elec_count or 0
-    elif has_ac_pm:
-        rule_list = rules_by_key.get((berth, 'ac_pm', eq_cat)) or rules_by_key.get((berth, 'ac_pm', 'all')) or []
-        if rule_list:
-            rule = rule_list[0]
-            req['pm_mech'] = rule.mech_count or 0
-            req['pm_elec'] = rule.elec_count or 0
-
-    # Specialist team requirement (pure defect bundles or AC PM + defect)
-    # Regular PM + defect: defects ride along free — NO specialist requirement
-    needs_specialist = has_defect and not has_regular_pm
-    if needs_specialist:
-        # Determine defect trade from work_center or defect category
-        defect_wc = None
-        for m in bundle.get('members', []):
-            if m.get('job_type') == 'defect':
-                defect_wc = m.get('work_center') or m.get('defect_work_center')
-                break
-        if defect_wc == 'ELEC':
-            team_type = 'defect_elec'
-            pool_key = 'spec_elec'
-        else:
-            team_type = 'defect_mech'
-            pool_key = 'spec_mech'
-
-        rule_list = rules_by_key.get((berth, team_type, 'all')) or rules_by_key.get((berth, team_type, eq_cat)) or []
-        if rule_list:
-            rule = rule_list[0]
-            total_needed = (rule.mech_count or 0) + (rule.elec_count or 0)
-            req[pool_key] = total_needed
-        else:
-            # No rule but has defect — assume 1 specialist group (SPECIALIST_GROUP_SIZE)
-            req[pool_key] = SPECIALIST_GROUP_SIZE
-
-    return req
-
-
-def _precompute_bundle_workforce(
-    bundles: List[Dict[str, Any]],
-    rules_by_key: Dict[Tuple[str, str, str], list],
-) -> None:
-    """Annotate each bundle with its workforce requirement before placement."""
-    for bundle in bundles:
-        req = _get_bundle_workforce_requirement(bundle, rules_by_key)
-        bundle['wf_pm_mech'] = req['pm_mech']
-        bundle['wf_pm_elec'] = req['pm_elec']
-        bundle['wf_spec_mech'] = req['spec_mech']
-        bundle['wf_spec_elec'] = req['spec_elec']
-
-
 def _step_distribute(
     plan: WorkPlan,
     bundles: List[Dict[str, Any]],
     recipe: str,
 ) -> Tuple[Dict[int, List[WorkPlanJob]], List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Assign each bundle to a day and create WorkPlanJob records.
-    STRICT capacity: bundles that don't fit go to unscheduled (no overflow).
-    URGENT override: high-priority bundles can exceed capacity by +1.
-    BALANCED distribution: spread by remaining capacity, not by total load.
+    Assign each bundle to a day (or two) and create WorkPlanJob records.
+
+    STRICT hours: a bundle fits a day only if its man-hours fit that team's
+    wallet. Bundles that fit nowhere go to unscheduled — no overflow, no
+    override. A regular PM bigger than a pair-day (only the reach stacker
+    today) is SPLIT across two consecutive days, its riding faults landing on
+    the finishing day; an URGENT reach stacker or ECH instead gets a bigger
+    crew and one day, if the men exist.
 
     Returns:
         (day_map, unscheduled, capacity_utilization)
@@ -1387,178 +1275,88 @@ def _step_distribute(
     day_map: Dict[int, List[WorkPlanJob]] = {d.id: [] for d in days}
     unscheduled: List[Dict[str, Any]] = []
 
-    # Track load per day for even distribution (informational)
+    # Informational load per day (machine-hours) — tie-breaks only.
     day_load: Dict[int, float] = {d.id: _existing_load(d) for d in days}
 
-    # ── Workforce pools (trade-aware capacity) ──
-    workforce_pools = _build_workforce_pools(plan, days)
+    # AC tracker only — the AC team keeps its machine-count rules as-is.
+    capacity_tracker: Dict[int, Dict[str, Dict]] = {
+        d.id: {berth: {'ac_category_locked': None, 'ac_count': 0}
+               for berth in ('east', 'west', 'both')}
+        for d in days
+    }
 
-    # Load rules for bundle workforce requirement computation
-    wf_rules_by_key: Dict[Tuple[str, str, str], list] = defaultdict(list)
-    if workforce_pools:
-        try:
-            from app.models.worker_assignment_rule import WorkerAssignmentRule
-            for r in WorkerAssignmentRule.query.filter_by(is_active=True).all():
-                wf_rules_by_key[(r.berth, r.team_type, r.equipment_category)].append(r)
-        except Exception:
-            pass
+    # The wallets: available day-shift men x 8h per team per berth. Empty dict
+    # means no team rules are configured — the hours check switches off and
+    # placement behaves as before, which keeps every installation without
+    # WorkerAssignmentRules working unchanged.
+    wallets = build_week_wallets(plan, days)
 
-    # Capacity tracker — 3 independent teams per day per berth + workforce:
-    # 1. Regular PM team (mech+elec): one category locked
-    # 2. AC PM team (separate 2-guy team): one category locked
-    # 3. Defect team: counts unique equipment with defects
-    # 4. Workforce slots: pm_mech, pm_elec, spec_mech, spec_elec
-    #
-    # Structure: {day_id: {berth: {
-    #     'pm_category_locked': str | None,
-    #     'pm_count': int,
-    #     'ac_category_locked': str | None,
-    #     'ac_count': int,
-    #     'defect_equipment': set,
-    #     'wf_pm_mech_used': int, 'wf_pm_mech_max': int | None,
-    #     'wf_pm_elec_used': int, 'wf_pm_elec_max': int | None,
-    #     'wf_spec_mech_used': int, 'wf_spec_mech_max': int | None,
-    #     'wf_spec_elec_used': int, 'wf_spec_elec_max': int | None,
-    # }}}
-    capacity_tracker: Dict[int, Dict[str, Dict]] = {}
+    # Jobs already sitting on the days (manual placements) are not free: AC
+    # jobs count against the AC caps, everything else spends wallet money at
+    # its assigned crew size (a pair when nobody is assigned yet).
     for d in days:
-        capacity_tracker[d.id] = {}
-        for berth in ('east', 'west', 'both'):
-            # Compute workforce slot maximums from pools
-            pools = workforce_pools.get(d.id, {}).get(berth, {})
-            pm_mech_avail = len(pools.get('pm_mech', set()))
-            pm_elec_avail = len(pools.get('pm_elec', set()))
-            spec_mech_avail = len(pools.get('spec_mech', set()))
-            spec_elec_avail = len(pools.get('spec_elec', set()))
-
-            # Specialist capacity: groups × equipment per group per day
-            spec_mech_groups = spec_mech_avail // SPECIALIST_GROUP_SIZE if spec_mech_avail else 0
-            spec_elec_groups = spec_elec_avail // SPECIALIST_GROUP_SIZE if spec_elec_avail else 0
-
-            capacity_tracker[d.id][berth] = {
-                'pm_category_locked': None,
-                'pm_count': 0,
-                'ac_category_locked': None,
-                'ac_count': 0,
-                'defect_equipment': set(),
-                # Workforce: PM team slots (maintenance workers × bundles per worker)
-                'wf_pm_mech_used': 0,
-                'wf_pm_mech_max': pm_mech_avail * MAX_PM_BUNDLES_PER_WORKER_PER_DAY if workforce_pools else None,
-                'wf_pm_elec_used': 0,
-                'wf_pm_elec_max': pm_elec_avail * MAX_PM_BUNDLES_PER_WORKER_PER_DAY if workforce_pools else None,
-                # Workforce: Specialist team slots (groups × equipment per group)
-                'wf_spec_mech_used': 0,
-                'wf_spec_mech_max': spec_mech_groups * MAX_SPECIALIST_EQUIP_PER_GROUP_PER_DAY if workforce_pools else None,
-                'wf_spec_elec_used': 0,
-                'wf_spec_elec_max': spec_elec_groups * MAX_SPECIALIST_EQUIP_PER_GROUP_PER_DAY if workforce_pools else None,
-            }
-        # Account for jobs already on this day (manual placements)
         for job in d.jobs:
-            b = _normalize_berth(job.berth) or 'both'
-            tracker = capacity_tracker[d.id].get(b)
-            if not tracker:
-                continue
-            if job.job_type == 'pm' and job.equipment and job.equipment.equipment_type:
-                cat = _get_category(job.equipment.equipment_type)
-                # Detect AC PM by description
-                desc_upper = (job.description or '').upper()
-                is_ac = (
-                    ' AC ' in f' {desc_upper} '
-                    or 'AC SYSTEM' in desc_upper
-                    or desc_upper.startswith('AC ')
-                    or desc_upper.endswith(' AC')
-                )
-                if is_ac:
+            berth = _normalize_berth(job.berth) or 'both'
+            desc_upper = (job.description or '').upper()
+            job_is_ac = job.job_type == 'pm' and (
+                ' AC ' in f' {desc_upper} ' or 'AC SYSTEM' in desc_upper
+                or desc_upper.startswith('AC ') or desc_upper.endswith(' AC'))
+            if job_is_ac:
+                tracker = (capacity_tracker[d.id].get(berth)
+                           or capacity_tracker[d.id]['both'])
+                if job.equipment and job.equipment.equipment_type:
+                    cat = _get_category(job.equipment.equipment_type)
                     if tracker['ac_category_locked'] is None:
                         tracker['ac_category_locked'] = cat
                     if tracker['ac_category_locked'] == cat:
                         tracker['ac_count'] += 1
+                continue
+            if wallets:
+                if job.job_type == 'pm':
+                    wallet_key = 'pm'
+                elif _job_is_defect_work(job):
+                    wallet_key = 'spec'
                 else:
-                    if tracker['pm_category_locked'] is None:
-                        tracker['pm_category_locked'] = cat
-                    if tracker['pm_category_locked'] == cat:
-                        tracker['pm_count'] += 1
-                # Workforce: count existing PM assignments against workforce slots
-                for assignment in job.assignments:
-                    user = getattr(assignment, 'user', None)
-                    if user and (user.specialization or '').lower() == 'mechanical':
-                        tracker['wf_pm_mech_used'] += 1
-                    elif user and (user.specialization or '').lower() == 'electrical':
-                        tracker['wf_pm_elec_used'] += 1
-            elif job.job_type == 'defect' and job.equipment_id:
-                tracker['defect_equipment'].add(job.equipment_id)
-                # Workforce: count existing defect assignments against specialist slots
-                for assignment in job.assignments:
-                    user = getattr(assignment, 'user', None)
-                    if user and (user.specialization or '').lower() == 'mechanical':
-                        tracker['wf_spec_mech_used'] += 1
-                    elif user and (user.specialization or '').lower() == 'electrical':
-                        tracker['wf_spec_elec_used'] += 1
-
-    # Pre-annotate bundles with workforce requirements
-    if workforce_pools:
-        _precompute_bundle_workforce(bundles, wf_rules_by_key)
+                    continue
+                crew = max(MIN_CREW, len(job.assignments or []))
+                _charge_wallet(wallets, d, berth, wallet_key,
+                               (job.estimated_hours or 0) * crew)
 
     # Apply recipe-specific ordering
     ordered_bundles = _apply_recipe_ordering(bundles, days, recipe)
 
     capacity_full_count = 0
-    for bundle in ordered_bundles:
-        target_day = _pick_day_with_capacity(
-            bundle, days, day_load, capacity_tracker, recipe
-        )
-        if target_day is None:
+    for bundle_index, bundle in enumerate(ordered_bundles):
+        placements = _plan_bundle_placement(
+            bundle, days, day_load, capacity_tracker, wallets, recipe)
+        if not placements:
             unscheduled.extend(bundle['members'])
             capacity_full_count += 1
             continue
 
-        created_jobs = _create_jobs_for_bundle(bundle, target_day, plan)
-        day_map[target_day.id].extend(created_jobs)
+        berth = bundle.get('berth') or 'both'
+        bundle_is_pm_visit = _bundle_has_regular_pm(bundle)
+        for day, members, wallet_key, charge in placements:
+            part = dict(bundle, members=members)
+            created_jobs = _create_jobs_for_bundle(part, day, plan)
+            # One crew, one visit (Ali): a regular PM makes the WHOLE bundle
+            # maintenance-team work — the assignment step must not look at the
+            # riding defects alone and send a specialist to a machine the PM
+            # pair is already standing on. The group ties the split halves
+            # (and ride-alongs) to the SAME workers.
+            if bundle_is_pm_visit:
+                for job, member in zip(created_jobs, members):
+                    job._bundle_team = 'regular_pm'
+                    job._bundle_group = bundle_index
+                    if member.get('job_type') == 'pm':
+                        job._crew_needed = member.get('crew')
+            day_map[day.id].extend(created_jobs)
+            day_load[day.id] += sum(m.get('estimated_hours', 0) for m in members)
+            if wallets and wallet_key and charge:
+                _charge_wallet(wallets, day, berth, wallet_key, charge)
+            _consume_ac_capacity(part, day, berth, capacity_tracker)
 
-        # Update load tracker
-        bundle_hours = sum(c.get('estimated_hours', 0) for c in bundle['members'])
-        day_load[target_day.id] += bundle_hours
-
-        # Update capacity tracker — count against ALL applicable buckets
-        b = bundle.get('berth') or 'both'
-        if b not in capacity_tracker[target_day.id]:
-            b = 'both'
-        tracker = capacity_tracker[target_day.id][b]
-        eq_id = bundle.get('equipment_id')
-        cat = _get_category(_get_equipment_type_key(bundle)) if eq_id else None
-        has_regular_pm = _bundle_has_regular_pm(bundle)
-        has_ac_pm = _bundle_has_ac_pm(bundle)
-
-        if has_regular_pm and cat:
-            if tracker['pm_category_locked'] is None:
-                tracker['pm_category_locked'] = cat
-            tracker['pm_count'] += 1
-
-        if has_ac_pm and cat:
-            if tracker['ac_category_locked'] is None:
-                tracker['ac_category_locked'] = cat
-            tracker['ac_count'] += 1
-
-        # Defect-team capacity is consumed when:
-        #   - Pure defect bundle (no PM at all), OR
-        #   - AC PM bundle with defects (AC specialist can't fix defects)
-        # Regular PM bundles do NOT consume defect capacity (PM team handles
-        # the defects themselves on the same workshop visit).
-        bundle_has_defect = any(
-            m.get('job_type') == 'defect' for m in bundle.get('members', [])
-        )
-        if eq_id and bundle_has_defect:
-            if not has_regular_pm:  # Pure defect OR AC PM with defects
-                tracker['defect_equipment'].add(eq_id)
-
-        # ── Workforce slot consumption ──
-        tracker['wf_pm_mech_used'] += bundle.get('wf_pm_mech', 0)
-        tracker['wf_pm_elec_used'] += bundle.get('wf_pm_elec', 0)
-        tracker['wf_spec_mech_used'] += bundle.get('wf_spec_mech', 0)
-        tracker['wf_spec_elec_used'] += bundle.get('wf_spec_elec', 0)
-
-    # Build capacity utilization summary for the response
-    capacity_utilization = _build_capacity_utilization(days, capacity_tracker)
+    capacity_utilization = _build_capacity_utilization(days, capacity_tracker, wallets)
 
     logger.info(
         "distribute | scheduled=%d unscheduled=%d full_bundles=%d",
@@ -1570,65 +1368,92 @@ def _step_distribute(
     return day_map, unscheduled, capacity_utilization
 
 
+def _bundle_wallet_key(bundle: Dict[str, Any]) -> Optional[str]:
+    """Which wallet pays for this bundle.
+
+    A regular PM makes it maintenance-team work — the whole visit, riding
+    faults included ('pm'). Otherwise faults are the defect team's ('spec').
+    A pure-AC bundle pays nobody: the AC team has its own caps.
+    On a one-team berth the two keys are the same Wallet object anyway.
+    """
+    if _bundle_has_regular_pm(bundle):
+        return 'pm'
+    if _bundle_has_defect_work(bundle):
+        return 'spec'
+    return None
+
+
+def _wallet_for(wallets, day, berth, wallet_key):
+    if not wallets or not wallet_key:
+        return None
+    berth_key = berth if berth in ('east', 'west') else 'east'
+    day_wallets = wallets.get(day.id, {}).get(berth_key)
+    return day_wallets.get(wallet_key) if day_wallets else None
+
+
+def _charge_wallet(wallets, day, berth, wallet_key, hours):
+    wallet = _wallet_for(wallets, day, berth, wallet_key)
+    if wallet is not None:
+        wallet.charge(hours)
+
+
+def _wallet_fits(wallets, day, berth, wallet_key, cost):
+    wallet = _wallet_for(wallets, day, berth, wallet_key)
+    if wallet is None:
+        return True
+    return cost <= wallet.remaining() + 1e-6
+
+
+def _consume_ac_capacity(bundle, day, berth, capacity_tracker):
+    """AC caps work exactly as they always did — lock the family, count one."""
+    if not _bundle_has_ac_pm(bundle):
+        return
+    tracker = (capacity_tracker[day.id].get(berth)
+               or capacity_tracker[day.id]['both'])
+    cat = _get_category(_get_equipment_type_key(bundle)) if bundle.get('equipment_id') else None
+    if cat:
+        if tracker['ac_category_locked'] is None:
+            tracker['ac_category_locked'] = cat
+        tracker['ac_count'] += 1
+
+
 def _build_capacity_utilization(
     days: List[WorkPlanDay],
     capacity_tracker: Dict[int, Dict[str, Dict]],
+    wallets: Dict,
 ) -> Dict[str, Any]:
-    """Build a per-day-per-berth capacity utilization summary."""
+    """Per-day-per-berth summary: wallet hours for the regular teams, machine
+    counts for the AC team (unchanged)."""
     util = {}
     for d in days:
         date_key = d.date.isoformat()
         util[date_key] = {}
         for berth in ('east', 'west', 'both'):
             tracker = capacity_tracker.get(d.id, {}).get(berth, {})
-
-            pm_cat = tracker.get('pm_category_locked')
-            pm_max = _get_pm_category_capacity(pm_cat) if pm_cat else 0
-            pm_used = tracker.get('pm_count', 0)
-
             ac_cat = tracker.get('ac_category_locked')
-            ac_max = _get_pm_category_capacity(ac_cat, is_ac=True) if ac_cat else 0
-            ac_used = tracker.get('ac_count', 0)
-
-            defect_used = len(tracker.get('defect_equipment', set()))
-
-            # Workforce utilization data
-            wf_pm_mech_max = tracker.get('wf_pm_mech_max')
-            wf_pm_elec_max = tracker.get('wf_pm_elec_max')
-            wf_spec_mech_max = tracker.get('wf_spec_mech_max')
-            wf_spec_elec_max = tracker.get('wf_spec_elec_max')
-
-            # Workforce is full when ANY trade pool is exhausted
-            workforce_full = (
-                (wf_pm_mech_max is not None and tracker.get('wf_pm_mech_used', 0) >= wf_pm_mech_max)
-                or (wf_pm_elec_max is not None and tracker.get('wf_pm_elec_used', 0) >= wf_pm_elec_max)
-                or (wf_spec_mech_max is not None and tracker.get('wf_spec_mech_used', 0) >= wf_spec_mech_max)
-                or (wf_spec_elec_max is not None and tracker.get('wf_spec_elec_used', 0) >= wf_spec_elec_max)
-            )
-
-            util[date_key][berth] = {
-                'pm_category': pm_cat,
-                'pm_used': pm_used,
-                'pm_max': pm_max,
+            entry = {
                 'ac_category': ac_cat,
-                'ac_used': ac_used,
-                'ac_max': ac_max,
-                'defect_used': defect_used,
-                'defect_max': DEFECT_CAPACITY_PER_BERTH,
-                # Workforce utilization
-                'workforce': {
-                    'pm_mech': {'used': tracker.get('wf_pm_mech_used', 0), 'max': wf_pm_mech_max},
-                    'pm_elec': {'used': tracker.get('wf_pm_elec_used', 0), 'max': wf_pm_elec_max},
-                    'spec_mech': {'used': tracker.get('wf_spec_mech_used', 0), 'max': wf_spec_mech_max},
-                    'spec_elec': {'used': tracker.get('wf_spec_elec_used', 0), 'max': wf_spec_elec_max},
-                },
-                'is_full': (
-                    pm_cat is not None
-                    and pm_used >= pm_max
-                    and (ac_cat is None or ac_used >= ac_max)
-                    and defect_used >= DEFECT_CAPACITY_PER_BERTH
-                ) or workforce_full,
+                'ac_used': tracker.get('ac_count', 0),
+                'ac_max': _ac_capacity(ac_cat) if ac_cat else 0,
             }
+            berth_key = berth if berth in ('east', 'west') else 'east'
+            day_wallets = wallets.get(d.id, {}).get(berth_key) if wallets else None
+            if day_wallets:
+                pm_wallet, spec_wallet = day_wallets['pm'], day_wallets['spec']
+                entry['hours'] = {
+                    'pm': {'used': round(pm_wallet.hours_spent, 1),
+                           'max': pm_wallet.hours_total},
+                    'spec': {'used': round(spec_wallet.hours_spent, 1),
+                             'max': spec_wallet.hours_total},
+                    # One team wearing two hats (east): the same money.
+                    'shared': pm_wallet is spec_wallet,
+                }
+                entry['is_full'] = (pm_wallet.remaining() <= 0
+                                    and spec_wallet.remaining() <= 0)
+            else:
+                entry['hours'] = None
+                entry['is_full'] = False
+            util[date_key][berth] = entry
     return util
 
 
@@ -1672,96 +1497,41 @@ def _check_capacity(
     day: WorkPlanDay,
     capacity_tracker: Dict[int, Dict[str, Dict]],
     allow_urgent_override: bool = False,
+    wallets: Dict = None,
+    cost: float = None,
 ) -> bool:
     """
-    Check if placing this bundle on this day respects capacity rules.
-    A bundle may contain regular PM, AC PM, and defects all on the same equipment.
-    Each component is checked against its own team's capacity bucket.
+    Does this bundle fit this day?
 
-    Returns False if ANY required bucket is over capacity.
-
-    Rules:
-    - PM (regular): pm_category lock must match (or empty), pm_count < cap.
-      Regular PM team also handles its own defects, so defects in a regular
-      PM bundle ride along for free (no defect team capacity used).
-    - PM (AC service): ac_category lock must match (or empty), ac_count < cap.
-      AC excluded for trailers/small forklifts (cap = 0). Defects in an AC
-      bundle do NOT ride free — they're done by the defect team and consume
-      defect_equipment capacity, because the AC specialist can't fix
-      mech/elec defects.
-    - Defect (pure): defect_equipment count < DEFECT_CAPACITY_PER_BERTH
-    - Urgent override: allow +1 over capacity
+    Two gates, and only two:
+      * AC caps — unchanged from the old design, urgent may still exceed by 1.
+      * The wallet — the bundle's man-hours must fit the paying team's
+        remaining hours. NEVER overridden: urgency buys the earliest fitting
+        day (and, upstream, more men on RS/ECH), not a way past the limit.
     """
     berth = bundle.get('berth') or 'both'
-    eq_id = bundle.get('equipment_id')
-
-    tracker = capacity_tracker.get(day.id, {}).get(berth)
-    if not tracker:
+    tracker = (capacity_tracker.get(day.id, {}).get(berth)
+               or capacity_tracker.get(day.id, {}).get('both'))
+    if tracker is None:
         return False
 
-    extra_slots = 1 if allow_urgent_override else 0
-    bundle_cat = _get_category(_get_equipment_type_key(bundle)) if eq_id else None
-    has_regular_pm = _bundle_has_regular_pm(bundle)
-    has_ac_pm = _bundle_has_ac_pm(bundle)
-    has_defect = any(m.get('job_type') == 'defect' for m in bundle.get('members', []))
+    if _bundle_has_ac_pm(bundle):
+        cat = _get_category(_get_equipment_type_key(bundle)) if bundle.get('equipment_id') else None
+        if cat:
+            locked = tracker['ac_category_locked']
+            if locked is not None and locked != cat:
+                return False
+            cap = _ac_capacity(cat)
+            if cap == 0:
+                return False
+            if tracker['ac_count'] >= cap + (1 if allow_urgent_override else 0):
+                return False
 
-    # Regular PM check
-    if has_regular_pm and bundle_cat:
-        locked_cat = tracker['pm_category_locked']
-        if locked_cat is not None and locked_cat != bundle_cat:
-            return False
-        max_cap = _get_pm_category_capacity(bundle_cat) + extra_slots
-        if tracker['pm_count'] >= max_cap:
-            return False
-
-    # AC PM check
-    if has_ac_pm and bundle_cat:
-        locked_cat = tracker['ac_category_locked']
-        if locked_cat is not None and locked_cat != bundle_cat:
-            return False
-        max_cap = _get_pm_category_capacity(bundle_cat, is_ac=True)
-        if max_cap == 0:
-            return False
-        max_cap += extra_slots
-        if tracker['ac_count'] >= max_cap:
-            return False
-
-    # Defect check — when defects are in this bundle, are they handled by
-    # the defect team and need to count against defect_equipment capacity?
-    #
-    # Case A — pure defect bundle (no PM at all): YES, count defect capacity.
-    # Case B — regular PM + defects: NO, the regular PM team handles them
-    #          for free during the same visit (existing ride-along behavior).
-    # Case C — AC PM + defects: YES, defect team handles them because the
-    #          AC specialist can only do AC work. They consume defect capacity.
-    needs_defect_capacity = has_defect and (
-        (not has_regular_pm and not has_ac_pm)  # Case A
-        or (has_ac_pm and not has_regular_pm)   # Case C
-    )
-
-    if needs_defect_capacity:
-        defect_equip = tracker['defect_equipment']
-        # Same equipment already counted → free
-        if eq_id and eq_id in defect_equip:
-            # Still need to check workforce even if defect capacity is free
-            pass
-        elif len(defect_equip) >= DEFECT_CAPACITY_PER_BERTH + extra_slots:
-            return False
-
-    # ── Workforce capacity check (additive to all existing checks) ──
-    for slot_key in ('wf_pm_mech', 'wf_pm_elec', 'wf_spec_mech', 'wf_spec_elec'):
-        needed = bundle.get(slot_key, 0)
-        if needed <= 0:
-            continue
-        slot_max = tracker.get(f'{slot_key}_max')
-        if slot_max is None:
-            continue  # No rules configured → skip workforce check
-        slot_used = tracker.get(f'{slot_key}_used', 0)
-        if slot_used + needed > slot_max + extra_slots:
-            logger.info(
-                "workforce_blocked | day=%s berth=%s %s: used=%d+needed=%d > max=%d+override=%d",
-                day.date, berth, slot_key, slot_used, needed, slot_max, extra_slots,
-            )
+    if wallets:
+        if cost is None:
+            cost = bundle_man_hours(bundle)
+        wallet_key = _bundle_wallet_key(bundle)
+        if wallet_key and not _wallet_fits(wallets, day, berth, wallet_key, cost):
             return False
 
     return True
@@ -1771,63 +1541,25 @@ def _remaining_capacity(
     bundle: Dict[str, Any],
     day: WorkPlanDay,
     capacity_tracker: Dict[int, Dict[str, Dict]],
-) -> int:
-    """
-    How many more bundles of this type can fit on this day?
-    For mixed bundles (PM+AC), returns the MIN of all relevant buckets — the
-    bottleneck.
-    """
+    wallets: Dict = None,
+    cost: float = None,
+) -> float:
+    """How much room the day would have LEFT after this bundle — for ranking."""
     berth = bundle.get('berth') or 'both'
-    eq_id = bundle.get('equipment_id')
-
-    tracker = capacity_tracker.get(day.id, {}).get(berth)
-    if not tracker:
-        return 0
-
-    bundle_cat = _get_category(_get_equipment_type_key(bundle)) if eq_id else None
-    has_regular_pm = _bundle_has_regular_pm(bundle)
-    has_ac_pm = _bundle_has_ac_pm(bundle)
-
-    capacities = []
-
-    if has_regular_pm and bundle_cat:
-        locked_cat = tracker['pm_category_locked']
-        if locked_cat is not None and locked_cat != bundle_cat:
-            return 0
-        max_cap = _get_pm_category_capacity(bundle_cat)
-        capacities.append(max(0, max_cap - tracker['pm_count']))
-
-    if has_ac_pm and bundle_cat:
-        locked_cat = tracker['ac_category_locked']
-        if locked_cat is not None and locked_cat != bundle_cat:
-            return 0
-        max_cap = _get_pm_category_capacity(bundle_cat, is_ac=True)
-        if max_cap == 0:
-            return 0
-        capacities.append(max(0, max_cap - tracker['ac_count']))
-
-    # Defect team capacity is the bottleneck for: pure defect bundles AND
-    # AC PM bundles with defects (since the defect team handles those defects).
-    bundle_has_defect = any(m.get('job_type') == 'defect' for m in bundle.get('members', []))
-    if not has_regular_pm and (
-        (not has_ac_pm)  # Pure defect bundle
-        or (has_ac_pm and bundle_has_defect)  # AC PM bundle with defects
-    ):
-        capacities.append(max(0, DEFECT_CAPACITY_PER_BERTH - len(tracker['defect_equipment'])))
-
-    # ── Workforce remaining capacity ──
-    for slot_key in ('wf_pm_mech', 'wf_pm_elec', 'wf_spec_mech', 'wf_spec_elec'):
-        needed = bundle.get(slot_key, 0)
-        if needed <= 0:
-            continue
-        slot_max = tracker.get(f'{slot_key}_max')
-        if slot_max is None:
-            continue
-        slot_used = tracker.get(f'{slot_key}_used', 0)
-        remaining_slots = max(0, slot_max - slot_used)
-        capacities.append(remaining_slots // needed if needed > 0 else 0)
-
-    return min(capacities) if capacities else 0
+    if wallets:
+        wallet_key = _bundle_wallet_key(bundle)
+        wallet = _wallet_for(wallets, day, berth, wallet_key)
+        if wallet is not None:
+            if cost is None:
+                cost = bundle_man_hours(bundle)
+            return wallet.remaining() - cost
+    if _bundle_has_ac_pm(bundle):
+        tracker = (capacity_tracker.get(day.id, {}).get(berth)
+                   or capacity_tracker.get(day.id, {}).get('both'))
+        cat = _get_category(_get_equipment_type_key(bundle)) if bundle.get('equipment_id') else None
+        if tracker is not None and cat:
+            return float(_ac_capacity(cat) - tracker['ac_count'])
+    return 1000.0
 
 
 def _pick_day_with_capacity(
@@ -1836,69 +1568,161 @@ def _pick_day_with_capacity(
     day_load: Dict[int, float],
     capacity_tracker: Dict[int, Dict[str, Dict]],
     recipe: str,
+    wallets: Dict = None,
+    cost: float = None,
 ) -> Optional[WorkPlanDay]:
     """
-    Choose which day a bundle should land on, respecting STRICT capacity.
-    Returns None if no day has capacity (no overflow).
+    Choose the single day a bundle lands on. Returns None if nothing fits.
 
-    Algorithm:
-    1. Try days with normal capacity (BALANCED: pick day with most remaining capacity)
-    2. If urgent/critical bundle, try +1 override
-    3. Otherwise return None → bundle goes to unscheduled list
+    Urgent bundles prefer the EARLIEST fitting day. The only override left is
+    the AC team's +1 machine — the wallet is checked identically either way.
     """
     is_urgent = _is_urgent_bundle(bundle)
 
     def get_valid_days(allow_override: bool):
-        return [d for d in days if _check_capacity(bundle, d, capacity_tracker, allow_override)]
+        return [d for d in days
+                if _check_capacity(bundle, d, capacity_tracker, allow_override,
+                                   wallets=wallets, cost=cost)]
 
-    # ── Phase 1: Strict capacity, no override ──
     valid = get_valid_days(allow_override=False)
 
     if valid:
-        # Travel optimized: prefer day with same-berth affinity
+        if is_urgent:
+            # Urgency buys position: first fitting day of the week.
+            return valid[0]
+
         if recipe == 'travel_optimized':
             bundle_berth = bundle.get('berth')
             if bundle_berth:
-                best_day = None
-                best_affinity = -1
+                best_day, best_affinity = None, -1e9
                 for d in valid:
                     affinity = sum(1 for j in d.jobs if j.berth == bundle_berth)
-                    remaining = _remaining_capacity(bundle, d, capacity_tracker)
+                    remaining = _remaining_capacity(bundle, d, capacity_tracker,
+                                                    wallets, cost)
                     score = affinity * 10 + remaining
                     if score > best_affinity:
-                        best_affinity = score
-                        best_day = d
+                        best_affinity, best_day = score, d
                 if best_day:
                     return best_day
 
-        # Default BALANCED: pick day with MOST remaining capacity for this bundle's slot
-        # Tie-break by earliest date for high-priority, lightest load otherwise
-        bundle_score = bundle.get('score', 0)
-        if bundle_score >= 70:
-            # High priority: prefer earlier days
+        if recipe == 'team_balanced':
+            # Spreading is this recipe's whole promise: emptiest day first.
             return max(valid, key=lambda d: (
-                _remaining_capacity(bundle, d, capacity_tracker),
-                -days.index(d),  # earlier date = higher value
-            ))
-        else:
-            # Normal priority: prefer day with most space
-            return max(valid, key=lambda d: (
-                _remaining_capacity(bundle, d, capacity_tracker),
+                _remaining_capacity(bundle, d, capacity_tracker, wallets, cost),
                 -day_load[d.id],
             ))
 
-    # ── Phase 2: Urgent override (+1 slot) ──
-    if is_urgent:
+        # Default: PACK the earliest day that fits. The week's model depends
+        # on it — the carry-over pushes work FORWARD and the box catches what
+        # falls off the end, which only makes sense if days fill front-first.
+        # Ordering already ran highest-score first, so early days hold the
+        # important work and the tail of the week stays movable.
+        return valid[0]
+
+    # AC-only override chance (+1 machine on the AC caps; wallet unchanged).
+    if is_urgent and _bundle_has_ac_pm(bundle):
         valid = get_valid_days(allow_override=True)
         if valid:
-            logger.info(
-                "urgent override applied | bundle_eq=%s score=%s",
-                bundle.get('equipment_id'),
-                bundle.get('score'),
-            )
-            return min(valid, key=lambda d: day_load[d.id])
+            logger.info("urgent AC override applied | bundle_eq=%s score=%s",
+                        bundle.get('equipment_id'), bundle.get('score'))
+            return valid[0]
 
-    # ── Phase 3: No capacity → return None (unscheduled) ──
+    return None
+
+
+def _plan_bundle_placement(
+    bundle: Dict[str, Any],
+    days: List[WorkPlanDay],
+    day_load: Dict[int, float],
+    capacity_tracker: Dict[int, Dict[str, Dict]],
+    wallets: Dict,
+    recipe: str,
+) -> Optional[List[Tuple[WorkPlanDay, List[Dict[str, Any]], Optional[str], float]]]:
+    """Decide where a bundle's members land: a list of
+    (day, members, wallet_key, man_hours_charge), or None for unscheduled.
+
+    Normally one placement. A regular PM longer than a working day produces
+    two (the split), unless it is urgent RS/ECH and enough men exist to
+    finish it in one.
+    """
+    members = bundle['members']
+    wallet_key = _bundle_wallet_key(bundle)
+    cost = bundle_man_hours(bundle)
+
+    if wallets:
+        big_pm = next((m for m in members
+                       if m.get('job_type') == 'pm' and not _member_is_ac_pm(m)
+                       and (m.get('estimated_hours') or 0) > MAN_HOURS_PER_DAY),
+                      None)
+        if big_pm is not None:
+            return _place_big_pm(bundle, big_pm, days, capacity_tracker, wallets)
+
+    day = _pick_day_with_capacity(bundle, days, day_load, capacity_tracker,
+                                  recipe, wallets, cost)
+    if day is None:
+        return None
+    return [(day, members, wallet_key, cost)]
+
+
+def _place_big_pm(
+    bundle: Dict[str, Any],
+    pm: Dict[str, Any],
+    days: List[WorkPlanDay],
+    capacity_tracker: Dict[int, Dict[str, Dict]],
+    wallets: Dict,
+) -> Optional[List[Tuple[WorkPlanDay, List[Dict[str, Any]], Optional[str], float]]]:
+    """A regular PM that does not fit one pair-day (the reach stacker: 12h).
+
+    URGENT RS/ECH first: try the biggest crew that finishes in a single day
+    ("RS AND ECHs put maximum up to 4" — Ali). Otherwise Ali's own week:
+    "1st day you put 1 reach stacker, second day you keep the reach stacker
+    and put TT or FL or trailer" — 8h today, the rest plus every riding job
+    on the finishing day, consecutive days, same machine, same pair.
+    """
+    members = bundle['members']
+    others = [m for m in members if m is not pm]
+    others_cost = sum(
+        (m.get('estimated_hours') or 0) * (m.get('crew') or MIN_CREW)
+        for m in others if not _member_is_ac_pm(m))
+    family = _get_category(pm.get('equipment_type') or '')
+    wallet_key = _bundle_wallet_key(bundle)
+
+    if _is_urgent_bundle(bundle):
+        for crew_try in range(urgent_max_crew(family), MIN_CREW, -1):
+            crew_n, hours_n = pm_hours(family, crew=crew_try)
+            if crew_n <= MIN_CREW or hours_n > MAN_HOURS_PER_DAY:
+                continue
+            cost_n = hours_n * crew_n + others_cost
+            for day in days:  # earliest first — urgent buys position
+                if _check_capacity(bundle, day, capacity_tracker,
+                                   wallets=wallets, cost=cost_n):
+                    pm['estimated_hours'] = hours_n
+                    pm['crew'] = crew_n
+                    return [(day, members, wallet_key, cost_n)]
+
+    crew = pm.get('crew') or MIN_CREW
+    first_hours = float(MAN_HOURS_PER_DAY)
+    rest_hours = round((pm.get('estimated_hours') or 0) - first_hours, 2)
+    if rest_hours <= 0:
+        return None
+    base_desc = (pm.get('description') or '').strip()
+    part1 = dict(pm, estimated_hours=first_hours,
+                 description=f'{base_desc} (part 1/2)'.strip())
+    part2 = dict(pm, estimated_hours=rest_hours,
+                 description=f'{base_desc} (part 2/2)'.strip())
+    cost1 = first_hours * crew
+    cost2 = rest_hours * crew + others_cost
+    bundle1 = dict(bundle, members=[part1])
+    bundle2 = dict(bundle, members=[part2] + others)
+
+    for i in range(len(days) - 1):
+        day1, day2 = days[i], days[i + 1]
+        if (_check_capacity(bundle1, day1, capacity_tracker,
+                            wallets=wallets, cost=cost1)
+                and _check_capacity(bundle2, day2, capacity_tracker,
+                                    wallets=wallets, cost=cost2)):
+            return [(day1, [part1], wallet_key, cost1),
+                    (day2, [part2] + others, wallet_key, cost2)]
     return None
 
 
@@ -1943,7 +1767,7 @@ def _create_jobs_for_bundle(
                     work_center = 'ELEC'
                 else:
                     work_center = 'ELME'
-            elif member['job_type'] == 'defect':
+            elif _member_is_defect_work(member):
                 work_center = 'MECH'  # Defaults; defect category overrides
 
         job_kwargs = dict(
@@ -2132,10 +1956,15 @@ def _step_assign(
     # Track team rotation per (day_id, berth, team_type, cat) for multi-team load balancing
     team_rotation_counter: Dict[Tuple[int, str, str, str], int] = defaultdict(int)
 
+    # The crew chosen for a bundle's first job, reused for its other jobs —
+    # and for the second half of a split PM, so the same pair comes back.
+    crew_by_group: Dict[int, List[Tuple[int, bool]]] = {}
+
     for day_id, jobs in day_map.items():
         for job in jobs:
-            # Determine team_type from job
-            team_type = _determine_team_type(job)
+            # The bundle's team wins over the job's own type: a riding defect
+            # in a PM visit is maintenance work, not specialist work.
+            team_type = getattr(job, '_bundle_team', None) or _determine_team_type(job)
             berth = _normalize_berth(job.berth)
             eq_cat = _get_category(job.equipment.equipment_type) if (job.equipment and job.equipment.equipment_type) else 'all'
 
@@ -2151,6 +1980,23 @@ def _step_assign(
             assigned_count = 0
             rule = None  # will point to the chosen rule for logging below
 
+            group = getattr(job, '_bundle_group', None)
+            needed = getattr(job, '_crew_needed', None)
+            if group is not None and group in crew_by_group:
+                for uid, is_lead in crew_by_group[group]:
+                    if uid in day_unavailable:
+                        continue
+                    db.session.add(WorkPlanAssignment(
+                        work_plan_job_id=job.id, user_id=uid, is_lead=is_lead))
+                    daily_worker_load[day_id][uid] += 1
+                    weekly_worker_load[uid] += 1
+                    assigned_count += 1
+                if assigned_count > 0:
+                    workers_assigned += assigned_count
+                else:
+                    jobs_without_worker += 1
+                continue
+
             if rule_list:
                 # Multi-team selection: try each team in order of team rotation balance.
                 # Track how many jobs each team has received TODAY for this (berth, team, cat).
@@ -2165,11 +2011,15 @@ def _step_assign(
 
                 # Try each team until one succeeds
                 for candidate_rule in sorted_rules:
-                    assigned_count = _assign_from_rule(
+                    assigned_crew = _assign_from_rule(
                         job, candidate_rule, workers_by_id, daily_worker_load, weekly_worker_load, day_id,
                         day_unavailable=day_unavailable,
+                        crew_needed=needed,
                     )
+                    assigned_count = len(assigned_crew)
                     if assigned_count > 0:
+                        if group is not None:
+                            crew_by_group[group] = assigned_crew
                         rule = candidate_rule
                         tn = getattr(candidate_rule, 'team_number', 1) or 1
                         team_rotation_counter[(*rotation_key, tn)] += 1
@@ -2246,7 +2096,7 @@ def _determine_team_type(job: WorkPlanJob) -> str:
             or desc_upper.endswith(' AC')
         )
         return 'ac_pm' if is_ac else 'regular_pm'
-    if job.job_type == 'defect':
+    if _job_is_defect_work(job):
         if job.defect and (job.defect.category or '').lower() == 'electrical':
             return 'defect_elec'
         return 'defect_mech'
@@ -2261,17 +2111,30 @@ def _assign_from_rule(
     weekly_load: Dict[int, int],
     day_id: int,
     day_unavailable: Optional[set] = None,
-) -> int:
+    crew_needed: Optional[int] = None,
+) -> List[Tuple[int, bool]]:
     """
     Assign workers to a job using a WorkerAssignmentRule.
     Picks primary lead (or successor if on leave), then fills with candidate workers.
     Skips workers marked unavailable for this day (off shift or approved leave).
-    Returns count of workers assigned.
+
+    `crew_needed` overrides the rule's headcount UPWARD — an urgent reach
+    stacker asks for 4 men from a rule written for a pair. The extra men come
+    from the mechanical pool.
+
+    Returns the assigned crew as [(user_id, is_lead), ...] so a bundle's other
+    jobs (and the second half of a split PM) can reuse the exact same people.
     """
     assigned_count = 0
+    assigned_crew: List[Tuple[int, bool]] = []
     assigned_user_ids = set()
     skipped_reasons = []  # debug: track why workers were rejected
     day_unavailable = day_unavailable or set()
+
+    mech_target = rule.mech_count or 0
+    elec_target = rule.elec_count or 0
+    if crew_needed and crew_needed > mech_target + elec_target:
+        mech_target += crew_needed - (mech_target + elec_target)
 
     def is_available(user_id):
         if user_id is None:
@@ -2296,7 +2159,7 @@ def _assign_from_rule(
 
     # Pick MECH lead
     mech_lead_id = None
-    if rule.mech_count > 0:
+    if mech_target > 0:
         if is_available(rule.primary_mech_lead_id):
             mech_lead_id = rule.primary_mech_lead_id
         elif is_available(rule.successor_mech_lead_id):
@@ -2311,10 +2174,11 @@ def _assign_from_rule(
             daily_load[day_id][mech_lead_id] += 1
             weekly_load[mech_lead_id] += 1
             assigned_count += 1
+            assigned_crew.append((mech_lead_id, True))
 
     # Fill remaining mech workers from candidate pool
     # Implicitly include successor + primary in the pool (in case admin forgot)
-    needed_mech = max(0, rule.mech_count - (1 if mech_lead_id else 0))
+    needed_mech = max(0, mech_target - (1 if mech_lead_id else 0))
     mech_pool = list(rule.candidate_mech_workers or [])
     for implicit_id in (rule.successor_mech_lead_id, rule.primary_mech_lead_id):
         if implicit_id and implicit_id not in mech_pool:
@@ -2334,11 +2198,12 @@ def _assign_from_rule(
             daily_load[day_id][uid] += 1
             weekly_load[uid] += 1
             assigned_count += 1
+            assigned_crew.append((uid, False))
             needed_mech -= 1
 
     # Pick ELEC lead
     elec_lead_id = None
-    if rule.elec_count > 0:
+    if elec_target > 0:
         if is_available(rule.primary_elec_lead_id):
             elec_lead_id = rule.primary_elec_lead_id
         elif is_available(rule.successor_elec_lead_id):
@@ -2353,10 +2218,11 @@ def _assign_from_rule(
             daily_load[day_id][elec_lead_id] += 1
             weekly_load[elec_lead_id] += 1
             assigned_count += 1
+            assigned_crew.append((elec_lead_id, mech_lead_id is None))
 
     # Fill remaining elec workers
     # Implicitly include successor + primary in the pool
-    needed_elec = max(0, rule.elec_count - (1 if elec_lead_id else 0))
+    needed_elec = max(0, elec_target - (1 if elec_lead_id else 0))
     elec_pool = list(rule.candidate_elec_workers or [])
     for implicit_id in (rule.successor_elec_lead_id, rule.primary_elec_lead_id):
         if implicit_id and implicit_id not in elec_pool:
@@ -2375,6 +2241,7 @@ def _assign_from_rule(
             daily_load[day_id][uid] += 1
             weekly_load[uid] += 1
             assigned_count += 1
+            assigned_crew.append((uid, False))
             needed_elec -= 1
 
     # Debug: if we couldn't fully fill the team, log why
@@ -2384,7 +2251,7 @@ def _assign_from_rule(
             job.id, rule.id, '; '.join(skipped_reasons[:6])
         )
 
-    return assigned_count
+    return assigned_crew
 
 
 def _get_previous_week_assignments(

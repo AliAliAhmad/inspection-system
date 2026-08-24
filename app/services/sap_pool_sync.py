@@ -26,15 +26,14 @@ from flask import current_app
 
 from app.extensions import db
 from app.models import Equipment, SapSyncFile, SAPWorkOrder
+from app.services.job_durations import family_from_plant_code, hours_for
 from app.services.sap_order_parser import (
     build_breakdown_index,
     build_order_status_index,
     load_iw39,
-    build_duration_index,
     build_last_completion_index,
     build_meter_index,
     corrective_priority,
-    estimate_hours,
     hourly_pm_priority,
     hours_run_since,
     load_maintenance_plan_types,
@@ -186,7 +185,11 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     gc.collect()
     last_completion = build_last_completion_index(iw39_frame)
     breakdowns = build_breakdown_index(iw39_frame, today=today)
-    durations = build_duration_index(iw39_frame, hours_by_order)
+    # No duration index any more. It learned medians from SAP's PLANNED hours in
+    # IW49 — which exist for 5,539 of 5,548 FINISHED orders and for NONE of the
+    # open ones, so every job in the pool was priced by a median of a figure that
+    # is inflated and, for a trailer PM, invented: 18.0h planned against 2.0h
+    # really held. Hours now come from app/services/job_durations.py.
 
     candidates, parse_report = parse_open_orders(
         iw39_frame, hours_by_order, plan_types, last_completion, today=today)
@@ -306,8 +309,25 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
 
         priority, overdue_value, overdue_unit = _priority_for(
             candidate, meters, last_completion, breakdowns, cluster)
-        hours = (candidate['estimated_hours'] if candidate['hours_from_iw49']
-                 else estimate_hours(durations, candidate['activity_type'], candidate['plant_code']))
+        # Ali's table, 2026-08-24 — see app/services/job_durations.py for how the
+        # figures were arrived at and what was measured and rejected.
+        #
+        # SAP's own planned hours are not used, and neither are the medians the
+        # app used to learn from them: IW49 has hours for 5,539 of 5,548 FINISHED
+        # orders and ZERO of the open ones, so every open order was priced by a
+        # median of SAP's PLANNED figure — which is inflated, and in the trailer's
+        # case invented (18.0h planned against 2.0h really held).
+        #
+        # The pool stores the STANDALONE price. A fault costs less when it rides
+        # along with a PM, but whether it does is a question only the generator
+        # can answer, when it bundles the machine's work onto a day.
+        hours = hours_for(
+            candidate['job_type'],
+            activity_type=candidate['activity_type'],
+            family=family_from_plant_code(candidate['plant_code']),
+            with_pm=False,
+            description=candidate['description'],
+        )
 
         order_number = candidate['order_number']
         seen.add(order_number)

@@ -112,6 +112,32 @@ def _workers(job):
     return names
 
 
+def is_app_inspection(job):
+    """An inspection the APP raised, as opposed to one SAP raised.
+
+    Ali, on the two kinds: "these INS are the ones that have order number, this
+    should come normal; the other ones are the ones that are generated from the
+    app itself and does not have order number."
+
+    The distinction is the whole rule. A SAP INS order is real planned work with
+    hours against it, and when it rides along with a PRM the PM team does it —
+    it belongs in the day's count like any other job. An app-raised inspection
+    is an inspector's own assignment: it has no order number, nobody is assigned
+    to it on the plan, and rendering it as a full card cost five lines, an
+    "unassigned ⚠️" that is not a problem, and a #id nobody will ever quote.
+    Twenty of those drown the day.
+
+    So only the app-raised ones collapse to a single line at the foot and drop
+    out of the day's job count and hours. Ali: "when they come in the telegram
+    they make the message crowd, but also i do not need to loose them in the
+    day".
+
+    Matching on the ORDER NUMBER, not on job.inspection_assignment_id: a job
+    can carry both, and the order number is what makes it SAP's.
+    """
+    return job.job_type == 'inspection' and not job.sap_order_number
+
+
 def render_job(job, language='en'):
     """One job, four short lines. The handle is always the first thing."""
     lines = []
@@ -166,18 +192,8 @@ def render_day(day, language='en', berth=None):
         jobs = [job for job in jobs
                 if (job.berth or 'both') == berth or (job.berth or 'both') == 'both']
 
-    # Inspections are OUT OF SCOPE for planning — the generator already refuses
-    # to schedule them, because inspectors get their work through the inspection
-    # assignment flow instead. But rendering them as full cards was five lines
-    # each, with an "unassigned" warning that is not a problem and a #id nobody
-    # will ever quote. Twenty of them would drown the day.
-    #
-    # So: one line at the foot, no card, no warning, and OUT of the day's job
-    # count and hours — the header should say how much WORK the day holds.
-    # Ali: "when they come in the telegram they make the message crowd, but
-    # also i do not need to loose them in the day".
-    inspections = [job for job in jobs if job.job_type == 'inspection']
-    jobs = [job for job in jobs if job.job_type != 'inspection']
+    inspections = [job for job in jobs if is_app_inspection(job)]
+    jobs = [job for job in jobs if not is_app_inspection(job)]
 
     total = sum(job.estimated_hours or 0 for job in jobs)
     count = len(jobs)
@@ -265,7 +281,7 @@ def render_week(plan, language='en', berth=None):
 
     total = sum(job.estimated_hours or 0
                 for day in plan.days for job in (day.jobs or [])
-                if job.job_type != 'inspection')
+                if not is_app_inspection(job))
     blocks.append(f'{RULE}\n{_t(language, "total")}: '
                   f'{_hours(total)}{_t(language, "hours")}')
 

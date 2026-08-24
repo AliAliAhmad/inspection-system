@@ -1093,3 +1093,80 @@ class TestInspectionsDoNotCrowdTheDay:
         db_session.session.refresh(day)
 
         assert 'الفحوصات اليوم' in renderer.render_day(day, language='ar')
+
+
+class TestASapInspectionOrderIsRealWork:
+    """Ali, correcting me: "these INS are the ones that have order number, this
+    should come normal; the other ones are the ones that are generated from the
+    app itself and does not have order number."
+
+    I had collapsed EVERY job of type 'inspection' into the one-line summary and
+    taken it out of the day's hours. That hid real planned work: a SAP INS order
+    riding along with its machine's PRM, which the PM team performs. The order
+    number is the discriminator.
+    """
+
+    def _sap_inspection(self, db_session, day, name, number, position=1):
+        equipment = make_equipment(db_session, name, f'S{name}')
+        job = WorkPlanJob(work_plan_day_id=day.id, job_type='inspection',
+                          equipment_id=equipment.id, estimated_hours=2.0,
+                          sap_order_number=number, berth='east',
+                          position=position)
+        db_session.session.add(job)
+        db_session.session.commit()
+        return job
+
+    def test_it_renders_as_a_full_card(self, db_session, week):
+        plan, day = week
+        job = self._sap_inspection(db_session, day, 'TT031', '700001778121')
+        db_session.session.refresh(day)
+
+        text = renderer.render_day(day)
+
+        assert f'#{job.id}' in text
+        assert 'SAP 700001778121' in text
+
+    def test_it_counts_in_the_day_s_hours_and_job_count(self, db_session, week):
+        plan, day = week
+        self._sap_inspection(db_session, day, 'TT031', '700001778121')
+        db_session.session.refresh(day)
+
+        header = renderer.render_day(day).splitlines()[1]
+
+        assert '1 job' in header
+        assert '2.0h' in header
+
+    def test_it_is_not_swept_into_the_collapsed_line(self, db_session, week):
+        plan, day = week
+        self._sap_inspection(db_session, day, 'TT031', '700001778121')
+        db_session.session.refresh(day)
+
+        assert '🔍' not in renderer.render_day(day)
+
+    def test_the_two_kinds_are_separated_on_the_same_day(self, db_session, week):
+        """The shape that proves the rule: one of each, side by side."""
+        plan, day = week
+        self._sap_inspection(db_session, day, 'TT031', '700001778121', position=1)
+        equipment = make_equipment(db_session, 'TT006', 'STT006')
+        db_session.session.add(WorkPlanJob(
+            work_plan_day_id=day.id, job_type='inspection',
+            equipment_id=equipment.id, estimated_hours=1.0, berth='both',
+            position=2))
+        db_session.session.commit()
+        db_session.session.refresh(day)
+
+        text = renderer.render_day(day)
+        collapsed = [l for l in text.splitlines() if l.startswith('🔍')][0]
+
+        assert 'TT006' in collapsed
+        assert 'TT031' not in collapsed          # the SAP one kept its card
+        assert 'SAP 700001778121' in text
+        assert '1 job' in text.splitlines()[1]   # only the SAP one is work
+        assert '2.0h' in text.splitlines()[1]
+
+    def test_the_week_total_includes_it(self, db_session, week):
+        plan, day = week
+        self._sap_inspection(db_session, day, 'TT031', '700001778121')
+        db_session.session.refresh(plan)
+
+        assert 'Total: 2.0h' in '\n'.join(renderer.render_week(plan))

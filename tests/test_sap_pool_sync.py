@@ -393,3 +393,72 @@ class TestAScheduledOrderIsNeverDuplicated:
         assert rows[0].status == 'pending'
         assert report['stranded_reclaimed'] == 1
         assert report['created'] == 0
+
+
+class TestWhatThePoolStoresForHours:
+    """The stored figure is not display-only.
+
+    A job dragged straight from the pool onto a day never passes through the
+    generator's bundling, so it carries whatever the sync wrote. That makes this
+    the second place Ali's table has to be right, and the one the generator
+    tests cannot see.
+
+    Until 2026-08-24 the sync priced every order from a median of SAP's PLANNED
+    hours in IW49 — a column that exists for 5,539 of 5,548 FINISHED orders and
+    for none of the open ones. That is what put 143 hours on one Monday.
+    """
+
+    def _equipment(self, db_session, name, kind):
+        db_session.session.add(Equipment(name=name, serial_number=f'SN-{name}',
+                                         equipment_type=kind))
+        db_session.session.commit()
+
+    def test_a_lone_fault_stores_the_OWN_TRIP_price(self, client, db_session):
+        self._equipment(db_session, 'TT001', 'tractor')
+        _deliver(client, _iw39([_open_order(activity='COM')]))
+
+        sync_pool_from_delivered_files(today='2026-08-23')
+
+        assert SAPWorkOrder.query.one().estimated_hours == 3.0
+
+    def test_an_AC_pm_is_not_priced_as_a_full_service(self, client, db_session):
+        """33 of the 78 open PMs are AC. At the reach stacker's full-service
+        figure this one row would book 12 hours for a 2-hour visit."""
+        self._equipment(db_session, 'RS109', 'reach stacker')
+        _deliver(client, _iw39([_open_order(
+            number='700000000002', location='3700-EQ-RS_-RS109', activity='PRM',
+            description='Inspection AC System')]))
+
+        sync_pool_from_delivered_files(today='2026-08-23')
+
+        assert SAPWorkOrder.query.one().estimated_hours == 2.0
+
+    def test_the_full_service_on_the_same_machine_is_twelve(self, client, db_session):
+        self._equipment(db_session, 'RS109', 'reach stacker')
+        _deliver(client, _iw39([_open_order(
+            number='700000000003', location='3700-EQ-RS_-RS109', activity='PRM',
+            description='RS109-250HR-MECH.HOURLY SERVICE')]))
+
+        sync_pool_from_delivered_files(today='2026-08-23')
+
+        assert SAPWorkOrder.query.one().estimated_hours == 12.0
+
+    def test_the_machine_family_decides_a_PM_and_not_a_fault(self, client, db_session):
+        """Measured: family is worth 4x on a PM and 1% on a fault."""
+        self._equipment(db_session, 'TR078', 'trailer')
+        self._equipment(db_session, 'RS109', 'reach stacker')
+        _deliver(client, _iw39([
+            _open_order(number='700000000004', location='3700-EQ-TR_-TR078',
+                        activity='PRM', description='250HR SERVICE'),
+            _open_order(number='700000000005', location='3700-EQ-TR_-TR078',
+                        activity='COM', description='Brake leak'),
+            _open_order(number='700000000006', location='3700-EQ-RS_-RS109',
+                        activity='COM', description='Brake leak'),
+        ]))
+
+        sync_pool_from_delivered_files(today='2026-08-23')
+
+        hours = {o.order_number: o.estimated_hours for o in SAPWorkOrder.query.all()}
+        assert hours['700000000004'] == 3.0    # trailer PM
+        assert hours['700000000005'] == 3.0    # a fault is a fault...
+        assert hours['700000000006'] == 3.0    # ...on any machine
