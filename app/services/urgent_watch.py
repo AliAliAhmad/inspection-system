@@ -344,23 +344,26 @@ def apply_urgent(proposal, option, user):
     # crew is silently cut to the table pair while three men are still
     # assigned, and a 12-hour split re-prices to 8 so `place_split` finds
     # nothing left to split and raises.
-    # A boosted shape was measured against ONE day's roster. "Pick a day" can
-    # move it to another, and four men free on Monday are not four men free on
-    # Thursday. Re-ask on the day actually chosen; if the crew is no longer
-    # there, fall back to the honest unboosted shape rather than booking an
-    # eight-hour day that needs men who are not coming.
-    if details.get('boosted') and can_field(order, day, details['crew']):
-        priced = price_one(order, crew=details['crew'])
+    # A shape was measured against ONE day's roster. "Pick a day" can move it
+    # to another, and four men free on Monday are not four men free on
+    # Thursday. So re-derive the WHOLE shape on the day actually chosen — crew,
+    # hours AND whether it still fits in one day. Reading `details['split']`
+    # here was a bug: falling back from 8 hours to 12 while still taking the
+    # single-day branch booked one twelve-hour job on one day, which is exactly
+    # the shape this feature exists to prevent. A man's day is eight hours.
+    boost = urgent_one_day_crew(order, day)
+    if boost is not None:
+        priced = price_one(order, crew=boost[0])
     else:
         if details.get('boosted'):
-            logger.info('urgent watch | %s was offered %d men but only %d can '
-                        'be fielded on %s — falling back to the plain shape',
-                        order.order_number, details['crew'],
-                        available_men(order, day), day.date)
+            logger.info('urgent watch | %s was offered %d men but %s cannot '
+                        'field them — re-planning on that day',
+                        order.order_number, details.get('crew'), day.date)
         priced = price_one(order)
+    split = priced['hours'] > MAN_HOURS_PER_DAY
     plan = day.work_plan
 
-    if not details.get('split'):
+    if not split:
         chain = make_room(plan, day, priced['cost_man_hours'],
                           priced['berth'], priced['wallet_key'], dry_run=False)
         job = place_one(order, day, priced=priced)
@@ -379,7 +382,12 @@ def apply_urgent(proposal, option, user):
             f'day of the week')
     day2 = following[0]
 
-    costs = details.get('costs') or [priced['cost_man_hours']]
+    # Recomputed, not read from `details`: the shape may have been re-derived
+    # for a different day with a different crew, and stale costs would make
+    # room for a job that is no longer the one being placed.
+    first_h = float(MAN_HOURS_PER_DAY)
+    rest_h = round(priced['hours'] - first_h, 2)
+    costs = [first_h * priced['crew'], rest_h * priced['crew']]
     # ONE call, both days — the SAME call the ask simulated. Two sequential
     # calls were blind to each other, and the second planned against a picture
     # the first had already changed. Sharing one code path is what makes the

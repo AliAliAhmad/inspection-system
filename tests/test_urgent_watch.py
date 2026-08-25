@@ -899,6 +899,16 @@ class TestTheSecondReviewCaught:
         result = apply_urgent(proposal, {'key': f'day:{days[2].id}'},
                               admin_user)
 
-        job = db.session.get(WorkPlanJob, result['job_id'])
-        assert float(job.estimated_hours) == 12.0, (
-            'no four-man crew on that day, so it is a twelve-hour job')
+        # Not a twelve-hour day. A man's day is eight hours, so when the crew
+        # is not there the whole SHAPE changes, not just the price: it becomes
+        # 8 + 4 across two days. An earlier version of this test asserted the
+        # single twelve-hour job and so locked in the exact shape this feature
+        # exists to prevent.
+        assert result.get('split') is True, result
+        part1 = db.session.get(WorkPlanJob, result['job_id'])
+        part2 = db.session.get(WorkPlanJob, result['job_id_part2'])
+        assert float(part1.estimated_hours) == 8.0
+        assert float(part2.estimated_hours) == 4.0
+        assert not [j for j in WorkPlanJob.query.all()
+                    if float(j.estimated_hours or 0) > 8.0], (
+            'no job may be longer than a man\'s day')

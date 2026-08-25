@@ -364,3 +364,58 @@ class TestSplittingItOverTwoDays:
         assert order.work_plan_id == plan.id
         assert SAPWorkOrder.query.filter_by(
             order_number='700000000300').count() == 1
+
+
+class TestATeamBiggerThanTheBoost:
+    """`_assign_from_rule` never sends FEWER than the rule's own headcount, so
+    a six-man team all turn up for a four-man boost. That is fine on the yard —
+    Ali's curve says the fourth man buys no time, so six men is still eight
+    hours — but the day is charged 8 x 6 = 48, and a promise of 32 would leave
+    it sixteen man-hours over.
+    """
+
+    def _big_rule(self, db_session, mech_n, elec_n, mech_free, elec_free):
+        mech = [_man(db_session, f'bm{next(_seq)}') for _ in range(mech_free)]
+        elec = [_man(db_session, f'be{next(_seq)}') for _ in range(elec_free)]
+        db_session.session.add(WorkerAssignmentRule(
+            berth='west', team_type='regular_pm', equipment_category='all',
+            mech_count=mech_n, elec_count=elec_n,
+            candidate_mech_workers=[m.id for m in mech],
+            candidate_elec_workers=[e.id for e in elec]))
+        db_session.session.commit()
+        return mech + elec
+
+    def test_a_five_man_team_is_priced_for_five(self, db_session, admin_user):
+        from app.services.place_one import urgent_one_day_crew
+        plan, days = _week(db_session, admin_user)
+        self._big_rule(db_session, mech_n=3, elec_n=2, mech_free=3, elec_free=2)
+        order = _order(db_session, number='700000000810')
+
+        assert urgent_one_day_crew(order, days[1]) == (5, 8.0)
+
+    def test_a_six_man_team_is_priced_for_six(self, db_session, admin_user):
+        from app.services.place_one import price_one, urgent_one_day_crew
+        plan, days = _week(db_session, admin_user)
+        self._big_rule(db_session, mech_n=4, elec_n=2, mech_free=4, elec_free=2)
+        order = _order(db_session, number='700000000811')
+
+        crew, hours = urgent_one_day_crew(order, days[1])
+        priced = price_one(order, crew=crew)
+
+        assert (crew, hours) == (6, 8.0)
+        assert priced['cost_man_hours'] == 48.0, 'six men, eight hours'
+
+    def test_the_promise_still_equals_what_the_domino_reads(self, db_session,
+                                                            admin_user):
+        """The whole point, for the big-team case."""
+        from app.services.place_one import price_one, urgent_one_day_crew
+        plan, days = _week(db_session, admin_user)
+        self._big_rule(db_session, mech_n=4, elec_n=2, mech_free=4, elec_free=2)
+        order = _order(db_session, number='700000000812')
+        crew, _hours = urgent_one_day_crew(order, days[1])
+        priced = price_one(order, crew=crew)
+
+        job = place_one(order, days[1], priced=priced)
+
+        assert len(job.assignments) == 6
+        assert job_cost_man_hours(job) == priced['cost_man_hours'] == 48.0

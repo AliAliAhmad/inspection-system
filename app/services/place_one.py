@@ -185,13 +185,30 @@ def can_field(order, day, size):
     Ten free mechanics and it still lands two. That is why this is a per-size
     question and not a headcount.
     """
+    return fielded_crew(order, day, size) >= size
+
+
+def fielded_crew(order, day, size):
+    """How many men would ACTUALLY be assigned if we asked for `size`.
+
+    Not `size`, and not a headcount. `_assign_from_rule` fills to
+    `max(mech_count, size - elec_count)` mechanics plus `elec_count`
+    electricians — so it can send FEWER than asked (electricians missing, and
+    nothing backfills them) and it can send MORE (a rule whose own team is
+    bigger than the boost never sends fewer than its own headcount).
+
+    Both directions break the promise if ignored. A six-man team turning up for
+    a four-man boost is fine operationally — Ali's curve says the fourth man
+    buys nothing, so six men is still eight hours — but the day is charged
+    8 x 6 = 48 against a promise of 32. The price has to be the men who come.
+    """
     rule = matching_rule(order)
     if rule is None:
-        return False
+        return 0
     mech_free, elec_free = _free_by_discipline(order, day)
     elec_want = rule.elec_count or 0
     mech_target = max(rule.mech_count or 0, size - elec_want)
-    return min(mech_free, mech_target) + min(elec_free, elec_want) >= size
+    return min(mech_free, mech_target) + min(elec_free, elec_want)
 
 
 def available_men(order, day):
@@ -231,12 +248,17 @@ def urgent_one_day_crew(order, day):
         return None                      # not a family Ali boosts
 
     for size in range(biggest, MIN_CREW, -1):
-        if not can_field(order, day, size):
+        coming = fielded_crew(order, day, size)
+        if coming < size:
             continue
         crew_n, hours_n = pm_hours(family, crew=size,
                                    description=order.description)
         if crew_n > MIN_CREW and hours_n <= MAN_HOURS_PER_DAY:
-            return (crew_n, hours_n)
+            # `coming`, not `size`: if the rule's own team is bigger than the
+            # boost, every one of them turns up and the day pays for all of
+            # them. The hours stay at the curve's figure — extra men buy no
+            # time — but the PRICE must be the men who actually come.
+            return (coming, hours_n)
     return None
 
 
@@ -277,11 +299,15 @@ def price_one(order, crew=None):
         # stacker buy four hours and the fourth buys nothing.
         family = _get_category(order.equipment.equipment_type) if (
             order.equipment and order.equipment.equipment_type) else ''
-        crew_n, hours_n = pm_hours(family, crew=crew,
-                                   description=order.description)
-        member['crew'] = crew_n
+        _curve_crew, hours_n = pm_hours(family, crew=crew,
+                                        description=order.description)
+        # Hours from the curve, crew from the CALLER. `pm_hours` answers "how
+        # long with a crew this size", stepping down to the nearest measured
+        # point — but the day is charged for every man who turns up, not for
+        # the measured point. Six men on a reach stacker is still eight hours
+        # and still forty-eight man-hours.
+        member['crew'] = crew
         member['estimated_hours'] = hours_n
-        crew = crew_n
     else:
         crew = int(member.get('crew') or MIN_CREW)
         from_rule = rule_crew_for(order)
