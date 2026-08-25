@@ -59,11 +59,26 @@
   counts, `MAX_PM_BUNDLES_PER_WORKER_PER_DAY`, `SPECIALIST_GROUP_SIZE` and the urgent
   "+1" all deleted (AC team caps kept as-is). RS PM splits 8h+4h over two days; urgent
   RS/ECH takes up to 4 men instead. Whole bundle assigned to the PM crew.
-- **Plan 2 pending — the evening truth:** worker types remaining hours on "Could not
-  finish"; carry-over books REMAINING hours (bug: copies full figure today) and must
-  merge with a planned continuation; the domino re-shuffle inside the daily review.
-- **Plan 3 pending — Telegram taps:** finished-early backfill ask; urgent-on-full-day
-  proposal (inline buttons).
+- ~~**Plan 2 — the evening truth.**~~ ✅ 2026-08-25 — worker states remaining hours,
+  carry-over books ONLY those + merges with a planned continuation, the domino makes
+  room (`app/services/day_ripple.py`), split-aware order lookups. Migration
+  `r8s9t0u1v2w3` — run `flask db upgrade` on Render.
+- ~~**Plan 3 Stage 1 — the bot learned to ask.**~~ ✅ 2026-08-25 — nightly urgent-with-no-room
+  proposal with inline buttons; first press wins. Migration `s9t0u1v2w3x4`.
+- **Plan 3 Stage 2 pending — the fast crew is still invisible.** Nothing in the system prices
+  a day by `actual_hours`, so a crew finishing a 6h job in 3h releases nothing. Needs the
+  free-hours sum, the best-3 pick, a completion hook and a mobile "I am free" button.
+- **⚠️ Stage 1 never offers an urgent reach stacker.** `price_one` does not apply the urgent
+  crew boost (`urgent_max_crew`), so an RS PM always prices at 12h/2 men, trips the
+  longer-than-a-day guard, and is skipped. RS is a core family. Wiring the boost means
+  staffing must boost with it, or the promise stops matching what the domino reads — an Ali
+  decision, not a code one.
+- **`schedule_sap_order` diverges from the generator** (`app/api/work_plans.py:934`): no
+  re-pricing, no berth normalisation, no capacity check, staffs nobody. `place_one` replaces
+  that behaviour for the bot; the endpoint is untouched.
+- **Night shift disagrees with itself:** `day_budget._unavailable_by_date` excludes `night`,
+  `_step_assign`'s own lookup does not — so a man giving the wallet zero hours can still be
+  staffed onto day work.
 - **Nested PM packages double-charged.** RS109 carries 250HR and 2000HR open at once,
   priced 12h + 12h; Ali's rule says the packages are nested task lists of one plan.
 - **⚠️ Confirm the fault price direction.** COM and DAM cost MORE alone (2→3, 1→3) but

@@ -162,11 +162,30 @@ export const DailyReviewForm: React.FC<DailyReviewFormProps> = ({
   });
 
   const carryOverMutation = useMutation({
-    mutationFn: (jobId: number) =>
-      workPlanTrackingApi.createCarryOver(review!.id, { original_job_id: jobId }),
-    onSuccess: () => {
+    mutationFn: ({ jobId, remainingHours }: { jobId: number; remainingHours?: number }) =>
+      workPlanTrackingApi.createCarryOver(review!.id, {
+        original_job_id: jobId,
+        remaining_hours: remainingHours,
+      }),
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['daily-review'] });
-      message.success('Job carried over');
+      const body = res?.data ?? res;
+      const merged = body?.merged_into_existing;
+      const hours = body?.remaining_hours;
+      const ripple = body?.ripple ?? [];
+      let text = merged
+        ? `Carried into the planned continuation (${hours}h left)`
+        : `Job carried over (${hours}h left)`;
+      message.success(text);
+      // The domino is never invisible: every job that slid to make room is named.
+      ripple.forEach((entry: any) => {
+        message.info(
+          entry.to === 'box'
+            ? `Moved back to the pool: ${entry.description || entry.sap_order_number}`
+            : `Moved to ${entry.to}: ${entry.description || entry.sap_order_number}`,
+          6,
+        );
+      });
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to carry over'),
   });
@@ -322,10 +341,35 @@ export const DailyReviewForm: React.FC<DailyReviewFormProps> = ({
             <Button
               size="small"
               onClick={() => {
+                const worked = Number(record.tracking?.actual_hours ?? 0);
+                const estimated = Number(record.estimated_hours ?? 0);
+                const suggested =
+                  record.tracking?.remaining_hours ??
+                  (worked > 0 && estimated > worked
+                    ? Math.round((estimated - worked) * 10) / 10
+                    : estimated || undefined);
+                let value = suggested != null ? String(suggested) : '';
                 Modal.confirm({
                   title: 'Carry Over Job?',
-                  content: 'This will create a copy for the next day.',
-                  onOk: () => carryOverMutation.mutate(record.id),
+                  content: (
+                    <div>
+                      <p>Only the remaining hours go to the next day.</p>
+                      <Input
+                        addonAfter="h"
+                        defaultValue={value}
+                        onChange={(e) => { value = e.target.value; }}
+                        placeholder="Hours left"
+                      />
+                    </div>
+                  ),
+                  onOk: () => {
+                    const parsed = parseFloat(value);
+                    carryOverMutation.mutate({
+                      jobId: record.id,
+                      remainingHours:
+                        Number.isFinite(parsed) && parsed > 0 ? parsed : undefined,
+                    });
+                  },
                 });
               }}
             >

@@ -71,24 +71,29 @@ def dead_week_plan_ids(today=None):
             .filter(WorkPlan.week_end < as_planning_date(today)).all()]
 
 
-def _job_for(plan_id, order_number):
+def _jobs_for(plan_id, order_number):
+    """ALL jobs this order became on this plan — plural since the day budget:
+    a 12h reach stacker PM is planned split into part 1/2 and part 2/2, two
+    rows with the same order number."""
     return (WorkPlanJob.query
             .join(WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id)
             .filter(WorkPlanDay.work_plan_id == plan_id,
                     WorkPlanJob.sap_order_number == order_number)
-            .first())
+            .all())
 
 
 def _was_worked(plan_id, order_number):
-    """True if a human touched the job this order became.
+    """True if a human touched ANY job this order became.
 
     Uses the API module's job_work_state so this agrees exactly with the manual
     removal rules — two copies of "has anyone touched this" would drift apart
-    the first time either was changed.
+    the first time either was changed. ANY, not first: with a split PM,
+    .first() could return the untouched part 2 while part 1 is half done, and
+    the release would move an order somebody is standing on.
     """
     from app.api.work_plans import job_work_state
-    job = _job_for(plan_id, order_number)
-    return job is not None and job_work_state(job) is not None
+    return any(job_work_state(job) is not None
+               for job in _jobs_for(plan_id, order_number))
 
 
 def classify(today=None):

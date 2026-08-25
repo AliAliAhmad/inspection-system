@@ -1506,7 +1506,8 @@
     "reason_missing_parts": "أجزاء مفقودة",
     "reason_not_accessible": "المعدة غير متاحة",
     "reason_time_ran_out": "انتهى الوقت",
-    "reason_safety_concern": "مخاوف السلامة"
+    "reason_safety_concern": "مخاوف السلامة",
+    "remaining_hours_placeholder": "الساعات المتبقية لإنهاء العمل (اختياري)"
   },
   "assessment": {
     "success": "تم",

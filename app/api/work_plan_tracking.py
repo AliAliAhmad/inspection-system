@@ -548,6 +548,19 @@ def mark_incomplete(job_id):
         tracking.total_paused_minutes = (tracking.total_paused_minutes or 0) + pause_duration
         tracking.paused_at = None
 
+    # The worker's own figure for what is left — Ali's rule: he touched the
+    # machine, he knows. Optional; the review can correct it, and the
+    # carry-over falls back to (estimated - actual) when nobody stated one.
+    remaining = data.get('remaining_hours')
+    if remaining is not None:
+        try:
+            remaining = float(remaining)
+        except (TypeError, ValueError):
+            raise ValidationError("remaining_hours must be a number")
+        if remaining < 0 or remaining > 99:
+            raise ValidationError("remaining_hours must be between 0 and 99")
+        tracking.remaining_hours = remaining
+
     tracking.status = 'incomplete'
     tracking.completed_at = now
     tracking.incomplete_reason_category = reason_category
@@ -1107,13 +1120,166 @@ def create_carry_over(review_id):
     if not target_day_id:
         raise BusinessError("No target day found for carry-over. Create next week's plan first.")
 
+    # ── How many hours does tomorrow actually get? ──
+    # Ali's chain: the ENGINEER's figure (he is looking at the review right
+    # now) beats the WORKER's (stated on the incomplete screen — he touched
+    # the machine) beats the arithmetic (estimated - actual) beats the
+    # original estimate. Never the full figure when work was done: that was
+    # the bug that over-booked every next day by exactly the work already
+    # finished, while hours_spent_original sat recorded on the same record.
+    remaining = data.get('remaining_hours')
+    if remaining is not None:
+        try:
+            remaining = float(remaining)
+        except (TypeError, ValueError):
+            raise ValidationError("remaining_hours must be a number")
+        if remaining <= 0 or remaining > 99:
+            raise ValidationError("remaining_hours must be between 0 and 99")
+    if remaining is None and original_tracking.remaining_hours is not None:
+        remaining = float(original_tracking.remaining_hours)
+    if remaining is None:
+        estimated = float(original_job.estimated_hours or 0)
+        actual = float(original_tracking.actual_hours or 0)
+        if actual > 0 and estimated > actual:
+            remaining = round(max(0.5, estimated - actual), 2)
+        else:
+            remaining = estimated or None
+
+    # ── Merge, never duplicate ──
+    # The plan may already hold tomorrow's half: a split PM carries the same
+    # sap_order_number on a later day ("part 2/2"). Carrying the unfinished
+    # part must ADJUST that job, not sit a second copy of the machine beside
+    # it. Only an untouched continuation is merged into — if somebody already
+    # started it, it is a work record, not a blank slate.
+    merged_job = None
+    if original_job.sap_order_number:
+        candidates = (WorkPlanJob.query
+                      .join(WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id)
+                      .filter(WorkPlanJob.sap_order_number == original_job.sap_order_number,
+                              WorkPlanJob.id != original_job.id,
+                              WorkPlanDay.date >= next_date)
+                      .order_by(WorkPlanDay.date)
+                      .all())
+        from app.api.work_plans import job_work_state
+        for candidate in candidates:
+            if job_work_state(candidate) is None:
+                merged_job = candidate
+                break
+
+    # ── The domino: does the target day have room? ──
+    # Ali's "A": the least important untouched job slides forward, cascading;
+    # what falls off the week's end returns to the box. The chain is returned
+    # so the review SHOWS what moved — approved by the same Submit, never
+    # invisible. dry_run computes everything and changes nothing.
+    from app.services.day_ripple import make_room
+    from app.services.job_durations import MIN_CREW, is_ac_service
+
+    if merged_job is not None:
+        ripple_day = merged_job.day
+        old_hours = float(merged_job.estimated_hours or 0)
+        extra_mh = max(0.0, ((remaining or 0) - old_hours))
+    else:
+        ripple_day = db.session.get(WorkPlanDay, target_day_id)
+        extra_mh = float(remaining or 0)
+    # Man-hours = hours x crew, and the crew that counts is the crew of the
+    # job the day will actually be CHARGED for — day_ripple prices every job
+    # by its OWN assignments. On a merge that is the continuation's gang: a
+    # split PM can be two men on part 1/2 and three on part 2/2. Pricing the
+    # carried job's crew instead asks the domino to free 4 man-hours when the
+    # day needs 6, so it frees nothing and the day silently runs over.
+    if merged_job is not None:
+        crew = max(MIN_CREW, len(merged_job.assignments or []))
+    else:
+        crew = max(MIN_CREW, len(data.get('reassign_to_ids') or [])
+                   or len(WorkPlanAssignment.query.filter_by(
+                       work_plan_job_id=original_job_id).all()))
+    extra_mh *= crew
+
+    if original_job.job_type == 'pm' and not is_ac_service(original_job.description):
+        ripple_key = 'pm'
+    elif original_job.job_type != 'pm':
+        ripple_key = 'spec'
+    else:
+        ripple_key = None   # an AC job never touches the wallets
+
+    ripple = []
+    if ripple_key and extra_mh > 0 and ripple_day is not None:
+        ripple = make_room(
+            ripple_day.work_plan, ripple_day, extra_mh,
+            original_job.berth or 'both', ripple_key,
+            protect_job_ids={merged_job.id} if merged_job is not None else set(),
+            dry_run=bool(data.get('dry_run')),
+        )
+
+    if data.get('dry_run'):
+        return jsonify({
+            'status': 'success',
+            'dry_run': True,
+            'remaining_hours': remaining,
+            'merged_into_existing': merged_job is not None,
+            'target_date': ripple_day.date.isoformat() if ripple_day else None,
+            'ripple': ripple,
+        }), 200
+
+    if merged_job is not None:
+        if remaining is not None:
+            merged_job.estimated_hours = remaining
+        merged_job.notes = f"[CARRY-OVER] {merged_job.notes or ''}".strip()
+
+        carry_over_count = (original_tracking.carry_over_count or 0) + 1
+        merged_tracking = WorkPlanJobTracking.query.filter_by(
+            work_plan_job_id=merged_job.id).first()
+        if merged_tracking is None:
+            merged_tracking = WorkPlanJobTracking(work_plan_job_id=merged_job.id,
+                                                  status='pending')
+            db.session.add(merged_tracking)
+        merged_tracking.is_carry_over = True
+        merged_tracking.original_job_id = original_job_id
+        merged_tracking.carry_over_count = carry_over_count
+
+        carry_over = WorkPlanCarryOver(
+            original_job_id=original_job_id,
+            new_job_id=merged_job.id,
+            reason_category=data.get('reason_category',
+                                     original_tracking.incomplete_reason_category or 'other'),
+            reason_details=data.get('reason_details'),
+            worker_voice_file_id=original_tracking.handover_voice_file_id,
+            worker_transcription=original_tracking.handover_transcription,
+            engineer_voice_file_id=data.get('engineer_voice_file_id'),
+            engineer_transcription=data.get('engineer_transcription'),
+            hours_spent_original=original_tracking.actual_hours,
+            carried_over_by_id=user.id,
+            daily_review_id=review_id,
+        )
+        db.session.add(carry_over)
+        db.session.flush()
+
+        create_log_entry(original_job_id, user.id, 'carry_over_created', {
+            'new_job_id': merged_job.id,
+            'target_date': merged_job.day.date.isoformat() if merged_job.day else None,
+            'carry_over_count': carry_over_count,
+            'merged_into_existing': True,
+            'remaining_hours': remaining,
+        })
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Job carried over into its planned continuation',
+            'carry_over': carry_over.to_dict(),
+            'new_job': merged_job.to_dict(),
+            'merged_into_existing': True,
+            'remaining_hours': remaining,
+            'ripple': ripple,
+        }), 201
+
     # Create the new job on the next day (copy from original)
     new_job = WorkPlanJob(
         work_plan_day_id=target_day_id,
         job_type=original_job.job_type,
         berth=original_job.berth,
         priority=original_job.priority,
-        estimated_hours=original_job.estimated_hours,
+        estimated_hours=remaining if remaining is not None else original_job.estimated_hours,
         equipment_id=original_job.equipment_id,
         defect_id=original_job.defect_id,
         inspection_assignment_id=original_job.inspection_assignment_id,
@@ -1192,7 +1358,10 @@ def create_carry_over(review_id):
         'status': 'success',
         'message': 'Job carried over to next day',
         'carry_over': carry_over.to_dict(),
-        'new_job': new_job.to_dict()
+        'new_job': new_job.to_dict(),
+        'merged_into_existing': False,
+        'remaining_hours': remaining,
+        'ripple': ripple,
     }), 201
 
 

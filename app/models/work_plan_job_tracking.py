@@ -37,6 +37,11 @@ class WorkPlanJobTracking(db.Model):
     # Actual hours (auto-calculated from start/complete minus pauses)
     actual_hours = db.Column(db.Numeric(5, 2), nullable=True)
 
+    # Hours still left when the worker could not finish — HIS figure, stated on
+    # the incomplete screen, because he touched the machine and the arithmetic
+    # (estimated - actual) did not. The engineer may override it at the review.
+    remaining_hours = db.Column(db.Numeric(5, 2), nullable=True)
+
     # Carry-over tracking
     is_carry_over = db.Column(db.Boolean, default=False, nullable=False)
     original_job_id = db.Column(db.Integer, db.ForeignKey('work_plan_jobs.id'), nullable=True)
@@ -117,6 +122,7 @@ class WorkPlanJobTracking(db.Model):
             'paused_at': (self.paused_at.isoformat() + 'Z') if self.paused_at else None,
             'total_paused_minutes': self.total_paused_minutes,
             'actual_hours': float(self.actual_hours) if self.actual_hours else None,
+            'remaining_hours': float(self.remaining_hours) if self.remaining_hours is not None else None,
             'is_carry_over': self.is_carry_over,
             'original_job_id': self.original_job_id,
             'carry_over_count': self.carry_over_count,

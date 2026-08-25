@@ -25,6 +25,9 @@ export default function DailyReviewScreen() {
   const [dateStr] = useState(() => new Date().toISOString().split('T')[0]);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [showCarryModal, setShowCarryModal] = useState(false);
+  const [carryJobId, setCarryJobId] = useState<number | null>(null);
+  const [carryHours, setCarryHours] = useState('');
   const [selectedJob, setSelectedJob] = useState<any>(null);
   const [selectedWorker, setSelectedWorker] = useState<any>(null);
   const [qcRating, setQcRating] = useState<number>(0);
@@ -72,12 +75,25 @@ export default function DailyReviewScreen() {
   });
 
   const carryOverMutation = useMutation({
-    mutationFn: (jobId: number) => workPlanTrackingApi.createCarryOver(review!.id, {
-      original_job_id: jobId,
-    }),
-    onSuccess: () => {
+    mutationFn: ({ jobId, remainingHours }: { jobId: number; remainingHours?: number }) =>
+      workPlanTrackingApi.createCarryOver(review!.id, {
+        original_job_id: jobId,
+        remaining_hours: remainingHours,
+      }),
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['daily-review'] });
-      Alert.alert('Done', 'Job carried over to next day');
+      const body = res?.data ?? res;
+      const ripple = body?.ripple ?? [];
+      // The domino is never invisible: every job that slid to make room is named.
+      const moved = ripple.length
+        ? '\n\nMoved to make room:\n' + ripple.map((entry: any) =>
+            `• ${entry.description || entry.sap_order_number} → ${entry.to === 'box' ? 'back to pool' : entry.to}`
+          ).join('\n')
+        : '';
+      const where = body?.merged_into_existing
+        ? 'into its planned continuation'
+        : 'to the next day';
+      Alert.alert('Done', `Carried ${where} (${body?.remaining_hours}h left)${moved}`);
     },
     onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed'),
   });
@@ -121,15 +137,31 @@ export default function DailyReviewScreen() {
     });
   };
 
-  const handleCarryOver = (jobId: number) => {
-    Alert.alert(
-      'Carry Over',
-      'Carry this job to the next day?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Carry Over', onPress: () => carryOverMutation.mutate(jobId) },
-      ]
-    );
+  const handleCarryOver = (jobId: number, job?: any) => {
+    // Only the remaining hours travel. Suggest the worker's figure, fall back
+    // to (estimated - actual); the engineer edits it in the modal.
+    // (A modal, not Alert.prompt — Alert.prompt exists only on iOS and this
+    // app ships on Android.)
+    const worked = Number(job?.tracking?.actual_hours ?? 0);
+    const estimated = Number(job?.estimated_hours ?? 0);
+    const suggested =
+      job?.tracking?.remaining_hours ??
+      (worked > 0 && estimated > worked
+        ? Math.round((estimated - worked) * 10) / 10
+        : estimated || undefined);
+    setCarryJobId(jobId);
+    setCarryHours(suggested != null ? String(suggested) : '');
+    setShowCarryModal(true);
+  };
+
+  const confirmCarryOver = () => {
+    if (carryJobId == null) return;
+    const parsed = parseFloat(carryHours);
+    setShowCarryModal(false);
+    carryOverMutation.mutate({
+      jobId: carryJobId,
+      remainingHours: Number.isFinite(parsed) && parsed > 0 ? parsed : undefined,
+    });
   };
 
   const handleSubmitReview = () => {
@@ -328,7 +360,7 @@ export default function DailyReviewScreen() {
             {(status === 'incomplete' || status === 'not_started') && (
               <TouchableOpacity
                 style={styles.carryOverBtn}
-                onPress={() => handleCarryOver(job.id)}
+                onPress={() => handleCarryOver(job.id, job)}
               >
                 <Text style={styles.carryOverText}>Carry Over to Next Day</Text>
               </TouchableOpacity>
@@ -380,6 +412,45 @@ export default function DailyReviewScreen() {
           <Text style={styles.submittedText}>Review Submitted</Text>
         </View>
       )}
+
+      {/* Carry-Over Modal — only the remaining hours go to the next day */}
+      <Modal visible={showCarryModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Carry Over</Text>
+            <Text style={styles.ratingLabel}>
+              How many hours are left? Only those go to the next day.
+            </Text>
+            <TextInput
+              style={styles.textInput}
+              value={carryHours}
+              onChangeText={setCarryHours}
+              keyboardType="decimal-pad"
+              placeholder="Hours left"
+              testID="carry-hours-input"
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancel}
+                onPress={() => setShowCarryModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirm}
+                onPress={confirmCarryOver}
+                disabled={carryOverMutation.isPending}
+              >
+                {carryOverMutation.isPending ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Carry Over</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Rating Modal */}
       <Modal visible={showRatingModal} transparent animationType="slide">

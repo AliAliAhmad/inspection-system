@@ -35,6 +35,7 @@ export interface WorkPlanJobTracking {
   paused_at: string | null;
   total_paused_minutes: number;
   actual_hours: number | null;
+  remaining_hours?: number | null;
   is_carry_over: boolean;
   original_job_id: number | null;
   carry_over_count: number;
@@ -252,6 +253,20 @@ export interface CarryOverPayload {
   engineer_voice_file_id?: number;
   engineer_transcription?: string;
   reassign_to_ids?: number[];
+  /** Engineer's override for the hours left — beats the worker's figure. */
+  remaining_hours?: number;
+  /** Compute the merge + ripple chain without applying anything. */
+  dry_run?: boolean;
+}
+
+/** One slide of the domino: a job pushed forward to make room for a carry. */
+export interface CarryOverRippleEntry {
+  job_id: number;
+  description: string | null;
+  sap_order_number: string | null;
+  priority: string | null;
+  from: string;
+  to: string; // a date, or 'box'
 }
 
 export interface OverrideTimeRatingPayload {

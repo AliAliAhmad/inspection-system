@@ -1704,7 +1704,8 @@
     "reason_missing_parts": "Missing Parts",
     "reason_not_accessible": "Equipment Not Accessible",
     "reason_time_ran_out": "Time Ran Out",
-    "reason_safety_concern": "Safety Concern"
+    "reason_safety_concern": "Safety Concern",
+    "remaining_hours_placeholder": "Hours left to finish (optional)"
   },
   "assessment": {
     "success": "Success",

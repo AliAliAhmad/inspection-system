@@ -146,8 +146,11 @@ export default function JobExecutionScreen() {
     onError: (err: any) => Alert.alert(t('job_execution.error'), err?.response?.data?.message || t('job_execution.failed_to_complete')),
   });
 
+  const [remainingHours, setRemainingHours] = useState('');
+
   const incompleteMutation = useMutation({
-    mutationFn: (payload: { reason_category: string; reason_details?: string }) =>
+    mutationFn: (payload: { reason_category: string; reason_details?: string;
+                            remaining_hours?: number }) =>
       workPlanTrackingApi.markIncomplete(jobId, payload as any),
     onSuccess: () => {
       setShowIncompleteModal(false);
@@ -427,10 +430,20 @@ export default function JobExecutionScreen() {
               onChangeText={setReasonDetails}
               multiline
             />
+            {/* The worker's own figure for what is left — he touched the
+                machine. Optional; the engineer can correct it at the review. */}
+            <TextInput
+              style={styles.textInput}
+              placeholder={t('job_execution.remaining_hours_placeholder')}
+              value={remainingHours}
+              onChangeText={setRemainingHours}
+              keyboardType="decimal-pad"
+              testID="remaining-hours-input"
+            />
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalCancel}
-                onPress={() => { setShowIncompleteModal(false); setSelectedReason(''); }}
+                onPress={() => { setShowIncompleteModal(false); setSelectedReason(''); setRemainingHours(''); }}
               >
                 <Text style={styles.modalCancelText}>{t('job_execution.cancel')}</Text>
               </TouchableOpacity>
@@ -438,9 +451,12 @@ export default function JobExecutionScreen() {
                 style={[styles.modalConfirm, styles.incompleteConfirm, !selectedReason && styles.modalConfirmDisabled]}
                 onPress={() => {
                   if (selectedReason) {
+                    const parsed = parseFloat(remainingHours);
                     incompleteMutation.mutate({
                       reason_category: selectedReason,
                       reason_details: reasonDetails || undefined,
+                      remaining_hours:
+                        Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined,
                     });
                   }
                 }}

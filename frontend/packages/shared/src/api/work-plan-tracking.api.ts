@@ -134,7 +134,13 @@ export const workPlanTrackingApi = {
   },
 
   createCarryOver(reviewId: number, payload: CarryOverPayload) {
-    return getApiClient().post<ApiResponse & { carry_over: WorkPlanCarryOver; new_job: any }>(
+    return getApiClient().post<ApiResponse & {
+      carry_over: WorkPlanCarryOver;
+      new_job: any;
+      merged_into_existing?: boolean;
+      remaining_hours?: number | null;
+      ripple?: import('../types/work-plan-tracking.types').CarryOverRippleEntry[];
+    }>(
       `${BASE}/daily-review/${reviewId}/carry-over`, payload
     );
   },

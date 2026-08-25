@@ -467,3 +467,28 @@ class TestReadingAndAnsweringEvents:
 
         reconcile_scheduled_orders(_index('open'), today=TODAY)
         assert len(_events('completion_not_confirmed')) == 2
+
+
+class TestASplitOrderRaisesOneEventNotTwo:
+    """A split PM is two job rows carrying one order number. When SAP closes
+    that order, both untouched halves are removed — and Ali hears about it
+    ONCE. The Reporter's (order, event_type) dedupe covers this within a run;
+    this test pins that behavior so it cannot be lost in a refactor."""
+
+    def test_both_halves_removed_one_event(self, db_session, plan_day):
+        plan, day = plan_day
+        job1 = _scheduled_job(db_session, day)
+        job2 = WorkPlanJob(work_plan_day_id=day.id, job_type='pm',
+                           equipment_id=job1.equipment_id,
+                           sap_order_number=ORDER,
+                           estimated_hours=4.0, position=2)
+        db_session.session.add(job2)
+        db_session.session.commit()
+        job1_id, job2_id = job1.id, job2.id
+
+        reconcile_scheduled_orders(_index('done'), today=TODAY)
+
+        assert len(_events()) == 1
+        from app.extensions import db as _db
+        assert _db.session.get(WorkPlanJob, job1_id) is None
+        assert _db.session.get(WorkPlanJob, job2_id) is None

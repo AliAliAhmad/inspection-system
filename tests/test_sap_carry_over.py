@@ -285,3 +285,40 @@ class TestOneRowPerOrderNumber:
         db_session.session.commit()
 
         assert SAPWorkOrder.query.filter_by(order_number='700000000002').count() == 1
+
+
+class TestSplitOrdersAreProtectedAsAWhole:
+    """Since the day budget, a 12h reach stacker PM is planned split — TWO job
+    rows with the same order number (part 1/2, part 2/2). The worked-check
+    must see the ORDER, not whichever row a .first() happens to return: part 1
+    half-done with part 2 untouched is a machine somebody is standing on."""
+
+    def test_a_split_with_one_worked_half_is_left_alone(self, db_session, dead):
+        plan, day = dead
+        equipment = _equipment(db_session)
+        order = _held(db_session, plan, equipment, '700000000001')
+        # The UNTOUCHED half is created first on purpose: a .first() lookup
+        # would see it, call the order unworked, and release a machine that
+        # part 2's crew is standing on.
+        part1 = _job(db_session, day, equipment, '700000000001', worked=None)
+        part2 = _job(db_session, day, equipment, '700000000001', worked='in_progress')
+
+        result = release_dead_week_orders(today=TODAY)
+
+        assert result['carried_back'] == 0
+        assert result['left_worked'] == 1
+        db_session.session.refresh(order)
+        assert order.work_plan_id == plan.id
+
+    def test_a_split_with_no_work_at_all_is_released(self, db_session, dead):
+        plan, day = dead
+        equipment = _equipment(db_session)
+        order = _held(db_session, plan, equipment, '700000000001')
+        _job(db_session, day, equipment, '700000000001', worked=None)
+        _job(db_session, day, equipment, '700000000001', worked=None)
+
+        result = release_dead_week_orders(today=TODAY)
+
+        assert result['carried_back'] == 1
+        db_session.session.refresh(order)
+        assert order.work_plan_id is None
