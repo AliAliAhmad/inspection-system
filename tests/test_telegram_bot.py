@@ -44,15 +44,27 @@ class Recorder:
 
     def __init__(self):
         self.messages = []
+        self.markups = []       # (chat_id, reply_markup) — kept, not discarded
+        self.answered = []      # (callback_query_id, text)
+        self.edited = []        # (chat_id, message_id, text, reply_markup)
 
     def send_message(self, chat_id, text, reply_markup=None):
         self.messages.append((chat_id, text))
+        self.markups.append((chat_id, reply_markup))
         return {'message_id': len(self.messages)}
 
     def send_chunks(self, chat_id, chunks):
         for chunk in chunks:
             self.send_message(chat_id, chunk)
         return len(chunks)
+
+    def answer_callback_query(self, callback_query_id, text=None):
+        self.answered.append((callback_query_id, text))
+        return {'ok': True}
+
+    def edit_message_text(self, chat_id, message_id, text, reply_markup=None):
+        self.edited.append((chat_id, message_id, text, reply_markup))
+        return {'message_id': message_id}
 
     @property
     def text(self):

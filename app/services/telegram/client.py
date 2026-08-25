@@ -110,6 +110,43 @@ class TelegramClient:
                 sent += 1
         return sent
 
+    def answer_callback_query(self, callback_query_id, text=None):
+        """Stop the spinner on the phone that just pressed a button.
+
+        Telegram turns a little wheel on the pressed button until this is
+        called, and its callback ids are short-lived.
+
+        Telegram accepts exactly ONE answer per press, so the caller answers
+        ONCE, at the end, in a `finally` — carrying the outcome, and guaranteed
+        even when the work raises. Answering first would stop the spinner
+        sooner but make it impossible to say what happened. See the module
+        docstring of app/services/telegram/taps.py.
+
+        `text` shows as a toast over the chat. Keep it short; Telegram caps it
+        around 200 characters.
+        """
+        payload = {'callback_query_id': callback_query_id}
+        if text:
+            payload['text'] = text[:200]
+        return self._call('answerCallbackQuery', payload)
+
+    def edit_message_text(self, chat_id, message_id, text, reply_markup=None):
+        """Rewrite a message already sitting on somebody's phone.
+
+        This is how the other planners' copies of a question stop working once
+        one of them has decided. Pass `reply_markup={'inline_keyboard': []}` to
+        take the buttons away — omitting it LEAVES THEM THERE, which is the
+        opposite of what a decided question wants.
+
+        No parse_mode, for the same reason send_message has none.
+        """
+        payload = {'chat_id': chat_id, 'message_id': message_id,
+                   'text': text[:MAX_MESSAGE_CHARS],
+                   'disable_web_page_preview': True}
+        if reply_markup is not None:
+            payload['reply_markup'] = reply_markup
+        return self._call('editMessageText', payload)
+
     def set_webhook(self, url, secret_token=None):
         payload = {'url': url, 'allowed_updates': ['message', 'callback_query']}
         if secret_token:

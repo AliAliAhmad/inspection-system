@@ -15,8 +15,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.models import User, WorkPlan, WorkPlanDay
+from app.models import Equipment, User, WorkPlan, WorkPlanDay, WorkPlanJob
 from app.models.roster import RosterEntry
+from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.worker_assignment_rule import WorkerAssignmentRule
 from app.services.day_budget import Wallet, build_week_wallets, is_one_team
 
@@ -24,6 +25,32 @@ TODAY = date(2026, 8, 24)
 
 
 _seq = iter(range(1, 10000))
+_dbseq = iter(range(1, 10000))
+
+
+def _machine(db_session, name, kind, berth='west'):
+    equipment = Equipment(name=f'{name}{next(_dbseq)}',
+                          serial_number=f'SNDB{next(_dbseq)}',
+                          equipment_type=kind, berth=berth)
+    db_session.session.add(equipment)
+    db_session.session.commit()
+    return equipment
+
+
+def _job_on(db_session, day, men, hours, job_type='pm', berth='west',
+            name='TT', description=None):
+    equipment = _machine(db_session, name, 'tractor', berth)
+    job = WorkPlanJob(work_plan_day_id=day.id, job_type=job_type,
+                      equipment_id=equipment.id, estimated_hours=hours,
+                      berth=berth, position=1,
+                      description=description or f'{equipment.name} service')
+    db_session.session.add(job)
+    db_session.session.flush()
+    for man in men:
+        db_session.session.add(WorkPlanAssignment(work_plan_job_id=job.id,
+                                                  user_id=man.id))
+    db_session.session.commit()
+    return job
 
 
 def _user(db_session, name, spec='mechanical'):
@@ -150,3 +177,44 @@ class TestBuildingTheWeek:
     def test_no_rules_means_no_wallets_feature_off(self, db_session, admin_user):
         plan, days = _week(db_session, admin_user)
         assert build_week_wallets(plan, days) == {}
+
+
+class TestHowFullADayReallyIs:
+    def test_it_counts_men_not_machines(self, db_session, admin_user):
+        """A 4-hour job done by 3 men costs the day 12, not 4."""
+        from app.services.day_budget import day_free_man_hours
+        plan, days = _week(db_session, admin_user)
+        pm = [_user(db_session, f'f{i}') for i in range(3)]      # 24 mh
+        _rule(db_session, 'west', 'regular_pm', pm)
+        _job_on(db_session, days[0], pm, 4.0)
+
+        assert day_free_man_hours(plan, days[0], 'west', 'pm') == 12.0
+
+    def test_an_empty_day_is_all_free(self, db_session, admin_user):
+        from app.services.day_budget import day_free_man_hours
+        plan, days = _week(db_session, admin_user)
+        _rule(db_session, 'west', 'regular_pm',
+              [_user(db_session, f'g{i}') for i in range(2)])
+
+        assert day_free_man_hours(plan, days[0], 'west', 'pm') == 16.0
+
+    def test_a_shared_wallet_is_drained_by_both_teams(self, db_session,
+                                                      admin_user):
+        """East is one team: an hour spent on a fault is an hour gone from PM
+        too. Filtering by wallet key alone would under-count it."""
+        from app.services.day_budget import day_free_man_hours
+        plan, days = _week(db_session, admin_user)
+        men = [_user(db_session, f'h{i}') for i in range(2)]     # 16 mh
+        _rule(db_session, 'east', 'regular_pm', men)
+        _job_on(db_session, days[0], men, 3.0, job_type='defect', berth='east',
+                name='ECH', description='ECH leak')
+
+        assert day_free_man_hours(plan, days[0], 'east', 'pm') == 10.0
+
+    def test_no_rules_means_none_not_zero(self, db_session, admin_user):
+        """None says 'there is no budget concept here'. Zero would say 'the day
+        is full', and the caller must not confuse the two."""
+        from app.services.day_budget import day_free_man_hours
+        plan, days = _week(db_session, admin_user)
+
+        assert day_free_man_hours(plan, days[0], 'west', 'pm') is None

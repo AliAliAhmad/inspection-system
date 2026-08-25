@@ -985,6 +985,12 @@ def init_scheduler(app):
                         report.get('removed_from_pool'),
                         report.get('equipment_unmatched'))
 
+            from app.services.urgent_watch import look_for_homeless_urgents
+            watch = look_for_homeless_urgents()
+            logger.info('Urgent watch: asked=%s checked=%s reason=%s',
+                        watch.get('asked'), watch.get('checked'),
+                        watch.get('reason'))
+
     scheduler.add_job(
         rebuild_pool_nightly,
         CronTrigger(hour=5, minute=0, timezone='Asia/Baghdad'),

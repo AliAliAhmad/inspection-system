@@ -126,3 +126,65 @@ def build_week_wallets(plan, days):
                 wallets[day.id][berth] = {'pm': Wallet(pm_here),
                                           'spec': Wallet(spec_here)}
     return wallets
+
+
+def day_free_man_hours(plan, day, berth, wallet_key):
+    """Man-hours still unspent on this day's (berth, team) wallet.
+
+    Returns None — never 0.0 — when no team rules exist. None means "there is
+    no budget concept here" and every caller must treat it as "the hours check
+    is off", exactly as the generator already treats an empty wallet dict.
+    Zero would mean the opposite: a full day.
+
+    Three places already did this inline and one of them (`_existing_load`)
+    got it wrong, summing machine-hours with no crew multiplier. This is the
+    one home for it.
+    """
+    from app.services.day_ripple import (_berth_key, _job_wallet_key,
+                                         job_cost_man_hours)
+
+    wallets = build_week_wallets(plan, list(plan.days))
+    if not wallets:
+        return None
+
+    berth_key = _berth_key(berth)
+    pots = wallets.get(day.id, {}).get(berth_key)
+    if not pots or wallet_key not in pots:
+        return None
+
+    # On a one-team berth 'pm' and 'spec' are the SAME Wallet object, so an
+    # hour spent on either drains both. Filtering by key alone under-counts it.
+    shared = pots['pm'] is pots['spec']
+
+    spent = 0.0
+    for job in day.jobs:
+        key = _job_wallet_key(job)
+        if key is None:
+            continue
+        if _berth_key(job.berth or 'both') != berth_key:
+            continue
+        if shared or key == wallet_key:
+            spent += job_cost_man_hours(job)
+
+    return max(0.0, pots[wallet_key].hours_total - spent)
+
+
+def day_wallet_hours(plan, day, berth, wallet_key):
+    """The wallet's FULL size for this (day, berth, team) — men x 8h.
+
+    The ceiling, not what is left. A job costing more than this can never fit
+    on that day no matter how much is moved out of the way, which is a thing
+    worth knowing BEFORE promising anybody a fit. None when no rules exist.
+    """
+    from app.services.day_ripple import _berth_key
+
+    wallets = build_week_wallets(plan, list(plan.days))
+    if not wallets:
+        return None
+
+    berth_key = _berth_key(berth)
+    pots = wallets.get(day.id, {}).get(berth_key)
+    if not pots or wallet_key not in pots:
+        return None
+
+    return pots[wallet_key].hours_total

@@ -269,3 +269,61 @@ Corollary: **a self-healing cleanup deserves the same suspicion as a migration.*
 unattended, every night, against production, and I shipped it the same afternoon I wrote
 it, on a rule I had not checked against the real shape of the data — which the
 `orders by plan` histogram would have shown in one query.
+
+---
+
+## LESSON 2026-08-25 — A unit test on each half cannot see the seam between them
+
+**What went wrong:** `day_ripple.make_room` was fully tested and correct. The carry-over
+endpoint was fully tested and correct. But the endpoint tells `make_room` HOW MANY
+man-hours to free, and man-hours = hours × crew — and on a merge the endpoint counted the
+crew of the job being *carried* (2 men on part 1/2) while `make_room` prices the job that
+will actually be *charged* (3 men on part 2/2). It asked for 4 man-hours when the day
+needed 6, so the domino froze and Tuesday ran 26 of 24 with a movable low-priority job
+sitting right there. Every unit test on both sides stayed green.
+
+**Rule:** when one component computes a number that a second component spends, write one
+end-to-end scenario that measures the RESULT, not the call. Here that meant: rebuild the
+wallets after the endpoint returns and assert nothing is overspent. A test that checks
+"make_room was asked to free X" can only ever confirm the wrong number was passed
+correctly.
+
+**Corollary:** any figure of the form `quantity × multiplier` crossing a module boundary
+deserves the question "whose multiplier?" out loud. Two components each holding their own
+idea of the crew is the same class of bug as two components each holding their own idea
+of "has anyone touched this job" (`_was_worked`, same plan, Task 4).
+
+---
+
+## LESSON 2026-08-25 (2) — A mutation check that cannot fail is not a check
+
+**What went wrong:** across Plan 3 Stage 1 I wrote seven task briefs containing complete,
+literal code. Six of them contained a real bug, and every single one was caught by an
+implementer or reviewer reading the surrounding code rather than trusting my brief:
+
+1. A plain `dict` where `_assign_from_rule` does `d[k][u] += 1` on unseen keys — KeyError on
+   the first man assigned.
+2. A stub object missing `.defect`, which `_determine_team_type` dereferences unguarded —
+   would have crashed every fault order.
+3. `cost = hours * crew` with no AC exclusion — would have started charging the day for
+   air-conditioning work that `bundle_man_hours` deliberately excludes.
+4. A mutation check asserting `{'inline_keyboard': []}` is falsy. It is TRUTHY — a dict is
+   falsy only with no keys — so that check could never fail.
+5. A registration guard (`if _APPLY: return`) that an earlier task's own tests disarm, because
+   they register a throwaway kind into the same dict and run first alphabetically.
+6. `details['order_number'].as_string()` — a JSON-path filter that works on Postgres and not
+   on SQLite, where the entire suite runs.
+
+**Rule:** when handed literal code to transcribe, read the real function it calls BEFORE
+trusting the snippet. If the two disagree, the real function wins. Say what you changed and
+why; never weaken a test to make code pass.
+
+**Rule:** a mutation check is only evidence if you WATCH IT FAIL. Twice in this run a mutation
+was "performed" and passed — once because the mutated line was never exercised by the test's
+data, once because my premise about Python truthiness was wrong. Both times the honest report
+("this did not fail, and here is why") is what found the real gap. A silently-passing mutation
+means the test is asleep, not that the code is right.
+
+**Corollary:** the strongest evidence in this whole run came from an implementer reporting a
+mutation that did NOT fail. Reward that. A report that only ever confirms expectations is not
+telling you anything.

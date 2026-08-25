@@ -35,7 +35,9 @@ SECRET_HEADER = 'X-Telegram-Bot-Api-Secret-Token'
 # update_id values already handled. Telegram redelivers on any non-200 and on a
 # deploy restart mid-request, so this is a correctness requirement, not polish.
 # In-memory and per-worker: a restart loses it, and the cost of that is one
-# duplicated READ. It gets promoted to a table before any command mutates.
+# duplicated READ. Mutations are NOT protected by this — they are protected by
+# the atomic claim in app/services/telegram/taps.py, which also covers the case
+# this cache never could: two DIFFERENT planners pressing at the same moment.
 _SEEN_LIMIT = 2000
 _seen_updates = OrderedDict()
 _seen_lock = threading.Lock()
@@ -90,6 +92,10 @@ def webhook(path_secret):
                 from app.models import User
                 sender = User.query.get(user_id)
                 if sender is None:
+                    return
+                if update.get('callback_query'):
+                    from app.services.telegram.taps import handle_callback
+                    handle_callback(update, sender)
                     return
                 chunks = handle(update, sender)
                 if chunks:
