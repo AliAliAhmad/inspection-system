@@ -296,11 +296,28 @@ what gets written to `result` and shown in the edited message.
 
 ### B. Crew finished early — on completion
 
-Hook in `app/api/work_plan_tracking.py` `complete_job` (line 416), placed after
-`create_log_entry(..., 'completed', ...)` and before `db.session.commit()`.
-There is nothing else on that path today: no notification, no event, no hook —
-`notify_engineers_for_job` exists but its only caller in the whole repo is
-`pause_job`.
+Hook in `app/api/work_plan_tracking.py` `complete_job` (line 416), placed
+**after `db.session.commit()`**. There is nothing else on that path today: no
+notification, no event, no hook — `notify_engineers_for_job` exists but its only
+caller in the whole repo is `pause_job`.
+
+CORRECTION, 2026-08-25 (final review, finding C3). This section originally said
+"before `db.session.commit()`", and that was wrong. The hook talks to Telegram —
+one synchronous POST per planner, 15s timeout each, up to 8 recipients — and
+`ask()` commits. Before the commit, that meant a man's completion held an open
+transaction while the server waited on api.telegram.org: an outage turned one
+tap on Finish into a ~2 minute hang, his phone gave up, retried, and the retry
+answered `Cannot complete job in 'completed' status` — a failure message on a
+job that had in fact completed. It also collapsed the request's atomicity,
+since `ask()`'s commit split the defect auto-resolve into a second transaction.
+
+After the commit, the man's work is safe before anybody picks up the phone.
+Guarded by `TestTheManIsSavedBeforeAnybodyPhonesTelegram` in
+`tests/test_crew_free.py`.
+
+ACCEPTED RESIDUAL: the request still blocks on Telegram, it just no longer
+holds a transaction or risks the man's work while it does. Moving the send to a
+background thread is deliberately NOT done here.
 
 Plus a new endpoint for the mobile button:
 `POST /api/work-plan-tracking/jobs/<job_id>/free-for-more` — the worker's

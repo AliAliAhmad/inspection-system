@@ -61,6 +61,13 @@ export const workPlanTrackingApi = {
     return getApiClient().post<TrackingResponse>(`${BASE}/jobs/${jobId}/complete`, payload);
   },
 
+  // Worker taps "I am free" from a completed job — a request, never a placement;
+  // the engineer still decides. `asked: false` means fine but nothing to offer.
+  freeForMore(jobId: number) {
+    return getApiClient().post<{ status: string; asked: boolean; reason: string | null }>(
+      `${BASE}/jobs/${jobId}/free-for-more`, {});
+  },
+
   adminCompleteJob(jobId: number, payload?: { notes?: string }) {
     return getApiClient().post<TrackingResponse>(`${BASE}/jobs/${jobId}/admin-complete`, payload);
   },

@@ -83,18 +83,34 @@ def ask(kind, text_by_language, options, expires_at, details=None,
         status='open',
         expires_at=expires_at,
     )
-    db.session.add(proposal)
-    db.session.flush()      # the buttons need proposal.id
+    # A SAVEPOINT around every row this function writes.
+    #
+    # Without it a failure between the flush and the commit leaves the proposal
+    # row sitting in the session, and whatever the CALLER commits next sweeps it
+    # in — a phantom question: status 'open', a real crew on it, not one message
+    # row, nobody ever saw it. It would then block that crew from being asked
+    # again all day and hide its box orders from every other crew, silently.
+    #
+    # A plain `db.session.rollback()` in the caller is NOT the fix and would be
+    # much worse: `ask` is called from inside `complete_job`, which by then has
+    # written a man's completed job and not yet committed it. Rolling back there
+    # would throw the completion away — breaking the one rule that outranks
+    # everything else here. The savepoint discards only what THIS function
+    # wrote, and leaves the caller's work exactly where it was.
+    with db.session.begin_nested():
+        db.session.add(proposal)
+        db.session.flush()      # the buttons need proposal.id
 
-    client = client or TelegramClient()
-    for user, chat_id in people:
-        language = getattr(user, 'language', None) or 'en'
-        text = text_by_language.get(language) or text_by_language.get('en', '')
-        sent = client.send_message(chat_id, text,
-                                   reply_markup=keyboard(proposal, language))
-        db.session.add(TelegramProposalMessage(
-            proposal_id=proposal.id, user_id=user.id, chat_id=chat_id,
-            message_id=(sent or {}).get('message_id'), language=language))
+        client = client or TelegramClient()
+        for user, chat_id in people:
+            language = getattr(user, 'language', None) or 'en'
+            text = (text_by_language.get(language)
+                    or text_by_language.get('en', ''))
+            sent = client.send_message(chat_id, text,
+                                       reply_markup=keyboard(proposal, language))
+            db.session.add(TelegramProposalMessage(
+                proposal_id=proposal.id, user_id=user.id, chat_id=chat_id,
+                message_id=(sent or {}).get('message_id'), language=language))
 
     db.session.commit()
     logger.info('telegram ask | kind=%s id=%s phones=%d',

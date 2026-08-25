@@ -262,6 +262,50 @@ def urgent_one_day_crew(order, day):
     return None
 
 
+def useful_crew(order, available):
+    """The FEWEST of `available` free men that finish this job soonest.
+
+    Not all of them, and not simply the biggest crew Ali measured. His curve is
+    measurements, not a formula, and it flattens:
+
+      * reach stacker — 2 men 12h, 3 men 8h, 4 men 8h;
+      * ech          — 2 men 8h,  3 men 7h, 4 men 7h;
+      * tractor      — 4.5h whatever you do.
+
+    So on a reach stacker the third man buys four hours of machine time and is
+    worth sending, while the FOURTH buys nothing and costs the day another
+    eight man-hours for it. `job_durations.py` says so in its own comment: the
+    fourth man is insurance for an URGENT machine, not speed. Nothing here is
+    urgent — `urgent_one_day_crew` owns that decision and deliberately does
+    take the fourth man; this function must not.
+
+    Hence: walk the sizes we could actually field, take the best hours, and
+    among the sizes that reach those hours take the SMALLEST. A fault has no
+    curve at all, so it takes the minimum pair.
+
+    This is what keeps the promise honest in the crew-free flow, where WE
+    choose how many men go. Measured before the fix: a tractor offered at
+    4.5h x 2 = 9 man-hours, then handed all three free men and charged 13.5.
+    """
+    from app.services.work_plan_generator_service import _get_category
+
+    available = max(MIN_CREW, int(available or MIN_CREW))
+    if order.job_type != 'pm':
+        return MIN_CREW
+    equipment = order.equipment
+    family = _get_category(equipment.equipment_type) if (
+        equipment and equipment.equipment_type) else ''
+
+    best_size, best_hours = MIN_CREW, None
+    for size in range(MIN_CREW, available + 1):
+        crew_n, hours = pm_hours(family, crew=size,
+                                 description=order.description)
+        crew_n = max(MIN_CREW, min(size, int(crew_n or MIN_CREW)))
+        if best_hours is None or hours < best_hours:
+            best_size, best_hours = crew_n, hours
+    return best_size
+
+
 def price_one(order, crew=None):
     """What this order costs a day, using the generator's own arithmetic.
 
@@ -332,8 +376,13 @@ def price_one(order, crew=None):
     }
 
 
-def staff_one_job(job, day, crew_needed=None):
+def staff_one_job(job, day, crew_needed=None, rule=None):
     """Pick men for one job using the generator's own rule logic.
+
+    `rule` names the team to use instead of letting the match pick. The Telegram
+    "Swap crew" button carries the team the engineer actually pressed, and
+    without this the match simply re-ran and took its own first candidate —
+    so with two teams on a berth the engineer's choice was thrown away.
 
     `_assign_from_rule` cannot be called on its own — it needs four context
     structures that only `_step_assign` builds. This rebuilds them for a single
@@ -357,18 +406,22 @@ def staff_one_job(job, day, crew_needed=None):
     if not rules:
         return []
 
-    berth = _normalize_berth(job.berth) or 'both'
-    team_type = _determine_team_type(job)
-    equipment = job.equipment
-    category = (_get_category(equipment.equipment_type)
-                if equipment and equipment.equipment_type else 'all')
+    if rule is not None:
+        candidates = [rule]
+    else:
+        berth = _normalize_berth(job.berth) or 'both'
+        team_type = _determine_team_type(job)
+        equipment = job.equipment
+        category = (_get_category(equipment.equipment_type)
+                    if equipment and equipment.equipment_type else 'all')
 
-    def matches(rule, wanted_category):
-        return (rule.berth == berth and rule.team_type == team_type
-                and rule.equipment_category == wanted_category)
+        def matches(candidate, wanted_category):
+            return (candidate.berth == berth
+                    and candidate.team_type == team_type
+                    and candidate.equipment_category == wanted_category)
 
-    candidates = ([r for r in rules if matches(r, category)]
-                  or [r for r in rules if matches(r, 'all')])
+        candidates = ([r for r in rules if matches(r, category)]
+                      or [r for r in rules if matches(r, 'all')])
     if not candidates:
         return []
 
@@ -398,7 +451,7 @@ def staff_one_job(job, day, crew_needed=None):
 
 def place_one(order, day, crew_user_ids=None, priority=None,
               priced=None, hours=None, description=None,
-              release_order=True):
+              release_order=True, rule=None):
     """Put one box order on one day, priced and staffed. Does NOT commit.
 
     Named men beat the rule: the crew that just finished early gets the work,
@@ -406,6 +459,11 @@ def place_one(order, day, crew_user_ids=None, priority=None,
     picks; when there are no rules at all, the job still lands with nobody on
     it — consistent with the rest of the system, which switches its hours
     checks off rather than refusing to work when rules are missing.
+
+    `rule` names a team instead of naming men — the Telegram "Swap crew"
+    button. Unlike the no-rules case this one RAISES when the named team can
+    field nobody: the engineer asked for that specific team, and a job landing
+    on the day with nobody on it looks planned and nobody comes.
 
     `priced` lets a caller hand in a price it already computed — an urgent
     reach stacker offered at 3 men and 8 hours was priced with an explicit
@@ -455,7 +513,10 @@ def place_one(order, day, crew_user_ids=None, priority=None,
                                               user_id=user_id,
                                               is_lead=is_lead))
     else:
-        staff_one_job(job, day, crew_needed=priced['crew'])
+        picked = staff_one_job(job, day, crew_needed=priced['crew'], rule=rule)
+        if rule is not None and not picked:
+            raise ValueError(
+                f'team {rule.berth} {rule.team_number} can field nobody')
 
     if release_order:
         order.status = 'scheduled'

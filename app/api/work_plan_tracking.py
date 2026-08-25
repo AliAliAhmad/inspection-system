@@ -457,6 +457,26 @@ def complete_job(job_id):
 
     db.session.commit()
 
+    # AFTER the commit, never before. The crew may now be standing in the yard
+    # with hours left, and nothing else on this path notices — there is no
+    # completion event in this codebase. But this hook talks to Telegram, up to
+    # one 15-second POST per planner, and `ask()` commits: running it inside
+    # the request's open transaction meant a Telegram outage held the man's
+    # completion open for ~2 minutes, his phone gave up and retried, and the
+    # retry answered "Cannot complete job in 'completed' status" — a failure
+    # message on a job that had in fact completed.
+    #
+    # (The spec said "before db.session.commit()". The spec was wrong.)
+    #
+    # The request still blocks on Telegram; it just no longer holds a
+    # transaction or risks the man's work while it does. Never let a Telegram
+    # problem fail a completed job.
+    try:
+        from app.services.crew_free import ask_for_backfill
+        ask_for_backfill(job)
+    except Exception:  # noqa: BLE001
+        logger.exception('crew-free ask failed for job %s', job_id)
+
     logger.info("Job %s completed by user %s. Actual hours: %s", job_id, user.id, tracking.actual_hours)
     return jsonify({
         'status': 'success',
@@ -584,6 +604,34 @@ def mark_incomplete(job_id):
         'status': 'success',
         'message': 'Job marked as incomplete',
         'tracking': tracking.to_dict()
+    }), 200
+
+
+@bp.route('/jobs/<int:job_id>/free-for-more', methods=['POST'])
+@jwt_required()
+def free_for_more(job_id):
+    """The worker says he is free. This is a REQUEST, never a placement.
+
+    It buzzes the planners' phones with the same question the automatic check
+    raises; the engineer still decides who gets what.
+    """
+    user = get_authenticated_user()
+    job = get_job_or_404(job_id)
+    if user.role not in ('admin', 'engineer'):
+        check_user_assigned_to_job(user.id, job_id)
+
+    from app.services.crew_free import ask_for_backfill
+    proposal = ask_for_backfill(job, forced=True)
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'asked': proposal is not None,
+        # Deliberately vague. `ask_for_backfill` returns None for several
+        # different reasons — nothing in the box fits, the crew was already
+        # announced today, nobody has hours left — and naming only one of them
+        # made the phone say "nothing fits" when that was not what happened.
+        'reason': None if proposal is not None else 'not asked',
     }), 200
 
 

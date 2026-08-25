@@ -65,14 +65,26 @@
   `r8s9t0u1v2w3` — run `flask db upgrade` on Render.
 - ~~**Plan 3 Stage 1 — the bot learned to ask.**~~ ✅ 2026-08-25 — nightly urgent-with-no-room
   proposal with inline buttons; first press wins. Migration `s9t0u1v2w3x4`.
-- **Plan 3 Stage 2 pending — the fast crew is still invisible.** Nothing in the system prices
-  a day by `actual_hours`, so a crew finishing a 6h job in 3h releases nothing. Needs the
-  free-hours sum, the best-3 pick, a completion hook and a mobile "I am free" button.
-- **⚠️ Stage 1 never offers an urgent reach stacker.** `price_one` does not apply the urgent
-  crew boost (`urgent_max_crew`), so an RS PM always prices at 12h/2 men, trips the
-  longer-than-a-day guard, and is skipped. RS is a core family. Wiring the boost means
-  staffing must boost with it, or the promise stops matching what the domino reads — an Ali
-  decision, not a code one.
+- ~~**Plan 3 Stage 2 — the fast crew is invisible.**~~ ✅ 2026-08-25 — a day is now priced by
+  `actual_hours` for men standing in the yard (`app/services/crew_free.py`). Finishing early
+  asks the engineer with buttons; the mobile "I am free" button raises the same question.
+  Only men who still have hours are offered or sent, and the job must fit inside the
+  shortest of them. Not committed — awaiting Ali's `push`.
+- ~~**⚠️ Stage 1 never offers an urgent reach stacker.**~~ ✅ 2026-08-25 — Ali's rule: always
+  offer 3 or 4 men so the time is 8h, and only fall back to 2 men / 12h when they are not
+  available. `urgent_one_day_crew` boosts the crew AND `place_one` staffs to the boosted
+  figure, so the promise matches what the domino reads. End-to-end run confirms it:
+  `crew: 3, hours: 8.0, cost_man_hours: 24.0`.
+- **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
+  (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
+  commit now, so his work is safe and the transaction is closed, but the phone still
+  waits. Fix is a background thread if it is ever felt. (2) `expires_at` is LOCAL
+  midnight compared against `datetime.utcnow()`, so buttons stay alive ~3h past Baghdad
+  midnight and can place a job on a day already over. Pre-existing Stage 1 pattern.
+- **Three smaller Stage 2 residuals, all deliberate.** A press re-checks neither the
+  men's shift nor whether they have picked up other work since; a FAILED swap leaves
+  that crew unaskable for the rest of the day; `exclude_orders` matches only a bundle's
+  first member (over-suppresses, which is the safe direction).
 - **`schedule_sap_order` diverges from the generator** (`app/api/work_plans.py:934`): no
   re-pricing, no berth normalisation, no capacity check, staffs nobody. `place_one` replaces
   that behaviour for the bot; the endpoint is untouched.

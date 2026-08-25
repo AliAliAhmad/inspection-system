@@ -146,6 +146,21 @@ export default function JobExecutionScreen() {
     onError: (err: any) => Alert.alert(t('job_execution.error'), err?.response?.data?.message || t('job_execution.failed_to_complete')),
   });
 
+  // Worker asks for more work off a completed job — a request, not a placement.
+  // The engineer still decides who gets what; this just raises a hand.
+  const freeMutation = useMutation({
+    mutationFn: () => workPlanTrackingApi.freeForMore(jobId),
+    onSuccess: (response) => {
+      Alert.alert(
+        t('job_execution.success'),
+        response.data?.asked
+          ? t('job_execution.free_for_more_sent')
+          : t('job_execution.free_for_more_nothing'),
+      );
+    },
+    onError: (err: any) => Alert.alert(t('job_execution.error'), err?.response?.data?.message || t('job_execution.failed')),
+  });
+
   const [remainingHours, setRemainingHours] = useState('');
 
   const incompleteMutation = useMutation({
@@ -273,12 +288,28 @@ export default function JobExecutionScreen() {
         )}
 
         {status === 'completed' && (
-          <View style={styles.completedInfo}>
-            <Text style={styles.completedText}>{t('job_execution.job_completed_label')}</Text>
-            {tracking?.actual_hours && (
-              <Text style={styles.hoursText}>{t('job_execution.actual_hours', { hours: tracking.actual_hours })}</Text>
-            )}
-          </View>
+          <>
+            <View style={styles.completedInfo}>
+              <Text style={styles.completedText}>{t('job_execution.job_completed_label')}</Text>
+              {tracking?.actual_hours && (
+                <Text style={styles.hoursText}>{t('job_execution.actual_hours', { hours: tracking.actual_hours })}</Text>
+              )}
+            </View>
+            <TouchableOpacity
+              testID="free-for-more-btn"
+              style={styles.freeButton}
+              disabled={freeMutation.isPending}
+              onPress={() => freeMutation.mutate()}
+            >
+              {freeMutation.isPending ? (
+                <ActivityIndicator color="#1677ff" />
+              ) : (
+                <Text style={styles.freeButtonText}>
+                  {t('job_execution.free_for_more')}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
@@ -495,6 +526,15 @@ const styles = StyleSheet.create({
   resumeButton: { backgroundColor: '#2196F3' },
   completeButton: { backgroundColor: '#4CAF50' },
   incompleteButton: { backgroundColor: '#F44336' },
+  freeButton: {
+    marginTop: 12,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1677ff',
+  },
+  freeButtonText: { color: '#1677ff', fontWeight: '600', fontSize: 15 },
   actionButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   completedInfo: { alignItems: 'center', padding: 20 },
   completedText: { fontSize: 20, fontWeight: 'bold', color: '#4CAF50' },

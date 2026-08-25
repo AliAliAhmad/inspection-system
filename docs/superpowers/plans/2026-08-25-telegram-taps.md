@@ -1,6 +1,6 @@
 # Telegram Taps (a bot that asks, not only tells) — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Give the Telegram bot inline buttons, so an urgent order with nowhere to go and a crew that finished early both become one-tap decisions on a planner's phone.
 
@@ -2861,7 +2861,7 @@ crew that finishes a six-hour job in three releases nothing, anywhere.
   - `free_hours_for_crew(job) -> dict[int, float]` — `{user_id: free hours}`
   - `crew_is_done_for_today(job) -> bool`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_crew_free.py`:
 
@@ -3027,12 +3027,12 @@ class TestWhatTheMenReallyDid:
         assert crew_is_done_for_today(done) is True
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `./venv/bin/python -m pytest tests/test_crew_free.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'app.services.crew_free'`
 
-- [ ] **Step 3: Write the arithmetic**
+- [x] **Step 3: Write the arithmetic**
 
 Create `app/services/crew_free.py`:
 
@@ -3128,12 +3128,12 @@ def crew_is_done_for_today(job):
     return True
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `./venv/bin/python -m pytest tests/test_crew_free.py -q -p no:warnings`
 Expected: PASS — 8 tests.
 
-- [ ] **Step 5: Mutation checks**
+- [x] **Step 5: Mutation checks**
 
 1. In `hours_worked_today`, always use `job.estimated_hours` →
    `test_a_finished_job_counts_its_real_hours` and
@@ -3144,7 +3144,7 @@ Expected: PASS — 8 tests.
 3. Drop `'incomplete'` from `DONE_STATUSES` →
    `test_an_abandoned_job_does_not_hold_the_crew` must FAIL. Restore.
 
-- [ ] **Step 6: Stage the commit (ASK Ali first)**
+- [x] **Step 6: Stage the commit (ASK Ali first)**
 
 ```bash
 git add app/services/crew_free.py tests/test_crew_free.py
@@ -3170,7 +3170,7 @@ the whole box plus every open defect plus last week's carry-overs, and runs
 plan-scoped subqueries), so the candidate dicts are built here from the box
 rows using the same keys its SAP branch emits.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_crew_free.py`:
 
@@ -3249,12 +3249,12 @@ class TestTheBestThreeThatFit:
         assert candidates_for(plan, 'west', 100.0, free_men=4) == []
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `./venv/bin/python -m pytest tests/test_crew_free.py::TestTheBestThreeThatFit -q`
 Expected: FAIL — `ImportError: cannot import name 'candidates_for'`
 
-- [ ] **Step 3: Write it**
+- [x] **Step 3: Write it**
 
 Append to `app/services/crew_free.py`:
 
@@ -3268,10 +3268,16 @@ def _candidate_dict(order):
     """
     from app.services.work_plan_generator_service import (_normalize_berth,
                                                           _resolve_overdue)
+    from app.utils.decorators import planning_today
     equipment = order.equipment
+    # SIX positional args, `required_date` THIRD and `today` LAST — an earlier
+    # draft of this plan passed five in the wrong order, which would have
+    # raised the moment a real order carried a required_date. And `today` must
+    # be a real date from planning_today(); None raises inside the day-based
+    # branch.
     value, unit = _resolve_overdue(
-        order.job_type, order.maintenance_base,
-        order.overdue_value, order.overdue_unit, None)
+        order.job_type, order.maintenance_base, order.required_date,
+        order.overdue_value, order.overdue_unit, planning_today())
     return {
         'source': 'sap',
         'job_type': order.job_type,
@@ -3361,19 +3367,19 @@ def candidates_for(plan, berth, free_man_hours, free_men, limit=3,
     return fits[:limit] if fits else oversized[:limit]
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Run: `./venv/bin/python -m pytest tests/test_crew_free.py -q -p no:warnings`
 Expected: PASS — 14 tests.
 
-- [ ] **Step 5: Mutation checks**
+- [x] **Step 5: Mutation checks**
 
 1. Drop the `crew > free_men` filter →
    `test_a_job_needing_more_men_than_are_free_is_not_offered` must FAIL. Restore.
 2. Drop the berth filter → `test_the_other_berth_is_not_offered` must FAIL.
    Restore.
 
-- [ ] **Step 6: Stage the commit (ASK Ali first)**
+- [x] **Step 6: Stage the commit (ASK Ali first)**
 
 ```bash
 git add app/services/crew_free.py tests/test_crew_free.py
@@ -3387,7 +3393,7 @@ git commit -m "feat: the best three jobs that actually fit the hours left"
 
 **Files:**
 - Modify: `app/services/crew_free.py` (append)
-- Modify: `app/api/work_plan_tracking.py` — hook inside `complete_job` (line 416, after `create_log_entry(..., 'completed', ...)` and before `db.session.commit()`); new endpoint after `mark_incomplete` (line 520)
+- Modify: `app/api/work_plan_tracking.py` — hook inside `complete_job` (line 416, **after `db.session.commit()`** — see the spec's C3 correction: before it, a Telegram outage held the man's completion open for ~2 minutes and his retry was told the job was already completed); new endpoint after `mark_incomplete` (line 520)
 - Test: `tests/test_crew_free.py` (append a class)
 
 **Interfaces:**
@@ -3400,7 +3406,7 @@ Nothing fires on completion today — no notification, no event, no hook. The on
 notifier that exists, `notify_engineers_for_job` (line 96), has exactly one
 caller in the whole repo, inside `pause_job`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_crew_free.py`:
 
@@ -3513,12 +3519,12 @@ Add the same `Recorder` class used in `tests/test_urgent_watch.py` to the top of
 this file (copy it verbatim — the plan's readers may open these files in any
 order).
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `./venv/bin/python -m pytest tests/test_crew_free.py::TestNoticingAndAsking -q`
 Expected: FAIL — `ImportError: cannot import name 'ask_for_backfill'`
 
-- [ ] **Step 3: Write it**
+- [x] **Step 3: Write it**
 
 Append to `app/services/crew_free.py`:
 
@@ -3743,7 +3749,7 @@ def ask_for_backfill(job, forced=False, client=None):
                client=client)
 ```
 
-- [ ] **Step 4: Hook it into completion**
+- [x] **Step 4: Hook it into completion**
 
 In `app/api/work_plan_tracking.py`, inside `complete_job`, immediately after the
 `create_log_entry(job_id, user.id, 'completed', {...})` call and **before**
@@ -3760,7 +3766,7 @@ In `app/api/work_plan_tracking.py`, inside `complete_job`, immediately after the
         logger.exception('crew-free ask failed for job %s', job_id)
 ```
 
-- [ ] **Step 5: Add the worker's request endpoint**
+- [x] **Step 5: Add the worker's request endpoint**
 
 In `app/api/work_plan_tracking.py`, after `mark_incomplete` (ends ~line 620):
 
@@ -3773,8 +3779,12 @@ def free_for_more(job_id):
     It buzzes the planners' phones with the same question the automatic check
     raises; the engineer still decides who gets what.
     """
-    user = get_current_user()
-    job = WorkPlanJob.query.get_or_404(job_id)
+    # This module's OWN helpers, not the raw ones: get_authenticated_user()
+    # (line 35) wraps get_current_user() and refuses a missing user instead
+    # of letting `None.role` blow up, and get_job_or_404() (line 51) is what
+    # complete_job and mark_incomplete both already use.
+    user = get_authenticated_user()
+    job = get_job_or_404(job_id)
     if user.role not in ('admin', 'engineer'):
         check_user_assigned_to_job(user.id, job_id)
 
@@ -3789,22 +3799,28 @@ def free_for_more(job_id):
     }), 200
 ```
 
-- [ ] **Step 6: Run to verify it passes**
+- [x] **Step 6: Run to verify it passes**
 
 Run: `./venv/bin/python -m pytest tests/test_crew_free.py tests/test_work_plan_defect_routing.py -q -p no:warnings`
 Expected: PASS — 21 crew-free tests, and the existing completion tests unchanged.
 
-- [ ] **Step 7: Mutation checks**
+- [x] **Step 7: Mutation checks**
 
 1. Drop the `_already_asked_today` guard →
    `test_the_same_crew_is_only_announced_once_a_day` must FAIL. Restore.
 2. Make `forced` ignored → `test_the_worker_may_ask_even_while_holding_work`
    must FAIL. Restore.
 3. Remove the `try/except` around the completion hook and make
-   `ask_for_backfill` raise — an existing completion test must FAIL. Restore.
+   `ask_for_backfill` raise. **There is no existing test to break.**
+   Verified 2026-08-25: before this task NOTHING in the whole suite POSTed
+   to `/api/work-plan-tracking/jobs/<id>/complete` over HTTP, so the single
+   most important rule in this task had no coverage at all. Write that test
+   FIRST — monkeypatch `crew_free.ask_for_backfill` to raise, POST to
+   `/complete`, assert the response is still 200 — then run the mutation
+   against it and watch the RuntimeError escape `complete_job`. Restore.
    **A Telegram problem must never fail a man's completed job.**
 
-- [ ] **Step 8: Stage the commit (ASK Ali first)**
+- [x] **Step 8: Stage the commit (ASK Ali first)**
 
 ```bash
 git add app/services/crew_free.py app/api/work_plan_tracking.py tests/test_crew_free.py
@@ -3829,7 +3845,7 @@ git commit -m "feat: notice a crew that finished early, and ask the engineer"
 currently returns early when `_APPLY` is non-empty, so registering the first
 kind would stop the second from ever loading.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_crew_free.py`:
 
@@ -3938,13 +3954,13 @@ class TestGivingThemTheWork:
         assert 'crew_is_free' in taps._APPLY
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `./venv/bin/python -m pytest tests/test_crew_free.py::TestGivingThemTheWork -q`
 Expected: FAIL — `AttributeError: module ... has no attribute '_registered'`, and
 the placement tests fail because no apply is registered for `crew_is_free`.
 
-- [ ] **Step 3: Fix the registration**
+- [x] **Step 3: Fix the registration**
 
 In `app/services/telegram/taps.py`, replace `_ensure_kinds_registered`:
 
@@ -3968,7 +3984,7 @@ def _ensure_kinds_registered():
     from app.services import crew_free     # noqa: F401
 ```
 
-- [ ] **Step 4: Write the apply**
+- [x] **Step 4: Write the apply**
 
 Append to `app/services/crew_free.py`:
 
@@ -4031,17 +4047,17 @@ Add the import at the top of `app/services/crew_free.py`:
 from app.services.telegram.taps import register
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run: `./venv/bin/python -m pytest tests/test_crew_free.py tests/test_urgent_watch.py tests/test_telegram_taps.py -q -p no:warnings`
 Expected: PASS — all three files.
 
-- [ ] **Step 6: Mutation check**
+- [x] **Step 6: Mutation check**
 
 Put the `if _APPLY: return` guard back in `_ensure_kinds_registered` →
 `test_both_kinds_are_registered` must FAIL. Restore the flag.
 
-- [ ] **Step 7: Stage the commit (ASK Ali first)**
+- [x] **Step 7: Stage the commit (ASK Ali first)**
 
 ```bash
 git add app/services/crew_free.py app/services/telegram/taps.py tests/test_crew_free.py
@@ -4065,7 +4081,7 @@ git commit -m "feat: one tap gives the free crew their next job"
 Lines 275-283 today are a dead-end info card in the `completed` branch with no
 affordance at all — the natural home for this button.
 
-- [ ] **Step 1: Add the client method**
+- [x] **Step 1: Add the client method**
 
 In `frontend/packages/shared/src/api/work-plan-tracking.api.ts`, beside
 `completeJob`:
@@ -4077,7 +4093,7 @@ In `frontend/packages/shared/src/api/work-plan-tracking.api.ts`, beside
   },
 ```
 
-- [ ] **Step 2: Add the words, both languages**
+- [x] **Step 2: Add the words, both languages**
 
 In `frontend/packages/shared/src/i18n/en.json`, inside `"job_execution"`:
 
@@ -4097,7 +4113,7 @@ In `frontend/packages/shared/src/i18n/ar.json`, inside `"job_execution"`:
 
 Edit `src/`, never `dist/` — `dist/` is a build artifact.
 
-- [ ] **Step 3: Add the button**
+- [x] **Step 3: Add the button**
 
 In `frontend/apps/mobile/src/screens/shared/JobExecutionScreen.tsx`, add the
 mutation beside `completeMutation` (line 138):
@@ -4146,7 +4162,7 @@ with a style next to `styles.completeButton`:
   freeButtonText: { color: '#1677ff', fontWeight: '600', fontSize: 15 },
 ```
 
-- [ ] **Step 4: Check both languages have the same keys**
+- [x] **Step 4: Check both languages have the same keys**
 
 Run:
 ```bash
@@ -4160,7 +4176,7 @@ console.log(missing.length ? 'MISSING IN AR: ' + missing : 'both languages match
 Expected: `both languages match`. If `ts-node` is unavailable, use `node -e` with
 the same body.
 
-- [ ] **Step 5: Type-check**
+- [x] **Step 5: Type-check**
 
 Run:
 ```bash
@@ -4170,7 +4186,7 @@ cd frontend && pnpm --filter @inspection/shared exec tsc --noEmit \
 Expected: clean. **pnpm, never npm** — npm destroys the workspace linkage in this
 monorepo.
 
-- [ ] **Step 6: Stage the commit (ASK Ali first)**
+- [x] **Step 6: Stage the commit (ASK Ali first)**
 
 ```bash
 git add frontend/apps/mobile/src/screens/shared/JobExecutionScreen.tsx \
@@ -4191,18 +4207,18 @@ git commit -m "feat(mobile): a free worker can ask for more work"
 - Create: `~/Documents/second-brain/raw/2026-08-25-inspection-app-telegram-taps.md`
 - Modify: this plan (tick the boxes)
 
-- [ ] **Step 1: Full suite**
+- [x] **Step 1: Full suite**
 
 Run: `./venv/bin/python -m pytest tests/ -q -p no:warnings`
 Expected: all green. Baseline before this plan was **650 passed, 1 skipped**;
 this plan adds roughly 60 tests.
 
-- [ ] **Step 2: Migration chain**
+- [x] **Step 2: Migration chain**
 
 Run: `./venv/bin/python -m flask db heads`
 Expected: one head, `s9t0u1v2w3x4 (head)`.
 
-- [ ] **Step 3: A realistic end-to-end scenario, then delete it**
+- [x] **Step 3: A realistic end-to-end scenario, then delete it**
 
 Write a scratch pytest file (NOT committed — the same practice the day-budget
 and evening-truth plans used) that, on a production-shaped week:
@@ -4218,7 +4234,7 @@ and evening-truth plans used) that, on a production-shaped week:
 
 Eyeball the printed output. **Delete the file afterwards.**
 
-- [ ] **Step 4: Records**
+- [x] **Step 4: Records**
 
 - `CLAUDE.md`: a Change Log entry, and move "Plan 3 pending — Telegram taps" out
   of "What Needs Work". Add two items that this work uncovered but did not fix:
@@ -4230,7 +4246,7 @@ Eyeball the printed output. **Delete the file afterwards.**
 - Second brain: `~/Documents/second-brain/raw/2026-08-25-inspection-app-telegram-taps.md`.
 - Tick every checkbox in this plan.
 
-- [ ] **Step 5: Report to Ali**
+- [x] **Step 5: Report to Ali**
 
 What the bot now asks, what a tap now does, what must happen on Render:
 

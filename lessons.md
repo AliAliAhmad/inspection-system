@@ -327,3 +327,63 @@ means the test is asleep, not that the code is right.
 **Corollary:** the strongest evidence in this whole run came from an implementer reporting a
 mutation that did NOT fail. Reward that. A report that only ever confirms expectations is not
 telling you anything.
+
+---
+
+## 2026-08-25 — Plan 3 Stage 2 final review
+
+**LESSON: I sent a reviewer a "full diff" that was `git diff --cached` — the STAGED subset.**
+Four of the eleven Stage 2 files had never been staged, so the completion hook, the entire
+`/free-for-more` endpoint, the savepoint and the kind registration were invisible to the one
+gate meant to see everything. → **Before packaging any review, run `git status --short` and
+account for EVERY line.** A diff that silently omits files reads exactly like a clean one.
+
+**LESSON: the same bug came back a seventh time, one call frame further out.** Six rounds
+closed "the button promises X and the day is charged Y" by making both sides call
+`useful_crew`. The seventh instance was not in the function — it was in the ARGUMENT: the
+offer counted men with hours left, the press counted everyone on the finished job. → **When
+two sides are made to share a function, check they also share its INPUT.** A shared callee
+with different arguments is still two answers.
+
+**LESSON: a spec can mandate a bug, and mine did.** The design doc said to put the completion
+hook "before `db.session.commit()`". Following it put up to eight 15-second Telegram POSTs
+inside a man's open transaction. → **When a review overturns a spec instruction, edit the
+spec in the same change.** Fixing only the code leaves the trap armed for the next author,
+and the diff then looks like an unexplained deviation.
+
+**LESSON: a test with one fixture row cannot tell a choice from a coincidence.**
+`test_swap_crew_hands_it_to_another_team` created exactly ONE assignment rule, so
+`candidates[0]` was the pressed rule by accident and passed while the code ignored the
+engineer's choice entirely. → **To prove a selection is honoured, the fixture must contain at
+least two candidates and the test must pick the one that is NOT first.**
+
+**LESSON: "take the biggest crew the table measured" is not the same as "take the best crew".**
+Ali's curve FLATTENS — a reach stacker is 8h at three men and 8h at four — so stepping to the
+largest measured point spent a man's whole afternoon for zero. The comment in
+`job_durations.py` had said so all along. → **When a lookup table plateaus, ask for the
+SMALLEST input reaching the best output.** And read the table's own comments before writing
+code that reads the table.
+
+**LESSON: a reviewer that goes idle without reporting has done no work.** Two opus reviewers
+analysed this branch and never sent a verdict. The third was dispatched with "Report your
+findings in your REPLY — send text" and produced five real findings, three of them blocking.
+→ **Put the delivery requirement in the dispatch, not just the analysis requirement.**
+
+**LESSON: fixing the arithmetic and leaving the words behind is still a bug.** My clock-check
+fix gave `fits` a second failure cause, but the label still only explained the first — and it
+quoted the MOST-free man while the check fails on the LEAST-free one. The engineer was told a
+4.5-hour job would not fit into eight hours. → **When a condition grows a new branch, grep for
+every sentence that explains that condition and grow those too.** The reviewer found this; the
+arithmetic tests could not, because they never read the message.
+
+**LESSON: `assert 'X' not in text` can never fail when the correct output CONTAINS 'X'.**
+My own guard asserted `'8.0 hours left today (2 men)' not in headline`, but the fixed output is
+`'1.0 to 8.0 hours left today (2 men)'` — which contains it. A green guard guarding nothing,
+and the `even = True` mutation sailed through it. → **Anchor negative string assertions** (line
+start, full line, regex `^`) **and always mutate them.** This is the same family as the
+`{'inline_keyboard': []}` truthiness error earlier in this plan: a premise about strings or
+truthiness that was never tested.
+
+**LESSON: one name, two shapes.** `details['free_clock_hours']` held a scalar while the
+parameter `free_clock_hours` was a per-man list. → **Never let a value and its container share
+a name in the same module.** Renamed to `crew_clock_hours` and `clock_hours_by_man`.

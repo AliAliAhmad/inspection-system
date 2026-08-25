@@ -142,6 +142,7 @@ def _ensure_kinds_registered():
         return
     _registered = True
     from app.services import urgent_watch  # noqa: F401
+    from app.services import crew_free  # noqa: F401
 
 
 def handle_callback(update, user, client=None):

@@ -550,3 +550,72 @@ class TestOneFingerDecides:
         assert proposal.options[3]['key'] == 'day:7'
         assert len(recorder.edited) == 1           # only the presser's own copy
         assert recorder.edited[0][3]['inline_keyboard']
+
+
+class TestAskLeavesNoPhantomBehind:
+    """`ask` writes a proposal row, flushes it to get an id for the buttons,
+    then sends. If anything between the flush and the commit raises, that row
+    is still sitting in the session — and whatever the CALLER commits next
+    sweeps it in.
+
+    The result is a phantom question: status 'open', a real crew recorded on
+    it, not one message row, and nobody ever saw it. It then blocks that crew
+    from being asked again all day, and hides its box orders from every other
+    crew, silently.
+
+    The fix is a SAVEPOINT inside `ask`, not a rollback in the caller: `ask`
+    runs inside `complete_job`, which by then has written a man's completed job
+    and not yet committed it. Rolling back there would throw the completion
+    away — breaking the rule that outranks everything else in this feature.
+    """
+
+    class Exploding:
+        """Raises rather than returning None — a bug inside the send path,
+        not the ordinary network failure `_call` already swallows."""
+
+        def send_message(self, chat_id, text, reply_markup=None):
+            raise RuntimeError('something inside the send path broke')
+
+    def test_a_failure_mid_send_leaves_no_row_behind(self, app, db_session,
+                                                     admin_user):
+        app.config['TELEGRAM_ALLOWED_USERS'] = f'{ALI_TELEGRAM_ID}:{admin_user.id}'
+        from app.services.telegram.ask import ask
+
+        with pytest.raises(RuntimeError):
+            ask('urgent_needs_room', _texts(), _options(),
+                datetime.utcnow() + timedelta(hours=12),
+                details={'order_number': '700000009999'},
+                client=self.Exploding())
+
+        # The caller commits next, exactly as complete_job does.
+        db_session.session.commit()
+
+        assert TelegramProposal.query.count() == 0, (
+            'a phantom question survived — it would block that crew all day '
+            'and hide its jobs from every other crew')
+        assert TelegramProposalMessage.query.count() == 0
+
+    def test_the_callers_own_work_survives(self, app, db_session, admin_user):
+        """The savepoint must discard only what `ask` wrote. Anything the
+        caller had already written and not yet committed must be untouched —
+        that is the man's completed job."""
+        app.config['TELEGRAM_ALLOWED_USERS'] = f'{ALI_TELEGRAM_ID}:{admin_user.id}'
+        from app.services.telegram.ask import ask
+        from app.models import Equipment
+
+        marker = Equipment(name='CALLER-WORK', serial_number='SN-CALLER',
+                           equipment_type='tractor', berth='west')
+        db_session.session.add(marker)
+        db_session.session.flush()
+
+        with pytest.raises(RuntimeError):
+            ask('urgent_needs_room', _texts(), _options(),
+                datetime.utcnow() + timedelta(hours=12),
+                client=self.Exploding())
+
+        db_session.session.commit()
+
+        assert Equipment.query.filter_by(name='CALLER-WORK').count() == 1, (
+            "the caller's uncommitted work was destroyed — this is exactly "
+            "what a rollback in complete_job would do to a completed job")
+        assert TelegramProposal.query.count() == 0
