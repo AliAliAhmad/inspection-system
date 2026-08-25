@@ -1,0 +1,28 @@
+- main [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - heading "Inspection System" [level=3] [ref=e7]
+      - text: Sign in to your account
+    - generic [ref=e8]:
+      - generic [ref=e14]:
+        - img "user" [ref=e16]:
+          - img [ref=e17]
+        - textbox "Email or Username" [ref=e19]
+      - generic [ref=e25]:
+        - img "lock" [ref=e27]:
+          - img [ref=e28]
+        - textbox "Password" [ref=e30]
+        - img "eye-invisible" [ref=e32] [cursor=pointer]:
+          - img [ref=e33]
+      - button "Login" [ref=e41] [cursor=pointer]:
+        - generic [ref=e42]: Login
+    - generic [ref=e44]:
+      - img "global" [ref=e46]:
+        - img [ref=e47]
+      - generic "Language selection" [ref=e50] [cursor=pointer]:
+        - generic [ref=e52]:
+          - combobox "Language selection" [ref=e54]
+          - generic "English" [ref=e55]
+        - generic:
+          - img:
+            - img

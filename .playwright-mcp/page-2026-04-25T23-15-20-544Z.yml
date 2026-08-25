@@ -1,0 +1,361 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e11]:
+      - banner [ref=e12]:
+        - generic [ref=e13]:
+          - img "appstore" [ref=e16] [cursor=pointer]:
+            - img [ref=e17]
+          - strong [ref=e21] [cursor=pointer]: Inspection System
+        - generic [ref=e22]:
+          - img "home" [ref=e24] [cursor=pointer]:
+            - img [ref=e25]
+          - img "search" [ref=e28] [cursor=pointer]:
+            - img [ref=e29]
+          - img "bell" [ref=e34] [cursor=pointer]:
+            - img [ref=e35]
+          - generic [ref=e38] [cursor=pointer]:
+            - img "user" [ref=e41]:
+              - img [ref=e42]
+            - generic [ref=e44]: Hussein Ali Abdul-Hussein
+      - main [ref=e45]:
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e50]:
+                - generic [ref=e51]:
+                  - button "left" [ref=e53] [cursor=pointer]:
+                    - img "left" [ref=e55]:
+                      - img [ref=e56]
+                  - strong [ref=e60]: Apr 26 - May 2, 2026
+                  - button "right" [ref=e62] [cursor=pointer]:
+                    - img "right" [ref=e64]:
+                      - img [ref=e65]
+                - radiogroup "segmented control" [ref=e68]:
+                  - generic [ref=e69]:
+                    - generic [ref=e70] [cursor=pointer]:
+                      - radio "bar-chart"
+                      - img "bar-chart" [ref=e73]:
+                        - img [ref=e74]
+                    - generic [ref=e76] [cursor=pointer]:
+                      - radio "calendar" [checked]
+                      - img "calendar" [ref=e79]:
+                        - img [ref=e80]
+                    - generic [ref=e82] [cursor=pointer]:
+                      - radio "project"
+                      - img "project" [ref=e85]:
+                        - img [ref=e86]
+                    - generic [ref=e88] [cursor=pointer]:
+                      - radio "pie-chart"
+                      - img "pie-chart" [ref=e91]:
+                        - img [ref=e92]
+              - generic [ref=e94]:
+                - button "thunderbolt Generate Plan" [ref=e302] [cursor=pointer]:
+                  - generic [ref=e303]:
+                    - img "thunderbolt" [ref=e304]:
+                      - img [ref=e305]
+                    - text: Generate Plan
+                - button "delete Clear All" [ref=e307] [cursor=pointer]:
+                  - img "delete" [ref=e309]:
+                    - img [ref=e310]
+                  - generic [ref=e312]: Clear All
+                - button "Auto-Schedule" [ref=e313] [cursor=pointer]:
+                  - generic [ref=e314]: Auto-Schedule
+                - button "setting Actions" [ref=e95] [cursor=pointer]:
+                  - img "setting" [ref=e97]:
+                    - img [ref=e98]
+                  - generic [ref=e100]: Actions
+                - button "file-pdf Generate PDF" [ref=e315] [cursor=pointer]:
+                  - img "file-pdf" [ref=e317]:
+                    - img [ref=e318]
+                  - generic [ref=e320]: Generate PDF
+                - button "send Publish" [ref=e321] [cursor=pointer]:
+                  - img "send" [ref=e323]:
+                    - img [ref=e324]
+                  - generic [ref=e326]: Publish
+                - button "right" [ref=e108] [cursor=pointer]:
+                  - img "right" [ref=e110]:
+                    - img [ref=e111]
+            - generic [ref=e113]:
+              - generic [ref=e114]:
+                - button "East Berth" [ref=e115] [cursor=pointer]:
+                  - generic [ref=e116]: East Berth
+                - button "West Berth" [ref=e117] [cursor=pointer]:
+                  - generic [ref=e118]: West Berth
+              - generic [ref=e330]: DRAFT • 0 jobs
+              - generic [ref=e119]:
+                - switch "robot robot" [checked] [ref=e120] [cursor=pointer]:
+                  - generic [ref=e122]:
+                    - generic:
+                      - img "robot":
+                        - img
+                    - generic:
+                      - img "robot":
+                        - img
+                - button "bulb AI" [ref=e123] [cursor=pointer]:
+                  - img "bulb" [ref=e125]:
+                    - img [ref=e126]
+                  - generic [ref=e128]: AI
+                - button "alert Conflicts" [ref=e129] [cursor=pointer]:
+                  - img "alert" [ref=e131]:
+                    - img [ref=e132]
+                  - generic [ref=e134]: Conflicts
+                - button "down Stats" [ref=e135] [cursor=pointer]:
+                  - img "down" [ref=e137]:
+                    - img [ref=e138]
+                  - generic [ref=e140]: Stats
+            - generic [ref=e141]:
+              - generic [ref=e331]: "🔧 Mech: 20 free"
+              - generic [ref=e332]: "⚡ Elec: 13 free"
+            - generic [ref=e333]:
+              - generic [ref=e334]:
+                - generic [ref=e336]: Plan Healthy
+                - generic [ref=e337]: 100%
+              - generic [ref=e339]:
+                - generic [ref=e340]:
+                  - generic [ref=e341]: "0"
+                  - generic [ref=e342]: jobs
+                - generic [ref=e343]: This week
+              - generic [ref=e345]:
+                - generic [ref=e346]: "0"
+                - generic [ref=e347]: / 0 assigned
+              - generic [ref=e351]:
+                - generic [ref=e352]: ✓
+                - generic [ref=e353]: all SAP ok
+              - generic [ref=e356]: Drag jobs from the right panel to schedule them
+            - generic [ref=e142]:
+              - generic [ref=e358]:
+                - generic [ref=e359]:
+                  - generic [ref=e360]: 👷
+                  - generic [ref=e361]: Engineers
+                  - superscript [ref=e363]:
+                    - generic [ref=e365]: "5"
+                - button "H Haidar" [ref=e366]:
+                  - generic [ref=e367]: H
+                  - generic [ref=e368]: Haidar
+                - button "H Hussein" [ref=e369]:
+                  - generic [ref=e370]: H
+                  - generic [ref=e371]: Hussein
+                - button "M Methaq" [ref=e380]:
+                  - generic [ref=e381]: M
+                  - generic [ref=e382]: Methaq
+                - button "M Mussab" [ref=e391]:
+                  - generic [ref=e392]: M
+                  - generic [ref=e393]: Mussab
+                - button "M Mustafa" [ref=e394]:
+                  - generic [ref=e395]: M
+                  - generic [ref=e396]: Mustafa
+              - generic [ref=e145]:
+                - generic [ref=e406]:
+                  - generic [ref=e408] [cursor=pointer]:
+                    - generic [ref=e409]:
+                      - generic [ref=e410]: Sun
+                      - generic [ref=e411]: "26"
+                    - generic [ref=e412]:
+                      - superscript [ref=e414]: "0"
+                      - generic [ref=e415]:
+                        - img "search" [ref=e416]:
+                          - img [ref=e417]
+                        - text: "13"
+                  - generic [ref=e420]:
+                    - generic [ref=e421]: ＋
+                    - generic [ref=e422]: Drag job here
+                  - generic [ref=e424]:
+                    - generic [ref=e425]: 0 jobs
+                    - generic [ref=e426]: —
+                - generic [ref=e429]:
+                  - generic [ref=e431] [cursor=pointer]:
+                    - generic [ref=e432]:
+                      - generic [ref=e433]: Mon
+                      - generic [ref=e434]: "27"
+                    - superscript [ref=e437]: "0"
+                  - generic [ref=e439]:
+                    - generic [ref=e440]: ＋
+                    - generic [ref=e441]: Drag job here
+                  - generic [ref=e443]:
+                    - generic [ref=e444]: 0 jobs
+                    - generic [ref=e445]: —
+                - generic [ref=e448]:
+                  - generic [ref=e450] [cursor=pointer]:
+                    - generic [ref=e451]:
+                      - generic [ref=e452]: Tue
+                      - generic [ref=e453]: "28"
+                    - superscript [ref=e456]: "0"
+                  - generic [ref=e458]:
+                    - generic [ref=e459]: ＋
+                    - generic [ref=e460]: Drag job here
+                  - generic [ref=e462]:
+                    - generic [ref=e463]: 0 jobs
+                    - generic [ref=e464]: —
+                - generic [ref=e467]:
+                  - generic [ref=e469] [cursor=pointer]:
+                    - generic [ref=e470]:
+                      - generic [ref=e471]: Wed
+                      - generic [ref=e472]: "29"
+                    - superscript [ref=e475]: "0"
+                  - generic [ref=e477]:
+                    - generic [ref=e478]: ＋
+                    - generic [ref=e479]: Drag job here
+                  - generic [ref=e481]:
+                    - generic [ref=e482]: 0 jobs
+                    - generic [ref=e483]: —
+                - generic [ref=e486]:
+                  - generic [ref=e488] [cursor=pointer]:
+                    - generic [ref=e489]:
+                      - generic [ref=e490]: Thu
+                      - generic [ref=e491]: "30"
+                    - superscript [ref=e494]: "0"
+                  - generic [ref=e496]:
+                    - generic [ref=e497]: ＋
+                    - generic [ref=e498]: Drag job here
+                  - generic [ref=e500]:
+                    - generic [ref=e501]: 0 jobs
+                    - generic [ref=e502]: —
+                - generic [ref=e505]:
+                  - generic [ref=e507] [cursor=pointer]:
+                    - generic [ref=e508]:
+                      - generic [ref=e509]: Fri
+                      - generic [ref=e510]: "1"
+                    - superscript [ref=e513]: "0"
+                  - generic [ref=e515]:
+                    - generic [ref=e516]: ＋
+                    - generic [ref=e517]: Drag job here
+                  - generic [ref=e519]:
+                    - generic [ref=e520]: 0 jobs
+                    - generic [ref=e521]: —
+                - generic [ref=e524]:
+                  - generic [ref=e526] [cursor=pointer]:
+                    - generic [ref=e527]:
+                      - generic [ref=e528]: Sat
+                      - generic [ref=e529]: "2"
+                    - superscript [ref=e532]: "0"
+                  - generic [ref=e534]:
+                    - generic [ref=e535]: ＋
+                    - generic [ref=e536]: Drag job here
+                  - generic [ref=e538]:
+                    - generic [ref=e539]: 0 jobs
+                    - generic [ref=e540]: —
+          - generic [ref=e149]:
+            - tablist [ref=e150]:
+              - generic [ref=e152]:
+                - tab "Jobs Pool" [selected] [ref=e154] [cursor=pointer]
+                - tab "Team Pool 4 2" [ref=e542] [cursor=pointer]:
+                  - generic [ref=e543]:
+                    - text: Team Pool
+                    - superscript [ref=e545]:
+                      - generic [ref=e546]:
+                        - generic [ref=e547]: "4"
+                        - generic [ref=e548]: "2"
+            - tabpanel "Jobs Pool" [ref=e159]:
+              - generic [ref=e161]:
+                - generic [ref=e162]:
+                  - generic [ref=e163]:
+                    - generic [ref=e164]:
+                      - generic [ref=e165]: 📦
+                      - generic [ref=e166]: Jobs Pool
+                      - superscript [ref=e557]: 99+
+                    - generic [ref=e169]:
+                      - button "upload Import" [ref=e171] [cursor=pointer]:
+                        - img "upload" [ref=e173]:
+                          - img [ref=e174]
+                        - generic [ref=e176]: Import
+                      - button "plus Add" [ref=e178] [cursor=pointer]:
+                        - img "plus" [ref=e180]:
+                          - img [ref=e181]
+                        - generic [ref=e184]: Add
+                      - button "delete" [ref=e559] [cursor=pointer]:
+                        - img "delete" [ref=e561]:
+                          - img [ref=e562]
+                  - generic [ref=e191]:
+                    - generic [ref=e193]:
+                      - img "search" [ref=e195]:
+                        - img [ref=e196]
+                      - textbox "Search equipment, description..." [ref=e198]
+                    - generic [ref=e201] [cursor=pointer]:
+                      - generic [ref=e203]:
+                        - combobox [ref=e205]
+                        - generic: Filter by equipment...
+                      - generic:
+                        - img:
+                          - img
+                    - generic [ref=e207] [cursor=pointer]:
+                      - generic [ref=e209]:
+                        - combobox [ref=e211]
+                        - generic: Filter by equipment type...
+                      - generic:
+                        - img:
+                          - img
+                    - generic [ref=e213]:
+                      - button "All" [ref=e214] [cursor=pointer]:
+                        - generic [ref=e215]: All
+                      - button "Urgent" [ref=e216] [cursor=pointer]:
+                        - generic [ref=e217]: Urgent
+                      - button "High" [ref=e218] [cursor=pointer]:
+                        - generic [ref=e219]: High
+                      - button "Normal" [ref=e220] [cursor=pointer]:
+                        - generic [ref=e221]: Normal
+                - generic [ref=e222]:
+                  - generic [ref=e223] [cursor=pointer]:
+                    - img "tool" [ref=e224]:
+                      - img [ref=e225]
+                    - text: PRM
+                  - generic [ref=e227] [cursor=pointer]:
+                    - img "bug" [ref=e228]:
+                      - img [ref=e229]
+                    - text: Defect
+                    - superscript [ref=e565]: 99+
+                - generic [ref=e234]:
+                  - generic [ref=e235]:
+                    - button "clock-circle Hourly" [ref=e237] [cursor=pointer]:
+                      - img "clock-circle" [ref=e239]:
+                        - img [ref=e240]
+                      - generic [ref=e243]: Hourly
+                    - button "Calendar" [ref=e245] [cursor=pointer]:
+                      - generic [ref=e246]: Calendar
+                  - text: (4000h → 250h)
+                - generic [ref=e566]:
+                  - img "No data" [ref=e568]
+                  - generic [ref=e574]: No PRM jobs available
+                - generic [ref=e257]: ↕ Drag to calendar · Drag back to remove
+        - status [ref=e258]
+    - button "robot" [ref=e259] [cursor=pointer]:
+      - img "robot" [ref=e261]:
+        - img [ref=e262]
+  - generic:
+    - generic: "*"
+  - menu [ref=e576]:
+    - menuitem "🎯 Priority First Schedule highest priority jobs first" [ref=e577] [cursor=pointer]:
+      - generic [ref=e579]:
+        - generic [ref=e580]: 🎯
+        - generic [ref=e581]:
+          - generic [ref=e582]: Priority First
+          - generic [ref=e583]: Schedule highest priority jobs first
+    - menuitem "🚢 Travel Optimized Group by berth/location per day" [ref=e584] [cursor=pointer]:
+      - generic [ref=e586]:
+        - generic [ref=e587]: 🚢
+        - generic [ref=e588]:
+          - generic [ref=e589]: Travel Optimized
+          - generic [ref=e590]: Group by berth/location per day
+    - menuitem "⚖️ Team Balanced Distribute evenly across workers" [ref=e591] [cursor=pointer]:
+      - generic [ref=e593]:
+        - generic [ref=e594]: ⚖️
+        - generic [ref=e595]:
+          - generic [ref=e596]: Team Balanced
+          - generic [ref=e597]: Distribute evenly across workers
+    - menuitem "🔧 PM Compliance Prioritize overdue PMs" [ref=e598] [cursor=pointer]:
+      - generic [ref=e600]:
+        - generic [ref=e601]: 🔧
+        - generic [ref=e602]:
+          - generic [ref=e603]: PM Compliance
+          - generic [ref=e604]: Prioritize overdue PMs
+    - menuitem "📋 Copy Last Week Clone last week's structure" [ref=e605] [cursor=pointer]:
+      - generic [ref=e607]:
+        - generic [ref=e608]: 📋
+        - generic [ref=e609]:
+          - generic [ref=e610]: Copy Last Week
+          - generic [ref=e611]: Clone last week's structure
+    - 'menuitem "🧩 Combined (3 Steps) Manual: PMs → urgent defects → normal defects" [ref=e612] [cursor=pointer]':
+      - generic [ref=e614]:
+        - generic [ref=e615]: 🧩
+        - generic [ref=e616]:
+          - generic [ref=e617]: Combined (3 Steps)
+          - generic [ref=e618]: "Manual: PMs → urgent defects → normal defects"

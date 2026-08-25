@@ -1,0 +1,786 @@
+- generic [ref=e2]:
+  - generic [ref=e11]:
+    - banner [ref=e12]:
+      - generic [ref=e13]:
+        - img "appstore" [ref=e16] [cursor=pointer]:
+          - img [ref=e17]
+        - strong [ref=e21] [cursor=pointer]: Inspection System
+      - generic [ref=e22]:
+        - img "home" [ref=e24] [cursor=pointer]:
+          - img [ref=e25]
+        - img "search" [ref=e28] [cursor=pointer]:
+          - img [ref=e29]
+        - switch "bulb bulb" [ref=e32] [cursor=pointer]:
+          - generic [ref=e34]:
+            - generic:
+              - img "bulb":
+                - img
+            - generic:
+              - img "bulb":
+                - img
+        - img "bell" [ref=e38] [cursor=pointer]:
+          - img [ref=e39]
+        - generic [ref=e42] [cursor=pointer]:
+          - img "user" [ref=e45]:
+            - img [ref=e46]
+          - generic [ref=e48]: Hussein Ali Abdul-Hussein
+    - generic [ref=e49]:
+      - generic [ref=e52]: LIVE
+      - generic [ref=e54]:
+        - generic [ref=e55] [cursor=pointer]:
+          - generic [ref=e57]: Equipment
+          - generic [ref=e58]: Pump P-2204 vibration exceeds threshold — immediate inspection required
+          - generic [ref=e59]: 2m ago
+        - generic [ref=e61] [cursor=pointer]:
+          - generic [ref=e63]: Safety
+          - generic [ref=e64]: Safety valve SV-3302 failed pressure test — equipment shutdown initiated
+          - generic [ref=e65]: 5m ago
+        - generic [ref=e67] [cursor=pointer]:
+          - generic [ref=e69]: Inspections
+          - generic [ref=e70]: 3 inspections overdue for East Berth — reassignment recommended
+          - generic [ref=e71]: 8m ago
+        - generic [ref=e73] [cursor=pointer]:
+          - generic [ref=e75]: Running Hours
+          - generic [ref=e76]: Generator G-101 running hours approaching service interval (4,850 / 5,000 hrs)
+          - generic [ref=e77]: 45m ago
+        - generic [ref=e79]:
+          - generic [ref=e81]: Performance
+          - generic [ref=e82]: Ahmed K. completed 12 inspections today — highest on team
+          - generic [ref=e83]: 15m ago
+        - generic [ref=e85]:
+          - generic [ref=e87]: Work Plan
+          - generic [ref=e88]: New work plan published for Week 8 — 47 jobs scheduled across 2 berths
+          - generic [ref=e89]: 1h ago
+        - generic [ref=e91]:
+          - generic [ref=e93]: KPI
+          - generic [ref=e94]: "Weekly inspection target reached: 94% completion rate"
+          - generic [ref=e95]: 30m ago
+        - generic [ref=e97] [cursor=pointer]:
+          - generic [ref=e99]: Equipment
+          - generic [ref=e100]: Pump P-2204 vibration exceeds threshold — immediate inspection required
+          - generic [ref=e101]: 2m ago
+        - generic [ref=e103] [cursor=pointer]:
+          - generic [ref=e105]: Safety
+          - generic [ref=e106]: Safety valve SV-3302 failed pressure test — equipment shutdown initiated
+          - generic [ref=e107]: 5m ago
+        - generic [ref=e109] [cursor=pointer]:
+          - generic [ref=e111]: Inspections
+          - generic [ref=e112]: 3 inspections overdue for East Berth — reassignment recommended
+          - generic [ref=e113]: 8m ago
+        - generic [ref=e115] [cursor=pointer]:
+          - generic [ref=e117]: Running Hours
+          - generic [ref=e118]: Generator G-101 running hours approaching service interval (4,850 / 5,000 hrs)
+          - generic [ref=e119]: 45m ago
+        - generic [ref=e121]:
+          - generic [ref=e123]: Performance
+          - generic [ref=e124]: Ahmed K. completed 12 inspections today — highest on team
+          - generic [ref=e125]: 15m ago
+        - generic [ref=e127]:
+          - generic [ref=e129]: Work Plan
+          - generic [ref=e130]: New work plan published for Week 8 — 47 jobs scheduled across 2 berths
+          - generic [ref=e131]: 1h ago
+        - generic [ref=e133]:
+          - generic [ref=e135]: KPI
+          - generic [ref=e136]: "Weekly inspection target reached: 94% completion rate"
+          - generic [ref=e137]: 30m ago
+      - generic [ref=e140]: "7"
+    - main [ref=e141]:
+      - generic [ref=e142]:
+        - generic [ref=e143]:
+          - generic [ref=e147]:
+            - generic [ref=e148]: Today Total
+            - generic [ref=e149]:
+              - img "calendar" [ref=e151]:
+                - img [ref=e152]
+              - generic [ref=e154]: "28"
+          - generic [ref=e158]:
+            - generic [ref=e159]: Unassigned
+            - generic [ref=e160]:
+              - img "exclamation-circle" [ref=e162]:
+                - img [ref=e163]
+              - generic [ref=e166]: "15"
+          - generic [ref=e170]:
+            - generic [ref=e171]: Completed
+            - generic [ref=e172]:
+              - img "check-circle" [ref=e174]:
+                - img [ref=e175]
+              - generic [ref=e178]: "10"
+          - generic [ref=e182]:
+            - generic [ref=e183]: Overdue
+            - generic [ref=e184]:
+              - img "clock-circle" [ref=e186]:
+                - img [ref=e187]
+              - generic [ref=e190]: "211"
+          - generic [ref=e194]:
+            - generic [ref=e195]: Week Completion
+            - generic [ref=e196]:
+              - progressbar [ref=e198]
+              - generic [ref=e203]: "19.8"
+              - generic [ref=e204]: "%"
+          - generic [ref=e208] [cursor=pointer]:
+            - generic [ref=e209]: Inspector Workload
+            - generic [ref=e210]:
+              - img "user" [ref=e212]:
+                - img [ref=e213]
+              - generic [ref=e215]: "10"
+              - generic [ref=e216]: active
+        - generic [ref=e219]:
+          - tablist [ref=e220]:
+            - generic [ref=e222]:
+              - tab "table Assignments" [selected] [ref=e224] [cursor=pointer]:
+                - generic [ref=e225]:
+                  - img "table" [ref=e226]:
+                    - img [ref=e227]
+                  - text: Assignments
+              - tab "cluster Smart Batching" [ref=e230] [cursor=pointer]:
+                - generic [ref=e231]:
+                  - img "cluster" [ref=e232]:
+                    - img [ref=e233]
+                  - text: Smart Batching
+              - tab "file Templates" [ref=e236] [cursor=pointer]:
+                - generic [ref=e237]:
+                  - img "file" [ref=e238]:
+                    - img [ref=e239]
+                  - text: Templates
+              - tab "swap Workload Balancer" [ref=e242] [cursor=pointer]:
+                - generic [ref=e243]:
+                  - img "swap" [ref=e244]:
+                    - img [ref=e245]
+                  - text: Workload Balancer
+              - tab "robot AI Intelligence" [ref=e248] [cursor=pointer]:
+                - generic [ref=e249]:
+                  - img "robot" [ref=e250]:
+                    - img [ref=e251]
+                  - text: AI Intelligence
+              - tab "clock-circle SLA Monitor" [ref=e254] [cursor=pointer]:
+                - generic [ref=e255]:
+                  - img "clock-circle" [ref=e256]:
+                    - img [ref=e257]
+                  - text: SLA Monitor
+          - generic:
+            - generic:
+              - tabpanel "table Assignments"
+        - generic [ref=e260]:
+          - generic [ref=e262]:
+            - generic [ref=e264]:
+              - heading "Inspection Assignments" [level=4] [ref=e266]
+              - generic [ref=e268]: 549 total
+            - generic [ref=e270]:
+              - generic [ref=e272]:
+                - button "table" [ref=e273] [cursor=pointer]:
+                  - img "table" [ref=e275]:
+                    - img [ref=e276]
+                - button "calendar" [ref=e278] [cursor=pointer]:
+                  - img "calendar" [ref=e280]:
+                    - img [ref=e281]
+              - button "reload" [ref=e284] [cursor=pointer]:
+                - img "reload" [ref=e286]:
+                  - img [ref=e287]
+              - button "delete Delete Unassigned" [ref=e290] [cursor=pointer]:
+                - img "delete" [ref=e292]:
+                  - img [ref=e293]
+                - generic [ref=e295]: Delete Unassigned
+              - button "plus Generate List" [ref=e297] [cursor=pointer]:
+                - img "plus" [ref=e299]:
+                  - img [ref=e300]
+                - generic [ref=e303]: Generate List
+          - generic [ref=e304]:
+            - generic [ref=e305]:
+              - generic [ref=e308]:
+                - textbox "Date" [ref=e309]
+                - generic:
+                  - img "calendar":
+                    - img
+              - generic [ref=e311] [cursor=pointer]:
+                - generic [ref=e313]:
+                  - combobox [ref=e315]
+                  - generic: Shift
+                - generic:
+                  - img:
+                    - img
+              - generic [ref=e317] [cursor=pointer]:
+                - generic [ref=e319]:
+                  - combobox [ref=e321]
+                  - generic: Status
+                - generic:
+                  - img:
+                    - img
+              - generic [ref=e323] [cursor=pointer]:
+                - generic [ref=e325]:
+                  - combobox [ref=e327]
+                  - generic: Berth
+                - generic:
+                  - img:
+                    - img
+              - generic [ref=e329] [cursor=pointer]:
+                - generic [ref=e331]:
+                  - combobox [ref=e333]
+                  - generic: Equipment Type
+                - generic:
+                  - img:
+                    - img
+              - button "Clear Filters" [ref=e335] [cursor=pointer]:
+                - generic [ref=e336]: Clear Filters
+            - alert [ref=e337]:
+              - generic [ref=e339]: 134 assignments need team assignment
+              - button "thunderbolt Select All Unassigned" [ref=e341] [cursor=pointer]:
+                - img "thunderbolt" [ref=e343]:
+                  - img [ref=e344]
+                - generic [ref=e346]: Select All Unassigned
+            - generic [ref=e349]:
+              - table [ref=e353]:
+                - rowgroup [ref=e365]:
+                  - row "Select all Date Shift Equipment Type Berth Status Mech Elec Actions" [ref=e366]:
+                    - columnheader "Select all" [ref=e367]:
+                      - checkbox "Select all" [ref=e371] [cursor=pointer]
+                    - columnheader "Date" [ref=e373]
+                    - columnheader "Shift" [ref=e374]
+                    - columnheader "Equipment" [ref=e375]
+                    - columnheader "Type" [ref=e376]
+                    - columnheader "Berth" [ref=e377]
+                    - columnheader "Status" [ref=e378]
+                    - columnheader "Mech" [ref=e379]
+                    - columnheader "Elec" [ref=e380]
+                    - columnheader "Actions" [ref=e381]
+                - rowgroup [ref=e382]:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - checkbox
+                  - row "26/04/2026 DAY TT003 TT WEST UNASSIGNED — — team Assign robot delete" [ref=e383]:
+                    - cell [ref=e384]:
+                      - checkbox [ref=e387] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e389]
+                    - cell "DAY" [ref=e390]:
+                      - generic [ref=e391]: DAY
+                    - cell "TT003" [ref=e392]
+                    - cell "TT" [ref=e393]
+                    - cell "WEST" [ref=e394]
+                    - cell "UNASSIGNED" [ref=e395]:
+                      - generic [ref=e397]: UNASSIGNED
+                    - cell "—" [ref=e398]
+                    - cell "—" [ref=e399]
+                    - cell "team Assign robot delete" [ref=e400]:
+                      - generic [ref=e401]:
+                        - button "team Assign" [ref=e403] [cursor=pointer]:
+                          - img "team" [ref=e405]:
+                            - img [ref=e406]
+                          - generic [ref=e408]: Assign
+                        - button "robot" [ref=e410] [cursor=pointer]:
+                          - img "robot" [ref=e412]:
+                            - img [ref=e413]
+                        - button "delete" [ref=e416] [cursor=pointer]:
+                          - img "delete" [ref=e418]:
+                            - img [ref=e419]
+                  - row "26/04/2026 DAY ECH02 ECH WEST UNASSIGNED — — team Assign robot delete" [ref=e421]:
+                    - cell [ref=e422]:
+                      - checkbox [ref=e425] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e427]
+                    - cell "DAY" [ref=e428]:
+                      - generic [ref=e429]: DAY
+                    - cell "ECH02" [ref=e430]
+                    - cell "ECH" [ref=e431]
+                    - cell "WEST" [ref=e432]
+                    - cell "UNASSIGNED" [ref=e433]:
+                      - generic [ref=e435]: UNASSIGNED
+                    - cell "—" [ref=e436]
+                    - cell "—" [ref=e437]
+                    - cell "team Assign robot delete" [ref=e438]:
+                      - generic [ref=e439]:
+                        - button "team Assign" [ref=e441] [cursor=pointer]:
+                          - img "team" [ref=e443]:
+                            - img [ref=e444]
+                          - generic [ref=e446]: Assign
+                        - button "robot" [ref=e448] [cursor=pointer]:
+                          - img "robot" [ref=e450]:
+                            - img [ref=e451]
+                        - button "delete" [ref=e454] [cursor=pointer]:
+                          - img "delete" [ref=e456]:
+                            - img [ref=e457]
+                  - row "26/04/2026 DAY RS107 RS WEST UNASSIGNED — — team Assign robot delete" [ref=e459]:
+                    - cell [ref=e460]:
+                      - checkbox [ref=e463] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e465]
+                    - cell "DAY" [ref=e466]:
+                      - generic [ref=e467]: DAY
+                    - cell "RS107" [ref=e468]
+                    - cell "RS" [ref=e469]
+                    - cell "WEST" [ref=e470]
+                    - cell "UNASSIGNED" [ref=e471]:
+                      - generic [ref=e473]: UNASSIGNED
+                    - cell "—" [ref=e474]
+                    - cell "—" [ref=e475]
+                    - cell "team Assign robot delete" [ref=e476]:
+                      - generic [ref=e477]:
+                        - button "team Assign" [ref=e479] [cursor=pointer]:
+                          - img "team" [ref=e481]:
+                            - img [ref=e482]
+                          - generic [ref=e484]: Assign
+                        - button "robot" [ref=e486] [cursor=pointer]:
+                          - img "robot" [ref=e488]:
+                            - img [ref=e489]
+                        - button "delete" [ref=e492] [cursor=pointer]:
+                          - img "delete" [ref=e494]:
+                            - img [ref=e495]
+                  - row "26/04/2026 DAY FL302 FL WEST UNASSIGNED — — team Assign robot delete" [ref=e497]:
+                    - cell [ref=e498]:
+                      - checkbox [ref=e501] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e503]
+                    - cell "DAY" [ref=e504]:
+                      - generic [ref=e505]: DAY
+                    - cell "FL302" [ref=e506]
+                    - cell "FL" [ref=e507]
+                    - cell "WEST" [ref=e508]
+                    - cell "UNASSIGNED" [ref=e509]:
+                      - generic [ref=e511]: UNASSIGNED
+                    - cell "—" [ref=e512]
+                    - cell "—" [ref=e513]
+                    - cell "team Assign robot delete" [ref=e514]:
+                      - generic [ref=e515]:
+                        - button "team Assign" [ref=e517] [cursor=pointer]:
+                          - img "team" [ref=e519]:
+                            - img [ref=e520]
+                          - generic [ref=e522]: Assign
+                        - button "robot" [ref=e524] [cursor=pointer]:
+                          - img "robot" [ref=e526]:
+                            - img [ref=e527]
+                        - button "delete" [ref=e530] [cursor=pointer]:
+                          - img "delete" [ref=e532]:
+                            - img [ref=e533]
+                  - row "26/04/2026 DAY TT042 TT EAST UNASSIGNED — — team Assign robot delete" [ref=e535]:
+                    - cell [ref=e536]:
+                      - checkbox [ref=e539] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e541]
+                    - cell "DAY" [ref=e542]:
+                      - generic [ref=e543]: DAY
+                    - cell "TT042" [ref=e544]
+                    - cell "TT" [ref=e545]
+                    - cell "EAST" [ref=e546]
+                    - cell "UNASSIGNED" [ref=e547]:
+                      - generic [ref=e549]: UNASSIGNED
+                    - cell "—" [ref=e550]
+                    - cell "—" [ref=e551]
+                    - cell "team Assign robot delete" [ref=e552]:
+                      - generic [ref=e553]:
+                        - button "team Assign" [ref=e555] [cursor=pointer]:
+                          - img "team" [ref=e557]:
+                            - img [ref=e558]
+                          - generic [ref=e560]: Assign
+                        - button "robot" [ref=e562] [cursor=pointer]:
+                          - img "robot" [ref=e564]:
+                            - img [ref=e565]
+                        - button "delete" [ref=e568] [cursor=pointer]:
+                          - img "delete" [ref=e570]:
+                            - img [ref=e571]
+                  - row "26/04/2026 DAY TT043 TT EAST UNASSIGNED — — team Assign robot delete" [ref=e573]:
+                    - cell [ref=e574]:
+                      - checkbox [ref=e577] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e579]
+                    - cell "DAY" [ref=e580]:
+                      - generic [ref=e581]: DAY
+                    - cell "TT043" [ref=e582]
+                    - cell "TT" [ref=e583]
+                    - cell "EAST" [ref=e584]
+                    - cell "UNASSIGNED" [ref=e585]:
+                      - generic [ref=e587]: UNASSIGNED
+                    - cell "—" [ref=e588]
+                    - cell "—" [ref=e589]
+                    - cell "team Assign robot delete" [ref=e590]:
+                      - generic [ref=e591]:
+                        - button "team Assign" [ref=e593] [cursor=pointer]:
+                          - img "team" [ref=e595]:
+                            - img [ref=e596]
+                          - generic [ref=e598]: Assign
+                        - button "robot" [ref=e600] [cursor=pointer]:
+                          - img "robot" [ref=e602]:
+                            - img [ref=e603]
+                        - button "delete" [ref=e606] [cursor=pointer]:
+                          - img "delete" [ref=e608]:
+                            - img [ref=e609]
+                  - row "26/04/2026 DAY TT053 TT EAST UNASSIGNED — — team Assign robot delete" [ref=e611]:
+                    - cell [ref=e612]:
+                      - checkbox [ref=e615] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e617]
+                    - cell "DAY" [ref=e618]:
+                      - generic [ref=e619]: DAY
+                    - cell "TT053" [ref=e620]
+                    - cell "TT" [ref=e621]
+                    - cell "EAST" [ref=e622]
+                    - cell "UNASSIGNED" [ref=e623]:
+                      - generic [ref=e625]: UNASSIGNED
+                    - cell "—" [ref=e626]
+                    - cell "—" [ref=e627]
+                    - cell "team Assign robot delete" [ref=e628]:
+                      - generic [ref=e629]:
+                        - button "team Assign" [ref=e631] [cursor=pointer]:
+                          - img "team" [ref=e633]:
+                            - img [ref=e634]
+                          - generic [ref=e636]: Assign
+                        - button "robot" [ref=e638] [cursor=pointer]:
+                          - img "robot" [ref=e640]:
+                            - img [ref=e641]
+                        - button "delete" [ref=e644] [cursor=pointer]:
+                          - img "delete" [ref=e646]:
+                            - img [ref=e647]
+                  - row "26/04/2026 DAY TT059 TT EAST UNASSIGNED — — team Assign robot delete" [ref=e649]:
+                    - cell [ref=e650]:
+                      - checkbox [ref=e653] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e655]
+                    - cell "DAY" [ref=e656]:
+                      - generic [ref=e657]: DAY
+                    - cell "TT059" [ref=e658]
+                    - cell "TT" [ref=e659]
+                    - cell "EAST" [ref=e660]
+                    - cell "UNASSIGNED" [ref=e661]:
+                      - generic [ref=e663]: UNASSIGNED
+                    - cell "—" [ref=e664]
+                    - cell "—" [ref=e665]
+                    - cell "team Assign robot delete" [ref=e666]:
+                      - generic [ref=e667]:
+                        - button "team Assign" [ref=e669] [cursor=pointer]:
+                          - img "team" [ref=e671]:
+                            - img [ref=e672]
+                          - generic [ref=e674]: Assign
+                        - button "robot" [ref=e676] [cursor=pointer]:
+                          - img "robot" [ref=e678]:
+                            - img [ref=e679]
+                        - button "delete" [ref=e682] [cursor=pointer]:
+                          - img "delete" [ref=e684]:
+                            - img [ref=e685]
+                  - row "26/04/2026 DAY FL330 FL WEST UNASSIGNED — — team Assign robot delete" [ref=e687]:
+                    - cell [ref=e688]:
+                      - checkbox [ref=e691] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e693]
+                    - cell "DAY" [ref=e694]:
+                      - generic [ref=e695]: DAY
+                    - cell "FL330" [ref=e696]
+                    - cell "FL" [ref=e697]
+                    - cell "WEST" [ref=e698]
+                    - cell "UNASSIGNED" [ref=e699]:
+                      - generic [ref=e701]: UNASSIGNED
+                    - cell "—" [ref=e702]
+                    - cell "—" [ref=e703]
+                    - cell "team Assign robot delete" [ref=e704]:
+                      - generic [ref=e705]:
+                        - button "team Assign" [ref=e707] [cursor=pointer]:
+                          - img "team" [ref=e709]:
+                            - img [ref=e710]
+                          - generic [ref=e712]: Assign
+                        - button "robot" [ref=e714] [cursor=pointer]:
+                          - img "robot" [ref=e716]:
+                            - img [ref=e717]
+                        - button "delete" [ref=e720] [cursor=pointer]:
+                          - img "delete" [ref=e722]:
+                            - img [ref=e723]
+                  - row "26/04/2026 DAY ECH10 ECH EAST UNASSIGNED — — team Assign robot delete" [ref=e725]:
+                    - cell [ref=e726]:
+                      - checkbox [ref=e729] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e731]
+                    - cell "DAY" [ref=e732]:
+                      - generic [ref=e733]: DAY
+                    - cell "ECH10" [ref=e734]
+                    - cell "ECH" [ref=e735]
+                    - cell "EAST" [ref=e736]
+                    - cell "UNASSIGNED" [ref=e737]:
+                      - generic [ref=e739]: UNASSIGNED
+                    - cell "—" [ref=e740]
+                    - cell "—" [ref=e741]
+                    - cell "team Assign robot delete" [ref=e742]:
+                      - generic [ref=e743]:
+                        - button "team Assign" [ref=e745] [cursor=pointer]:
+                          - img "team" [ref=e747]:
+                            - img [ref=e748]
+                          - generic [ref=e750]: Assign
+                        - button "robot" [ref=e752] [cursor=pointer]:
+                          - img "robot" [ref=e754]:
+                            - img [ref=e755]
+                        - button "delete" [ref=e758] [cursor=pointer]:
+                          - img "delete" [ref=e760]:
+                            - img [ref=e761]
+                  - row "26/04/2026 DAY TT044 TT EAST UNASSIGNED — — team Assign robot delete" [ref=e763]:
+                    - cell [ref=e764]:
+                      - checkbox [ref=e767] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e769]
+                    - cell "DAY" [ref=e770]:
+                      - generic [ref=e771]: DAY
+                    - cell "TT044" [ref=e772]
+                    - cell "TT" [ref=e773]
+                    - cell "EAST" [ref=e774]
+                    - cell "UNASSIGNED" [ref=e775]:
+                      - generic [ref=e777]: UNASSIGNED
+                    - cell "—" [ref=e778]
+                    - cell "—" [ref=e779]
+                    - cell "team Assign robot delete" [ref=e780]:
+                      - generic [ref=e781]:
+                        - button "team Assign" [ref=e783] [cursor=pointer]:
+                          - img "team" [ref=e785]:
+                            - img [ref=e786]
+                          - generic [ref=e788]: Assign
+                        - button "robot" [ref=e790] [cursor=pointer]:
+                          - img "robot" [ref=e792]:
+                            - img [ref=e793]
+                        - button "delete" [ref=e796] [cursor=pointer]:
+                          - img "delete" [ref=e798]:
+                            - img [ref=e799]
+                  - row "26/04/2026 NIGHT RS118 RS WEST UNASSIGNED — — team Assign robot delete" [ref=e801]:
+                    - cell [ref=e802]:
+                      - checkbox [ref=e805] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e807]
+                    - cell "NIGHT" [ref=e808]:
+                      - generic [ref=e809]: NIGHT
+                    - cell "RS118" [ref=e810]
+                    - cell "RS" [ref=e811]
+                    - cell "WEST" [ref=e812]
+                    - cell "UNASSIGNED" [ref=e813]:
+                      - generic [ref=e815]: UNASSIGNED
+                    - cell "—" [ref=e816]
+                    - cell "—" [ref=e817]
+                    - cell "team Assign robot delete" [ref=e818]:
+                      - generic [ref=e819]:
+                        - button "team Assign" [ref=e821] [cursor=pointer]:
+                          - img "team" [ref=e823]:
+                            - img [ref=e824]
+                          - generic [ref=e826]: Assign
+                        - button "robot" [ref=e828] [cursor=pointer]:
+                          - img "robot" [ref=e830]:
+                            - img [ref=e831]
+                        - button "delete" [ref=e834] [cursor=pointer]:
+                          - img "delete" [ref=e836]:
+                            - img [ref=e837]
+                  - row "26/04/2026 NIGHT ECH05 ECH WEST UNASSIGNED — — team Assign robot delete" [ref=e839]:
+                    - cell [ref=e840]:
+                      - checkbox [ref=e843] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e845]
+                    - cell "NIGHT" [ref=e846]:
+                      - generic [ref=e847]: NIGHT
+                    - cell "ECH05" [ref=e848]
+                    - cell "ECH" [ref=e849]
+                    - cell "WEST" [ref=e850]
+                    - cell "UNASSIGNED" [ref=e851]:
+                      - generic [ref=e853]: UNASSIGNED
+                    - cell "—" [ref=e854]
+                    - cell "—" [ref=e855]
+                    - cell "team Assign robot delete" [ref=e856]:
+                      - generic [ref=e857]:
+                        - button "team Assign" [ref=e859] [cursor=pointer]:
+                          - img "team" [ref=e861]:
+                            - img [ref=e862]
+                          - generic [ref=e864]: Assign
+                        - button "robot" [ref=e866] [cursor=pointer]:
+                          - img "robot" [ref=e868]:
+                            - img [ref=e869]
+                        - button "delete" [ref=e872] [cursor=pointer]:
+                          - img "delete" [ref=e874]:
+                            - img [ref=e875]
+                  - row "26/04/2026 NIGHT ECH07 ECH EAST UNASSIGNED — — team Assign robot delete" [ref=e877]:
+                    - cell [ref=e878]:
+                      - checkbox [ref=e881] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e883]
+                    - cell "NIGHT" [ref=e884]:
+                      - generic [ref=e885]: NIGHT
+                    - cell "ECH07" [ref=e886]
+                    - cell "ECH" [ref=e887]
+                    - cell "EAST" [ref=e888]
+                    - cell "UNASSIGNED" [ref=e889]:
+                      - generic [ref=e891]: UNASSIGNED
+                    - cell "—" [ref=e892]
+                    - cell "—" [ref=e893]
+                    - cell "team Assign robot delete" [ref=e894]:
+                      - generic [ref=e895]:
+                        - button "team Assign" [ref=e897] [cursor=pointer]:
+                          - img "team" [ref=e899]:
+                            - img [ref=e900]
+                          - generic [ref=e902]: Assign
+                        - button "robot" [ref=e904] [cursor=pointer]:
+                          - img "robot" [ref=e906]:
+                            - img [ref=e907]
+                        - button "delete" [ref=e910] [cursor=pointer]:
+                          - img "delete" [ref=e912]:
+                            - img [ref=e913]
+                  - row "26/04/2026 NIGHT TT051 TT EAST UNASSIGNED — — team Assign robot delete" [ref=e915]:
+                    - cell [ref=e916]:
+                      - checkbox [ref=e919] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e921]
+                    - cell "NIGHT" [ref=e922]:
+                      - generic [ref=e923]: NIGHT
+                    - cell "TT051" [ref=e924]
+                    - cell "TT" [ref=e925]
+                    - cell "EAST" [ref=e926]
+                    - cell "UNASSIGNED" [ref=e927]:
+                      - generic [ref=e929]: UNASSIGNED
+                    - cell "—" [ref=e930]
+                    - cell "—" [ref=e931]
+                    - cell "team Assign robot delete" [ref=e932]:
+                      - generic [ref=e933]:
+                        - button "team Assign" [ref=e935] [cursor=pointer]:
+                          - img "team" [ref=e937]:
+                            - img [ref=e938]
+                          - generic [ref=e940]: Assign
+                        - button "robot" [ref=e942] [cursor=pointer]:
+                          - img "robot" [ref=e944]:
+                            - img [ref=e945]
+                        - button "delete" [ref=e948] [cursor=pointer]:
+                          - img "delete" [ref=e950]:
+                            - img [ref=e951]
+                  - row "26/04/2026 NIGHT TT057 TT EAST UNASSIGNED — — team Assign robot delete" [ref=e953]:
+                    - cell [ref=e954]:
+                      - checkbox [ref=e957] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e959]
+                    - cell "NIGHT" [ref=e960]:
+                      - generic [ref=e961]: NIGHT
+                    - cell "TT057" [ref=e962]
+                    - cell "TT" [ref=e963]
+                    - cell "EAST" [ref=e964]
+                    - cell "UNASSIGNED" [ref=e965]:
+                      - generic [ref=e967]: UNASSIGNED
+                    - cell "—" [ref=e968]
+                    - cell "—" [ref=e969]
+                    - cell "team Assign robot delete" [ref=e970]:
+                      - generic [ref=e971]:
+                        - button "team Assign" [ref=e973] [cursor=pointer]:
+                          - img "team" [ref=e975]:
+                            - img [ref=e976]
+                          - generic [ref=e978]: Assign
+                        - button "robot" [ref=e980] [cursor=pointer]:
+                          - img "robot" [ref=e982]:
+                            - img [ref=e983]
+                        - button "delete" [ref=e986] [cursor=pointer]:
+                          - img "delete" [ref=e988]:
+                            - img [ref=e989]
+                  - row "26/04/2026 NIGHT TT056 TT EAST UNASSIGNED — — team Assign robot delete" [ref=e991]:
+                    - cell [ref=e992]:
+                      - checkbox [ref=e995] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e997]
+                    - cell "NIGHT" [ref=e998]:
+                      - generic [ref=e999]: NIGHT
+                    - cell "TT056" [ref=e1000]
+                    - cell "TT" [ref=e1001]
+                    - cell "EAST" [ref=e1002]
+                    - cell "UNASSIGNED" [ref=e1003]:
+                      - generic [ref=e1005]: UNASSIGNED
+                    - cell "—" [ref=e1006]
+                    - cell "—" [ref=e1007]
+                    - cell "team Assign robot delete" [ref=e1008]:
+                      - generic [ref=e1009]:
+                        - button "team Assign" [ref=e1011] [cursor=pointer]:
+                          - img "team" [ref=e1013]:
+                            - img [ref=e1014]
+                          - generic [ref=e1016]: Assign
+                        - button "robot" [ref=e1018] [cursor=pointer]:
+                          - img "robot" [ref=e1020]:
+                            - img [ref=e1021]
+                        - button "delete" [ref=e1024] [cursor=pointer]:
+                          - img "delete" [ref=e1026]:
+                            - img [ref=e1027]
+                  - row "26/04/2026 NIGHT RS116 RS EAST UNASSIGNED — — team Assign robot delete" [ref=e1029]:
+                    - cell [ref=e1030]:
+                      - checkbox [ref=e1033] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e1035]
+                    - cell "NIGHT" [ref=e1036]:
+                      - generic [ref=e1037]: NIGHT
+                    - cell "RS116" [ref=e1038]
+                    - cell "RS" [ref=e1039]
+                    - cell "EAST" [ref=e1040]
+                    - cell "UNASSIGNED" [ref=e1041]:
+                      - generic [ref=e1043]: UNASSIGNED
+                    - cell "—" [ref=e1044]
+                    - cell "—" [ref=e1045]
+                    - cell "team Assign robot delete" [ref=e1046]:
+                      - generic [ref=e1047]:
+                        - button "team Assign" [ref=e1049] [cursor=pointer]:
+                          - img "team" [ref=e1051]:
+                            - img [ref=e1052]
+                          - generic [ref=e1054]: Assign
+                        - button "robot" [ref=e1056] [cursor=pointer]:
+                          - img "robot" [ref=e1058]:
+                            - img [ref=e1059]
+                        - button "delete" [ref=e1062] [cursor=pointer]:
+                          - img "delete" [ref=e1064]:
+                            - img [ref=e1065]
+                  - row "26/04/2026 NIGHT TT027 TT WEST UNASSIGNED — — team Assign robot delete" [ref=e1067]:
+                    - cell [ref=e1068]:
+                      - checkbox [ref=e1071] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e1073]
+                    - cell "NIGHT" [ref=e1074]:
+                      - generic [ref=e1075]: NIGHT
+                    - cell "TT027" [ref=e1076]
+                    - cell "TT" [ref=e1077]
+                    - cell "WEST" [ref=e1078]
+                    - cell "UNASSIGNED" [ref=e1079]:
+                      - generic [ref=e1081]: UNASSIGNED
+                    - cell "—" [ref=e1082]
+                    - cell "—" [ref=e1083]
+                    - cell "team Assign robot delete" [ref=e1084]:
+                      - generic [ref=e1085]:
+                        - button "team Assign" [ref=e1087] [cursor=pointer]:
+                          - img "team" [ref=e1089]:
+                            - img [ref=e1090]
+                          - generic [ref=e1092]: Assign
+                        - button "robot" [ref=e1094] [cursor=pointer]:
+                          - img "robot" [ref=e1096]:
+                            - img [ref=e1097]
+                        - button "delete" [ref=e1100] [cursor=pointer]:
+                          - img "delete" [ref=e1102]:
+                            - img [ref=e1103]
+                  - row "26/04/2026 NIGHT TT026 TT WEST UNASSIGNED — — team Assign robot delete" [ref=e1105]:
+                    - cell [ref=e1106]:
+                      - checkbox [ref=e1109] [cursor=pointer]
+                    - cell "26/04/2026" [ref=e1111]
+                    - cell "NIGHT" [ref=e1112]:
+                      - generic [ref=e1113]: NIGHT
+                    - cell "TT026" [ref=e1114]
+                    - cell "TT" [ref=e1115]
+                    - cell "WEST" [ref=e1116]
+                    - cell "UNASSIGNED" [ref=e1117]:
+                      - generic [ref=e1119]: UNASSIGNED
+                    - cell "—" [ref=e1120]
+                    - cell "—" [ref=e1121]
+                    - cell "team Assign robot delete" [ref=e1122]:
+                      - generic [ref=e1123]:
+                        - button "team Assign" [ref=e1125] [cursor=pointer]:
+                          - img "team" [ref=e1127]:
+                            - img [ref=e1128]
+                          - generic [ref=e1130]: Assign
+                        - button "robot" [ref=e1132] [cursor=pointer]:
+                          - img "robot" [ref=e1134]:
+                            - img [ref=e1135]
+                        - button "delete" [ref=e1138] [cursor=pointer]:
+                          - img "delete" [ref=e1140]:
+                            - img [ref=e1141]
+              - list [ref=e1143]:
+                - listitem "Previous Page" [ref=e1144]:
+                  - button "left" [disabled] [ref=e1145]:
+                    - img "left" [ref=e1146]:
+                      - img [ref=e1147]
+                - listitem "1" [ref=e1149] [cursor=pointer]:
+                  - generic [ref=e1150]: "1"
+                - listitem "2" [ref=e1151] [cursor=pointer]:
+                  - generic [ref=e1152]: "2"
+                - listitem "3" [ref=e1153] [cursor=pointer]:
+                  - generic [ref=e1154]: "3"
+                - listitem "4" [ref=e1155] [cursor=pointer]:
+                  - generic [ref=e1156]: "4"
+                - listitem "5" [ref=e1157] [cursor=pointer]:
+                  - generic [ref=e1158]: "5"
+                - listitem "Next 5 Pages" [ref=e1159] [cursor=pointer]:
+                  - generic [ref=e1161]:
+                    - img "double-right" [ref=e1162]:
+                      - img [ref=e1163]
+                    - generic [ref=e1165]: •••
+                - listitem "28" [ref=e1166] [cursor=pointer]:
+                  - generic [ref=e1167]: "28"
+                - listitem "Next Page" [ref=e1168] [cursor=pointer]:
+                  - button "right" [ref=e1169]:
+                    - img "right" [ref=e1170]:
+                      - img [ref=e1171]
+                - listitem [ref=e1173]:
+                  - generic "Page Size" [ref=e1174] [cursor=pointer]:
+                    - generic [ref=e1176]:
+                      - combobox "Page Size" [ref=e1178]
+                      - generic "20 / page" [ref=e1179]
+                    - generic:
+                      - img:
+                        - img
+  - button "robot" [ref=e1180] [cursor=pointer]:
+    - img "robot" [ref=e1182]:
+      - img [ref=e1183]

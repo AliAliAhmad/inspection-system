@@ -1,0 +1,310 @@
+- generic [ref=e2]:
+  - generic [ref=e56]:
+    - banner [ref=e57]:
+      - generic [ref=e58]:
+        - img "appstore" [ref=e61] [cursor=pointer]:
+          - img [ref=e62]
+        - strong [ref=e66] [cursor=pointer]: Inspection System
+      - generic [ref=e67]:
+        - img "home" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+        - img "search" [ref=e73] [cursor=pointer]:
+          - img [ref=e74]
+        - switch "bulb bulb" [ref=e77] [cursor=pointer]:
+          - generic [ref=e79]:
+            - generic:
+              - img "bulb":
+                - img
+            - generic:
+              - img "bulb":
+                - img
+        - img "bell" [ref=e83] [cursor=pointer]:
+          - img [ref=e84]
+        - generic [ref=e87] [cursor=pointer]:
+          - img "user" [ref=e90]:
+            - img [ref=e91]
+          - generic [ref=e93]: Hussein Ali Abdul-Hussein
+    - generic [ref=e94]:
+      - generic [ref=e97]: LIVE
+      - generic [ref=e99]:
+        - generic [ref=e100] [cursor=pointer]:
+          - generic [ref=e102]: Equipment
+          - generic [ref=e103]: Pump P-2204 vibration exceeds threshold — immediate inspection required
+          - generic [ref=e104]: 2m ago
+        - generic [ref=e106] [cursor=pointer]:
+          - generic [ref=e108]: Safety
+          - generic [ref=e109]: Safety valve SV-3302 failed pressure test — equipment shutdown initiated
+          - generic [ref=e110]: 5m ago
+        - generic [ref=e112] [cursor=pointer]:
+          - generic [ref=e114]: Inspections
+          - generic [ref=e115]: 3 inspections overdue for East Berth — reassignment recommended
+          - generic [ref=e116]: 8m ago
+        - generic [ref=e118] [cursor=pointer]:
+          - generic [ref=e120]: Running Hours
+          - generic [ref=e121]: Generator G-101 running hours approaching service interval (4,850 / 5,000 hrs)
+          - generic [ref=e122]: 45m ago
+        - generic [ref=e124]:
+          - generic [ref=e126]: Performance
+          - generic [ref=e127]: Ahmed K. completed 12 inspections today — highest on team
+          - generic [ref=e128]: 15m ago
+        - generic [ref=e130]:
+          - generic [ref=e132]: Work Plan
+          - generic [ref=e133]: New work plan published for Week 8 — 47 jobs scheduled across 2 berths
+          - generic [ref=e134]: 1h ago
+        - generic [ref=e136]:
+          - generic [ref=e138]: KPI
+          - generic [ref=e139]: "Weekly inspection target reached: 94% completion rate"
+          - generic [ref=e140]: 30m ago
+        - generic [ref=e142] [cursor=pointer]:
+          - generic [ref=e144]: Equipment
+          - generic [ref=e145]: Pump P-2204 vibration exceeds threshold — immediate inspection required
+          - generic [ref=e146]: 2m ago
+        - generic [ref=e148] [cursor=pointer]:
+          - generic [ref=e150]: Safety
+          - generic [ref=e151]: Safety valve SV-3302 failed pressure test — equipment shutdown initiated
+          - generic [ref=e152]: 5m ago
+        - generic [ref=e154] [cursor=pointer]:
+          - generic [ref=e156]: Inspections
+          - generic [ref=e157]: 3 inspections overdue for East Berth — reassignment recommended
+          - generic [ref=e158]: 8m ago
+        - generic [ref=e160] [cursor=pointer]:
+          - generic [ref=e162]: Running Hours
+          - generic [ref=e163]: Generator G-101 running hours approaching service interval (4,850 / 5,000 hrs)
+          - generic [ref=e164]: 45m ago
+        - generic [ref=e166]:
+          - generic [ref=e168]: Performance
+          - generic [ref=e169]: Ahmed K. completed 12 inspections today — highest on team
+          - generic [ref=e170]: 15m ago
+        - generic [ref=e172]:
+          - generic [ref=e174]: Work Plan
+          - generic [ref=e175]: New work plan published for Week 8 — 47 jobs scheduled across 2 berths
+          - generic [ref=e176]: 1h ago
+        - generic [ref=e178]:
+          - generic [ref=e180]: KPI
+          - generic [ref=e181]: "Weekly inspection target reached: 94% completion rate"
+          - generic [ref=e182]: 30m ago
+      - generic [ref=e185]: "7"
+    - main [ref=e186]:
+      - generic [ref=e187]:
+        - generic [ref=e188]:
+          - img "search" [ref=e190]:
+            - img [ref=e191]
+          - textbox "Search pages & tools... (press /)" [ref=e193]:
+            - /placeholder: Search pages & tools...  (press /)
+        - generic [ref=e195]:
+          - generic [ref=e196]:
+            - img "thunderbolt" [ref=e197]:
+              - img [ref=e198]
+            - generic [ref=e200]: Quick Actions
+          - generic [ref=e201]:
+            - generic [ref=e202] [cursor=pointer]:
+              - generic [ref=e203]: 📅
+              - generic [ref=e204]: Create Work Plan
+            - generic [ref=e205] [cursor=pointer]:
+              - generic [ref=e206]: 📝
+              - generic [ref=e207]: Daily Review
+            - generic [ref=e208] [cursor=pointer]:
+              - generic [ref=e209]: 🏖️
+              - generic [ref=e210]: Request Leave
+            - generic [ref=e211] [cursor=pointer]:
+              - generic [ref=e212]: 🔍
+              - generic [ref=e213]: Follow-Ups
+            - generic [ref=e214] [cursor=pointer]:
+              - generic [ref=e215]: 🎯
+              - generic [ref=e216]: Assessments
+            - generic [ref=e217] [cursor=pointer]:
+              - generic [ref=e218]: 🛠️
+              - generic [ref=e219]: My Jobs
+            - generic [ref=e220] [cursor=pointer]:
+              - generic [ref=e221]: ➕
+              - generic [ref=e222]: Create Job
+        - generic [ref=e223]:
+          - generic [ref=e224]:
+            - img "appstore" [ref=e225]:
+              - img [ref=e226]
+            - generic [ref=e228]: All Pages
+          - generic [ref=e229]:
+            - generic [ref=e230]:
+              - generic [ref=e231]:
+                - generic [ref=e232]: 📊
+                - generic [ref=e233]: Operations
+                - generic [ref=e234]: "5"
+              - generic [ref=e235]:
+                - generic [ref=e236] [cursor=pointer]:
+                  - generic [ref=e237]: 📅
+                  - generic [ref=e238]: Work Planning
+                  - button "star" [ref=e239]:
+                    - img "star" [ref=e240]:
+                      - img [ref=e241]
+                - generic [ref=e243] [cursor=pointer]:
+                  - generic [ref=e244]: 📝
+                  - generic [ref=e245]: Daily Review
+                  - button "star" [ref=e246]:
+                    - img "star" [ref=e247]:
+                      - img [ref=e248]
+                - generic [ref=e250] [cursor=pointer]:
+                  - generic [ref=e251]: ⏰
+                  - generic [ref=e252]: Overdue
+                  - button "star" [ref=e253]:
+                    - img "star" [ref=e254]:
+                      - img [ref=e255]
+                - generic [ref=e257] [cursor=pointer]:
+                  - generic [ref=e258]: 📋
+                  - generic [ref=e259]: My Work Plan
+                  - button "star" [ref=e260]:
+                    - img "star" [ref=e261]:
+                      - img [ref=e262]
+                - generic [ref=e264] [cursor=pointer]:
+                  - generic [ref=e265]: 🛠️
+                  - generic [ref=e266]: My Jobs
+                  - button "star" [ref=e267]:
+                    - img "star" [ref=e268]:
+                      - img [ref=e269]
+            - generic [ref=e271]:
+              - generic [ref=e272]:
+                - generic [ref=e273]: 🔧
+                - generic [ref=e274]: Equipment
+                - generic [ref=e275]: "3"
+              - generic [ref=e276]:
+                - generic [ref=e277] [cursor=pointer]:
+                  - generic [ref=e278]: 📊
+                  - generic [ref=e279]: Dashboard
+                  - button "star" [ref=e280]:
+                    - img "star" [ref=e281]:
+                      - img [ref=e282]
+                - generic [ref=e284] [cursor=pointer]:
+                  - generic [ref=e285]: ⏱️
+                  - generic [ref=e286]: Running Hours
+                  - button "star" [ref=e287]:
+                    - img "star" [ref=e288]:
+                      - img [ref=e289]
+                - generic [ref=e291] [cursor=pointer]:
+                  - generic [ref=e292]: 🐛
+                  - generic [ref=e293]: Defects
+                  - button "star" [ref=e294]:
+                    - img "star" [ref=e295]:
+                      - img [ref=e296]
+            - generic [ref=e298]:
+              - generic [ref=e299]:
+                - generic [ref=e300]: 📋
+                - generic [ref=e301]: Inspections
+                - generic [ref=e302]: "2"
+              - generic [ref=e303]:
+                - generic [ref=e304] [cursor=pointer]:
+                  - generic [ref=e305]: 🎯
+                  - generic [ref=e306]: Assessment Tracking
+                  - button "star" [ref=e307]:
+                    - img "star" [ref=e308]:
+                      - img [ref=e309]
+                - generic [ref=e311] [cursor=pointer]:
+                  - generic [ref=e312]: 🔍
+                  - generic [ref=e313]: Monitor Follow-Ups
+                  - button "star" [ref=e314]:
+                    - img "star" [ref=e315]:
+                      - img [ref=e316]
+            - generic [ref=e318]:
+              - generic [ref=e319]:
+                - generic [ref=e320]: 👥
+                - generic [ref=e321]: Team
+                - generic [ref=e322]: "6"
+              - generic [ref=e323]:
+                - generic [ref=e324] [cursor=pointer]:
+                  - generic [ref=e325]: 📅
+                  - generic [ref=e326]: Roster
+                  - button "star" [ref=e327]:
+                    - img "star" [ref=e328]:
+                      - img [ref=e329]
+                - generic [ref=e331] [cursor=pointer]:
+                  - generic [ref=e332]: 🏖️
+                  - generic [ref=e333]: Leaves
+                  - button "star" [ref=e334]:
+                    - img "star" [ref=e335]:
+                      - img [ref=e336]
+                - generic [ref=e338] [cursor=pointer]:
+                  - generic [ref=e339]: 📈
+                  - generic [ref=e340]: Performance
+                  - button "star" [ref=e341]:
+                    - img "star" [ref=e342]:
+                      - img [ref=e343]
+                - generic [ref=e345] [cursor=pointer]:
+                  - generic [ref=e346]: 🏆
+                  - generic [ref=e347]: Leaderboard
+                  - button "star" [ref=e348]:
+                    - img "star" [ref=e349]:
+                      - img [ref=e350]
+                - generic [ref=e352] [cursor=pointer]:
+                  - generic [ref=e353]: 👥
+                  - generic [ref=e354]: Team Assignment
+                  - button "star" [ref=e355]:
+                    - img "star" [ref=e356]:
+                      - img [ref=e357]
+                - generic [ref=e359] [cursor=pointer]:
+                  - generic [ref=e360]: ⏸️
+                  - generic [ref=e361]: Pause Approvals
+                  - button "star" [ref=e362]:
+                    - img "star" [ref=e363]:
+                      - img [ref=e364]
+            - generic [ref=e366]:
+              - generic [ref=e367]:
+                - generic [ref=e368]: 📦
+                - generic [ref=e369]: Maintenance
+                - generic [ref=e370]: "2"
+              - generic [ref=e371]:
+                - generic [ref=e372] [cursor=pointer]:
+                  - generic [ref=e373]: 📦
+                  - generic [ref=e374]: Materials
+                  - button "star" [ref=e375]:
+                    - img "star" [ref=e376]:
+                      - img [ref=e377]
+                - generic [ref=e379] [cursor=pointer]:
+                  - generic [ref=e380]: 📄
+                  - generic [ref=e381]: PM Templates
+                  - button "star" [ref=e382]:
+                    - img "star" [ref=e383]:
+                      - img [ref=e384]
+            - generic [ref=e386]:
+              - generic [ref=e387]:
+                - generic [ref=e388]: ⚙️
+                - generic [ref=e389]: Settings
+                - generic [ref=e390]: "2"
+              - generic [ref=e391]:
+                - generic [ref=e392] [cursor=pointer]:
+                  - generic [ref=e393]: 👤
+                  - generic [ref=e394]: Profile
+                  - button "star" [ref=e395]:
+                    - img "star" [ref=e396]:
+                      - img [ref=e397]
+                - generic [ref=e399] [cursor=pointer]:
+                  - generic [ref=e400]: 🔔
+                  - generic [ref=e401]: Notifications
+                  - button "star" [ref=e402]:
+                    - img "star" [ref=e403]:
+                      - img [ref=e404]
+        - generic [ref=e406]:
+          - generic [ref=e407] [cursor=pointer]:
+            - img "dashboard" [ref=e408]:
+              - img [ref=e409]
+            - text: Dashboard
+          - generic [ref=e411] [cursor=pointer]:
+            - img "search" [ref=e412]:
+              - img [ref=e413]
+            - text: ⌘K
+          - generic [ref=e415] [cursor=pointer]:
+            - img "bulb" [ref=e416]:
+              - img [ref=e417]
+            - text: Dark
+          - generic [ref=e419] [cursor=pointer]:
+            - img "translation" [ref=e420]:
+              - img [ref=e421]
+            - text: AR
+          - generic [ref=e424] [cursor=pointer]:
+            - img "tool" [ref=e425]:
+              - img [ref=e426]
+            - text: Equipment
+          - generic [ref=e428] [cursor=pointer]:
+            - img "user" [ref=e429]:
+              - img [ref=e430]
+            - text: Profile
+  - button "robot" [ref=e432] [cursor=pointer]:
+    - img "robot" [ref=e434]:
+      - img [ref=e435]
