@@ -191,3 +191,63 @@ class TestMakingRoom:
         _job(db_session, days[1], 'TT040', 12.0, priority='low')
 
         assert make_room(plan, days[1], 8.0, 'west', 'pm') == []
+
+
+class TestSeveralDemandsInOnePass:
+    """A split PM needs room on TWO days — 8 hours today, 4 tomorrow.
+
+    Asking twice cannot work: the first call pushes a job onto the second day,
+    and the second call plans without knowing. `demands` simulates both in one
+    pass, which is what keeps the promise this module is built on — dry_run
+    returns byte-for-byte what apply does.
+    """
+
+    def test_a_dry_run_over_two_days_is_what_apply_does(self, db_session,
+                                                        admin_user, crew):
+        plan, days = _week(db_session, admin_user)
+        for day in days[:6]:
+            _job(db_session, day, f'TTM{day.date.day}', 5.0, priority='low',
+                 number=f'7000000031{day.date.day}')
+
+        wanted = [(days[0], 10.0), (days[1], 6.0)]
+        shown = make_room(plan, days[0], 10.0, 'west', 'pm',
+                          dry_run=True, demands=wanted)
+        happened = make_room(plan, days[0], 10.0, 'west', 'pm',
+                             dry_run=False, demands=wanted)
+
+        assert shown == happened
+        assert shown, 'the setup must actually force some moves'
+
+    def test_both_days_are_really_freed(self, db_session, admin_user, crew):
+        """Two separate calls left the second day short, because the first had
+        already pushed a job onto it."""
+        from app.services.day_budget import day_free_man_hours
+        plan, days = _week(db_session, admin_user)
+        for day in days[:6]:
+            _job(db_session, day, f'TTN{day.date.day}', 6.0, priority='low',
+                 number=f'7000000032{day.date.day}')
+
+        make_room(plan, days[0], 10.0, 'west', 'pm', dry_run=False,
+                  demands=[(days[0], 10.0), (days[1], 6.0)])
+        # make_room flushes but does not expire, so the cached day.jobs
+        # collections still show the old picture. Measure the database, not
+        # the leftovers — this is the same staleness that made two sequential
+        # calls plan against a picture the first had already changed.
+        db_session.session.expire_all()
+
+        assert day_free_man_hours(plan, days[0], 'west', 'pm') >= 10.0
+        assert day_free_man_hours(plan, days[1], 'west', 'pm') >= 6.0
+
+    def test_without_demands_it_behaves_exactly_as_before(self, db_session,
+                                                          admin_user, crew):
+        """The single-day callers — the evening carry-over among them — must
+        see no change at all."""
+        plan, days = _week(db_session, admin_user)
+        keeper = _job(db_session, days[1], 'TTP1', 4.0, priority='high')
+        lamp = _job(db_session, days[1], 'TTP2', 3.0, priority='low')
+
+        chain = make_room(plan, days[1], 8.0, 'west', 'pm')
+
+        assert [m['job_id'] for m in chain] == [lamp.id]
+        db_session.session.refresh(keeper)
+        assert keeper.work_plan_day_id == days[1].id

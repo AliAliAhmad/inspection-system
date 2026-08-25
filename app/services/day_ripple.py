@@ -56,8 +56,16 @@ def _berth_key(berth):
 
 
 def make_room(plan, target_day, needed_mh, berth, wallet_key,
-              protect_job_ids=None, dry_run=False):
+              protect_job_ids=None, dry_run=False, demands=None):
     """Make `needed_mh` man-hours of room on `target_day`'s (berth, team) wallet.
+
+    `demands` asks for room on SEVERAL days at once — [(day, man_hours), ...] —
+    simulated in ONE pass. A split PM needs 8 hours today and 4 tomorrow, and
+    two separate calls cannot see each other: the first may push a job onto the
+    second day, which the second then plans without. Calling twice made the
+    message promise five moves while six happened, and a different job moved —
+    breaking the one thing this module guarantees, that `dry_run` returns
+    byte-for-byte what apply would do. One pass, one answer, both callers.
 
     Returns the chain of moves as [{'job_id', 'description',
     'sap_order_number', 'priority', 'from', 'to'}] where 'to' is a date
@@ -101,8 +109,11 @@ def make_room(plan, target_day, needed_mh, berth, wallet_key,
     # ── Simulate ──
     moves = []
     demand = defaultdict(float)
-    demand[target_day.id] = float(needed_mh)
-    start = next(i for i, day in enumerate(days) if day.id == target_day.id)
+    wanted = list(demands) if demands else [(target_day, needed_mh)]
+    for a_day, a_mh in wanted:
+        demand[a_day.id] += float(a_mh)
+    wanted_ids = {a_day.id for a_day, _ in wanted}
+    start = min(i for i, day in enumerate(days) if day.id in wanted_ids)
 
     for i in range(start, len(days)):
         day = days[i]

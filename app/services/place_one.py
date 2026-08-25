@@ -23,7 +23,8 @@ from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.worker_assignment_rule import WorkerAssignmentRule
 from app.models.user import User
 from app.services.day_budget import _unavailable_by_date
-from app.services.job_durations import MIN_CREW
+from app.services.job_durations import (MAN_HOURS_PER_DAY, MIN_CREW,
+                                        pm_hours, urgent_max_crew)
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,148 @@ def rule_crew_for(order):
     return max(MIN_CREW, (rule.mech_count or 0) + (rule.elec_count or 0))
 
 
-def price_one(order):
+def matching_rule(order):
+    """The WorkerAssignmentRule that will staff this order, or None.
+
+    Extracted so `rule_crew_for`, `available_men` and `staff_one_job` all ask
+    the same question the same way — three copies of a lookup drift, and the
+    first thing to drift here would be which team a machine belongs to.
+    """
+    from app.services.work_plan_generator_service import (_determine_team_type,
+                                                          _get_category,
+                                                          _normalize_berth)
+    equipment = order.equipment
+    berth = _normalize_berth(
+        order.berth or (equipment.berth if equipment else None)) or 'both'
+
+    class _Shim:
+        """What _determine_team_type and _job_is_defect_work actually read."""
+        job_type = order.job_type
+        description = order.description
+        sap_order_number = order.order_number
+        defect = None
+
+    team_type = _determine_team_type(_Shim())
+    category = (_get_category(equipment.equipment_type)
+                if equipment and equipment.equipment_type else 'all')
+
+    rules = WorkerAssignmentRule.query.filter_by(is_active=True).all()
+
+    def matches(rule, wanted):
+        return (rule.berth == berth and rule.team_type == team_type
+                and rule.equipment_category == wanted)
+
+    found = ([r for r in rules if matches(r, category)]
+             or [r for r in rules if matches(r, 'all')])
+    return found[0] if found else None
+
+
+def _free_by_discipline(order, day):
+    """(free mechanics, free electricians) for this order's team on this day.
+
+    Free means: in the rule's candidate list or one of its two leads for that
+    discipline, active, not on leave, and not off/leave/NIGHT on the roster.
+    Night counts as away because `day_budget` gives a night man zero wallet
+    hours — staffing him onto day work would spend hours the day never had.
+    """
+    rule = matching_rule(order)
+    if rule is None:
+        return (0, 0)
+
+    plan = day.work_plan
+    gone = _unavailable_by_date(plan.week_start, plan.week_end).get(day.date, set())
+
+    def free(ids):
+        ids = {i for i in ids if i}
+        if not ids:
+            return 0
+        here = User.query.filter(
+            User.id.in_(ids),
+            User.is_active.is_(True),
+            User.is_on_leave.is_(False)).all()
+        return len([u for u in here if u.id not in gone])
+
+    mech = free(set(rule.candidate_mech_workers or []) |
+                {rule.primary_mech_lead_id, rule.successor_mech_lead_id})
+    elec = free(set(rule.candidate_elec_workers or []) |
+                {rule.primary_elec_lead_id, rule.successor_elec_lead_id})
+    return (mech, elec)
+
+
+def can_field(order, day, size):
+    """Can this order's team really put `size` men on this machine, this day?
+
+    NOT "are `size` people free". `_assign_from_rule` fills a job to
+    `rule.mech_count` mechanics and `rule.elec_count` electricians, and
+    `crew_needed` raises **the mech target only** — and it raises it by
+    `size - (mech_count + elec_count)`, subtracting the electricians the rule
+    WISHES for, not the ones that exist. So when free electricians fall short
+    of `elec_count`, nothing makes up the difference and the job lands smaller
+    than promised:
+
+        elec_count=2, 0 electricians free, 10 mechanics free, ask for 4
+        -> mech target stays 2, elec fills 0 -> TWO men on an 8-hour reach
+           stacker, and Ali's curve says two men need twelve.
+
+    Ten free mechanics and it still lands two. That is why this is a per-size
+    question and not a headcount.
+    """
+    rule = matching_rule(order)
+    if rule is None:
+        return False
+    mech_free, elec_free = _free_by_discipline(order, day)
+    elec_want = rule.elec_count or 0
+    mech_target = max(rule.mech_count or 0, size - elec_want)
+    return min(mech_free, mech_target) + min(elec_free, elec_want) >= size
+
+
+def available_men(order, day):
+    """The biggest crew this order's team can really field on this day."""
+    mech_free, elec_free = _free_by_discipline(order, day)
+    for size in range(mech_free + elec_free, 0, -1):
+        if can_field(order, day, size):
+            return size
+    return 0
+
+
+def urgent_one_day_crew(order, day):
+    """(crew, hours) for finishing this urgent PM in ONE day, or None.
+
+    Ali, 2026-08-25: "always he should offer and plan an urgent reach stacker
+    — if it is possible to put 4 or 3 so the time be 8; if 3 or 4 not
+    available, put 2 and make the time 12."
+
+    So: try the biggest crew his curve allows for this family, down to three,
+    and take the first one that both finishes inside a day AND has the men
+    standing free. None means there is no one-day answer and the caller must
+    split it 8 + 4 across two days.
+
+    Only ever a boost for the families Ali named — "if TT or FL, TR is urgent
+    always keep 2. RS AND ECHs put maximum up to 4." A truck fits a day at two
+    men anyway; more men would only take them off other machines.
+    """
+    from app.services.work_plan_generator_service import _get_category
+
+    if order.job_type != 'pm':
+        return None
+    equipment = order.equipment
+    family = _get_category(equipment.equipment_type) if (
+        equipment and equipment.equipment_type) else ''
+    biggest = urgent_max_crew(family)
+    if biggest <= MIN_CREW:
+        return None                      # not a family Ali boosts
+
+    for size in range(biggest, MIN_CREW, -1):
+        if not can_field(order, day, size):
+            continue
+        crew_n, hours_n = pm_hours(family, crew=size,
+                                   description=order.description)
+        if crew_n > MIN_CREW and hours_n <= MAN_HOURS_PER_DAY:
+            return (crew_n, hours_n)
+    return None
+
+
+def price_one(order, crew=None):
     """What this order costs a day, using the generator's own arithmetic.
 
     A one-member bundle through `_price_bundle`, so the hours come from Ali's
@@ -115,19 +257,36 @@ def price_one(order):
     table (see `rule_crew_for`). The table crew is the fallback when no rule
     matches. AC work still costs the day nothing, matching
     `bundle_man_hours`'s exclusion of AC-PM members: its wallet is None.
+
+    Pass `crew` to price the order for a SPECIFIC number of men — that is how
+    an urgent reach stacker is offered at 3 or 4 men and 8 hours instead of 2
+    men and 12 (`urgent_one_day_crew`). An explicit crew beats both the rule
+    and the table, because the caller is about to staff exactly that many.
     """
     from app.services.work_plan_generator_service import (
-        _bundle_wallet_key, _member_is_ac_pm, _price_bundle)
+        _bundle_wallet_key, _get_category, _member_is_ac_pm, _price_bundle)
 
     member, berth = _member_for(order)
     bundle = {'equipment_id': order.equipment_id, 'berth': berth,
               'score': 0, 'members': [member]}
     _price_bundle(bundle)
 
-    crew = int(member.get('crew') or MIN_CREW)
-    from_rule = rule_crew_for(order)
-    if from_rule is not None:
-        crew = from_rule
+    if crew is not None:
+        # An explicit crew: re-read the hours from Ali's curve for THAT crew.
+        # PM_CREW_CURVE is measurements, not a formula — three men on a reach
+        # stacker buy four hours and the fourth buys nothing.
+        family = _get_category(order.equipment.equipment_type) if (
+            order.equipment and order.equipment.equipment_type) else ''
+        crew_n, hours_n = pm_hours(family, crew=crew,
+                                   description=order.description)
+        member['crew'] = crew_n
+        member['estimated_hours'] = hours_n
+        crew = crew_n
+    else:
+        crew = int(member.get('crew') or MIN_CREW)
+        from_rule = rule_crew_for(order)
+        if from_rule is not None:
+            crew = from_rule
 
     hours = float(member.get('estimated_hours') or 0)
     cost = 0.0 if _member_is_ac_pm(member) else hours * crew
@@ -205,7 +364,9 @@ def staff_one_job(job, day, crew_needed=None):
     return [user_id for user_id, _is_lead in picked]
 
 
-def place_one(order, day, crew_user_ids=None, priority=None):
+def place_one(order, day, crew_user_ids=None, priority=None,
+              priced=None, hours=None, description=None,
+              release_order=True):
     """Put one box order on one day, priced and staffed. Does NOT commit.
 
     Named men beat the rule: the crew that just finished early gets the work,
@@ -213,11 +374,19 @@ def place_one(order, day, crew_user_ids=None, priority=None):
     picks; when there are no rules at all, the job still lands with nobody on
     it — consistent with the rest of the system, which switches its hours
     checks off rather than refusing to work when rules are missing.
+
+    `priced` lets a caller hand in a price it already computed — an urgent
+    reach stacker offered at 3 men and 8 hours was priced with an explicit
+    crew, and re-pricing here would silently drop back to 2 men and 12.
+    `hours` and `description` override just those two for one half of a split
+    PM. `release_order=False` leaves the box row alone, so the second half of a
+    split does not try to schedule an order the first half already took.
     """
     from app.services.work_plan_generator_service import _normalize_berth
     from app.models.pm_template import PMTemplate
 
-    priced = price_one(order)
+    if priced is None:
+        priced = price_one(order)
     equipment = order.equipment
     template = None
     if equipment is not None:
@@ -229,13 +398,13 @@ def place_one(order, day, crew_user_ids=None, priority=None):
         job_type=order.job_type,
         berth=_normalize_berth(order.berth or (equipment.berth if equipment else None)),
         priority=priority or order.priority or 'normal',
-        estimated_hours=priced['hours'],
+        estimated_hours=hours if hours is not None else priced['hours'],
         equipment_id=order.equipment_id,
         cycle_id=order.cycle_id,
         pm_template_id=template.id if template else None,
         sap_order_number=order.order_number,
         sap_order_type=order.order_type,
-        description=order.description,
+        description=description or order.description,
         maintenance_base=order.maintenance_base,
         overdue_value=order.overdue_value,
         overdue_unit=order.overdue_unit,
@@ -246,16 +415,61 @@ def place_one(order, day, crew_user_ids=None, priority=None):
     db.session.flush()
 
     if crew_user_ids:
-        for user_id in crew_user_ids:
+        for entry in crew_user_ids:
+            # Accept plain ids or (id, is_lead) pairs — the second half of a
+            # split needs to carry the lead across.
+            user_id, is_lead = entry if isinstance(entry, tuple) else (entry, False)
             db.session.add(WorkPlanAssignment(work_plan_job_id=job.id,
-                                              user_id=user_id))
+                                              user_id=user_id,
+                                              is_lead=is_lead))
     else:
         staff_one_job(job, day, crew_needed=priced['crew'])
 
-    order.status = 'scheduled'
-    order.work_plan_id = day.work_plan_id
+    if release_order:
+        order.status = 'scheduled'
+        order.work_plan_id = day.work_plan_id
     db.session.flush()
 
     logger.info('place_one | order=%s day=%s hours=%.1f crew=%d',
-                order.order_number, day.date, priced['hours'], priced['crew'])
+                order.order_number, day.date,
+                float(job.estimated_hours or 0), priced['crew'])
     return job
+
+
+def place_split(order, day1, day2, priced=None):
+    """A PM too long for one day: 8 hours today, the rest tomorrow.
+
+    Ali, 2026-08-25: "if 3 or 4 not available, put 2 and make the time 12" —
+    and twelve hours cannot be one day, so it runs 8 then 4 on consecutive
+    days. The same shape the weekly planner already produces (_place_big_pm),
+    which matters beyond tidiness: the evening carry-over MERGES a carried
+    part 1/2 into an untouched part 2/2 by matching the order number, so a
+    split made here is understood by machinery that already exists.
+
+    Both halves get the SAME men — one crew, one machine, two days. The box row
+    is released once, by the first half. Does NOT commit.
+    """
+    if priced is None:
+        priced = price_one(order)
+
+    first = float(MAN_HOURS_PER_DAY)
+    rest = round(float(priced['hours']) - first, 2)
+    if rest <= 0:
+        raise ValueError(
+            f"{order.order_number} is {priced['hours']}h — it fits one day, "
+            f'nothing to split')
+
+    base = (order.description or '').strip()
+    part1 = place_one(order, day1, priced=priced, hours=first,
+                      description=f'{base} (part 1/2)'.strip())
+    # Same men AND the same lead: a crew arriving on the second morning with
+    # nobody in charge is not the same crew.
+    crew = [(a.user_id, bool(a.is_lead)) for a in part1.assignments]
+    part2 = place_one(order, day2, priced=priced, hours=rest,
+                      description=f'{base} (part 2/2)'.strip(),
+                      crew_user_ids=crew or None, release_order=False)
+
+    logger.info('place_split | order=%s %s=%.1fh + %s=%.1fh crew=%d',
+                order.order_number, day1.date, first, day2.date, rest,
+                len(crew))
+    return part1, part2

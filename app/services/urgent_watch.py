@@ -17,7 +17,9 @@ from app.models import SAPWorkOrder, TelegramProposal, WorkPlan, WorkPlanJob
 from app.services.day_budget import day_free_man_hours, day_wallet_hours
 from app.services.day_ripple import job_cost_man_hours, make_room
 from app.services.job_durations import MAN_HOURS_PER_DAY
-from app.services.place_one import place_one, price_one
+from app.services.place_one import (available_men, can_field, place_one,
+                                    place_split, price_one,
+                                    urgent_one_day_crew)
 from app.services.telegram.ask import ask, expire_open
 from app.services.telegram.taps import register
 from app.utils.decorators import planning_today
@@ -171,44 +173,72 @@ def look_for_homeless_urgents(today=None, client=None):
                         'tomorrow night', asked, remaining)
             skipped = remaining
             break
-        priced = price_one(order)
-        if priced['hours'] > MAN_HOURS_PER_DAY:
-            # The generator splits a big PM 8h + 4h across two days
-            # (_place_big_pm). place_one cannot, and one 12-hour single-day job
-            # is a shape the day model forbids. Stage 1 does not ask about work
-            # it cannot place correctly.
-            logger.info('urgent watch | %s is %.1fh, longer than a day — '
-                        'needs the 8+4 split, not asking',
-                        order.order_number, priced['hours'])
-            continue
+        # Ali, 2026-08-25: an urgent reach stacker (or ECH) must ALWAYS be
+        # offered. Give it 3 or 4 men and it takes 8 hours — one day. Only if
+        # 3 or 4 are not standing free does it drop to 2 men, 12 hours, and
+        # run 8 today + 4 tomorrow. His curve holds the numbers; this just
+        # asks for them.
+        boost = urgent_one_day_crew(order, days[0])
+        priced = price_one(order, crew=boost[0]) if boost else price_one(order)
+
         if priced['wallet_key'] is None:
             continue                     # AC work spends no wallet; not ours
-        cost = priced['cost_man_hours']
 
         free = [day_free_man_hours(plan, d, priced['berth'],
                                    priced['wallet_key']) for d in days]
         if any(f is None for f in free):
-            return {'asked': asked, 'checked': len(orders), 'expired': expired,
+            return {'asked': asked, 'checked': len(orders), 'skipped': skipped,
+                    'expired': expired,
                     'reason': 'no team rules — hours check is off'}
-        if any(f >= cost for f in free):
-            continue                     # it fits; the next generate places it
+
+        if priced['hours'] > MAN_HOURS_PER_DAY:
+            # Two men, twelve hours: 8 today and the rest tomorrow, the same
+            # shape the weekly planner produces and the same shape the evening
+            # carry-over's merge already understands.
+            if len(days) < 2:
+                logger.info('urgent watch | %s needs two days and only %d is '
+                            'left in the week — not asking',
+                            order.order_number, len(days))
+                continue
+            first_h = float(MAN_HOURS_PER_DAY)
+            rest_h = round(priced['hours'] - first_h, 2)
+            costs = [first_h * priced['crew'], rest_h * priced['crew']]
+            shape_days = [days[0], days[1]]
+            split = True
+            if any(free[i] >= costs[0] and free[i + 1] >= costs[1]
+                   for i in range(len(days) - 1)):
+                continue                 # a consecutive pair already takes it
+        else:
+            costs = [priced['cost_man_hours']]
+            shape_days = [days[0]]
+            split = False
+            if any(f >= costs[0] for f in free):
+                continue                 # it fits; the next generate places it
+        cost = costs[0]
 
         if _already_open(order.order_number):
             continue
 
-        target = days[0]
+        target = shape_days[0]
 
-        ceiling = day_wallet_hours(plan, target, priced['berth'],
-                                   priced['wallet_key'])
-        if ceiling is None or cost > ceiling + 1e-6:
+        ceilings = [day_wallet_hours(plan, d, priced['berth'],
+                                     priced['wallet_key']) for d in shape_days]
+        ceiling = ceilings[0]
+        if (any(c is None for c in ceilings)
+                or any(cst > c + 1e-6 for cst, c in zip(costs, ceilings))):
             logger.info('urgent watch | %s needs %.1f mh, the whole %s %s '
                         'wallet is %s — cannot fit any day, not asking',
                         order.order_number, cost, target.date,
                         priced['berth'], ceiling)
             continue
 
-        chain = make_room(plan, target, cost, priced['berth'],
-                          priced['wallet_key'], dry_run=True)
+        # ONE simulation for the whole shape. Two calls cannot see each
+        # other: the first pushes a job onto the second day, which the second
+        # then plans without — the message promised five moves while six
+        # happened, and a different job moved.
+        chain = make_room(plan, shape_days[0], costs[0], priced['berth'],
+                          priced['wallet_key'], dry_run=True,
+                          demands=list(zip(shape_days, costs)))
         if not chain:
             continue                     # nothing can move; asking is pointless
 
@@ -244,10 +274,12 @@ def look_for_homeless_urgents(today=None, client=None):
              'label_en': WORDS['en']['no'], 'label_ar': WORDS['ar']['no']},
             {'key': 'pick', 'action': 'expand',
              'label_en': WORDS['en']['pick'], 'label_ar': WORDS['ar']['pick'],
+             # A split needs a day AFTER it, so the week's last day is never
+             # offered for one — picking it could only ever raise an error.
              'expand': [{'key': f'day:{d.id}', 'action': 'apply',
                          'label_en': d.date.isoformat(),
                          'label_ar': d.date.isoformat()}
-                        for d in days[1:]]},
+                        for d in (days[1:-1] if split else days[1:])]},
         ]
 
         proposal = ask(KIND, texts, options, _tomorrow_morning(today),
@@ -255,8 +287,12 @@ def look_for_homeless_urgents(today=None, client=None):
                                 'berth': priced['berth'],
                                 'wallet_key': priced['wallet_key'],
                                 'cost_man_hours': cost,
+                                'costs': costs,
                                 'hours': priced['hours'],
                                 'crew': priced['crew'],
+                                'split': split,
+                                'boosted': boost is not None,
+                                'day_ids': [d.id for d in shape_days],
                                 'chain': chain},
                        work_plan_id=plan.id, target_day_id=target.id,
                        client=client)
@@ -300,11 +336,60 @@ def apply_urgent(proposal, option, user):
     if day is None:
         raise ValueError('that day is gone')
 
-    priced = price_one(order)
-    chain = make_room(day.work_plan, day, priced['cost_man_hours'],
-                      priced['berth'], priced['wallet_key'], dry_run=False)
-    job = place_one(order, day)
+    # Re-price with the crew the QUESTION was asked about — but ONLY when the
+    # ask was actually boosted. `price_one(crew=N)` re-reads the hours from
+    # Ali's curve for N men, which is meaningful only for an urgent RS/ECH that
+    # was offered a bigger crew. Replaying it on an ordinary proposal rewrites
+    # hours nobody agreed to: a 3-hour fault becomes an 8-hour PM, a truck's
+    # crew is silently cut to the table pair while three men are still
+    # assigned, and a 12-hour split re-prices to 8 so `place_split` finds
+    # nothing left to split and raises.
+    # A boosted shape was measured against ONE day's roster. "Pick a day" can
+    # move it to another, and four men free on Monday are not four men free on
+    # Thursday. Re-ask on the day actually chosen; if the crew is no longer
+    # there, fall back to the honest unboosted shape rather than booking an
+    # eight-hour day that needs men who are not coming.
+    if details.get('boosted') and can_field(order, day, details['crew']):
+        priced = price_one(order, crew=details['crew'])
+    else:
+        if details.get('boosted'):
+            logger.info('urgent watch | %s was offered %d men but only %d can '
+                        'be fielded on %s — falling back to the plain shape',
+                        order.order_number, details['crew'],
+                        available_men(order, day), day.date)
+        priced = price_one(order)
+    plan = day.work_plan
+
+    if not details.get('split'):
+        chain = make_room(plan, day, priced['cost_man_hours'],
+                          priced['berth'], priced['wallet_key'], dry_run=False)
+        job = place_one(order, day, priced=priced)
+        db.session.flush()
+        return {'chain': chain, 'job_id': job.id,
+                'day': day.date.isoformat(),
+                'crew': priced['crew'], 'hours': priced['hours'],
+                'cost_man_hours': priced['cost_man_hours']}
+
+    # Two men, twelve hours: 8 today and 4 tomorrow, consecutive days.
+    days = sorted(plan.days, key=lambda d: d.date)
+    following = [d for d in days if d.date > day.date]
+    if not following:
+        raise ValueError(
+            f'{order.order_number} needs two days and {day.date} is the last '
+            f'day of the week')
+    day2 = following[0]
+
+    costs = details.get('costs') or [priced['cost_man_hours']]
+    # ONE call, both days — the SAME call the ask simulated. Two sequential
+    # calls were blind to each other, and the second planned against a picture
+    # the first had already changed. Sharing one code path is what makes the
+    # message honest: dry_run returns byte-for-byte what this does.
+    chain = make_room(plan, day, costs[0], priced['berth'],
+                      priced['wallet_key'], dry_run=False,
+                      demands=list(zip((day, day2), costs)))
+    part1, part2 = place_split(order, day, day2, priced=priced)
     db.session.flush()
-    return {'chain': chain, 'job_id': job.id,
-            'day': day.date.isoformat(),
-            'cost_man_hours': priced['cost_man_hours']}
+    return {'chain': chain, 'job_id': part1.id, 'job_id_part2': part2.id,
+            'day': day.date.isoformat(), 'day_part2': day2.date.isoformat(),
+            'split': True, 'crew': priced['crew'], 'hours': priced['hours'],
+            'cost_man_hours': sum(costs)}
