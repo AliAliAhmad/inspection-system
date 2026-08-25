@@ -343,6 +343,57 @@ class TestTheNightWatch:
         assert recorder.messages == []
 
 
+    def test_a_night_asks_at_most_three_questions(self, app, db_session,
+                                                  admin_user, allowed):
+        """Without a cap the watch asks about EVERY homeless urgent order, one
+        message per order to every planner. With 40 of 133 live orders flagged
+        urgent that is a wall of buzzing at five in the morning — and _call has
+        no retry and no rate-limit pacing, so a burst would silently drop some
+        planners' copies. Whatever is skipped is counted, not hidden, and comes
+        back the next night."""
+        from app.services.urgent_watch import (MAX_ASKS_PER_NIGHT,
+                                               look_for_homeless_urgents)
+        plan, days = _week(db_session, admin_user)
+        men = [_man(db_session, f'cap{i}') for i in range(3)]      # 24 mh/day
+        _rule(db_session, men)
+        for day in days:
+            _fill(db_session, day, men[:2], 10.0)                  # 20 of 24
+        for i in range(5):
+            _order(db_session, f'70000000076{i}')
+        recorder = Recorder()
+
+        report = look_for_homeless_urgents(today=MONDAY, client=recorder)
+
+        assert report['asked'] == MAX_ASKS_PER_NIGHT == 3
+        assert report['skipped'] == 2
+        assert TelegramProposal.query.count() == 3
+        assert len(recorder.messages) == 3
+
+    def test_the_most_overdue_is_asked_about_first(self, app, db_session,
+                                                   admin_user, allowed):
+        """A capped night must spend its three questions on the work that has
+        waited longest, not on whatever the database happened to return first."""
+        from app.services.urgent_watch import look_for_homeless_urgents
+        plan, days = _week(db_session, admin_user)
+        men = [_man(db_session, f'ov{i}') for i in range(3)]
+        _rule(db_session, men)
+        for day in days:
+            _fill(db_session, day, men[:2], 10.0)
+        # Created oldest-last on purpose, so insertion order is the wrong order.
+        for i, overdue in enumerate([1.0, 90.0, 5.0, 60.0, 2.0]):
+            order = _order(db_session, f'70000000077{i}')
+            order.overdue_value = overdue
+            order.overdue_unit = 'days'
+        db_session.session.commit()
+
+        look_for_homeless_urgents(today=MONDAY, client=Recorder())
+
+        asked = {p.details['order_number']
+                 for p in TelegramProposal.query.all()}
+        assert asked == {'700000000771', '700000000773', '700000000772'}, (
+            'the three most overdue (90, 60, 5 days) had to be the ones asked')
+
+
 class TestPressingYes:
     def _asked(self, app, db_session, admin_user):
         from app.services.urgent_watch import look_for_homeless_urgents

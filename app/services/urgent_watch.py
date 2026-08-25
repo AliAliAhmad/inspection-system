@@ -26,6 +26,16 @@ logger = logging.getLogger(__name__)
 
 KIND = 'urgent_needs_room'
 
+# How many questions ONE night may raise. Without a cap the watch asks about
+# every homeless urgent order, one message per order to every planner — with 40
+# of 133 live orders flagged urgent that is a wall of buzzing at five in the
+# morning, and `TelegramClient._call` has no retry and no rate-limit pacing, so
+# a burst would silently drop some planners' copies (message_id NULL) and they
+# would never know they had been asked. Three is a morning's worth of decisions.
+# Whatever is skipped is LOGGED and counted, never silently dropped, and it
+# comes back the next night — the box does not forget.
+MAX_ASKS_PER_NIGHT = 3
+
 WORDS = {
     'en': {
         'headline': 'URGENT {order} — {machine} — has no room on {day}.',
@@ -146,8 +156,21 @@ def look_for_homeless_urgents(today=None, client=None):
                 'reason': 'no days left in this week'}
 
     asked = 0
+    skipped = 0
     orders = _homeless_urgents()
+    # Most overdue first, so a capped night spends its three questions on the
+    # work that has waited longest. `overdue_value` is already comparable across
+    # kinds — `_resolve_overdue` normalises calendar PMs to days and
+    # running-hours PMs to hours past due — and None sorts last.
+    orders.sort(key=lambda o: (o.overdue_value is None, -(o.overdue_value or 0)))
     for order in orders:
+        if asked >= MAX_ASKS_PER_NIGHT:
+            remaining = len(orders) - orders.index(order)
+            logger.info('urgent watch | cap reached — asked about %d, %d more '
+                        'urgent orders still have nowhere to go; they come back '
+                        'tomorrow night', asked, remaining)
+            skipped = remaining
+            break
         priced = price_one(order)
         if priced['hours'] > MAN_HOURS_PER_DAY:
             # The generator splits a big PM 8h + 4h across two days
@@ -240,10 +263,10 @@ def look_for_homeless_urgents(today=None, client=None):
         if proposal is not None:
             asked += 1
 
-    logger.info('urgent watch | checked=%d asked=%d expired=%d',
-                len(orders), asked, expired)
-    return {'asked': asked, 'checked': len(orders), 'expired': expired,
-            'reason': None}
+    logger.info('urgent watch | checked=%d asked=%d skipped_by_cap=%d expired=%d',
+                len(orders), asked, skipped, expired)
+    return {'asked': asked, 'checked': len(orders), 'skipped': skipped,
+            'expired': expired, 'reason': None}
 
 
 @register(KIND)
