@@ -299,15 +299,21 @@ def price_one(order, crew=None):
         # stacker buy four hours and the fourth buys nothing.
         family = _get_category(order.equipment.equipment_type) if (
             order.equipment and order.equipment.equipment_type) else ''
-        _curve_crew, hours_n = pm_hours(family, crew=crew,
-                                        description=order.description)
-        # Hours from the curve, crew from the CALLER. `pm_hours` answers "how
-        # long with a crew this size", stepping down to the nearest measured
-        # point — but the day is charged for every man who turns up, not for
-        # the measured point. Six men on a reach stacker is still eight hours
-        # and still forty-eight man-hours.
+        # The crew is ALWAYS the caller's — the day is charged for every man
+        # who turns up, not for the nearest measured point on the curve. Six
+        # men on a reach stacker is still eight hours and still forty-eight
+        # man-hours.
         member['crew'] = crew
-        member['estimated_hours'] = hours_n
+        # The HOURS are re-read from the curve only for a PM. `pm_hours`
+        # answers "how long does a PM take with a crew this size"; asking it
+        # about a fault gets a PM's figure back, and a three-hour hydraulic
+        # leak comes out an eight-hour job. A fault keeps the hours
+        # `_price_bundle` gave it from Ali's fault table — more men on a leak
+        # do not make the leak shorter, they just cost the day more.
+        if order.job_type == 'pm':
+            _curve_crew, hours_n = pm_hours(family, crew=crew,
+                                            description=order.description)
+            member['estimated_hours'] = hours_n
     else:
         crew = int(member.get('crew') or MIN_CREW)
         from_rule = rule_crew_for(order)

@@ -419,3 +419,59 @@ class TestATeamBiggerThanTheBoost:
 
         assert len(job.assignments) == 6
         assert job_cost_man_hours(job) == priced['cost_man_hours'] == 48.0
+
+
+class TestPricingAFaultForANamedCrew:
+    """Stage 2 hands a job to the men who just finished — a NAMED crew — so it
+    must price for exactly those men. That means `price_one(crew=N)` on any
+    kind of job, including faults.
+
+    `pm_hours` answers "how long does a PM take with a crew this size". Asking
+    it about a hydraulic leak returns a PM's figure, and a three-hour fault
+    comes out an eight-hour job. More men on a leak do not make the leak
+    shorter — they only cost the day more.
+    """
+
+    def test_a_fault_keeps_its_own_hours_whatever_the_crew(self, db_session,
+                                                           admin_user):
+        from app.services.place_one import price_one
+        plan, days = _week(db_session, admin_user)
+        order = _order(db_session, name='ECH7', kind='empty handler',
+                       job_type='defect', order_type='COM',
+                       number='700000000820', description='ECH7 hydraulic leak')
+
+        plain = price_one(order)
+        for_three = price_one(order, crew=3)
+
+        assert plain['hours'] == for_three['hours'] == 3.0, (
+            'a COM alone is three hours however many men are on it')
+        assert for_three['crew'] == 3
+        assert for_three['cost_man_hours'] == 9.0
+
+    def test_a_pm_still_re_reads_the_curve(self, db_session, admin_user):
+        """The other half of the rule — a reach stacker PM with three men is
+        genuinely eight hours, not twelve."""
+        from app.services.place_one import price_one
+        plan, days = _week(db_session, admin_user)
+        order = _order(db_session, number='700000000821')     # reach stacker PM
+
+        assert price_one(order)['hours'] == 12.0
+        assert price_one(order, crew=3)['hours'] == 8.0
+
+    def test_the_named_crew_price_is_what_the_domino_reads(self, db_session,
+                                                           admin_user):
+        """Two men who finished early are given a fault. The day must be
+        charged 3h x 2, and that is exactly what job_cost_man_hours sees."""
+        from app.services.place_one import price_one
+        plan, days = _week(db_session, admin_user)
+        men = [_man(db_session, f'nm{i}') for i in range(2)]
+        _rule(db_session, men)
+        order = _order(db_session, name='ECH8', kind='empty handler',
+                       job_type='defect', order_type='COM',
+                       number='700000000822', description='ECH8 leak')
+        priced = price_one(order, crew=len(men))
+
+        job = place_one(order, days[1], crew_user_ids=[m.id for m in men],
+                        priced=priced)
+
+        assert job_cost_man_hours(job) == priced['cost_man_hours'] == 6.0

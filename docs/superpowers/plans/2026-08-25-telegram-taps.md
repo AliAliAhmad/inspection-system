@@ -3294,12 +3294,25 @@ def _candidate_dict(order):
     }
 
 
-def candidates_for(plan, berth, free_man_hours, free_men, limit=3):
+def candidates_for(plan, berth, free_man_hours, free_men, limit=3,
+                   exclude_orders=()):
     """The best few jobs from the box that these men could actually start.
 
-    Two filters, and both matter: a job must be small enough in MAN-HOURS
-    (hours x crew) and must not need more men than are standing free. A
-    four-man job is no use to two men with a whole afternoon.
+    Ordered by Ali's rule, 2026-08-25: **jobs that FIT come first** — finishing
+    something beats starting something. Only when nothing fits are oversized
+    jobs offered, each carrying `fits=False` so the message can say plainly
+    that the rest will carry to tomorrow.
+
+    A job must never need more men than are standing free: a four-man job is no
+    use to two men with a whole afternoon, however many hours they have.
+
+    `exclude_orders` keeps a job that is already sitting in somebody else's
+    open question out of this one. Two crews finishing at the same moment must
+    not both be offered the same machine — the second press would fail.
+
+    Deliberately NO fence on splittable PMs. A 12-hour reach stacker may be
+    started here like anything else; Ali declined the guard, knowing it leaves
+    a ~7h remainder on tomorrow's plan.
     """
     from app.api.work_plans import pool_orders_query
     from app.services.work_plan_generator_service import (_normalize_berth,
@@ -3317,26 +3330,35 @@ def candidates_for(plan, berth, free_man_hours, free_men, limit=3):
 
     bundles = _step_bundle(_step_score([_candidate_dict(o) for o in rows], plan))
 
-    offered = []
+    excluded = set(exclude_orders or ())
+    fits, oversized = [], []
     for bundle in bundles:
         cost = bundle_man_hours(bundle)
-        if cost <= 0 or cost > free_man_hours:
+        if cost <= 0:
             continue
         crew = max((m.get('crew') or MIN_CREW) for m in bundle['members'])
         if crew > free_men:
-            continue
+            continue                    # more men than are standing there
         first = bundle['members'][0]
-        offered.append({
-            'order_number': first.get('sap_order_number'),
+        number = first.get('sap_order_number')
+        if number in excluded:
+            continue                    # already in somebody else's question
+        entry = {
+            'order_number': number,
             'description': first.get('description') or '',
             'hours': float(first.get('estimated_hours') or 0),
             'crew': int(crew),
             'cost_man_hours': cost,
             'score': bundle.get('score', 0),
-        })
-        if len(offered) >= limit:
+            'fits': cost <= free_man_hours,
+        }
+        (fits if entry['fits'] else oversized).append(entry)
+        if len(fits) >= limit:
             break
-    return offered
+
+    # Finishing something beats starting something: an oversized job is a last
+    # resort, never a filler alongside jobs that fit.
+    return fits[:limit] if fits else oversized[:limit]
 ```
 
 - [ ] **Step 4: Run to verify it passes**
@@ -3505,18 +3527,30 @@ KIND = 'crew_is_free'
 
 ASK_WORDS = {
     'en': {
-        'headline': '{names} finished early on {day}.',
-        'left': 'They have {mh} man-hours left ({men} men).',
+        # CLOCK hours, never man-hours. Ali, 2026-08-25: two men who each have
+        # five hours left hold ten man-hours of work — both true — but at
+        # eleven in the morning "ten hours left" is a number nobody can work.
+        # The arithmetic stays in man-hours; the message speaks in hours.
+        'headline': '{names} finished {machine} early on {day}.',
+        'left': '{clock} hours left today ({men} men).',
         'pick': 'Pick one, or say no thanks:',
         'option': '{description} — {hours}h, {crew} men',
+        'over': '{description} — {hours}h, {crew} men (needs {hours}h, they '
+                'have {clock}h — the rest carries to tomorrow)',
+        'nothing': '{names} finished {machine} early on {day}. {clock} hours '
+                   'left today ({men} men). Nothing in the box fits.',
         'no': 'No thanks',
         'swap': 'Swap crew',
     },
     'ar': {
-        'headline': '{names} أنهوا مبكراً يوم {day}.',
-        'left': 'بقي لديهم {mh} ساعة-رجل ({men} رجال).',
+        'headline': '{names} أنهوا {machine} مبكراً يوم {day}.',
+        'left': 'بقي {clock} ساعات اليوم ({men} رجال).',
         'pick': 'اختر واحدة، أو لا شكراً:',
         'option': '{description} — {hours} ساعة، {crew} رجال',
+        'over': '{description} — {hours} ساعة، {crew} رجال (يحتاج {hours} ساعة '
+                'ولديهم {clock} — الباقي ينتقل إلى الغد)',
+        'nothing': '{names} أنهوا {machine} مبكراً يوم {day}. بقي {clock} ساعات '
+                   'اليوم ({men} رجال). لا يوجد في الصندوق ما يناسب.',
         'no': 'لا شكراً',
         'swap': 'تبديل الفريق',
     },
@@ -3532,9 +3566,10 @@ def _already_asked_today(day, crew_user_ids):
     """One announcement per crew per day. Two men finishing two jobs in the
     same minute must not buzz eight phones twice."""
     from app.models import TelegramProposal
+    # Includes the told-only rows the nothing-fits push leaves behind, which
+    # are born 'expired' — a crew mentioned once today is not mentioned again.
     open_rows = TelegramProposal.query.filter(
         TelegramProposal.kind == KIND,
-        TelegramProposal.status == 'open',
         TelegramProposal.target_day_id == day.id).all()
     wanted = set(crew_user_ids)
     return any(wanted & set((row.details or {}).get('crew_user_ids') or [])
@@ -3557,6 +3592,44 @@ def _other_teams(berth, crew_user_ids):
         if members and not (members & theirs):
             teams.append(rule)
     return teams
+
+
+def _orders_in_open_questions():
+    """Order numbers already offered in a question nobody has answered yet.
+
+    Two crews finishing in the same minute must not both be offered the same
+    machine — the second press would find the order gone and fail. Ali chose
+    safe over optimal here, knowing the cost: if the first crew's question is
+    never answered, that job stays hidden from the second crew until the
+    question dies at the end of the day.
+    """
+    from app.models import TelegramProposal
+    spoken_for = set()
+    for row in TelegramProposal.query.filter(
+            TelegramProposal.kind == KIND,
+            TelegramProposal.status == 'open').all():
+        for candidate in (row.details or {}).get('candidates') or []:
+            if candidate.get('order_number'):
+                spoken_for.add(candidate['order_number'])
+    return spoken_for
+
+
+def _remember_told(day, crew_user_ids):
+    """Record that this crew was mentioned today, even with nothing to offer.
+
+    The nothing-fits push creates no question row, so without this a crew that
+    finishes early every morning would be announced every morning.
+    """
+    from app.extensions import db as _db
+    from app.models import TelegramProposal
+    _db.session.add(TelegramProposal(
+        kind=KIND, summary='crew free, nothing in the box fits',
+        details={'crew_user_ids': crew_user_ids, 'candidates': [],
+                 'told_only': True},
+        options=[], status='expired',
+        work_plan_id=day.work_plan_id, target_day_id=day.id,
+        expires_at=datetime.combine(day.date + timedelta(days=1), time(0, 0))))
+    _db.session.commit()
 
 
 def ask_for_backfill(job, forced=False, client=None):
@@ -3587,28 +3660,50 @@ def ask_for_backfill(job, forced=False, client=None):
         return None
 
     berth = _normalize_berth(job.berth) or 'both'
-    offered = candidates_for(day.work_plan, berth, free_man_hours,
-                             len(free_men))
-    if not offered:
-        return None
-
+    # The clock hours a human can act on: the most any one of these men has
+    # left. Man-hours stay the currency for deciding what fits.
+    clock = max(free.values()) if free else 0.0
     names = ', '.join(sorted(
         (a.user.full_name or a.user.email) for a in job.assignments or []
         if a.user is not None))
+    machine = (job.equipment.name if job.equipment else job.description) or ''
+
+    offered = candidates_for(day.work_plan, berth, free_man_hours,
+                             len(free_men),
+                             exclude_orders=_orders_in_open_questions())
+
+    if not offered:
+        # Ali: tell me anyway. Idle men are worth knowing about even when the
+        # box has nothing for them — but there is nothing to decide, so this is
+        # a plain push with no buttons and no question row to answer.
+        from app.services.telegram.ask import recipients
+        from app.services.telegram.client import TelegramClient
+        teller = client or TelegramClient()
+        for person, chat_id in recipients():
+            language = getattr(person, 'language', None) or 'en'
+            teller.send_message(chat_id, _at(
+                language, 'nothing', names=names, machine=machine,
+                day=day.date.isoformat(), clock=clock, men=len(free_men)))
+        _remember_told(day, crew_user_ids)
+        return None
 
     texts, options = {}, []
     for language in ASK_WORDS:
         texts[language] = '\n'.join([
-            _at(language, 'headline', names=names, day=day.date.isoformat()),
-            _at(language, 'left', mh=free_man_hours, men=len(free_men)),
+            _at(language, 'headline', names=names, machine=machine,
+                day=day.date.isoformat()),
+            _at(language, 'left', clock=clock, men=len(free_men)),
             _at(language, 'pick'),
         ])
     for candidate in offered:
+        # An oversized job says so on its own button, so nobody presses one
+        # without knowing the rest carries to tomorrow.
+        word = 'option' if candidate.get('fits', True) else 'over'
         options.append({
             'key': f"order:{candidate['order_number']}",
             'action': 'apply',
-            'label_en': _at('en', 'option', **candidate),
-            'label_ar': _at('ar', 'option', **candidate),
+            'label_en': _at('en', word, clock=clock, **candidate),
+            'label_ar': _at('ar', word, clock=clock, **candidate),
         })
     options.append({'key': 'no', 'action': 'decline',
                     'label_en': ASK_WORDS['en']['no'],
@@ -3641,6 +3736,7 @@ def ask_for_backfill(job, forced=False, client=None):
                         'berth': berth,
                         'crew_user_ids': crew_user_ids,
                         'free_man_hours': free_man_hours,
+                        'free_clock_hours': clock,
                         'free_men': len(free_men),
                         'candidates': offered},
                work_plan_id=day.work_plan_id, target_day_id=day.id,
@@ -3907,12 +4003,19 @@ def apply_crew_free(proposal, option, user):
         raise ValueError('that day is gone')
 
     crew_user_ids = details.get('crew_user_ids') or []
+    # Price for the men who will ACTUALLY be on it — the crew that just
+    # finished, not the rule's standard gang — so the promise equals what
+    # `day_ripple.job_cost_man_hours` reads off the created job. Safe for a
+    # fault too: `price_one(crew=N)` only re-reads hours from the PM curve for
+    # a PM, so a three-hour leak stays three hours however many men take it.
+    priced = price_one(order, crew=max(MIN_CREW, len(crew_user_ids))) \
+        if crew_user_ids else price_one(order)
     if swapped_rule_id is not None:
         # Another team was chosen: let the generator's own rule logic pick who,
         # rather than handing the whole candidate list the work.
         crew_user_ids = None
 
-    job = place_one(order, day, crew_user_ids=crew_user_ids)
+    job = place_one(order, day, crew_user_ids=crew_user_ids, priced=priced)
     if swapped_rule_id is not None:
         crew_user_ids = [a.user_id for a in job.assignments]
     # NEVER commit here — handle_callback owns the single commit. See the

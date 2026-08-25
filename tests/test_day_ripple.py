@@ -251,3 +251,78 @@ class TestSeveralDemandsInOnePass:
         assert [m['job_id'] for m in chain] == [lamp.id]
         db_session.session.refresh(keeper)
         assert keeper.work_plan_day_id == days[1].id
+
+
+class TestEachPursePushesItsOwn:
+    """Ali, 2026-08-25: "the carry over next day defect jobs should affect
+    domino effect over the defect jobs."
+
+    A job spends from one of two purses — the PM team's or the fault team's —
+    and the domino may only push aside work paid for out of the SAME purse. A
+    carried defect moves other defects; a carried PM moves other PMs. Making a
+    PM fit by shoving a fault aside would spend another team's money.
+
+    True in the code before this test existed, and completely unguarded: any
+    change to the victim filter would have broken it silently.
+    """
+
+    def _two_teams(self, db_session):
+        _rule(db_session, [_user(db_session, 'pm1'), _user(db_session, 'pm2')],
+              team_type='regular_pm')                       # west PM: 16 mh
+        _rule(db_session, [_user(db_session, 'sp1'), _user(db_session, 'sp2')],
+              team_type='defect_mech')                      # west faults: 16 mh
+
+    def test_a_carried_defect_pushes_a_defect_not_a_pm(self, db_session,
+                                                       admin_user):
+        """The PM on that day is the more tempting victim — lower priority AND
+        bigger, so the domino's own sort would pick it first. It must not."""
+        plan, days = _week(db_session, admin_user)
+        self._two_teams(db_session)
+        tempting_pm = _job(db_session, days[1], 'TTQ1', 7.0, priority='low')
+        the_fault = _job(db_session, days[1], 'ECHQ1', 5.0, priority='normal',
+                         job_type='defect')
+
+        chain = make_room(plan, days[1], 8.0, 'west', 'spec')
+
+        assert [m['job_id'] for m in chain] == [the_fault.id]
+        db_session.session.refresh(tempting_pm)
+        assert tempting_pm.work_plan_day_id == days[1].id, (
+            'a fault must never be made to fit by moving a PM')
+
+    def test_a_carried_pm_pushes_a_pm_not_a_defect(self, db_session,
+                                                   admin_user):
+        plan, days = _week(db_session, admin_user)
+        self._two_teams(db_session)
+        tempting_fault = _job(db_session, days[1], 'ECHQ2', 7.0, priority='low',
+                              job_type='defect')
+        the_pm = _job(db_session, days[1], 'TTQ2', 5.0, priority='normal')
+
+        chain = make_room(plan, days[1], 8.0, 'west', 'pm')
+
+        assert [m['job_id'] for m in chain] == [the_pm.id]
+        db_session.session.refresh(tempting_fault)
+        assert tempting_fault.work_plan_day_id == days[1].id
+
+    def test_on_a_one_team_berth_either_can_move_the_other(self, db_session,
+                                                           admin_user):
+        """East is one team — the same men do PMs and faults, so it is one
+        purse. There, making room for a PM CAN move a fault, because it is the
+        same hands either way. Detected from the data, never hardcoded."""
+        _rule(db_session, [_user(db_session, 'e1'), _user(db_session, 'e2')],
+              team_type='regular_pm')
+        plan, days = _week(db_session, admin_user)
+        for rule in WorkerAssignmentRule.query.all():
+            rule.berth = 'east'
+        db_session.session.commit()
+        fault = _job(db_session, days[1], 'ECHQ3', 5.0, priority='low',
+                     job_type='defect')
+        fault.berth = 'east'
+        keeper = _job(db_session, days[1], 'TTQ3', 3.0, priority='high')
+        keeper.berth = 'east'
+        db_session.session.commit()
+
+        chain = make_room(plan, days[1], 8.0, 'east', 'pm')
+
+        assert [m['job_id'] for m in chain] == [fault.id]
+        db_session.session.refresh(keeper)
+        assert keeper.work_plan_day_id == days[1].id

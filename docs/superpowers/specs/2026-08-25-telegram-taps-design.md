@@ -59,6 +59,19 @@ plan is wrong and somebody with a phone could fix it in one second:
 | Who does the offered job? | **The same men who just finished**, by default. One more button — **Swap crew** — hands it to another team on that day instead. |
 | Who decides | The engineer, never the worker. The worker's app button is a **request**, not a placement. |
 
+### Crew finished early — decided 2026-08-25, second round
+
+| Question | Decision |
+|---|---|
+| **The number in the message** | **Clock hours, with the crew size** — "5 hours left today (2 men)", NEVER "10 hours". Ali: *"the job should be 5 hrs not 10 hrs unless the job is counted # of employee * job estimated hrs."* He is right, and both numbers are true: two men who each have 5 hours left hold 10 man-hours of work. The arithmetic stays in man-hours because that is how a job is priced; the MESSAGE says clock hours, because at eleven in the morning "ten hours left" is a number nobody can work. |
+| A job too big for the hours left | **Offer it anyway** — they start it, and tonight the worker states the hours remaining and the evening carry-over moves the rest to tomorrow. Two rules on top: (1) jobs that FIT are always offered first — finishing something beats starting something; (2) a job that does not fit is offered only when nothing fits, and the message says so plainly: *"this needs 16 hours, they have 5, the rest carries to tomorrow."* |
+| A too-big job and tomorrow | **Accepted, eyes open** (Ali chose this over two safer options after seeing the consequence spelled out). Two men with 10 man-hours free given a 16 man-hour job work their 10, and 6 man-hours carry to tomorrow — so **the domino is not avoided, it is delayed by one day**: nothing moves today, and tomorrow's carry-over fires it if tomorrow is full. Rejected alternatives: offer only what fits; offer a too-big job only when the leftover is small. |
+| Does the free-crew placement itself run the domino? | **No — and not because the check is skipped.** The free hours are counted from what the men REALLY did, and only jobs fitting those hours are offered, so the room has already been proved before the phone buzzes. Running the domino here would read the day's wallet, which still counts the hours the plan GUESSED, decide the day is full, and push somebody's work aside to make room that already exists — punishing the crew for being fast. |
+| Splittable PMs (the reach stacker) | **No special fence.** A 12-hour PM may be started by a free crew like anything else. Ali declined the proposed guard. Recorded consequence, accepted: a 12h reach stacker started with 5 hours left leaves a ~7h remainder on tomorrow's plan, and if tomorrow is full the domino will push another job aside for it. |
+| Nothing in the box fits at all | **Say so anyway** — a plain message, no buttons: the men are idle and that is worth knowing. Once per crew per day, so a crew that finishes early every morning does not buzz every morning. |
+| Two crews free at once, same best job | **A job in an open question is never offered in another.** Safe over optimal: nobody can press a button that fails. Recorded cost, accepted: if the first crew's question is never answered, that job stays hidden from the second crew until the question dies at the end of the day. |
+| What the message says | Names, what they finished, and the hours left: *"Hassan and Omar finished RS110 250HR SERVICE early. 5 hours left today (2 men)."* Deliberately NOT how much faster than the plan they were — that turns every message into a quiet scoreboard about named men. |
+
 ### Explicitly NOT in scope (YAGNI)
 
 - Any web planner UI for these questions. The web planner already lets an
