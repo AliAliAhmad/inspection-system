@@ -103,10 +103,13 @@
 - **RUN ON RENDER AFTER DEPLOY:** `flask db upgrade` (migration `t0u1v2w3x4y5` de-duplicates
   `material_kit_items` and adds the missing unique constraint), then
   `flask seed-material-kits` — report only — and `--apply` when Ali has read it.
-- **What the dry run cannot settle from here:** whether production's
-  `equipment.model_number` holds `DRG450-65S5` (Ali's kits' convention) or something else.
-  It decides whether his 8 kits are UPDATED or replaced-and-switched-off. The report on
-  Render says which, before writing.
+- **Settled on production 2026-08-26:** `equipment.model_number` holds the bare model
+  (`DCF90-45E6`), so Ali's 8 kits are UPDATED in place, none switched off.
+- **The spec ships one row per SERVICE, not pre-grouped kits.** Grouping is done by
+  `equipment.model_number` in the live table — never by the asset list. Ali: the ten Ottawa
+  tractors are *"not one model but share same engine, so keep each kit different"*, and
+  production carries `Ottawa 50`..`Ottawa 59` for TT029..TT038. Side effect: the asset
+  list's `YT22011` typo stops mattering, because the app already has those 22 right.
 - **`CO01-C022-004 Equipment degreaser` does not exist** — zero appearances in 283,345
   movement lines, yet it is in 6 of the 8 saved kits. The seeder removes it.
 - **Held back: 23 kits under 5 services**, and every CALENDAR PM — nothing reaches 75% on

@@ -207,3 +207,41 @@ by `(equipment_type, equipment_model, cycle_id)`. The preview seeds
 kits use. If production holds something else — `KALMAR DRG450-65S5`, or NULL —
 the same run creates 32 new kits and switches off all 8 instead. **The dry run
 on Render is what settles it**, and it says so before writing anything.
+
+
+---
+
+# CORRECTION 2026-08-26 (later) — the app decides the grouping, not the asset list
+
+The production dry run found two things, and the second changed the design.
+
+**1. The `YT22011` typo is ONLY in the asset list.** Both spec kits resolved to
+the same app key (`TT/YT220`), so the app's equipment table already had all 22
+tractors right. The seeder skipped the second kit rather than merging it, which
+silently threw away 30 services at 250 hr and 10 at 1000 hr.
+
+**2. The ten Ottawa tractors carry a DIFFERENT `model_number` each** — `Ottawa
+50` through `Ottawa 59`, counting up in step with TT029..TT038, while the asset
+list calls all ten `OTTAWA 50`. Ali, asked: *"not one model but share same
+engine, so keep each kit different."* So they are genuinely ten models and each
+must keep its own kit.
+
+That settles the architecture: **grouping cannot come from the asset list.** The
+shipped file now holds ONE ROW PER SERVICE — machine, service package, and what
+left the store — and `material_kit_seed.build()` does the grouping and the
+arithmetic against the live `equipment` table:
+
+    1,093 services, 98 machines, 570 materials, 369 KB
+
+Consequences, all good:
+* Each Ottawa model gets a kit built from ITS OWN machines' history.
+* The `YT22011` typo is disposed of without a correction rule — whatever the app
+  says a machine is, is what it is.
+* The asset list is no longer read at all, so its cp1252 encoding and its
+  non-breaking spaces stop mattering.
+* A kit's key is computed from the same rows `find_matching_kit` compares, so a
+  kit that cannot be found cannot be created.
+
+Local dry run against Ali's real fleet and his 8 real kits: **24 to create,
+8 to update, 0 switched off, 13 materials to create, 23 held back under five
+services.** Suite 851 passed, 1 skipped.

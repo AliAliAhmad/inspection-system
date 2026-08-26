@@ -1,8 +1,8 @@
-"""Loading the standard kits.
+"""Building the standard kits.
 
-Ali's bar for this work: "0 bug and wrong tolerance". So the seeder reports
-before it writes, keys every kit to what `find_matching_kit` actually compares,
-and refuses rather than guesses when the app and the data disagree.
+Ali's bar: "0 bug and wrong tolerance". So the seeder reports before it writes,
+groups by what the APP says a machine is rather than by the source data's text,
+and refuses rather than guesses when the two disagree.
 """
 
 import pytest
@@ -12,30 +12,24 @@ from app.models import Equipment
 from app.models.maintenance_cycle import MaintenanceCycle
 from app.models.material import Material
 from app.models.material_kit import MaterialKit, MaterialKitItem
-from app.services.material_kit_seed import apply, load_spec, plan
+from app.services.material_kit_seed import apply, build, load_spec, plan
 
 _seq = iter(range(1, 9999))
 
-
-def _spec(kits, too_few=()):
-    return {'rules': {'threshold_pct': 75}, 'kits': kits,
-            'too_few_services': list(too_few)}
+OIL = 'CO01-C014-003'
+FILTER = 'ST04-M067-005'
 
 
-def _kit_spec(family='RS', manufacturer='KALMAR', model='DRG450-65S5',
-              hours=250, plants=('RS113', 'RS114'), items=None):
-    return {'family': family, 'manufacturer': manufacturer, 'model': model,
-            'interval_hours': hours, 'services': 53,
-            'plant_numbers': list(plants),
-            'items': items or [_item()]}
+def _spec(services, materials=None):
+    return {'rules': {'threshold_pct': 75},
+            'materials': materials or {
+                OIL: {'name': 'Engine oil 15w40', 'unit': 'LTR', 'category': 'lubricant'},
+                FILTER: {'name': 'Engine oil filter', 'unit': 'EA', 'category': 'filter'}},
+            'services': services}
 
 
-def _item(code='CO01-C014-003', name='Engine oil 15w40', unit='LTR',
-          qty=45, category='lubricant'):
-    return {'code': code, 'name': name, 'unit': unit, 'category': category,
-            'quantity': qty, 'freq_pct': 98, 'used_on': 52,
-            'times_this_qty': 42, 'average': 48.58, 'min': 40, 'max': 95,
-            'spread': '45x42  65x3  40x2'}
+def _svc(machine='RS113', hours=250, **materials):
+    return {'machine': machine, 'interval_hours': hours, 'materials': materials}
 
 
 def _machine(db_session, name, eq_type='RS', model='DRG450-65S5'):
@@ -58,145 +52,183 @@ def _cycle(db_session, hours):
     return row
 
 
-class TestTheShippedSpecIsSane:
-    def test_it_loads_and_every_kit_is_complete(self):
+class TestTheShippedFileIsSane:
+    def test_it_loads_and_every_service_is_usable(self):
         spec = load_spec()
-        assert spec['kits'], 'the shipped spec is empty'
-        for kit in spec['kits']:
-            assert kit['plant_numbers'], f'{kit["model"]} names no machines'
-            assert kit['items'], f'{kit["model"]} has no materials'
-            assert kit['services'] >= 5, (
-                f'{kit["model"]} slipped past the 5-service floor')
-            for item in kit['items']:
-                assert item['freq_pct'] >= 75
-                assert item['quantity'] > 0
-                assert item['unit'], f'{item["code"]} has no unit'
-                assert item['spread'], f'{item["code"]} carries no provenance'
+        assert spec['services'], 'the shipped file is empty'
+        for s in spec['services']:
+            assert s['machine'], 'a service with no machine cannot be grouped'
+            assert s['materials'], 'a service with no materials is not a service'
+            assert all(q > 0 for q in s['materials'].values())
+
+    def test_every_material_used_has_a_name_and_a_unit(self):
+        spec = load_spec()
+        used = {c for s in spec['services'] for c in s['materials']}
+        for code in used:
+            info = spec['materials'].get(code)
+            assert info, f'{code} is used but not described'
+            assert info['name'] and info['unit'], f'{code} has no name or unit'
 
     def test_the_dead_material_code_is_nowhere_in_it(self):
-        """`CO01-C022-004 Equipment degreaser` is in 6 of Ali's 8 saved kits and
-        appears ZERO times in 283,345 movement lines. The data-driven spec must
-        not carry it forward."""
+        """`CO01-C022-004 Equipment degreaser` sits in 6 of Ali's 8 saved kits
+        and appears ZERO times in 283,345 movement lines."""
         spec = load_spec()
-        codes = {i['code'] for k in spec['kits'] for i in k['items']}
-        assert 'CO01-C022-004' not in codes
-
-    def test_no_kit_lists_the_same_material_twice(self):
-        spec = load_spec()
-        for kit in spec['kits']:
-            codes = [i['code'] for i in kit['items']]
-            assert len(codes) == len(set(codes)), f'{kit["model"]} repeats a material'
+        used = {c for s in spec['services'] for c in s['materials']}
+        assert 'CO01-C022-004' not in used
 
 
-class TestReportBeforeWrite:
-    def test_plan_changes_nothing(self, app, db_session):
-        _machine(db_session, 'RS113'); _cycle(db_session, 250)
-        before = MaterialKit.query.count(), Material.query.count()
+class TestTheAppDecidesTheGrouping:
+    """Ali, 2026-08-26, on the ten Ottawa tractors: "not one model but share
+    same engine, so keep each kit different." So the grouping comes from
+    `equipment.model_number` — never from the source data's own model text."""
 
-        plan(_spec([_kit_spec()]))
+    def test_two_models_get_two_kits_even_from_one_pool_of_services(
+            self, app, db_session):
+        _cycle(db_session, 250)
+        _machine(db_session, 'TT029', eq_type='TT', model='Ottawa 50')
+        _machine(db_session, 'TT030', eq_type='TT', model='Ottawa 51')
+        services = ([_svc('TT029', 250, **{OIL: 25}) for _ in range(6)]
+                    + [_svc('TT030', 250, **{OIL: 30}) for _ in range(6)])
 
-        assert (MaterialKit.query.count(), Material.query.count()) == before
+        kits, held, problems = build(_spec(services))
 
-    def test_it_says_which_materials_it_would_create(self, app, db_session):
-        _machine(db_session, 'RS113'); _cycle(db_session, 250)
+        assert len(kits) == 2
+        by_model = {k['equipment_model']: k for k in kits}
+        assert by_model['Ottawa 50']['items'][0]['quantity'] == 25
+        assert by_model['Ottawa 51']['items'][0]['quantity'] == 30
 
-        report = plan(_spec([_kit_spec()]))
+    def test_one_model_across_many_machines_is_one_kit(self, app, db_session):
+        """The `YT22011` typo in the asset list splits one fleet of 22 in two.
+        Grouping by the app's own rows makes that impossible."""
+        _cycle(db_session, 250)
+        for name in ('TT039', 'TT049'):
+            _machine(db_session, name, eq_type='TT', model='YT220')
+        services = ([_svc('TT039', 250, **{OIL: 25}) for _ in range(4)]
+                    + [_svc('TT049', 250, **{OIL: 25}) for _ in range(4)])
 
-        assert [m['code'] for m in report['materials_to_create']] == ['CO01-C014-003']
-        assert report['materials_to_create'][0]['unit'] == 'LTR'
+        kits, held, problems = build(_spec(services))
 
-    def test_it_shows_the_old_quantity_beside_the_new_one(self, app, db_session):
-        """Ali has to be able to see what changes before it changes."""
-        _machine(db_session, 'RS113')
-        cycle = _cycle(db_session, 250)
-        old_mat = Material(code='CO01-C014-003', name='Engine oil 15w40',
-                           category='lubricant', unit='LTR')
-        db_session.session.add(old_mat); db_session.session.flush()
-        kit = MaterialKit(name='250 Hrs-RS-DRG450', equipment_type='RS',
-                          equipment_model='DRG450-65S5', cycle_id=cycle.id,
-                          is_active=True)
-        db_session.session.add(kit); db_session.session.flush()
-        db_session.session.add(MaterialKitItem(kit_id=kit.id,
-                                               material_id=old_mat.id, quantity=65))
-        db_session.session.commit()
+        assert len(kits) == 1
+        assert kits[0]['services'] == 8, 'both machines feed one kit'
+        assert sorted(kits[0]['machines']) == ['TT039', 'TT049']
 
-        report = plan(_spec([_kit_spec()]))
-
-        entry = report['kits'][0]
-        assert entry['action'] == 'update'
-        assert entry['existing_id'] == kit.id
-        assert entry['current_items'][0]['quantity'] == 65
-        assert entry['items'][0]['quantity'] == 45
-
-
-class TestWhatItRefusesToDo:
-    def test_a_machine_the_app_does_not_know_is_reported_not_invented(
+    def test_a_machine_the_app_does_not_know_is_named_not_invented(
             self, app, db_session):
         _cycle(db_session, 250)
 
-        report = plan(_spec([_kit_spec(plants=('RS999',))]))
+        kits, held, problems = build(_spec([_svc('RS999', 250, **{OIL: 45})]))
 
-        assert report['kits'] == []
-        assert any('RS999' in p for p in report['problems'])
+        assert kits == []
+        assert any('RS999' in p for p in problems)
+
+
+class TestTheArithmetic:
+    def test_a_material_under_75_percent_is_left_out(self, app, db_session):
+        _cycle(db_session, 250); _machine(db_session, 'RS113')
+        services = [_svc('RS113', 250, **{OIL: 45}) for _ in range(8)]
+        services[0]['materials'][FILTER] = 1   # 1 of 8 = 12%
+
+        kits, held, problems = build(_spec(services))
+
+        assert [i['code'] for i in kits[0]['items']] == [OIL]
+
+    def test_exactly_75_percent_is_kept(self, app, db_session):
+        _cycle(db_session, 250); _machine(db_session, 'RS113')
+        services = [_svc('RS113', 250, **{OIL: 45}) for _ in range(8)]
+        for s in services[:6]:
+            s['materials'][FILTER] = 1        # 6 of 8 = exactly 75%
+
+        kits, held, problems = build(_spec(services))
+
+        assert {i['code'] for i in kits[0]['items']} == {OIL, FILTER}
+
+    def test_the_quantity_is_the_most_used_not_the_average(self, app, db_session):
+        """Ali, 2026-08-26. RS DRG450 at 250 hr drew 45 LTR 42 times of 53; the
+        average of 48.58 is a figure nobody ever asked the store for."""
+        _cycle(db_session, 250); _machine(db_session, 'RS113')
+        services = ([_svc('RS113', 250, **{OIL: 45}) for _ in range(6)]
+                    + [_svc('RS113', 250, **{OIL: 95}) for _ in range(2)])
+
+        kits, held, problems = build(_spec(services))
+
+        item = kits[0]['items'][0]
+        assert item['quantity'] == 45
+        assert item['spread'] == '45x6  95x2'
+        assert item['times_this_qty'] == 6
+
+    def test_under_five_services_is_held_back_not_built(self, app, db_session):
+        _cycle(db_session, 250); _machine(db_session, 'RS113')
+
+        kits, held, problems = build(
+            _spec([_svc('RS113', 250, **{OIL: 45}) for _ in range(4)]))
+
+        assert kits == []
+        assert len(held) == 1 and held[0]['services'] == 4
 
     def test_a_missing_cycle_row_stops_that_kit_and_says_so(self, app, db_session):
         _machine(db_session, 'RS113')
         MaintenanceCycle.query.filter_by(hours_value=250).delete()
         db_session.session.commit()
 
-        report = plan(_spec([_kit_spec()]))
+        kits, held, problems = build(
+            _spec([_svc('RS113', 250, **{OIL: 45}) for _ in range(6)]))
 
-        assert report['kits'] == []
-        assert any('250 running hours' in p for p in report['problems'])
+        assert kits == []
+        assert any('250 running hours' in p for p in problems)
 
-    def test_when_the_app_disagrees_about_the_model_it_says_so(self, app, db_session):
-        """The asset list holds `YT220` and `YT22011` for one fleet of 22
-        tractors. If that typo is in the app too, Ali sees it rather than the
-        seeder averaging it away."""
-        _cycle(db_session, 250)
-        _machine(db_session, 'RS113', model='DRG450-65S5')
-        _machine(db_session, 'RS114', model='DRG450-65S5-TYPO')
 
-        report = plan(_spec([_kit_spec()]))
+class TestReportBeforeWrite:
+    def test_plan_changes_nothing(self, app, db_session):
+        _cycle(db_session, 250); _machine(db_session, 'RS113')
+        before = MaterialKit.query.count(), Material.query.count()
 
-        assert any('disagrees about the model' in p for p in report['problems'])
-        assert len(report['kits']) == 2, 'both groups are offered, neither guessed'
+        plan(_spec([_svc('RS113', 250, **{OIL: 45}) for _ in range(6)]))
 
-    def test_two_spec_kits_landing_on_one_app_key_is_refused(self, app, db_session):
-        """Exactly what the YT220/YT22011 typo does once the app has cleaned it
-        up: two spec kits both resolve to RS/DRG450-65S5/250. Writing one over
-        the other silently would lose a whole fleet's numbers."""
-        _cycle(db_session, 250)
-        _machine(db_session, 'RS113'); _machine(db_session, 'RS114')
+        assert (MaterialKit.query.count(), Material.query.count()) == before
 
-        report = plan(_spec([
-            _kit_spec(plants=('RS113',)),
-            _kit_spec(model='DRG450-65S5 ', plants=('RS114',)),
-        ]))
+    def test_it_shows_the_old_quantity_beside_the_new_one(self, app, db_session):
+        cycle = _cycle(db_session, 250); _machine(db_session, 'RS113')
+        old = Material(code=OIL, name='Engine oil 15w40', category='lubricant',
+                       unit='LTR')
+        db_session.session.add(old); db_session.session.flush()
+        kit = MaterialKit(name='250 Hrs-RS-DRG450', equipment_type='RS',
+                          equipment_model='DRG450-65S5', cycle_id=cycle.id,
+                          is_active=True)
+        db_session.session.add(kit); db_session.session.flush()
+        db_session.session.add(MaterialKitItem(kit_id=kit.id, material_id=old.id,
+                                               quantity=65))
+        db_session.session.commit()
 
-        assert len(report['kits']) == 1
-        assert any('already claims' in p for p in report['problems'])
+        report = plan(_spec([_svc('RS113', 250, **{OIL: 45}) for _ in range(6)]))
+
+        entry = report['kits'][0]
+        assert entry['action'] == 'update' and entry['existing_id'] == kit.id
+        assert entry['current_items'][0]['quantity'] == 65
+        assert entry['items'][0]['quantity'] == 45
 
 
 class TestWriting:
-    def test_it_creates_the_kit_and_its_material(self, app, db_session):
-        _machine(db_session, 'RS113'); cycle = _cycle(db_session, 250)
+    def _six(self, machine='RS113'):
+        return _spec([_svc(machine, 250, **{OIL: 45}) for _ in range(6)])
 
-        counts = apply(_spec([_kit_spec()]))
+    def test_it_creates_the_kit_and_its_material(self, app, db_session):
+        cycle = _cycle(db_session, 250); _machine(db_session, 'RS113')
+
+        counts = apply(self._six())
 
         assert counts['created'] == 1 and counts['materials_created'] == 1
-        kit = MaterialKit.query.filter_by(equipment_type='RS').one()
-        assert kit.equipment_model == 'DRG450-65S5'
-        assert kit.cycle_id == cycle.id
+        kit = MaterialKit.query.one()
+        assert (kit.equipment_type, kit.equipment_model, kit.cycle_id) == \
+               ('RS', 'DRG450-65S5', cycle.id)
         assert len(kit.items) == 1 and kit.items[0].quantity == 45
 
     def test_the_kit_it_writes_is_one_the_matcher_can_find(self, app, db_session):
         """The whole point. A kit keyed to anything else exists and never fires."""
         from app.api.materials import find_matching_kit
-        machine = _machine(db_session, 'RS113')
         cycle = _cycle(db_session, 250)
+        machine = _machine(db_session, 'RS113')
 
-        apply(_spec([_kit_spec()]))
+        apply(self._six())
 
         found = find_matching_kit(machine.id, cycle.id)
         assert found is not None, 'the seeder wrote a kit the matcher cannot see'
@@ -204,30 +236,26 @@ class TestWriting:
 
     def test_a_forklift_kit_with_no_interval_is_also_findable(self, app, db_session):
         from app.api.materials import find_matching_kit
-        machine = _machine(db_session, 'FL328', eq_type='FL', model='DOOSAN D30NXP')
+        machine = _machine(db_session, 'FL328', eq_type='FL', model='D30NXP')
 
-        apply(_spec([_kit_spec(family='FL', manufacturer='DOOSAN',
-                               model='DOOSAN D30NXP', hours=None,
-                               plants=('FL328',),
-                               items=[_item(qty=10)])]))
+        apply(_spec([_svc('FL328', None, **{OIL: 10}) for _ in range(6)]))
 
         found = find_matching_kit(machine.id, None)
         assert found is not None and found.items[0].quantity == 10
 
     def test_running_it_twice_changes_nothing_the_second_time(self, app, db_session):
-        _machine(db_session, 'RS113'); _cycle(db_session, 250)
+        _cycle(db_session, 250); _machine(db_session, 'RS113')
 
-        apply(_spec([_kit_spec()]))
-        counts = apply(_spec([_kit_spec()]))
+        apply(self._six())
+        counts = apply(self._six())
 
         assert counts['created'] == 0 and counts['updated'] == 1
-        assert MaterialKit.query.count() == 1
-        assert MaterialKitItem.query.count() == 1
+        assert MaterialKit.query.count() == 1 and MaterialKitItem.query.count() == 1
 
     def test_a_line_no_longer_in_the_data_is_dropped(self, app, db_session):
-        """This is how `CO01-C022-004` and the six duplicate rows disappear —
-        the items are replaced wholesale, with no special case for either."""
-        _machine(db_session, 'RS113'); cycle = _cycle(db_session, 250)
+        """How `CO01-C022-004` and the six duplicate rows go, with no rule of
+        their own."""
+        cycle = _cycle(db_session, 250); _machine(db_session, 'RS113')
         dead = Material(code='CO01-C022-004', name='Equipment degreaser',
                         category='consumable', unit='EA')
         db_session.session.add(dead); db_session.session.flush()
@@ -239,25 +267,22 @@ class TestWriting:
                                                quantity=1))
         db_session.session.commit()
 
-        apply(_spec([_kit_spec()]))
+        apply(self._six())
 
         db_session.session.refresh(kit)
-        assert [i.material.code for i in kit.items] == ['CO01-C014-003']
+        assert [i.material.code for i in kit.items] == [OIL]
 
     def test_a_kit_with_no_data_behind_it_is_switched_off_not_deleted(
             self, app, db_session):
-        """Ali said "if wrong remove". Deactivating is the reversible reading,
-        and it keeps the history of what the kit used to say."""
-        _machine(db_session, 'RS113'); _cycle(db_session, 250)
+        """Ali said "if wrong remove". Deactivating is the reversible reading."""
+        _cycle(db_session, 250); _machine(db_session, 'RS113')
         orphan = MaterialKit(name='nobody makes this any more',
                              equipment_type='QC', equipment_model='J7600',
                              is_active=True)
-        db_session.session.add(orphan)
-        db_session.session.commit()
+        db_session.session.add(orphan); db_session.session.commit()
         orphan_id = orphan.id
 
-        counts = apply(_spec([_kit_spec()]))
+        counts = apply(self._six())
 
         assert counts['deactivated'] == 1
-        assert db.session.get(MaterialKit, orphan_id) is not None
         assert db.session.get(MaterialKit, orphan_id).is_active is False

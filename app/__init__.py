@@ -432,13 +432,17 @@ def create_app(config_name='development'):
         updates = [k for k in report['kits'] if k['action'] == 'update']
         print(f"\nKITS: {len(creates)} to create, {len(updates)} to update, "
               f"{len(report['to_deactivate'])} to switch off")
-        print(f"({report['held_back']} more kits held back — under 5 services)")
+        held = report['held_back']
+        print(f"({len(held)} more held back — under 5 services, so a percentage "
+              f"would mean nothing)")
 
         for entry in report['kits']:
             iv = f"{entry['interval_hours']} hr" if entry['interval_hours'] else 'hourly, no interval'
             head = (f"{entry['action'].upper():<7s} {entry['equipment_type']:<6s} "
                     f"{entry['equipment_model'] or '(any model)':<24s} {iv:<20s} "
                     f"from {entry['services']} services, {len(entry['machines'])} machines")
+            if len(entry['machines']) <= 12:
+                print(f"        machines: {', '.join(entry['machines'])}")
             print('\n' + '-' * 78)
             print(head)
             if entry['existing_id']:
@@ -462,6 +466,15 @@ def create_app(config_name='development'):
             print('\nSWITCHED OFF (no data behind them any more):')
             for k in report['to_deactivate']:
                 print(f"    kit {k['id']}: {k['name']!r}")
+
+        if held:
+            print('\nHELD BACK — too few services to trust:')
+            for entry in sorted(held, key=lambda e: -e['services']):
+                iv = f"{entry['interval_hours']} hr" if entry['interval_hours'] else 'hourly'
+                print(f"    {entry['equipment_type']:<6s} "
+                      f"{entry['equipment_model'] or '(no model)':<24s} {iv:<12s} "
+                      f"{entry['services']} service(s), would have been "
+                      f"{len(entry['items'])} items")
 
         if report['problems']:
             print(f"\nNEEDS YOUR EYE ({len(report['problems'])}):")

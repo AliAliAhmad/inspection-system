@@ -441,3 +441,16 @@ dict in `sap_pool_sync` carries a comment naming four things "computed by the pa
 then thrown away, which quietly disabled four things in the planner". `cycle_id` was the
 fifth, sitting right there, still thrown away. → **When you find a comment that names a
 class of bug, look for the next instance of that class before moving on.**
+
+**LESSON: when the source data and the app disagree about a fact, the app wins — and the
+grouping belongs where the app's own rows are.** I first grouped the kits by the asset
+list's model column. Production then showed the asset list calling ten Ottawa tractors one
+model while the app calls them ten, and calling 22 Terberg tractors two models while the app
+calls them one. Both directions wrong, in one dry run. → **Ship the RAW rows and do the
+grouping against the live table** — especially when the grouping key is the same string the
+consumer will compare. A kit that cannot be found then cannot be created.
+
+**LESSON: "SKIPPED, something else already claims this key" is a safe refusal that still
+loses data.** The seeder refused to overwrite one kit with another, which was right — and
+quietly discarded 40 real services while doing it. → **A refusal is only complete when the
+report says what was lost.** Better still, remove the situation that causes it.
