@@ -1,0 +1,106 @@
+
+KITS: 24 to create, 8 to update, 0 to switch off
+MATERIALS to create: 13
+held back (under 5 services): 23
+
+----------------------------------------------------------------------------
+UPDATE  RS DRF-450-65S5L 250 hr   (kit 6: 250hrs-RS-DRF450)
+   100%  ST04-M067-005    Engine oil filter                   1 EA  
+   100%  CO01-C014-003    Engine oil 15w40                   45 LTR 
+   100%  ST04-M067-012    Fuel filter                         1 EA  
+    89%  CO01-C014-009    Grease General Purpose EP2          2 KGM 
+    78%  CO01-C014-014    Tufgear universal grease -Roco      2 KGM   was 1
+    78%  CO01-C003-002NV  Cotton Rags                         3 KGM   NEW LINE
+   GONE  CO01-C022-004    was 1
+
+----------------------------------------------------------------------------
+UPDATE  RS DRF-450-65S5L 500 hr   (kit 7: 500 Hrs-RS-DRF450)
+   100%  CO01-C014-003    Engine oil 15w40                   45 LTR 
+   100%  ST04-M067-005    Engine oil filter                   1 EA  
+   100%  ST04-M067-012    Fuel filter                         1 EA  
+    93%  CO01-C003-002NV  Cotton Rags                         5 KGM   NEW LINE
+    87%  CO01-C014-009    Grease General Purpose EP2          2 KGM 
+   GONE  CO01-C014-014    was 1
+   GONE  CO01-C022-004    was 1
+
+----------------------------------------------------------------------------
+UPDATE  RS DRF-450-65S5L 1000 hr   (kit 8: 1000 Hrs-RS-DRF450)
+    86%  ST04-M067-005    Engine oil filter                   1 EA  
+    86%  CO01-C014-003    Engine oil 15w40                   45 LTR 
+    86%  ST04-M067-012    Fuel filter                         1 EA  
+    86%  CO01-C014-006    Transmission Oil dexron III        65 LTR 
+    86%  CO01-C014-009    Grease General Purpose EP2          2 KGM 
+   GONE  CO01-C014-014    was 2
+   GONE  CO01-C022-004    was 1
+   GONE  ST04-M067-009    was 2
+
+----------------------------------------------------------------------------
+UPDATE  RS DRG450-65S5 250 hr   (kit 1: 250 Hrs-RS-DRG450)
+   100%  ST04-M067-012    Fuel filter                         1 EA  
+   100%  CO01-C014-003    Engine oil 15w40                   45 LTR 
+    98%  ST04-M067-005    Engine oil filter                   1 EA  
+    87%  CO01-C014-009    Grease General Purpose EP2          2 KGM   was 4
+   GONE  CO01-C003-002NV  was 5
+   GONE  CO01-C014-014    was 1
+   GONE  CO01-C022-004    was 1
+
+----------------------------------------------------------------------------
+UPDATE  RS DRG450-65S5 500 hr   (kit 2: 500 Hrs-RS-DRG450)
+   100%  CO01-C014-003    Engine oil 15w40                   45 LTR 
+   100%  ST04-M067-012    Fuel filter                         1 EA  
+    94%  ST04-M067-005    Engine oil filter                   1 EA  
+    90%  CO01-C014-009    Grease General Purpose EP2          2 KGM 
+   GONE  CO01-C003-002NV  was 5
+   GONE  CO01-C014-014    was 2
+   GONE  CO01-C022-004    was 1
+
+----------------------------------------------------------------------------
+UPDATE  RS DRG450-65S5 1000 hr   (kit 3: 1000 Hrs-RS-DRG450)
+   100%  ST04-M067-005    Engine oil filter                   1 EA  
+   100%  CO01-C014-003    Engine oil 15w40                  110 LTR   was 45
+   100%  ST04-M067-012    Fuel filter                         1 EA  
+   100%  CO01-C014-009    Grease General Purpose EP2          2 KGM 
+    92%  CO01-C003-002NV  Cotton Rags                         5 KGM   NEW LINE
+    83%  ST35-M067-001    Hydraulic Filter                    2 EA  
+    83%  CO01-C014-014    Tufgear universal grease -Roco      2 KGM   was 1
+    83%  CO01-C022-007NV  CRC                                 1 EA    NEW LINE
+    75%  ST04-M067-001    Air filter outer                    1 EA  
+   GONE  CO01-C022-004    was 1
+   GONE  ST04-M067-002    was 1
+
+----------------------------------------------------------------------------
+UPDATE  RS DRG450-65S5 2000 hr   (kit 4: 2000 Hrs-RS-DRG450)
+   100%  ST04-M067-005    Engine oil filter                   1 EA  
+   100%  ST04-M067-012    Fuel filter                         1 EA  
+   100%  ST35-M067-001    Hydraulic Filter                    2 EA  
+   100%  CO01-C014-003    Engine oil 15w40                  105 LTR   was 65
+   100%  CO01-C014-009    Grease General Purpose EP2          3 KGM 
+    88%  ST04-M067-001    Air filter outer                    1 EA  
+    88%  ST04-M067-002    Air filter inner                    1 EA  
+    75%  ST04-M067-010    Water filter                        1 EA  
+    75%  CO01-C003-002NV  Cotton Rags                         5 KGM   NEW LINE
+   GONE  CO01-C014-014    was 2
+   GONE  CO01-C002-001    was 12
+   GONE  CO01-C002-126NV  was 1
+   GONE  ST04-M067-004    was 1
+   GONE  ST04-M067-006    was 1
+   GONE  ST04-M067-007    was 2
+
+----------------------------------------------------------------------------
+UPDATE  RS DRG450-65S5 4000 hr   (kit 5: 4000 Hrs-RS-DRG450)
+   100%  ST04-M067-012    Fuel filter                         1 EA  
+   100%  ST04-M067-004    Steering filter                     1 EA  
+   100%  ST04-M067-010    Water filter                        1 EA  
+   100%  ST04-M067-003    Brake tank filter                   3 EA    was 1
+   100%  ST04-M067-014    Brake tank breather filter          1 EA  
+   100%  ST04-M067-007    Hyd.tanke insert filter             2 EA  
+   100%  ST35-M067-001    Hydraulic Filter                    2 EA  
+   100%  CO01-C014-001    Hydraulic Oil VG 68               600 LTR 
+   100%  CO01-C014-003    Engine oil 15w40                  110 LTR   was 65
+   100%  CO01-C014-004    Brake oil 5w30                    140 LTR 
+    83%  ST04-M067-005    Engine oil filter                   1 EA  
+    83%  CO01-C014-005    Gear oil 85w140                    75 LTR   was 85
+    83%  CO01-C014-009    Grease General Purpose EP2          2 KGM   was 4
+   GONE  CO01-C014-014    was 3
+   GONE  ST04-M067-001    was 1
+   GONE  CO01-C002-001    was 30

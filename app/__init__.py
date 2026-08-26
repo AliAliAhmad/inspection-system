@@ -3,6 +3,7 @@ Flask application factory.
 Creates and configures the Flask app with all extensions.
 """
 
+import click
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from app.config import config
@@ -403,6 +404,79 @@ def create_app(config_name='development'):
         }), status_code
 
     # CLI commands
+    @app.cli.command('seed-material-kits')
+    @click.option('--apply', 'do_apply', is_flag=True,
+                  help='Write the kits. Without this nothing is changed.')
+    def seed_material_kits(do_apply):
+        """Load the standard PM material kits from SAP history.
+
+        Prints what it would do and stops. Add --apply to write.
+        """
+        from app.services.material_kit_seed import apply as apply_kits, plan
+        report = plan()
+
+        rules = report.get('rules', {})
+        print('=' * 78)
+        print('STANDARD PM MATERIAL KITS')
+        for key, value in rules.items():
+            print(f'  {key}: {value}')
+        print('=' * 78)
+
+        if report['materials_to_create']:
+            print(f"\nMATERIALS TO CREATE ({len(report['materials_to_create'])}) "
+                  f"— referenced by a kit but not yet in the app:")
+            for m in report['materials_to_create']:
+                print(f"    {m['code']:<16s} {m['name']:<34s} {m['unit']:<5s} {m['category']}")
+
+        creates = [k for k in report['kits'] if k['action'] == 'create']
+        updates = [k for k in report['kits'] if k['action'] == 'update']
+        print(f"\nKITS: {len(creates)} to create, {len(updates)} to update, "
+              f"{len(report['to_deactivate'])} to switch off")
+        print(f"({report['held_back']} more kits held back — under 5 services)")
+
+        for entry in report['kits']:
+            iv = f"{entry['interval_hours']} hr" if entry['interval_hours'] else 'hourly, no interval'
+            head = (f"{entry['action'].upper():<7s} {entry['equipment_type']:<6s} "
+                    f"{entry['equipment_model'] or '(any model)':<24s} {iv:<20s} "
+                    f"from {entry['services']} services, {len(entry['machines'])} machines")
+            print('\n' + '-' * 78)
+            print(head)
+            if entry['existing_id']:
+                print(f"        replacing kit {entry['existing_id']}: {entry['existing_name']!r}")
+            was = {c['code']: c['quantity'] for c in entry['current_items']}
+            now = {i['code'] for i in entry['items']}
+            for item in entry['items']:
+                old = was.get(item['code'])
+                mark = ('       ' if old is None else
+                        '  same ' if abs(float(old) - float(item['quantity'])) < 1e-9 else
+                        f'  was {old:g}'.ljust(7))
+                print(f"    {item['freq_pct']:3d}% ({item['used_on']}/{entry['services']}) "
+                      f"{item['code']:<16s} {item['name'][:30]:<30s} "
+                      f"{item['quantity']:>7g} {item['unit']:<4s}{mark}")
+                print(f"         every amount drawn: {item['spread']}")
+            for code, qty in was.items():
+                if code not in now:
+                    print(f"    REMOVED  {code:<16s} was {qty:g} — below 75%, or not used at all")
+
+        if report['to_deactivate']:
+            print('\nSWITCHED OFF (no data behind them any more):')
+            for k in report['to_deactivate']:
+                print(f"    kit {k['id']}: {k['name']!r}")
+
+        if report['problems']:
+            print(f"\nNEEDS YOUR EYE ({len(report['problems'])}):")
+            for p in report['problems']:
+                print(f'    {p}')
+
+        if not do_apply:
+            print('\n' + '=' * 78)
+            print('NOTHING WAS CHANGED. Run again with --apply to write it.')
+            return
+
+        counts = apply_kits(report=report)
+        print('\n' + '=' * 78)
+        print(f'WRITTEN: {counts}')
+
     @app.cli.command('seed-admin')
     def seed_admin():
         """Create the initial admin user."""

@@ -50,31 +50,15 @@
 
 ## What Needs Work
 
-### NEXT UP — make the plan realistic
-- ~~**Job hours are fiction.**~~ ✅ 2026-08-24 — priced from real elapsed time
-  (`docs/job-durations.md`). Pool 1,272h → 714h.
-- ~~**No hours cap on a day / family lock / invented constants.**~~ ✅ 2026-08-25 —
-  day budget = day-shift men × 8h per team per berth (`app/services/day_budget.py`),
-  east one shared wallet, charged in man-hours at placement. Family lock, machine
-  counts, `MAX_PM_BUNDLES_PER_WORKER_PER_DAY`, `SPECIALIST_GROUP_SIZE` and the urgent
-  "+1" all deleted (AC team caps kept as-is). RS PM splits 8h+4h over two days; urgent
-  RS/ECH takes up to 4 men instead. Whole bundle assigned to the PM crew.
-- ~~**Plan 2 — the evening truth.**~~ ✅ 2026-08-25 — worker states remaining hours,
-  carry-over books ONLY those + merges with a planned continuation, the domino makes
-  room (`app/services/day_ripple.py`), split-aware order lookups. Migration
-  `r8s9t0u1v2w3` — run `flask db upgrade` on Render.
-- ~~**Plan 3 Stage 1 — the bot learned to ask.**~~ ✅ 2026-08-25 — nightly urgent-with-no-room
-  proposal with inline buttons; first press wins. Migration `s9t0u1v2w3x4`.
-- ~~**Plan 3 Stage 2 — the fast crew is invisible.**~~ ✅ 2026-08-25 — a day is now priced by
-  `actual_hours` for men standing in the yard (`app/services/crew_free.py`). Finishing early
-  asks the engineer with buttons; the mobile "I am free" button raises the same question.
-  Only men who still have hours are offered or sent, and the job must fit inside the
-  shortest of them. Not committed — awaiting Ali's `push`.
-- ~~**⚠️ Stage 1 never offers an urgent reach stacker.**~~ ✅ 2026-08-25 — Ali's rule: always
-  offer 3 or 4 men so the time is 8h, and only fall back to 2 men / 12h when they are not
-  available. `urgent_one_day_crew` boosts the crew AND `place_one` staffs to the boosted
-  figure, so the promise matches what the domino reads. End-to-end run confirms it:
-  `crew: 3, hours: 8.0, cost_man_hours: 24.0`.
+### Done — full detail in HISTORY.md
+- ✅ 2026-08-24 Job hours priced from real elapsed time (`docs/job-durations.md`), pool 1,272h → 714h
+- ✅ 2026-08-25 Day budget = day-shift men × 8h per team per berth (`app/services/day_budget.py`)
+- ✅ 2026-08-25 Plan 2, the evening truth — carry-over books only remaining hours (`day_ripple.py`)
+- ✅ 2026-08-25 Plan 3 Stage 1 — nightly urgent proposal, inline buttons, first press wins
+- ✅ 2026-08-25 Plan 3 Stage 2 — the fast crew (`app/services/crew_free.py`), commit `f4aac4d`
+- ✅ 2026-08-25 Urgent reach stacker offered at 3-4 men / 8h, falling back to 2 men / 12h
+
+### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
   commit now, so his work is safe and the transaction is closed, but the phone still
@@ -104,6 +88,30 @@
   leftover from per-week pools — one order should mean one row.
 - **Removal-rule recipients:** all 8 admins+engineers today; Ali is meant to be the
   filter. Undecided.
+
+### NEXT UP — standard material kits from SAP (built, NOT deployed)
+- **Built 2026-08-26, awaiting Ali's push.** Full record: `docs/material-kits-findings.md`.
+  Dry run against his real fleet and his 8 real kits: `docs/material-kit-seed-preview.txt`.
+- **The kits could NEVER have fired.** `sap_pool_sync` never set `cycle_id`, so every job
+  carried NULL and `find_matching_kit` fell to its last rule — which demands a kit with no
+  interval and no model. All 8 saved kits have both. Fixed, plus a new matcher rule for the
+  forklift shape (type + model, no interval), which nothing could return before.
+- **`pm_interval_hours` in `sap_order_parser`** reads all six ways SAP spells the interval.
+  On the real IW39 that is **375 → 973** PM orders read, none of the old hits lost.
+  `25/5H` IS the 250-hour service (Ali confirmed). `250Hrs` with a trailing `s` was found
+  only by checking what the first fix DROPPED.
+- **RUN ON RENDER AFTER DEPLOY:** `flask db upgrade` (migration `t0u1v2w3x4y5` de-duplicates
+  `material_kit_items` and adds the missing unique constraint), then
+  `flask seed-material-kits` — report only — and `--apply` when Ali has read it.
+- **What the dry run cannot settle from here:** whether production's
+  `equipment.model_number` holds `DRG450-65S5` (Ali's kits' convention) or something else.
+  It decides whether his 8 kits are UPDATED or replaced-and-switched-off. The report on
+  Render says which, before writing.
+- **`CO01-C022-004 Equipment degreaser` does not exist** — zero appearances in 283,345
+  movement lines, yet it is in 6 of the 8 saved kits. The seeder removes it.
+- **Held back: 23 kits under 5 services**, and every CALENDAR PM — nothing reaches 75% on
+  any of them, even reach stackers with 109 services. A 3-week inspection is a
+  look-and-check job with no standard parts.
 
 ### Other
 - Full QA testing needed (496 passing)

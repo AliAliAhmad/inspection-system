@@ -27,6 +27,7 @@ from flask import current_app
 from app.extensions import db
 from app.models import Equipment, SapSyncFile, SAPWorkOrder
 from app.services.job_durations import family_from_plant_code, hours_for
+from app.models.maintenance_cycle import MaintenanceCycle
 from app.services.sap_order_parser import (
     build_breakdown_index,
     build_order_status_index,
@@ -39,6 +40,7 @@ from app.services.sap_order_parser import (
     load_maintenance_plan_types,
     parse_open_orders,
     parse_operation_hours,
+    pm_interval_hours,
 )
 from app.services.sap_removal_rules import reconcile_scheduled_orders
 from app.utils.decorators import planning_today
@@ -299,6 +301,13 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     unmatched_codes = set()
     seen = set()
 
+    # {250: id, 500: id, ...}. Read once — the loop below runs over every open
+    # order. A missing row simply means no kit for that package; the order still
+    # lands in the box, because one unusual description must never stop the
+    # whole nightly rebuild.
+    cycle_ids = {c.hours_value: c.id for c in MaintenanceCycle.query.filter_by(
+        cycle_type='running_hours', is_active=True).all() if c.hours_value}
+
     for candidate in candidates:
         equipment_id = equipment_by_code.get(candidate['plant_code'])
         if not equipment_id:
@@ -355,6 +364,16 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
             'overdue_unit': overdue_unit,
             'required_date': _as_date(candidate.get('required_date')),
             'berth': berth_by_equipment.get(equipment_id),
+            # WHICH service package this is — the 250-hour, the 4000-hour. The
+            # fifth thing the parser computed and this dict threw away, and the
+            # one that quietly disabled the material kits: `place_one` copies
+            # `cycle_id` onto the job, `find_matching_kit(equipment_id,
+            # job.cycle_id)` is the only route a kit reaches a job, and with
+            # NULL the matcher falls to its last rule — which demands a kit with
+            # NO interval and NO model. Every one of Ali's saved kits has both,
+            # so not one of them could ever fire.
+            'cycle_id': cycle_ids.get(pm_interval_hours(candidate['description']))
+                        if candidate['job_type'] == 'pm' else None,
         }
 
         if order_number in scheduled_numbers:

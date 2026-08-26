@@ -88,6 +88,14 @@ class MaterialKitItem(db.Model):
     kit = db.relationship('MaterialKit', back_populates='items')
     material = db.relationship('Material')
 
+    # One line per material. Without this, Ali's production kits accumulated
+    # six duplicate rows — kit 4 listed engine oil at both 65 LTR and 45 LTR,
+    # and the storeman had no way to know which. `JobTemplateMaterial` has had
+    # the same constraint all along; this table was simply missing it.
+    __table_args__ = (
+        db.UniqueConstraint('kit_id', 'material_id', name='unique_kit_material'),
+    )
+
     def to_dict(self, language='en'):
         """Convert to dictionary."""
         return {

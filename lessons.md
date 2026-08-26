@@ -387,3 +387,57 @@ truthiness that was never tested.
 **LESSON: one name, two shapes.** `details['free_clock_hours']` held a scalar while the
 parameter `free_clock_hours` was a per-man list. → **Never let a value and its container share
 a name in the same module.** Renamed to `crew_clock_hours` and `clock_hours_by_man`.
+
+---
+
+## 2026-08-26 — Standard material kits from SAP
+
+**LESSON: an absurd count is the parser confessing, not the data being thin.** My first
+pass reported "TT 250HR = 1 job" for a fleet of 22 tractors over 20 months. Instead of
+believing it, I printed the distinct description SHAPES my regex had REJECTED — and found
+`250H` (no `R`, 30 orders), `500 HR` (a space, 4 orders) and above all `25/5H`
+(448 orders, more than half of all tractor PMs). → **When a count is implausible, print
+what the filter threw away before you print what it kept.**
+
+**LESSON: prove, then confirm — never infer alone.** `25/5H` looked like it might mean the
+250-hour service. Rather than assume, I compared the two groups' consumption: 448 `25/5H`
+orders and 30 `250H` orders shared six core materials at six identical quantities, with
+nothing in one absent from the other. THEN I asked Ali, who confirmed. → **Evidence turns
+a question into a confirmation. A confirmation is cheap; a wrong merge of 448 orders is not.**
+
+**LESSON: know when the data cannot answer, and stop.** Ali's kits are per machine model.
+SAP records the model nowhere — checked `Description of technical object`, `Description of
+functional location`, `Assembly`, `Maintenance Plan` and `SQ01.XLSX`. I tried deriving it
+from which parts each machine consumed; it failed, because at 250 hours both reach stacker
+models take the same six items. → **Stopping and asking beat labelling a 14-machine fleet
+on a fingerprint that does not separate.** Report the attempt AND why it failed, so nobody
+repeats it.
+
+**LESSON: I nearly deleted live work while trimming CLAUDE.md under its 8KB limit.** I cut
+a block by pattern, assuming it held only finished `~~struck~~` items — it also held ten
+open issues, and 3.6KB vanished. Caught it by comparing byte counts against `git show
+HEAD:CLAUDE.md` before writing anything else. → **When trimming a memory file, cut by
+explicit line range, ASSERT that every line in the range is finished, and grep for each
+live item by name afterwards.** A memory file is the one place where a silent deletion is
+never noticed later.
+
+**LESSON: before building a feature, check the chain that DELIVERS it end to end.** The
+material kits were the visible job. But `find_matching_kit(equipment_id, job.cycle_id)` is
+the only route a kit reaches a job, and `sap_pool_sync` never set `cycle_id` — so every one
+of Ali's 8 saved kits had been unreachable since the day he made them. Seeding better kits
+would have changed nothing at all. → **Trace the whole path from data to screen before
+writing the first line.** Ask "what reads this, and does it get what it needs?" The answer
+was one grep: `grep -n "cycle_id" app/services/sap_pool_sync.py` returned nothing.
+
+**LESSON: the fix that gains 598 rows can still lose 12, and only a diff finds them.** After
+teaching the parser five spellings I compared old-parser hits against new-parser hits and
+found **13 orders the old one caught and the new one refused** — `RS119-250Hrs`, with a
+trailing `s`, which `HR?\b` rejects because `s` is a word character. Net was already hugely
+positive, so nothing would have looked wrong. → **When replacing a matcher, always print
+the set difference BOTH ways.** "It finds more" is not the same as "it lost nothing".
+
+**LESSON: a comment listing past mistakes is a checklist, not a monument.** The `fields`
+dict in `sap_pool_sync` carries a comment naming four things "computed by the parser and
+then thrown away, which quietly disabled four things in the planner". `cycle_id` was the
+fifth, sitting right there, still thrown away. → **When you find a comment that names a
+class of bug, look for the next instance of that class before moving on.**

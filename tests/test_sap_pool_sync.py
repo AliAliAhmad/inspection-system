@@ -462,3 +462,106 @@ class TestWhatThePoolStoresForHours:
         assert hours['700000000004'] == 3.0    # trailer PM
         assert hours['700000000005'] == 3.0    # a fault is a fault...
         assert hours['700000000006'] == 3.0    # ...on any machine
+
+
+from app.models.maintenance_cycle import MaintenanceCycle
+
+
+class TestWhichServiceThisIs:
+    """A PM order must carry its SERVICE PACKAGE — 250 hour, 1000 hour — or the
+    material kit that belongs to it can never be found.
+
+    `find_matching_kit(equipment_id, job.cycle_id)` is the only way a kit
+    reaches a job, and `place_one` copies `cycle_id` straight off the box order.
+    The rebuild never set it, so every order carried NULL, the matcher fell to
+    its last rule (which demands a kit with no interval AND no model), and every
+    one of Ali's 8 saved kits — all of which have both — could never fire.
+    """
+
+    def _cycles(self, db_session):
+        for hours in (250, 500, 1000, 2000, 4000):
+            if not MaintenanceCycle.query.filter_by(
+                    cycle_type='running_hours', hours_value=hours).first():
+                db_session.session.add(MaintenanceCycle(
+                    name=f'{hours}h', cycle_type='running_hours',
+                    hours_value=hours, display_label=f'{hours} Hours',
+                    is_active=True))
+        db_session.session.commit()
+
+    def _run(self, client, db_session, description, machine='RS115',
+             location='3700-EQ-RS_-RS115', number='700000000900'):
+        self._cycles(db_session)
+        db_session.session.add(Equipment(name=machine, serial_number=f'SN-{machine}',
+                                         equipment_type='reach stacker'))
+        db_session.session.commit()
+        _deliver(client, _iw39([_open_order(number=number, location=location,
+                                            activity='PRM',
+                                            description=description)]))
+        sync_pool_from_delivered_files(today='2026-08-23')
+        return SAPWorkOrder.query.filter_by(order_number=number).one()
+
+    def test_a_250_hour_service_carries_the_250_cycle(self, client, db_session):
+        order = self._run(client, db_session, 'RS115-250HR-MECH.HOURLY SERVICE')
+        assert order.cycle_id is not None, (
+            'without a cycle the job can never find its material kit')
+        assert order.cycle.hours_value == 250
+
+    def test_the_25_5h_spelling_is_the_250_hour_service(self, client, db_session):
+        """448 tractor orders and 91 ECH orders are written this way — more than
+        half of all tractor PMs. Ali confirmed 2026-08-26."""
+        order = self._run(client, db_session, 'TT028-25/5H-MECH. HOURLY SERVICE',
+                          machine='TT028', location='3700-EQ-TT_-TT028',
+                          number='700000000901')
+        assert order.cycle is not None and order.cycle.hours_value == 250
+
+    def test_the_trailing_s_spelling_is_read(self, client, db_session):
+        """RS119 alone is written `250Hrs` — 12 orders."""
+        order = self._run(client, db_session, 'RS119-1000Hrs-HOURLY SERVICE',
+                          machine='RS119', location='3700-EQ-RS_-RS119',
+                          number='700000000902')
+        assert order.cycle is not None and order.cycle.hours_value == 1000
+
+    def test_a_forklift_with_no_interval_gets_no_cycle(self, client, db_session):
+        """All 148 forklift PM orders read `FL327-HOURLY SERVICE`. Inventing a
+        250 here would put the wrong kit on the machine."""
+        order = self._run(client, db_session, 'FL327-HOURLY SERVICE',
+                          machine='FL327', location='3700-EQ-FL_-FL327',
+                          number='700000000903')
+        assert order.cycle_id is None
+
+    def test_a_calendar_inspection_gets_no_cycle(self, client, db_session):
+        order = self._run(client, db_session, '3-Week INSPECTION_RS',
+                          number='700000000904')
+        assert order.cycle_id is None
+
+    def test_a_fault_never_gets_a_cycle_even_if_a_number_is_in_the_text(
+            self, client, db_session):
+        """Only a PM has a service package. A corrective mentioning 250 hours
+        must not be given one."""
+        self._cycles(db_session)
+        db_session.session.add(Equipment(name='RS116', serial_number='SN-RS116',
+                                         equipment_type='reach stacker'))
+        db_session.session.commit()
+        _deliver(client, _iw39([_open_order(
+            number='700000000905', location='3700-EQ-RS_-RS116', activity='COM',
+            description='Leak found at 250HR check')]))
+        sync_pool_from_delivered_files(today='2026-08-23')
+        order = SAPWorkOrder.query.filter_by(order_number='700000000905').one()
+        assert order.job_type != 'pm'
+        assert order.cycle_id is None
+
+    def test_a_missing_cycle_row_is_survived_not_crashed(self, client, db_session):
+        """If nobody has created the 4000-hour cycle, the order still lands —
+        without a kit, but in the box. A KeyError here would stop the whole
+        nightly rebuild for one unusual description."""
+        db_session.session.add(Equipment(name='RS117', serial_number='SN-RS117',
+                                         equipment_type='reach stacker'))
+        db_session.session.commit()
+        MaintenanceCycle.query.filter_by(hours_value=4000).delete()
+        db_session.session.commit()
+        _deliver(client, _iw39([_open_order(
+            number='700000000906', location='3700-EQ-RS_-RS117', activity='PRM',
+            description='RS117-4000HR-MECH.HOURLY SERVICE')]))
+        sync_pool_from_delivered_files(today='2026-08-23')
+        order = SAPWorkOrder.query.filter_by(order_number='700000000906').one()
+        assert order.cycle_id is None

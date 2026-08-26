@@ -32,6 +32,7 @@ one exists because the obvious alternative was silently wrong:
 import io
 import logging
 import re
+import unicodedata
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -659,6 +660,66 @@ def build_last_completion_index(iw39_bytes):
 #
 # "Hours run" comes from IK17 counter readings: the reading nearest the last
 # completion, subtracted from the latest reading.
+
+# ---------------------------------------------------------------------------
+# WHICH package is this order — the 250-hour service, the 1000, the 4000?
+#
+# Distinct from PM_SERVICE_INTERVAL_HOURS above, which is how often the PLAN
+# comes round. This is the name of the package, and it is what a material kit
+# is keyed to: a 4000-hour service takes hydraulic oil and brake oil that a
+# 250-hour service does not.
+#
+# SAP writes the same question five ways, verified against Ali's real
+# `IW39 YTD.XLSX`:
+#
+#     RS115-250HR-MECH.HOURLY SERVICE      185 RS orders
+#     TT028-250H-HOURLY SERVICE             30 orders — no R
+#     TT046-500 HR-MECH. HOURLY SERVICE      4 orders — a space
+#     RS119-250Hrs-HOURLY SERVICE           12 orders — a trailing s
+#     TT028-25/5H-MECH. HOURLY SERVICE     448 TT + 91 ECH orders
+#     FL327-HOURLY SERVICE                 148 orders — NO interval at all
+#
+# A parser that only knows the first form finds ONE tractor 250-hour service
+# where there are 478, which is exactly what the first pass at the material
+# kits reported before this function existed.
+
+# Ali's fleet is serviced at these five points and no others. A stray `750HR`
+# is a typo, and a kit keyed to it would match nothing anyway — the
+# `maintenance_cycles` table has no 750 row.
+PM_PACKAGE_HOURS = (250, 500, 1000, 2000, 4000)
+
+# `25/5H` is the 250-hour service. Ali confirmed 2026-08-26; the data had
+# already proved it, with 448 `25/5H` orders and 30 `250H` orders sharing six
+# core materials at six identical quantities and nothing in one absent from the
+# other. Matched BEFORE the number search, which cannot see it: `25` and `5`
+# are too short for the three-digit minimum that keeps machine numbers out.
+_25_5H = re.compile(r'25\s*/\s*5\s*H', re.I)
+
+# Three digits minimum, so `RS115` and `TT028` are never read as the service.
+# `H(?:OUR|R)?S?` covers H / HR / HRS / HOUR / HOURS — RS119 alone is written
+# `250Hrs`, and an `HR?\b` that demands a boundary straight after `HR` refuses
+# every one of them. `\s*` covers `500 HR` and `PM-250 Hrs`.
+_PACKAGE = re.compile(r'(\d{3,5})\s*H(?:OUR|R)?S?\b', re.I)
+
+
+def pm_interval_hours(description):
+    """Which service package this order is, in hours, or None.
+
+    None means SAP did not say — a forklift's `FL327-HOURLY SERVICE`, a
+    calendar `3-Week INSPECTION_RS`, an AC inspection. Returning a guess there
+    would put a 250-hour kit on a machine SAP has never described that way.
+    """
+    text = unicodedata.normalize('NFC', str(description or '')).strip()
+    if not text:
+        return None
+    if _25_5H.search(text):
+        return 250
+    match = _PACKAGE.search(text)
+    if not match:
+        return None
+    hours = int(match.group(1))
+    return hours if hours in PM_PACKAGE_HOURS else None
+
 
 PM_SERVICE_INTERVAL_HOURS = 250.0
 

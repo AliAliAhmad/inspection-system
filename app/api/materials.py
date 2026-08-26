@@ -49,7 +49,21 @@ def get_equipment_type_from_code(code: str) -> str:
 
 def find_matching_kit(equipment_id, cycle_id=None):
     """Find best-matching material kit for equipment + PM interval.
-    Matching priority: exact (type+model+cycle) > type+cycle > type only.
+
+    Priority, most specific first:
+        1. type + model + interval
+        2. type + interval        (any model)
+        3. type + model           (no interval)
+        4. type                   (no model, no interval)
+
+    Rule 3 was missing, and it is the one every FORKLIFT kit needs: SAP gives
+    forklifts no interval at all — all 148 PM orders read `FL327-HOURLY
+    SERVICE` — so a forklift kit can only ever be type + model + no interval.
+    Rules 1 and 2 both require a cycle and rule 4 demands the model be EMPTY,
+    so those kits existed in the database and could never be returned.
+
+    Per-model matters here rather than a single forklift kit: a DOOSAN D30NXP
+    takes 10 LTR of engine oil and a TCM FD 200-2 takes 20.
     """
     from app.models import Equipment
     equipment = db.session.get(Equipment, equipment_id)
@@ -79,7 +93,15 @@ def find_matching_kit(equipment_id, cycle_id=None):
         if kit:
             return kit
 
-    # 3. Type only (any interval, any model)
+    # 3. Type + model, no interval — the forklift shape.
+    if eq_model:
+        kit = MaterialKit.query.filter_by(
+            equipment_type=eq_type, equipment_model=eq_model, is_active=True
+        ).filter(MaterialKit.cycle_id == None).first()  # noqa: E711
+        if kit:
+            return kit
+
+    # 4. Type only, no interval, no model.
     kit = MaterialKit.query.filter_by(
         equipment_type=eq_type, is_active=True
     ).filter(

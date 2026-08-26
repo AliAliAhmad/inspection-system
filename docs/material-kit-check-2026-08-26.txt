@@ -1,0 +1,135 @@
+
+==============================================================================
+KIT 1: 250 Hrs-RS-DRG450   [RS / DRG450-65S5 / 250 Hours]
+   compared against 80 real RS 250-hour jobs (all models together)
+   [QTY  real=3]  CO01-C003-002NV  Cotton Rags                      kit says 5KGM — used in 72% (58/80), most-used 3 (26x)
+   [OK         ]  CO01-C014-003    Engine oil 15w40                 kit says 45LTR — used in 100% (80/80)
+   [QTY  real=2]  CO01-C014-009    Grease General Purpose EP2       kit says 4KGM — used in 88% (70/80), most-used 2 (31x)
+   [QTY  real=2]  CO01-C014-014    Tufgear universal grease -Rocol  kit says 1KGM — used in 72% (58/80), most-used 2 (50x)
+   [NEVER USED ]  CO01-C022-004    Equipment degreaser              kit says 1EA — 0 of 80 jobs
+   [OK         ]  ST04-M067-005    Engine oil filter                kit says 1EA — used in 99% (79/80)
+   [OK         ]  ST04-M067-012    Fuel filter                      kit says 1EA — used in 100% (80/80)
+   [MISSING    ]  CO01-C022-007NV                                   used in 52% (42/80), most-used 1
+   [MISSING    ]  ST04-M067-001                                     used in 51% (41/80), most-used 1
+
+==============================================================================
+KIT 2: 500 Hrs-RS-DRG450   [RS / DRG450-65S5 / 500 Hours]
+   compared against 46 real RS 500-hour jobs (all models together)
+   [OK         ]  CO01-C003-002NV  Cotton Rags                      kit says 5KGM — used in 80% (37/46)
+   [OK         ]  CO01-C014-003    Engine oil 15w40                 kit says 45LTR — used in 100% (46/46)
+   [OK         ]  CO01-C014-009    Grease General Purpose EP2       kit says 2KGM — used in 89% (41/46)
+   [OK         ]  CO01-C014-014    Tufgear universal grease -Rocol  kit says 2KGM — used in 74% (34/46)
+   [NEVER USED ]  CO01-C022-004    Equipment degreaser              kit says 1EA — 0 of 46 jobs
+   [OK         ]  ST04-M067-005    Engine oil filter                kit says 1EA — used in 96% (44/46)
+   [OK         ]  ST04-M067-012    Fuel filter                      kit says 1EA — used in 100% (46/46)
+   [MISSING    ]  ST04-M067-001                                     used in 54% (25/46), most-used 1
+
+==============================================================================
+KIT 3: 1000 Hrs-RS-DRG450   [RS / DRG450-65S5 / 1000 Hours]
+   compared against 19 real RS 1000-hour jobs (all models together)
+   [OK         ]  CO01-C014-003    Engine oil 15w40                 kit says 45LTR — used in 95% (18/19)
+   [DUPLICATE ROW]  CO01-C014-003    Engine oil 15w40                 also listed above
+   [OK         ]  CO01-C014-009    Grease General Purpose EP2       kit says 2KGM — used in 95% (18/19)
+   [QTY  real=2]  CO01-C014-014    Tufgear universal grease -Rocol  kit says 1KGM — used in 74% (14/19), most-used 2 (11x)
+   [NEVER USED ]  CO01-C022-004    Equipment degreaser              kit says 1EA — 0 of 19 jobs
+   [OK         ]  ST04-M067-001    Air filter outer                 kit says 1EA — used in 74% (14/19)
+   [OK         ]  ST04-M067-002    Air filter inner                 kit says 1EA — used in 58% (11/19)
+   [OK         ]  ST04-M067-005    Engine oil filter                kit says 1EA — used in 95% (18/19)
+   [OK         ]  ST04-M067-012    Fuel filter                      kit says 1EA — used in 95% (18/19)
+   [OK         ]  ST35-M067-001    Hydraulic Filter                 kit says 2EA — used in 53% (10/19)
+   [MISSING    ]  CO01-C003-002NV                                   used in 84% (16/19), most-used 3
+   [MISSING    ]  CO01-C022-007NV                                   used in 74% (14/19), most-used 1
+   [MISSING    ]  CO01-C011-002NV                                   used in 58% (11/19), most-used 1
+
+==============================================================================
+KIT 4: 2000 Hrs-RS-DRG450   [RS / DRG450-65S5 / 2000 Hours]
+   compared against 12 real RS 2000-hour jobs (all models together)
+   [QTY  real=20]  CO01-C002-001    Engine coolant                   kit says 12LTR — used in 33% (4/12), most-used 20 (2x)
+   [NEVER USED ]  CO01-C002-126NV  Equipment degreaser              kit says 1LTR — 0 of 12 jobs
+   [QTY  real=45]  CO01-C014-003    Engine oil 15w40                 kit says 65LTR — used in 100% (12/12), most-used 45 (5x)
+   [DUPLICATE ROW]  CO01-C014-003    Engine oil 15w40                 also listed above
+   [QTY  real=2]  CO01-C014-009    Grease General Purpose EP2       kit says 3KGM — used in 100% (12/12), most-used 2 (3x)
+   [OK         ]  CO01-C014-014    Tufgear universal grease -Rocol  kit says 2KGM — used in 58% (7/12)
+   [OK         ]  ST04-M067-001    Air filter outer                 kit says 1EA — used in 92% (11/12)
+   [OK         ]  ST04-M067-002    Air filter inner                 kit says 1EA — used in 83% (10/12)
+   [OK         ]  ST04-M067-004    Steering filter                  kit says 1EA — used in 67% (8/12)
+   [OK         ]  ST04-M067-005    Engine oil filter                kit says 1EA — used in 100% (12/12)
+   [OK         ]  ST04-M067-006    Hyd.tank breather filter         kit says 1EA — used in 58% (7/12)
+   [DUPLICATE ROW]  ST04-M067-006    Hyd.tank breather filter         also listed above
+   [OK         ]  ST04-M067-007    Hyd.tanke insert filter          kit says 2EA — used in 50% (6/12)
+   [DUPLICATE ROW]  ST04-M067-007    Hyd.tanke insert filter          also listed above
+   [OK         ]  ST04-M067-010    Water filter                     kit says 1EA — used in 75% (9/12)
+   [OK         ]  ST04-M067-012    Fuel filter                      kit says 1EA — used in 100% (12/12)
+   [OK         ]  ST35-M067-001    Hydraulic Filter                 kit says 2EA — used in 67% (8/12)
+   [DUPLICATE ROW]  ST35-M067-001    Hydraulic Filter                 also listed above
+   [MISSING    ]  CO01-C003-002NV                                   used in 83% (10/12), most-used 3
+   [MISSING    ]  CO01-C022-007NV                                   used in 67% (8/12), most-used 1
+
+==============================================================================
+KIT 5: 4000 Hrs-RS-DRG450   [RS / DRG450-65S5 / 4000 Hours]
+   compared against 10 real RS 4000-hour jobs (all models together)
+   [OK         ]  CO01-C002-001    Engine coolant                   kit says 30LTR — used in 40% (4/10)
+   [OK         ]  CO01-C014-001    Hydraulic Oil VG 68              kit says 600LTR — used in 100% (10/10)
+   [QTY  real=45]  CO01-C014-003    Engine oil 15w40                 kit says 65LTR — used in 100% (10/10), most-used 45 (4x)
+   [DUPLICATE ROW]  CO01-C014-003    Engine oil 15w40                 also listed above
+   [OK         ]  CO01-C014-004    Brake oil 5w30                   kit says 140LTR — used in 100% (10/10)
+   [QTY  real=75]  CO01-C014-005    Gear oil 85w140                  kit says 85LTR — used in 90% (9/10), most-used 75 (4x)
+   [QTY  real=2]  CO01-C014-009    Grease General Purpose EP2       kit says 4KGM — used in 80% (8/10), most-used 2 (5x)
+   [QTY  real=2]  CO01-C014-014    Tufgear universal grease -Rocol  kit says 3KGM — used in 80% (8/10), most-used 2 (6x)
+   [OK         ]  ST04-M067-001    Air filter outer                 kit says 1EA — used in 60% (6/10)
+   [OK         ]  ST04-M067-003    Brake tank filter                kit says 1EA — used in 90% (9/10)
+   [OK         ]  ST04-M067-004    Steering filter                  kit says 1EA — used in 90% (9/10)
+   [OK         ]  ST04-M067-005    Engine oil filter                kit says 1EA — used in 90% (9/10)
+   [OK         ]  ST04-M067-007    Hyd.tanke insert filter          kit says 2EA — used in 90% (9/10)
+   [OK         ]  ST04-M067-010    Water filter                     kit says 1EA — used in 90% (9/10)
+   [OK         ]  ST04-M067-012    Fuel filter                      kit says 1EA — used in 100% (10/10)
+   [OK         ]  ST04-M067-014    Brake tank breather filter       kit says 1EA — used in 90% (9/10)
+   [OK         ]  ST35-M067-001    Hydraulic Filter                 kit says 2EA — used in 60% (6/10)
+   [MISSING    ]  ST04-M067-006                                     used in 70% (7/10), most-used 1
+   [MISSING    ]  CO01-C003-002NV                                   used in 70% (7/10), most-used 5
+   [MISSING    ]  CO01-C022-007NV                                   used in 70% (7/10), most-used 1
+   [MISSING    ]  CO01-C008-002                                     used in 60% (6/10), most-used 1
+   [MISSING    ]  CO01-C011-002NV                                   used in 50% (5/10), most-used 1
+
+==============================================================================
+KIT 6: 250hrs-RS-DRF450   [RS / DRF-450-65S5L / 250 Hours]
+   compared against 80 real RS 250-hour jobs (all models together)
+   [OK         ]  CO01-C014-003    Engine oil 15w40                 kit says 45LTR — used in 100% (80/80)
+   [OK         ]  CO01-C014-009    Grease General Purpose EP2       kit says 2KGM — used in 88% (70/80)
+   [QTY  real=2]  CO01-C014-014    Tufgear universal grease -Rocol  kit says 1KGM — used in 72% (58/80), most-used 2 (50x)
+   [NEVER USED ]  CO01-C022-004    Equipment degreaser              kit says 1EA — 0 of 80 jobs
+   [OK         ]  ST04-M067-005    Engine oil filter                kit says 1EA — used in 99% (79/80)
+   [OK         ]  ST04-M067-012    Fuel filter                      kit says 1EA — used in 100% (80/80)
+   [MISSING    ]  CO01-C003-002NV                                   used in 72% (58/80), most-used 3
+   [MISSING    ]  CO01-C022-007NV                                   used in 52% (42/80), most-used 1
+   [MISSING    ]  ST04-M067-001                                     used in 51% (41/80), most-used 1
+
+==============================================================================
+KIT 7: 500 Hrs-RS-DRF450   [RS / DRF-450-65S5L / 500 Hours]
+   compared against 46 real RS 500-hour jobs (all models together)
+   [OK         ]  CO01-C014-003    Engine oil 15w40                 kit says 45LTR — used in 100% (46/46)
+   [OK         ]  CO01-C014-009    Grease General Purpose EP2       kit says 2KGM — used in 89% (41/46)
+   [QTY  real=2]  CO01-C014-014    Tufgear universal grease -Rocol  kit says 1KGM — used in 74% (34/46), most-used 2 (28x)
+   [NEVER USED ]  CO01-C022-004    Equipment degreaser              kit says 1EA — 0 of 46 jobs
+   [OK         ]  ST04-M067-005    Engine oil filter                kit says 1EA — used in 96% (44/46)
+   [OK         ]  ST04-M067-012    Fuel filter                      kit says 1EA — used in 100% (46/46)
+   [MISSING    ]  CO01-C003-002NV                                   used in 80% (37/46), most-used 5
+   [MISSING    ]  ST04-M067-001                                     used in 54% (25/46), most-used 1
+
+==============================================================================
+KIT 8: 1000 Hrs-RS-DRF450   [RS / DRF-450-65S5L / 1000 Hours]
+   compared against 19 real RS 1000-hour jobs (all models together)
+   [OK         ]  CO01-C014-003    Engine oil 15w40                 kit says 45LTR — used in 95% (18/19)
+   [OK         ]  CO01-C014-006    Transmission Oil dexron III      kit says 65LTR — used in 32% (6/19)
+   [OK         ]  CO01-C014-009    Grease General Purpose EP2       kit says 2KGM — used in 95% (18/19)
+   [OK         ]  CO01-C014-014    Tufgear universal grease -Rocol  kit says 2KGM — used in 74% (14/19)
+   [NEVER USED ]  CO01-C022-004    Equipment degreaser              kit says 1EA — 0 of 19 jobs
+   [OK         ]  ST04-M067-005    Engine oil filter                kit says 1EA — used in 95% (18/19)
+   [OK         ]  ST04-M067-009    Transmissoin filter              kit says 2EA — used in 26% (5/19)
+   [OK         ]  ST04-M067-012    Fuel filter                      kit says 1EA — used in 95% (18/19)
+   [MISSING    ]  CO01-C003-002NV                                   used in 84% (16/19), most-used 3
+   [MISSING    ]  ST04-M067-001                                     used in 74% (14/19), most-used 1
+   [MISSING    ]  CO01-C022-007NV                                   used in 74% (14/19), most-used 1
+   [MISSING    ]  ST04-M067-002                                     used in 58% (11/19), most-used 1
+   [MISSING    ]  CO01-C011-002NV                                   used in 58% (11/19), most-used 1
+   [MISSING    ]  ST35-M067-001                                     used in 53% (10/19), most-used 2
