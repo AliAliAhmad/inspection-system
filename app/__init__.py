@@ -441,10 +441,10 @@ def create_app(config_name='development'):
             head = (f"{entry['action'].upper():<7s} {entry['equipment_type']:<6s} "
                     f"{entry['equipment_model'] or '(any model)':<24s} {iv:<20s} "
                     f"from {entry['services']} services, {len(entry['machines'])} machines")
-            if len(entry['machines']) <= 12:
-                print(f"        machines: {', '.join(entry['machines'])}")
             print('\n' + '-' * 78)
             print(head)
+            if len(entry['machines']) <= 12:
+                print(f"        machines: {', '.join(entry['machines'])}")
             if entry['existing_id']:
                 print(f"        replacing kit {entry['existing_id']}: {entry['existing_name']!r}")
             was = {c['code']: c['quantity'] for c in entry['current_items']}

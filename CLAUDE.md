@@ -89,20 +89,24 @@
 - **Removal-rule recipients:** all 8 admins+engineers today; Ali is meant to be the
   filter. Undecided.
 
-### NEXT UP — standard material kits from SAP (built, NOT deployed)
-- **Built 2026-08-26, awaiting Ali's push.** Full record: `docs/material-kits-findings.md`.
-  Dry run against his real fleet and his 8 real kits: `docs/material-kit-seed-preview.txt`.
+### Standard material kits from SAP — LIVE 2026-08-26
+- Full record: `docs/material-kits-findings.md`. Commits `5a2463f`, `3fcba0a`.
 - **The kits could NEVER have fired.** `sap_pool_sync` never set `cycle_id`, so every job
   carried NULL and `find_matching_kit` fell to its last rule — which demands a kit with no
   interval and no model. All 8 saved kits have both. Fixed, plus a new matcher rule for the
   forklift shape (type + model, no interval), which nothing could return before.
-- **`pm_interval_hours` in `sap_order_parser`** reads all six ways SAP spells the interval.
-  On the real IW39 that is **375 → 973** PM orders read, none of the old hits lost.
-  `25/5H` IS the 250-hour service (Ali confirmed). `250Hrs` with a trailing `s` was found
+- **`pm_interval_hours`** reads all six ways SAP spells the interval — **375 → 973** PM
+  orders read on the real IW39, none of the old hits lost. `250Hrs` (trailing `s`) was found
   only by checking what the first fix DROPPED.
-- **RUN ON RENDER AFTER DEPLOY:** `flask db upgrade` (migration `t0u1v2w3x4y5` de-duplicates
-  `material_kit_items` and adds the missing unique constraint), then
-  `flask seed-material-kits` — report only — and `--apply` when Ali has read it.
+- **APPLIED on production 2026-08-26:** `created: 28, updated: 8, deactivated: 0,
+  materials_created: 0, items_written: 204`. Every material already existed in the app.
+  Re-run `flask seed-material-kits [--apply]` any time — it is idempotent.
+- **The kits do NOT reach jobs until the pool is rebuilt.** `cycle_id` is written by
+  `sap_pool_sync`, which runs 05:00 Baghdad. Box orders are UPDATED by that run so they
+  backfill; orders ALREADY scheduled onto a plan are deliberately left untouched and keep
+  NULL, so jobs on existing plans get no kit. New plans do.
+- **3 machines have SAP history but no `equipment` row** — TT004, TT005, TT080 (22 of 1,093
+  services, 2%). Their materials are ignored. Sold, or never added — Ali to decide.
 - **Settled on production 2026-08-26:** `equipment.model_number` holds the bare model
   (`DCF90-45E6`), so Ali's 8 kits are UPDATED in place, none switched off.
 - **The spec ships one row per SERVICE, not pre-grouped kits.** Grouping is done by
@@ -110,11 +114,11 @@
   tractors are *"not one model but share same engine, so keep each kit different"*, and
   production carries `Ottawa 50`..`Ottawa 59` for TT029..TT038. Side effect: the asset
   list's `YT22011` typo stops mattering, because the app already has those 22 right.
-- **`CO01-C022-004 Equipment degreaser` does not exist** — zero appearances in 283,345
-  movement lines, yet it is in 6 of the 8 saved kits. The seeder removes it.
-- **Held back: 23 kits under 5 services**, and every CALENDAR PM — nothing reaches 75% on
-  any of them, even reach stackers with 109 services. A 3-week inspection is a
-  look-and-check job with no standard parts.
+- **`CO01-C022-004` does not exist** — zero appearances in 283,345 movement lines, yet it
+  was in 6 of the 8 saved kits. Removed by the seeder.
+- **Held back: 48 kits under 5 services** (mostly the Ottawa split), and every CALENDAR PM —
+  nothing reaches 75% on any, even reach stackers with 109 services. A 3-week inspection is
+  a look-and-check job with no standard parts.
 
 ### Other
 - Full QA testing needed (496 passing)
