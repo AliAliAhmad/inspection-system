@@ -454,3 +454,56 @@ consumer will compare. A kit that cannot be found then cannot be created.
 loses data.** The seeder refused to overwrite one kit with another, which was right — and
 quietly discarded 40 real services while doing it. → **A refusal is only complete when the
 report says what was lost.** Better still, remove the situation that causes it.
+
+**LESSON: counting `t()` calls does not prove a screen is translated.** The job screens
+called `t()` 200+ times and still showed English, because `t('jobs.severity', 'Severity')`
+falls back to the second argument, silently, when the key is missing from `ar.json`. 80 of
+the keys the job screens asked for did not exist. → **Audit the KEYS against the dictionary,
+never the call sites.** A key present in `en.json` but absent from `ar.json` is invisible in
+code review and invisible at runtime — it just looks like English.
+
+**LESSON: a language read from the wrong place is worse than no language at all.**
+`/my-plan` did `language = user.language or 'en'` — a column only an admin ever writes — and
+then never used the variable. The same wrong line appeared in **8** endpoints; 6 of them did
+use it, so they were quietly English too. → **Language comes from the request
+(`get_language(user)`), not from a stored column.** When you fix a line like this, grep for
+it across the file before assuming it is one bug.
+
+**LESSON: adding a translation can BREAK a working screen.** Seven call sites read
+`t('key', `Up to ${max} photos`)` — no variables passed, JavaScript baking the number into
+the fallback. That renders correctly *only because the key is missing*. The moment the key
+exists, i18next serves the dictionary and the number disappears. → **Before adding any key,
+check whether its fallback is a template literal.** If it is, the call site must pass the
+variable in the same edit.
+
+**LESSON: get the extractor right before trusting what it says is missing.** My first regex
+matched only `t(k, 'x')` and reported 25 keys as having no English source anywhere. All 25
+had one — in `t(k, \`x\`)` or `t(k, {defaultValue:'x'})` form. → **When a scan reports
+something surprising ("these have no source at all"), suspect the scan before the code.**
+
+**LESSON: Arabic is not singular/plural — it has six count forms.** `"قبل {{count}} يوم"`
+renders "قبل 5 يوم", which is wrong; 3-10 takes أيام, 2 takes the dual يومين, 11+ goes back
+to singular يوماً. → **Any Arabic string containing `{{count}}` needs
+`_zero/_one/_two/_few/_many/_other` variants**, and must be verified against the real i18next
+(`node -e` with the actual json) — not assumed.
+
+**LESSON: a hook cannot go in every component, and the compiler is the only thing that knows.**
+Bulk-adding `const { t } = useTranslation()` broke two ways: `ErrorBoundary` is a CLASS (hooks
+illegal — and an error boundary must not use context either, since it renders after a crash),
+and a naive "insert after the first `{`" landed inside multi-line destructured PARAMETERS.
+→ **Never bulk-edit JSX without running `tsc --noEmit` after every pass.** It caught 19
+out-of-scope `t` calls and then caught my fix for them.
+
+**LESSON: `cd` persists between Bash calls.** A heredoc appending to `lessons.md` ran from
+`frontend/apps/mobile` and silently created a second lessons.md there. → **Use absolute paths,
+or `cd` to the project root, in every write.** A file that lands in the wrong directory reports
+success.
+
+**LESSON: a shared i18n file is a shared BEHAVIOUR change, and English is not the safe half.**
+Adding Arabic to the shared `ar.json` was the obvious risk. The quiet one was `en.json`: an
+entry there overrides a screen's inline English fallback, so the WEB's English text changes
+too — `jobs.notes` would have flipped from "Notes" to "Additional Notes" on web. →
+**When only one app should get new strings, put them in that app and layer them on with
+`i18n.addResourceBundle(lng, 'translation', overlay, /* deep */ true, true)`.** `deep: true`
+is not optional — `deep: false` replaces a whole namespace and silently drops its shared keys.
+Prove the other app is untouched with `git diff --name-only <shared path>` returning empty.
