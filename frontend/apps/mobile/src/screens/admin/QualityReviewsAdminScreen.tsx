@@ -42,6 +42,7 @@ function ReviewCard({
   review: QualityReview;
   onValidate: (r: QualityReview) => void;
 }) {
+  const { t } = useTranslation();
   const statusColor = STATUS_COLORS[review.status] ?? '#757575';
   const needsValidation =
     !review.admin_validation && (review.status === 'approved' || review.status === 'rejected');
@@ -109,7 +110,7 @@ function ReviewCard({
           testID={`quality-review-validate-btn-${review.id}`}
           onPress={() => onValidate(review)}
         >
-          <Text style={styles.validateButtonText}>Validate Review</Text>
+          <Text style={styles.validateButtonText}>{t('qualityReviews.validateReview', 'Validate Review')}</Text>
         </TouchableOpacity>
       )}
     </View>

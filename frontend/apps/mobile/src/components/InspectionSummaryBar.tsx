@@ -102,6 +102,7 @@ function StatusTag({ count, label, color }: { count: number; label: string; colo
 }
 
 function InspectionCard({ assignment }: { assignment: DayInspectionSummary }) {
+  const { t } = useTranslation();
   const statusColor = STATUS_COLORS[assignment.status] ?? '#9E9E9E';
 
   return (
@@ -126,7 +127,7 @@ function InspectionCard({ assignment }: { assignment: DayInspectionSummary }) {
           <Text style={styles.engineerText}>Eng: {assignment.engineer}</Text>
         )}
         {!assignment.mechanical_inspector && !assignment.electrical_inspector && (
-          <Text style={styles.notAssignedText}>Not Assigned</Text>
+          <Text style={styles.notAssignedText}>{t('common.not_assigned', 'Not Assigned')}</Text>
         )}
       </View>
     </View>

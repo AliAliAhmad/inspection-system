@@ -298,7 +298,7 @@ export default function TeamAssignmentScreen() {
             style={styles.input}
             value={targetDate}
             onChangeText={setTargetDate}
-            placeholder="YYYY-MM-DD"
+            placeholder={t('common.date_format_hint', 'YYYY-MM-DD')}
             placeholderTextColor="#999"
           />
 

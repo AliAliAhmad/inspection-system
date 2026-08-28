@@ -68,6 +68,7 @@ interface UserCardProps {
 }
 
 function UserCard({ user, dates, onPress }: UserCardProps) {
+  const { t } = useTranslation();
   const roleColor = ROLE_COLORS[user.role] ?? '#757575';
 
   return (
@@ -83,7 +84,7 @@ function UserCard({ user, dates, onPress }: UserCardProps) {
           </View>
         </View>
         <View style={styles.leaveInfo}>
-          <Text style={styles.leaveLabel}>Balance</Text>
+          <Text style={styles.leaveLabel}>{t('workload.balance', 'Balance')}</Text>
           <Text style={[styles.leaveValue, user.leave_remaining === 0 && styles.leaveZero]}>
             {user.leave_remaining ?? '-'}
           </Text>

@@ -1,5 +1,9 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+// A class component cannot use hooks, and an error boundary must keep working
+// AFTER the tree below it has crashed — so it must not depend on React context
+// either. i18next's singleton is what useTranslation() wraps anyway.
+import i18n from 'i18next';
 
 interface Props {
   children: ReactNode;
@@ -33,10 +37,10 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <View style={styles.container}>
           <Text style={styles.icon}>⚠️</Text>
-          <Text style={styles.title}>Something went wrong</Text>
+          <Text style={styles.title}>{i18n.t('common.somethingWentWrong', 'Something went wrong')}</Text>
           <Text style={styles.message}>{this.state.error?.message || 'An unexpected error occurred'}</Text>
           <TouchableOpacity style={styles.button} onPress={this.handleReset}>
-            <Text style={styles.buttonText}>Try Again</Text>
+            <Text style={styles.buttonText}>{i18n.t('common.tryAgain', 'Try Again')}</Text>
           </TouchableOpacity>
         </View>
       );

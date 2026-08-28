@@ -247,7 +247,7 @@ export default function LeaderboardScreen() {
               ? Math.round((item as any).total_epi)
               : '--'}
           </Text>
-          <Text style={styles.epiLabel}>EPI</Text>
+          <Text style={styles.epiLabel}>{t('leaderboard.epi', 'EPI')}</Text>
         </View>
 
         {/* Avg Stars */}

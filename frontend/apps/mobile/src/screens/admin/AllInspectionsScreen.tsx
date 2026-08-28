@@ -493,7 +493,7 @@ export default function AllInspectionsScreen() {
                       {downloadingPdf ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Text style={styles.actionButtonText}>PDF</Text>
+                        <Text style={styles.actionButtonText}>{t('work_plan.download_pdf', 'PDF')}</Text>
                       )}
                     </TouchableOpacity>
                   </>
@@ -561,7 +561,7 @@ export default function AllInspectionsScreen() {
               style={styles.textArea}
               value={reviewNotes}
               onChangeText={setReviewNotes}
-              placeholder="Add review notes (optional)..."
+              placeholder={t('dailyReview.notes_placeholder', 'Add review notes (optional)...')}
               placeholderTextColor="#999"
               multiline
               numberOfLines={4}
@@ -628,13 +628,13 @@ export default function AllInspectionsScreen() {
             {insightsQuery.isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#9C27B0" />
-                <Text style={styles.loadingText}>Analyzing inspection data...</Text>
+                <Text style={styles.loadingText}>{t('scheduleAI.analyzing_inspections', 'Analyzing inspection data...')}</Text>
               </View>
             ) : insights ? (
               <>
                 {/* Trend Summary */}
                 <View style={styles.insightCard}>
-                  <Text style={styles.insightTitle}>Trend Summary</Text>
+                  <Text style={styles.insightTitle}>{t('performance.trend_summary', 'Trend Summary')}</Text>
                   <View style={styles.trendRow}>
                     <Text style={[styles.trendIcon, { color: insights.trend_summary?.direction === 'up' ? '#4CAF50' : '#E53935' }]}>
                       {insights.trend_summary?.direction === 'up' ? '📈' : '📉'}
@@ -696,7 +696,7 @@ export default function AllInspectionsScreen() {
                 )}
               </>
             ) : (
-              <Text style={styles.errorText}>Failed to load insights</Text>
+              <Text style={styles.errorText}>{t('ai.insights_failed', 'Failed to load insights')}</Text>
             )}
           </ScrollView>
         </View>

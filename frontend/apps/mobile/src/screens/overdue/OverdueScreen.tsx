@@ -243,14 +243,14 @@ export default function OverdueScreen() {
             style={styles.viewButton}
             onPress={() => handleItemPress(item)}
           >
-            <Text style={styles.viewButtonText}>View Details</Text>
+            <Text style={styles.viewButtonText}>{t('materials.view_details', 'View Details')}</Text>
           </TouchableOpacity>
           {item.type !== 'reviews' && (
             <TouchableOpacity
               style={styles.rescheduleButton}
               onPress={() => handleReschedulePress(item)}
             >
-              <Text style={styles.rescheduleButtonText}>Reschedule</Text>
+              <Text style={styles.rescheduleButtonText}>{t('overdue.reschedule', 'Reschedule')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -339,7 +339,7 @@ export default function OverdueScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No Overdue Items</Text>
+            <Text style={styles.emptyTitle}>{t('overdue.none', 'No Overdue Items')}</Text>
             <Text style={styles.emptySubtitle}>
               All {activeTab} are within their deadlines
             </Text>
@@ -351,7 +351,7 @@ export default function OverdueScreen() {
       <Modal visible={rescheduleModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Reschedule Item</Text>
+            <Text style={styles.modalTitle}>{t('schedules.reschedule_item', 'Reschedule Item')}</Text>
 
             {selectedItem && (
               <View style={styles.selectedItemInfo}>
@@ -360,21 +360,21 @@ export default function OverdueScreen() {
               </View>
             )}
 
-            <Text style={styles.modalLabel}>New Due Date</Text>
+            <Text style={styles.modalLabel}>{t('schedules.new_due_date', 'New Due Date')}</Text>
             <TextInput
               style={styles.modalInput}
               value={newDueDate}
               onChangeText={setNewDueDate}
-              placeholder="YYYY-MM-DD"
+              placeholder={t('common.date_format_hint', 'YYYY-MM-DD')}
               placeholderTextColor="#9E9E9E"
             />
 
-            <Text style={styles.modalLabel}>Reason for Rescheduling</Text>
+            <Text style={styles.modalLabel}>{t('schedules.reschedule_reason', 'Reason for Rescheduling')}</Text>
             <TextInput
               style={[styles.modalInput, styles.modalTextArea]}
               value={rescheduleReason}
               onChangeText={setRescheduleReason}
-              placeholder="Enter reason..."
+              placeholder={t('common.enter_reason_placeholder', 'Enter reason...')}
               placeholderTextColor="#9E9E9E"
               multiline
               numberOfLines={3}
@@ -401,7 +401,7 @@ export default function OverdueScreen() {
                 {rescheduleMutation.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.modalSubmitText}>Reschedule</Text>
+                  <Text style={styles.modalSubmitText}>{t('overdue.reschedule', 'Reschedule')}</Text>
                 )}
               </TouchableOpacity>
             </View>

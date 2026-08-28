@@ -12,6 +12,7 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getApiClient } from '@inspection/shared';
 import { syncManager } from '../utils/sync-manager';
+import { useTranslation } from 'react-i18next';
 
 // ─── Module-level audio singleton ─────────────────────────────
 // Ensures only one audio plays at a time across all VoiceNoteRecorder instances
@@ -82,6 +83,7 @@ export default function VoiceNoteRecorder({
   urgency_level,
   onQueuedOffline,
 }: VoiceNoteRecorderProps) {
+  const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -421,7 +423,7 @@ export default function VoiceNoteRecorder({
             <Text style={styles.recordingTime}>{formatTime(recordingTime)}</Text>
           </View>
         ) : isUploading ? (
-          <Text style={styles.uploadingText}>Uploading...</Text>
+          <Text style={styles.uploadingText}>{t('common.uploading', 'Uploading...')}</Text>
         ) : isQueued ? (
           <Text style={styles.queuedText}>Saved – will upload when back online</Text>
         ) : hasAudio ? (
@@ -452,7 +454,7 @@ export default function VoiceNoteRecorder({
             </TouchableOpacity>
           </View>
         ) : (
-          <Text style={styles.hintText}>Hold to record</Text>
+          <Text style={styles.hintText}>{t('voice_message.record', 'Hold to record')}</Text>
         )}
       </View>
 

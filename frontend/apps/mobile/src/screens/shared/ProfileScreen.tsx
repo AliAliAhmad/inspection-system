@@ -209,7 +209,7 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('profile.languageSettings')}</Text>
         <View style={styles.langRow}>
-          <Text style={styles.langLabel}>English</Text>
+          <Text style={styles.langLabel}>{t('common.language_english', 'English')}</Text>
           <Switch
             testID="language-toggle"
             value={language === 'ar'}

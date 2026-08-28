@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { QuestionThumbnail, QuestionStatus, STATUS_CONFIG } from './QuestionCard';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_PADDING = 16;
@@ -44,6 +45,7 @@ export function QuestionGridView({
   visible,
   onClose,
 }: QuestionGridViewProps) {
+  const { t } = useTranslation();
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
 
   // Filter questions based on selected status
@@ -118,9 +120,9 @@ export function QuestionGridView({
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Question Overview</Text>
+          <Text style={styles.headerTitle}>{t('inspection.question_overview', 'Question Overview')}</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>Close</Text>
+            <Text style={styles.closeButtonText}>{t('common.close', 'Close')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -214,25 +216,25 @@ export function QuestionGridView({
             <Text style={[styles.statValue, { color: STATUS_CONFIG.pass.borderColor }]}>
               {statusCounts.pass}
             </Text>
-            <Text style={styles.statLabel}>Pass</Text>
+            <Text style={styles.statLabel}>{t('common.pass', 'Pass')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: STATUS_CONFIG.fail.borderColor }]}>
               {statusCounts.fail}
             </Text>
-            <Text style={styles.statLabel}>Fail</Text>
+            <Text style={styles.statLabel}>{t('common.fail', 'Fail')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: STATUS_CONFIG.unanswered.borderColor }]}>
               {statusCounts.unanswered}
             </Text>
-            <Text style={styles.statLabel}>Pending</Text>
+            <Text style={styles.statLabel}>{t('common.pending', 'Pending')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: '#212121' }]}>
               {Math.round(((statusCounts.pass + statusCounts.fail + statusCounts.needs_review) / questions.length) * 100)}%
             </Text>
-            <Text style={styles.statLabel}>Complete</Text>
+            <Text style={styles.statLabel}>{t('common.complete', 'Complete')}</Text>
           </View>
         </View>
       </View>

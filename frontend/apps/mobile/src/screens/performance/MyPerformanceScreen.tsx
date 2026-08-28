@@ -174,8 +174,8 @@ export default function MyPerformanceScreen() {
       {/* Performance Score Card */}
       <View style={styles.scoreCard}>
         <View style={styles.scoreHeader}>
-          <Text style={styles.scoreTitle}>Performance Score</Text>
-          <Text style={styles.scorePeriod}>This Month</Text>
+          <Text style={styles.scoreTitle}>{t('performance.score', 'Performance Score')}</Text>
+          <Text style={styles.scorePeriod}>{t('jobs.month_completed', 'This Month')}</Text>
         </View>
 
         <View style={styles.scoreContent}>
@@ -192,19 +192,19 @@ export default function MyPerformanceScreen() {
               <Text style={styles.scoreStatValue}>
                 {latestPerformance?.completion_rate ?? 0}%
               </Text>
-              <Text style={styles.scoreStatLabel}>Completion</Text>
+              <Text style={styles.scoreStatLabel}>{t('performance.completion', 'Completion')}</Text>
             </View>
             <View style={styles.scoreStat}>
               <Text style={styles.scoreStatValue}>
                 {latestPerformance?.avg_qc_rating?.toFixed(1) ?? '--'}
               </Text>
-              <Text style={styles.scoreStatLabel}>QC Rating</Text>
+              <Text style={styles.scoreStatLabel}>{t('jobs.qc_rating', 'QC Rating')}</Text>
             </View>
             <View style={styles.scoreStat}>
               <Text style={styles.scoreStatValue}>
                 {latestPerformance?.total_points_earned ?? 0}
               </Text>
-              <Text style={styles.scoreStatLabel}>Points</Text>
+              <Text style={styles.scoreStatLabel}>{t('jobs.total_points', 'Points')}</Text>
             </View>
           </View>
         </View>
@@ -214,12 +214,12 @@ export default function MyPerformanceScreen() {
           <View style={styles.streakItem}>
             <Text style={styles.streakIcon}>🔥</Text>
             <Text style={styles.streakValue}>{performanceData?.current_streak || 0}</Text>
-            <Text style={styles.streakLabel}>Current Streak</Text>
+            <Text style={styles.streakLabel}>{t('performance.current_streak', 'Current Streak')}</Text>
           </View>
           <View style={styles.streakItem}>
             <Text style={styles.streakIcon}>⭐</Text>
             <Text style={styles.streakValue}>{performanceData?.max_streak || 0}</Text>
-            <Text style={styles.streakLabel}>Best Streak</Text>
+            <Text style={styles.streakLabel}>{t('performance.best_streak', 'Best Streak')}</Text>
           </View>
         </View>
       </View>
@@ -231,21 +231,21 @@ export default function MyPerformanceScreen() {
           onPress={() => navigation.navigate('Trajectory' as any)}
         >
           <Text style={styles.quickActionIcon}>📈</Text>
-          <Text style={styles.quickActionText}>Trajectory</Text>
+          <Text style={styles.quickActionText}>{t('performance.trajectory', 'Trajectory')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.quickActionButton}
           onPress={() => navigation.navigate('SkillGaps' as any)}
         >
           <Text style={styles.quickActionIcon}>🎯</Text>
-          <Text style={styles.quickActionText}>Skill Gaps</Text>
+          <Text style={styles.quickActionText}>{t('performance.skillGaps', 'Skill Gaps')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.quickActionButton}
           onPress={() => navigation.navigate('Goals' as any)}
         >
           <Text style={styles.quickActionIcon}>🏆</Text>
-          <Text style={styles.quickActionText}>Goals</Text>
+          <Text style={styles.quickActionText}>{t('goals.title', 'Goals')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -257,7 +257,7 @@ export default function MyPerformanceScreen() {
               <Text style={styles.rankNumber}>#{ranking.rank}</Text>
             </View>
             <View style={styles.rankInfo}>
-              <Text style={styles.rankTitle}>Your Rank</Text>
+              <Text style={styles.rankTitle}>{t('performance.your_rank', 'Your Rank')}</Text>
               <Text style={styles.rankSubtitle}>
                 Out of {ranking.total} {ranking.total === 1 ? 'worker' : 'workers'}
               </Text>
@@ -274,20 +274,20 @@ export default function MyPerformanceScreen() {
       {/* Active Goals */}
       <View style={styles.goalsSection}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Active Goals</Text>
+          <Text style={styles.sectionTitle}>{t('goals.active', 'Active Goals')}</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Goals' as any)}>
-            <Text style={styles.seeAllLink}>See All</Text>
+            <Text style={styles.seeAllLink}>{t('common.see_all', 'See All')}</Text>
           </TouchableOpacity>
         </View>
 
         {goals.length === 0 ? (
           <View style={styles.emptyGoals}>
-            <Text style={styles.emptyGoalsText}>No active goals</Text>
+            <Text style={styles.emptyGoalsText}>{t('goals.no_active', 'No active goals')}</Text>
             <TouchableOpacity
               style={styles.createGoalButton}
               onPress={() => navigation.navigate('Goals' as any)}
             >
-              <Text style={styles.createGoalButtonText}>Set a Goal</Text>
+              <Text style={styles.createGoalButtonText}>{t('goals.set_goal', 'Set a Goal')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -332,7 +332,7 @@ export default function MyPerformanceScreen() {
       {/* Coaching Tips Carousel */}
       {tips.length > 0 && (
         <View style={styles.tipsSection}>
-          <Text style={styles.sectionTitle}>Coaching Tips</Text>
+          <Text style={styles.sectionTitle}>{t('performance.coachingTips', 'Coaching Tips')}</Text>
 
           <FlatList
             testID="my-performance-list"
@@ -375,7 +375,7 @@ export default function MyPerformanceScreen() {
 
       {/* Quick Stats */}
       <View style={styles.quickStats}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <Text style={styles.sectionTitle}>{t('profile.recentActivity', 'Recent Activity')}</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

@@ -24,6 +24,7 @@ import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { scheduleAIApi, type EquipmentRiskScore } from '@inspection/shared';
 import { Searchbar, Chip } from 'react-native-paper';
 import { RiskBadge, HealthTrendIcon } from '../../components/shared';
+import { useTranslation } from 'react-i18next';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -36,6 +37,7 @@ const RISK_FILTERS = [
 ];
 
 export default function EquipmentRiskListScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -134,11 +136,11 @@ export default function EquipmentRiskListScreen() {
 
         <View style={styles.equipmentStats}>
           <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Risk Score</Text>
+            <Text style={styles.statLabel}>{t('defects.risk', 'Risk Score')}</Text>
             <Text style={styles.statValue}>{item.risk_score.toFixed(1)}</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Days Since Inspection</Text>
+            <Text style={styles.statLabel}>{t('schedules.days_since_inspection', 'Days Since Inspection')}</Text>
             <Text style={styles.statValue}>{item.days_since_inspection}</Text>
           </View>
         </View>
@@ -158,7 +160,7 @@ export default function EquipmentRiskListScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyStateText}>No equipment found</Text>
+      <Text style={styles.emptyStateText}>{t('equipment.none_found', 'No equipment found')}</Text>
     </View>
   );
 
@@ -166,7 +168,7 @@ export default function EquipmentRiskListScreen() {
     <View style={styles.header}>
       <Searchbar
         testID="equipment-risk-search-bar"
-        placeholder="Search equipment..."
+        placeholder={t('equipment.search', 'Search equipment...')}
         onChangeText={setSearchQuery}
         value={searchQuery}
         style={styles.searchBar}

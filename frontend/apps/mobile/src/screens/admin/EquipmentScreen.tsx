@@ -508,7 +508,7 @@ export default function EquipmentScreen() {
               style={styles.input}
               value={(formData as any).installation_date || ''}
               onChangeText={(text) => setFormData({ ...formData, installation_date: text } as any)}
-              placeholder="YYYY-MM-DD"
+              placeholder={t('common.date_format_hint', 'YYYY-MM-DD')}
             />
 
             {editingEquipment && (

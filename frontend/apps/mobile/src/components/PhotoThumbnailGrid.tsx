@@ -14,6 +14,7 @@ import Animated, {
   withSpring,
   runOnJS,
 } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_PADDING = 12;
@@ -168,6 +169,7 @@ export function PhotoThumbnailGrid({
   maxPhotos = 10,
   disabled = false,
 }: PhotoThumbnailGridProps) {
+  const { t } = useTranslation();
   const handleDragStart = useCallback(() => {
     // Can add haptic feedback here if needed
   }, []);
@@ -214,7 +216,7 @@ export function PhotoThumbnailGrid({
           >
             <View style={styles.addButtonInner}>
               <Text style={styles.addButtonIcon}>+</Text>
-              <Text style={styles.addButtonText}>Add</Text>
+              <Text style={styles.addButtonText}>{t('common.add', 'Add')}</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -227,7 +229,7 @@ export function PhotoThumbnailGrid({
             {photos.length}/{maxPhotos} photos
           </Text>
           {photos.length > 1 && (
-            <Text style={styles.reorderHint}>Hold & drag to reorder</Text>
+            <Text style={styles.reorderHint}>{t('common.drag_to_reorder', 'Hold & drag to reorder')}</Text>
           )}
         </View>
       )}

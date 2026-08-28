@@ -62,6 +62,7 @@ function LeaveCard({
   onReject: (id: number) => void;
   isActioning: boolean;
 }) {
+  const { t } = useTranslation();
   const statusColor = STATUS_COLORS[request.status] ?? '#757575';
   const typeColor = LEAVE_TYPE_COLORS[request.leave_type] ?? '#757575';
   const isPending = request.status === 'pending';
@@ -107,7 +108,7 @@ function LeaveCard({
             disabled={isActioning}
             testID={`leave-reject-btn-${request.id}`}
           >
-            <Text style={styles.rejectButtonText}>Reject</Text>
+            <Text style={styles.rejectButtonText}>{t('common.reject', 'Reject')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, styles.approveButton]}
@@ -115,7 +116,7 @@ function LeaveCard({
             disabled={isActioning}
             testID={`leave-approve-btn-${request.id}`}
           >
-            <Text style={styles.approveButtonText}>Approve</Text>
+            <Text style={styles.approveButtonText}>{t('common.approve', 'Approve')}</Text>
           </TouchableOpacity>
         </View>
       )}

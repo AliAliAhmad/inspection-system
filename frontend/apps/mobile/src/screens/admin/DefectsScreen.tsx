@@ -328,7 +328,7 @@ export default function DefectsScreen({ navigation }: any) {
           style={styles.aiSearchButton}
           onPress={() => setSearchModalVisible(true)}
         >
-          <Text style={styles.aiSearchButtonText}>AI Search</Text>
+          <Text style={styles.aiSearchButtonText}>{t('equipmentAI.aiSearch', 'AI Search')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -505,7 +505,7 @@ export default function DefectsScreen({ navigation }: any) {
                   style={styles.textArea}
                   value={majorReason}
                   onChangeText={setMajorReason}
-                  placeholder="Explain why this is a major job..."
+                  placeholder={t('jobs.major_reason_placeholder', 'Explain why this is a major job...')}
                   placeholderTextColor="#999"
                   multiline
                   numberOfLines={4}
@@ -557,7 +557,7 @@ export default function DefectsScreen({ navigation }: any) {
                 );
               }}
               ListEmptyComponent={
-                <Text style={styles.noSpecialistsText}>No specialists available</Text>
+                <Text style={styles.noSpecialistsText}>{t('defects.no_specialists_available', 'No specialists available')}</Text>
               }
               style={styles.specialistList}
             />
@@ -612,7 +612,7 @@ export default function DefectsScreen({ navigation }: any) {
                 {isSearching ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.searchButtonText}>Search</Text>
+                  <Text style={styles.searchButtonText}>{t('common.search', 'Search')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -620,7 +620,7 @@ export default function DefectsScreen({ navigation }: any) {
             {isSearching && (
               <View style={styles.searchingContainer}>
                 <ActivityIndicator size="large" color="#1976D2" />
-                <Text style={styles.searchingText}>Searching with AI...</Text>
+                <Text style={styles.searchingText}>{t('ai.searching', 'Searching with AI...')}</Text>
               </View>
             )}
 
@@ -649,7 +649,7 @@ export default function DefectsScreen({ navigation }: any) {
 
             {!isSearching && searchResults.length === 0 && searchQuery && (
               <View style={styles.noResultsContainer}>
-                <Text style={styles.noResultsText}>No similar defects found</Text>
+                <Text style={styles.noResultsText}>{t('defects.noSimilarFound', 'No similar defects found')}</Text>
               </View>
             )}
           </View>

@@ -286,7 +286,7 @@ export default function LeavesScreen() {
                 style={styles.input}
                 value={formDateFrom}
                 onChangeText={setFormDateFrom}
-                placeholder="YYYY-MM-DD"
+                placeholder={t('common.date_format_hint', 'YYYY-MM-DD')}
                 placeholderTextColor="#999"
               />
 
@@ -298,7 +298,7 @@ export default function LeavesScreen() {
                 style={styles.input}
                 value={formDateTo}
                 onChangeText={setFormDateTo}
-                placeholder="YYYY-MM-DD"
+                placeholder={t('common.date_format_hint', 'YYYY-MM-DD')}
                 placeholderTextColor="#999"
               />
 

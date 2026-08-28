@@ -154,12 +154,12 @@ export default function TrajectoryScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{trajectoryData?.current_points ?? 0}</Text>
-            <Text style={styles.statLabel}>Current Points</Text>
+            <Text style={styles.statLabel}>{t('performance.current_points', 'Current Points')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statValue}>#{trajectoryData?.current_rank ?? '--'}</Text>
-            <Text style={styles.statLabel}>Current Rank</Text>
+            <Text style={styles.statLabel}>{t('performance.current_rank', 'Current Rank')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
@@ -167,7 +167,7 @@ export default function TrajectoryScreen() {
               {(trajectoryData?.avg_monthly_growth ?? 0) >= 0 ? '+' : ''}
               {(trajectoryData?.avg_monthly_growth ?? 0).toFixed(0)}
             </Text>
-            <Text style={styles.statLabel}>Monthly Growth</Text>
+            <Text style={styles.statLabel}>{t('performance.monthly_growth', 'Monthly Growth')}</Text>
           </View>
         </View>
       </View>
@@ -196,14 +196,14 @@ export default function TrajectoryScreen() {
       {trajectoryData?.has_sufficient_data === false ? (
         <View style={styles.noDataCard}>
           <Text style={styles.noDataIcon}>...</Text>
-          <Text style={styles.noDataTitle}>Not Enough Data</Text>
+          <Text style={styles.noDataTitle}>{t('performance.not_enough_data', 'Not Enough Data')}</Text>
           <Text style={styles.noDataText}>
             {trajectoryData?.message || 'More historical data is needed for predictions.'}
           </Text>
         </View>
       ) : (
         <View style={styles.chartCard}>
-          <Text style={styles.chartTitle}>Predicted Points Over Time</Text>
+          <Text style={styles.chartTitle}>{t('performance.predicted_points_over_time', 'Predicted Points Over Time')}</Text>
 
           <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
             <Defs>
@@ -263,7 +263,7 @@ export default function TrajectoryScreen() {
 
           {/* X-axis labels */}
           <View style={styles.xAxisLabels}>
-            <Text style={styles.axisLabel}>Now</Text>
+            <Text style={styles.axisLabel}>{t('common.now', 'Now')}</Text>
             {trajectoryData?.predictions?.map((p) => (
               <Text key={p.month} style={styles.axisLabel}>
                 {p.date}
@@ -275,7 +275,7 @@ export default function TrajectoryScreen() {
           <View style={styles.legend}>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: trendColor }]} />
-              <Text style={styles.legendText}>Predicted Points</Text>
+              <Text style={styles.legendText}>{t('performance.predicted_points', 'Predicted Points')}</Text>
             </View>
             <Text style={styles.confidenceText}>
               Confidence: {((trajectoryData?.confidence ?? 0) * 100).toFixed(0)}%
@@ -287,12 +287,12 @@ export default function TrajectoryScreen() {
       {/* Predictions Table */}
       {trajectoryData?.predictions && trajectoryData.predictions.length > 0 && (
         <View style={styles.predictionsCard}>
-          <Text style={styles.cardTitle}>Monthly Predictions</Text>
+          <Text style={styles.cardTitle}>{t('performance.monthly_predictions', 'Monthly Predictions')}</Text>
 
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.tableColMonth]}>Month</Text>
-            <Text style={[styles.tableHeaderCell, styles.tableColPoints]}>Points</Text>
-            <Text style={[styles.tableHeaderCell, styles.tableColRank]}>Rank</Text>
+            <Text style={[styles.tableHeaderCell, styles.tableColMonth]}>{t('assignments.month', 'Month')}</Text>
+            <Text style={[styles.tableHeaderCell, styles.tableColPoints]}>{t('jobs.total_points', 'Points')}</Text>
+            <Text style={[styles.tableHeaderCell, styles.tableColRank]}>{t('performance.rank', 'Rank')}</Text>
           </View>
 
           {trajectoryData.predictions.map((prediction, index) => (
@@ -309,7 +309,7 @@ export default function TrajectoryScreen() {
 
       {/* Insights */}
       <View style={styles.insightsCard}>
-        <Text style={styles.cardTitle}>Trajectory Insights</Text>
+        <Text style={styles.cardTitle}>{t('performance.trajectory_insights', 'Trajectory Insights')}</Text>
 
         {trajectoryData?.trend === 'improving' && (
           <View style={[styles.insightItem, styles.insightPositive]}>

@@ -21,6 +21,7 @@ import Animated, {
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MIN_SCALE = 1;
@@ -193,6 +194,7 @@ export function FullScreenGallery({
   onClose,
   onDeletePhoto,
 }: FullScreenGalleryProps) {
+  const { t } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const flatListRef = useRef<FlatList>(null);
 
@@ -273,7 +275,7 @@ export function FullScreenGallery({
             onPress={onClose}
             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
           >
-            <Text style={styles.closeButtonText}>Close</Text>
+            <Text style={styles.closeButtonText}>{t('common.close', 'Close')}</Text>
           </TouchableOpacity>
 
           <Text style={styles.counter}>
@@ -286,7 +288,7 @@ export function FullScreenGallery({
               onPress={handleDelete}
               hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
             >
-              <Text style={styles.deleteButtonText}>Delete</Text>
+              <Text style={styles.deleteButtonText}>{t('common.delete', 'Delete')}</Text>
             </TouchableOpacity>
           )}
         </View>

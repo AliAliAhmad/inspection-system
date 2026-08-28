@@ -53,6 +53,7 @@ interface UpcomingCardProps {
 }
 
 function UpcomingCard({ title, date, entries }: UpcomingCardProps) {
+  const { t } = useTranslation();
   // Group by berth
   const byBerth: Record<string, { day: UpcomingEntry[]; night: UpcomingEntry[] }> = {};
   for (const e of entries) {
@@ -72,7 +73,7 @@ function UpcomingCard({ title, date, entries }: UpcomingCardProps) {
       </View>
 
       {berths.length === 0 ? (
-        <Text style={styles.noInspections}>No inspections scheduled</Text>
+        <Text style={styles.noInspections}>{t('schedules.no_inspections', 'No inspections scheduled')}</Text>
       ) : (
         berths.map(([berth, shifts]) => (
           <View key={berth} style={styles.berthRow}>

@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { Language, resources, setLanguage as setApiLanguage } from '@inspection/shared';
+import arMobile from '../i18n/ar.mobile.json';
+import enMobile from '../i18n/en.mobile.json';
 
 const LANG_KEY = 'app_language';
 
@@ -13,6 +15,20 @@ i18n.use(initReactI18next).init({
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
 });
+
+// Strings that belong to the MOBILE app only.
+//
+// `resources` comes from @inspection/shared and is loaded by the WEB app too, so
+// anything added there changes the web — in Arabic AND in English, because an
+// en.json entry overrides a screen's inline English fallback. Ali wants the web
+// left exactly as it is, so these live here instead and the web never sees them.
+//
+// The 4th argument (deep) MUST stay true: with deep = false the overlay's
+// `jobs: {...}` REPLACES the shared `jobs` section wholesale and silently drops
+// every shared key in it. The 5th (overwrite) is true so a mobile-specific
+// wording wins over a shared one for the same key.
+i18n.addResourceBundle('en', 'translation', enMobile, true, true);
+i18n.addResourceBundle('ar', 'translation', arMobile, true, true);
 
 interface LanguageContextValue {
   language: Language;

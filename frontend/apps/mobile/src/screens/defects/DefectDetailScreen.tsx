@@ -238,7 +238,7 @@ export default function DefectDetailScreen() {
           onPress={() => setAiPanelExpanded(!aiPanelExpanded)}
         >
           <View style={styles.aiPanelTitleRow}>
-            <Text style={styles.aiPanelTitle}>AI Insights</Text>
+            <Text style={styles.aiPanelTitle}>{t('ai.insights', 'AI Insights')}</Text>
             <Text style={styles.aiPanelToggle}>{aiPanelExpanded ? '−' : '+'}</Text>
           </View>
         </TouchableOpacity>
@@ -247,7 +247,7 @@ export default function DefectDetailScreen() {
           <View style={styles.aiPanelContent}>
             {/* Risk Score Gauge */}
             <View style={styles.riskSection}>
-              <Text style={styles.riskLabel}>Risk Score</Text>
+              <Text style={styles.riskLabel}>{t('defects.risk', 'Risk Score')}</Text>
               {loadingRisk ? (
                 <ActivityIndicator size="small" color="#1976D2" />
               ) : (
@@ -269,7 +269,7 @@ export default function DefectDetailScreen() {
             {/* SLA Countdown */}
             {slaDeadline && (
               <View style={styles.slaSection}>
-                <Text style={styles.slaLabel}>SLA Status</Text>
+                <Text style={styles.slaLabel}>{t('defects.slaStatus', 'SLA Status')}</Text>
                 <SLABadge deadline={slaDeadline} countdown />
               </View>
             )}
@@ -277,7 +277,7 @@ export default function DefectDetailScreen() {
             {/* Similar Defects */}
             <View style={styles.similarSection}>
               <View style={styles.similarHeader}>
-                <Text style={styles.similarLabel}>Similar Defects</Text>
+                <Text style={styles.similarLabel}>{t('defects.similar', 'Similar Defects')}</Text>
                 {similarDefects.length === 0 && (
                   <TouchableOpacity
                     style={styles.loadSimilarButton}
@@ -287,7 +287,7 @@ export default function DefectDetailScreen() {
                     {loadingSimilar ? (
                       <ActivityIndicator size="small" color="#9C27B0" />
                     ) : (
-                      <Text style={styles.loadSimilarText}>Find Similar</Text>
+                      <Text style={styles.loadSimilarText}>{t('defects.find_similar', 'Find Similar')}</Text>
                     )}
                   </TouchableOpacity>
                 )}
@@ -331,7 +331,7 @@ export default function DefectDetailScreen() {
               style={styles.escalateButton}
               onPress={() => setShowEscalateModal(true)}
             >
-              <Text style={styles.escalateButtonText}>Quick Escalate</Text>
+              <Text style={styles.escalateButtonText}>{t('defects.quick_escalate', 'Quick Escalate')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -343,7 +343,7 @@ export default function DefectDetailScreen() {
 
         {defect.equipment && (
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Equipment</Text>
+            <Text style={styles.infoLabel}>{t('common.equipment', 'Equipment')}</Text>
             <Text style={styles.infoValue}>
               {defect.equipment.name} - {defect.equipment.serial_number}
             </Text>
@@ -351,32 +351,32 @@ export default function DefectDetailScreen() {
         )}
 
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Priority</Text>
+          <Text style={styles.infoLabel}>{t('notifications.priorityFilter', 'Priority')}</Text>
           <Text style={styles.infoValue}>{defect.priority}</Text>
         </View>
 
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Created</Text>
+          <Text style={styles.infoLabel}>{t('common.created_at', 'Created')}</Text>
           <Text style={styles.infoValue}>{formatDateTime(defect.created_at)}</Text>
         </View>
 
         {(defect as any).updated_at && (
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Last Updated</Text>
+            <Text style={styles.infoLabel}>{t('common.last_updated', 'Last Updated')}</Text>
             <Text style={styles.infoValue}>{formatDateTime((defect as any).updated_at)}</Text>
           </View>
         )}
 
         {(defect as any).reported_by && (
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Reported By</Text>
+            <Text style={styles.infoLabel}>{t('job_details.reported_by', 'Reported By')}</Text>
             <Text style={styles.infoValue}>{(defect as any).reported_by.full_name}</Text>
           </View>
         )}
 
         {(defect as any).assigned_to && (
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Assigned To</Text>
+            <Text style={styles.infoLabel}>{t('common.assigned_to', 'Assigned To')}</Text>
             <Text style={styles.infoValue}>{(defect as any).assigned_to.full_name}</Text>
           </View>
         )}
@@ -406,9 +406,9 @@ export default function DefectDetailScreen() {
       <Modal visible={showEscalateModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Escalate Defect</Text>
+            <Text style={styles.modalTitle}>{t('defects.escalate_defect', 'Escalate Defect')}</Text>
 
-            <Text style={styles.modalLabel}>Reason for Escalation</Text>
+            <Text style={styles.modalLabel}>{t('defects.escalation_reason', 'Reason for Escalation')}</Text>
             <View style={styles.reasonOptions}>
               {[
                 'Safety Critical',
@@ -458,7 +458,7 @@ export default function DefectDetailScreen() {
                 {escalateMutation.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.modalSubmitText}>Escalate</Text>
+                  <Text style={styles.modalSubmitText}>{t('defects.escalate', 'Escalate')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -470,10 +470,10 @@ export default function DefectDetailScreen() {
       <Modal visible={showAssignInspectorModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Assign to Inspector</Text>
+            <Text style={styles.modalTitle}>{t('defects.assign_to_inspector', 'Assign to Inspector')}</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search inspectors..."
+              placeholder={t('assignments.search_inspectors', 'Search inspectors...')}
               value={inspectorSearch}
               onChangeText={setInspectorSearch}
               autoCapitalize="none"
@@ -494,7 +494,7 @@ export default function DefectDetailScreen() {
                   <Text style={styles.inspectorItemRole}>{item.role}</Text>
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={<Text style={styles.emptyText}>No inspectors found</Text>}
+              ListEmptyComponent={<Text style={styles.emptyText}>{t('assignments.no_inspectors_found', 'No inspectors found')}</Text>}
             />
             <TouchableOpacity
               style={styles.modalCancelButton}

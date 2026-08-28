@@ -204,7 +204,7 @@ export function QuestionSearch({
           </Text>
           {item.question.critical_failure && (
             <View style={styles.criticalTag}>
-              <Text style={styles.criticalTagText}>CRITICAL</Text>
+              <Text style={styles.criticalTagText}>{t('inspection.critical', 'CRITICAL')}</Text>
             </View>
           )}
         </View>

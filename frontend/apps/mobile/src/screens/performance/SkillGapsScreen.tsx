@@ -153,7 +153,7 @@ export default function SkillGapsScreen() {
 
       {/* Radar Chart */}
       <View style={styles.chartCard}>
-        <Text style={styles.chartTitle}>Skills Overview</Text>
+        <Text style={styles.chartTitle}>{t('performance.skills_overview', 'Skills Overview')}</Text>
 
         <View style={styles.chartContainer}>
           <Svg width={CHART_SIZE} height={CHART_SIZE}>
@@ -247,11 +247,11 @@ export default function SkillGapsScreen() {
         <View style={styles.legend}>
           <View style={styles.legendItem}>
             <View style={[styles.legendLine, { backgroundColor: '#4CAF50' }]} />
-            <Text style={styles.legendText}>Current</Text>
+            <Text style={styles.legendText}>{t('common.current', 'Current')}</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendLine, { backgroundColor: '#2196F3', opacity: 0.6 }]} />
-            <Text style={styles.legendText}>Target</Text>
+            <Text style={styles.legendText}>{t('goals.target', 'Target')}</Text>
           </View>
         </View>
       </View>
@@ -259,7 +259,7 @@ export default function SkillGapsScreen() {
       {/* Priority Skill Gaps */}
       {sortedGaps.length > 0 && (
         <View style={styles.gapsCard}>
-          <Text style={styles.cardTitle}>Priority Skill Gaps</Text>
+          <Text style={styles.cardTitle}>{t('performance.priority_skill_gaps', 'Priority Skill Gaps')}</Text>
 
           {sortedGaps.map((skill, index) => {
             const priority = getPriority(skill.gap);
@@ -328,7 +328,7 @@ export default function SkillGapsScreen() {
       {sortedGaps.length === 0 && (
         <View style={styles.successCard}>
           <Text style={styles.successIcon}>-</Text>
-          <Text style={styles.successTitle}>Excellent Performance!</Text>
+          <Text style={styles.successTitle}>{t('performance.excellent', 'Excellent Performance!')}</Text>
           <Text style={styles.successText}>
             All your skills are at or above target level. Keep up the great work!
           </Text>
@@ -337,12 +337,12 @@ export default function SkillGapsScreen() {
 
       {/* General Recommendations */}
       <View style={styles.recommendationsCard}>
-        <Text style={styles.cardTitle}>Improvement Recommendations</Text>
+        <Text style={styles.cardTitle}>{t('performance.improvement_recommendations', 'Improvement Recommendations')}</Text>
 
         <View style={styles.recommendationItem}>
           <Text style={styles.recommendationIcon}>1</Text>
           <View style={styles.recommendationContent}>
-            <Text style={styles.recommendationTitle}>Focus on High Priority Gaps</Text>
+            <Text style={styles.recommendationTitle}>{t('performance.focus_high_priority', 'Focus on High Priority Gaps')}</Text>
             <Text style={styles.recommendationText}>
               Address skills with the largest gaps first for maximum impact.
             </Text>
@@ -352,7 +352,7 @@ export default function SkillGapsScreen() {
         <View style={styles.recommendationItem}>
           <Text style={styles.recommendationIcon}>2</Text>
           <View style={styles.recommendationContent}>
-            <Text style={styles.recommendationTitle}>Request Feedback</Text>
+            <Text style={styles.recommendationTitle}>{t('performance.request_feedback', 'Request Feedback')}</Text>
             <Text style={styles.recommendationText}>
               Ask your supervisor for specific feedback on improvement areas.
             </Text>
@@ -362,7 +362,7 @@ export default function SkillGapsScreen() {
         <View style={styles.recommendationItem}>
           <Text style={styles.recommendationIcon}>3</Text>
           <View style={styles.recommendationContent}>
-            <Text style={styles.recommendationTitle}>Track Progress</Text>
+            <Text style={styles.recommendationTitle}>{t('goals.track_progress', 'Track Progress')}</Text>
             <Text style={styles.recommendationText}>
               Monitor your skill improvements weekly to stay motivated.
             </Text>

@@ -252,7 +252,7 @@ export function PhotoCapture({
           ) : (
             <View style={styles.captureContainer}>
               <View style={styles.cameraPlaceholder}>
-                <Text style={styles.cameraIcon}>Camera</Text>
+                <Text style={styles.cameraIcon}>{t('common.camera', 'Camera')}</Text>
                 <Text style={styles.captureTitle}>
                   {t('jobs.capture_photo', 'Capture Photo')}
                 </Text>

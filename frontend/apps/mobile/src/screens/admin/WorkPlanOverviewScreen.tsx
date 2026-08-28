@@ -196,7 +196,7 @@ export default function WorkPlanOverviewScreen() {
 
           {hasNoSAP && (
             <View style={styles.noSapTag}>
-              <Text style={styles.noSapText}>No SAP</Text>
+              <Text style={styles.noSapText}>{t('jobs.no_sap', 'No SAP')}</Text>
             </View>
           )}
         </View>
@@ -254,7 +254,7 @@ export default function WorkPlanOverviewScreen() {
         {isExpanded && (
           <View style={styles.jobsList}>
             {jobs.length === 0 ? (
-              <Text style={styles.noJobsText}>No jobs scheduled</Text>
+              <Text style={styles.noJobsText}>{t('jobs.none_scheduled', 'No jobs scheduled')}</Text>
             ) : (
               jobs.map(job => renderJob(job, day.id))
             )}
@@ -331,15 +331,15 @@ export default function WorkPlanOverviewScreen() {
         <View style={styles.statsBar}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{stats.totalJobs}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={styles.statLabel}>{t('jobs.total', 'Total')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: '#4CAF50' }]}>{stats.assignedJobs}</Text>
-            <Text style={styles.statLabel}>Assigned</Text>
+            <Text style={styles.statLabel}>{t('jobs.assigned', 'Assigned')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: '#FF9800' }]}>{stats.unassignedJobs}</Text>
-            <Text style={styles.statLabel}>Unassigned</Text>
+            <Text style={styles.statLabel}>{t('common.unassigned', 'Unassigned')}</Text>
           </View>
           {workPlan.pdf_url && (
             <TouchableOpacity style={styles.pdfButton} onPress={() => Linking.openURL(workPlan.pdf_url!)}>
@@ -352,8 +352,8 @@ export default function WorkPlanOverviewScreen() {
       {/* Days List */}
       {!workPlan ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>No Work Plan</Text>
-          <Text style={styles.emptySubtitle}>No plan has been created for this week</Text>
+          <Text style={styles.emptyTitle}>{t('work_plan.no_plan', 'No Work Plan')}</Text>
+          <Text style={styles.emptySubtitle}>{t('work_plan.none_this_week', 'No plan has been created for this week')}</Text>
         </View>
       ) : (
         <FlatList

@@ -6,6 +6,7 @@
  */
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 export interface SLABadgeProps {
   /** ISO date string of the SLA deadline */
@@ -63,6 +64,7 @@ function getSLAInfo(deadline: string): SLAInfo {
 }
 
 export function SLABadge({ deadline, compact = false, countdown = false }: SLABadgeProps) {
+  const { t } = useTranslation();
   const slaInfo = useMemo(() => {
     if (!deadline) return null;
     return getSLAInfo(deadline);
@@ -71,7 +73,7 @@ export function SLABadge({ deadline, compact = false, countdown = false }: SLABa
   if (!slaInfo) {
     return (
       <View style={[styles.badge, styles.noBadge]}>
-        <Text style={styles.noText}>No SLA</Text>
+        <Text style={styles.noText}>{t('defects.no_sla', 'No SLA')}</Text>
       </View>
     );
   }

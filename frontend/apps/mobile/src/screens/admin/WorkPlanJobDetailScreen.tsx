@@ -149,7 +149,7 @@ export default function WorkPlanJobDetailScreen() {
   if (!job) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>Job not found</Text>
+        <Text style={styles.errorText}>{t('common.not_found', 'Job not found')}</Text>
       </View>
     );
   }
@@ -184,7 +184,7 @@ export default function WorkPlanJobDetailScreen() {
         {/* SAP Order */}
         {job.sap_order_number ? (
           <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>SAP Order</Text>
+            <Text style={styles.infoLabel}>{t('job_details.sap_info', 'SAP Order')}</Text>
             <Text style={styles.infoValue}>{job.sap_order_number}</Text>
           </View>
         ) : (
@@ -205,15 +205,15 @@ export default function WorkPlanJobDetailScreen() {
         {/* Details Grid */}
         <View style={styles.detailsGrid}>
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Est. Hours</Text>
+            <Text style={styles.detailLabel}>{t('pmTemplate.estHours', 'Est. Hours')}</Text>
             <Text style={styles.detailValue}>{job.estimated_hours}h</Text>
           </View>
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Berth</Text>
+            <Text style={styles.detailLabel}>{t('equipment.berth', 'Berth')}</Text>
             <Text style={styles.detailValue}>{job.berth?.toUpperCase() || 'Both'}</Text>
           </View>
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Cycle</Text>
+            <Text style={styles.detailLabel}>{t('pmTemplate.cycle', 'Cycle')}</Text>
             <Text style={styles.detailValue}>{job.cycle?.display_label || 'N/A'}</Text>
           </View>
         </View>
@@ -269,12 +269,12 @@ export default function WorkPlanJobDetailScreen() {
           ))
         ) : (
           <View style={styles.emptyTeam}>
-            <Text style={styles.emptyTeamText}>No team members assigned</Text>
+            <Text style={styles.emptyTeamText}>{t('assignments.no_members', 'No team members assigned')}</Text>
             <TouchableOpacity
               style={styles.assignNowButton}
               onPress={() => setAssignModalVisible(true)}
             >
-              <Text style={styles.assignNowText}>Assign Now</Text>
+              <Text style={styles.assignNowText}>{t('assignments.assign_now', 'Assign Now')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -336,7 +336,7 @@ export default function WorkPlanJobDetailScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Assign Team Member</Text>
+            <Text style={styles.modalTitle}>{t('assignments.assign_member', 'Assign Team Member')}</Text>
             <TouchableOpacity onPress={() => setAssignModalVisible(false)}>
               <Text style={styles.modalClose}>✕</Text>
             </TouchableOpacity>
@@ -378,7 +378,7 @@ export default function WorkPlanJobDetailScreen() {
               </TouchableOpacity>
             )}
             ListEmptyComponent={
-              <Text style={styles.noUsersText}>No available users</Text>
+              <Text style={styles.noUsersText}>{t('users.none_available', 'No available users')}</Text>
             }
           />
         </View>

@@ -175,11 +175,12 @@ function AssignmentCard({
 }
 
 function SuggestionCard({ suggestion, type }: { suggestion: InspectorSuggestion | null; type: string }) {
+  const { t } = useTranslation();
   if (!suggestion) {
     return (
       <View style={styles.suggestionCard}>
         <Text style={styles.suggestionType}>{type}</Text>
-        <Text style={styles.suggestionEmpty}>No inspector available</Text>
+        <Text style={styles.suggestionEmpty}>{t('assignments.no_inspector_available', 'No inspector available')}</Text>
       </View>
     );
   }
@@ -289,7 +290,7 @@ export default function InspectionAssignmentsScreen() {
       setGenerateModalVisible(false);
       Alert.alert(
         t('common.success', 'Success'),
-        t('assignments.generateSuccess', `List generated — ${result?.total_assets ?? 0} assignments created`)
+        t('assignments.generateSuccess', { count: result?.total_assets ?? 0, defaultValue: 'List generated — {{count}} assignments created' })
       );
     },
     onError: (err: any) => {
@@ -512,25 +513,25 @@ export default function InspectionAssignmentsScreen() {
           style={[styles.tabItem, activeTab === 'assignments' && styles.tabItemActive]}
           onPress={() => setActiveTab('assignments')}
         >
-          <Text style={[styles.tabText, activeTab === 'assignments' && styles.tabTextActive]}>Assignments</Text>
+          <Text style={[styles.tabText, activeTab === 'assignments' && styles.tabTextActive]}>{t('assignments.assignments', 'Assignments')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'batching' && styles.tabItemActive]}
           onPress={() => { setActiveTab('batching'); setSelectionMode(true); }}
         >
-          <Text style={[styles.tabText, activeTab === 'batching' && styles.tabTextActive]}>Batching</Text>
+          <Text style={[styles.tabText, activeTab === 'batching' && styles.tabTextActive]}>{t('assignments.batching', 'Batching')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'templates' && styles.tabItemActive]}
           onPress={() => setActiveTab('templates')}
         >
-          <Text style={[styles.tabText, activeTab === 'templates' && styles.tabTextActive]}>Templates</Text>
+          <Text style={[styles.tabText, activeTab === 'templates' && styles.tabTextActive]}>{t('templates.title', 'Templates')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabItem, activeTab === 'balancer' && styles.tabItemActive]}
           onPress={() => setActiveTab('balancer')}
         >
-          <Text style={[styles.tabText, activeTab === 'balancer' && styles.tabTextActive]}>Balancer</Text>
+          <Text style={[styles.tabText, activeTab === 'balancer' && styles.tabTextActive]}>{t('workload.balancer', 'Balancer')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -555,7 +556,7 @@ export default function InspectionAssignmentsScreen() {
             style={styles.selectionDoneButton}
             onPress={() => setActiveTab('batching')}
           >
-            <Text style={styles.selectionDoneText}>Analyze</Text>
+            <Text style={styles.selectionDoneText}>{t('common.analyze', 'Analyze')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -701,7 +702,7 @@ export default function InspectionAssignmentsScreen() {
               style={styles.dateInput}
               value={targetDateStr}
               onChangeText={setTargetDateStr}
-              placeholder="YYYY-MM-DD"
+              placeholder={t('common.date_format_hint', 'YYYY-MM-DD')}
               placeholderTextColor="#999"
             />
 
@@ -784,7 +785,7 @@ export default function InspectionAssignmentsScreen() {
             {(availabilityQuery.isLoading || allUsersQuery.isLoading) ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#1976D2" />
-                <Text style={styles.loadingText}>Loading available inspectors...</Text>
+                <Text style={styles.loadingText}>{t('assignments.loading_inspectors', 'Loading available inspectors...')}</Text>
               </View>
             ) : (
               <>
@@ -859,11 +860,11 @@ export default function InspectionAssignmentsScreen() {
             {aiSuggestQuery.isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#9C27B0" />
-                <Text style={styles.loadingText}>Analyzing workload and availability...</Text>
+                <Text style={styles.loadingText}>{t('workload.analyzing', 'Analyzing workload and availability...')}</Text>
               </View>
             ) : aiSuggestQuery.data ? (
               <>
-                <Text style={styles.sectionTitle}>Recommended Team</Text>
+                <Text style={styles.sectionTitle}>{t('assignments.recommended_team', 'Recommended Team')}</Text>
                 <SuggestionCard
                   suggestion={aiSuggestQuery.data.recommended?.mechanical}
                   type="Mechanical"
@@ -890,7 +891,7 @@ export default function InspectionAssignmentsScreen() {
 
                 {(aiSuggestQuery.data.suggestions?.mechanical?.length > 1 || aiSuggestQuery.data.suggestions?.electrical?.length > 1) && (
                   <>
-                    <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Other Options</Text>
+                    <Text style={[styles.sectionTitle, { marginTop: 24 }]}>{t('common.other_options', 'Other Options')}</Text>
                     {aiSuggestQuery.data.suggestions?.mechanical?.slice(1, 4).map((s: InspectorSuggestion) => (
                       <View key={s.id} style={styles.otherOption}>
                         <Text style={styles.otherOptionName}>{s.name}</Text>
@@ -901,7 +902,7 @@ export default function InspectionAssignmentsScreen() {
                 )}
               </>
             ) : (
-              <Text style={styles.errorText}>Failed to get AI suggestions</Text>
+              <Text style={styles.errorText}>{t('ai.suggestions_failed', 'Failed to get AI suggestions')}</Text>
             )}
           </ScrollView>
         </View>

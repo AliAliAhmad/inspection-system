@@ -145,7 +145,7 @@ export default function UnassignedJobsScreen() {
             style={styles.assignButton}
             onPress={() => handleOpenAssign(job)}
           >
-            <Text style={styles.assignButtonText}>Assign</Text>
+            <Text style={styles.assignButtonText}>{t('common.assign', 'Assign')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -157,7 +157,7 @@ export default function UnassignedJobsScreen() {
           <Text style={styles.berthText}>{job.berth?.toUpperCase() || 'BOTH'}</Text>
           {hasNoSAP && (
             <View style={styles.noSapTag}>
-              <Text style={styles.noSapText}>No SAP</Text>
+              <Text style={styles.noSapText}>{t('jobs.no_sap', 'No SAP')}</Text>
             </View>
           )}
         </View>
@@ -185,7 +185,7 @@ export default function UnassignedJobsScreen() {
     <View style={styles.container} testID="unassigned-jobs-screen">
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Unassigned Jobs</Text>
+        <Text style={styles.title}>{t('jobs.unassigned', 'Unassigned Jobs')}</Text>
         <View style={styles.countBadge}>
           <Text style={styles.countText}>{unassignedJobs.length}</Text>
         </View>
@@ -208,8 +208,8 @@ export default function UnassignedJobsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyEmoji}>🎉</Text>
-            <Text style={styles.emptyTitle}>All Jobs Assigned!</Text>
-            <Text style={styles.emptySubtitle}>Every job has a team member assigned</Text>
+            <Text style={styles.emptyTitle}>{t('jobs.all_assigned', 'All Jobs Assigned!')}</Text>
+            <Text style={styles.emptySubtitle}>{t('jobs.all_assigned_message', 'Every job has a team member assigned')}</Text>
           </View>
         }
       />
@@ -227,7 +227,7 @@ export default function UnassignedJobsScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <View>
-              <Text style={styles.modalTitle}>Assign Team</Text>
+              <Text style={styles.modalTitle}>{t('assignments.assignTeam', 'Assign Team')}</Text>
               {selectedJob && (
                 <Text style={styles.modalSubtitle}>
                   {selectedJob.equipment?.serial_number || 'Job'} • {selectedJob.estimated_hours}h
@@ -284,7 +284,7 @@ export default function UnassignedJobsScreen() {
               </TouchableOpacity>
             )}
             ListEmptyComponent={
-              <Text style={styles.noUsersText}>No users available</Text>
+              <Text style={styles.noUsersText}>{t('users.no_users_available', 'No users available')}</Text>
             }
           />
 

@@ -111,11 +111,11 @@ export function SmartBatchView({ selectedIds, onClose }: SmartBatchViewProps) {
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>{batchResult.total_batches}</Text>
-              <Text style={styles.statLabel}>Batches</Text>
+              <Text style={styles.statLabel}>{t('materials.batches', 'Batches')}</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>{batchResult.total_time_savings_min}</Text>
-              <Text style={styles.statLabel}>Min Saved</Text>
+              <Text style={styles.statLabel}>{t('routes.minutes_saved', 'Min Saved')}</Text>
             </View>
           </View>
 
@@ -169,7 +169,7 @@ export function SmartBatchView({ selectedIds, onClose }: SmartBatchViewProps) {
             style={styles.resetButton}
             onPress={() => setBatchResult(null)}
           >
-            <Text style={styles.resetButtonText}>Analyze Again</Text>
+            <Text style={styles.resetButtonText}>{t('common.analyze_again', 'Analyze Again')}</Text>
           </TouchableOpacity>
         </ScrollView>
       )}

@@ -231,7 +231,7 @@ export default function AdminUsersScreen() {
   const handleDelete = (user: User) => {
     Alert.alert(
       t('users.delete_confirm_title', 'Delete User'),
-      t('users.delete_confirm_message', `Are you sure you want to delete ${user.full_name}?`),
+      t('users.delete_confirm_message', { name: user.full_name, defaultValue: 'Are you sure you want to delete {{name}}?' }),
       [
         { text: t('common.cancel', 'Cancel'), style: 'cancel' },
         {

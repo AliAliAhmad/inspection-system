@@ -121,6 +121,7 @@ function InspectorPicker({
   onSelect: (id: number | null) => void;
   loading: boolean;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const selectedInspector = inspectors.find((i) => i.id === selectedId);
 
@@ -153,7 +154,7 @@ function InspectorPicker({
       {expanded && !loading && (
         <View style={styles.pickerDropdown}>
           {inspectors.length === 0 ? (
-            <Text style={styles.pickerEmpty}>No inspectors available</Text>
+            <Text style={styles.pickerEmpty}>{t('assignments.no_inspectors_available', 'No inspectors available')}</Text>
           ) : (
             inspectors.map((inspector) => (
               <TouchableOpacity
@@ -398,7 +399,7 @@ export default function MonitorFollowupScheduleScreen() {
           style={styles.dateInput}
           value={dateText}
           onChangeText={handleDateTextChange}
-          placeholder="YYYY-MM-DD"
+          placeholder={t('common.date_format_hint', 'YYYY-MM-DD')}
           placeholderTextColor="#BDBDBD"
           keyboardType={Platform.OS === 'ios' ? 'default' : 'default'}
           maxLength={10}

@@ -23,10 +23,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import { scheduleAIApi } from '@inspection/shared';
 import { Card, Button } from 'react-native-paper';
+import { useTranslation } from 'react-i18next';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ScheduleAIScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
 
   // Fetch risk scores
@@ -157,14 +159,14 @@ export default function ScheduleAIScreen() {
           <Card style={[styles.statCard, styles.statCardPrimary]}>
             <Card.Content>
               <Text style={styles.statValue}>{summary?.total_equipment || 0}</Text>
-              <Text style={styles.statLabel}>Total Equipment</Text>
+              <Text style={styles.statLabel}>{t('equipment.total', 'Total Equipment')}</Text>
             </Card.Content>
           </Card>
 
           <Card style={[styles.statCard, styles.statCardSuccess]}>
             <Card.Content>
               <Text style={styles.statValue}>{coverageRate}%</Text>
-              <Text style={styles.statLabel}>Coverage Rate</Text>
+              <Text style={styles.statLabel}>{t('schedules.coverage_rate', 'Coverage Rate')}</Text>
             </Card.Content>
           </Card>
         </View>
@@ -175,14 +177,14 @@ export default function ScheduleAIScreen() {
               <Text style={styles.statValue}>
                 {summary?.average_risk_score?.toFixed(1) || '0.0'}
               </Text>
-              <Text style={styles.statLabel}>Avg Risk Score</Text>
+              <Text style={styles.statLabel}>{t('schedules.avg_risk_score', 'Avg Risk Score')}</Text>
             </Card.Content>
           </Card>
 
           <Card style={[styles.statCard, styles.statCardDanger]}>
             <Card.Content>
               <Text style={styles.statValue}>{slaRisksCount}</Text>
-              <Text style={styles.statLabel}>SLA Risks</Text>
+              <Text style={styles.statLabel}>{t('defects.sla_risks', 'SLA Risks')}</Text>
             </Card.Content>
           </Card>
         </View>
@@ -191,7 +193,7 @@ export default function ScheduleAIScreen() {
       {/* Critical Insights */}
       {criticalInsights.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Critical Insights</Text>
+          <Text style={styles.sectionTitle}>{t('scheduleAI.critical_insights', 'Critical Insights')}</Text>
           {criticalInsights.map((insight, index) => (
             <Card key={index} style={styles.insightCard}>
               <Card.Content>
@@ -200,7 +202,7 @@ export default function ScheduleAIScreen() {
                     <Text style={styles.categoryText}>{insight.category}</Text>
                   </View>
                   <View style={styles.priorityBadge}>
-                    <Text style={styles.priorityText}>HIGH</Text>
+                    <Text style={styles.priorityText}>{t('jobs.priority_high', 'HIGH')}</Text>
                   </View>
                 </View>
                 <Text style={styles.insightTitle}>{insight.title}</Text>
@@ -216,14 +218,14 @@ export default function ScheduleAIScreen() {
       {/* Coverage Gaps Alerts */}
       {criticalGaps.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Coverage Gaps</Text>
+          <Text style={styles.sectionTitle}>{t('schedules.coverage_gaps', 'Coverage Gaps')}</Text>
           {criticalGaps.map((gap) => (
             <Card key={gap.equipment_id} style={styles.gapCard}>
               <Card.Content>
                 <View style={styles.gapHeader}>
                   <Text style={styles.gapEquipment}>{gap.equipment_name}</Text>
                   <View style={styles.gapSeverityBadge}>
-                    <Text style={styles.gapSeverityText}>CRITICAL</Text>
+                    <Text style={styles.gapSeverityText}>{t('inspection.critical', 'CRITICAL')}</Text>
                   </View>
                 </View>
                 <Text style={styles.gapLocation}>{gap.location}</Text>

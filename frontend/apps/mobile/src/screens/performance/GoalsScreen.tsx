@@ -70,6 +70,7 @@ function SwipeableGoalCard({
   onDelete: () => void;
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const translateX = useRef(new Animated.Value(0)).current;
   const [swiped, setSwiped] = useState(false);
 
@@ -122,7 +123,7 @@ function SwipeableGoalCard({
             onEdit();
           }}
         >
-          <Text style={styles.swipeActionText}>Edit</Text>
+          <Text style={styles.swipeActionText}>{t('common.edit', 'Edit')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.swipeAction, styles.deleteAction]}
@@ -131,7 +132,7 @@ function SwipeableGoalCard({
             onDelete();
           }}
         >
-          <Text style={styles.swipeActionText}>Delete</Text>
+          <Text style={styles.swipeActionText}>{t('common.delete', 'Delete')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -407,7 +408,7 @@ export default function GoalsScreen() {
       >
         {goals.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No Goals Yet</Text>
+            <Text style={styles.emptyTitle}>{t('goals.none_yet', 'No Goals Yet')}</Text>
             <Text style={styles.emptySubtitle}>
               Set goals to track your performance and stay motivated
             </Text>
@@ -440,7 +441,7 @@ export default function GoalsScreen() {
               {editingGoal ? 'Edit Goal' : 'Create Goal'}
             </Text>
 
-            <Text style={styles.modalLabel}>Goal Title *</Text>
+            <Text style={styles.modalLabel}>{t('goals.title_required', 'Goal Title *')}</Text>
             <TextInput
               style={styles.modalInput}
               value={goalTitle}
@@ -449,7 +450,7 @@ export default function GoalsScreen() {
               placeholderTextColor="#9E9E9E"
             />
 
-            <Text style={styles.modalLabel}>Goal Type</Text>
+            <Text style={styles.modalLabel}>{t('goals.type', 'Goal Type')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -478,7 +479,7 @@ export default function GoalsScreen() {
 
             <View style={styles.row}>
               <View style={styles.halfField}>
-                <Text style={styles.modalLabel}>Target *</Text>
+                <Text style={styles.modalLabel}>{t('goals.target_required', 'Target *')}</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={goalTarget}
@@ -489,23 +490,23 @@ export default function GoalsScreen() {
                 />
               </View>
               <View style={styles.halfField}>
-                <Text style={styles.modalLabel}>Deadline *</Text>
+                <Text style={styles.modalLabel}>{t('goals.deadline_required', 'Deadline *')}</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={goalDeadline}
                   onChangeText={setGoalDeadline}
-                  placeholder="YYYY-MM-DD"
+                  placeholder={t('common.date_format_hint', 'YYYY-MM-DD')}
                   placeholderTextColor="#9E9E9E"
                 />
               </View>
             </View>
 
-            <Text style={styles.modalLabel}>Description (Optional)</Text>
+            <Text style={styles.modalLabel}>{t('common.description_optional', 'Description (Optional)')}</Text>
             <TextInput
               style={[styles.modalInput, styles.textArea]}
               value={goalDescription}
               onChangeText={setGoalDescription}
-              placeholder="Add notes about this goal..."
+              placeholder={t('goals.notes_placeholder', 'Add notes about this goal...')}
               placeholderTextColor="#9E9E9E"
               multiline
               numberOfLines={3}
@@ -520,7 +521,7 @@ export default function GoalsScreen() {
                   resetForm();
                 }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[

@@ -49,6 +49,7 @@ function JobCard({
   job: SpecialistJob;
   onPress: (j: SpecialistJob) => void;
 }) {
+  const { t } = useTranslation();
   const statusColor = STATUS_COLORS[job.status] ?? '#757575';
   const isIncomplete = job.status === 'incomplete';
   const needsAck = isIncomplete && !job.incomplete_acknowledged_by;
@@ -104,7 +105,7 @@ function JobCard({
 
       {needsAck && (
         <View style={styles.warningBanner}>
-          <Text style={styles.warningText}>Needs acknowledgment</Text>
+          <Text style={styles.warningText}>{t('jobs.needs_acknowledgment', 'Needs acknowledgment')}</Text>
         </View>
       )}
 
@@ -138,14 +139,15 @@ function WorkloadModal({
   onClose: () => void;
   workload: SpecialistJobStats['specialist_workload'];
 }) {
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <TouchableOpacity onPress={onClose}>
-            <Text style={styles.modalClose}>Close</Text>
+            <Text style={styles.modalClose}>{t('common.close', 'Close')}</Text>
           </TouchableOpacity>
-          <Text style={styles.modalTitle}>Specialist Workload</Text>
+          <Text style={styles.modalTitle}>{t('workload.specialist_workload', 'Specialist Workload')}</Text>
           <View style={{ width: 50 }} />
         </View>
         <ScrollView style={styles.modalContent}>
@@ -172,7 +174,7 @@ function WorkloadModal({
             </View>
           ))}
           {(!workload || workload.length === 0) && (
-            <Text style={styles.emptyModalText}>No active specialists</Text>
+            <Text style={styles.emptyModalText}>{t('defects.no_active_specialists', 'No active specialists')}</Text>
           )}
         </ScrollView>
       </View>
@@ -189,6 +191,7 @@ function PerformersModal({
   onClose: () => void;
   performers: SpecialistJobStats['top_performers'];
 }) {
+  const { t } = useTranslation();
   const getMedalColor = (index: number) => {
     if (index === 0) return '#FFD700';
     if (index === 1) return '#C0C0C0';
@@ -201,9 +204,9 @@ function PerformersModal({
       <View style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <TouchableOpacity onPress={onClose}>
-            <Text style={styles.modalClose}>Close</Text>
+            <Text style={styles.modalClose}>{t('common.close', 'Close')}</Text>
           </TouchableOpacity>
-          <Text style={styles.modalTitle}>Top Performers</Text>
+          <Text style={styles.modalTitle}>{t('leaderboard.top_performers', 'Top Performers')}</Text>
           <View style={{ width: 50 }} />
         </View>
         <ScrollView style={styles.modalContent}>
@@ -221,7 +224,7 @@ function PerformersModal({
             </View>
           ))}
           {(!performers || performers.length === 0) && (
-            <Text style={styles.emptyModalText}>No data this month</Text>
+            <Text style={styles.emptyModalText}>{t('performance.no_data_month', 'No data this month')}</Text>
           )}
         </ScrollView>
       </View>

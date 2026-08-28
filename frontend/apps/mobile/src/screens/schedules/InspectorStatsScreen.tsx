@@ -22,10 +22,12 @@ import { useQuery } from '@tanstack/react-query';
 import { scheduleAIApi } from '@inspection/shared';
 import { Card, List, ProgressBar } from 'react-native-paper';
 import ProgressRing from '../../components/ProgressRing';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function InspectorStatsScreen() {
+  const { t } = useTranslation();
   // Fetch current user's inspector scores
   const {
     data: inspectorScoresData,
@@ -104,7 +106,7 @@ export default function InspectorStatsScreen() {
   if (!inspectorScore) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyText}>No performance data available</Text>
+        <Text style={styles.emptyText}>{t('performance.no_data', 'No performance data available')}</Text>
       </View>
     );
   }
@@ -119,7 +121,7 @@ export default function InspectorStatsScreen() {
       {/* Overall Quality Score */}
       <Card style={styles.scoreCard}>
         <Card.Content>
-          <Text style={styles.scoreCardTitle}>Overall Quality Score</Text>
+          <Text style={styles.scoreCardTitle}>{t('quality.overall_score', 'Overall Quality Score')}</Text>
           <View style={styles.scoreContent}>
             <ProgressRing
               progress={qualityScore}
@@ -130,15 +132,15 @@ export default function InspectorStatsScreen() {
             />
             <View style={styles.scoreDetails}>
               <View style={styles.scoreDetailItem}>
-                <Text style={styles.scoreDetailLabel}>Your Score</Text>
+                <Text style={styles.scoreDetailLabel}>{t('performance.your_score', 'Your Score')}</Text>
                 <Text style={styles.scoreDetailValue}>{qualityScore.toFixed(1)}%</Text>
               </View>
               <View style={styles.scoreDetailItem}>
-                <Text style={styles.scoreDetailLabel}>Team Avg</Text>
+                <Text style={styles.scoreDetailLabel}>{t('performance.team_avg', 'Team Avg')}</Text>
                 <Text style={styles.scoreDetailValue}>{teamAvgQuality.toFixed(1)}%</Text>
               </View>
               <View style={styles.scoreDetailItem}>
-                <Text style={styles.scoreDetailLabel}>Trend</Text>
+                <Text style={styles.scoreDetailLabel}>{t('ai.trend', 'Trend')}</Text>
                 <View style={styles.trendRow}>
                   <Text style={styles.trendIcon}>
                     {getTrendIcon(inspectorScore.trend)}
@@ -161,7 +163,7 @@ export default function InspectorStatsScreen() {
       {/* Comparison to Team */}
       <Card style={styles.comparisonCard}>
         <Card.Content>
-          <Text style={styles.comparisonTitle}>Comparison to Team Average</Text>
+          <Text style={styles.comparisonTitle}>{t('performance.vs_team_average', 'Comparison to Team Average')}</Text>
           <View style={styles.comparisonContent}>
             <Text
               style={[
@@ -187,29 +189,29 @@ export default function InspectorStatsScreen() {
       {/* Performance Metrics */}
       <Card style={styles.metricsCard}>
         <Card.Content>
-          <Text style={styles.metricsTitle}>Performance Metrics</Text>
+          <Text style={styles.metricsTitle}>{t('performance.metrics', 'Performance Metrics')}</Text>
           <View style={styles.metricsGrid}>
             <View style={styles.metricItem}>
               <Text style={styles.metricValue}>
                 {inspectorScore.completion_rate.toFixed(1)}%
               </Text>
-              <Text style={styles.metricLabel}>Completion Rate</Text>
+              <Text style={styles.metricLabel}>{t('pmTemplate.completionRate', 'Completion Rate')}</Text>
             </View>
             <View style={styles.metricItem}>
               <Text style={styles.metricValue}>
                 {inspectorScore.avg_inspection_time.toFixed(0)} min
               </Text>
-              <Text style={styles.metricLabel}>Avg Inspection Time</Text>
+              <Text style={styles.metricLabel}>{t('schedules.avg_inspection_time', 'Avg Inspection Time')}</Text>
             </View>
             <View style={styles.metricItem}>
               <Text style={styles.metricValue}>
                 {inspectorScore.defect_detection_rate.toFixed(1)}%
               </Text>
-              <Text style={styles.metricLabel}>Defect Detection</Text>
+              <Text style={styles.metricLabel}>{t('performance.defect_detection', 'Defect Detection')}</Text>
             </View>
             <View style={styles.metricItem}>
               <Text style={styles.metricValue}>{recentInspectionsCount}</Text>
-              <Text style={styles.metricLabel}>Recent Inspections</Text>
+              <Text style={styles.metricLabel}>{t('inspections.recent', 'Recent Inspections')}</Text>
             </View>
           </View>
         </Card.Content>
@@ -218,7 +220,7 @@ export default function InspectorStatsScreen() {
       {/* Performance Trend Chart Placeholder */}
       <Card style={styles.chartCard}>
         <Card.Content>
-          <Text style={styles.chartTitle}>Performance Trend (30 Days)</Text>
+          <Text style={styles.chartTitle}>{t('performance.trend_30_days', 'Performance Trend (30 Days)')}</Text>
           <View style={styles.chartPlaceholder}>
             <Text style={styles.chartPlaceholderText}>📊</Text>
             <Text style={styles.chartPlaceholderSubtext}>
@@ -275,19 +277,19 @@ export default function InspectorStatsScreen() {
           <View style={styles.achievementsGrid}>
             <View style={styles.achievementBadge}>
               <Text style={styles.achievementIcon}>🥇</Text>
-              <Text style={styles.achievementName}>Quality Expert</Text>
+              <Text style={styles.achievementName}>{t('performance.badge_quality_expert', 'Quality Expert')}</Text>
             </View>
             <View style={styles.achievementBadge}>
               <Text style={styles.achievementIcon}>⚡</Text>
-              <Text style={styles.achievementName}>Speed Demon</Text>
+              <Text style={styles.achievementName}>{t('performance.badge_speed_demon', 'Speed Demon')}</Text>
             </View>
             <View style={styles.achievementBadge}>
               <Text style={styles.achievementIcon}>🔍</Text>
-              <Text style={styles.achievementName}>Defect Hunter</Text>
+              <Text style={styles.achievementName}>{t('performance.badge_defect_hunter', 'Defect Hunter')}</Text>
             </View>
             <View style={[styles.achievementBadge, styles.achievementBadgeLocked]}>
               <Text style={styles.achievementIcon}>🔒</Text>
-              <Text style={styles.achievementName}>Locked</Text>
+              <Text style={styles.achievementName}>{t('leaderboard.locked', 'Locked')}</Text>
             </View>
           </View>
         </Card.Content>

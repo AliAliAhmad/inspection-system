@@ -273,10 +273,10 @@ export default function AIRatingsSheet({
                 <View style={styles.aiIcon}>
                   <Text style={styles.aiIconText}>AI</Text>
                 </View>
-                <Text style={styles.headerTitle}>AI Rating Suggestions</Text>
+                <Text style={styles.headerTitle}>{t('ai.rating_suggestions', 'AI Rating Suggestions')}</Text>
               </View>
               <TouchableOpacity onPress={onClose}>
-                <Text style={styles.closeButton}>Close</Text>
+                <Text style={styles.closeButton}>{t('common.close', 'Close')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -285,11 +285,11 @@ export default function AIRatingsSheet({
           {isLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#7B1FA2" />
-              <Text style={styles.loadingText}>Analyzing performance data...</Text>
+              <Text style={styles.loadingText}>{t('performance.analyzing', 'Analyzing performance data...')}</Text>
             </View>
           ) : suggestions.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No suggestions available</Text>
+              <Text style={styles.emptyText}>{t('materials.no_suggestions', 'No suggestions available')}</Text>
             </View>
           ) : (
             <>
@@ -326,13 +326,13 @@ export default function AIRatingsSheet({
                             </Text>
                           </View>
                           <View style={styles.previewItem}>
-                            <Text style={styles.previewLabel}>Time</Text>
+                            <Text style={styles.previewLabel}>{t('common.time', 'Time')}</Text>
                             <Text style={styles.previewValue}>
                               {suggestion.suggested_time_rating}/7
                             </Text>
                           </View>
                           <View style={styles.previewItem}>
-                            <Text style={styles.previewLabel}>Clean</Text>
+                            <Text style={styles.previewLabel}>{t('quality.clean', 'Clean')}</Text>
                             <Text style={styles.previewValue}>
                               {suggestion.suggested_cleaning_rating}/2
                             </Text>
@@ -367,7 +367,7 @@ export default function AIRatingsSheet({
 
                           {/* Explanation */}
                           <View style={styles.explanationBox}>
-                            <Text style={styles.explanationTitle}>Why these ratings?</Text>
+                            <Text style={styles.explanationTitle}>{t('ai.why_these_ratings', 'Why these ratings?')}</Text>
                             <Text style={styles.explanationText}>
                               {suggestion.explanation}
                             </Text>
@@ -386,7 +386,7 @@ export default function AIRatingsSheet({
                             style={styles.applyButton}
                             onPress={() => handleApplySingle(suggestion)}
                           >
-                            <Text style={styles.applyButtonText}>Apply Rating</Text>
+                            <Text style={styles.applyButtonText}>{t('dailyReview.apply_rating', 'Apply Rating')}</Text>
                           </TouchableOpacity>
                         </View>
                       )}

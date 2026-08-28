@@ -205,7 +205,7 @@ export default function DailyReviewScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Daily Review</Text>
+        <Text style={styles.headerTitle}>{t('hub.daily_review', 'Daily Review')}</Text>
         <Text style={styles.headerDate}>{dateStr}</Text>
       </View>
 
@@ -215,13 +215,13 @@ export default function DailyReviewScreen() {
           style={[styles.shiftBtn, shift === 'day' && styles.shiftBtnActive]}
           onPress={() => setShift('day')}
         >
-          <Text style={[styles.shiftText, shift === 'day' && styles.shiftTextActive]}>Day Shift</Text>
+          <Text style={[styles.shiftText, shift === 'day' && styles.shiftTextActive]}>{t('roster.dayShift', 'Day Shift')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.shiftBtn, shift === 'night' && styles.shiftBtnActive]}
           onPress={() => setShift('night')}
         >
-          <Text style={[styles.shiftText, shift === 'night' && styles.shiftTextActive]}>Night Shift</Text>
+          <Text style={[styles.shiftText, shift === 'night' && styles.shiftTextActive]}>{t('roster.nightShift', 'Night Shift')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -231,19 +231,19 @@ export default function DailyReviewScreen() {
           <View style={styles.summaryRow}>
             <View style={[styles.summaryBox, { backgroundColor: '#E8F5E9' }]}>
               <Text style={styles.summaryValue}>{review.approved_jobs}</Text>
-              <Text style={styles.summaryLabel}>Completed</Text>
+              <Text style={styles.summaryLabel}>{t('common.completed', 'Completed')}</Text>
             </View>
             <View style={[styles.summaryBox, { backgroundColor: '#FFF3E0' }]}>
               <Text style={styles.summaryValue}>{review.incomplete_jobs}</Text>
-              <Text style={styles.summaryLabel}>Incomplete</Text>
+              <Text style={styles.summaryLabel}>{t('jobs.incomplete', 'Incomplete')}</Text>
             </View>
             <View style={[styles.summaryBox, { backgroundColor: '#ECEFF1' }]}>
               <Text style={styles.summaryValue}>{review.not_started_jobs}</Text>
-              <Text style={styles.summaryLabel}>Not Started</Text>
+              <Text style={styles.summaryLabel}>{t('jobs.status_pending', 'Not Started')}</Text>
             </View>
             <View style={[styles.summaryBox, { backgroundColor: '#E3F2FD' }]}>
               <Text style={styles.summaryValue}>{review.completion_rate}%</Text>
-              <Text style={styles.summaryLabel}>Rate</Text>
+              <Text style={styles.summaryLabel}>{t('dailyReview.rate', 'Rate')}</Text>
             </View>
           </View>
           {review.has_unresolved_pauses && (
@@ -314,13 +314,13 @@ export default function DailyReviewScreen() {
                         style={styles.approveBtn}
                         onPress={() => approvePauseMutation.mutate(pr.id)}
                       >
-                        <Text style={styles.approveBtnText}>Approve</Text>
+                        <Text style={styles.approveBtnText}>{t('common.approve', 'Approve')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.rejectBtn}
                         onPress={() => rejectPauseMutation.mutate(pr.id)}
                       >
-                        <Text style={styles.rejectBtnText}>Reject</Text>
+                        <Text style={styles.rejectBtnText}>{t('common.reject', 'Reject')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -348,7 +348,7 @@ export default function DailyReviewScreen() {
                           {existing.time_rating ? `★${existing.time_rating}` : 'Rated'}
                         </Text>
                       ) : (
-                        <Text style={styles.rateLink}>Rate</Text>
+                        <Text style={styles.rateLink}>{t('dailyReview.rate', 'Rate')}</Text>
                       )}
                     </TouchableOpacity>
                   );
@@ -362,7 +362,7 @@ export default function DailyReviewScreen() {
                 style={styles.carryOverBtn}
                 onPress={() => handleCarryOver(job.id, job)}
               >
-                <Text style={styles.carryOverText}>Carry Over to Next Day</Text>
+                <Text style={styles.carryOverText}>{t('dailyReview.carry_over_next_day', 'Carry Over to Next Day')}</Text>
               </TouchableOpacity>
             )}
 
@@ -409,7 +409,7 @@ export default function DailyReviewScreen() {
 
       {review?.status === 'submitted' && (
         <View style={styles.submittedBanner}>
-          <Text style={styles.submittedText}>Review Submitted</Text>
+          <Text style={styles.submittedText}>{t('dailyReview.submitted', 'Review Submitted')}</Text>
         </View>
       )}
 
@@ -417,7 +417,7 @@ export default function DailyReviewScreen() {
       <Modal visible={showCarryModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Carry Over</Text>
+            <Text style={styles.modalTitle}>{t('dailyReview.carry_over', 'Carry Over')}</Text>
             <Text style={styles.ratingLabel}>
               How many hours are left? Only those go to the next day.
             </Text>
@@ -426,7 +426,7 @@ export default function DailyReviewScreen() {
               value={carryHours}
               onChangeText={setCarryHours}
               keyboardType="decimal-pad"
-              placeholder="Hours left"
+              placeholder={t('dailyReview.hours_left_placeholder', 'Hours left')}
               testID="carry-hours-input"
             />
             <View style={styles.modalActions}>
@@ -434,7 +434,7 @@ export default function DailyReviewScreen() {
                 style={styles.modalCancel}
                 onPress={() => setShowCarryModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalConfirm}
@@ -444,7 +444,7 @@ export default function DailyReviewScreen() {
                 {carryOverMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>Carry Over</Text>
+                  <Text style={styles.modalConfirmText}>{t('dailyReview.carry_over', 'Carry Over')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -473,7 +473,7 @@ export default function DailyReviewScreen() {
             {qcRating > 0 && (qcRating < 3 || qcRating > 4) && (
               <TextInput
                 style={styles.textInput}
-                placeholder="QC reason (required for < 3 or > 4)..."
+                placeholder={t('dailyReview.qc_reason_placeholder', 'QC reason (required for < 3 or > 4)...')}
                 value={qcReason}
                 onChangeText={setQcReason}
                 multiline
@@ -501,7 +501,7 @@ export default function DailyReviewScreen() {
                 style={styles.modalCancel}
                 onPress={() => setShowRatingModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalConfirm}
@@ -511,7 +511,7 @@ export default function DailyReviewScreen() {
                 {rateMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>Save Rating</Text>
+                  <Text style={styles.modalConfirmText}>{t('dailyReview.save_rating', 'Save Rating')}</Text>
                 )}
               </TouchableOpacity>
             </View>

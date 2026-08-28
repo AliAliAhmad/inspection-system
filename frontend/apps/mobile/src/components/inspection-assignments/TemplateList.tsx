@@ -63,7 +63,7 @@ export function TemplateList({
       const count = res.data?.data?.applied_count || 0;
       Alert.alert(
         t('common.success', 'Success'),
-        t('templates.apply_success', `Applied template to ${count} assignments`)
+        t('templates.apply_success', { count, defaultValue: 'Applied template to {{count}} assignments' })
       );
       onTemplateApplied?.();
     },

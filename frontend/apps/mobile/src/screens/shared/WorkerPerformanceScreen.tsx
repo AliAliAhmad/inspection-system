@@ -59,15 +59,15 @@ export default function WorkerPerformanceScreen() {
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{perf.total_jobs_completed}/{perf.total_jobs_assigned}</Text>
-            <Text style={styles.statLabel}>Jobs Done</Text>
+            <Text style={styles.statLabel}>{t('performance.jobs_done', 'Jobs Done')}</Text>
           </View>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{perf.total_actual_hours}h</Text>
-            <Text style={styles.statLabel}>Actual Hours</Text>
+            <Text style={styles.statLabel}>{t('jobs.actual_hours', 'Actual Hours')}</Text>
           </View>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{perf.total_points_earned}</Text>
-            <Text style={styles.statLabel}>Points</Text>
+            <Text style={styles.statLabel}>{t('jobs.total_points', 'Points')}</Text>
           </View>
         </View>
 
@@ -99,11 +99,11 @@ export default function WorkerPerformanceScreen() {
       <View style={styles.streakContainer}>
         <View style={styles.streakBox}>
           <Text style={styles.streakNumber}>{currentStreak}</Text>
-          <Text style={styles.streakLabel}>Current Streak</Text>
+          <Text style={styles.streakLabel}>{t('performance.current_streak', 'Current Streak')}</Text>
         </View>
         <View style={styles.streakBox}>
           <Text style={styles.streakNumber}>{maxStreak}</Text>
-          <Text style={styles.streakLabel}>Best Streak</Text>
+          <Text style={styles.streakLabel}>{t('performance.best_streak', 'Best Streak')}</Text>
         </View>
       </View>
 
@@ -127,7 +127,7 @@ export default function WorkerPerformanceScreen() {
         <ActivityIndicator size="large" color="#1976D2" style={{ marginTop: 40 }} />
       ) : performances.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No performance data yet</Text>
+          <Text style={styles.emptyText}>{t('performance.no_data_yet', 'No performance data yet')}</Text>
         </View>
       ) : (
         performances.map((perf: WorkPlanPerformance, i: number) => renderPerformanceCard(perf, i))

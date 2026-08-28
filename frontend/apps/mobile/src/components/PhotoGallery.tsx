@@ -66,7 +66,7 @@ export function PhotoGallery({
     if (photos.length >= maxPhotos) {
       Alert.alert(
         t('common.warning', 'Warning'),
-        t('inspection.maxPhotosReached', `Maximum ${maxPhotos} photos allowed`)
+        t('inspection.maxPhotosReached', { max: maxPhotos, defaultValue: 'Maximum {{max}} photos allowed' })
       );
       return;
     }
@@ -285,7 +285,7 @@ export function PhotoGallery({
                 {t('inspection.addPhotos', 'Add Photos')}
               </Text>
               <Text style={styles.emptyAddSubtext}>
-                {t('inspection.upToPhotos', `Up to ${maxPhotos} photos`)}
+                {t('inspection.upToPhotos', { max: maxPhotos, defaultValue: 'Up to {{max}} photos' })}
               </Text>
             </View>
           </TouchableOpacity>

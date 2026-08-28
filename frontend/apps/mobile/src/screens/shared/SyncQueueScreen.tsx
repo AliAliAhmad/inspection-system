@@ -156,7 +156,7 @@ export default function SyncQueueScreen() {
           <>
             <TouchableOpacity style={[styles.actionButton, styles.retryAllButton]} onPress={handleRetryAll}>
               <Text style={styles.actionButtonText}>
-                {t('offline.retry_all', { defaultValue: `Retry All (${failedCount})` })}
+                {t('offline.retry_all_count', { count: failedCount, defaultValue: 'Retry All ({{count}})' })}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionButton, styles.clearButton]} onPress={handleClearFailed}>

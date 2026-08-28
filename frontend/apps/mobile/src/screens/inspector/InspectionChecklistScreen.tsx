@@ -920,7 +920,7 @@ export default function InspectionChecklistScreen() {
             ) : null}
             {item.critical_failure ? (
               <View style={styles.criticalBadge}>
-                <Text style={styles.criticalBadgeText}>CRITICAL</Text>
+                <Text style={styles.criticalBadgeText}>{t('inspection.critical', 'CRITICAL')}</Text>
               </View>
             ) : null}
           </View>

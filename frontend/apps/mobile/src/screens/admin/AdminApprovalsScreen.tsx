@@ -426,12 +426,12 @@ export default function AdminApprovalsScreen() {
       {item.system_verdict && (
         <View style={styles.verdictRow}>
           <View style={styles.verdictItem}>
-            <Text style={styles.verdictLabel}>System</Text>
+            <Text style={styles.verdictLabel}>{t('assessment.system', 'System')}</Text>
             <Text style={styles.verdictValue}>{item.system_verdict ?? '-'}</Text>
           </View>
           {item.engineer_verdict && (
             <View style={styles.verdictItem}>
-              <Text style={styles.verdictLabel}>Engineer</Text>
+              <Text style={styles.verdictLabel}>{t('assessment.engineer', 'Engineer')}</Text>
               <Text style={styles.verdictValue}>{item.engineer_verdict ?? '-'}</Text>
             </View>
           )}

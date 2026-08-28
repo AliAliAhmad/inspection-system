@@ -53,7 +53,7 @@ export function WorkloadBalancer({ listId, onBalanceApplied, onClose }: Workload
         setPreviewData(null);
         Alert.alert(
           t('common.success', 'Success'),
-          t('workload.balance_success', `Balanced ${res.data.data.assigned_count} assignments`)
+          t('workload.balance_success', { count: res.data.data.assigned_count, defaultValue: 'Balanced {{count}} assignments' })
         );
         onBalanceApplied?.();
       }
@@ -189,26 +189,26 @@ export function WorkloadBalancer({ listId, onBalanceApplied, onClose }: Workload
         {previewData && !previewMutation.isPending && (
           <View style={styles.resultsContainer}>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Preview Analysis</Text>
+              <Text style={styles.summaryTitle}>{t('workload.preview_analysis', 'Preview Analysis')}</Text>
               <View style={styles.summaryRow}>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryValue}>{previewData.unassigned_count}</Text>
-                  <Text style={styles.summaryLabel}>Unassigned</Text>
+                  <Text style={styles.summaryLabel}>{t('common.unassigned', 'Unassigned')}</Text>
                 </View>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryValue}>{previewData.available_inspectors}</Text>
-                  <Text style={styles.summaryLabel}>Inspectors</Text>
+                  <Text style={styles.summaryLabel}>{t('nav.inspectors', 'Inspectors')}</Text>
                 </View>
                 <View style={styles.summaryItem}>
                   <Text style={[styles.summaryValue, { color: '#4CAF50' }]}>
                     {getBalanceScore(previewData.preview)}%
                   </Text>
-                  <Text style={styles.summaryLabel}>Balance</Text>
+                  <Text style={styles.summaryLabel}>{t('workload.balance', 'Balance')}</Text>
                 </View>
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Distribution Preview</Text>
+            <Text style={styles.sectionTitle}>{t('workload.distribution_preview', 'Distribution Preview')}</Text>
             {previewData.preview.map((item) => {
               const maxAssignments = Math.max(...previewData.preview.map((d) => d.estimated_after_balance || 0));
               const newCount = (item.estimated_after_balance || 0) - (item.current_assignments || 0);
@@ -261,7 +261,7 @@ export function WorkloadBalancer({ listId, onBalanceApplied, onClose }: Workload
               </Text>
             </View>
 
-            <Text style={styles.sectionTitle}>Final Distribution</Text>
+            <Text style={styles.sectionTitle}>{t('workload.final_distribution', 'Final Distribution')}</Text>
             {balanceResult.distribution.map((item) => {
               const maxAssignments = Math.max(...balanceResult.distribution.map((d) => d.assigned_count || 0));
               return (

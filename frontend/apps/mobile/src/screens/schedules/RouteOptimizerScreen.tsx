@@ -23,8 +23,10 @@ import {
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { scheduleAIApi, type OptimizedRoute } from '@inspection/shared';
 import { Button, Chip, Card, Divider } from 'react-native-paper';
+import { useTranslation } from 'react-i18next';
 
 export default function RouteOptimizerScreen() {
+  const { t } = useTranslation();
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<number[]>([]);
   const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null);
 
@@ -120,7 +122,7 @@ export default function RouteOptimizerScreen() {
         <>
           {/* Equipment Selection */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Select Equipment for Route</Text>
+            <Text style={styles.sectionTitle}>{t('routes.select_equipment', 'Select Equipment for Route')}</Text>
             <Text style={styles.sectionSubtitle}>
               Select 2 or more equipment items to optimize your route
             </Text>
@@ -167,16 +169,16 @@ export default function RouteOptimizerScreen() {
           {/* Optimized Route Display */}
           <Card style={styles.summaryCard}>
             <Card.Content>
-              <Text style={styles.summaryTitle}>Route Optimized!</Text>
+              <Text style={styles.summaryTitle}>{t('routes.optimized', 'Route Optimized!')}</Text>
               <View style={styles.summaryRow}>
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Total Distance</Text>
+                  <Text style={styles.summaryLabel}>{t('routes.total_distance', 'Total Distance')}</Text>
                   <Text style={styles.summaryValue}>
                     {optimizedRoute.total_distance.toFixed(1)} km
                   </Text>
                 </View>
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryLabel}>Estimated Time</Text>
+                  <Text style={styles.summaryLabel}>{t('jobs.estimated_time', 'Estimated Time')}</Text>
                   <Text style={styles.summaryValue}>
                     {Math.round(optimizedRoute.total_time_minutes)} min
                   </Text>
@@ -189,28 +191,28 @@ export default function RouteOptimizerScreen() {
           {optimizedRoute.optimization_savings && (
             <Card style={styles.savingsCard}>
               <Card.Content>
-                <Text style={styles.savingsTitle}>Optimization Savings</Text>
+                <Text style={styles.savingsTitle}>{t('routes.optimization_savings', 'Optimization Savings')}</Text>
                 <View style={styles.savingsRow}>
                   <View style={styles.savingsItem}>
                     <Text style={styles.savingsIcon}>📉</Text>
                     <Text style={styles.savingsValue}>
                       {optimizedRoute.optimization_savings.distance_saved_km.toFixed(1)} km
                     </Text>
-                    <Text style={styles.savingsLabel}>Distance Saved</Text>
+                    <Text style={styles.savingsLabel}>{t('routes.distance_saved', 'Distance Saved')}</Text>
                   </View>
                   <View style={styles.savingsItem}>
                     <Text style={styles.savingsIcon}>⏱️</Text>
                     <Text style={styles.savingsValue}>
                       {Math.round(optimizedRoute.optimization_savings.time_saved_minutes)} min
                     </Text>
-                    <Text style={styles.savingsLabel}>Time Saved</Text>
+                    <Text style={styles.savingsLabel}>{t('routes.time_saved', 'Time Saved')}</Text>
                   </View>
                   <View style={styles.savingsItem}>
                     <Text style={styles.savingsIcon}>✨</Text>
                     <Text style={styles.savingsValue}>
                       {Math.round(optimizedRoute.optimization_savings.efficiency_improvement_pct)}%
                     </Text>
-                    <Text style={styles.savingsLabel}>Efficiency</Text>
+                    <Text style={styles.savingsLabel}>{t('performance.efficiency', 'Efficiency')}</Text>
                   </View>
                 </View>
               </Card.Content>
@@ -219,7 +221,7 @@ export default function RouteOptimizerScreen() {
 
           {/* Route Steps */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Route Steps</Text>
+            <Text style={styles.sectionTitle}>{t('routes.steps', 'Route Steps')}</Text>
             {optimizedRoute.route_order.map((step) => (
               <View key={step.sequence} style={styles.routeStep}>
                 <View style={styles.routeStepNumber}>

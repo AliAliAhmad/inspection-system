@@ -350,7 +350,7 @@ export default function ChecklistsScreen() {
               style={styles.input}
               value={templateForm.name || ''}
               onChangeText={(text) => setTemplateForm({ ...templateForm, name: text })}
-              placeholder="Template name"
+              placeholder={t('templates.name', 'Template name')}
             />
 
             <Text style={styles.fieldLabel}>{t('checklists.function', 'Function')} *</Text>
@@ -382,7 +382,7 @@ export default function ChecklistsScreen() {
               style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
               value={templateForm.description || ''}
               onChangeText={(text) => setTemplateForm({ ...templateForm, description: text })}
-              placeholder="What this checklist covers"
+              placeholder={t('checklists.what_it_covers', 'What this checklist covers')}
               multiline
             />
 
@@ -420,7 +420,7 @@ export default function ChecklistsScreen() {
               style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
               value={itemForm.question_text || ''}
               onChangeText={(text) => setItemForm({ ...itemForm, question_text: text })}
-              placeholder="Question text"
+              placeholder={t('checklists.question_placeholder', 'Question text')}
               multiline
             />
 
@@ -429,7 +429,7 @@ export default function ChecklistsScreen() {
               style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
               value={itemForm.question_text_ar || ''}
               onChangeText={(text) => setItemForm({ ...itemForm, question_text_ar: text })}
-              placeholder="Arabic translation"
+              placeholder={t('checklists.arabic_translation', 'Arabic translation')}
               multiline
             />
 
@@ -462,7 +462,7 @@ export default function ChecklistsScreen() {
                 style={[styles.chip, !itemForm.category && styles.chipActive]}
                 onPress={() => setItemForm({ ...itemForm, category: undefined })}
               >
-                <Text style={[styles.chipText, !itemForm.category && styles.chipTextActive]}>None</Text>
+                <Text style={[styles.chipText, !itemForm.category && styles.chipTextActive]}>{t('common.none', 'None')}</Text>
               </TouchableOpacity>
               {CATEGORIES.map((cat) => (
                 <TouchableOpacity
