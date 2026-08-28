@@ -508,3 +508,101 @@ See HISTORY.md for full changelog. Only keep last 3 entries here.
 - **2026-08-25 (2)** — **The evening truth: tomorrow gets only what is actually left.** The worker types the hours remaining, the engineer corrects it, the carry-over books THAT number and merges with a planned continuation; the domino (`app/services/day_ripple.py`) makes room. Migration `r8s9t0u1v2w3`. Caught a live crew-pricing bug. Full entry in HISTORY.md.
 
 - **2026-08-25** — **The day got a real size: the men who showed up × 8 hours** — day-budget wallets replace every machine-count rule; RS PMs split 8h+4h; urgent RS/ECH takes up to 4 men; one crew per PM visit. Verified on the real 208 orders: 0 of 21 wallets overspent. Full entry in HISTORY.md.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
+
+### 2026-08-28 — The whole mobile app is now Arabic (590 keys + 250 literals)
+Scope: **mobile only** — Ali's call; the web app's 2,267 missing keys stay untouched.
+Wording: full Arabic including maintenance jargon (PM → صيانة وقائية, berth → رصيف). Only
+brand names stay Latin — SAP has no Arabic.
+
+**The web is untouched, and this is structural.** Mobile strings live in
+`frontend/apps/mobile/src/i18n/{ar,en}.mobile.json` and are layered on at runtime in
+mobile's `LanguageProvider` via `i18n.addResourceBundle(lng,'translation',overlay,true,true)`.
+`frontend/packages/shared/src/i18n/{ar,en}.json` are byte-identical to before —
+`git diff --name-only frontend/packages/shared/` comes back empty.
+Why it had to be this way: `resources` is loaded by the WEB app too, and adding to
+**en.json changes the web's ENGLISH** — an en.json entry overrides a screen's inline
+fallback, so e.g. web's `jobs.notes` would have flipped from "Notes" to "Additional Notes".
+241 of the new keys are called by web code, so nothing could simply be deleted instead.
+The 4th argument to `addResourceBundle` (`deep`) MUST stay `true`; with `false` the
+overlay's `jobs: {...}` replaces the shared `jobs` section wholesale and silently drops
+every shared key in it. Verified: merged ar = 1,666 shared + 919 overlay = **2,585**.
+
+**Final state — all four audits clean:**
+| Check | Before | After |
+|---|---|---|
+| Mobile keys missing from the merged dictionary | 590 | **0** |
+| Hardcoded English lines | 248 (46 files) | **0** |
+| Placeholder mismatches | — | **0** of 2,585 merged |
+| `git diff frontend/packages/shared/` | — | **empty** (web untouched) |
+| `tsc --noEmit` | 4 pre-existing | 4 pre-existing (none mine) |
+
+**Part A — 590 dictionary keys.** Terminology anchored to the existing 1,810 Arabic strings
+first (عطل, تفتيش, رصيف, معدة, وردية) so new strings don't rename old concepts.
+**Part B — 250 hardcoded literals** across 46 files. 71 unique strings reused an existing
+translated key; 148 got new ones. 21 components needed `useTranslation` wired in.
+
+**Four traps, all real:**
+1. **The extractor, not the translation, was the risky part.** i18next takes a default three
+   ways — `t(k,'x')`, `t(k,BACKTICK x BACKTICK)`, `t(k,{defaultValue:'x'})`. A regex seeing
+   only the first claimed 25 keys had "no English source"; all 25 had one. Fixed regex → 3.
+2. **Adding a translation can BREAK a working screen.** 7 call sites baked the number into a
+   template-literal fallback and passed NO variables — correct *only while the key is
+   missing*. Those now pass `{ max, defaultValue }`.
+3. **Arabic has SIX count forms, not two.** 1 singular, 2 dual (يومين), 3-10 plural (أيام),
+   11+ back to singular (يوماً). A bare `{{count}}` string is wrong 5 times in 6. Six
+   count-keys got `_zero/_one/_two/_few/_many/_other`; verified against i18next 23.16.8.
+4. **`ErrorBoundary` is a CLASS component** — hooks are illegal, and an error boundary must
+   survive the crash below it, so it must not use React context either. Uses the `i18n`
+   singleton directly.
+
+Verified: every key resolves through i18next's nested lookup; runtime spot-checks return
+Arabic, never a fallback. **NOT verified: on-device rendering and RTL layout.**
+Still open: 167 `en.json` keys with no Arabic twin — all web-called or dead.
+
+### 2026-08-28 — mobile Arabic, pass 1: the 590 keys
+Second pass, after the job screens. Scope: **mobile only** — Ali's call; the web app's 2,267
+missing keys stay untouched. Wording: full Arabic including maintenance jargon
+(PM → صيانة وقائية, berth → رصيف). Only brand names stay Latin — SAP has no Arabic.
+- **590 keys added to `ar.json`, 585 to `en.json`** across 61 mobile screens: admin approvals,
+  users, equipment, checklists, defects, reports, leaves, monitor follow-ups, assignments,
+  workload balancer, templates, notifications, quality reviews, offline sync.
+- **Mobile keys missing from `ar.json` is now 0** (was 590). Placeholder parity across all
+  2,401 Arabic keys: 0 mismatches.
+- **The extractor was the risky part, not the translation.** i18next takes a default three
+  ways — `t(k,'x')`, `t(k,\`x\`)`, `t(k,{defaultValue:'x'})`. A regex that saw only the first
+  reported 25 keys as having "no English source"; they all had one. Fixing the regex dropped
+  that to 3.
+- **7 call sites had to change, or adding a translation would have BROKEN them.**
+  `t('inspection.upToPhotos', \`Up to ${maxPhotos} photos\`)` passes no variables — JS bakes
+  the number into the fallback string. That works only while the fallback is what renders;
+  the moment the key exists, the dictionary wins and the number vanishes. Those now pass
+  `{ max: maxPhotos, defaultValue: 'Up to {{max}} photos' }`. Same for `maxPhotosReached`,
+  `assignments.generateSuccess`, `templates.apply_success`, `users.delete_confirm_message`,
+  `workload.balance_success`, and `offline.retry_all` (split into `retry_all_count`).
+- **`ErrorState.tsx` keeps a second private en/ar dictionary.** It works and is now also in
+  the real dictionary, which wins. Left in place as a fallback — worth removing one day.
+- Verified: `tsc --noEmit` clean on all touched files (4 errors remain in files never
+  touched); every key resolves through i18next's nested lookup. NOT verified on a device.
+- Still open: 167 `en.json` keys with no Arabic twin — all web-called or dead.
+
+### 2026-08-28 — Jobs now come through fully in Arabic on mobile
+Four independent causes, all fixed. Tests: `tests/test_my_plan_arabic.py` (4 new), full
+suite 851 passed.
+1. **80 keys the job screens asked for were missing from `ar.json`.** i18next falls back to
+   the inline English default, silently — so screens that called `t()` still rendered
+   English. 143 keys added to BOTH `en.json` and `ar.json`.
+2. **`language = user.language or 'en'` in 8 endpoints** of `app/api/work_plans.py`.
+   `users.language` is only ever written by an admin, so a worker who switched the app to
+   Arabic still had `'en'`. Now `get_language(user)` everywhere (reads `?lang=` then
+   `Accept-Language`). In `get_my_plan` the variable was computed and never used at all.
+3. **`/my-plan` served raw English** equipment names and defect text. Now swaps in the
+   CACHED `equipment.name_ar` / `defect.description_ar` in place — no field renamed, so the
+   clients needed no change. Deliberately does NOT call the translation service: the list is
+   a whole week of jobs and that would put the screen behind Gemini/Groq.
+4. **Hardcoded English** in `MyWorkPlanScreen`, `SpecialistJobDetailScreen`,
+   `JobShowUpSection`, `SwipeableJobCard` — status labels, pause reasons, priorities,
+   buttons, modal titles, placeholders, alerts. All now go through `t()`.
+   Dates follow the language (`ar-u-nu-latn`: Arabic month names, Western digits).
+   `my-work-plan` react-query key now includes the language, or a switch keeps serving the
+   cached English until something forces a refetch.

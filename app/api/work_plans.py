@@ -535,7 +535,7 @@ def list_work_plans():
         - include_days: Include day details (default false for list view)
     """
     user = get_current_user()
-    language = user.language or 'en'
+    language = get_language(user)
 
     week_start = request.args.get('week_start')
     status = request.args.get('status')
@@ -606,7 +606,7 @@ def get_work_plan(plan_id):
         raise NotFoundError("Work plan not found")
 
     user = get_current_user()
-    language = user.language or 'en'
+    language = get_language(user)
 
     return jsonify({
         'status': 'success',
@@ -2215,7 +2215,12 @@ def get_my_plan():
     from sqlalchemy.orm import joinedload
 
     user = get_current_user()
-    language = user.language or 'en'
+    # Must be get_language(), not user.language: `users.language` defaults to 'en'
+    # and is only ever set by an admin editing the user, so a worker who switched
+    # the app to Arabic still had 'en' stored and this whole screen came back in
+    # English. Same reasoning as get_job_details().
+    language = get_language(user)
+    want_ar = language == 'ar'
 
     week_start = request.args.get('week_start')
     if week_start:
@@ -2274,13 +2279,23 @@ def get_my_plan():
                         'equipment_id': job.equipment_id,
                         'equipment': {
                             'id': job.equipment.id,
-                            'name': job.equipment.name,
+                            # Swapped in place so the job card needs no client
+                            # change. Only the CACHED translation is served here:
+                            # this endpoint renders a whole week of jobs, and
+                            # translating each one would put the entire screen
+                            # behind a flaky external API. get_job_details() is
+                            # what fills description_ar, one job at a time.
+                            'name': (job.equipment.name_ar
+                                     if want_ar and job.equipment.name_ar
+                                     else job.equipment.name),
                             'serial_number': job.equipment.serial_number
                         } if job.equipment else None,
                         'defect_id': job.defect_id,
                         'defect': {
                             'id': job.defect.id,
-                            'description': job.defect.description,
+                            'description': (job.defect.description_ar
+                                            if want_ar and job.defect.description_ar
+                                            else job.defect.description),
                             'status': job.defect.status
                         } if job.defect else None,
                         'sap_order_number': job.sap_order_number,
@@ -2873,7 +2888,7 @@ def get_available_jobs():
         - plan_id: Required for SAP orders - get orders for specific plan
     """
     user = get_current_user()
-    language = user.language or 'en'
+    language = get_language(user)
 
     berth = request.args.get('berth')
     job_type = request.args.get('job_type')
@@ -3817,7 +3832,7 @@ def list_job_templates():
         - active_only: Only active templates (default true)
     """
     user = get_current_user()
-    language = user.language or 'en'
+    language = get_language(user)
 
     job_type = request.args.get('job_type')
     equipment_type = request.args.get('equipment_type')
@@ -3913,7 +3928,7 @@ def create_job_template():
 def get_job_template(id):
     """Get a job template with materials and checklist."""
     user = get_current_user()
-    language = user.language or 'en'
+    language = get_language(user)
 
     template = db.session.get(JobTemplate, id)
     if not template:
@@ -5082,7 +5097,7 @@ def restore_plan_version(plan_id, version):
 def get_job_checklist(plan_id, job_id):
     """Get checklist for a job (from template)."""
     user = get_current_user()
-    language = user.language or 'en'
+    language = get_language(user)
 
     plan = db.session.get(WorkPlan, plan_id)
     if not plan:
@@ -6248,7 +6263,7 @@ def export_plan_report(plan_id):
         raise NotFoundError("Work plan not found")
 
     export_format = request.args.get('format', 'xlsx')
-    language = user.language or 'en'
+    language = get_language(user)
 
     # Build data for export
     rows = []
