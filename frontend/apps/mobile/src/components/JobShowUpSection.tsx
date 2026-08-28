@@ -79,10 +79,10 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
       );
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Show-up photo uploaded');
+      Alert.alert(t('common.success', 'Success'), t('jobs.show_up_photo_uploaded', 'Show-up photo uploaded'));
       queryClient.invalidateQueries({ queryKey: ['job-showup', jobType, jobId] });
     },
-    onError: () => Alert.alert('Error', 'Failed to upload photo'),
+    onError: () => Alert.alert(t('common.error', 'Error'), t('common.upload_photo_failed', 'Failed to upload photo')),
   });
 
   // Upload challenge voice
@@ -96,10 +96,10 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
       );
     },
     onSuccess: () => {
-      Alert.alert('Success', 'Challenge voice uploaded with transcription');
+      Alert.alert(t('common.success', 'Success'), t('jobs.challenge_voice_uploaded', 'Challenge voice uploaded with transcription'));
       queryClient.invalidateQueries({ queryKey: ['job-showup', jobType, jobId] });
     },
-    onError: () => Alert.alert('Error', 'Failed to upload voice'),
+    onError: () => Alert.alert(t('common.error', 'Error'), t('common.upload_voice_failed', 'Failed to upload voice')),
   });
 
   // Add review mark
@@ -110,18 +110,18 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
         note: markNote.trim() || undefined,
       }),
     onSuccess: (_: any, markType: 'star' | 'point') => {
-      Alert.alert('Success', markType === 'star' ? 'Marked as Show Up' : 'Marked as Challenge');
+      Alert.alert(t('common.success', 'Success'), markType === 'star' ? t('jobs.marked_show_up', 'Marked as Show Up') : t('jobs.marked_challenge', 'Marked as Challenge'));
       setMarkNote('');
       queryClient.invalidateQueries({ queryKey: ['job-showup', jobType, jobId] });
     },
-    onError: () => Alert.alert('Error', 'Failed to add mark'),
+    onError: () => Alert.alert(t('common.error', 'Error'), t('jobs.add_mark_failed', 'Failed to add mark')),
   });
 
   // Take photo
   const handleTakePhoto = useCallback(async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Camera permission is required to take a show-up photo');
+      Alert.alert(t('common.permission_needed', 'Permission needed'), t('common.camera_permission_required', 'Camera permission is required to take a show-up photo'));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -137,7 +137,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
   const handlePickPhoto = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Gallery permission is required');
+      Alert.alert(t('common.permission_needed', 'Permission needed'), t('common.gallery_permission_required', 'Gallery permission is required'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -154,7 +154,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Microphone permission is required');
+        Alert.alert(t('common.permission_needed', 'Permission needed'), t('common.microphone_permission_required', 'Microphone permission is required'));
         return;
       }
       await Audio.setAudioModeAsync({
@@ -167,7 +167,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
       setRecording(rec);
       setIsRecording(true);
     } catch (err) {
-      Alert.alert('Error', 'Failed to start recording');
+      Alert.alert(t('common.error', 'Error'), t('common.recording_failed', 'Failed to start recording'));
     }
   }, []);
 
@@ -182,7 +182,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
         uploadVoiceMutation.mutate(uri);
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to stop recording');
+      Alert.alert(t('common.error', 'Error'), t('common.recording_stop_failed', 'Failed to stop recording'));
     }
   }, [recording, uploadVoiceMutation]);
 
@@ -206,7 +206,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
       await sound.playAsync();
       setPlayingId(voiceId);
     } catch {
-      Alert.alert('Error', 'Failed to play audio');
+      Alert.alert(t('common.error', 'Error'), t('common.playback_failed', 'Failed to play audio'));
     }
   }, [playingId]);
 
@@ -214,7 +214,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionHeader}>Show Up & Challenges</Text>
+      <Text style={styles.sectionHeader}>{t('jobs.show_up_challenges', 'Show Up & Challenges')}</Text>
 
       {/* Counts */}
       <View style={styles.countsRow}>
@@ -247,7 +247,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
           ))}
         </ScrollView>
       ) : (
-        <Text style={styles.emptyText}>No show-up photo yet</Text>
+        <Text style={styles.emptyText}>{t('jobs.no_show_up_photo', 'No show-up photo yet')}</Text>
       )}
 
       {canUpload && (
@@ -313,7 +313,7 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
           </View>
         ))
       ) : (
-        <Text style={styles.emptyText}>No challenges recorded</Text>
+        <Text style={styles.emptyText}>{t('jobs.no_challenges', 'No challenges recorded')}</Text>
       )}
 
       {canUpload && (
@@ -361,14 +361,14 @@ export default function JobShowUpSection({ jobType, jobId, jobOwnerId, jobStatus
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyText}>No review marks yet</Text>
+        <Text style={styles.emptyText}>{t('jobs.no_review_marks', 'No review marks yet')}</Text>
       )}
 
       {canMark && (
         <View style={{ marginTop: 12 }}>
           <TextInput
             style={styles.noteInput}
-            placeholder="Optional note..."
+            placeholder={t('jobs.optional_note_placeholder', 'Optional note...')}
             value={markNote}
             onChangeText={setMarkNote}
           />

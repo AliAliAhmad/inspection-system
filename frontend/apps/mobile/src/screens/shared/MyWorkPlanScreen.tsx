@@ -46,21 +46,24 @@ interface ExtendedWorkPlanJob extends WorkPlanJob {
 }
 
 // Status configuration with emojis
-const STATUS_CONFIG: Record<TrackingStatus, { emoji: string; label: string; color: string }> = {
-  not_started: { emoji: '\uD83D\uDFE2', label: 'Not Started', color: '#607D8B' },
-  pending: { emoji: '\uD83D\uDFE2', label: 'Not Started', color: '#607D8B' },
-  in_progress: { emoji: '\uD83D\uDD35', label: 'In Progress', color: '#FF9800' },
-  paused: { emoji: '\u23F8\uFE0F', label: 'Paused', color: '#9C27B0' },
-  completed: { emoji: '\u2705', label: 'Completed', color: '#4CAF50' },
-  incomplete: { emoji: '\u26A0\uFE0F', label: 'Incomplete', color: '#F44336' },
+// Labels are i18n KEYS, not text. Holding literal English here is what made the
+// status badge stay English on every card for an Arabic user, however many times
+// the screen called t() elsewhere.
+const STATUS_CONFIG: Record<TrackingStatus, { emoji: string; labelKey: string; fallback: string; color: string }> = {
+  not_started: { emoji: '\uD83D\uDFE2', labelKey: 'jobs.status_not_started', fallback: 'Not Started', color: '#607D8B' },
+  pending: { emoji: '\uD83D\uDFE2', labelKey: 'jobs.status_pending', fallback: 'Not Started', color: '#607D8B' },
+  in_progress: { emoji: '\uD83D\uDD35', labelKey: 'jobs.status_in_progress', fallback: 'In Progress', color: '#FF9800' },
+  paused: { emoji: '\u23F8\uFE0F', labelKey: 'jobs.status_paused', fallback: 'Paused', color: '#9C27B0' },
+  completed: { emoji: '\u2705', labelKey: 'jobs.status_completed', fallback: 'Completed', color: '#4CAF50' },
+  incomplete: { emoji: '\u26A0\uFE0F', labelKey: 'jobs.status_incomplete', fallback: 'Incomplete', color: '#F44336' },
 };
 
-const PAUSE_REASONS: { key: PauseReasonCategory; label: string }[] = [
-  { key: 'break', label: 'Break' },
-  { key: 'waiting_for_materials', label: 'Waiting for Materials' },
-  { key: 'urgent_task', label: 'Called to Urgent Task' },
-  { key: 'waiting_for_access', label: 'Waiting for Access' },
-  { key: 'other', label: 'Other' },
+const PAUSE_REASONS: { key: PauseReasonCategory; labelKey: string; fallback: string }[] = [
+  { key: 'break', labelKey: 'job_execution.pause_reason_break', fallback: 'Break' },
+  { key: 'waiting_for_materials', labelKey: 'job_execution.pause_reason_waiting_materials', fallback: 'Waiting for Materials' },
+  { key: 'urgent_task', labelKey: 'job_execution.pause_reason_urgent_task', fallback: 'Called to Urgent Task' },
+  { key: 'waiting_for_access', labelKey: 'job_execution.pause_reason_waiting_access', fallback: 'Waiting for Access' },
+  { key: 'other', labelKey: 'job_execution.pause_reason_other', fallback: 'Other' },
 ];
 
 const JOB_TYPE_COLORS: Record<JobType, string> = {
@@ -107,9 +110,21 @@ function addDays(dateStr: string, days: number): string {
   return toLocalDateString(d);
 }
 
+/** Locale tag for date formatting.
+ *
+ * 'ar-u-nu-latn' keeps Arabic month and weekday NAMES but forces Western digits
+ * (9, not ٩). The yard reads equipment serials and berth numbers in Western
+ * digits all day, so switching only the calendar to Arabic-Indic would be the
+ * odd one out. Hermes silently ignores an unknown locale and falls back to
+ * en-US, which is the old behaviour — never a crash.
+ */
+function dateLocale(language: string): string {
+  return language === 'ar' ? 'ar-u-nu-latn' : 'en-US';
+}
+
 /** "Sunday, 9 August" — the headline for the day being viewed. */
-function formatDayHeadline(dateStr: string): string {
-  return parseLocalDate(dateStr).toLocaleDateString('en-US', {
+function formatDayHeadline(dateStr: string, language: string): string {
+  return parseLocalDate(dateStr).toLocaleDateString(dateLocale(language), {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -117,8 +132,10 @@ function formatDayHeadline(dateStr: string): string {
 }
 
 /** Short weekday initial-ish label for the day strip: SUN, MON, ... */
-function formatDayStripLabel(dateStr: string): string {
-  return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+function formatDayStripLabel(dateStr: string, language: string): string {
+  const label = parseLocalDate(dateStr).toLocaleDateString(dateLocale(language), { weekday: 'short' });
+  // toUpperCase() is a no-op on Arabic script; harmless to keep for English.
+  return label.toUpperCase();
 }
 
 function dayOfMonth(dateStr: string): string {
@@ -127,7 +144,8 @@ function dayOfMonth(dateStr: string): string {
 
 
 export default function MyWorkPlanScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   // This screen shows ONE day at a time and opens on today.
@@ -157,7 +175,11 @@ export default function MyWorkPlanScreen() {
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['my-work-plan', anchorDate],
+    // language is part of the key because /my-plan now translates equipment and
+    // defect text server-side off Accept-Language. Without it, toggling to
+    // Arabic re-renders the labels but keeps serving the cached ENGLISH job
+    // text until something else forces a refetch.
+    queryKey: ['my-work-plan', anchorDate, language],
     queryFn: () => workPlansApi.getMyPlan(anchorDate),
   });
 
@@ -238,7 +260,7 @@ export default function MyWorkPlanScreen() {
       queryClient.invalidateQueries({ queryKey: ['my-work-plan'] });
       queryClient.invalidateQueries({ queryKey: ['my-jobs'] });
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to start job'),
+    onError: (err: any) => Alert.alert(t('common.error', 'Error'), err?.response?.data?.message || t('job_execution.failed_to_start', 'Failed to start job')),
   });
 
   // Pause mutation
@@ -252,7 +274,7 @@ export default function MyWorkPlanScreen() {
       setReasonDetails('');
       queryClient.invalidateQueries({ queryKey: ['my-work-plan'] });
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to pause job'),
+    onError: (err: any) => Alert.alert(t('common.error', 'Error'), err?.response?.data?.message || t('job_execution.failed_to_pause', 'Failed to pause job')),
   });
 
   // Resume mutation
@@ -261,7 +283,7 @@ export default function MyWorkPlanScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-work-plan'] });
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to resume job'),
+    onError: (err: any) => Alert.alert(t('common.error', 'Error'), err?.response?.data?.message || t('job_execution.failed_to_resume', 'Failed to resume job')),
   });
 
   // Complete mutation
@@ -274,9 +296,9 @@ export default function MyWorkPlanScreen() {
       setWorkNotes('');
       queryClient.invalidateQueries({ queryKey: ['my-work-plan'] });
       queryClient.invalidateQueries({ queryKey: ['my-jobs'] });
-      Alert.alert('Success', 'Job completed!');
+      Alert.alert(t('common.success', 'Success'), t('job_execution.job_completed_msg', 'Job completed!'));
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.message || 'Failed to complete job'),
+    onError: (err: any) => Alert.alert(t('common.error', 'Error'), err?.response?.data?.message || t('job_execution.failed_to_complete', 'Failed to complete job')),
   });
 
   // Keep a ref to myJobs for the timer interval (avoids re-creating interval on data change)
@@ -448,7 +470,7 @@ export default function MyWorkPlanScreen() {
             <View style={[styles.statusBadge, { backgroundColor: statusConfig.color + '20' }]}>
               <Text style={styles.statusEmoji}>{statusConfig.emoji}</Text>
               <Text style={[styles.statusBadgeText, { color: statusConfig.color }]}>
-                {statusConfig.label}
+                {t(statusConfig.labelKey, statusConfig.fallback)}
               </Text>
             </View>
 
@@ -459,7 +481,9 @@ export default function MyWorkPlanScreen() {
             )}
             {job.priority !== 'normal' && (
               <View style={[styles.priorityBadge, { backgroundColor: priorityColor }]}>
-                <Text style={styles.priorityBadgeText}>{job.priority}</Text>
+                <Text style={styles.priorityBadgeText}>
+                  {t(`jobs.priority_${job.priority}`, job.priority)}
+                </Text>
               </View>
             )}
           </View>
@@ -476,7 +500,7 @@ export default function MyWorkPlanScreen() {
 
           <View style={styles.jobDetails}>
             <Text style={styles.hoursText}>
-              Est: {job.estimated_hours}h
+              {t('jobs.est_hours', { hours: job.estimated_hours, defaultValue: 'Est: {{hours}}h' })}
             </Text>
             {job.berth && (
               <Text style={styles.berthText}>
@@ -495,7 +519,9 @@ export default function MyWorkPlanScreen() {
             <View style={styles.timerContainer}>
               <View style={styles.timerRow}>
                 <Text style={styles.timerLabel}>
-                  {isRunning ? '\u23F1\uFE0F Working:' : '\u23F8\uFE0F Paused:'}
+                  {isRunning
+                    ? `\u23F1\uFE0F ${t('jobs.working_label', 'Working:')}`
+                    : `\u23F8\uFE0F ${t('jobs.paused_label', 'Paused:')}`}
                 </Text>
                 <Text style={[styles.timerValue, isPaused && styles.timerPaused]}>
                   {formatElapsedTime(elapsedSeconds)}
@@ -546,7 +572,7 @@ export default function MyWorkPlanScreen() {
                   ) : (
                     <>
                       <Text style={styles.quickActionIcon}>\u25B6\uFE0F</Text>
-                      <Text style={styles.quickActionText}>Start</Text>
+                      <Text style={styles.quickActionText}>{t('common.start', 'Start')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -567,7 +593,7 @@ export default function MyWorkPlanScreen() {
                     ) : (
                       <>
                         <Text style={styles.quickActionIcon}>\u23F8\uFE0F</Text>
-                        <Text style={styles.quickActionText}>Pause</Text>
+                        <Text style={styles.quickActionText}>{t('common.pause', 'Pause')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -585,7 +611,7 @@ export default function MyWorkPlanScreen() {
                     ) : (
                       <>
                         <Text style={styles.quickActionIcon}>\u2705</Text>
-                        <Text style={styles.quickActionText}>Complete</Text>
+                        <Text style={styles.quickActionText}>{t('common.complete', 'Complete')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -607,7 +633,7 @@ export default function MyWorkPlanScreen() {
                     ) : (
                       <>
                         <Text style={styles.quickActionIcon}>\u25B6\uFE0F</Text>
-                        <Text style={styles.quickActionText}>Resume</Text>
+                        <Text style={styles.quickActionText}>{t('common.resume', 'Resume')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -622,7 +648,7 @@ export default function MyWorkPlanScreen() {
                   >
                     <>
                       <Text style={styles.quickActionIcon}>\u2705</Text>
-                      <Text style={styles.quickActionText}>Complete</Text>
+                      <Text style={styles.quickActionText}>{t('common.complete', 'Complete')}</Text>
                     </>
                   </TouchableOpacity>
                 </>
@@ -701,7 +727,7 @@ export default function MyWorkPlanScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.dayDisplay} onPress={goToToday} activeOpacity={0.7}>
-          <Text style={styles.dayHeadline}>{formatDayHeadline(selectedDate)}</Text>
+          <Text style={styles.dayHeadline}>{formatDayHeadline(selectedDate, language)}</Text>
           <View style={styles.dayHeadlineMeta}>
             {isTodaySelected && (
               <View style={styles.todayPill}>
@@ -740,7 +766,7 @@ export default function MyWorkPlanScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.dayStripLabel, isSel && styles.dayStripTextSelected]}>
-                  {formatDayStripLabel(d.date)}
+                  {formatDayStripLabel(d.date, language)}
                 </Text>
                 <Text
                   style={[
@@ -804,7 +830,7 @@ export default function MyWorkPlanScreen() {
       <Modal visible={showPauseModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Pause Reason</Text>
+            <Text style={styles.modalTitle}>{t('work_plan.pause_reason', 'Pause Reason')}</Text>
             <Text style={styles.modalSubtitle}>Select why you need to pause:</Text>
             {PAUSE_REASONS.map((reason) => (
               <TouchableOpacity
@@ -819,14 +845,14 @@ export default function MyWorkPlanScreen() {
                   styles.reasonButtonText,
                   selectedReason === reason.key && styles.reasonButtonTextSelected,
                 ]}>
-                  {reason.label}
+                  {t(reason.labelKey, reason.fallback)}
                 </Text>
               </TouchableOpacity>
             ))}
             {selectedReason === 'other' && (
               <TextInput
                 style={styles.textInput}
-                placeholder="Describe reason..."
+                placeholder={t('jobs.describe_reason_placeholder', 'Describe reason...')}
                 value={reasonDetails}
                 onChangeText={setReasonDetails}
                 multiline
@@ -842,7 +868,7 @@ export default function MyWorkPlanScreen() {
                   setReasonDetails('');
                 }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalConfirm, !selectedReason && styles.modalConfirmDisabled]}
@@ -862,7 +888,7 @@ export default function MyWorkPlanScreen() {
                 {pauseMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>Pause</Text>
+                  <Text style={styles.modalConfirmText}>{t('common.pause', 'Pause')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -874,11 +900,11 @@ export default function MyWorkPlanScreen() {
       <Modal visible={showCompleteModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Complete Job</Text>
+            <Text style={styles.modalTitle}>{t('work_plan.complete_job', 'Complete Job')}</Text>
             <Text style={styles.modalSubtitle}>Add any notes about the work completed:</Text>
             <TextInput
               style={[styles.textInput, { height: 100 }]}
-              placeholder="Work notes (optional)..."
+              placeholder={t('jobs.work_notes_optional_placeholder', 'Work notes (optional)...')}
               value={workNotes}
               onChangeText={setWorkNotes}
               multiline
@@ -893,7 +919,7 @@ export default function MyWorkPlanScreen() {
                   setWorkNotes('');
                 }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('common.cancel', 'Cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalConfirm, styles.completeConfirm]}
@@ -910,7 +936,7 @@ export default function MyWorkPlanScreen() {
                 {completeMutation.isPending ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.modalConfirmText}>Complete</Text>
+                  <Text style={styles.modalConfirmText}>{t('common.complete', 'Complete')}</Text>
                 )}
               </TouchableOpacity>
             </View>

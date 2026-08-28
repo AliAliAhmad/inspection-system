@@ -10,6 +10,7 @@
  */
 import React, { useCallback, ReactNode } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
@@ -71,6 +72,7 @@ export function SwipeableJobCard({
   enableRightSwipe = true,
   enableLeftSwipe = true,
 }: SwipeableJobCardProps) {
+  const { t } = useTranslation();
   const haptics = useHaptics();
 
   const translateX = useSharedValue(0);
@@ -251,7 +253,7 @@ export function SwipeableJobCard({
             <Text style={styles.actionIcon}>{rightAction.icon || '>'}</Text>
             <Text style={styles.actionLabel}>{rightAction.label}</Text>
             <Animated.View style={[styles.thresholdIndicator, rightThresholdStyle]}>
-              <Text style={styles.thresholdText}>Release to confirm</Text>
+              <Text style={styles.thresholdText}>{t('jobs.release_to_confirm', 'Release to confirm')}</Text>
             </Animated.View>
           </View>
         </Animated.View>
@@ -264,7 +266,7 @@ export function SwipeableJobCard({
             <Text style={styles.actionIcon}>{leftAction.icon || '||'}</Text>
             <Text style={styles.actionLabel}>{leftAction.label}</Text>
             <Animated.View style={[styles.thresholdIndicator, leftThresholdStyle]}>
-              <Text style={styles.thresholdText}>Release to confirm</Text>
+              <Text style={styles.thresholdText}>{t('jobs.release_to_confirm', 'Release to confirm')}</Text>
             </Animated.View>
           </View>
         </Animated.View>

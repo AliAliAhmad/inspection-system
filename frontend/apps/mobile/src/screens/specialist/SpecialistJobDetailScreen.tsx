@@ -34,13 +34,14 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { tokenStorage } from '../../storage/token-storage';
 
-const INCOMPLETE_REASONS: { key: IncompleteReason; label: string }[] = [
-  { key: 'no_spare_parts', label: 'No Spare Parts' },
-  { key: 'waiting_for_approval', label: 'Waiting for Approval' },
-  { key: 'equipment_in_use', label: 'Equipment in Use' },
-  { key: 'safety_concern', label: 'Safety Concern' },
-  { key: 'need_assistance', label: 'Need Assistance' },
-  { key: 'other', label: 'Other' },
+// Keys, not text — a literal label here cannot be translated at render time.
+const INCOMPLETE_REASONS: { key: IncompleteReason; fallback: string }[] = [
+  { key: 'no_spare_parts', fallback: 'No Spare Parts' },
+  { key: 'waiting_for_approval', fallback: 'Waiting for Approval' },
+  { key: 'equipment_in_use', fallback: 'Equipment in Use' },
+  { key: 'safety_concern', fallback: 'Safety Concern' },
+  { key: 'need_assistance', fallback: 'Need Assistance' },
+  { key: 'other', fallback: 'Other' },
 ];
 import * as ImagePicker from 'expo-image-picker';
 import JobShowUpSection from '../../components/JobShowUpSection';
@@ -409,7 +410,7 @@ export default function SpecialistJobDetailScreen() {
       cleaningMutation.mutate();
     } catch (error) {
       console.error('Cleaning photo upload failed:', error);
-      Alert.alert(t('common.error'), 'Failed to upload photo');
+      Alert.alert(t('common.error'), t('common.upload_photo_failed', 'Failed to upload photo'));
     } finally {
       setUploadingCleaning(false);
     }
@@ -651,7 +652,7 @@ export default function SpecialistJobDetailScreen() {
       {/* Timer Section */}
       {jobData.is_running && (
         <View style={styles.timerCard}>
-          <Text style={styles.timerLabel}>Elapsed Time</Text>
+          <Text style={styles.timerLabel}>{t('common.elapsed_time', 'Elapsed Time')}</Text>
           <Text style={styles.timerDisplay}>{formatTimer(elapsedSeconds)}</Text>
         </View>
       )}
@@ -786,7 +787,7 @@ export default function SpecialistJobDetailScreen() {
           <View style={styles.incompleteReasonBox}>
             <Text style={styles.incompleteReasonLabel}>{t('jobs.incomplete_reason')}:</Text>
             <Text style={styles.incompleteReasonText}>
-              {INCOMPLETE_REASONS.find(r => r.key === jobData.incomplete_reason)?.label || jobData.incomplete_reason}
+              {t(`jobs.incomplete_reason_${jobData.incomplete_reason}`, INCOMPLETE_REASONS.find(r => r.key === jobData.incomplete_reason)?.fallback || jobData.incomplete_reason)}
             </Text>
             {jobData.incomplete_notes && (
               <>
@@ -813,7 +814,7 @@ export default function SpecialistJobDetailScreen() {
         {/* Cleaning section - available for in_progress / completed */}
         {(jobData.status === 'in_progress' || jobData.status === 'completed') && (
           <View style={styles.cleaningSection}>
-            <Text style={styles.cleaningLabel}>Cleaning Evidence</Text>
+            <Text style={styles.cleaningLabel}>{t('jobs.cleaning_evidence', 'Cleaning Evidence')}</Text>
             <View style={styles.cleaningButtons}>
               <TouchableOpacity
                 style={[styles.cleaningPhotoBtn, uploadingCleaning && styles.buttonDisabled]}
@@ -833,7 +834,7 @@ export default function SpecialistJobDetailScreen() {
             {uploadingCleaning && (
               <View style={styles.uploadingRow}>
                 <ActivityIndicator size="small" color="#00897B" />
-                <Text style={styles.uploadingText}>Uploading...</Text>
+                <Text style={styles.uploadingText}>{t('common.uploading', 'Uploading...')}</Text>
               </View>
             )}
             {cleaningPhotoUri && (
@@ -851,7 +852,7 @@ export default function SpecialistJobDetailScreen() {
               {cleaningMutation.isPending ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.actionButtonText}>Mark Cleaning Done</Text>
+                <Text style={styles.actionButtonText}>{t('jobs.mark_cleaning_done', 'Mark Cleaning Done')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -863,7 +864,7 @@ export default function SpecialistJobDetailScreen() {
             style={[styles.actionButton, styles.assessmentButton]}
             onPress={() => setAssessmentModalVisible(true)}
           >
-            <Text style={styles.actionButtonText}>Submit Defect Assessment</Text>
+            <Text style={styles.actionButtonText}>{t('jobs.submit_defect_assessment', 'Submit Defect Assessment')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -871,7 +872,7 @@ export default function SpecialistJobDetailScreen() {
       {/* Pause History */}
       {pauses.length > 0 && (
         <View style={styles.pauseHistoryCard}>
-          <Text style={styles.sectionTitle}>Pause History</Text>
+          <Text style={styles.sectionTitle}>{t('jobs.pause_history', 'Pause History')}</Text>
           {pauses.map((pause) => {
             const pauseStatusColor = PAUSE_STATUS_COLORS[pause.status] ?? '#9E9E9E';
             return (
@@ -914,7 +915,7 @@ export default function SpecialistJobDetailScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{t('jobs.pause')}</Text>
 
-            <Text style={styles.modalLabel}>Category</Text>
+            <Text style={styles.modalLabel}>{t('jobs.pause_category', 'Category')}</Text>
             <View style={styles.categoryPicker}>
               {PAUSE_CATEGORIES.map((cat) => (
                 <TouchableOpacity
@@ -931,18 +932,18 @@ export default function SpecialistJobDetailScreen() {
                       pauseCategory === cat && styles.categoryOptionTextActive,
                     ]}
                   >
-                    {cat.replace(/_/g, ' ')}
+                    {t(`jobs.pause_category_${cat}`, cat.replace(/_/g, ' '))}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.modalLabel}>Details</Text>
+            <Text style={styles.modalLabel}>{t('common.details', 'Details')}</Text>
             <VoiceTextInput
               style={styles.modalTextInput}
               value={pauseDetails}
               onChangeText={setPauseDetails}
-              placeholder="Optional details..."
+              placeholder={t('jobs.optional_details_placeholder', 'Optional details...')}
               multiline
               numberOfLines={3}
             />
@@ -989,7 +990,7 @@ export default function SpecialistJobDetailScreen() {
               style={styles.modalTextInput}
               value={workNotesInput}
               onChangeText={setWorkNotesInput}
-              placeholder="Work notes..."
+              placeholder={t('jobs.work_notes_placeholder', 'Work notes...')}
               multiline
               numberOfLines={4}
             />
@@ -1048,7 +1049,7 @@ export default function SpecialistJobDetailScreen() {
                       incompleteReason === item.key && styles.incompleteReasonOptionTextActive,
                     ]}
                   >
-                    {item.label}
+                    {t(`jobs.incomplete_reason_${item.key}`, item.fallback)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1059,7 +1060,7 @@ export default function SpecialistJobDetailScreen() {
               style={styles.modalTextInput}
               value={incompleteNotes}
               onChangeText={setIncompleteNotes}
-              placeholder="Additional details..."
+              placeholder={t('jobs.additional_details_placeholder', 'Additional details...')}
               multiline
               numberOfLines={3}
             />
@@ -1100,9 +1101,9 @@ export default function SpecialistJobDetailScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Defect Assessment</Text>
+            <Text style={styles.modalTitle}>{t('jobs.defect_assessment', 'Defect Assessment')}</Text>
 
-            <Text style={styles.modalLabel}>Verdict</Text>
+            <Text style={styles.modalLabel}>{t('jobs.verdict', 'Verdict')}</Text>
             <View style={styles.verdictPicker}>
               {(['confirm', 'reject', 'minor'] as const).map((verdict) => (
                 <TouchableOpacity
@@ -1123,18 +1124,18 @@ export default function SpecialistJobDetailScreen() {
                       assessmentVerdict === verdict && styles.verdictOptionTextActive,
                     ]}
                   >
-                    {verdict === 'confirm' ? 'Confirm' : verdict === 'reject' ? 'Reject' : 'Minor'}
+                    {t(`jobs.verdict_${verdict}`, verdict === 'confirm' ? 'Confirm' : verdict === 'reject' ? 'Reject' : 'Minor')}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.modalLabel}>Technical Notes *</Text>
+            <Text style={styles.modalLabel}>{t('jobs.technical_notes', 'Technical Notes')} *</Text>
             <VoiceTextInput
               style={styles.modalTextInput}
               value={technicalNotes}
               onChangeText={setTechnicalNotes}
-              placeholder="Technical notes..."
+              placeholder={t('jobs.technical_notes_placeholder', 'Technical notes...')}
               multiline
               numberOfLines={4}
             />
