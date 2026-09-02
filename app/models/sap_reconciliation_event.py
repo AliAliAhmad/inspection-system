@@ -25,6 +25,17 @@ EVENT_TYPES = (
     'job_completion_confirmed',
     # Scenario 12: the app says done, SAP still shows it open. A question.
     'completion_not_confirmed',
+    # Not a scenario — a machine in the SAP export that the app has never heard
+    # of. Every order on it is dropped, so it is the one failure that makes the
+    # planner look simply empty. Named here because 38 orders vanished for four
+    # machines on 2026-09-02 and the only record was a counter in a JSON file.
+    #
+    # For THIS event type `order_number` holds the PLANT CODE, not an order
+    # number: the useful unit is one open question per machine, not 38 identical
+    # ones per night. It also makes _Reporter's (order_number, event_type)
+    # de-duplication mean "one alert per unknown machine until someone deals
+    # with it", which is exactly right. The dropped order numbers are in details.
+    'orders_skipped_no_equipment',
 )
 
 

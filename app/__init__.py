@@ -404,6 +404,101 @@ def create_app(config_name='development'):
         }), status_code
 
     # CLI commands
+    @app.cli.command('add-missing-equipment')
+    @click.option('--apply', 'do_apply', is_flag=True,
+                  help='Write the row. Without this nothing is changed.')
+    def add_missing_equipment(do_apply):
+        """Add machines SAP writes orders for that the app does not have.
+
+        A machine missing from `equipment` makes the pool sync drop EVERY order
+        on it, silently — 38 orders across four codes on 2026-09-02. This adds
+        the ones Ali has confirmed are real.
+
+        Idempotent: matches on serial_number, so re-running changes nothing.
+        Prints what it would do and stops. Add --apply to write.
+        """
+        from app.models import Equipment
+
+        # plant code -> (what it is, which existing machine to copy conventions
+        # from). The type column is derived from the name elsewhere in the app,
+        # so it is READ off a real sibling rather than guessed here — otherwise
+        # the order imports fine and then plans as an unknown category.
+        WANTED = [
+            {
+                'code': 'RET01',
+                'sibling_prefix': 'TT',
+                # Ali, 2026-09-03: a terminal tractor that SAP codes RET, and it
+                # moves between berths rather than living on one.
+                'name_ar': 'RET01',
+                'berth': None,
+            },
+        ]
+
+        print('=' * 78)
+        print('MACHINES MISSING FROM THE APP')
+        print('=' * 78)
+
+        to_create = []
+        for want in WANTED:
+            code = want['code']
+            existing = Equipment.query.filter(
+                (Equipment.serial_number == code) | (Equipment.name == code)
+            ).first()
+            if existing:
+                print(f'  {code}: already present (id={existing.id}) — nothing to do')
+                continue
+
+            # Ali's convention (see _equipment_lookup): the equipment NAME
+            # carries the plant code and serial_number carries the manufacturer
+            # serial — so a sibling has to be found by either, not by serial
+            # alone. Searching serial only found nothing and refused to create.
+            prefix = f"{want['sibling_prefix']}%"
+            sibling = Equipment.query.filter(
+                (Equipment.name.like(prefix)) | (Equipment.serial_number.like(prefix))
+            ).order_by(Equipment.id).first()
+            if not sibling:
+                print(f"  {code}: SKIPPED — no {want['sibling_prefix']}* machine to "
+                      f'copy the type conventions from')
+                continue
+
+            to_create.append((want, sibling))
+            print(f'  {code}: WILL CREATE')
+            print(f'     type          = {sibling.equipment_type} (copied from '
+                  f'{sibling.serial_number})')
+            print(f'     type_2        = {sibling.equipment_type_2}')
+            print(f'     berth         = {want["berth"] or "(none — works both)"}')
+
+        if not to_create:
+            print('\nNothing to create.')
+            return
+
+        if not do_apply:
+            print('\nDRY RUN — re-run with --apply to write.')
+            return
+
+        for want, sibling in to_create:
+            db.session.add(Equipment(
+                name=want['code'],
+                name_ar=want['name_ar'],
+                # name carries the plant code, per the convention above — that
+                # is what the pool sync matches on and what the planner shows.
+                # serial_number is nullable=False and UNIQUE, and the real
+                # manufacturer serial is not known here, so the plant code
+                # stands in. Worth correcting on the equipment screen once the
+                # real serial is to hand; the match works off either column.
+                serial_number=want['code'],
+                equipment_type=sibling.equipment_type,
+                equipment_type_2=sibling.equipment_type_2,
+                equipment_type_ar=sibling.equipment_type_ar,
+                # NULL, not 'both': the column is documented east/west only, and
+                # the pool query already ORs `berth IS NULL` into both berths, so
+                # a null berth is what "works either side" means here.
+                berth=want['berth'],
+                status='active',
+            ))
+        db.session.commit()
+        print(f'\nCreated {len(to_create)}. Run the pool rebuild to import their orders.')
+
     @app.cli.command('seed-material-kits')
     @click.option('--apply', 'do_apply', is_flag=True,
                   help='Write the kits. Without this nothing is changed.')

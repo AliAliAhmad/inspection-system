@@ -20,7 +20,7 @@ import gc
 import logging
 import os
 from datetime import date, datetime
-from collections import Counter
+from collections import Counter, defaultdict
 
 from flask import current_app
 
@@ -42,7 +42,7 @@ from app.services.sap_order_parser import (
     parse_operation_hours,
     pm_interval_hours,
 )
-from app.services.sap_removal_rules import reconcile_scheduled_orders
+from app.services.sap_removal_rules import _Reporter, reconcile_scheduled_orders
 from app.utils.decorators import planning_today
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,19 @@ logger = logging.getLogger(__name__)
 # transactions; the maintenance-plan classification is a file Ali maintains by
 # hand, so it is found by filename instead.
 MAINTENANCE_PLAN_FILENAME_HINT = 'maintenance plan'
+
+# Machines SAP still writes orders for, that the terminal no longer has.
+#
+# They are NOT equipment rows, so an order on one is dropped exactly like an
+# order on a machine nobody has added yet — the two are indistinguishable to the
+# skip below, and that is the problem: a genuinely new machine hides inside the
+# noise of sold ones. Listing them here separates "deliberately not imported"
+# from "nobody knows about this yet", so the warning stays worth reading.
+#
+# Sold. Ali, 2026-09-03. The real cleanup is on the SAP side — an order still
+# open against a machine that no longer exists should be TECO'd there, not
+# imported here.
+RETIRED_PLANT_CODES = frozenset({'TT004', 'TT005', 'TT080'})
 
 
 def _current_file_bytes(sheet_name=None, filename_contains=None):
@@ -298,7 +311,12 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         db.session.flush()
 
     created = updated = skipped_no_equipment = skipped_scheduled = 0
+    skipped_retired = 0
     unmatched_codes = set()
+    # code -> the order numbers dropped for it, so the warning can say WHICH
+    # orders were lost rather than only how many.
+    dropped_by_code = defaultdict(list)
+    retired_hits = Counter()
     seen = set()
 
     # {250: id, 500: id, ...}. Read once — the loop below runs over every open
@@ -311,9 +329,18 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     for candidate in candidates:
         equipment_id = equipment_by_code.get(candidate['plant_code'])
         if not equipment_id:
-            skipped_no_equipment += 1
-            if candidate['plant_code']:
-                unmatched_codes.add(candidate['plant_code'])
+            # `continue` drops THIS order only — the rest of the export is
+            # unaffected. But it drops EVERY order on that machine, so one
+            # unknown machine makes itself completely invisible to the planner.
+            code = (candidate['plant_code'] or '').strip().upper()
+            if code in RETIRED_PLANT_CODES:
+                skipped_retired += 1
+                retired_hits[code] += 1
+            else:
+                skipped_no_equipment += 1
+                if code:
+                    unmatched_codes.add(code)
+                    dropped_by_code[code].append(candidate['order_number'])
             continue
 
         priority, overdue_value, overdue_unit = _priority_for(
@@ -405,6 +432,44 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
             SAPWorkOrder.order_number.in_(stale),
         ).delete(synchronize_session=False)
 
+    # An unknown machine is the one failure in this pipeline that leaves the
+    # planner simply LOOKING empty. Until now it only incremented a counter in a
+    # report that the Telegram /pool command was the sole reader of — so when the
+    # bot went quiet, 38 orders could vanish nightly with nothing to notice.
+    #
+    # _Reporter is reused rather than reimplemented because it already carries
+    # the three things this needs: de-duplication on (order_number, event_type)
+    # so an unresolved machine is not re-announced every morning, a bilingual
+    # in-app notification to the planners, and dry-run suppression.
+    #
+    # RETIRED_PLANT_CODES are deliberately NOT reported: they are a known,
+    # decided exclusion, and mixing them in is what would make this warning
+    # background noise within a week.
+    if dropped_by_code:
+        reporter = _Reporter(dry_run)
+        for code, numbers in sorted(dropped_by_code.items()):
+            reporter.report(
+                event_type='orders_skipped_no_equipment',
+                # The PLANT CODE, not an order number — see the comment on the
+                # event type. One open question per machine, not per order.
+                order_number=code,
+                sap_state='open',
+                summary=(f"{len(numbers)} SAP orders for {code} were not imported: "
+                         f"{code} is not in the app's equipment list. Add the machine "
+                         f"and its orders appear on the next rebuild."),
+                summary_ar=(f"لم يتم استيراد {len(numbers)} أمر عمل للمعدة {code}: "
+                            f"{code} غير موجودة في قائمة المعدات. أضف المعدة "
+                            f"وستظهر أوامرها في التحديث القادم."),
+                details={
+                    'plant_code': code,
+                    'order_count': len(numbers),
+                    # Capped: the point is to identify the work, not to store
+                    # an unbounded list in a JSON column.
+                    'order_numbers': numbers[:50],
+                },
+                priority='warning',
+            )
+
     if not dry_run:
         db.session.commit()
 
@@ -419,7 +484,10 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     )
 
     logger.info('SAP pool sync: parse done (peak rss=%s MB)', _rss_mb())
-    matched = len(codes) - len(unmatched_codes)
+    # Counted directly rather than by subtraction: `codes` also holds the
+    # retired machines, so `len(codes) - len(unmatched_codes)` would quietly
+    # count a sold machine as successfully matched.
+    matched = len(codes & set(equipment_by_code))
     report = {
         'status': 'ok',
         'dry_run': dry_run,
@@ -437,6 +505,12 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         'equipment_unmatched': len(unmatched_codes),
         'unmatched_codes': sorted(unmatched_codes),
         'orders_skipped_no_equipment': skipped_no_equipment,
+        # Which machine cost which orders. Without this the report says 38 were
+        # lost across four codes and leaves you to guess how they split — and
+        # adding one machine back then looks like it did not work.
+        'orders_skipped_by_code': {c: len(n) for c, n in sorted(dropped_by_code.items())},
+        'retired_codes': sorted(retired_hits),
+        'orders_skipped_retired': skipped_retired,
         'inputs': {'iw49': had_iw49, 'ik17': had_ik17, 'maintenance_plan': had_plan_file},
         'delivered': _delivered_summary(),
         'removal_rules': removal,

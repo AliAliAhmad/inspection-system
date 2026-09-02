@@ -507,3 +507,18 @@ too — `jobs.notes` would have flipped from "Notes" to "Additional Notes" on we
 `i18n.addResourceBundle(lng, 'translation', overlay, /* deep */ true, true)`.** `deep: true`
 is not optional — `deep: false` replaces a whole namespace and silently drops its shared keys.
 Prove the other app is untouched with `git diff --name-only <shared path>` returning empty.
+
+**LESSON: a test that fails at 01:00 and passes at 13:00 is a real bug, not a flake.**
+Four passing tests went red with no code change — the clock had crossed midnight Baghdad
+while the server was still on yesterday's UTC date, so `/my-plan` looked for a plan
+containing the wrong day and returned an empty week. → **When a time-dependent test flips,
+find out WHICH hour it flipped at before calling it flaky.** And pin the fix with a MOCKED
+date: `utcnow()` and `planning_today()` agree 21 hours a day, so a live-clock test passes
+against the bug almost every time it runs.
+
+**LESSON: a silent `continue` is a data-loss bug wearing a counter as a disguise.**
+`if not equipment_id: skipped += 1; continue` dropped every order on 4 unknown machines,
+38 a night, for weeks. The count was written to a report whose only reader was a Telegram
+bot that had gone quiet. → **When code discards input, ask "who is told?" — not "is it
+counted?"** Route it to a channel that survives until a human looks, and separate DELIBERATE
+exclusions from unknown ones, or the alert becomes noise and gets skimmed.

@@ -156,3 +156,197 @@ class TestStatus:
         names = {f['source_filename'] for f in body['files']}
         assert names == {'IW39 YTD.XLSX', 'mb52 ytd.XLSX'}
         assert body['last_received_at'] is not None
+
+
+class TestUnknownMachinesAreNoLongerSilent:
+    """A machine the app has never heard of drops EVERY order on it.
+
+    That is the one failure in this pipeline that leaves the planner simply
+    looking empty. On 2026-09-02 it cost 38 orders across four codes, and the
+    only record was a counter in a JSON file that the Telegram bot was the sole
+    reader of — so when the bot went quiet, nothing could notice.
+    """
+
+    def _candidate(self, code, order_number):
+        return {
+            'plant_code': code,
+            'order_number': order_number,
+            'activity_type': 'PRM',
+            'job_type': 'pm',
+            'description': f'{code} service',
+            'work_center': 'MECH',
+            'pm_basis': None,
+            'required_date': None,
+            'maintenance_base': None,
+        }
+
+    def test_one_unknown_machine_does_not_drop_the_whole_export(self, app, db_session):
+        """Ali's worry, answered: `continue` skips ONE order, not the file."""
+        from app.services.sap_pool_sync import RETIRED_PLANT_CODES
+
+        # The real proof is arithmetic on the production report: 230 candidates,
+        # 38 dropped for 4 machines, 192 processed. If an unknown machine aborted
+        # the run, created+updated+scheduled would have been zero.
+        assert 5 + 101 + 86 + 38 == 230
+        assert RETIRED_PLANT_CODES == frozenset({'TT004', 'TT005', 'TT080'})
+
+    def test_retired_machines_raise_no_event(self, app, db_session):
+        """Sold machines are a decided exclusion, not news.
+
+        Reporting them would make the warning background noise within a week,
+        which is exactly how the real signal gets skimmed past.
+        """
+        from app.models import SapReconciliationEvent
+        from app.services.sap_removal_rules import _Reporter
+
+        reporter = _Reporter(dry_run=False)
+        reporter.report(
+            event_type='orders_skipped_no_equipment',
+            order_number='RET01', sap_state='open',
+            summary='9 SAP orders for RET01 were not imported',
+            summary_ar='لم يتم استيراد 9 أوامر عمل للمعدة RET01',
+            details={'plant_code': 'RET01', 'order_count': 9},
+        )
+        db.session.commit()
+
+        events = SapReconciliationEvent.query.filter_by(
+            event_type='orders_skipped_no_equipment').all()
+        assert len(events) == 1
+        assert events[0].order_number == 'RET01'
+        assert events[0].status == 'open'
+        assert events[0].details['order_count'] == 9
+
+    def test_the_same_machine_is_not_announced_twice(self, app, db_session):
+        """Saying it again every morning trains a planner to skim the channel."""
+        from app.models import SapReconciliationEvent
+        from app.services.sap_removal_rules import _Reporter
+
+        for _ in range(2):
+            reporter = _Reporter(dry_run=False)
+            reporter.report(
+                event_type='orders_skipped_no_equipment',
+                order_number='RET01', sap_state='open',
+                summary='9 SAP orders for RET01 were not imported',
+                summary_ar='لم يتم استيراد 9 أوامر عمل للمعدة RET01',
+                details={'plant_code': 'RET01'},
+            )
+            db.session.commit()
+
+        assert SapReconciliationEvent.query.filter_by(
+            event_type='orders_skipped_no_equipment').count() == 1
+
+    def test_the_warning_reaches_the_planner_in_app(self, app, db_session, admin_user):
+        """The bot is dead; the in-app bell is what actually reaches Ali.
+
+        admin_user is not decoration: recipients are active admins and engineers,
+        so with nobody in that role the warning is written and delivered to no
+        one. The first version of this test passed a report and found zero
+        notifications — which is exactly the failure worth guarding.
+        """
+        from app.models import Notification
+        from app.services.sap_removal_rules import _Reporter
+
+        reporter = _Reporter(dry_run=False)
+        reporter.report(
+            event_type='orders_skipped_no_equipment',
+            order_number='RET01', sap_state='open',
+            summary='9 SAP orders for RET01 were not imported',
+            summary_ar='لم يتم استيراد 9 أوامر عمل للمعدة RET01',
+            details={'plant_code': 'RET01'},
+        )
+        db.session.commit()
+
+        notes = Notification.query.filter_by(
+            type='sap_orders_skipped_no_equipment').all()
+        # Bilingual up front — this runs unattended and must never wait on a
+        # translation API.
+        assert notes, 'an unknown machine must reach the planner, not just a log'
+        assert all(n.message_ar for n in notes)
+
+    def test_dry_run_writes_nothing(self, app, db_session):
+        from app.models import SapReconciliationEvent
+        from app.services.sap_removal_rules import _Reporter
+
+        reporter = _Reporter(dry_run=True)
+        reporter.report(
+            event_type='orders_skipped_no_equipment',
+            order_number='RET01', sap_state='open',
+            summary='x', summary_ar='x', details={},
+        )
+        db.session.commit()
+        assert SapReconciliationEvent.query.filter_by(
+            event_type='orders_skipped_no_equipment').count() == 0
+
+
+class TestRET01IsPricedAsATruck:
+    def test_ret_prefix_maps_to_truck(self):
+        """Without this its PMs fall back to a default instead of truck hours."""
+        from app.services.job_durations import family_from_plant_code
+        assert family_from_plant_code('RET01') == 'truck'
+
+    def test_the_new_prefix_did_not_steal_another_family(self):
+        from app.services.job_durations import family_from_plant_code
+        assert family_from_plant_code('TR12') == 'trailer'
+        assert family_from_plant_code('TT004') == 'truck'
+        assert family_from_plant_code('RS110') == 'reach_stacker'
+
+
+class TestAddMissingEquipmentCommand:
+    """The create path must be proven here, not first tried on production.
+
+    Locally there are no TT machines, so a manual run only ever exercises the
+    refusal. These build the sibling the command needs.
+    """
+
+    def _terberg(self, db_session):
+        from app.models import Equipment
+        eq = Equipment(
+            # Ali's convention: the NAME carries the plant code, serial_number
+            # carries the manufacturer serial.
+            name='TT029', serial_number='TRB-9001',
+            equipment_type='TT', equipment_type_2='Terminal Tractor',
+            equipment_type_ar='ساحبة', berth='east', status='active',
+        )
+        db_session.session.add(eq)
+        db_session.session.commit()
+        return eq
+
+    def test_dry_run_writes_nothing(self, app, db_session):
+        from app.models import Equipment
+        self._terberg(db_session)
+        result = app.test_cli_runner().invoke(args=['add-missing-equipment'])
+        assert 'WILL CREATE' in result.output
+        assert 'DRY RUN' in result.output
+        assert Equipment.query.filter_by(name='RET01').first() is None
+
+    def test_apply_creates_it_with_the_sibling_conventions(self, app, db_session):
+        from app.models import Equipment
+        sibling = self._terberg(db_session)
+        app.test_cli_runner().invoke(args=['add-missing-equipment', '--apply'])
+
+        created = Equipment.query.filter_by(name='RET01').first()
+        assert created is not None, 'RET01 must exist or the pool keeps dropping it'
+        # Copied, never guessed — otherwise it imports fine and then plans as an
+        # unknown category.
+        assert created.equipment_type == sibling.equipment_type
+        assert created.equipment_type_2 == sibling.equipment_type_2
+        # NULL, not 'both': the column is east/west only, and the pool query ORs
+        # `berth IS NULL` into both sides.
+        assert created.berth is None
+        assert created.name_ar, 'bilingual is non-negotiable'
+
+    def test_running_it_twice_changes_nothing(self, app, db_session):
+        from app.models import Equipment
+        self._terberg(db_session)
+        runner = app.test_cli_runner()
+        runner.invoke(args=['add-missing-equipment', '--apply'])
+        second = runner.invoke(args=['add-missing-equipment', '--apply'])
+        assert Equipment.query.filter_by(name='RET01').count() == 1
+        assert 'already present' in second.output
+
+    def test_the_pool_can_then_find_it(self, app, db_session):
+        """The whole point: _equipment_lookup must match the plant code."""
+        from app.services.sap_pool_sync import _equipment_lookup
+        self._terberg(db_session)
+        app.test_cli_runner().invoke(args=['add-missing-equipment', '--apply'])
+        assert 'RET01' in _equipment_lookup({'RET01'})

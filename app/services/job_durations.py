@@ -175,6 +175,10 @@ def crew_for(activity_type, family=None, is_pm=False, crew=None):
 # has _get_category for the other direction. Both land on the same family names.
 PLANT_PREFIX_TO_FAMILY = {
     'TT': 'truck',
+    # RET01 is a terminal tractor that SAP codes RET, not TT (Ali, 2026-09-03).
+    # Without this line family_from_plant_code returns None for it and its PMs
+    # fall back to a default price instead of the truck figures.
+    'RET': 'truck',
     'RS': 'reach_stacker',
     'ECH': 'ech',
     'FL': 'forklift',
