@@ -2229,7 +2229,13 @@ def get_my_plan():
         except ValueError:
             raise ValidationError("Invalid date format. Use YYYY-MM-DD")
     else:
-        week_date = datetime.utcnow().date()
+        # planning_today(), not utcnow().date(). The yard is Baghdad (UTC+3) and
+        # the server runs UTC, so between 00:00 and 03:00 local the server still
+        # believes it is YESTERDAY — and the plan containing today then fails the
+        # `week_start <= date <= week_end` match entirely. A worker opening the
+        # app at 1am saw an empty week. The rest of the planner already moved to
+        # planning_today() for exactly this; /my-plan was missed.
+        week_date = get_planning_today()
 
     # Plans can start on any day of the week (e.g., Sunday from the web
     # planner), so match the published plan whose date range contains the

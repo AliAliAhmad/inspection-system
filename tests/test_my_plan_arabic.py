@@ -123,3 +123,41 @@ class TestMyPlanLanguage:
 
         assert job['equipment']['name'] == 'Reach Stacker'
         assert job['defect']['description'] == 'Vibration on bearing'
+
+
+class TestMyPlanUsesBaghdadNotUTC:
+    """Between 00:00 and 03:00 Baghdad the server still thinks it is yesterday.
+
+    The plan match is `week_start <= date <= week_end`, so a plan that begins
+    today failed that test entirely and the worker saw an empty week. Found at
+    01:13 Baghdad on 2026-09-03, when the tests above went from green to red
+    without a line of their code changing.
+
+    The rest of the planner already moved to planning_today() for exactly this
+    reason; /my-plan had been missed.
+    """
+
+    def test_the_endpoint_asks_for_the_yard_date(
+        self, client, engineer, specialist, mech_inspector, db_session, monkeypatch
+    ):
+        import app.api.work_plans as work_plans
+
+        job = _bilingual_defect_job(db_session, engineer, mech_inspector, specialist)
+        plan_start = job.day.date
+
+        # Deliberately mocked rather than trusting the wall clock: utcnow() and
+        # planning_today() agree for 21 hours a day, so a live-clock test would
+        # pass against the bug almost every time it ran.
+        called = {}
+
+        def fake_today():
+            called['yes'] = True
+            return plan_start
+
+        monkeypatch.setattr(work_plans, 'get_planning_today', fake_today)
+
+        headers = get_auth_header(client, 'spec@test.com', 'test123')
+        resp = client.get('/api/work-plans/my-plan', headers=headers)
+
+        assert called.get('yes'), '/my-plan must resolve today via planning_today()'
+        assert resp.get_json()['my_jobs'], 'the plan covering the yard date must be found'

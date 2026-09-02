@@ -606,3 +606,5 @@ suite 851 passed.
    Dates follow the language (`ar-u-nu-latn`: Arabic month names, Western digits).
    `my-work-plan` react-query key now includes the language, or a switch keeps serving the
    cached English until something forces a refetch.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
+See HISTORY.md for full changelog. Only keep last 3 entries here.

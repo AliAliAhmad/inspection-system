@@ -105,8 +105,15 @@
   `sap_pool_sync`, which runs 05:00 Baghdad. Box orders are UPDATED by that run so they
   backfill; orders ALREADY scheduled onto a plan are deliberately left untouched and keep
   NULL, so jobs on existing plans get no kit. New plans do.
-- **3 machines have SAP history but no `equipment` row** — TT004, TT005, TT080 (22 of 1,093
-  services, 2%). Their materials are ignored. Sold, or never added — Ali to decide.
+- **DECIDED 2026-09-03 — the missing machines were costing 38 orders a night.**
+  `sap_pool_sync` drops EVERY order on a machine that has no `equipment` row, silently.
+  On 2026-09-02: 230 candidates → 5 created, 101 updated, 86 already scheduled,
+  **38 dropped** across RET01, TT004, TT005, TT080. Ali: RET01 is a real terminal
+  tractor (SAP codes it RET, not TT) and roams both berths; TT004/005/080 were SOLD.
+  Fixes: `RETIRED_PLANT_CODES` for the sold three, `'RET': 'truck'` in
+  `PLANT_PREFIX_TO_FAMILY`, `flask add-missing-equipment --apply` for RET01, and an
+  `orders_skipped_no_equipment` reconciliation event so an unknown machine now raises
+  a bilingual in-app notification instead of a counter nobody reads.
 - **Settled on production 2026-08-26:** `equipment.model_number` holds the bare model
   (`DCF90-45E6`), so Ali's 8 kits are UPDATED in place, none switched off.
 - **The spec ships one row per SERVICE, not pre-grouped kits.** Grouping is done by
