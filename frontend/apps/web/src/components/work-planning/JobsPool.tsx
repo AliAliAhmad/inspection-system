@@ -47,6 +47,25 @@ interface DraggableJobItemProps {
   overdueMax?: OverdueMax;
 }
 
+/** Did this order land in the pool in the last few days?
+ *
+ * Reads created_at, which the API already sends — SAPWorkOrder.to_dict has
+ * carried it all along, so this needs no backend change and no migration.
+ *
+ * Three days, not one: the courier does not deliver every night (Aug 28, then
+ * Aug 31, then Sep 1), so a one-day window would leave the planner with nothing
+ * marked on most mornings and no way to tell that from "nothing arrived".
+ */
+const NEW_ARRIVAL_DAYS = 3;
+
+function isNewlyArrived(job: any): boolean {
+  const raw = job?.created_at;
+  if (!raw) return false;
+  const added = new Date(raw).getTime();
+  if (Number.isNaN(added)) return false;
+  return Date.now() - added < NEW_ARRIVAL_DAYS * 24 * 60 * 60 * 1000;
+}
+
 const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, days = [], onQuickSchedule, overdueMax }) => {
   const id = `pool-${jobType}-${job.id || job.equipment?.id || job.defect?.id || job.assignment?.id}`;
 
@@ -121,7 +140,7 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
         userSelect: 'none',
       }}
     >
-      {/* Row 1: Equipment name + overdue badge */}
+      {/* Row 1: Equipment name + NEW badge + overdue badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
         <div style={{
           fontWeight: 700, fontSize: 15, flex: 1,
@@ -130,6 +149,20 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
         }}>
           {equipmentName}
         </div>
+        {isNewlyArrived(job) && (
+          // The pool sorts most-overdue first, so an order that arrived last
+          // night lands at the BOTTOM — the least overdue thing in the box. On
+          // 2026-09-02 five new orders were due 2026-09-01 while the top of the
+          // list was due 2025-03-25, and they read as missing while sitting in
+          // plain sight. This is the only thing on the card that says "this one
+          // is new", because the sort can never say it.
+          <span style={{
+            fontSize: 9, fontWeight: 800, color: '#fff', background: '#1677ff',
+            padding: '0 5px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            NEW
+          </span>
+        )}
         {isOverdue && (
           <span style={{
             fontSize: 9, fontWeight: 800, color: heat.badgeText, background: heat.badgeBg,
@@ -271,7 +304,13 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
 
     const sapOrders = availableJobs.sap_orders || [];
     const defects = availableJobs.defect_jobs || [];
-    // Inspections no longer shown in pool — they appear in InspectionSummaryBar
+    // The app's OWN inspections are not shown here — they live in
+    // InspectionSummaryBar. That is not the same thing as a SAP order whose
+    // MaintActivityType is INS, which ACTIVITY_TO_JOB_TYPE maps to
+    // job_type='inspection'. Those are real planned maintenance work and they
+    // arrive in sap_orders, so they belong in a tab. They had none: PRM matched
+    // pm|corrective and Defect matched defect, and an INS order fell between
+    // them — stored in the pool, drawn nowhere. Found 2026-09-03.
 
     // Filter function
     const filterJob = (job: any) => {
@@ -303,9 +342,12 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
     };
 
     // PRM Jobs - from SAP orders with job_type === 'pm' (corrective jobs returned to
-    // the pool live here too, since they're manual non-defect maintenance work)
+    // the pool live here too, since they're manual non-defect maintenance work).
+    // 'inspection' is here for the same reason: SAP INS orders are planned
+    // maintenance, not the app's own inspection assignments.
     let prm = sapOrders
-      .filter((j: SAPWorkOrder) => j.job_type === 'pm' || j.job_type === 'corrective')
+      .filter((j: SAPWorkOrder) => j.job_type === 'pm' || j.job_type === 'corrective'
+                                   || j.job_type === 'inspection')
       .filter(filterJob);
 
     // Sort PRM jobs
