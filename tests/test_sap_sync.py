@@ -350,3 +350,80 @@ class TestAddMissingEquipmentCommand:
         self._terberg(db_session)
         app.test_cli_runner().invoke(args=['add-missing-equipment', '--apply'])
         assert 'RET01' in _equipment_lookup({'RET01'})
+
+
+class TestPoolStatusCommand:
+    """Answering "which orders came in?" must not need TablePlus or the bot.
+
+    Both failed on the same day: the laptop's DB client stopped working and the
+    Telegram /pool command went silent. The Render shell was all that was left.
+    """
+
+    def test_it_lists_what_is_in_the_box(self, app, db_session):
+        from app.models import Equipment, SAPWorkOrder
+        from datetime import date
+
+        eq = Equipment(name='RS110', serial_number='RS-9', equipment_type='RS',
+                       berth='east', status='active')
+        db_session.session.add(eq)
+        db_session.session.flush()
+        db_session.session.add(SAPWorkOrder(
+            work_plan_id=None, order_number='700001', order_type='PRM',
+            job_type='pm', equipment_id=eq.id, description='250HR service',
+            status='pending', required_date=date(2026, 9, 30), priority='normal',
+        ))
+        db_session.session.commit()
+
+        out = app.test_cli_runner().invoke(args=['pool-status']).output
+        assert '1 orders waiting' in out
+        assert '700001' in out
+        assert 'RS110' in out, 'the machine name is the point — an order id alone is useless'
+
+    def test_a_missing_machine_or_date_does_not_crash_it(self, app, db_session):
+        """A diagnostic that dies on incomplete data is worse than none."""
+        from app.models import Equipment, SAPWorkOrder
+
+        eq = Equipment(name='TT029', serial_number='TRB-1', equipment_type='TT',
+                       status='active')
+        db_session.session.add(eq)
+        db_session.session.flush()
+        db_session.session.add(SAPWorkOrder(
+            work_plan_id=None, order_number='700002', order_type='COM',
+            job_type='corrective', equipment_id=eq.id, description=None,
+            status='pending', required_date=None, priority='normal',
+        ))
+        db_session.session.commit()
+
+        result = app.test_cli_runner().invoke(args=['pool-status'])
+        assert result.exit_code == 0, result.output
+        assert '700002' in result.output
+
+    def test_it_orders_by_arrival_not_due_date(self, app, db_session):
+        """The planner sorts by due date, which buries a new order at the bottom.
+
+        That is the most common reason a new order looks missing, so this view
+        deliberately sorts by when it ARRIVED.
+        """
+        from app.models import Equipment, SAPWorkOrder
+        from datetime import date, datetime, timedelta
+
+        eq = Equipment(name='RS110', serial_number='RS-9', equipment_type='RS',
+                       status='active')
+        db_session.session.add(eq)
+        db_session.session.flush()
+        old = SAPWorkOrder(
+            work_plan_id=None, order_number='OLD', order_type='PRM', job_type='pm',
+            equipment_id=eq.id, status='pending', required_date=date(2026, 1, 1),
+            created_at=datetime.utcnow() - timedelta(days=30),
+        )
+        new = SAPWorkOrder(
+            work_plan_id=None, order_number='NEW', order_type='PRM', job_type='pm',
+            equipment_id=eq.id, status='pending', required_date=date(2027, 1, 1),
+            created_at=datetime.utcnow(),
+        )
+        db_session.session.add_all([old, new])
+        db_session.session.commit()
+
+        out = app.test_cli_runner().invoke(args=['pool-status']).output
+        # NEW is due LATER, so a due-date sort would bury it. Here it comes first.
+        assert out.index('NEW') < out.index('OLD')

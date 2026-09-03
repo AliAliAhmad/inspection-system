@@ -404,6 +404,77 @@ def create_app(config_name='development'):
         }), status_code
 
     # CLI commands
+    @app.cli.command('pool-status')
+    @click.option('--new', 'how_many', default=15, show_default=True,
+                  help='How many of the most recently added orders to list.')
+    def pool_status(how_many):
+        """What is in the job pool, and what the last rebuild did.
+
+        Exists because the two ways to answer "which orders came in?" both fail
+        on their own: TablePlus needs a working laptop connection, and the
+        Telegram /pool command needs a bot that is currently silent. This needs
+        only the Render shell, which is where you end up anyway.
+        """
+        from app.models import Equipment, SAPWorkOrder
+        from app.services.sap_pool_sync import load_last_report
+
+        box = SAPWorkOrder.query.filter(
+            SAPWorkOrder.work_plan_id.is_(None),
+            SAPWorkOrder.status == 'pending',
+        )
+        print('=' * 78)
+        print(f'JOB POOL: {box.count()} orders waiting')
+        print('=' * 78)
+
+        by_type = dict(db.session.query(SAPWorkOrder.job_type, db.func.count())
+                       .filter(SAPWorkOrder.work_plan_id.is_(None),
+                               SAPWorkOrder.status == 'pending')
+                       .group_by(SAPWorkOrder.job_type).all())
+        if by_type:
+            print('  by type: ' + ' · '.join(f'{k} {v}' for k, v in sorted(by_type.items())))
+
+        # Ordered by when they ARRIVED, not by required_date. The planner sorts
+        # by due date, which puts a brand-new order at the BOTTOM of a hundred-row
+        # list — the single most common reason a new order looks missing.
+        print()
+        print(f'--- the {how_many} most recently added ---')
+        recent = (box.order_by(SAPWorkOrder.created_at.desc())
+                  .limit(how_many).all())
+        if not recent:
+            print('  (none)')
+        for order in recent:
+            machine = db.session.get(Equipment, order.equipment_id)
+            print(f"  {str(order.created_at)[:16]}  {order.order_number}  "
+                  f"{(order.order_type or '?'):4}  "
+                  f"{(machine.name if machine else '?'):8}  "
+                  f"due {order.required_date or '-'}  "
+                  f"{(order.description or '')[:44]}")
+
+        report = load_last_report()
+        print()
+        print('--- last rebuild ---')
+        if not report:
+            print('  never run')
+            return
+        print(f"  at        : {report.get('written_at')}  ({report.get('status')})")
+        if report.get('status') != 'ok':
+            print(f"  reason    : {report.get('reason')}")
+            return
+        print(f"  source    : {report.get('source_file')} "
+              f"received {report.get('source_received_at')}")
+        print(f"  candidates: {report.get('candidates')}")
+        print(f"    created : {report.get('created')}")
+        print(f"    updated : {report.get('updated')}")
+        print(f"    on plans: {report.get('left_alone_because_scheduled')}")
+        print(f"    DROPPED : {report.get('orders_skipped_no_equipment')} "
+              f"(machine not in the app)")
+        for code, count in (report.get('orders_skipped_by_code') or {}).items():
+            print(f'        {code}: {count} orders lost')
+        retired = report.get('retired_codes') or []
+        if retired:
+            print(f"    retired : {report.get('orders_skipped_retired')} on "
+                  f"{', '.join(retired)} (sold — skipped on purpose)")
+
     @app.cli.command('add-missing-equipment')
     @click.option('--apply', 'do_apply', is_flag=True,
                   help='Write the row. Without this nothing is changed.')
