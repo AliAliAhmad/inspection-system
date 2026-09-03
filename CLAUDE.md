@@ -105,15 +105,23 @@
   `sap_pool_sync`, which runs 05:00 Baghdad. Box orders are UPDATED by that run so they
   backfill; orders ALREADY scheduled onto a plan are deliberately left untouched and keep
   NULL, so jobs on existing plans get no kit. New plans do.
-- **DECIDED 2026-09-03 — the missing machines were costing 38 orders a night.**
+- **DECIDED 2026-09-03 — unknown machines were costing 38 orders a night.**
   `sap_pool_sync` drops EVERY order on a machine that has no `equipment` row, silently.
-  On 2026-09-02: 230 candidates → 5 created, 101 updated, 86 already scheduled,
-  **38 dropped** across RET01, TT004, TT005, TT080. Ali: RET01 is a real terminal
-  tractor (SAP codes it RET, not TT) and roams both berths; TT004/005/080 were SOLD.
-  Fixes: `RETIRED_PLANT_CODES` for the sold three, `'RET': 'truck'` in
-  `PLANT_PREFIX_TO_FAMILY`, `flask add-missing-equipment --apply` for RET01, and an
-  `orders_skipped_no_equipment` reconciliation event so an unknown machine now raises
-  a bilingual in-app notification instead of a counter nobody reads.
+  2026-09-02: 230 candidates → 5 created, 101 updated, 86 already scheduled, **38 dropped**
+  across RET01, TT004, TT005, TT080.
+  - **TT004/005/080: SOLD.** In `RETIRED_PLANT_CODES` — still skipped, never reported.
+    The real cleanup is TECO-ing them in SAP.
+  - **RET01: Ali does NOT want it added** (2026-09-03, after first saying it was real).
+    Its ~orders stay out on purpose. It is deliberately NOT in the retired list, because
+    Ali asked to keep being flagged about it in case he changes his mind.
+    **Do not add it unprompted.** `flask add-missing-equipment --apply` is the button
+    if he ever asks; it has never been run.
+  - An unknown machine now raises an `orders_skipped_no_equipment` event → bilingual
+    in-app notification to admins/engineers, de-duplicated per machine.
+  - `flask pool-status` answers "which orders came in?" from the Render shell alone —
+    built because TablePlus and the Telegram bot both failed on the same day.
+  - Also settled: for machines the app DOES have, only 5 new orders existed. They were in
+    the pool the whole time, near the bottom, because the pool sorts most-overdue first.
 - **Settled on production 2026-08-26:** `equipment.model_number` holds the bare model
   (`DCF90-45E6`), so Ali's 8 kits are UPDATED in place, none switched off.
 - **The spec ships one row per SERVICE, not pre-grouped kits.** Grouping is done by
