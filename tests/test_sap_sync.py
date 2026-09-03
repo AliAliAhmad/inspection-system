@@ -479,3 +479,81 @@ class TestADeliveryTriggersTheRebuild:
         from app.api.sap_sync import clear_delivery_marker
         clear_delivery_marker()
         clear_delivery_marker()
+
+
+class TestThePoolLoadsInABoundedNumberOfQueries:
+    """Ali: "why does it take time to load the job pool?"
+
+    SAPWorkOrder.to_dict reads self.equipment and self.cycle, both lazy, so
+    serialising the pool cost one round trip PER DISTINCT MACHINE on top of the
+    query itself. Measured at 30 extra queries for a 106-order pool over 30
+    machines; production carries 87 machines and inspection-db is on the free
+    plan, where round trips are expensive.
+
+    The assertion is on the SHAPE — a constant, not a multiple of the row count —
+    because that is the property that actually keeps the screen fast as the pool
+    grows.
+    """
+
+    def _pool(self, db_session, orders, machines):
+        from app.models import Equipment, SAPWorkOrder
+        eqs = []
+        for i in range(machines):
+            eq = Equipment(name=f'RS{200+i}', serial_number=f'PERF-{i}',
+                           equipment_type='RS', status='active')
+            db_session.session.add(eq)
+            eqs.append(eq)
+        db_session.session.flush()
+        for i in range(orders):
+            db_session.session.add(SAPWorkOrder(
+                work_plan_id=None, order_number=f'PERF{i:06d}', order_type='COM',
+                job_type='defect', equipment_id=eqs[i % machines].id,
+                status='pending', description='x', priority='normal'))
+        db_session.session.commit()
+        db_session.session.expire_all()
+
+    def _count_queries(self, app, fn):
+        from sqlalchemy import event
+        from app.extensions import db
+        seen = []
+
+        def listener(conn, cur, stmt, params, ctx, many):
+            seen.append(stmt)
+
+        event.listen(db.engine, 'before_cursor_execute', listener)
+        try:
+            fn()
+        finally:
+            event.remove(db.engine, 'before_cursor_execute', listener)
+        return len(seen)
+
+    def test_serialising_the_pool_does_not_query_per_machine(self, app, db_session):
+        from sqlalchemy.orm import joinedload
+        from app.api.work_plans import pool_orders_query
+        from app.models import SAPWorkOrder
+
+        self._pool(db_session, orders=60, machines=20)
+
+        def load():
+            rows = (pool_orders_query(None)
+                    .options(joinedload(SAPWorkOrder.equipment),
+                             joinedload(SAPWorkOrder.cycle))
+                    .all())
+            [o.to_dict('en') for o in rows]
+
+        assert self._count_queries(app, load) <= 2, (
+            'the pool must load in a constant number of queries, not one per machine')
+
+    def test_without_eager_loading_it_would_be_one_per_machine(self, app, db_session):
+        """Pins WHY the options() call is there, so removing it fails loudly."""
+        from app.api.work_plans import pool_orders_query
+
+        self._pool(db_session, orders=60, machines=20)
+
+        def load_lazily():
+            [o.to_dict('en') for o in pool_orders_query(None).all()]
+
+        # 1 for the orders + 1 per distinct machine. If a future change makes
+        # this cheap on its own, this test failing is good news — read it and
+        # delete it.
+        assert self._count_queries(app, load_lazily) > 10

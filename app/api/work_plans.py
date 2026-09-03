@@ -2934,7 +2934,17 @@ def get_available_jobs():
                 WorkPlanJob.sap_order_number.isnot(None),
             ).subquery()
             sap_query = sap_query.filter(~SAPWorkOrder.order_number.in_(scheduled_order_numbers))
-        sap_orders = sap_query.order_by(SAPWorkOrder.required_date, SAPWorkOrder.order_number).all()
+        # to_dict() reads self.equipment and self.cycle, both lazy — so without
+        # this the pool costs one round trip PER DISTINCT MACHINE, plus one per
+        # cycle, on top of the query itself. Measured at 30 extra queries for a
+        # 106-order pool across 30 machines; production carries 87 machines and
+        # inspection-db is on the free plan, where every round trip is dear.
+        # That is why the pool took seconds to appear.
+        sap_orders = (sap_query
+                      .options(joinedload(SAPWorkOrder.equipment),
+                               joinedload(SAPWorkOrder.cycle))
+                      .order_by(SAPWorkOrder.required_date, SAPWorkOrder.order_number)
+                      .all())
         result['sap_orders'] = [o.to_dict(language) for o in sap_orders]
 
     # Get equipment for PM jobs (all running equipment) - only if no SAP orders or explicitly requested
@@ -2948,15 +2958,26 @@ def get_available_jobs():
                 db.or_(Equipment.berth == berth, Equipment.berth == 'both')
             )
         equipment_list = eq_query.order_by(Equipment.serial_number).all()
+
+        # One grouped query, not a .count() inside the comprehension. That ran
+        # once PER MACHINE — 87 round trips on the free-plan database to build a
+        # single screen. It only escaped notice because this branch is skipped
+        # whenever the SAP pool is non-empty, which it normally is; the moment
+        # the pool empties, the fallback screen became the slowest one.
+        from app.models.inspection import Inspection as _Insp
+        equipment_ids = [eq.id for eq in equipment_list]
+        defect_counts = dict(
+            db.session.query(_Insp.equipment_id, db.func.count(Defect.id))
+            .join(Defect, Defect.inspection_id == _Insp.id)
+            .filter(Defect.status.in_(['open', 'in_progress']),
+                    _Insp.equipment_id.in_(equipment_ids))
+            .group_by(_Insp.equipment_id).all()
+        ) if equipment_ids else {}
+
         result['pm_jobs'] = [{
             'equipment': eq.to_dict(),
             'job_type': 'pm',
-            'related_defects_count': Defect.query.join(
-                Defect.inspection
-            ).filter(
-                Defect.inspection.has(equipment_id=eq.id),
-                Defect.status.in_(['open', 'in_progress'])
-            ).count()
+            'related_defects_count': defect_counts.get(eq.id, 0),
         } for eq in equipment_list]
 
     # Get open defects — ONLY defects from inspections (not field reports or safety reports)
