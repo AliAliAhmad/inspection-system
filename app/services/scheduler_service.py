@@ -999,6 +999,52 @@ def init_scheduler(app):
         replace_existing=True
     )
 
+    # A delivery is not orders until something reads it. The 05:00 cron above was
+    # the only reader, which is invisible while the courier delivers at 22:40 —
+    # and glaring on 2026-09-03, when it delivered at 13:05 and the file would
+    # have sat unread until the next morning.
+    #
+    # Waits for the delivery to go QUIET rather than firing on arrival: the
+    # courier sends ten files over about twelve minutes and IW39, the one the
+    # rebuild needs, arrives EARLY. Rebuilding on its arrival would pair today's
+    # IW39 with yesterday's IW49 and IK17.
+    DELIVERY_QUIET_SECONDS = 15 * 60
+
+    @run_with_context
+    def rebuild_pool_after_delivery():
+        from app.api.sap_sync import clear_delivery_marker, delivery_is_settled
+        from app.services.run_once import CrossWorkerLock
+        from app.services.sap_pool_sync import sync_pool_from_delivered_files
+
+        settled, age = delivery_is_settled(DELIVERY_QUIET_SECONDS)
+        if not settled:
+            if age is not None:
+                logger.info('Delivery still arriving (%.0fs quiet, need %ds)',
+                            age, DELIVERY_QUIET_SECONDS)
+            return
+
+        with CrossWorkerLock(app, 'sap-pool-rebuild') as lock:
+            if not lock.acquired:
+                logger.info('Post-delivery rebuild skipped — one is already running')
+                return
+            # Cleared BEFORE the rebuild, not after. A rebuild that crashes must
+            # not leave the marker behind to be retried every five minutes
+            # forever; the next delivery writes a fresh one, and the 05:00 cron
+            # is still there as the floor.
+            clear_delivery_marker()
+            report = sync_pool_from_delivered_files()
+            logger.info('Post-delivery pool rebuild: created=%s updated=%s '
+                        'dropped=%s', report.get('created'), report.get('updated'),
+                        report.get('orders_skipped_no_equipment'))
+
+    scheduler.add_job(
+        rebuild_pool_after_delivery,
+        CronTrigger(minute='*/5'),
+        id='rebuild_pool_after_delivery',
+        name='Rebuild the SAP job pool once a delivery has finished arriving',
+        replace_existing=True
+    )
+
     scheduler.add_job(
         telegram_push_tomorrow,
         CronTrigger(hour=16, minute=0, timezone='Asia/Baghdad'),

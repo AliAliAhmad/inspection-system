@@ -427,3 +427,55 @@ class TestPoolStatusCommand:
         out = app.test_cli_runner().invoke(args=['pool-status']).output
         # NEW is due LATER, so a due-date sort would bury it. Here it comes first.
         assert out.index('NEW') < out.index('OLD')
+
+
+class TestADeliveryTriggersTheRebuild:
+    """A delivered file is not orders until something reads it.
+
+    Until 2026-09-03 the only reader was the 05:00 cron. Invisible while the
+    courier delivered at 22:40 — five hours' wait. Glaring when it delivered at
+    13:05 and the file would have sat unread for sixteen hours, which is what
+    Ali was actually looking at when he said "still nothing new in the pool".
+    """
+
+    def test_an_upload_marks_the_delivery(self, client, app):
+        from app.api.sap_sync import delivery_is_settled
+        _post(client)
+        settled, age = delivery_is_settled(quiet_seconds=0)
+        assert settled, 'an upload must leave a mark for the scheduler to find'
+        assert age is not None and age >= 0
+
+    def test_it_waits_for_the_delivery_to_go_quiet(self, client, app):
+        """The courier sends ten files over ~12 minutes and IW39 arrives EARLY.
+
+        Rebuilding when IW39 lands would pair today's IW39 with yesterday's
+        IW49 and IK17, so this must refuse until nothing new has arrived.
+        """
+        from app.api.sap_sync import delivery_is_settled
+        _post(client)
+        settled, _ = delivery_is_settled(quiet_seconds=15 * 60)
+        assert not settled, 'a file that just landed means more may still be coming'
+
+    def test_a_later_file_pushes_the_wait_back(self, client, app):
+        """Ten files must cause ONE rebuild, after the last one, not ten."""
+        from datetime import datetime, timedelta
+        from app.api.sap_sync import _mark_delivery, delivery_is_settled
+
+        _mark_delivery(now=datetime.utcnow() - timedelta(minutes=30))
+        assert delivery_is_settled(quiet_seconds=15 * 60)[0], 'quiet for 30 min'
+
+        # A second file arrives — the clock restarts.
+        _mark_delivery()
+        assert not delivery_is_settled(quiet_seconds=15 * 60)[0]
+
+    def test_no_delivery_means_no_rebuild(self, app):
+        from app.api.sap_sync import clear_delivery_marker, delivery_is_settled
+        clear_delivery_marker()
+        settled, age = delivery_is_settled(quiet_seconds=0)
+        assert not settled and age is None
+
+    def test_clearing_twice_is_harmless(self, app):
+        """It is cleared BEFORE the rebuild, so a crash must not wedge it."""
+        from app.api.sap_sync import clear_delivery_marker
+        clear_delivery_marker()
+        clear_delivery_marker()

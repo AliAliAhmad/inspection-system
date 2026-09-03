@@ -191,6 +191,19 @@ def upload_sap_file():
 
     db.session.commit()
 
+    # A delivered file is not orders until something reads it, and until now the
+    # only thing that did was the 05:00 cron. Every earlier delivery landed at
+    # 22:40, so the wait was a few hours and nobody noticed; the 2026-09-03
+    # delivery landed at 13:05 and would have sat unread for sixteen hours.
+    #
+    # A MARKER, not a rebuild started here: the courier uploads ten files in
+    # sequence (IW39 at 22:40:19, IK17 at :38, IW49 at 22:41, IW47 at 22:52),
+    # and IW39 — the one the rebuild needs — arrives EARLY. Rebuilding the
+    # moment it lands would pair today's IW39 with yesterday's IW49 and IK17.
+    # So each upload just says "something arrived, and when", and the scheduler
+    # rebuilds once the deliveries have gone quiet.
+    _mark_delivery()
+
     logger.info('SAP sync: stored %s/%s (%s, %.1f MB) superseded=%d freed=%.1f MB',
                 source_folder, source_filename, sheet_name,
                 len(payload) / 1048576, len(superseded), freed / 1048576)
@@ -203,6 +216,54 @@ def upload_sap_file():
         'bytes': len(payload),
         'superseded': len(superseded),
     }), 200
+
+
+PENDING_REBUILD_MARKER = 'pending_rebuild'
+
+
+def _marker_path():
+    return os.path.join(_storage_dir(), PENDING_REBUILD_MARKER)
+
+
+def _mark_delivery(now=None):
+    """Record that a file just arrived, so the scheduler can react to it.
+
+    Overwrites, so the timestamp is always the LAST delivery — which is what
+    "the deliveries have gone quiet" has to be measured from.
+
+    Never raises. A marker that cannot be written costs one cycle of latency;
+    an upload that fails because of it costs the file, and the courier's retry
+    would hit the same disk.
+    """
+    try:
+        with open(_marker_path(), 'w') as handle:
+            handle.write((now or datetime.utcnow()).isoformat())
+    except Exception as e:  # noqa: BLE001
+        logger.warning('Could not mark the delivery for rebuild: %s', e)
+
+
+def delivery_is_settled(quiet_seconds, now=None):
+    """(should_rebuild, age_seconds) — has a delivery finished arriving?
+
+    True once nothing new has landed for `quiet_seconds`. Returns False while
+    files are still coming in, so a ten-file delivery causes ONE rebuild rather
+    than ten, and never one that reads a half-delivered set.
+    """
+    try:
+        with open(_marker_path()) as handle:
+            marked = datetime.fromisoformat(handle.read().strip())
+    except Exception:  # noqa: BLE001
+        return False, None
+    age = ((now or datetime.utcnow()) - marked).total_seconds()
+    return age >= quiet_seconds, age
+
+
+def clear_delivery_marker():
+    """Drop the marker once its rebuild has run."""
+    try:
+        os.remove(_marker_path())
+    except OSError:
+        pass
 
 
 @bp.route('/status', methods=['GET'])
