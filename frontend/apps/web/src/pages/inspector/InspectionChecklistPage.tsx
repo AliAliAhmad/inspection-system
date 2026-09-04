@@ -337,7 +337,11 @@ export default function InspectionChecklistPage() {
 
   const answers = inspection.answers ?? [];
   const answeredMap = new Map<number, InspectionAnswer>();
-  answers.forEach((a) => answeredMap.set(a.checklist_item_id, a));
+  // checklist_item_id is nullable: an answer with no item is a free-text extra,
+  // not a reply to a checklist row, so it has no key to be filed under here.
+  answers.forEach((a) => {
+    if (a.checklist_item_id != null) answeredMap.set(a.checklist_item_id, a);
+  });
 
   // Determine inspector's category — from inspection response (always available)
   const inspectorCategory = React.useMemo(() => {

@@ -685,3 +685,4 @@ hand: it rejected `.xlsm` and parses a different layout.
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
