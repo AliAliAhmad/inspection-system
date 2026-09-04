@@ -545,3 +545,22 @@ file had never been read: the courier delivered at 13:05 and the only reader was
 cron. The delivery timestamp was in the FIRST query of the investigation and I read it as
 "the file is there" instead of "the file is two days old". → **For anything that should
 update on a schedule, ask "when did it last change?" before "is it there?"**
+
+**LESSON: a field that does not exist can sit unnoticed behind an empty table.**
+Five call sites read `roster.shift_type`; `RosterEntry` only has `shift`. They were all
+guarded by `if roster and roster.shift_type ...`, and `roster` was always None because the
+roster table was empty — so the attribute was never reached. Filling that table would have
+500'd the bulk-assign endpoint. → **When a feature FILLS a table that was empty, grep every
+reader of that table before shipping.** Dormant code wakes up with the data.
+
+**LESSON: never let one bad row lose the whole batch AND mark the batch done.**
+A duplicate SAP id in the roster sheet violated `UniqueConstraint(user, date)`, so the commit
+raised and every row was lost — while the scheduler had already recorded its claim BEFORE the
+work, so the file was never retried. A duplicate survives every daily save, so it would have
+failed silently every night. → **Record "done" in the SAME transaction as the work**, and
+merge or report duplicate keys rather than letting the database refuse them.
+
+**LESSON: a fix that is correct and unusable is still broken.**
+Closing the upload-button hole added one SELECT per (user x date) — ~38,000 round trips on a
+free-plan database for one button press. The endpoint would never have returned. → **After
+fixing a loop, count the queries it now makes.** Preload the set once, outside the loop.

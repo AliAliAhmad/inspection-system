@@ -633,3 +633,28 @@ in a comment closed the shell string, deleted every patch below it, and 500'd th
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
+
+### 2026-09-04 — The team roster imports itself (LIVE, 15,878 days)
+`Engineering 2026_v1.xlsm` had arrived daily since 2026-08-28 and NOTHING read it. Its
+`All Employees Off Days` sheet is the roster. The old upload could not have read it even by
+hand: it rejected `.xlsm` and parses a different layout.
+- **Live result:** 103 in sheet → **45 matched**, 58 dropped, 15,878 days
+  (day 7,436 · off 6,459 · night 1,007 · leave 976).
+- Codes: `D` day · `N` night · `X` off · `PL`/`PSL`/`COM`/`EX` leave. `COM` = holiday,
+  `EX` = leave earned by working extra (Ali). Unknown codes are **skipped and counted**.
+- **`RosterEntry.source`** (`import`/`manual`/`swap`): an import NEVER overwrites a day a
+  person set. Approved swaps are stamped `swap`. `to_dict` exposes `changed_by_hand`.
+- The old Upload button used to `delete()` every entry for a user — it would have wiped
+  every hand change. Now deletes only rows it owns.
+- **Daily-wage men:** the sheet IDs them `DW1`–`DW6`, the app had `600001`–`600007`.
+  Remapped 2026-09-04 (DW1 Hasanen · DW2 Muslim · DW3 Mohammad Zaki · DW4 Hssein ·
+  DW5 Waleed · DW6 Ali Khalil). Also `500879` → `500831` (Ali Mohammad Hilal).
+- Auto-imports ~15 min after a delivery settles, gated on `SapSyncFile.parsed_at` set in the
+  SAME transaction as the rows. `flask import-roster [--apply]`, `flask roster-coverage`.
+- **⚠️ NIGHT SHIFT IS NOW LOADED (1,007 days).** The known disagreement — `day_budget`
+  excludes `night`, the generator's own lookup does not — is no longer theoretical.
+  Check the first generated plan for night men on day jobs.
+- Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
+  would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
+  forever; the roster job gated on a marker the pool job deletes.
