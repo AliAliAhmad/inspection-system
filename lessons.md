@@ -522,3 +522,26 @@ against the bug almost every time it runs.
 bot that had gone quiet. → **When code discards input, ask "who is told?" — not "is it
 counted?"** Route it to a channel that survives until a human looks, and separate DELIBERATE
 exclusions from unknown ones, or the alert becomes noise and gets skimmed.
+
+**LESSON: `bash -n` does not check code embedded inside a shell string.**
+`start.sh` runs its schema patches inside `python -c "..."`. A comment I added contained a
+quoted phrase, which closed that shell string early and silently deleted every patch below
+it — including an ALTER TABLE. The app then booted against a column that did not exist and
+the job pool 500'd in production. `bash -n start.sh` PASSED, because the result was still
+valid bash. → **When one language is nested inside another, check each layer.** Extract the
+inner code and `compile()` it (`tests/test_start_sh_is_intact.py`), and never put a double
+quote inside a double-quoted heredoc-less block.
+
+**LESSON: a fact must not depend on the thing it outlives.**
+"Was this job started" was going to be computed by joining back to the WorkPlanJob on the old
+week — but finished weeks are cleanup targets, so deleting them would have silently erased
+the sign from every half-done job. → **If a fact must survive its source, COPY it at the
+moment you still have it** (`app_work_state` is stamped on reclaim, not looked up later).
+A test that deletes the source and asserts the fact survives is what proves it.
+
+**LESSON: check the input's FRESHNESS, not just its presence.**
+Four rounds of "nothing new in the pool" were spent inside the app. The answer was that the
+file had never been read: the courier delivered at 13:05 and the only reader was a 05:00
+cron. The delivery timestamp was in the FIRST query of the investigation and I read it as
+"the file is there" instead of "the file is two days old". → **For anything that should
+update on a schedule, ask "when did it last change?" before "is it there?"**
