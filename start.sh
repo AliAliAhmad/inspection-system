@@ -80,6 +80,18 @@ with app.app_context():
     # above is followed by '|| echo WARNING', so a failed migration does not
     # stop the boot — and a missing column would 500 the nightly rebuild in a
     # background thread nobody is watching.
+    # Where a roster day came from, so an import never overwrites a person's
+    # own change. NO DOUBLE QUOTES here either -- see the note above.
+    for col_name, col_type in (('source', 'VARCHAR(10)'),):
+        try:
+            db.session.execute(text(
+                f'ALTER TABLE roster_entries ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added roster_entries.{col_name}')
+        except Exception:
+            db.session.rollback()
+            print(f'roster_entries.{col_name} already exists')
+
     for col_name, col_type in (('system_status', 'VARCHAR(64)'),
                                ('app_work_state', 'VARCHAR(20)')):
         try:

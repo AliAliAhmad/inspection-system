@@ -404,6 +404,51 @@ def create_app(config_name='development'):
         }), status_code
 
     # CLI commands
+    @app.cli.command('import-roster')
+    @click.option('--apply', 'do_apply', is_flag=True,
+                  help='Write the roster. Without this nothing is changed.')
+    def import_roster(do_apply):
+        """Read the team roster out of the delivered engineering workbook.
+
+        Prints what it would do and stops. Add --apply to write.
+
+        Never overwrites a day somebody set in the app: Ali, 2026-09-04, "what i
+        change in the app should be kept as what my change is".
+        """
+        from app.services.roster_import import apply_roster
+        from app.services.sap_pool_sync import _current_file_bytes
+
+        payload, record = _current_file_bytes(filename_contains='Engineering 2026_v1')
+        if not payload:
+            print('No engineering workbook has been delivered.')
+            return
+
+        print('=' * 78)
+        print(f'ROSTER from {record.source_filename}  (delivered {record.received_at})')
+        print('=' * 78)
+
+        report = apply_roster(payload, dry_run=not do_apply)
+        print(f"  people in the sheet : {report['people_in_sheet']}")
+        print(f"  matched in the app  : {report['matched_people']}")
+        print(f"  dropped (no SAP id) : {report['dropped_people']}")
+        if report['dropped_sap_ids']:
+            print(f"      {', '.join(report['dropped_sap_ids'][:20])}"
+                  + (' ...' if report['dropped_people'] > 20 else ''))
+        print(f"  date columns        : {report['date_columns']}")
+        print(f"  days created        : {report['created']}")
+        print(f"  days updated        : {report['updated']}")
+        print(f"  days left alone     : {report['left_alone_manual']}  "
+              f"(changed by hand in the app)")
+        if report['unknown_codes']:
+            # A new code in the sheet must be visible, never silently skipped —
+            # the workbook's own Instruction sheet is the authority.
+            print(f"  UNKNOWN codes       : {report['unknown_codes']}")
+            print('      not imported. Check the Instruction sheet and tell me '
+                  'what they mean.')
+
+        if not do_apply:
+            print('\nDRY RUN — re-run with --apply to write.')
+
     @app.cli.command('pool-status')
     @click.option('--new', 'how_many', default=15, show_default=True,
                   help='How many of the most recently added orders to list.')

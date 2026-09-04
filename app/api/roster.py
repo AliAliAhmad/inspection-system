@@ -102,8 +102,12 @@ def upload_roster():
         return jsonify({'status': 'error', 'message': 'No file uploaded'}), 400
 
     file = request.files['file']
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        return jsonify({'status': 'error', 'message': 'Only .xlsx files are supported'}), 400
+    # .xlsm is the same format with macros enabled, and openpyxl reads it the
+    # same way. Ali's roster workbook IS an .xlsm, so leaving it out meant the
+    # real file could not be uploaded even by hand.
+    if not file.filename.endswith(('.xlsx', '.xls', '.xlsm')):
+        return jsonify({'status': 'error',
+                        'message': 'Only .xlsx, .xlsm and .xls files are supported'}), 400
 
     try:
         import openpyxl
@@ -168,8 +172,18 @@ def upload_roster():
             errors.append(f'Row {row_idx}: No user found with SAP ID "{sap_id_str}"')
             continue
 
-        # Delete all existing roster entries for this user
-        RosterEntry.query.filter_by(user_id=user.id).delete()
+        # Delete the days this importer owns — NOT the ones a person set.
+        #
+        # This used to delete every entry for the user, which silently undid
+        # Ali's rule (2026-09-04): "what i change in the app should be kept as
+        # what my change is". A manual fix or an approved shift swap would
+        # vanish the next time anybody pressed Upload. NULL is included because
+        # rows predating `source` are the old importer's own work.
+        RosterEntry.query.filter(
+            RosterEntry.user_id == user.id,
+            db.or_(RosterEntry.source.is_(None),
+                   RosterEntry.source == 'import'),
+        ).delete(synchronize_session=False)
         users_processed += 1
 
         # Parse each date column
@@ -179,10 +193,20 @@ def upload_roster():
             if shift is None:
                 continue
 
+            # A day the person set stays exactly as they set it.
+            kept = RosterEntry.query.filter(
+                RosterEntry.user_id == user.id,
+                RosterEntry.date == col_date,
+                RosterEntry.source.in_(('manual', 'swap')),
+            ).first()
+            if kept:
+                continue
+
             entry = RosterEntry(
                 user_id=user.id,
                 date=col_date,
-                shift=shift
+                shift=shift,
+                source='import'
             )
             db.session.add(entry)
             imported += 1
@@ -1160,11 +1184,15 @@ def approve_swap_request(request_id):
     ).first()
     if req_entry:
         req_entry.shift = swap_req.target_shift
+        # An approved swap is a person's decision, so the roster import must
+        # never flatten it back to whatever the Excel file says.
+        req_entry.source = 'swap'
     else:
         req_entry = RosterEntry(
             user_id=swap_req.requester_id,
             date=swap_req.requester_date,
-            shift=swap_req.target_shift
+            shift=swap_req.target_shift,
+            source='swap'
         )
         db.session.add(req_entry)
 
@@ -1175,11 +1203,13 @@ def approve_swap_request(request_id):
     ).first()
     if tgt_entry:
         tgt_entry.shift = swap_req.requester_shift
+        tgt_entry.source = 'swap'
     else:
         tgt_entry = RosterEntry(
             user_id=swap_req.target_user_id,
             date=swap_req.target_date,
-            shift=swap_req.requester_shift
+            shift=swap_req.requester_shift,
+            source='swap'
         )
         db.session.add(tgt_entry)
 

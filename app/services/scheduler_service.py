@@ -1045,6 +1045,54 @@ def init_scheduler(app):
         replace_existing=True
     )
 
+    # The courier has delivered the engineering workbook every day since
+    # 2026-08-28 and nothing has ever read it. It carries the team roster on its
+    # `All Employees Off Days` sheet, and it arrives on its OWN schedule — 08:41
+    # on 2026-09-04, hours away from the 21:16 SAP batch — so it rides the same
+    # delivery-settled marker rather than a second timer.
+    ROSTER_FILENAME_HINT = 'Engineering 2026_v1'
+
+    @run_with_context
+    def import_roster_after_delivery():
+        from app.api.sap_sync import delivery_is_settled
+        from app.services.roster_import import apply_roster
+        from app.services.run_once import CrossWorkerLock, claim
+        from app.services.sap_pool_sync import _current_file_bytes
+
+        settled, _ = delivery_is_settled(DELIVERY_QUIET_SECONDS)
+        if not settled:
+            return
+
+        payload, record = _current_file_bytes(filename_contains=ROSTER_FILENAME_HINT)
+        if not payload or not record:
+            return
+
+        # Keyed on the FILE's id, so the same workbook is imported once however
+        # many times this job wakes up. A new delivery is a new row and so a new
+        # key; re-importing identical bytes is wasted work on a 512 MB box.
+        # claim() fails OPEN, so a marker that cannot be read costs a repeat
+        # import — which is idempotent — rather than a roster that never loads.
+        if not claim(app, f'roster-import-{record.id}', window_seconds=86400):
+            return
+
+        with CrossWorkerLock(app, 'roster-import') as lock:
+            if not lock.acquired:
+                return
+            report = apply_roster(payload)
+            logger.info('Roster imported from %s: matched=%s dropped=%s '
+                        'created=%s updated=%s kept_manual=%s',
+                        record.source_filename, report.get('matched_people'),
+                        report.get('dropped_people'), report.get('created'),
+                        report.get('updated'), report.get('left_alone_manual'))
+
+    scheduler.add_job(
+        import_roster_after_delivery,
+        CronTrigger(minute='*/5'),
+        id='import_roster_after_delivery',
+        name='Import the team roster once a delivery has finished arriving',
+        replace_existing=True
+    )
+
     scheduler.add_job(
         telegram_push_tomorrow,
         CronTrigger(hour=16, minute=0, timezone='Asia/Baghdad'),
