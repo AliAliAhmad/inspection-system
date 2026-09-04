@@ -20,8 +20,11 @@ from app.models import (
     # Enhanced Work Planning models
     JobTemplate, JobTemplateMaterial, JobTemplateChecklist, JobDependency,
     CapacityConfig, WorkerSkill, EquipmentRestriction, WorkPlanVersion,
-    SchedulingConflict, JobChecklistResponse, InspectionAnswer
+    SchedulingConflict, JobChecklistResponse, InspectionAnswer,
+    WorkPlanJobTask
 )
+from app.models.work_plan_job_task import (anchor_for as anchor_for_job,
+                                           normalise_text as normalise_task_text)
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from app.utils.decorators import (get_current_user, get_language,
                                   planning_today as get_planning_today,
@@ -1277,7 +1280,13 @@ def _delete_job_record(plan_id, job):
 # rating row dangling.
 JOB_CHILD_TABLES = ('job_checklist_responses', 'work_plan_assignments',
                     'work_plan_materials', 'work_plan_job_ratings',
-                    'work_plan_job_trackings')
+                    'work_plan_job_trackings',
+                    # Only MANUAL-job sub-task lists carry work_plan_job_id, so
+                    # this DELETE clears those (right — that job is gone) and
+                    # cannot touch a list anchored to a SAP order, defect or
+                    # inspection (right — Ali: it must survive the pool).
+                    # It is here so the final DELETE does not trip the FK.
+                    'work_plan_job_tasks')
 
 
 def purge_job_rows(job):
@@ -2272,6 +2281,8 @@ def get_my_plan():
 
     # Get user's assigned jobs with minimal data + tracking
     my_jobs = []
+    my_job_objs = []
+    dicts_by_job_id = {}
     for day in plan.days:
         day_jobs = []
         for job in day.jobs:
@@ -2346,6 +2357,8 @@ def get_my_plan():
                         job_dict['tracking'] = None
 
                     day_jobs.append(job_dict)
+                    my_job_objs.append(job)
+                    dicts_by_job_id[job.id] = job_dict
                     break
 
         if day_jobs:
@@ -2354,6 +2367,14 @@ def get_my_plan():
                 'day_name': day.date.strftime('%A'),
                 'jobs': day_jobs
             })
+
+    # Sub-task lists for the whole week in ONE query, not one per job. The
+    # worker may tick these; he may not add or edit them (see the endpoints).
+    for job_id, tasks in WorkPlanJobTask.for_jobs(my_job_objs).items():
+        target = dicts_by_job_id.get(job_id)
+        if target is not None:
+            target['sub_tasks'] = [t.to_dict() for t in tasks]
+            target['sub_tasks_done'] = len([t for t in tasks if t.is_done])
 
     return jsonify({
         'status': 'success',
@@ -5284,6 +5305,224 @@ def complete_job_checklist(plan_id, job_id):
         'failed_items': len(failed_responses),
         'failed_details': [{'item_id': r.checklist_item_id, 'question': r.question, 'notes': r.notes} for r in failed_responses]
     }), 200
+
+
+# ==================== JOB SUB-TASKS / TEAM NOTES ====================
+#
+# Ali, 2026-09-05: a "+" on every planned job for sub-tasks and notes, which
+# stay with the job "even when back to pool or transferred".
+#
+# The list does NOT belong to the plan row — see app/models/work_plan_job_task.py
+# for why, and for what it hangs on instead. Everything below just resolves a
+# job id to that anchor and reads/writes there.
+#
+# Two deliberate differences from the neighbouring job endpoints:
+#
+#   * A PUBLISHED plan is editable here. move/remove refuse on a published plan
+#     because they change the week's shape; a note left mid-week on the live
+#     plan is the whole point of the feature.
+#   * A worker may TICK, and only tick. Adding, editing and deleting stay with
+#     engineers and admins, so the list a planner wrote cannot be rewritten
+#     from a phone.
+
+
+def _job_for_tasks(job_id, plan_id=None):
+    """Load a job for its task list, or raise."""
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job:
+        raise NotFoundError("Job not found")
+    if plan_id is not None and job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+    return job
+
+
+def _may_tick(user, job):
+    """A planner, or one of the people actually assigned to this job."""
+    if user.role in PLANNING_ROLES:
+        return True
+    return any(a.user_id == user.id for a in (job.assignments or []))
+
+
+def _tasks_for_job(job):
+    kind, key = anchor_for_job(job)
+    return (WorkPlanJobTask.query
+            .filter_by(anchor_kind=kind, anchor_key=key)
+            .order_by(WorkPlanJobTask.position, WorkPlanJobTask.id)
+            .all())
+
+
+def _task_payload(job, tasks):
+    done = len([t for t in tasks if t.is_done])
+    kind, key = anchor_for_job(job)
+    return {
+        'job_id': job.id,
+        'anchor_kind': kind,
+        'anchor_key': key,
+        'tasks': [t.to_dict() for t in tasks],
+        'total': len(tasks),
+        'done': done,
+    }
+
+
+@bp.route('/<int:plan_id>/job-tasks', methods=['GET'])
+@jwt_required()
+def get_plan_job_tasks(plan_id):
+    """Every job's task list for one plan, in ONE query, keyed by job id.
+
+    The board draws ~100 jobs. Asking per job is the N+1 that used to make the
+    pool spend 30 queries on one screen.
+    """
+    get_current_user()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    jobs = (WorkPlanJob.query
+            .join(WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id)
+            .filter(WorkPlanDay.work_plan_id == plan_id)
+            .all())
+
+    by_job = WorkPlanJobTask.for_jobs(jobs)
+
+    return jsonify({
+        'status': 'success',
+        'plan_id': plan_id,
+        'jobs': {
+            str(job_id): {
+                'tasks': [t.to_dict() for t in tasks],
+                'total': len(tasks),
+                'done': len([t for t in tasks if t.is_done]),
+            }
+            for job_id, tasks in by_job.items() if tasks
+        },
+    }), 200
+
+
+@bp.route('/jobs/<int:job_id>/tasks', methods=['GET'])
+@jwt_required()
+def get_job_tasks(job_id):
+    """One job's sub-task list. Used by the phone and by the task popover."""
+    get_current_user()
+    job = _job_for_tasks(job_id)
+    return jsonify({'status': 'success',
+                    **_task_payload(job, _tasks_for_job(job))}), 200
+
+
+@bp.route('/jobs/<int:job_id>/tasks', methods=['POST'])
+@jwt_required()
+def add_job_task(job_id):
+    """Add one line to a job's list.
+
+    Request body: {"content": "Grease the boom pins"}
+    """
+    user = engineer_or_admin_required()
+    job = _job_for_tasks(job_id)
+
+    data = request.get_json() or {}
+    content = normalise_task_text(data.get('content'))
+    if not content:
+        raise ValidationError("content is required")
+    if len(content) > 500:
+        raise ValidationError("content must be 500 characters or fewer")
+
+    kind, key = anchor_for_job(job)
+
+    existing = _tasks_for_job(job)
+    # Same text twice on the same job is a double-tap, not a second job step.
+    for task in existing:
+        if task.content == content:
+            return jsonify({'status': 'success',
+                            'message': 'That line is already on this job',
+                            'task': task.to_dict(),
+                            **_task_payload(job, existing)}), 200
+
+    task = WorkPlanJobTask(
+        anchor_kind=kind,
+        anchor_key=key,
+        # NULL unless the job has no durable identity of its own — this is what
+        # keeps anchored lists alive through purge_job_rows(). See the model.
+        work_plan_job_id=job.id if kind == 'job' else None,
+        content=content,
+        created_by_id=user.id,
+        position=(max([t.position for t in existing]) + 1) if existing else 0,
+    )
+    db.session.add(task)
+    db.session.commit()
+
+    return jsonify({'status': 'success',
+                    'message': 'Sub-task added',
+                    'task': task.to_dict(),
+                    **_task_payload(job, _tasks_for_job(job))}), 201
+
+
+@bp.route('/jobs/<int:job_id>/tasks/<int:task_id>', methods=['PATCH'])
+@jwt_required()
+def update_job_task(job_id, task_id):
+    """Tick/untick a line, or edit its text.
+
+    Request body: {"is_done": true} and/or {"content": "..."}
+
+    Ticking is open to the assigned worker; editing the text is not.
+    """
+    user = get_current_user()
+    job = _job_for_tasks(job_id)
+
+    task = db.session.get(WorkPlanJobTask, task_id)
+    kind, key = anchor_for_job(job)
+    if not task or task.anchor_kind != kind or task.anchor_key != key:
+        raise NotFoundError("Sub-task not found on this job")
+
+    data = request.get_json() or {}
+    if 'is_done' not in data and 'content' not in data:
+        raise ValidationError("is_done or content is required")
+
+    if 'is_done' in data:
+        if not _may_tick(user, job):
+            raise ForbiddenError("Only the assigned team, engineers and admins can tick sub-tasks")
+        done = bool(data['is_done'])
+        if done != bool(task.is_done):
+            task.is_done = done
+            # Who ticked it is the useful half — cleared on un-tick so a stale
+            # name never sits next to an open line.
+            task.done_by_id = user.id if done else None
+            task.done_at = datetime.utcnow() if done else None
+
+    if 'content' in data:
+        if user.role not in PLANNING_ROLES:
+            raise ForbiddenError("Only engineers and admins can edit sub-task text")
+        content = normalise_task_text(data.get('content'))
+        if not content:
+            raise ValidationError("content cannot be empty")
+        if len(content) > 500:
+            raise ValidationError("content must be 500 characters or fewer")
+        task.content = content
+
+    db.session.commit()
+
+    return jsonify({'status': 'success',
+                    'task': task.to_dict(),
+                    **_task_payload(job, _tasks_for_job(job))}), 200
+
+
+@bp.route('/jobs/<int:job_id>/tasks/<int:task_id>', methods=['DELETE'])
+@jwt_required()
+def delete_job_task(job_id, task_id):
+    """Remove one line from a job's list."""
+    engineer_or_admin_required()
+    job = _job_for_tasks(job_id)
+
+    task = db.session.get(WorkPlanJobTask, task_id)
+    kind, key = anchor_for_job(job)
+    if not task or task.anchor_kind != kind or task.anchor_key != key:
+        raise NotFoundError("Sub-task not found on this job")
+
+    db.session.delete(task)
+    db.session.commit()
+
+    return jsonify({'status': 'success',
+                    'message': 'Sub-task removed',
+                    **_task_payload(job, _tasks_for_job(job))}), 200
 
 
 # ==================== CONFLICTS ====================

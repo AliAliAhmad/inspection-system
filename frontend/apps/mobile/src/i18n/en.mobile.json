@@ -964,5 +964,9 @@
     "select_list_desc": "Select an inspection list to balance workload.",
     "specialist_workload": "Specialist Workload",
     "title": "Workload Balancer"
+  },
+  "job_sub_tasks": {
+    "title": "Sub-tasks & notes",
+    "done_by": "done by {{name}}"
   }
 }

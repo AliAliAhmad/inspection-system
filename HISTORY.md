@@ -1,3 +1,29 @@
+## 2026-09-05 — Job sub-tasks / team notes
+
+### Job sub-tasks / team notes — BUILT 2026-09-05, not yet deployed
+- Ali: a "+" on every planned job for sub-tasks and notes, "kept with it even when
+  back to pool or transferred". Tickable lines; worker may tick, not add or edit;
+  they print on the plan PDF.
+- **The list does NOT hang on the plan row.** `purge_job_rows` DELETES the job row and
+  every child when a job returns to the pool, so a child row would be destroyed —
+  exactly what Ali said must not happen. It hangs on the durable identity instead:
+  `sap_order_number` -> `defect_id` -> `inspection_assignment_id` -> job id, resolved by
+  `anchor_for()` in `app/models/work_plan_job_task.py`. Every path that re-creates a job
+  (carry-over, split, `place_one`, pool -> plan) copies the SAP order verbatim, so the
+  list follows for free. `split_job`'s synthetic `<order>-P2` suffix is stripped so the
+  parts of one split job share one list.
+- **`work_plan_job_id` is NULL except for manual jobs.** That is what makes it safe to
+  put `work_plan_job_tasks` in `JOB_CHILD_TABLES`: the purge deletes manual-job lists
+  (right — that job is gone) and cannot see anchored ones (right).
+- Endpoints on `/api/work-plans`: `<plan>/job-tasks` (whole board in ONE query),
+  `jobs/<id>/tasks` GET/POST, `.../<task>` PATCH/DELETE. A PUBLISHED plan is editable
+  here on purpose, unlike move/remove.
+- Web: `JobSubTasks.tsx` popover on each `BundleCard` row. Mobile: `JobSubTasksCard.tsx`
+  on `JobDetailsScreen`, optimistic tick. PDF: indented tick-boxes under each job row.
+- Table ships via the `start.sh` pattern (alembic still has nine heads). 16 tests in
+  `tests/test_work_plan_job_tasks.py`; full suite 929 passed.
+
+
 # Inspection System
 
 - **2026-08-25 (2)** — **Plan 3 Stage 2: the fast crew stops being invisible, and five findings from the final review.** Nothing in this system priced a day by `actual_hours` — every wallet, the generator and the domino used the ESTIMATE — so a crew finishing a six-hour job in three released nothing, anywhere. `app/services/crew_free.py` answers the different question: what is left of these specific men's day, right now. It deliberately does **not** consult the day wallet, which is a planning budget and would say "nothing is free" on any day planned full — which is every day this feature is for. Finishing the last job early buzzes the planners with up to three buttons; the mobile **"I am free"** button (`POST /api/work-plan-tracking/jobs/<id>/free-for-more`) raises the same question by hand. **The message speaks CLOCK hours, never man-hours** (Ali, 2026-08-25: two men each holding five hours is ten man-hours — true, and at eleven in the morning "ten hours left" is a number nobody can work); the arithmetic stays in man-hours. **Jobs that FIT come first** — finishing something beats starting something — and an oversized job is offered only when nothing fits, saying on its own button that the rest carries to tomorrow. **No domino here**: these hours were never in the day's planned budget, so nothing needs to move aside. One announcement per crew per day, including the nothing-fits push, and a job sitting in one open question is hidden from another so two crews finishing in the same minute cannot both be promised the same machine.
@@ -658,3 +684,4 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.

@@ -93,6 +93,7 @@ from app.models.work_plan_day import WorkPlanDay
 from app.models.work_plan_job import WorkPlanJob
 from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.work_plan_material import WorkPlanMaterial
+from app.models.work_plan_job_task import WorkPlanJobTask
 from app.models.sap_work_order import SAPWorkOrder
 
 # Enhanced Work Planning (must be after WorkPlanJob due to FK)
@@ -245,6 +246,7 @@ __all__ = [
     'WorkPlan',
     'WorkPlanDay',
     'WorkPlanJob',
+    'WorkPlanJobTask',
     'WorkPlanAssignment',
     'WorkPlanMaterial',
     'SAPWorkOrder',

@@ -180,7 +180,27 @@ class WorkPlanPDF(FPDF):
         # photos in narrow filtered PDFs (per-day, per-berth, etc.) but NOT
         # in the full-week PDF where they'd add too many pages.
         self.filters_active = False
+        # Sub-tasks / team notes for every job on the plan, in ONE query. They
+        # are printed under each job row so a crew working off the paper sheet
+        # gets the same list the app shows. Keyed by job id.
+        self._sub_tasks = self._load_sub_tasks()
         self._load_fonts()
+
+    def _load_sub_tasks(self):
+        """{job_id: [task, ...]} for the whole plan. Never fatal.
+
+        A PDF that renders without the notes is far better than a PDF that
+        does not render, so a missing table (a server that has not restarted
+        into the new schema yet) degrades to an empty map.
+        """
+        try:
+            from app.models.work_plan_job_task import WorkPlanJobTask
+            jobs = [job for day in (self.plan.days or []) for job in (day.jobs or [])]
+            return WorkPlanJobTask.for_jobs(jobs)
+        except Exception:
+            current_app.logger.warning(
+                'Sub-task lists unavailable for this PDF', exc_info=True)
+            return {}
 
     def _embed_image_from_url(self, url, x, y, w, h):
         """Download an image from a URL and embed it into the PDF.
@@ -1899,6 +1919,44 @@ class WorkPlanPDF(FPDF):
 
         # Advance cursor past the wrapped row
         self.set_xy(LM, row_y + row_h)
+
+        # Sub-tasks / notes, indented under the job they belong to.
+        self._render_sub_task_lines(job, col_widths)
+
+    def _render_sub_task_lines(self, job, col_widths):
+        """Print a job's sub-task list under its row, one line each.
+
+        Each line gets its own empty checkbox: the sheet is what the crew ticks
+        by hand in the yard, so a line already ticked in the app still prints a
+        box — the paper is a fresh copy, not a mirror of the screen.
+        """
+        tasks = self._sub_tasks.get(job.id) or []
+        if not tasks:
+            return
+
+        line_h = 3.2
+        # Indent to the description column so the lines sit under the job text,
+        # not under the row number.
+        indent = LM + col_widths[0] + 2
+        width = sum(col_widths[1:5]) - 4
+        cpl = 70 if self.language == 'ar' else 100
+
+        for task in tasks:
+            for line in self._wrap_lines(task.content or '', cpl, max_lines=2,
+                                         separator=' '):
+                if self.get_y() > PH - 18:
+                    self.add_page()
+                y = self.get_y()
+                # Tick box
+                self.set_draw_color(*BORDER)
+                self.set_line_width(0.2)
+                self.rect(indent, y + 0.5, 2.2, 2.2, 'D')
+                self._font('', 6)
+                self.set_text_color(*MUTED)
+                self.set_xy(indent + 3.4, y)
+                self.cell(width, line_h, self._safe(line), border=0)
+                self.set_text_color(*TEXT)
+                self.set_xy(LM, y + line_h)
 
 
 # ---------------------------------------------------------------------------

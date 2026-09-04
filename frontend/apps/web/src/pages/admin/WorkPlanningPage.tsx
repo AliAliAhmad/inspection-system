@@ -73,7 +73,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, workPlanTrackingApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType, type PdfFilters } from '@inspection/shared';
+import { workPlansApi, workPlanTrackingApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, jobSubTasksApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType, type PdfFilters } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -1246,6 +1246,16 @@ export default function WorkPlanningPage() {
     queryFn: () => defectsApi.list({ status: 'open', per_page: 500 }).then((r) => r.data),
   });
   const openDefects = ((defectsData as any)?.data || []);
+
+  // Sub-task / note counts for EVERY job on the plan, in one request. Asking
+  // per job would be 100 requests to draw one board — the same N+1 that made
+  // the pool slow. The badge on each job row reads from this map.
+  const { data: subTaskCountsData } = useQuery({
+    queryKey: ['plan-job-sub-tasks', currentPlan?.id],
+    queryFn: () => jobSubTasksApi.forPlan(currentPlan!.id).then((r) => r.data),
+    enabled: !!currentPlan?.id,
+  });
+  const subTaskCounts = subTaskCountsData?.jobs;
 
   // Fetch roster for leave status
   const { data: rosterData } = useQuery({
@@ -3096,6 +3106,8 @@ export default function WorkPlanningPage() {
                                             dayId={day.id}
                                             onJobClick={handleJobClick}
                                             overdueMax={overdueMax}
+                                            planId={currentPlan?.id}
+                                            subTaskCounts={subTaskCounts}
                                           />
                                         ));
                                       })()}

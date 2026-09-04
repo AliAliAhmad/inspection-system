@@ -173,7 +173,7 @@ export type {
   SearchResult,
   AssistantResponse,
 } from './ai.api';
-export { workPlansApi, workerAssignmentRulesApi } from './work-plans.api';
+export { workPlansApi, workerAssignmentRulesApi, jobSubTasksApi } from './work-plans.api';
 export type {
   WorkPlanListParams,
   WorkPlansListResponse,
@@ -184,6 +184,9 @@ export type {
   EquipmentCategory,
   RuleUserSummary,
   RuleBerth,
+  JobSubTask,
+  JobSubTaskList,
+  PlanJobSubTasks,
 } from './work-plans.api';
 export { materialsApi } from './materials.api';
 export type {

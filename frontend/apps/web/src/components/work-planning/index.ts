@@ -41,3 +41,4 @@ export { GenerationActionBar } from './GenerationActionBar';
 export { WorkerAssignmentRulesManager } from './WorkerAssignmentRulesManager';
 export { BundleCard } from './BundleCard';
 export { PdfFilterModal } from './PdfFilterModal';
+export { JobSubTasks } from './JobSubTasks';

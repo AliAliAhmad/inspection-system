@@ -797,3 +797,73 @@ export const workerAssignmentRulesApi = {
     );
   },
 };
+
+// ── Job sub-tasks / team notes ──────────────────────────────────────────────
+//
+// These stick to the JOB, not to its row in a plan: the same SAP order pulled
+// back out of the pool next week carries the same list. The backend resolves a
+// job id to that anchor, so the client only ever needs the job id.
+
+export interface JobSubTask {
+  id: number;
+  content: string;
+  is_done: boolean;
+  position: number;
+  anchor_kind: 'sap' | 'defect' | 'inspection' | 'job';
+  anchor_key: string;
+  created_by_id: number;
+  created_by_name: string | null;
+  done_by_id: number | null;
+  done_by_name: string | null;
+  done_at: string | null;
+  created_at: string | null;
+}
+
+export interface JobSubTaskList {
+  status: string;
+  job_id: number;
+  anchor_kind: string;
+  anchor_key: string;
+  tasks: JobSubTask[];
+  total: number;
+  done: number;
+}
+
+export interface PlanJobSubTasks {
+  status: string;
+  plan_id: number;
+  /** Keyed by job id as a STRING — JSON object keys are always strings. */
+  jobs: Record<string, { tasks: JobSubTask[]; total: number; done: number }>;
+}
+
+export const jobSubTasksApi = {
+  /** Every job's list for one plan, in one request. Used by the plan board. */
+  forPlan(planId: number) {
+    return getApiClient().get<PlanJobSubTasks>(`/api/work-plans/${planId}/job-tasks`);
+  },
+
+  list(jobId: number) {
+    return getApiClient().get<JobSubTaskList>(`/api/work-plans/jobs/${jobId}/tasks`);
+  },
+
+  add(jobId: number, content: string) {
+    return getApiClient().post<JobSubTaskList & { task: JobSubTask }>(
+      `/api/work-plans/jobs/${jobId}/tasks`,
+      { content }
+    );
+  },
+
+  /** Tick/untick is open to the assigned worker; editing content is not. */
+  update(jobId: number, taskId: number, payload: { is_done?: boolean; content?: string }) {
+    return getApiClient().patch<JobSubTaskList & { task: JobSubTask }>(
+      `/api/work-plans/jobs/${jobId}/tasks/${taskId}`,
+      payload
+    );
+  },
+
+  remove(jobId: number, taskId: number) {
+    return getApiClient().delete<JobSubTaskList>(
+      `/api/work-plans/jobs/${jobId}/tasks/${taskId}`
+    );
+  },
+};

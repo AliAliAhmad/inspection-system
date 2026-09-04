@@ -58,6 +58,13 @@
 - ✅ 2026-08-25 Plan 3 Stage 2 — the fast crew (`app/services/crew_free.py`), commit `f4aac4d`
 - ✅ 2026-08-25 Urgent reach stacker offered at 3-4 men / 8h, falling back to 2 men / 12h
 
+### Job sub-tasks / team notes — BUILT 2026-09-05, not yet deployed
+- A "+" on every planned job: tickable sub-tasks/notes that survive a return to the
+  pool. Full detail in HISTORY.md. Key fact: the list hangs on `sap_order_number`,
+  NOT on the plan row, because `purge_job_rows` deletes the row and its children.
+- `app/models/work_plan_job_task.py`, 17 tests in `tests/test_work_plan_job_tasks.py`.
+- **Deploy needs:** a Render restart (`start.sh` creates the table) + a mobile OTA.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

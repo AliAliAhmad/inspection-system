@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { useRoute } from '@react-navigation/native';
 import { workPlansApi } from '@inspection/shared';
 import type { JobDetails } from '@inspection/shared';
+import JobSubTasksCard from '../../components/JobSubTasksCard';
 
 const SEVERITY_COLORS: Record<string, string> = {
   low: '#9E9E9E',
@@ -162,6 +163,9 @@ export default function JobDetailsScreen() {
           )}
         </View>
       </View>
+
+      {/* ── Sub-tasks & notes the planner left on this job ── */}
+      <JobSubTasksCard jobId={jobId} />
 
       {/* ── SAP block ── */}
       {data.sap && (

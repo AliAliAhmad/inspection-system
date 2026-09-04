@@ -743,6 +743,44 @@ with app.app_context():
         db.session.rollback()
         print('work_plan_materials table already exists')
 
+    # Create work_plan_job_tasks table
+    #
+    # Sub-tasks and team notes that stick to the JOB, not to the plan row.
+    # work_plan_job_id is deliberately NULLable and is set only for manual jobs
+    # that have no SAP order, defect or inspection behind them -- see
+    # app/models/work_plan_job_task.py for why that is what keeps a list alive
+    # when the job goes back to the pool.
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_job_tasks (
+                id SERIAL PRIMARY KEY,
+                anchor_kind VARCHAR(12) NOT NULL,
+                anchor_key VARCHAR(64) NOT NULL,
+                work_plan_job_id INTEGER REFERENCES work_plan_jobs(id),
+                content TEXT NOT NULL,
+                is_done BOOLEAN DEFAULT FALSE NOT NULL,
+                done_by_id INTEGER REFERENCES users(id),
+                done_at TIMESTAMP,
+                created_by_id INTEGER NOT NULL REFERENCES users(id),
+                position INTEGER DEFAULT 0 NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+        '''))
+        db.session.execute(text('''
+            CREATE INDEX IF NOT EXISTS ix_work_plan_job_tasks_anchor
+            ON work_plan_job_tasks (anchor_kind, anchor_key)
+        '''))
+        db.session.execute(text('''
+            CREATE INDEX IF NOT EXISTS ix_work_plan_job_tasks_work_plan_job_id
+            ON work_plan_job_tasks (work_plan_job_id)
+        '''))
+        db.session.commit()
+        print('Created work_plan_job_tasks table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_job_tasks table already exists')
+
     # Create maintenance_cycles table
     try:
         db.session.execute(text('''

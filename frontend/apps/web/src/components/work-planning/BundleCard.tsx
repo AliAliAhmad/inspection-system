@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { WorkPlanJob } from '@inspection/shared';
 import { getOverdueInfo, isJobOverdue, getOverdueHeat, type OverdueMax } from '../../utils/overdue';
+import { JobSubTasks } from './JobSubTasks';
 
 const { Text } = Typography;
 
@@ -19,6 +20,11 @@ interface BundleCardProps {
   defaultExpanded?: boolean;
   /** Worst overdue (per unit) across the plan, to normalise the overdue heat */
   overdueMax?: OverdueMax;
+  /** Plan id, so a sub-task change can refresh the plan-wide badge counts */
+  planId?: number;
+  /** {jobId: {total, done}} from the ONE plan-wide sub-task fetch, so each row
+   *  can show its badge without asking the server per job. */
+  subTaskCounts?: Record<string, { total: number; done: number }>;
 }
 
 /** Pull team category (mech / elec) from the assignment user.specialization */
@@ -83,9 +89,11 @@ interface IndividualJobRowProps {
   onJobClick: (job: WorkPlanJob) => void;
   expanded: boolean;
   overdueMax?: OverdueMax;
+  planId?: number;
+  subTaskCount?: { total: number; done: number };
 }
 
-const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax }) => {
+const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax, planId, subTaskCount }) => {
   const overdue = getOverdueInfo(job as any);
   const isOverdue = overdue.isOverdue;
   const heat = getOverdueHeat(job as any, overdueMax);
@@ -197,6 +205,13 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
               {heat.isWorst ? '🔥 ' : ''}{overdue.amount}{overdue.shortUnit}
             </span>
           )}
+          {/* Sub-tasks / team notes. Sticks to the job, not to this day. */}
+          <JobSubTasks
+            jobId={job.id}
+            planId={planId}
+            total={subTaskCount?.total ?? 0}
+            done={subTaskCount?.done ?? 0}
+          />
         </div>
 
         {/* Job description */}
@@ -325,6 +340,8 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
   onJobClick,
   defaultExpanded = false,
   overdueMax,
+  planId,
+  subTaskCounts,
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -620,6 +637,8 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                     onJobClick={onJobClick}
                     expanded={true}
                     overdueMax={overdueMax}
+                    planId={planId}
+                    subTaskCount={subTaskCounts?.[String(job.id)]}
                   />
                 ))}
               </div>
@@ -666,6 +685,8 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                     onJobClick={onJobClick}
                     expanded={true}
                     overdueMax={overdueMax}
+                    planId={planId}
+                    subTaskCount={subTaskCounts?.[String(job.id)]}
                   />
                 ))}
               </div>
@@ -695,5 +716,10 @@ export const BundleCard = React.memo(BundleCardInner, (prev, next) =>
   prev.defaultExpanded === next.defaultExpanded &&
   prev.onJobClick === next.onJobClick &&
   prev.overdueMax === next.overdueMax &&
+  prev.planId === next.planId &&
+  // Reference compare: the counts map comes straight from the React Query
+  // cache, so it only changes identity when a sub-task actually changed.
+  // Leaving it out of this comparator meant a new count never reached the row.
+  prev.subTaskCounts === next.subTaskCounts &&
   sameJobs(prev.jobs, next.jobs)
 );
