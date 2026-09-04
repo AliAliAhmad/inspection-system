@@ -1051,8 +1051,12 @@ def _get_ai_suggestion_for_assignment(assignment):
         ).first()
 
         # Skip if on different shift or off
-        if roster and roster.shift_type not in (shift, 'leave'):
-            if roster.shift_type == 'off':
+        # RosterEntry has `shift`, never `shift_type`. These read AttributeError
+        # the moment a roster exists — which is exactly what the 2026-09-04
+        # import creates, ~38,000 rows where there were almost none. Until then
+        # `roster` was always None and the attribute was never reached.
+        if roster and roster.shift not in (shift, 'leave'):
+            if roster.shift == 'off':
                 continue
 
         # Count current assignments for workload
@@ -1168,9 +1172,9 @@ def ai_suggest_assignment():
 
         roster_status = 'available'
         if roster:
-            if roster.shift_type == 'off':
+            if roster.shift == 'off':
                 continue
-            if roster.shift_type != shift:
+            if roster.shift != shift:
                 roster_status = 'different_shift'
 
         # Calculate workload

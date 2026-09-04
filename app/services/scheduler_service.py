@@ -1054,31 +1054,43 @@ def init_scheduler(app):
 
     @run_with_context
     def import_roster_after_delivery():
-        from app.api.sap_sync import delivery_is_settled
+        from datetime import datetime as _dt
+
+        from app.extensions import db as _db
         from app.services.roster_import import apply_roster
-        from app.services.run_once import CrossWorkerLock, claim
+        from app.services.run_once import CrossWorkerLock
         from app.services.sap_pool_sync import _current_file_bytes
 
-        settled, _ = delivery_is_settled(DELIVERY_QUIET_SECONDS)
-        if not settled:
-            return
-
+        # Gated on the FILE's own parsed_at, NOT on the delivery-quiet marker.
+        #
+        # That marker is consume-once: rebuild_pool_after_delivery DELETES it
+        # before doing its work, and both jobs wake on the same */5 tick. Which
+        # one saw it first was a thread-start coin flip, so on the days this job
+        # lost, the roster was never imported and nothing said so — the same
+        # shape as the material kits that could never fire, a precondition
+        # consumed somewhere else.
+        #
+        # parsed_at exists for exactly this (see SapSyncFile), and it is set in
+        # the SAME transaction as the roster rows: a crash rolls both back and
+        # the file is retried, instead of being marked done and lost. The roster
+        # never needed the quiet gate anyway — that exists so today's IW39 is
+        # not paired with yesterday's IK17, and this is one self-contained file.
         payload, record = _current_file_bytes(filename_contains=ROSTER_FILENAME_HINT)
-        if not payload or not record:
-            return
-
-        # Keyed on the FILE's id, so the same workbook is imported once however
-        # many times this job wakes up. A new delivery is a new row and so a new
-        # key; re-importing identical bytes is wasted work on a 512 MB box.
-        # claim() fails OPEN, so a marker that cannot be read costs a repeat
-        # import — which is idempotent — rather than a roster that never loads.
-        if not claim(app, f'roster-import-{record.id}', window_seconds=86400):
+        if not payload or not record or record.parsed_at is not None:
             return
 
         with CrossWorkerLock(app, 'roster-import') as lock:
             if not lock.acquired:
                 return
-            report = apply_roster(payload)
+            # Re-read inside the lock: the other worker may have just done it.
+            fresh = _db.session.get(type(record), record.id)
+            if fresh is None or fresh.parsed_at is not None:
+                return
+
+            report = apply_roster(payload, commit=False)
+            fresh.parsed_at = _dt.utcnow()
+            _db.session.commit()
+
             logger.info('Roster imported from %s: matched=%s dropped=%s '
                         'created=%s updated=%s kept_manual=%s',
                         record.source_filename, report.get('matched_people'),

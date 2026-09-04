@@ -632,3 +632,4 @@ in a comment closed the shell string, deleted every patch below it, and 500'd th
 `bash -n` passes on it. Guarded by `tests/test_start_sh_is_intact.py`.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
+See HISTORY.md for full changelog. Only keep last 3 entries here.

@@ -88,6 +88,16 @@ class TestTheSheetIsReadAsItReallyIs:
         assert rows[0]['days'][date(2026, 1, 1)] == 'off'
         assert rows[0]['days'][date(2026, 1, 2)] == 'leave'
 
+    def test_ex_is_leave_not_a_working_day(self):
+        """Ali, 2026-09-04: "ex are leave due to more working".
+
+        The name reads like extra WORK, which is exactly the trap: mapping it to
+        a shift would put a man on the board on a day he had earned off.
+        """
+        rows, report = parse(_workbook([('500000', 'x', ['EX', 'D'])]))
+        assert rows[0]['days'][date(2026, 1, 1)] == 'leave'
+        assert report['unknown_codes'] == {}, 'EX must no longer be unknown'
+
     def test_an_unknown_code_is_skipped_and_counted(self):
         """Never guessed. Reading a code as 'day' would put a man on shift who
         is at home; skipping only loses capacity. Counted so a new code in the
@@ -243,3 +253,68 @@ class TestTheOldUploadButtonRespectsTheSameRule:
                                           'Engineering 2026_v1.xlsm')},
                            content_type='multipart/form-data')
         assert resp.status_code != 400 or 'supported' not in resp.get_json().get('message', '')
+
+
+class TestTheBlockersFoundInReview:
+    """Three faults the reviewer caught before the first --apply.
+
+    Each is written as a test that FAILS on the original code, so none of them
+    can quietly return.
+    """
+
+    def test_a_duplicate_sap_id_does_not_lose_the_whole_import(self, db_session, worker):
+        """Two lines for one man used to violate UniqueConstraint(user, date).
+
+        The commit then raised, the ENTIRE import was lost, and the scheduler
+        had already recorded its claim — so the file was never retried. Not
+        once: a duplicate survives every daily save of the workbook.
+        """
+        report = apply_roster(_workbook([
+            ('500000', 'Roster One', ['D', 'D']),
+            ('500000', 'Roster One again', ['N', 'N']),   # same man, second line
+        ]))
+        assert report['duplicate_sap_ids'] == {'500000': 2}
+        assert RosterEntry.query.count() == 2, 'one row per day, not two'
+        # The later line wins, as a person reading down the sheet would take it.
+        assert RosterEntry.query.filter_by(date=date(2026, 1, 1)).one().shift == 'night'
+
+    def test_a_duplicate_merges_rather_than_dropping_days(self, db_session, worker):
+        """A second line may carry days the first did not."""
+        report = apply_roster(_workbook([
+            ('500000', 'Roster One', ['D', None]),
+            ('500000', 'Roster One again', [None, 'N']),
+        ]))
+        assert report['duplicate_sap_ids'] == {'500000': 2}
+        by_date = {e.date: e.shift for e in RosterEntry.query.all()}
+        assert by_date == {date(2026, 1, 1): 'day', date(2026, 1, 2): 'night'}
+
+    def test_apply_can_defer_its_commit(self, db_session, worker):
+        """So the roster rows and the file's parsed_at stamp land together.
+
+        Committing separately meant a crash could mark the file done while its
+        rows were rolled back — read once, lost forever.
+        """
+        report = apply_roster(_workbook([('500000', 'Roster One', ['D', 'N'])]),
+                              commit=False)
+        assert report['created'] == 2
+        db_session.session.rollback()
+        assert RosterEntry.query.count() == 0, 'nothing should survive a rollback'
+
+
+class TestTheRosterFieldTheCodeActuallyHas:
+    def test_nothing_reads_a_shift_type_attribute(self):
+        """Five call sites read roster.shift_type, which does not exist.
+
+        They survived only because `roster` was always None — an empty roster
+        table. This import fills it with ~38,000 rows, at which point the bulk
+        inspection-assign endpoint would have raised AttributeError on the
+        first AI suggestion after the roster landed.
+        """
+        import pathlib
+        root = pathlib.Path(__file__).resolve().parent.parent
+        offenders = []
+        for path in list((root / 'app').rglob('*.py')):
+            text = path.read_text(encoding='utf8', errors='ignore')
+            if 'roster.shift_type' in text or 'RosterEntry.shift_type' in text:
+                offenders.append(str(path.relative_to(root)))
+        assert not offenders, f'RosterEntry has no shift_type: {offenders}'

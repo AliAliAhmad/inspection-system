@@ -63,6 +63,10 @@ SHIFT_CODES = {
     'PL': 'leave',    # planned / paid leave
     'PSL': 'leave',   # paid sick leave
     'COM': 'leave',   # holiday (Ali, 2026-09-04)
+    'EX': 'leave',    # leave earned by working extra (Ali, 2026-09-04).
+                      # 'Extra days' reads like extra work, and mapping it to a
+                      # shift would have put a man on the board on a day he had
+                      # earned off. It is leave: he is not at work.
 }
 
 # An import may replace a day it wrote itself, or one from before this existed.
@@ -107,7 +111,8 @@ def parse(workbook_bytes):
     import openpyxl
 
     report = {'sheet': SHEET_NAME, 'people_in_sheet': 0, 'date_columns': 0,
-              'unknown_codes': {}, 'blank_cells_skipped': 0}
+              'unknown_codes': {}, 'blank_cells_skipped': 0,
+              'duplicate_sap_ids': {}}
 
     workbook = openpyxl.load_workbook(io.BytesIO(workbook_bytes),
                                       data_only=True, read_only=True)
@@ -133,6 +138,8 @@ def parse(workbook_bytes):
     report['date_columns'] = len(date_columns)
 
     unknown = {}
+    duplicates = {}
+    seen_ids = {}
     rows = []
     for line in grid[FIRST_DATA_ROW:]:
         if len(line) <= SAP_ID_COL:
@@ -157,16 +164,33 @@ def parse(workbook_bytes):
                 continue
             days[day] = shift
 
+        # MERGED, not appended. Two sheet lines with the same SAP ID both
+        # resolve to one user, and roster_entries has
+        # UniqueConstraint('user_id','date') — so appending them added two rows
+        # for one day and the COMMIT raised IntegrityError, losing the entire
+        # import. Not once: the duplicate survives every daily save of the
+        # workbook, and the scheduler records its claim BEFORE the work, so the
+        # file would never be retried. 106 rows carry 103 SAP ids.
+        #
+        # The later line wins, matching how a person reading down the sheet
+        # would take the last thing written about someone.
+        if sap_id in seen_ids:
+            merged = rows[seen_ids[sap_id]]
+            merged['days'].update(days)
+            duplicates[sap_id] = duplicates.get(sap_id, 1) + 1
+            continue
+        seen_ids[sap_id] = len(rows)
         rows.append({'sap_id': sap_id,
                      'name': (line[2] or '') if len(line) > 2 else '',
                      'days': days})
 
     report['unknown_codes'] = dict(sorted(unknown.items(),
                                           key=lambda kv: -kv[1])[:20])
+    report['duplicate_sap_ids'] = duplicates
     return rows, report
 
 
-def apply_roster(workbook_bytes, dry_run=False):
+def apply_roster(workbook_bytes, dry_run=False, commit=True):
     """Write the sheet into roster_entries. Returns a report.
 
     Writes nothing when `dry_run` is set, which is how a change is inspected
@@ -228,7 +252,10 @@ def apply_roster(workbook_bytes, dry_run=False):
                     entry.source = 'import'
                 report['updated'] += 1
 
-    if not dry_run:
+    # `commit=False` lets the caller put the roster rows and the file's
+    # parsed_at stamp in ONE transaction, so a crash rolls back both and the
+    # file is retried rather than marked done and lost.
+    if not dry_run and commit:
         db.session.commit()
 
     logger.info('Roster import: %s', {k: v for k, v in report.items()

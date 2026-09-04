@@ -151,6 +151,13 @@ def upload_roster():
     imported = 0
     users_processed = 0
 
+    # Every day a person set, loaded in ONE query before the loop below.
+    protected = {
+        (row[0], row[1]) for row in
+        db.session.query(RosterEntry.user_id, RosterEntry.date)
+        .filter(RosterEntry.source.in_(('manual', 'swap'))).all()
+    }
+
     for row_idx, row in enumerate(rows[1:], start=2):
         if len(row) < 4:
             continue
@@ -194,12 +201,11 @@ def upload_roster():
                 continue
 
             # A day the person set stays exactly as they set it.
-            kept = RosterEntry.query.filter(
-                RosterEntry.user_id == user.id,
-                RosterEntry.date == col_date,
-                RosterEntry.source.in_(('manual', 'swap')),
-            ).first()
-            if kept:
+            # Read from the set loaded ONCE above, never a query per cell:
+            # this loop runs users x date-columns, which for the real workbook
+            # is 103 x 373 — about 38,000 round trips to a free-plan database
+            # for one button press. The endpoint would never have returned.
+            if (user.id, col_date) in protected:
                 continue
 
             entry = RosterEntry(

@@ -1143,7 +1143,7 @@ class OverdueAIService(AIServiceWrapper):
                         RosterEntry.date == check_date
                     ).first()
 
-                    if roster and roster.shift_type == 'off':
+                    if roster and roster.shift == 'off':
                         continue
 
                     # Calculate workload for this date (check deadline date)
