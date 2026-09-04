@@ -65,10 +65,31 @@ def webhook(path_secret):
     """
     ok = jsonify({'ok': True}), 200
 
+    # SILENT TO THE CALLER, NOT TO THE LOGS.
+    #
+    # Answering 200 to a refusal is right: a 401 would tell a prober the path is
+    # a real webhook, and Telegram would retry it forever. But saying nothing
+    # ANYWHERE meant a bot that had stopped answering could not be diagnosed at
+    # all — on 2026-09-04 Telegram reported a correct URL, zero pending updates
+    # and no delivery error, which proved the updates were arriving and being
+    # dropped here, and there was no way to learn at which gate.
+    #
+    # These lines never name the secret, only which gate closed.
     expected_path = current_app.config.get('TELEGRAM_WEBHOOK_SECRET', '') or ''
-    if not expected_path or path_secret != expected_path:
+    if not expected_path:
+        logger.warning('Telegram update refused: TELEGRAM_WEBHOOK_SECRET is not set')
+        return ok
+    if path_secret != expected_path:
+        logger.warning('Telegram update refused: path secret does not match '
+                       '(got %d chars, expected %d) — the webhook was probably '
+                       'registered with a different secret than the app now holds',
+                       len(path_secret or ''), len(expected_path))
         return ok
     if not secret_header_ok(request.headers.get(SECRET_HEADER)):
+        logger.warning('Telegram update refused: %s header %s. Re-register with '
+                       'scripts/telegram_set_webhook.py, which passes secret_token.',
+                       SECRET_HEADER,
+                       'missing' if not request.headers.get(SECRET_HEADER) else 'did not match')
         return ok
 
     update = request.get_json(silent=True) or {}
@@ -77,10 +98,21 @@ def webhook(path_secret):
 
     user = resolve_sender(update)
     if user is None:
+        # The commonest real cause: the sender's Telegram id is not in
+        # TELEGRAM_ALLOWED_USERS, or the app user it maps to no longer exists.
+        # Telegram ids are not secret — they are visible to any chat partner —
+        # so naming it is what makes the setting fixable.
+        sender = ((update.get('message') or update.get('callback_query') or {})
+                  .get('from') or {})
+        logger.warning('Telegram update refused: sender %s (%s) is not in the '
+                       'allowlist, or maps to a user that no longer exists',
+                       sender.get('id'), sender.get('username'))
         return ok
 
     chat_id = chat_id_of(update)
     if chat_id is None:
+        logger.warning('Telegram update refused: no private chat id on the update '
+                       '(group and channel messages are ignored by design)')
         return ok
 
     app = current_app._get_current_object()
@@ -92,6 +124,8 @@ def webhook(path_secret):
                 from app.models import User
                 sender = User.query.get(user_id)
                 if sender is None:
+                    logger.warning('Telegram update dropped: TELEGRAM_ALLOWED_USERS '
+                                   'maps to app user %s, which does not exist', user_id)
                     return
                 if update.get('callback_query'):
                     from app.services.telegram.taps import handle_callback
