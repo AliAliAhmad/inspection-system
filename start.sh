@@ -66,7 +66,12 @@ with app.app_context():
         except Exception:
             db.session.rollback()
             print(f'{col_name} column already exists')
-    # Two columns that answer "has anyone begun this job".
+    # Two columns that answer whether anyone has begun this job.
+    # NOTE: NO DOUBLE QUOTES anywhere in this block. It lives inside a
+    # python -c shell string that is itself delimited by double quotes, so one
+    # stray quote closes it early and silently destroys every patch below it.
+    # bash -n does NOT catch this: the result is still valid bash, just wrong.
+    # It cost a broken production pool on 2026-09-04.
     #
     # system_status is SAP's word (Ali: REL without CNF = in progress);
     # app_work_state is what the app saw a worker do, snapshotted when the
