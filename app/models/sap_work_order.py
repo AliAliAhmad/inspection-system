@@ -7,6 +7,28 @@ from app.extensions import db
 from datetime import datetime
 
 
+def sap_says_started(system_status):
+    """True when SAP's System status means the work is under way.
+
+    Ali's rule, 2026-09-04, in his words: "rel in the status (sure without CNF)
+    means in progress ... cnf/teco/clsd means finish ... PCNF means partially
+    finish but we do not use it".
+
+    Tokenised on whitespace, never substring — 'REL' must not match inside
+    'RELEASED_X', the same trap is_plannable_status() documents.
+
+    Deliberately NOT folded into order_sap_state(): its vocabulary is
+    open/done/cancelled/unknown, which has no room for "started", and
+    overloading it would change what the removal rules mean by 'open'.
+    """
+    if not system_status or isinstance(system_status, float):
+        return False
+    tokens = set(str(system_status).upper().split())
+    if 'CNF' in tokens:
+        return False
+    return 'REL' in tokens
+
+
 class SAPWorkOrder(db.Model):
     """
     Staging table for imported SAP work orders.
@@ -71,6 +93,25 @@ class SAPWorkOrder(db.Model):
     # Status: pending (in pool), scheduled (moved to a day)
     status = db.Column(db.String(20), default='pending')
 
+    # SAP's own System status for this order, e.g. 'REL CSER NMAT PRC'.
+    #
+    # Ali, 2026-09-04: REL without CNF means the work has STARTED; CNF, TECO or
+    # CLSD mean finished; PCNF exists but the yard does not use it. The parser
+    # has always read this field and sap_pool_sync then discarded it — the fifth
+    # thing thrown away in that dict — so the app could only ever see half of
+    # "has anyone begun this". Refreshed on every rebuild.
+    system_status = db.Column(db.String(64), nullable=True)
+
+    # What the APP recorded a worker doing, SNAPSHOT at the moment this order
+    # went back in the box.
+    #
+    # Not computed at read time from the old WorkPlanJob: that job sits on a
+    # week that has ended, and finished weeks are cleanup targets. Deleting old
+    # plans would silently erase the badge from every half-done job — exactly
+    # the loss Ali meant by "we cannot drop starting from sap or from the app".
+    # Stamped by the reclaim paths, never cleared by the nightly sync.
+    app_work_state = db.Column(db.String(20), nullable=True)
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
@@ -125,8 +166,23 @@ class SAPWorkOrder(db.Model):
             'notes': self.notes,
             'work_center': self.work_center,
             'status': self.status,
+            'system_status': self.system_status,
+            'app_work_state': self.app_work_state,
+            # Decided HERE, never in the browser: the rule is Ali's and one copy
+            # of it in the backend cannot drift from another in the frontend.
+            'started': self.has_started(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
+
+    def has_started(self):
+        """Has anyone begun this work — according to SAP or to the app?
+
+        EITHER source counts. Ali, 2026-09-04: "we cannot drop starting from sap
+        or from the app itself." SAP only learns once someone books time in SAP,
+        which may be days later or never; the app knows the second a worker
+        presses Start. Neither alone is enough.
+        """
+        return sap_says_started(self.system_status) or bool(self.app_work_state)
 
     def __repr__(self):
         return f'<SAPWorkOrder {self.order_number} ({self.status})>'

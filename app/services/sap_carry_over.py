@@ -170,6 +170,12 @@ def release_dead_week_orders(today=None, dry_run=False):
             result['duplicates_deleted'] += 1
             continue
 
+        # Untouched by definition here — _was_worked() returned False above, so
+        # there is nothing to snapshot. The stamp that matters happens in the
+        # pool sync's stranded path, which is what actually releases the rows a
+        # worker DID start. Left as a note so the absence reads as deliberate
+        # rather than forgotten.
+
         in_box.add(row.order_number)
         result['carried_back'] += 1
         if not dry_run:

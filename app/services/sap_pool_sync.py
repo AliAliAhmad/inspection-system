@@ -125,6 +125,27 @@ def _rss_mb():
         return None
 
 
+def _app_work_state_for(plan_id, order_number):
+    """What the APP recorded a worker doing on this order, or None.
+
+    Shares job_work_state with the removal rules so "has anyone touched this"
+    has exactly one definition. ANY of the jobs, not the first: a 12h PM is
+    planned as part 1/2 and part 2/2, and .first() could return the untouched
+    half while the other is half done.
+    """
+    from app.api.work_plans import job_work_state
+    from app.models import WorkPlanDay, WorkPlanJob
+    jobs = (WorkPlanJob.query
+            .join(WorkPlanDay, WorkPlanJob.work_plan_day_id == WorkPlanDay.id)
+            .filter(WorkPlanDay.work_plan_id == plan_id,
+                    WorkPlanJob.sap_order_number == order_number).all())
+    for job in jobs:
+        state = job_work_state(job)
+        if state:
+            return state
+    return None
+
+
 def _delivered_summary(limit=12):
     """What the courier has actually delivered, as the rebuild sees it.
 
@@ -304,6 +325,13 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
                 db.session.delete(row)
             continue
         if not dry_run:
+            # Snapshot what a worker actually did BEFORE the link to that job is
+            # gone. The job sits on a week that has ended, and finished weeks
+            # get cleaned up — computing this later from the job would lose the
+            # badge the moment those plans are deleted.
+            state = _app_work_state_for(row.work_plan_id, row.order_number)
+            if state:
+                row.app_work_state = state
             row.work_plan_id = None
             row.status = 'pending'
         existing[row.order_number] = row
@@ -376,6 +404,11 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
             'priority': priority,
             'work_center': candidate['work_center'],
             'status': 'pending',
+            # The fifth field the parser computed and this dict threw away.
+            # Ali, 2026-09-04: REL without CNF means the work has STARTED, and
+            # without storing it the app could only ever see the half of that
+            # question its own tracking answers.
+            'system_status': candidate.get('system_status'),
             # Everything below was computed by the parser and then thrown away,
             # which quietly disabled four things in the planner:
             #

@@ -557,3 +557,156 @@ class TestThePoolLoadsInABoundedNumberOfQueries:
         # this cheap on its own, this test failing is good news — read it and
         # delete it.
         assert self._count_queries(app, load_lazily) > 10
+
+
+class TestAJobThatWasStartedCarriesASign:
+    """Ali, 2026-09-04, on a half-done job returning to the pool:
+
+        "rel in the status (sure without CNF) means in progress ... cnf/teco/clsd
+         means finish ... PCNF means partially finish but we do not use it ...
+         we cannot drop starting from sap or from the app itself"
+
+    EITHER source counts. SAP only learns once someone books time in SAP, which
+    may be days later or never; the app knows the second a worker presses Start.
+    """
+
+    def test_sap_rule_truth_table(self):
+        from app.models.sap_work_order import sap_says_started
+        # REL alone, and REL among SAP's other tokens -> in progress
+        assert sap_says_started('REL')
+        assert sap_says_started('REL CSER NMAT PRC')
+        assert sap_says_started('rel cser')          # case
+        # CNF wins, whatever else is present -> finished
+        assert not sap_says_started('REL CNF')
+        assert not sap_says_started('TECO CNF CSER NMAT PRC SETC')
+        # Created but not released -> not started
+        assert not sap_says_started('CRTD CSER NMAT PRC')
+        # Nothing to go on
+        assert not sap_says_started('')
+        assert not sap_says_started(None)
+        assert not sap_says_started(float('nan'))
+
+    def test_rel_is_matched_as_a_token_not_a_substring(self):
+        """The trap is_plannable_status already documents."""
+        from app.models.sap_work_order import sap_says_started
+        assert not sap_says_started('RELEASED_X')
+        assert not sap_says_started('PRELIM')
+
+    def test_pcnf_is_ignored(self):
+        """Ali: "PCNF means partially finish but we do not use it"."""
+        from app.models.sap_work_order import sap_says_started
+        assert not sap_says_started('CRTD PCNF')
+        assert sap_says_started('REL PCNF'), 'REL still decides; PCNF is not consulted'
+
+    def test_either_source_raises_the_sign(self, db_session):
+        from app.models import Equipment, SAPWorkOrder
+
+        eq = Equipment(name='RS110', serial_number='SIGN-1', equipment_type='RS',
+                       status='active')
+        db_session.session.add(eq)
+        db_session.session.flush()
+
+        def order(number, system_status=None, app_work_state=None):
+            o = SAPWorkOrder(work_plan_id=None, order_number=number, order_type='PRM',
+                             job_type='pm', equipment_id=eq.id, status='pending',
+                             system_status=system_status, app_work_state=app_work_state)
+            db_session.session.add(o)
+            return o
+
+        sap_only = order('S1', system_status='REL CSER')
+        app_only = order('S2', system_status='CRTD CSER', app_work_state='paused')
+        neither = order('S3', system_status='CRTD CSER')
+        both = order('S4', system_status='REL', app_work_state='in_progress')
+        db_session.session.commit()
+
+        assert sap_only.has_started(), 'SAP alone must be enough'
+        assert app_only.has_started(), 'the app alone must be enough'
+        assert both.has_started()
+        assert not neither.has_started()
+
+    def test_the_api_decides_it_not_the_browser(self, db_session):
+        """One copy of Ali's rule. A second in TypeScript would drift."""
+        from app.models import Equipment, SAPWorkOrder
+        eq = Equipment(name='RS110', serial_number='SIGN-2', equipment_type='RS',
+                       status='active')
+        db_session.session.add(eq)
+        db_session.session.flush()
+        o = SAPWorkOrder(work_plan_id=None, order_number='S9', order_type='PRM',
+                         job_type='pm', equipment_id=eq.id, status='pending',
+                         system_status='REL CSER')
+        db_session.session.add(o)
+        db_session.session.commit()
+
+        payload = o.to_dict('en')
+        assert payload['started'] is True
+        assert payload['system_status'] == 'REL CSER'
+        assert 'app_work_state' in payload
+
+
+class TestTheSignSurvivesTheOldWeekBeingDeleted:
+    """The reason app_work_state is a COLUMN and not a read-time join.
+
+    A reclaimed order's old job sits on a week that has ENDED, and finished
+    weeks are cleanup targets — ~2,000 legacy rows are stamped to plans 6-38 and
+    one cleanup has already broken on them. Computing "the app says started"
+    from that job would work today and silently erase the sign the moment those
+    plans are deleted. That is precisely the loss Ali meant by "we cannot drop
+    starting from sap or from the app itself".
+    """
+
+    def test_the_stamp_outlives_the_job_it_came_from(self, db_session, engineer):
+        from app.models import (Equipment, SAPWorkOrder, WorkPlan, WorkPlanDay,
+                                WorkPlanJob)
+        from datetime import date, timedelta
+
+        eq = Equipment(name='RS110', serial_number='SURV-1', equipment_type='RS',
+                       status='active')
+        db_session.session.add(eq)
+        db_session.session.flush()
+
+        # A week that ended, holding a job somebody started.
+        plan = WorkPlan(week_start=date.today() - timedelta(days=14),
+                        week_end=date.today() - timedelta(days=8),
+                        status='published', created_by_id=engineer.id)
+        db_session.session.add(plan)
+        db_session.session.flush()
+        day = WorkPlanDay(work_plan_id=plan.id, date=plan.week_start)
+        db_session.session.add(day)
+        db_session.session.flush()
+        job = WorkPlanJob(work_plan_day_id=day.id, job_type='pm', berth='east',
+                          equipment_id=eq.id, sap_order_number='SURV9',
+                          estimated_hours=4.0, position=1, priority='normal')
+        db_session.session.add(job)
+
+        order = SAPWorkOrder(work_plan_id=None, order_number='SURV9',
+                             order_type='PRM', job_type='pm', equipment_id=eq.id,
+                             status='pending', system_status='CRTD CSER',
+                             app_work_state='paused')   # the stamp
+        db_session.session.add(order)
+        db_session.session.commit()
+
+        assert order.has_started(), 'the app signal alone must raise the sign'
+
+        # The old week is cleaned up, jobs and all.
+        WorkPlanJob.query.filter_by(sap_order_number='SURV9').delete()
+        WorkPlanDay.query.filter_by(work_plan_id=plan.id).delete()
+        WorkPlan.query.filter_by(id=plan.id).delete()
+        db_session.session.commit()
+
+        refreshed = SAPWorkOrder.query.filter_by(order_number='SURV9').first()
+        assert refreshed.app_work_state == 'paused'
+        assert refreshed.has_started(), (
+            'deleting the old week must not erase the fact that work began')
+
+    def test_an_untouched_job_carries_no_stamp(self, db_session):
+        from app.models import Equipment, SAPWorkOrder
+        eq = Equipment(name='RS110', serial_number='SURV-2', equipment_type='RS',
+                       status='active')
+        db_session.session.add(eq)
+        db_session.session.flush()
+        o = SAPWorkOrder(work_plan_id=None, order_number='SURV8', order_type='PRM',
+                         job_type='pm', equipment_id=eq.id, status='pending',
+                         system_status='CRTD CSER')
+        db_session.session.add(o)
+        db_session.session.commit()
+        assert not o.has_started(), 'planned but never begun is not started'

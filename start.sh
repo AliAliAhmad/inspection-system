@@ -66,6 +66,26 @@ with app.app_context():
         except Exception:
             db.session.rollback()
             print(f'{col_name} column already exists')
+    # Two columns that answer "has anyone begun this job".
+    #
+    # system_status is SAP's word (Ali: REL without CNF = in progress);
+    # app_work_state is what the app saw a worker do, snapshotted when the
+    # order went back in the box. Added here as well as in the migration
+    # because this repo has multiple alembic heads and 'flask db upgrade'
+    # above is followed by '|| echo WARNING', so a failed migration does not
+    # stop the boot — and a missing column would 500 the nightly rebuild in a
+    # background thread nobody is watching.
+    for col_name, col_type in (('system_status', 'VARCHAR(64)'),
+                               ('app_work_state', 'VARCHAR(20)')):
+        try:
+            db.session.execute(text(
+                f'ALTER TABLE sap_work_orders ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+            print(f'Added sap_work_orders.{col_name}')
+        except Exception:
+            db.session.rollback()
+            print(f'sap_work_orders.{col_name} already exists')
+
     # Make equipment_type nullable
     try:
         db.session.execute(text('ALTER TABLE checklist_templates ALTER COLUMN equipment_type DROP NOT NULL'))

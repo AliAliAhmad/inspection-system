@@ -17,6 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { workPlansApi, type AvailablePMJob, type AvailableDefectJob, type SAPWorkOrder } from '@inspection/shared';
 import { getOverdueInfo, isJobOverdue, getOverdueHeat, computeOverdueMax, type OverdueMax } from '../../utils/overdue';
+import { useLanguage } from '../../providers/LanguageProvider';
 
 // Priority order for sorting
 const PRIORITY_ORDER: Record<string, number> = {
@@ -67,6 +68,7 @@ function isNewlyArrived(job: any): boolean {
 }
 
 const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, onClick, days = [], onQuickSchedule, overdueMax }) => {
+  const { isRTL } = useLanguage();
   const id = `pool-${jobType}-${job.id || job.equipment?.id || job.defect?.id || job.assignment?.id}`;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -149,6 +151,22 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
         }}>
           {equipmentName}
         </div>
+        {job?.started && (
+          // "Started" comes from the BACKEND, never decided here. The rule is
+          // Ali's — SAP says REL without CNF, or the app recorded a worker
+          // pressing Start — and one copy of it in Python cannot drift from a
+          // second copy written in TypeScript.
+          //
+          // Worth marking because it is the MINORITY: 32 of 200 open orders on
+          // 2026-09-04. And worth marking at all because a half-done job that
+          // returns to the pool otherwise looks exactly like fresh work.
+          <span style={{
+            fontSize: 9, fontWeight: 800, color: '#fff', background: '#fa8c16',
+            padding: '0 5px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            {isRTL ? 'بدأ' : 'STARTED'}
+          </span>
+        )}
         {isNewlyArrived(job) && (
           // The pool sorts most-overdue first, so an order that arrived last
           // night lands at the BOTTOM — the least overdue thing in the box. On
