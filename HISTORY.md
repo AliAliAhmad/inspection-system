@@ -714,3 +714,4 @@ hand: it rejected `.xlsm` and parses a different layout.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
+See HISTORY.md for full changelog. Only keep last 3 entries here.

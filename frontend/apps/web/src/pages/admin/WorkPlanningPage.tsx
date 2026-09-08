@@ -2018,6 +2018,12 @@ export default function WorkPlanningPage() {
   };
 
   // useCallback so memoized BundleCards don't re-render on every parent render
+  /** A job a planner typed in, with no origin outside this plan.
+   *  Mirrors is_manually_added() in app/api/work_plans.py — the server is the
+   *  authority, this only decides whether to offer the button. */
+  const isManuallyAddedJob = (job: WorkPlanJob | null): boolean =>
+    !!job && !job.sap_order_number && !job.defect_id && !job.inspection_assignment_id;
+
   const handleJobClick = useCallback((job: WorkPlanJob) => {
     setSelectedJob(job);
     setJobDetailsModalOpen(true);
@@ -3659,7 +3665,48 @@ export default function WorkPlanningPage() {
           setJobDetailsModalOpen(false);
           setSelectedJob(null);
         }}
-        footer={null}
+        footer={
+          // "Remove from plan", for a job the planner typed in by hand.
+          //
+          // Ali, 2026-09-08: "sometimes i added a job wrongly i need to be able
+          // to remove or delete a job that is added manually".
+          //
+          // The two existing delete gestures — drag a job onto the pool, and the
+          // bulk toolbar — are both behind `isDraft`, and his live week is
+          // published nearly all of its life, so a mistyped job stayed on the
+          // board all week with nothing to click.
+          //
+          // Only offered for a MANUAL job: one with no SAP order, no defect and
+          // no inspection behind it. Anything with an origin outside the plan
+          // must go back through unpublishing. Whether the job has been STARTED
+          // is not known here (the compact payload the board uses carries no
+          // tracking), so the server decides that and its refusal is shown.
+          isManuallyAddedJob(selectedJob) ? (
+            <Popconfirm
+              title="Remove this job from the plan?"
+              description="It was added by hand, so nothing is sent back to the pool."
+              okText="Remove"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => {
+                if (!currentPlan || !selectedJob) return;
+                removeJobMutation.mutate(
+                  { planId: currentPlan.id, jobId: selectedJob.id },
+                  {
+                    onSuccess: () => {
+                      message.success('Job removed from the plan');
+                      setJobDetailsModalOpen(false);
+                      setSelectedJob(null);
+                    },
+                  }
+                );
+              }}
+            >
+              <Button danger icon={<DeleteOutlined />} loading={removeJobMutation.isPending}>
+                Remove from plan
+              </Button>
+            </Popconfirm>
+          ) : null
+        }
         width={700}
         styles={getOverdueHeat(selectedJob as any, overdueMax).active
           ? { content: { borderTop: `4px solid ${getOverdueHeat(selectedJob as any, overdueMax).stripe}`, background: getOverdueHeat(selectedJob as any, overdueMax).cardTint }, header: { background: getOverdueHeat(selectedJob as any, overdueMax).cardTint } }
