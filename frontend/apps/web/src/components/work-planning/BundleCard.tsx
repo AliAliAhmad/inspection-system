@@ -165,7 +165,13 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
         boxShadow: heat.active ? `0 1px 4px ${heat.stripe}40` : undefined,
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
-        touchAction: 'none',
+        // 'manipulation', not 'none'. 'none' forbids the browser from
+        // panning when a finger starts here, which on an iPad means the
+        // day column cannot be scrolled at all. The TouchSensor's delay
+        // (WorkPlanningPage sensors) is what separates a scroll from a
+        // drag now; 'manipulation' still kills double-tap zoom, which
+        // would otherwise fire while holding to start a drag.
+        touchAction: 'manipulation',
         opacity: isDragging ? 0.4 : 1,
         transform: CSS.Translate.toString(transform),
       }}

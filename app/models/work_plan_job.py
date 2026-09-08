@@ -224,6 +224,21 @@ class WorkPlanJob(db.Model):
                 'is_split': self.is_split,
                 'split_part': self.split_part,
                 'difficulty': self.difficulty,
+                # work_center and notes are plain columns on the row that is
+                # already loaded — no join, no query, a few bytes each. Leaving
+                # them out of compact mode was not saving anything, and it cost
+                # the board its two most visible facts as soon as a day got
+                # busy: a job with no work_center is drawn under BOTH the mech
+                # and elec headings (BundleCard.subTeamForJob rule 4), and the
+                # note marker disappeared.
+                #
+                # This is the whole of Ali's 2026-09-08 report. He picked
+                # Mechanical, it saved correctly, and the board never received
+                # it — but ONLY on days with more than 10 jobs, which is every
+                # real day and no test day. `cycle` stays out: it is a
+                # relationship and genuinely costs a query per job.
+                'work_center': self.work_center,
+                'notes': self.notes,
                 'engineer_id': self.engineer_id,
                 'assigned_users_count': len(self.assignments),
                 'assignments': [a.to_dict() for a in self.assignments],

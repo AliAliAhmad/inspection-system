@@ -1335,6 +1335,9 @@ def create_carry_over(review_id):
         pm_template_id=original_job.pm_template_id,
         sap_order_number=original_job.sap_order_number,
         sap_order_type=original_job.sap_order_type,
+        # Without this a MECH job carried into tomorrow arrives with no trade
+        # and is drawn under BOTH teams — it silently loses the planner's choice.
+        work_center=original_job.work_center,
         description=original_job.description,
         notes=f"[CARRY-OVER] {original_job.notes or ''}".strip(),
     )

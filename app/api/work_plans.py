@@ -177,6 +177,7 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
             overdue_value=sap.overdue_value,
             overdue_unit=sap.overdue_unit,
             maintenance_base=sap.maintenance_base,
+            work_center=sap.work_center,
             planned_date=sap.planned_date or sap.required_date,
             estimated_hours=sap.estimated_hours,
             position=max_pos,
@@ -1007,6 +1008,7 @@ def schedule_sap_order(plan_id):
         work_plan_day_id=day.id,
         job_type=sap_order.job_type,
         berth=sap_order.berth,
+        work_center=sap_order.work_center,
         equipment_id=sap_order.equipment_id,
         sap_order_number=sap_order.order_number,
         sap_order_type=sap_order.order_type,
@@ -1118,6 +1120,13 @@ def update_job(plan_id, job_id):
         job.position = data['position']
     if 'sap_order_number' in data:
         job.sap_order_number = data['sap_order_number']
+    if 'work_center' in data:
+        # Was missing entirely, so picking a Trade on an EXISTING job did
+        # nothing at all and it stayed drawn under both teams.
+        work_center = data['work_center']
+        if work_center and work_center not in ('ELEC', 'MECH', 'ELME'):
+            raise ValidationError("work_center must be ELEC, MECH, or ELME")
+        job.work_center = work_center or None
     if 'difficulty' in data:
         if data['difficulty'] and data['difficulty'] not in ('minor', 'major'):
             raise ValidationError("difficulty must be 'minor' or 'major'")
@@ -1194,6 +1203,47 @@ def assert_job_removable(job):
         f"Job #{job.id} has work in progress ({state}) and cannot be removed. "
         "Removing it would erase the worker's time, checklist and materials."
     )
+
+
+def is_manually_added(job):
+    """True when a planner typed this job in by hand.
+
+    A manual job has no origin outside the plan: no SAP order behind it, no
+    defect, no inspection. Nothing else in the system is waiting for it and
+    nothing is fed back anywhere when it goes — deleting it simply undoes the
+    typing.
+    """
+    return not (job.sap_order_number or job.defect_id
+                or job.inspection_assignment_id)
+
+
+def assert_removable_from_published(job):
+    """Guard the one deletion a PUBLISHED plan is allowed to accept.
+
+    Ali, 2026-09-08: "sometimes i added a job wrongly i need to be able to
+    remove or delete a job that is added manually".
+
+    A published plan is otherwise frozen, and rightly so — the week is out with
+    the crews and jobs must not move under them. But a job typed in by mistake
+    was never real work in the first place, and the plan is published for most
+    of its life, so refusing meant a wrong job stayed on the board all week.
+
+    Both conditions are required. It must be a job a planner typed (nothing
+    external is depending on it), and nobody may have touched it yet — once a
+    worker has started, assert_job_removable() owns the decision and the record
+    of the work wins.
+    """
+    if not is_manually_added(job):
+        raise ForbiddenError(
+            "Only a manually added job can be removed from a published plan. "
+            "This job came from SAP, a defect or an inspection — unpublish the "
+            "plan to change it."
+        )
+    if job_work_state(job) is not None:
+        raise ForbiddenError(
+            f"Job #{job.id} has already been started and cannot be removed "
+            "from a published plan."
+        )
 
 
 def pool_orders_query(plan_id=None):
@@ -1321,12 +1371,14 @@ def remove_job(plan_id, job_id):
     if not plan:
         raise NotFoundError("Work plan not found")
 
-    if plan.status == 'published':
-        raise ForbiddenError("Cannot remove jobs from a published work plan")
-
     job = db.session.get(WorkPlanJob, job_id)
     if not job or job.day.work_plan_id != plan_id:
         raise NotFoundError("Job not found in this plan")
+
+    if plan.status == 'published':
+        # The single exception — a job the planner typed in by mistake, that
+        # nobody has started. See assert_removable_from_published().
+        assert_removable_from_published(job)
 
     _delete_job_record(plan_id, job)
     db.session.commit()
@@ -1661,8 +1713,8 @@ def bulk_delete_jobs(plan_id):
     if not plan:
         raise NotFoundError("Work plan not found")
 
-    if plan.status == 'published':
-        raise ForbiddenError("Cannot remove jobs from a published work plan")
+    # The published check is per-job, further down: a manually added job the
+    # planner typed by mistake may go, everything else may not.
 
     data = request.get_json() or {}
     job_ids = data.get('job_ids')
@@ -1679,6 +1731,11 @@ def bulk_delete_jobs(plan_id):
     for job in jobs:
         if job.day.work_plan_id != plan_id:
             raise NotFoundError(f"Job {job.id} not found in this plan")
+        if plan.status == 'published':
+            # Same single exception as remove_job, checked for EVERY job before
+            # any is deleted, so a mixed selection removes nothing rather than
+            # half of it.
+            assert_removable_from_published(job)
 
     # Resolve every job's pool side-effects before any expunge/raw delete runs
     for job in jobs:
@@ -3650,6 +3707,7 @@ def auto_schedule(plan_id):
             work_plan_day_id=best_day.id,
             job_type=order.job_type,
             berth=order.berth,
+            work_center=order.work_center,
             equipment_id=order.equipment_id,
             sap_order_number=order.order_number,
             sap_order_type=order.order_type,
@@ -3765,6 +3823,7 @@ def copy_from_previous_week(plan_id):
                     work_plan_day_id=target_day.id,
                     job_type=source_job.job_type,
                     berth=source_job.berth,
+                    work_center=source_job.work_center,
                     equipment_id=source_job.equipment_id,
                     # Don't copy SAP order - each week has unique orders
                     sap_order_number=None,
@@ -4523,6 +4582,7 @@ def split_job(plan_id, job_id):
                 work_plan_day_id=day.id,
                 job_type=job.job_type,
                 berth=job.berth,
+                work_center=job.work_center,
                 equipment_id=job.equipment_id,
                 sap_order_number=f"{job.sap_order_number}-P{i+1}" if job.sap_order_number else None,
                 sap_order_type=job.sap_order_type,
@@ -5112,6 +5172,7 @@ def restore_plan_version(plan_id, version):
                 job_type=job_data.get('job_type'),
                 equipment_id=job_data.get('equipment_id'),
                 berth=job_data.get('berth'),
+                work_center=job_data.get('work_center'),
                 estimated_hours=job_data.get('estimated_hours'),
                 priority=job_data.get('priority', 'normal')
             )

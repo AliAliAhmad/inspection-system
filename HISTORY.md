@@ -1,3 +1,30 @@
+## 2026-09-09 — iPad scrolling, the trade, and deleting a mistyped job
+
+### iPad web + the trade that never arrived — FIXED 2026-09-09
+- **Swipe could not scroll a day.** `touchAction:'none'` on the job cards forbids the
+  browser from panning, and `PointerSensor{distance:8}` claimed any 8px finger move as a
+  drag. Fixed with `MouseSensor` + `TouchSensor{delay:250}` and `touchAction:'manipulation'`.
+  BOTH halves are required: touchAction alone restores scrolling but BREAKS dragging on
+  touch; the sensor alone does nothing. Verified with real CDP touch events.
+- **Hold-then-move is now how you drag on a touch screen.** Tell planners.
+- **The trade showed under both teams — root cause was NOT the form.** The form, the
+  backend and the display were all correct. `WorkPlanDay.to_dict` switches to a compact
+  job payload at `len(self.jobs) > 10`, and that payload omitted `work_center` (and
+  `notes`). Every real day is over 10 jobs; no test day was. Both are plain columns and
+  now ride along; `cycle` stays out because it is a relationship.
+- **Separately, `work_center` was dropped by 12 of 13 job-creation paths** (carry-over,
+  split, `place_one`, `schedule_sap_order`, snapshot restore...) and `update_job` did not
+  accept it at all, so editing a job's Trade silently did nothing. All fixed, plus an
+  idempotent backfill in `start.sh` that copies the trade from `sap_work_orders` onto
+  existing jobs — it only fills NULLs, so a hand-set trade is never overridden.
+- **A manually added job can now be deleted from a PUBLISHED plan** — only if it is
+  manual (no SAP order/defect/inspection) AND unstarted. Bulk delete is all-or-nothing.
+  `tests/test_work_plan_bulk_jobs.py::test_rejects_published_plan` was rewritten: it used
+  to encode the old blanket ban.
+- **Auto-scroll is off while dragging a person** onto a job — the narrow iPad day column
+  kept sliding away mid-drop. Still on for job drags, which need to reach other days.
+
+
 ## 2026-09-05 — Job sub-tasks / team notes
 
 ### Job sub-tasks / team notes — BUILT 2026-09-05, not yet deployed
@@ -684,5 +711,6 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

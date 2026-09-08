@@ -65,6 +65,15 @@
 - `app/models/work_plan_job_task.py`, 17 tests in `tests/test_work_plan_job_tasks.py`.
 - **Deploy needs:** a Render restart (`start.sh` creates the table) + a mobile OTA.
 
+### iPad web + the trade that never arrived — FIXED 2026-09-09
+- Swipe scrolls a day again; **hold-then-move is now how you drag on touch**.
+- The trade showed under both teams because `WorkPlanDay.to_dict` goes compact above
+  10 jobs a day and that payload omitted `work_center`. Every real day is over 10.
+- `work_center` was also dropped by 12 of 13 creation paths and ignored by `update_job`.
+  Backfill added to `start.sh`.
+- A manually added, unstarted job can now be deleted from a published plan.
+- Full detail in HISTORY.md.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

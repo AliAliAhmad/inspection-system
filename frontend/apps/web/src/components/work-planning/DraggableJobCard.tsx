@@ -44,7 +44,8 @@ const DraggableJobCardInner: React.FC<DraggableJobCardProps> = ({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    touchAction: 'none',
+    // See BundleCard: 'none' would block iPad scrolling inside a day.
+    touchAction: 'manipulation',
   };
 
   return (

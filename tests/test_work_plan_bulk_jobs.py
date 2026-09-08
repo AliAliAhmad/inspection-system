@@ -196,9 +196,20 @@ class TestBulkDeleteJobs:
         assert order.status == 'pending'
 
     def test_rejects_published_plan(self, client, admin_user, engineer, db_session):
+        """A published plan still refuses — for anything that came from SAP.
+
+        Rewritten 2026-09-08. This used to build MANUAL jobs (no SAP order, no
+        defect) and assert they were refused too. Ali asked for exactly that
+        case to be allowed: "sometimes i added a job wrongly i need to be able
+        to remove or delete a job that is added manually", and his live week is
+        published nearly all the time. The rule the endpoint enforces now is
+        per-job, not per-plan, so this test pins the half that must NOT move.
+        """
         eq = make_equipment(db_session, 'Pub Del Pump', 'BULK-8')
         plan, day_one, _ = _draft_plan_with_two_days(db_session, admin_user)
         jobs = _add_jobs(db_session, day_one, eq, 2)
+        for i, job in enumerate(jobs):
+            job.sap_order_number = f'400088800{i}'
         plan.status = 'published'
         db_session.session.commit()
 
@@ -213,6 +224,27 @@ class TestBulkDeleteJobs:
         # Nothing was deleted
         for job in jobs:
             assert db_session.session.get(WorkPlanJob, job.id) is not None
+
+    def test_published_plan_allows_deleting_a_manually_added_job(
+            self, client, admin_user, engineer, db_session):
+        """The counterpart: a job typed in by mistake may go, published or not."""
+        eq = make_equipment(db_session, 'Typo Pump', 'BULK-9')
+        plan, day_one, _ = _draft_plan_with_two_days(db_session, admin_user)
+        jobs = _add_jobs(db_session, day_one, eq, 2)
+        plan.status = 'published'
+        db_session.session.commit()
+        job_ids = [j.id for j in jobs]
+
+        headers = get_auth_header(client, 'eng@test.com', 'test123')
+        resp = client.post(
+            f'/api/work-plans/{plan.id}/jobs/bulk-delete',
+            json={'job_ids': job_ids},
+            headers=headers,
+        )
+
+        assert resp.status_code == 200, resp.get_json()
+        for job_id in job_ids:
+            assert db_session.session.get(WorkPlanJob, job_id) is None
 
 
 class TestDayPayloadShape:

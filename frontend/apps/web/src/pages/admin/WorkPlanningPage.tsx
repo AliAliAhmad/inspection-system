@@ -63,7 +63,8 @@ import {
   closestCenter,
   pointerWithin,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragOverEvent,
@@ -441,7 +442,7 @@ const SimpleJobRow: React.FC<{
         padding: '3px 6px', borderRadius: 4, marginBottom: 3,
         background: isDragging ? '#e6f7ff' : isEmployeeOver ? '#f9f0ff' : isOverdue ? '#fff1f0' : isAssigned ? '#f6ffed' : '#fafafa',
         border: `1px solid ${isDragging ? '#1890ff' : isEmployeeOver ? '#722ed1' : isOverdue ? '#ffccc7' : isAssigned ? '#b7eb8f' : '#f0f0f0'}`,
-        cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none',
+        cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'manipulation',
         opacity: isDragging ? 0.4 : 1,
         transform: CSS.Translate.toString(transform),
       }}
@@ -704,9 +705,26 @@ export default function WorkPlanningPage() {
   const currentWeekStart = dayjs().startOf('week').add(weekOffset, 'week');
   const weekStartStr = currentWeekStart.format('YYYY-MM-DD');
 
-  // Sensors for drag & drop
+  // Sensors for drag & drop.
+  //
+  // MouseSensor + TouchSensor, NOT PointerSensor. On a desktop the two are the
+  // same thing, but on an iPad the finger is both the scrollbar and the drag
+  // handle, and PointerSensor cannot tell those apart: an 8px move claimed the
+  // gesture as a drag, so a swipe inside a day column never scrolled. Ali
+  // could not reach the jobs below the fold.
+  //
+  // The touch rule is therefore TIME, not distance — hold for a moment and it
+  // is a drag; move sooner and the browser keeps the gesture and scrolls. The
+  // mouse keeps the old 8px rule so nothing changes for the planners on a PC.
+  //
+  // Both sensors must be listed and PointerSensor must be gone: leaving it in
+  // means both it and TouchSensor fire on every touch.
+  //
+  // This works only together with `touchAction: 'manipulation'` on the
+  // draggable cards (it was 'none', which forbids scrolling outright).
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor)
   );
 
@@ -2107,6 +2125,15 @@ export default function WorkPlanningPage() {
       collisionDetection={customCollision}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
+      // Auto-scroll OFF while dragging a person onto a job.
+      //
+      // dnd-kit scrolls a container when the pointer nears its edge. Moving a
+      // JOB needs that — the day you are aiming at may be off-screen. Dropping
+      // a WORKER does not: the job is already on screen, you are just aiming at
+      // it. On an iPad the finger is large and the day column narrow, so the
+      // edge was being grazed constantly and the column slid away mid-drop —
+      // Ali kept landing the worker on the wrong job.
+      autoScroll={activeItem?.type !== 'employee'}
     >
       {/* Fix Ant Design Tabs so children can flex + scroll properly */}
       <style>{`

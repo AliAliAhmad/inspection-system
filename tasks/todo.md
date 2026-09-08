@@ -41,9 +41,11 @@ fit the free cap?
 Wins most of the same speed with no downtime and no migration.
 
 ## Done
-- Per-job sub-tasks / notes that stick to the job (2026-09-05). Built, 929 tests green,
-  NOT yet pushed or deployed. Needs a Render restart for `start.sh` to create
-  `work_plan_job_tasks`, and a mobile OTA for the worker's tick screen.
+- Per-job sub-tasks / notes that stick to the job — SHIPPED 2026-09-05 (commit `7266b72`),
+  deployed to Render, mobile OTA published to the `preview` channel.
+- iPad: swipe now scrolls a day column; hold-then-move drags — 2026-09-08.
+- The trade (MECH/ELEC) reaching the board on busy days — 2026-09-09.
+- Deleting a manually added job from a PUBLISHED plan — 2026-09-09.
 
 ## Known, pre-existing, NOT caused by this work
 Four TypeScript errors in the mobile app, all in unrelated screens:

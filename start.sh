@@ -781,6 +781,31 @@ with app.app_context():
         db.session.rollback()
         print('work_plan_job_tasks table already exists')
 
+    # Backfill work_center onto jobs that were scheduled from a SAP order.
+    #
+    # SAP has always known the trade, but every path that created a job from an
+    # order dropped the column, so the job arrived with work_center NULL and the
+    # board drew it under BOTH the mech and elec headings. Fixing the code only
+    # helps jobs created from now on; the plans already on the board keep the
+    # NULL. This copies the trade the order was carrying all along.
+    #
+    # Idempotent: it only ever fills a NULL, so it never overrides a trade a
+    # planner set by hand, and re-running it changes nothing.
+    try:
+        result = db.session.execute(text('''
+            UPDATE work_plan_jobs AS j
+            SET work_center = s.work_center
+            FROM sap_work_orders AS s
+            WHERE j.sap_order_number = s.order_number
+              AND j.work_center IS NULL
+              AND s.work_center IS NOT NULL
+        '''))
+        db.session.commit()
+        print('Backfilled work_center on %s jobs' % result.rowcount)
+    except Exception as exc:
+        db.session.rollback()
+        print('work_center backfill skipped: %s' % exc)
+
     # Create maintenance_cycles table
     try:
         db.session.execute(text('''
