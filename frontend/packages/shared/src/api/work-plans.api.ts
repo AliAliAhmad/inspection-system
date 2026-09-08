@@ -126,8 +126,22 @@ export const workPlansApi = {
     return getApiClient().put<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/${jobId}`, payload);
   },
 
-  removeJob(planId: number, jobId: number) {
-    return getApiClient().delete<ApiResponse<void>>(`/api/work-plans/${planId}/jobs/${jobId}`);
+  /**
+   * Take a job off a plan.
+   *
+   * By default the job is PARKED: a job from SAP goes back to the pool, and a
+   * hand-typed one is kept there under a `MAN-...` placeholder so it can be
+   * scheduled again. That is what dragging a job onto the pool means.
+   *
+   * `discard` means the opposite — the job was typed in by mistake and is not
+   * work at all, so nothing is kept. A real SAP order is never destroyed
+   * either way; the server enforces that.
+   */
+  removeJob(planId: number, jobId: number, opts?: { discard?: boolean }) {
+    return getApiClient().delete<ApiResponse<void>>(
+      `/api/work-plans/${planId}/jobs/${jobId}`,
+      opts?.discard ? { params: { discard: true } } : undefined
+    );
   },
 
   /**

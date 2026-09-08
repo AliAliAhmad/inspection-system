@@ -98,7 +98,18 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
 
     added = 0
     eq = db.session.get(Equipment, equipment_id)
-    berth = eq.berth if eq else None
+    # Normalised, not raw. `work_plan_jobs` has
+    # CHECK (berth IN ('east','west','both') OR berth IS NULL), and while
+    # `equipment` now carries its own check, a row written before that arrived
+    # can still hold something else — this repo's local database holds 'B20'.
+    # Passing such a value straight through makes the INSERT violate the
+    # constraint, and because this runs inside the caller's transaction it takes
+    # the planner's OWN job down with it: adding a job by hand returns a 500 and
+    # saves nothing. Every other creation path already normalises; this one did
+    # not. Not observed on production, fixed because it is a real failure mode
+    # and the guard is free.
+    from app.services.work_plan_generator_service import _normalize_berth
+    berth = _normalize_berth(eq.berth) if eq else None
 
     # Get next position
     max_pos = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
@@ -1205,16 +1216,38 @@ def assert_job_removable(job):
     )
 
 
+# A hand-typed job that has been returned to the pool comes back wearing one of
+# these. It is NOT a SAP order — _delete_job_record mints it so the job can sit
+# in the pool like anything else. `MAN-{plan_id}-{job_id}`, and split_job may
+# append `-P2`, so this is a PREFIX test.
+MANUAL_ORDER_PREFIX = 'MAN-'
+
+
+def is_manual_order_number(order_number):
+    return bool(order_number) and str(order_number).startswith(MANUAL_ORDER_PREFIX)
+
+
 def is_manually_added(job):
     """True when a planner typed this job in by hand.
 
-    A manual job has no origin outside the plan: no SAP order behind it, no
-    defect, no inspection. Nothing else in the system is waiting for it and
-    nothing is fed back anywhere when it goes — deleting it simply undoes the
-    typing.
+    A manual job has no origin outside the plan: no defect, no inspection, and
+    no SAP order — or an order number the app minted for it ITSELF.
+
+    That last clause is the whole of Ali's 2026-09-09 report: "SOME have the
+    option some do not have, and the do not have app gives them a sap order i do
+    not know why". Removing a hand-typed job parks it in the pool as
+    `MAN-<plan>-<job>` so the work is not lost. When it is scheduled again — by
+    hand, or by _auto_group_equipment_jobs sweeping up everything pending for
+    that machine — the new row carries that number, and a plain "has a
+    sap_order_number" test then calls it a SAP job. It stopped being deletable
+    and it displayed an order Ali never created.
     """
-    return not (job.sap_order_number or job.defect_id
-                or job.inspection_assignment_id)
+    if job.defect_id or job.inspection_assignment_id:
+        return False
+    if not job.sap_order_number:
+        return True
+    return (is_manual_order_number(job.sap_order_number)
+            or job.sap_order_type == 'MANUAL')
 
 
 def assert_removable_from_published(job):
@@ -1267,12 +1300,39 @@ def pool_orders_query(plan_id=None):
                             SAPWorkOrder.work_plan_id == plan_id))
 
 
-def _delete_job_record(plan_id, job):
+def _purge_manual_job_tasks(order_number):
+    """Drop the sub-task list belonging to a discarded hand-typed job.
+
+    Those lists hang on the order number rather than the plan row, on purpose —
+    that is what lets them survive a trip through the pool. So a job discarded
+    for good would otherwise leave its notes behind forever, and they would
+    reappear if the number were ever minted again.
+    """
+    if not is_manual_order_number(order_number):
+        return
+    db.session.execute(
+        db.text('DELETE FROM work_plan_job_tasks '
+                'WHERE anchor_kind = :kind AND anchor_key = :key'),
+        {'kind': 'sap', 'key': order_number}
+    )
+
+
+def _delete_job_record(plan_id, job, discard=False):
     """Delete a single job from a plan, preserving pool semantics.
 
     Shared by remove_job (single) and bulk_delete_jobs (many) so both paths
     behave identically. Does NOT commit — the caller owns the transaction so a
     bulk delete is one commit instead of one per job.
+
+    `discard=True` means "this was typed in by mistake, it is not work" — the
+    job is not parked in the pool and its `MAN-` placeholder is destroyed too.
+    Without that, deleting a mistyped job put it straight back in the pool,
+    where _auto_group_equipment_jobs picked it up again the next time anyone
+    scheduled anything for that machine. Ali deleted a job and watched it
+    return wearing an order number he had never seen.
+
+    A REAL SAP order is never destroyed by this, whatever `discard` says: it is
+    outstanding work that belongs to SAP, and it goes back to the pool.
 
     Raises ForbiddenError if the job carries a record of real work.
     """
@@ -1285,7 +1345,16 @@ def _delete_job_record(plan_id, job):
             work_plan_id=plan_id,
             order_number=job.sap_order_number
         ).first()
-        if sap_order and sap_order.status == 'scheduled':
+        placeholder = (is_manual_order_number(job.sap_order_number)
+                       or (sap_order is not None and sap_order.order_type == 'MANUAL'))
+        if sap_order and discard and placeholder:
+            # The app's own note-to-self for a hand-typed job. Throwing the job
+            # away means throwing this away too, or the pool hands it straight
+            # back. Guarded on `placeholder` so a real SAP order can never be
+            # destroyed here.
+            _purge_manual_job_tasks(sap_order.order_number)
+            db.session.delete(sap_order)
+        elif sap_order and sap_order.status == 'scheduled':
             # Back into the shared box, not this week's — the job is outstanding
             # work again and belongs to whenever it gets done, not to the week it
             # happened to be pulled from.
@@ -1294,8 +1363,9 @@ def _delete_job_record(plan_id, job):
     # Otherwise, if it's a MANUAL PM or corrective job (not from SAP, not a defect),
     # preserve it by returning it to the pool as a pending SAP order — so a
     # manually-added job can be dragged back to the pool like any other job
-    # instead of vanishing.
-    elif job.job_type in ('pm', 'corrective') and not job.defect_id and job.equipment_id:
+    # instead of vanishing. Skipped entirely when discarding.
+    elif (not discard and job.job_type in ('pm', 'corrective')
+          and not job.defect_id and job.equipment_id):
         manual_order_number = f"MAN-{plan_id}-{job_id}"
         existing_manual = SAPWorkOrder.query.filter_by(
             work_plan_id=plan_id, order_number=manual_order_number
@@ -1380,12 +1450,18 @@ def remove_job(plan_id, job_id):
         # nobody has started. See assert_removable_from_published().
         assert_removable_from_published(job)
 
-    _delete_job_record(plan_id, job)
+    # ?discard=true means "I typed this wrongly", not "do it another week".
+    # Default false, so dragging a job onto the pool still parks it exactly as
+    # it always has.
+    discard = request.args.get('discard', '').lower() in ('1', 'true', 'yes')
+
+    _delete_job_record(plan_id, job, discard=discard)
     db.session.commit()
 
     return jsonify({
         'status': 'success',
-        'message': 'Job removed from plan'
+        'message': 'Job deleted' if discard else 'Job removed from plan',
+        'discarded': discard,
     }), 200
 
 

@@ -948,8 +948,12 @@ export default function WorkPlanningPage() {
 
   // Remove job from plan (used when dragging calendar job back to pool)
   const removeJobMutation = useMutation({
-    mutationFn: ({ planId, jobId }: { planId: number; jobId: number }) =>
-      workPlansApi.removeJob(planId, jobId),
+    // `discard` is only set by the "Remove from plan" button in the job modal.
+    // Dragging a job onto the pool leaves it undefined, which parks the job —
+    // unchanged behaviour.
+    mutationFn: ({ planId, jobId, discard }:
+                 { planId: number; jobId: number; discard?: boolean }) =>
+      workPlansApi.removeJob(planId, jobId, discard ? { discard: true } : undefined),
     onMutate: async ({ planId, jobId }) => {
       await queryClient.cancelQueries({ queryKey: planQueryKey });
       const previous = queryClient.getQueryData(planQueryKey);
@@ -2019,10 +2023,21 @@ export default function WorkPlanningPage() {
 
   // useCallback so memoized BundleCards don't re-render on every parent render
   /** A job a planner typed in, with no origin outside this plan.
+   *
    *  Mirrors is_manually_added() in app/api/work_plans.py — the server is the
-   *  authority, this only decides whether to offer the button. */
-  const isManuallyAddedJob = (job: WorkPlanJob | null): boolean =>
-    !!job && !job.sap_order_number && !job.defect_id && !job.inspection_assignment_id;
+   *  authority, this only decides whether to offer the button.
+   *
+   *  A `MAN-...` number counts as hand-typed. It is not a SAP order: the server
+   *  mints it when a hand-typed job is returned to the pool, so the job can sit
+   *  there like anything else. Treating it as SAP is what made the button
+   *  disappear from jobs Ali had added himself, and made them show an order
+   *  number he never created. `MAN-6-9-P2` (a split part) still matches. */
+  const isManuallyAddedJob = (job: WorkPlanJob | null): boolean => {
+    if (!job || job.defect_id || job.inspection_assignment_id) return false;
+    if (!job.sap_order_number) return true;
+    return job.sap_order_number.startsWith('MAN-')
+      || (job as any).sap_order_type === 'MANUAL';
+  };
 
   const handleJobClick = useCallback((job: WorkPlanJob) => {
     setSelectedJob(job);
@@ -3690,7 +3705,7 @@ export default function WorkPlanningPage() {
               onConfirm={() => {
                 if (!currentPlan || !selectedJob) return;
                 removeJobMutation.mutate(
-                  { planId: currentPlan.id, jobId: selectedJob.id },
+                  { planId: currentPlan.id, jobId: selectedJob.id, discard: true },
                   {
                     onSuccess: () => {
                       message.success('Job removed from the plan');

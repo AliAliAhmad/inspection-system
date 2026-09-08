@@ -74,6 +74,16 @@
 - A manually added, unstarted job can now be deleted from a published plan.
 - Full detail in HISTORY.md.
 
+### The job that came back — FIXED 2026-09-09
+- `MAN-<plan>-<job>` is the app's own placeholder for a hand-typed job parked in the
+  pool, NOT a SAP order. Treating it as SAP hid the delete button and showed Ali an
+  order he never created. Now recognised as manual everywhere.
+- Delete endpoint takes `?discard=true` — "typed by mistake" no longer parks it in the
+  pool to be swept back on. Drag-to-pool still parks. A real SAP order is never destroyed.
+- **⚠️ Jobs deleted BEFORE this fix are still parked in production** and may return once
+  more; the button will now be on them.
+- Full detail in HISTORY.md.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

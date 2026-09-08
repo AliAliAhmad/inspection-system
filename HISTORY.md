@@ -1,3 +1,27 @@
+## 2026-09-09 — The job that came back
+
+### The job that came back — FIXED 2026-09-09
+- Ali: "SOME have the option some do not have, and the do not have app gives them a sap
+  order i do not know why?"
+- **`MAN-<plan>-<job>` is NOT a SAP order.** `_delete_job_record` mints it so a hand-typed
+  job removed from a plan is PARKED in the pool rather than lost. When it is scheduled
+  again — often automatically, because `_auto_group_equipment_jobs` sweeps up everything
+  pending for that machine — the new row carries that number. `is_manually_added` tested
+  only "has a sap_order_number", so the job stopped being deletable and displayed an
+  order the planner never created. Now `MAN-` prefixed / `order_type='MANUAL'` counts as
+  manual, on the server and in the web UI. `MAN-6-9-P2` (split) still matches.
+- **`?discard=true` on the delete endpoint.** Park is right for "do it another week"
+  (drag to pool, unchanged). It was wrong for "I typed this by mistake": the placeholder
+  sat in the pool and came back. The modal button now discards — the placeholder row and
+  the job's sub-task list go with it. **A real SAP order is never destroyed**, whatever
+  discard says; it returns to the pool.
+- **⚠️ Jobs deleted BEFORE this fix are still parked in production** and may reappear once
+  more. The button will now be on them and will remove them for good.
+- Also fixed: `_auto_group_equipment_jobs` passed `equipment.berth` raw into a column
+  constrained to east/west/both. A legacy row holding e.g. 'B20' made the whole manual
+  add fail with a 500, taking the planner's own job with it. Not observed on production.
+
+
 ## 2026-09-09 — iPad scrolling, the trade, and deleting a mistyped job
 
 ### iPad web + the trade that never arrived — FIXED 2026-09-09
@@ -711,6 +735,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

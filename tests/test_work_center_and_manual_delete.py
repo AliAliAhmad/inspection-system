@@ -297,3 +297,192 @@ def test_a_quiet_day_sends_the_trade_too(db_session, engineer, plan):
     fresh = db.session.get(WorkPlanDay, day.id)
     assert len(fresh.jobs) <= 10
     assert fresh.to_dict('en')['jobs_east'][0]['work_center'] == 'MECH'
+
+
+# ── The job that came back ─────────────────────────────────────────────────
+#
+# Ali, 2026-09-09: "i found that SOME have the option some do not have, and the
+# do not have app gives them a sap order i do not know why?"
+#
+# Removing a hand-typed job PARKS it in the pool under `MAN-<plan>-<job>` so the
+# work is not lost. That is right for "do it another week". It was wrong for "I
+# typed this by mistake": the placeholder sat in the pool, and the next time
+# anyone scheduled anything for that machine _auto_group_equipment_jobs swept it
+# back onto the board — now carrying an order number Ali had never seen, and no
+# longer recognised as his, so the delete button was gone.
+
+def _manual_job(plan, eq, description='Typed by hand', offset=0):
+    job = WorkPlanJob(work_plan_day_id=_day(plan, offset).id, job_type='pm',
+                      equipment_id=eq.id, estimated_hours=2, berth='east',
+                      description=description)
+    db.session.add(job)
+    db.session.commit()
+    return job
+
+
+def test_a_discarded_job_does_not_come_back(db_session, engineer, client, plan):
+    """The whole loop, end to end. This is the report."""
+    eq = make_equipment(db_session, serial='RS109')
+    job = _manual_job(plan, eq, 'Added by mistake')
+    job_id = job.id
+
+    resp = client.delete(
+        f'/api/work-plans/{plan.id}/jobs/{job_id}?discard=true',
+        headers=_headers(client))
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()['discarded'] is True
+
+    # Nothing left parked in the pool wearing its name.
+    left = SAPWorkOrder.query.filter(
+        SAPWorkOrder.order_number.like('MAN-%')).all()
+    assert left == [], f'still parked: {[o.order_number for o in left]}'
+
+    # Now schedule something else for the SAME machine, which is what pulls in
+    # everything outstanding for it.
+    resp = client.post(f'/api/work-plans/{plan.id}/jobs', headers=_headers(client),
+                       json={'day_id': _day(plan).id, 'job_type': 'pm',
+                             'equipment_id': eq.id, 'estimated_hours': 2,
+                             'description': 'A different job', 'berth': 'east'})
+    assert resp.status_code == 201, resp.get_json()
+
+    back = WorkPlanJob.query.filter_by(description='Added by mistake').all()
+    assert back == [], 'the discarded job came back'
+
+
+def test_removing_without_discard_still_parks_it(db_session, engineer, client,
+                                                 plan):
+    """Dragging a job onto the pool must behave exactly as it always has."""
+    eq = make_equipment(db_session, serial='RS109')
+    job = _manual_job(plan, eq, 'Do it next week')
+
+    resp = client.delete(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                         headers=_headers(client))
+    assert resp.status_code == 200
+    assert resp.get_json()['discarded'] is False
+
+    parked = SAPWorkOrder.query.filter(
+        SAPWorkOrder.order_number.like('MAN-%')).all()
+    assert len(parked) == 1
+    assert parked[0].description == 'Do it next week'
+
+
+def test_a_parked_job_is_still_recognised_as_hand_typed(db_session, engineer,
+                                                        client, plan):
+    """A job back from the pool wears MAN-…; it is still Ali's, not SAP's."""
+    from app.api.work_plans import is_manually_added
+
+    eq = make_equipment(db_session, serial='RS109')
+    job = WorkPlanJob(work_plan_day_id=_day(plan).id, job_type='pm',
+                      equipment_id=eq.id, estimated_hours=2, berth='east',
+                      sap_order_number='MAN-6-9', sap_order_type='MANUAL',
+                      description='Came back from the pool')
+    db.session.add(job)
+    plan.status = 'published'
+    db.session.commit()
+
+    assert is_manually_added(job) is True
+
+    # Split parts carry `-P2` and must not stop being manual.
+    part = WorkPlanJob(work_plan_day_id=_day(plan).id, job_type='pm',
+                       equipment_id=eq.id, estimated_hours=1, berth='east',
+                       sap_order_number='MAN-6-9-P2')
+    assert is_manually_added(part) is True
+
+    # And it can be deleted from a published plan, taking its placeholder along.
+    db.session.add(SAPWorkOrder(order_number='MAN-6-9', order_type='MANUAL',
+                                job_type='pm', equipment_id=eq.id,
+                                status='scheduled', work_plan_id=plan.id,
+                                estimated_hours=2, berth='east'))
+    db.session.commit()
+
+    resp = client.delete(
+        f'/api/work-plans/{plan.id}/jobs/{job.id}?discard=true',
+        headers=_headers(client))
+    assert resp.status_code == 200, resp.get_json()
+    assert SAPWorkOrder.query.filter_by(order_number='MAN-6-9').first() is None
+
+
+def test_a_real_sap_order_is_never_destroyed(db_session, engineer, client, plan):
+    """Even asked to discard. That work belongs to SAP, not to the plan."""
+    eq = make_equipment(db_session, serial='RS109')
+    order = SAPWorkOrder(order_number='4000123999', order_type='PRM',
+                         job_type='pm', equipment_id=eq.id, status='scheduled',
+                         work_plan_id=plan.id, estimated_hours=3, berth='east')
+    db.session.add(order)
+    job = WorkPlanJob(work_plan_day_id=_day(plan).id, job_type='pm',
+                      equipment_id=eq.id, estimated_hours=3, berth='east',
+                      sap_order_number='4000123999')
+    db.session.add(job)
+    db.session.commit()
+
+    resp = client.delete(
+        f'/api/work-plans/{plan.id}/jobs/{job.id}?discard=true',
+        headers=_headers(client))
+    assert resp.status_code == 200
+
+    survivor = SAPWorkOrder.query.filter_by(order_number='4000123999').first()
+    assert survivor is not None, 'a real SAP order was destroyed'
+    assert survivor.status == 'pending', 'it should be back in the pool'
+
+
+def test_discarding_takes_its_sub_tasks_with_it(db_session, engineer, client,
+                                                plan):
+    """Sub-task lists hang on the order number so they survive the pool. A job
+    thrown away for good must not leave its notes behind."""
+    from app.models import WorkPlanJobTask
+
+    eq = make_equipment(db_session, serial='RS109')
+    job = WorkPlanJob(work_plan_day_id=_day(plan).id, job_type='pm',
+                      equipment_id=eq.id, estimated_hours=2, berth='east',
+                      sap_order_number='MAN-6-77', sap_order_type='MANUAL')
+    db.session.add(job)
+    db.session.add(SAPWorkOrder(order_number='MAN-6-77', order_type='MANUAL',
+                                job_type='pm', equipment_id=eq.id,
+                                status='scheduled', work_plan_id=plan.id,
+                                estimated_hours=2, berth='east'))
+    db.session.commit()
+
+    client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=_headers(client),
+                json={'content': 'a note on a job that is about to vanish'})
+    assert WorkPlanJobTask.query.count() == 1
+
+    resp = client.delete(
+        f'/api/work-plans/{plan.id}/jobs/{job.id}?discard=true',
+        headers=_headers(client))
+    assert resp.status_code == 200
+    assert WorkPlanJobTask.query.count() == 0
+
+
+def test_auto_grouping_survives_an_odd_machine_berth(db_session, engineer,
+                                                     client, plan):
+    """equipment.berth is free text; work_plan_jobs allows only east/west/both.
+
+    _auto_group_equipment_jobs passed it through raw, so adding a job by hand
+    for such a machine failed the CHECK constraint — and because it runs inside
+    the caller's transaction it took the planner's OWN job down with it.
+
+    equipment has its own check_valid_berth, so a value like 'B20' cannot be
+    written through the ORM today. It is set here with raw SQL because that is
+    exactly how such a row exists in a real database: written before the
+    constraint arrived. This repo's own local sqlite still holds several.
+    """
+    eq = make_equipment(db_session, serial='RS109')
+    db.session.commit()
+    # A fresh database cannot be given this value at all, so the check is turned
+    # off for the one write that plants it — which is precisely the state of a
+    # row that was written before the constraint existed.
+    db.session.execute(db.text('PRAGMA ignore_check_constraints = ON'))
+    db.session.execute(db.text('UPDATE equipment SET berth = :b WHERE id = :i'),
+                       {'b': 'B20', 'i': eq.id})
+    db.session.commit()
+    db.session.execute(db.text('PRAGMA ignore_check_constraints = OFF'))
+    assert db.session.execute(
+        db.text('SELECT berth FROM equipment WHERE id = :i'),
+        {'i': eq.id}).scalar() == 'B20'
+
+    resp = client.post(f'/api/work-plans/{plan.id}/jobs', headers=_headers(client),
+                       json={'day_id': _day(plan).id, 'job_type': 'pm',
+                             'equipment_id': eq.id, 'estimated_hours': 2,
+                             'description': 'On an oddly-berthed machine',
+                             'berth': 'east'})
+    assert resp.status_code == 201, resp.get_json()
