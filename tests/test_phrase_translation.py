@@ -359,3 +359,35 @@ def test_restoring_survives_a_reordered_sentence():
     token = list(protected)[0]
     assert restore_terms(f'{token} الإضاءة الخلفية مفقودة', protected) \
         == '(PM) الإضاءة الخلفية مفقودة'
+
+
+@pytest.mark.parametrize('source, must_still_reach_translator', [
+    # From Ali's third run. The code pattern was eating the English words
+    # beside it, so 'FL311-HOURLY SERVICE' came back as 'خدمة FL311-HOURLY' —
+    # the machine name preserved and the actual work half-named.
+    ('FL311-HOURLY SERVICE', ['HOURLY', 'SERVICE']),
+    ('FL302-HOURLY SERVICE', ['HOURLY', 'SERVICE']),
+    ('TR064-MECHANICAL INSPECTION', ['MECHANICAL', 'INSPECTION']),
+    ('TT033-25/5H-MECH. HOURLY SERVICE', ['HOURLY', 'SERVICE']),
+    ('RS109-250HR-MECH.HOURLY SERVICE', ['HOURLY', 'SERVICE']),
+])
+def test_a_code_never_eats_the_words_beside_it(source, must_still_reach_translator):
+    from app.services.phrase_translation import protect_terms
+    masked, _ = protect_terms(source)
+    for word in must_still_reach_translator:
+        assert word in masked, f'{word!r} was swallowed by the code pattern'
+
+
+@pytest.mark.parametrize('source', [
+    'FL311-HOURLY SERVICE',
+    'TR064-MECHANICAL INSPECTION',
+    'TT033-25/5H-MECH. HOURLY SERVICE',
+    'ECH02-SP-(EMS)TWL INSPECTION_PB',
+])
+def test_no_placeholder_is_glued_onto_a_word(source):
+    """'MECH' matching the front of 'MECHANICAL' left 'ANICAL' stranded."""
+    import re
+    from app.services.phrase_translation import protect_terms
+    masked, _ = protect_terms(source)
+    assert not re.search(r'XQZ[A-Za-z]', masked), \
+        f'a word was cut in half: {masked}'

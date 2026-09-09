@@ -90,10 +90,15 @@ _PROTECTED_TERMS = [
     r'\(\s*P\.?M\.?\s*\)', r'\(\s*P\.?R\.?\s*\)', r'\(\s*C\.?M\.?\s*\)',
     r'\bPM\b(?=\s*$)', r'\-PM\b',
     # machine / order codes: two-to-four letters then digits, plus any tail
-    # Each tail segment stays SHORT and dot-free, so 'RS109-250HR-MECH' is
-    # protected but the '.HOURLY SERVICE' after it is still translated. A
-    # greedier tail swallowed real words and left the Arabic saying less.
-    r'\b[A-Z]{2,4}\d{2,4}(?:[-/][A-Za-z0-9]{1,6})*',
+    # A tail segment must LOOK like a code: contain a digit, or be at most four
+    # capitals (MECH, SP, PB). Length alone was not enough — a six-character
+    # allowance swallowed the real words in 'FL311-HOURLY SERVICE' and
+    # 'TR064-MECHANICAL INSPECTION', which then came back half-translated:
+    # 'خدمة FL311-HOURLY' instead of naming the hourly service at all.
+    # ...and it must END where the segment ends. Without the lookahead, 'MECH'
+    # matched the front of 'MECHANICAL' and 'HOUR' the front of 'HOURLY',
+    # leaving 'ANICAL' and 'LY' stranded outside the placeholder.
+    r'\b[A-Z]{2,4}\d{2,4}(?:[-/](?:[A-Za-z]*\d[A-Za-z0-9]*|[A-Z]{1,4})(?![A-Za-z]))*',
     # service intervals
     r'\b\d{2,4}\s*HRS?\b', r'\b\d{1,3}/\d{1,2}\s*H\b',
     # trade abbreviations this yard uses
