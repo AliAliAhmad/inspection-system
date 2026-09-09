@@ -30,6 +30,18 @@ class User(db.Model):
 
     # Profile
     full_name = db.Column(db.String(255), nullable=False)
+    # The same man's name written in Arabic. TYPED BY A PERSON, never generated.
+    #
+    # These are real Arabic names that happen to be stored in Latin letters
+    # because that is how the Excel arrived. Machine-transliterating them would
+    # be guessing at the spelling of someone's own name — Haidar is حيدر or
+    # حيدار depending on the man, and getting it wrong is not a translation
+    # error, it is calling someone by the wrong name.
+    #
+    # Empty is the normal state and costs nothing: every reader falls back to
+    # full_name, exactly as before. The roster import must never write this —
+    # its source is the same Latin-lettered workbook.
+    full_name_ar = db.Column(db.String(255), nullable=True)
     phone = db.Column(db.String(50))
     language = db.Column(db.String(2), default='en')  # 'en' or 'ar'
 
@@ -137,6 +149,7 @@ class User(db.Model):
             'email': self.email,
             'username': self.username,
             'full_name': self.full_name,
+            'full_name_ar': self.full_name_ar,
             'phone': self.phone,
             'role': self.role,
             'role_id': self.role_id,
@@ -164,6 +177,12 @@ class User(db.Model):
             data['password_hash'] = self.password_hash
 
         return data
+
+    def display_name(self, language='en'):
+        """The name to show this reader. Arabic when we have it, else as stored."""
+        if language == 'ar' and self.full_name_ar:
+            return self.full_name_ar
+        return self.full_name
 
     @staticmethod
     def generate_username(full_name):

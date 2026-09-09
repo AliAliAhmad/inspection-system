@@ -157,7 +157,7 @@ class WorkPlanJobTask(db.Model):
                 result[job_id] = found
         return result
 
-    def to_dict(self):
+    def to_dict(self, language='en'):
         return {
             'id': self.id,
             'content': self.content,
@@ -166,9 +166,11 @@ class WorkPlanJobTask(db.Model):
             'anchor_kind': self.anchor_kind,
             'anchor_key': self.anchor_key,
             'created_by_id': self.created_by_id,
-            'created_by_name': self.created_by.full_name if self.created_by else None,
+            'created_by_name': (self.created_by.display_name(language)
+                                if self.created_by else None),
             'done_by_id': self.done_by_id,
-            'done_by_name': self.done_by.full_name if self.done_by else None,
+            'done_by_name': (self.done_by.display_name(language)
+                             if self.done_by else None),
             'done_at': self.done_at.isoformat() if self.done_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }

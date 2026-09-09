@@ -1495,6 +1495,32 @@ def remove_job(plan_id, job_id):
     }), 200
 
 
+def _note_for_reader(note, want_ar):
+    """A job note in the reader's language, without ever blocking on a provider.
+
+    Notes are one-off prose typed by a planner, not the repeating SAP
+    vocabulary, so the phrase store is the wrong home for them. Two things save
+    most of the work anyway:
+
+      * a planner writing for an Arabic crew usually writes Arabic already, and
+        translating Arabic into Arabic is how text gets mangled;
+      * the rest are handled by the same cached path as everything else, so a
+        note is translated once and then free.
+
+    Never raises and never waits: a failure returns what was typed.
+    """
+    if not note or not want_ar:
+        return note
+    try:
+        from app.services.translation_service import is_arabic
+        if is_arabic(note):
+            return note
+        from app.services.phrase_translation import to_arabic
+        return to_arabic(note)
+    except Exception:  # noqa: BLE001
+        return note
+
+
 def _arabic_or_original(text, cached_ar, on_translated=None):
     """Return Arabic text for `text`, translating once and caching if needed.
 
@@ -1674,7 +1700,8 @@ def get_job_details(job_id):
             inspection = {
                 'id': insp.id,
                 'date': insp.created_at.date().isoformat() if insp.created_at else None,
-                'inspector': insp.technician.full_name if getattr(insp, 'technician', None) else None,
+                'inspector': (insp.technician.display_name(language)
+                              if getattr(insp, 'technician', None) else None),
             }
 
         media = _defect_media(d)
@@ -1705,7 +1732,8 @@ def get_job_details(job_id):
             'video_url': media['video_url'],
             'voice_note_url': media['voice_note_url'],
             'voice_transcription': transcription,
-            'reported_by': d.reported_by.full_name if getattr(d, 'reported_by', None) else None,
+            'reported_by': (d.reported_by.display_name(language)
+                            if getattr(d, 'reported_by', None) else None),
             'inspection': inspection,
         }
 
@@ -1728,7 +1756,7 @@ def get_job_details(job_id):
             'assignments': [
                 {
                     'user_id': a.user_id,
-                    'full_name': a.user.full_name if a.user else None,
+                    'full_name': a.user.display_name(language) if a.user else None,
                     'is_lead': a.is_lead,
                 }
                 for a in job.assignments
@@ -2428,7 +2456,11 @@ def get_my_plan():
     plan = WorkPlan.query.options(
         joinedload(WorkPlan.days)
         .joinedload(WorkPlanDay.jobs)
-        .joinedload(WorkPlanJob.assignments),
+        .joinedload(WorkPlanJob.assignments)
+        # ...and the user on each one. This block already served
+        # a.user.full_name, so without this it was a query per assignment on
+        # every worker's week — invisible until someone counted.
+        .joinedload(WorkPlanAssignment.user),
         joinedload(WorkPlan.days)
         .joinedload(WorkPlanDay.jobs)
         .joinedload(WorkPlanJob.equipment),
@@ -2500,7 +2532,7 @@ def get_my_plan():
                         'planned_time_hours': float(job.planned_time_hours) if job.planned_time_hours is not None else None,
                         'has_planned_time': job.has_planned_time(),
                         'priority': job.priority,
-                        'notes': job.notes,
+                        'notes': _note_for_reader(job.notes, want_ar),
                         'checklist_required': job.checklist_required,
                         'checklist_completed': job.checklist_completed,
                         'completion_photo_required': job.completion_photo_required,
@@ -2511,7 +2543,7 @@ def get_my_plan():
                             {
                                 'id': a.id,
                                 'user_id': a.user_id,
-                                'user_name': a.user.full_name if a.user else None,
+                                'user_name': a.user.display_name(language) if a.user else None,
                                 'is_lead': a.is_lead
                             } for a in job.assignments
                         ],
@@ -2563,7 +2595,7 @@ def get_my_plan():
     for job_id, tasks in WorkPlanJobTask.for_jobs(my_job_objs).items():
         target = dicts_by_job_id.get(job_id)
         if target is not None:
-            target['sub_tasks'] = [t.to_dict() for t in tasks]
+            target['sub_tasks'] = [t.to_dict(language) for t in tasks]
             target['sub_tasks_done'] = len([t for t in tasks if t.is_done])
 
     return jsonify({

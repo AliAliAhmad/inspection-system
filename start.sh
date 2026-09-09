@@ -835,6 +835,18 @@ with app.app_context():
         db.session.rollback()
         print('phrase_translations table already exists')
 
+    # users.full_name_ar — the same man's name written in Arabic, typed by a
+    # person. Nullable and never backfilled: empty means show the name as
+    # stored, which is exactly the behaviour before this column existed.
+    try:
+        db.session.execute(text(
+            'ALTER TABLE users ADD COLUMN full_name_ar VARCHAR(255)'))
+        db.session.commit()
+        print('Added users.full_name_ar')
+    except Exception:
+        db.session.rollback()
+        print('users.full_name_ar already exists')
+
     # Create maintenance_cycles table
     try:
         db.session.execute(text('''

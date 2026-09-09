@@ -7,6 +7,8 @@ import json
 import re
 import io
 from datetime import date, datetime, timedelta
+import unicodedata
+
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
@@ -91,6 +93,7 @@ def get_users_for_assignment():
             {
                 'id': u.id,
                 'full_name': u.full_name,
+                'full_name_ar': u.full_name_ar,
                 'role': u.role,
                 'role_id': u.role_id,
                 'specialization': u.specialization,
@@ -513,6 +516,11 @@ def update_user(user_id):
     # Update fields if provided
     if 'full_name' in data:
         user.full_name = data['full_name']
+    if 'full_name_ar' in data:
+        # The same man's name in Arabic, typed by a person. Blank clears it and
+        # the app falls back to full_name, which is the default state.
+        value = (data['full_name_ar'] or '').strip()
+        user.full_name_ar = unicodedata.normalize('NFC', value) if value else None
     if 'role' in data:
         valid_roles = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance']
         if data['role'] not in valid_roles:

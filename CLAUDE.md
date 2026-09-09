@@ -120,6 +120,13 @@
   ready but not set on Render.
 - Card now shows the job description. Full detail in HISTORY.md.
 
+### Arabic for the things a worker actually reads — 2026-09-09
+- `users.full_name_ar` — TYPED by a person, never machine-transliterated. Empty falls
+  back to the stored name. `User.display_name(language)` decides everywhere.
+- Notes read from the phrase store, skipped when already Arabic.
+- **Two levers, both Ali's:** type the Arabic names; add an API key and run
+  `flask translate-phrases --apply`. Full detail in HISTORY.md.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

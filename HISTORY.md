@@ -1,3 +1,23 @@
+## 2026-09-09 — Arabic for names and notes
+
+### Arabic for the things a worker actually reads — 2026-09-09
+- Ali: "description, employee name, and other main details like notes in arabic".
+- **Names are TYPED, not translated.** New `users.full_name_ar`, nullable, filled by a
+  person in the Users screen (web form has the field, `dir="rtl"`). These are real Arabic
+  names stored in Latin letters because that is how the roster arrives — machine
+  transliteration would be guessing at the spelling of someone's own name. Empty falls
+  back to `full_name`, so shipping it changes nothing until Ali fills it.
+  `User.display_name(language)` is the single decider; roster import never writes it.
+- **Notes** go through `_note_for_reader`: skipped entirely when the planner already typed
+  Arabic (`is_arabic`), otherwise read from the phrase store. Never blocks.
+- Also fixed while in there: `/my-plan` served `a.user.full_name` without eager-loading
+  `WorkPlanAssignment.user` — a query per assignment on every worker's week.
+- Day names were already client-side and locale-aware on mobile. Not an issue.
+- **Two levers, both Ali's, both one-time:** type the Arabic names, and add a working
+  API key then run `flask translate-phrases --apply`. Until then everything falls back to
+  English exactly as before.
+
+
 ## Standard material kits from SAP (moved out of CLAUDE.md 2026-09-09)
 
 ### Standard material kits from SAP — LIVE 2026-08-26
@@ -857,6 +877,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

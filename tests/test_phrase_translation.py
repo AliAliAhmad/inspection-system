@@ -154,3 +154,88 @@ def test_english_users_are_unaffected(db_session, engineer, worker, client, plan
                       headers=headers)
     jobs = [j for d in resp.get_json()['my_jobs'] for j in d['jobs']]
     assert jobs[0]['description'] == '250HR SERVICE'
+
+
+# ── Names ──────────────────────────────────────────────────────────────────
+#
+# Ali, 2026-09-09: "what i care about is to have the description, employee name,
+# and other main details like notes in arabic for the arabic user".
+#
+# A name is not translated. It is TYPED, once, by someone who knows how the man
+# spells his own name — Haidar is حيدر or حيدار depending on the person, and a
+# machine guessing is not a translation error, it is calling someone by the
+# wrong name. Empty is the normal state and falls back to the stored spelling.
+
+def test_a_name_falls_back_when_no_arabic_is_stored(db_session):
+    u = User(email='n1@test.com', full_name='Ali Jameel Haidar',
+             role='maintenance', role_id='MNT900', shift='day')
+    u.set_password('x')
+    db.session.add(u)
+    db.session.commit()
+    assert u.display_name('ar') == 'Ali Jameel Haidar'
+    assert u.display_name('en') == 'Ali Jameel Haidar'
+
+
+def test_a_typed_arabic_name_is_used_for_arabic_readers_only(db_session):
+    u = User(email='n2@test.com', full_name='Ali Jameel Haidar',
+             full_name_ar='علي جميل حيدر',
+             role='maintenance', role_id='MNT901', shift='day')
+    u.set_password('x')
+    db.session.add(u)
+    db.session.commit()
+    assert u.display_name('ar') == 'علي جميل حيدر'
+    assert u.display_name('en') == 'Ali Jameel Haidar', 'English readers unchanged'
+
+
+def test_the_team_on_a_job_reads_in_arabic(db_session, engineer, worker, client,
+                                           plan):
+    """The names a worker sees beside his own job."""
+    eq = make_equipment(db_session, serial='RS109')
+    mate = User(email='mate@test.com', full_name='Haidar Kareem',
+                full_name_ar='حيدر كريم', role='maintenance',
+                role_id='MNT902', shift='day')
+    mate.set_password('x')
+    db.session.add(mate)
+    job = WorkPlanJob(work_plan_day_id=sorted(plan.days, key=lambda d: d.date)[0].id,
+                      job_type='pm', equipment_id=eq.id, estimated_hours=4,
+                      berth='east', description='250HR SERVICE')
+    db.session.add(job)
+    db.session.flush()
+    db.session.add_all([
+        WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id, is_lead=True),
+        WorkPlanAssignment(work_plan_job_id=job.id, user_id=mate.id),
+    ])
+    db.session.commit()
+
+    headers = get_auth_header(client, 'worker@test.com', 'test123')
+    resp = client.get(f'/api/work-plans/my-plan?week_start={plan.week_start}',
+                      headers=headers)
+    jobs = [j for d in resp.get_json()['my_jobs'] for j in d['jobs']]
+    names = [a['user_name'] for a in jobs[0]['assignments']]
+    assert 'حيدر كريم' in names
+    # The one with no Arabic name stored still shows as stored — not blank.
+    assert 'Test Worker' in names
+
+
+# ── Notes ──────────────────────────────────────────────────────────────────
+
+def test_a_note_already_in_arabic_is_left_alone(db_session):
+    """Translating Arabic into Arabic is how text gets mangled."""
+    from app.api.work_plans import _note_for_reader
+    arabic = 'تحقق من الفلتر قبل البدء'
+    assert _note_for_reader(arabic, True) == arabic
+
+
+def test_an_english_note_uses_the_store(db_session):
+    from app.api.work_plans import _note_for_reader
+    remember('Bring the 32mm socket', 'أحضر مفتاح 32 مم')
+    db.session.commit()
+    assert _note_for_reader('Bring the 32mm socket', True) == 'أحضر مفتاح 32 مم'
+    # An English reader is untouched.
+    assert _note_for_reader('Bring the 32mm socket', False) == 'Bring the 32mm socket'
+
+
+def test_an_unknown_note_stays_english_rather_than_failing(db_session):
+    from app.api.work_plans import _note_for_reader
+    assert _note_for_reader('Something nobody translated', True) == 'Something nobody translated'
+    assert _note_for_reader(None, True) is None

@@ -1018,6 +1018,13 @@ export default function UsersPage() {
           <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
             <Input />
           </Form.Item>
+          {/* Typed by a person, never generated. These are real Arabic names
+              stored in Latin letters because that is how the roster arrives;
+              guessing the spelling of someone's own name is not a translation
+              problem. Blank simply falls back to the English spelling. */}
+          <Form.Item name="full_name_ar" label="Full Name (Arabic)">
+            <Input dir="rtl" placeholder="اتركه فارغاً لعرض الاسم كما هو" />
+          </Form.Item>
           <Form.Item name="full_name" label="Full Name">
             <Input />
           </Form.Item>
