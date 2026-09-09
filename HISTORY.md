@@ -1,3 +1,84 @@
+## 2026-09-09 — Voice was never recording on any iPad, and the camera path
+
+Ali, on the iPad: "RECORD VOICE IS NOT RECORDEING, PICTURE IS WORKING FROM TH
+GELLERY FROM THE CAMERA IT IS NOT WORING".
+
+### Voice — root cause found and fixed
+
+Three places on web called:
+
+    new MediaRecorder(stream, { mimeType: 'audio/webm' })
+
+**Safari does not record webm and never has.** That constructor does not return a
+quiet recorder — it THROWS `NotSupportedError` before the microphone is touched.
+All three call sites caught the throw and reported "Microphone access denied" /
+"No microphone available", which is why this read as a hardware problem for
+months instead of a one-word format problem.
+
+So web voice was dead on every iPad and iPhone in the yard, in all three places:
+- `components/work-planning/JobAttachments.tsx` (the planner's new job notes)
+- `components/VoiceTextArea.tsx` (used across the app)
+- `pages/inspector/InspectionChecklistPage.tsx` (WhatsApp-style hold to record)
+
+**Fix:** `utils/audio-recording.ts` — `pickAudioFormat()` walks a candidate list
+through `MediaRecorder.isTypeSupported`. **webm stays first**, so Chrome and
+Android produce a byte-identical file to before and only Safari (which produced
+NOTHING) changes. Safari lands on `audio/mp4` -> `.m4a`.
+
+- `createRecorder(stream)` returns the recorder AND the format it settled on.
+  When nothing matches it constructs with NO options — `{ mimeType: '' }` throws,
+  an empty string is not "no preference".
+- `describeMicError(err)` splits `NotAllowedError` (blocked) from `NotFoundError`
+  (none fitted) from `NotSupportedError`. The collapsed message cost a bug report.
+- `voice.api.ts` hard-coded the upload filename `recording.webm`. The server takes
+  the temp-file suffix for Whisper and the Cloudinary storage type from that
+  extension, so a Safari recording would have arrived labelled as something it is
+  not. Now derived from `blob.type`, defaulting to webm so nothing already working
+  moves.
+- Server needed no change: `m4a` is already in `file_service.ALLOWED_EXTENSIONS`,
+  `_get_resource_type` maps it to Cloudinary 'video', and `app/api/voice.py`
+  `_get_suffix` reads the real filename.
+
+**Proof:** `src/utils/audio-recording.test.ts` stands in for each browser by
+answering `isTypeSupported` the way it really does. One test asserts the OLD line
+throws under Safari's answers and the new one does not — the bug itself, as a rule.
+
+### Camera — rebuilt on the pattern that already works, plus one confirmed server bug
+
+**Not claimed as a found root cause.** Safari-on-iPad cannot be reproduced from
+here. Two changes, one certain and one well-founded:
+
+**Certain — the server was refusing unlabelled photos.** The attachment check was
+`mime.startswith('image/')`, and `''.startswith('image/')` is False. A browser
+does not always send a Content-Type; an iPad camera capture is one of the cases
+that may not. An ordinary photo came back "That file is not an image".
+`_attachment_matches_kind()` now falls back to the extension (already validated at
+upload) when the mime type is absent. A missing label is not evidence of the wrong
+type. A PDF with no label, and a file with no extension at all, are still refused —
+three tests say so.
+
+**Well-founded — the input's lifetime.** Picking from the library is fast and the
+page stays alive. The camera owns the whole screen for as long as it takes to
+frame a shot, iOS backgrounds the page, and React can re-render in the meantime —
+replacing the `<input>` that is waiting for the photo. The photo returns to an
+element that is gone. Nothing errors, nothing appears.
+
+`PhotoCapture.tsx` never had this problem because it builds the input with
+`document.createElement`, outside React's tree. Extracted to `utils/file-picker.ts`
+so there is one copy. Also splits the one ambiguous button into **Take Photo**
+(`capture="environment"`, straight to the rear camera, no iOS three-way sheet) and
+**Gallery**.
+
+`src/utils/file-picker.test.ts` pins: the input is in the document, camera carries
+`capture`, gallery does not, the file is handed over, the node is cleaned up, and a
+cancel says nothing.
+
+### Scope
+- **Web only.** Mobile records with `expo-av`, not `MediaRecorder`, and never had
+  this bug. No OTA needed.
+- 1037 backend tests pass (3 new). 23 web tests pass (11 new).
+- The iPad is the real verification for the camera half.
+
 ## 2026-09-09 — Arabic for names and notes
 
 ### Arabic for the things a worker actually reads — 2026-09-09
@@ -877,6 +958,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

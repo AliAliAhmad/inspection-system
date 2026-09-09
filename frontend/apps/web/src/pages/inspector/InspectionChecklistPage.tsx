@@ -47,6 +47,7 @@ import {
 } from '@inspection/shared';
 import { useOfflineQuery } from '../../hooks/useOfflineQuery';
 import { CACHE_KEYS } from '../../utils/offline-storage';
+import { createRecorder, describeMicError, micErrorKey, type AudioFormat } from '../../utils/audio-recording';
 
 /**
  * Convert Cloudinary audio URL to MP3 format for better iOS compatibility
@@ -858,6 +859,7 @@ function ChecklistItemCard({
     }
   };
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedFormatRef = useRef<AudioFormat>({ mimeType: 'audio/webm', extension: 'webm' });
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
 
@@ -1008,7 +1010,10 @@ function ChecklistItemCard({
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      // Safari THROWS on a hard-coded 'audio/webm' — hold-to-record was dead on
+      // every iPad in the yard. See utils/audio-recording.ts.
+      const { recorder: mediaRecorder, format } = createRecorder(stream);
+      recordedFormatRef.current = format;
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -1024,8 +1029,10 @@ function ChecklistItemCard({
       timerRef.current = window.setInterval(() => {
         setRecordingTime((prev) => prev + 1);
       }, 1000);
-    } catch {
-      message.error(t('inspection.mic_denied', 'Microphone access denied'));
+    } catch (err) {
+      // Translated for the Arabic crew; the precise English is the fallback.
+      message.error(t(micErrorKey(err), describeMicError(err)));
+      setIsRecording(false);
     }
   }, [t]);
 
@@ -1043,7 +1050,7 @@ function ChecklistItemCard({
         const stream = mediaRecorderRef.current!.stream;
         stream.getTracks().forEach((t) => t.stop());
 
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(chunksRef.current, { type: recordedFormatRef.current.mimeType });
         setIsRecording(false);
 
         if (blob.size < 100) {

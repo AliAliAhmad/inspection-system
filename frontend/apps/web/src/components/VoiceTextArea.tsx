@@ -4,6 +4,7 @@ import { AudioOutlined, LoadingOutlined, TranslationOutlined } from '@ant-design
 import { voiceApi, aiApi } from '@inspection/shared';
 import { useTranslation } from 'react-i18next';
 import type { TextAreaProps } from 'antd/es/input';
+import { createRecorder, describeMicError, micErrorKey } from '../utils/audio-recording';
 
 interface VoiceTextAreaProps extends TextAreaProps {
   /** Called after transcription with both language versions */
@@ -73,7 +74,9 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalB
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      // Safari THROWS on a hard-coded 'audio/webm', which is why voice was dead
+      // on every iPad. See utils/audio-recording.ts.
+      const { recorder: mediaRecorder, format } = createRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -83,7 +86,7 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalB
 
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(chunksRef.current, { type: format.mimeType });
 
         if (blob.size < 100) {
           message.warning('Recording too short');
@@ -139,10 +142,14 @@ export default function VoiceTextArea({ onTranscribed, onVoiceRecorded, onLocalB
 
       mediaRecorder.start();
       setRecording(true);
-    } catch {
-      message.error('Microphone access denied');
+    } catch (err) {
+      // The real reason, not a guess. A blocked permission and a format the
+      // browser cannot record need different actions from the person holding it.
+      // Translated for the Arabic crew; the precise English is the fallback.
+      message.error(t(micErrorKey(err), describeMicError(err)));
+      setRecording(false);
     }
-  }, [textAreaProps.onChange, onTranscribed, onVoiceRecorded, onLocalBlobUrl, language]);
+  }, [textAreaProps.onChange, onTranscribed, onVoiceRecorded, onLocalBlobUrl, language, t]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {

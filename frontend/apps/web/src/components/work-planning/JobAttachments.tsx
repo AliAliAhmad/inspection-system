@@ -1,8 +1,12 @@
 import React, { useRef, useState } from 'react';
 import { Card, Button, Typography, Empty, Spin, Popconfirm, message } from 'antd';
-import { CameraOutlined, AudioOutlined, AudioMutedOutlined, DeleteOutlined } from '@ant-design/icons';
+import {
+  CameraOutlined, PictureOutlined, AudioOutlined, AudioMutedOutlined, DeleteOutlined,
+} from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobSubTasksApi, filesApi, type JobSubTask } from '@inspection/shared';
+import { createRecorder, describeMicError } from '../../utils/audio-recording';
+import { openCamera, openGallery } from '../../utils/file-picker';
 
 const { Text } = Typography;
 
@@ -39,7 +43,6 @@ interface JobAttachmentsProps {
 export const JobAttachments: React.FC<JobAttachmentsProps> = ({ jobId, planId, canEdit = true }) => {
   const queryClient = useQueryClient();
   const queryKey = ['job-sub-tasks', jobId];
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -85,11 +88,11 @@ export const JobAttachments: React.FC<JobAttachmentsProps> = ({ jobId, planId, c
     }
   };
 
-  const onPickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';                        // so the same file can be picked twice
-    if (file) await attach(file, 'photo');
-  };
+  // The picker is built outside React (see utils/file-picker.ts) — the camera
+  // owns the whole iPad screen while a photo is taken, and a React-owned input
+  // can be replaced by a re-render before the photo comes back.
+  const takePhoto = () => openCamera((file) => attach(file, 'photo'));
+  const choosePhoto = () => openGallery((file) => attach(file, 'photo'));
 
   const toggleRecording = async () => {
     if (recording) {
@@ -98,22 +101,31 @@ export const JobAttachments: React.FC<JobAttachmentsProps> = ({ jobId, planId, c
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      // Format comes from what the browser says it supports, NOT a hard-coded
+      // 'audio/webm' — Safari throws on webm, which is why this was silent on
+      // the iPad. See utils/audio-recording.ts.
+      const { recorder, format } = createRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (ev) => ev.data.size && chunksRef.current.push(ev.data);
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());   // release the microphone
         setRecording(false);
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        if (blob.size > 0) {
-          await attach(new File([blob], `job-${jobId}-note.webm`, { type: 'audio/webm' }), 'voice');
+        const blob = new Blob(chunksRef.current, { type: format.mimeType });
+        if (blob.size < 100) {
+          message.warning('Recording was too short — hold it a moment longer');
+          return;
         }
+        const name = `job-${jobId}-note.${format.extension}`;
+        await attach(new File([blob], name, { type: format.mimeType }), 'voice');
       };
       recorderRef.current = recorder;
       recorder.start();
       setRecording(true);
-    } catch {
-      message.error('No microphone available');
+    } catch (err) {
+      // Say what actually happened. "No microphone available" sent Ali looking
+      // at the tablet's hardware for a format bug.
+      message.error(describeMicError(err));
+      setRecording(false);
     }
   };
 
@@ -122,21 +134,17 @@ export const JobAttachments: React.FC<JobAttachmentsProps> = ({ jobId, planId, c
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text type="secondary">Photos &amp; Voice Notes</Text>
         {canEdit && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={onPickPhoto}
-            />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <Button
               size="small"
               icon={<CameraOutlined />}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={takePhoto}
               loading={busy && !recording}
             >
-              Add Photo
+              Take Photo
+            </Button>
+            <Button size="small" icon={<PictureOutlined />} onClick={choosePhoto} disabled={busy}>
+              Gallery
             </Button>
             <Button
               size="small"

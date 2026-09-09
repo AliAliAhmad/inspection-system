@@ -177,6 +177,22 @@
   شجيرات (shrubs), الإرسال (broadcasting, for the gearbox), قضية (a legal case),
   ارتداء (wearing clothes), مساء (the evening), التيار المتردد (alternating current).
 
+### Voice was dead on every iPad — FIXED 2026-09-09
+- `new MediaRecorder(stream, {mimeType:'audio/webm'})` **THROWS on Safari**; all three
+  web call sites caught it and said "microphone denied". Web voice had never worked on
+  an iPad. `utils/audio-recording.ts` picks a supported format — **webm stays first** so
+  Chrome is byte-identical; Safari gets `audio/mp4` -> `.m4a`. Server already accepted m4a.
+- `voice.api.ts` no longer hard-codes the upload name `recording.webm` — the server picks
+  the Whisper suffix and Cloudinary type from that extension.
+- Mic errors are now BILINGUAL (`voice.mic_*` keys in en.json/ar.json) — the checklist
+  page had a translated message before and must not go backwards for an Arabic crew.
+- Camera: the attachment check refused an empty mime type (`''.startswith('image/')` is
+  False) — a real, confirmed rejection of ordinary photos, now falling back to the
+  extension. The picker moved out of React's tree (`utils/file-picker.ts`, the pattern
+  `PhotoCapture.tsx` already used) with separate **Take Photo** / **Gallery** buttons.
+  **The input-lifetime theory is unproven — the iPad is the verification.**
+- Web only; mobile uses `expo-av` and never had this. Full detail in HISTORY.md.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

@@ -564,3 +564,30 @@ merge or report duplicate keys rather than letting the database refuse them.
 Closing the upload-button hole added one SELECT per (user x date) — ~38,000 round trips on a
 free-plan database for one button press. The endpoint would never have returned. → **After
 fixing a loop, count the queries it now makes.** Preload the set once, outside the loop.
+
+LESSON: A `catch { message.error('No microphone available') }` renamed a format
+error into a hardware error, and web voice stayed dead on every iPad for months
+→ Never collapse an error into a guessed cause. Switch on `err.name` and say the
+real reason. The message a person reads is a diagnostic tool, not decoration.
+
+LESSON: `new MediaRecorder(stream, {mimeType:'audio/webm'})` THROWS on Safari —
+it does not degrade → Never hard-code a media format. Ask
+`MediaRecorder.isTypeSupported` and keep the previously-working format FIRST so
+browsers that already worked produce an identical file.
+
+LESSON: `''.startswith('image/')` is False, so a photo with no Content-Type was
+refused as "not an image" → A missing label is not evidence of the wrong type.
+Validate on the mime type WHEN THERE IS ONE, fall back to the extension, and
+refuse only when both are unhelpful.
+
+LESSON: An `<input type=file>` rendered by React can be replaced by a re-render
+while the iOS camera is full-screen, so the photo returns to an element that is
+gone → Build camera inputs with `document.createElement`, outside React's tree.
+
+LESSON: Replacing a translated message with a more precise English one is a
+regression for an Arabic crew → When improving any user-facing string, check
+whether the old one went through `t()`. Precision never outranks being readable.
+
+LESSON: Chrome cannot verify a Safari fix → When the failing environment is out
+of reach, simulate its API answers in a unit test. It proves more than a browser
+click-through and stays as a regression test.

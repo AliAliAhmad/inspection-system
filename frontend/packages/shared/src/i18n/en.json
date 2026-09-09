@@ -1982,5 +1982,12 @@
   "category": {
     "mechanical": "Mechanical",
     "electrical": "Electrical"
+  },
+  "voice": {
+    "mic_blocked": "Microphone blocked. Allow it for this site in your browser settings.",
+    "mic_not_found": "No microphone found on this device.",
+    "mic_busy": "The microphone is busy in another app. Close it and try again.",
+    "mic_unsupported": "This browser cannot record audio. Update Safari or Chrome.",
+    "mic_failed": "Could not start recording."
   }
 }

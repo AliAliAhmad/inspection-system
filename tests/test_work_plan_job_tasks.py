@@ -640,6 +640,78 @@ def test_a_file_must_be_what_it_claims_to_be(db_session, engineer, client, plan)
                              'attachment_kind': 'voice'}).status_code == 400
 
 
+def test_a_photo_with_no_mime_label_is_still_a_photo(db_session, engineer, client, plan):
+    """Ali, iPad, 2026-09-09: "FROM TH CAMERA IT IS NOT WORING".
+
+    A browser does not always send a Content-Type. An iPad camera capture is one
+    of the cases that may not, and the check was `mime.startswith('image/')` —
+    which is False for an empty string. So a perfectly ordinary photo came back
+    "That file is not an image".
+
+    A missing label is not evidence of the wrong type. Fall back to the
+    extension, which the upload has already checked.
+    """
+    from app.models import File
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    unlabelled = File(original_filename='IMG_0421.HEIC', stored_filename='e-img.heic',
+                      file_path='https://res.cloudinary.com/demo/IMG_0421.HEIC',
+                      file_size=2048, mime_type='', uploaded_by=engineer.id)
+    db.session.add(unlabelled)
+    db.session.commit()
+
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': unlabelled.id,
+                             'attachment_kind': 'photo'})
+    assert resp.status_code == 201, resp.get_json()
+
+
+def test_an_unlabelled_recording_is_still_a_recording(db_session, engineer, client, plan):
+    """Safari records m4a, not webm. It must not be refused for lacking a label."""
+    from app.models import File
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    voice = File(original_filename='job-1-note.m4a', stored_filename='e-note.m4a',
+                 file_path='https://res.cloudinary.com/demo/note.m4a',
+                 file_size=2048, mime_type=None, uploaded_by=engineer.id)
+    db.session.add(voice)
+    db.session.commit()
+
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    assert client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': voice.id,
+                             'attachment_kind': 'voice'}).status_code == 201
+
+
+def test_an_unlabelled_file_of_the_wrong_shape_is_still_refused(db_session, engineer,
+                                                                client, plan):
+    """The fallback must not become a hole.
+
+    Losing the mime type must not turn the check off — a PDF with no label is
+    still not a photo, and neither is a file with no extension at all.
+    """
+    from app.models import File
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    pdf = File(original_filename='report.pdf', stored_filename='r2.pdf',
+               file_path='https://res.cloudinary.com/demo/report.pdf',
+               file_size=10, mime_type='', uploaded_by=engineer.id)
+    nameless = File(original_filename='blob', stored_filename='blob',
+                    file_path='https://res.cloudinary.com/demo/blob',
+                    file_size=10, mime_type='', uploaded_by=engineer.id)
+    db.session.add_all([pdf, nameless])
+    db.session.commit()
+
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    assert client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': pdf.id,
+                             'attachment_kind': 'photo'}).status_code == 400
+    assert client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': nameless.id,
+                             'attachment_kind': 'photo'}).status_code == 400
+
+
 def test_your_own_file_still_attaches(db_session, engineer, worker, client, plan):
     """The fix must not break the thing it protects."""
     eq = make_equipment(db_session, serial='RS109')

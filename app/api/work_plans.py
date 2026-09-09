@@ -5569,6 +5569,38 @@ def _may_tick(user, job):
     return any(a.user_id == user.id for a in (job.assignments or []))
 
 
+_PHOTO_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif',
+                     'bmp', 'tiff', 'tif'}
+_VOICE_EXTENSIONS = {'webm', 'wav', 'mp3', 'ogg', 'm4a', 'mp4', 'mov', '3gp',
+                     'aac', 'amr', 'caf'}
+
+
+def _attachment_matches_kind(attachment, kind):
+    """Is this file really the photo / recording it claims to be?
+
+    The mime type is the answer WHEN THERE IS ONE. There is not always one: a
+    browser may send an empty Content-Type for a file it does not recognise —
+    an iPad camera capture among them — and `''.startswith('image/')` is False,
+    so a plain photo was being refused with "That file is not an image".
+
+    A missing mime type is not evidence of the wrong type, it is an absence of
+    evidence. So fall back to the extension, which the upload has already
+    checked against file_service.ALLOWED_EXTENSIONS. A file with neither a mime
+    type nor a known extension is still refused.
+    """
+    mime = (attachment.mime_type or '').lower()
+    if mime:
+        if kind == 'photo':
+            return mime.startswith('image/')
+        return mime.startswith('audio/') or mime.startswith('video/')
+
+    name = (attachment.original_filename or attachment.stored_filename or '')
+    if '.' not in name:
+        return False
+    ext = name.rsplit('.', 1)[1].lower()
+    return ext in (_PHOTO_EXTENSIONS if kind == 'photo' else _VOICE_EXTENSIONS)
+
+
 def _tasks_for_job(job):
     kind, key = anchor_for_job(job)
     return (WorkPlanJobTask.query
@@ -5688,12 +5720,10 @@ def add_job_task(job_id):
             raise ForbiddenError("You can only attach a file you uploaded yourself")
         # And it has to BE what it says it is, so a PDF cannot arrive labelled
         # as a photo and be rendered as one.
-        mime = (attachment.mime_type or '').lower()
-        if attachment_kind == 'photo' and not mime.startswith('image/'):
-            raise ValidationError("That file is not an image")
-        if attachment_kind == 'voice' and not (mime.startswith('audio/')
-                                               or mime.startswith('video/')):
-            raise ValidationError("That file is not a recording")
+        if not _attachment_matches_kind(attachment, attachment_kind):
+            raise ValidationError("That file is not an image"
+                                  if attachment_kind == 'photo'
+                                  else "That file is not a recording")
 
     # An attachment IS the content, so a caption is optional beside one.
     if not content and attachment_file_id:
