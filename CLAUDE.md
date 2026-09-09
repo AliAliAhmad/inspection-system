@@ -220,7 +220,8 @@
   the fix looks complete and is silent on every iPhone.
 - `_task_payload` passed no language (English planner name on one screen, Arabic on
   the other) — all 5 call sites fixed. `📷/🎤 tap for details` hint on the plan card.
-- **Needs an OTA, not just a Render deploy.** Full detail in HISTORY.md.
+- ✅ **DEPLOYED 2026-09-10** — commit `7886287`, web bundle `index-B9cZgYlV.js`,
+  OTA group `1c222b02` on the `preview` channel (runtime 1.0.0). Full detail in HISTORY.md.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
