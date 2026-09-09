@@ -239,3 +239,65 @@ def test_an_unknown_note_stays_english_rather_than_failing(db_session):
     from app.api.work_plans import _note_for_reader
     assert _note_for_reader('Something nobody translated', True) == 'Something nobody translated'
     assert _note_for_reader(None, True) is None
+
+
+# ── The wreckage guard ─────────────────────────────────────────────────────
+#
+# 2026-09-09, from Ali's production run. gemini-2.5-flash is a THINKING model:
+# it spends output tokens reasoning before it writes, and that was charged
+# against a maxOutputTokens of 100. It thought until the allowance was gone and
+# emitted a fragment — then the fragment was stored looking like a translation.
+#
+# The provider is fixed (thinkingBudget 0, real ceiling). This is the net
+# underneath it, because a wrong phrase in the store is permanent AND invisible:
+# it reads as Arabic, so nobody goes looking.
+
+@pytest.mark.parametrize('source, arabic', [
+    ('RS109-250HR-MECH.HOURLY SERVICE', 'RS'),
+    ('Open rotation motor check brakes & component.', 'فحص مح'),
+    # Nothing came back but the machine code it started with.
+    ('ECH02-SP-(EMS)TWL INSPECTION_PB', 'ECH02-SP-(EMS)TWL INSPECTION_PB'),
+    ('Steering cylinder leaking (PM)', ''),
+    ('Something long enough to matter', 'xx'),
+])
+def test_obvious_wreckage_is_refused(db_session, source, arabic):
+    from app.services.phrase_translation import looks_truncated
+    assert looks_truncated(source, arabic) is True
+    assert remember(source, arabic) is None
+    db.session.commit()
+    assert to_arabic(source) == source, 'the English must survive intact'
+
+
+@pytest.mark.parametrize('source, arabic', [
+    ('Tire set worn out (PM)', 'مجموعة الإطارات مهترئة (PM)'),
+    # Arabic writes no short vowels, so a GOOD translation can be much shorter.
+    # An early version of the guard rejected this one.
+    ('General Refurbishment', 'تجديد عام'),
+    ('Transmission Leak', 'تسرب الإرسال'),
+    ('Front glass cracked (PM)', 'الزجاج الأمامي متصدع (PM)'),
+    ('Replace Operator seat', 'استبدال مقعد المشغل'),
+])
+def test_real_translations_are_kept(db_session, source, arabic):
+    from app.services.phrase_translation import looks_truncated
+    assert looks_truncated(source, arabic) is False
+    assert remember(source, arabic) is not None
+    db.session.commit()
+    assert to_arabic(source) == arabic
+
+
+def test_a_person_may_store_something_short(db_session):
+    """The guard is aimed at machines. A human saying it outranks the rule."""
+    assert remember('A very long English maintenance phrase', 'قصير',
+                    reviewed=True) is not None
+    db.session.commit()
+    assert to_arabic('A very long English maintenance phrase') == 'قصير'
+
+
+def test_gemini_is_asked_not_to_think(db_session):
+    """The actual cause. Translating a phrase needs no reasoning, and the
+    reasoning was eating the answer."""
+    import io
+    src = io.open('app/services/translation_service.py', encoding='utf-8').read()
+    assert '"thinkingConfig": {"thinkingBudget": 0}' in src
+    assert 'max(len(text) * 3, 100)' not in src.split('_translate_gemini')[1][:2000], \
+        'the starved ceiling is back'

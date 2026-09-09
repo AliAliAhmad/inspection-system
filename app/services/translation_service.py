@@ -275,13 +275,32 @@ class TranslationService:
         models = ["gemma-3-4b-it", "gemini-2.5-flash"]
         base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
+        # thinkingBudget 0, and a real ceiling.
+        #
+        # gemini-2.5-flash is a THINKING model: it spends output tokens on
+        # internal reasoning before it writes anything, and that reasoning is
+        # charged against maxOutputTokens. With the old budget it thought until
+        # the allowance was nearly gone and then emitted a fragment:
+        #
+        #     'AC Issue'                        -> 'مشكلة تكي'      (cut mid-word)
+        #     'Coolant System Issue'            -> 'مشكلة في نظام'
+        #     'RS109-250HR-MECH.HOURLY SERVICE' -> 'RS'
+        #
+        # Which is precisely what Ali reported on 2026-09-09: "not all the words
+        # are translated". Not a bad model — a starved one.
+        #
+        # Translating a maintenance phrase needs no reasoning, so thinking is
+        # switched off. The ceiling is raised as well: Arabic takes noticeably
+        # more tokens per character than English, so len(text)*3 was tight even
+        # without the thinking.
         payload = {
             "contents": [{
                 "parts": [{"text": f"{system_prompt}\n\nText to translate:\n{text}"}]
             }],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": max(len(text) * 3, 100)
+                "maxOutputTokens": max(len(text) * 8, 512),
+                "thinkingConfig": {"thinkingBudget": 0},
             }
         }
 

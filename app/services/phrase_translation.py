@@ -42,6 +42,8 @@ from app.models.phrase_translation import PhraseTranslation
 
 logger = logging.getLogger(__name__)
 
+_ARABIC_CHARS = re.compile(r'[\u0600-\u06FF]')
+
 # Long descriptions are not the repeating vocabulary this is for; they are
 # one-offs, and storing them would fill the table with rows that never hit again.
 MAX_PHRASE_LENGTH = 200
@@ -58,6 +60,50 @@ def normalise(text):
         return ''
     text = unicodedata.normalize('NFC', str(text))
     return re.sub(r'\s+', ' ', text).strip().upper()
+
+
+def looks_truncated(source, arabic):
+    """True when a translation is obviously a fragment rather than a translation.
+
+    Written after 2026-09-09, when a starved gemini-2.5-flash returned:
+
+        'AC Issue'                        -> 'مشكلة تكي'      (cut mid-word)
+        'Coolant System Issue'            -> 'مشكلة في نظام'
+        'RS109-250HR-MECH.HOURLY SERVICE' -> 'RS'
+
+    and every one of them was stored as though it were correct. The provider
+    bug is fixed, but a store that outlives the provider must not depend on the
+    provider behaving. A wrong phrase here is permanent and invisible: it looks
+    like a translation, so nobody goes looking.
+
+    WHAT THIS CAN AND CANNOT CATCH, measured against those real cases.
+
+    Arabic is genuinely compact — it writes no short vowels — so length alone is
+    a weak signal. "General Refurbishment" -> "تجديد عام" is a GOOD translation
+    at 43% of the length, and an early version of this function rejected it. The
+    threshold therefore sits below that, at 30%, which still catches the
+    destroyed ones ('RS' at 6%, 'فحص مح' at 13%).
+
+    It does NOT catch 'AC Issue' -> 'مشكلة تكي'. That is a word cut in half at
+    roughly the right total length, and no length rule will ever see it. The
+    provider fix is what stops those; this is the net underneath, for the
+    obvious wreckage, and it is deliberately not claimed to be more.
+    """
+    if not source or not arabic:
+        return True
+    src = str(source).strip()
+    out = str(arabic).strip()
+    if not out:
+        return True
+    # Nothing came back but the machine code it started with.
+    if out == src:
+        return True
+    if len(out) < len(src) * 0.30:
+        return True
+    # A word cut in half leaves no closing punctuation and no Arabic at all.
+    if len(src) > 12 and not _ARABIC_CHARS.search(out):
+        return True
+    return False
 
 
 def to_arabic(text):
@@ -118,9 +164,16 @@ def to_arabic_many(texts):
 
 
 def remember(text, ar_text, reviewed=False):
-    """Store the Arabic for a phrase. Does NOT commit."""
+    """Store the Arabic for a phrase. Does NOT commit.
+
+    Refuses anything that looks like a fragment, unless a PERSON is saying it —
+    a human may legitimately store something short. A machine may not.
+    """
     key = normalise(text)
     if not key or len(key) > MAX_PHRASE_LENGTH:
+        return None
+    if not reviewed and looks_truncated(text, ar_text):
+        logger.warning('refused a truncated translation: %r -> %r', text, ar_text)
         return None
     row = PhraseTranslation.query.filter_by(source_key=key).first()
     if row is None:

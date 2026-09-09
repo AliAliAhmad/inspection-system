@@ -126,6 +126,17 @@
 - Notes read from the phrase store, skipped when already Arabic.
 - **Two levers, both Ali's:** type the Arabic names; add an API key and run
   `flask translate-phrases --apply`. Full detail in HISTORY.md.
+- **⚠️ gemini-2.5-flash is a THINKING model** — reasoning tokens were charged against
+  `maxOutputTokens: max(len*3, 100)`, so it thought until the budget was gone and emitted
+  a fragment: `AC Issue -> مشكلة تكي`, `RS109-250HR-... -> RS`. That IS Ali's "not all the
+  words are translated". Fixed with `thinkingConfig.thinkingBudget = 0` and a real ceiling.
+- `remember()` now REFUSES obvious wreckage (`looks_truncated`). Threshold is 30% of the
+  source length — Arabic writes no short vowels so a good translation can be far shorter
+  (`General Refurbishment -> تجديد عام` is 43% and correct). It cannot catch a word cut
+  mid-way at the right total length; the provider fix is what stops those.
+- **`flask review-phrases --suspect` / `--forget`** — 49 rows were written before the fix;
+  `--forget` deletes the bad ones so `translate-phrases --apply` redoes them.
+- Google Translate (the free last resort) produced GOOD Arabic throughout.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).

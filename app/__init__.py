@@ -606,6 +606,64 @@ def create_app(config_name='development'):
         print()
         print('  Anything still English simply shows in English. No screen breaks.')
 
+    @app.cli.command('review-phrases')
+    @click.option('--suspect', 'only_suspect', is_flag=True,
+                  help='Only phrases whose Arabic looks wrong.')
+    @click.option('--forget', 'forget_suspect', is_flag=True,
+                  help='Delete the suspect ones so they translate again.')
+    @click.option('--limit', default=40, show_default=True)
+    def review_phrases(only_suspect, forget_suspect, limit):
+        """Read the Arabic phrase store, and throw out the bad answers.
+
+        On 2026-09-09 a starved gemini-2.5-flash returned fragments — 'AC Issue'
+        became 'مشكلة تكي', cut mid-word — and they were stored looking exactly
+        like real translations. The provider is fixed and remember() now refuses
+        obvious wreckage, but rows written before that are still sitting there,
+        and a wrong phrase is invisible: it reads as Arabic, so nobody checks.
+
+        --suspect lists the ones worth a human eye. --forget deletes them, so
+        the next `translate-phrases --apply` does them again properly. A phrase
+        marked reviewed is never touched.
+        """
+        from app.models import PhraseTranslation
+        from app.services.phrase_translation import looks_truncated
+
+        rows = PhraseTranslation.query.order_by(PhraseTranslation.id).all()
+        done = [r for r in rows if r.ar_text]
+        suspect = [r for r in done
+                   if not r.is_reviewed and looks_truncated(r.source_text, r.ar_text)]
+
+        print('=' * 78)
+        print('ARABIC PHRASE STORE')
+        print('=' * 78)
+        print(f'  stored              : {len(rows)}')
+        print(f'  with Arabic         : {len(done)}')
+        print(f'  reviewed by a person: {sum(1 for r in rows if r.is_reviewed)}')
+        print(f'  look wrong          : {len(suspect)}')
+
+        show = suspect if only_suspect or forget_suspect else done
+        if not show:
+            print()
+            print('  Nothing to show.')
+            return
+
+        print()
+        print(f'--- {min(limit, len(show))} of {len(show)} ---')
+        for r in show[:limit]:
+            mark = 'SUSPECT' if r in suspect else '   ok  '
+            print(f'  {mark}  {r.source_text[:44].ljust(44)}  ->  {(r.ar_text or "")[:30]}')
+
+        if forget_suspect:
+            for r in suspect:
+                db.session.delete(r)
+            db.session.commit()
+            print()
+            print(f'  Deleted {len(suspect)}. Run `flask translate-phrases --apply`')
+            print('  to do them again, now that the provider is fixed.')
+        elif not only_suspect:
+            print()
+            print('  --suspect shows only the doubtful ones, --forget deletes them.')
+
     @app.cli.command('why-no-plan')
     @click.argument('who')
     @click.option('--date', 'on_date', default=None,
