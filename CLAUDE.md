@@ -100,6 +100,17 @@
   gated. `/my-plan` untouched.
 - Full detail in HISTORY.md.
 
+### A draft plan is invisible to the crews — WARNED 2026-09-09
+- `/my-plan` matches `status == 'published'` only, so an unpublished week shows EVERY
+  worker an empty day with no explanation. Cost a morning on 2026-09-09: a man was
+  reported as seeing nothing and the plan simply had not been published.
+- The board did say `DRAFT` — in 11px grey secondary text, which was there and was
+  missed. A red `🔒 NOT VISIBLE TO THE TEAM` tag now sits beside it, but ONLY once
+  `week_start <= today`; a draft for next week is just work in progress.
+- `flask why-no-plan "<name|username|sap id|employee id>"` answers this from the Render
+  shell, walking /my-plan's conditions in order and stopping at the first failure.
+  Searches every identity field case-insensitively and suggests near-matches by name.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

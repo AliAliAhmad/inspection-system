@@ -766,6 +766,9 @@ export default function WorkPlanningPage() {
 
   const currentPlan = plansData?.work_plans?.[0];
   const isDraft = currentPlan?.status === 'draft';
+  // Local date, not toISOString() — that converts to UTC first, so between
+  // 00:00 and 03:00 Baghdad it reports yesterday.
+  const todayISO = dayjs().format('YYYY-MM-DD');
 
   // Range covering the plan's own days. Every day column passes this identical
   // pair to the inspection components, so their React Query keys match and the
@@ -2555,6 +2558,27 @@ export default function WorkPlanningPage() {
           {/* Status badge */}
           {currentPlan && (
             <Badge status={currentPlan.status === 'published' ? 'success' : 'warning'} text={<Text type="secondary" style={{ fontSize: 11 }}>{currentPlan.status.toUpperCase()} &bull; {currentPlan.total_jobs} jobs</Text>} />
+          )}
+
+          {/* A draft week that has already started is invisible to the crews.
+              /my-plan matches published plans only, so every worker opens his
+              phone to an empty day and has no way to tell why. On 2026-09-09
+              that cost a morning: a man was reported as seeing nothing, and the
+              plan simply had not been published.
+
+              The badge beside this already says DRAFT, in 11px grey — it was
+              there and it was missed, because nothing about it says "your team
+              cannot see this". Only shown once the week has actually begun; a
+              draft for next week is just work in progress. */}
+          {currentPlan && isDraft && currentPlan.week_start <= todayISO && (
+            <Tooltip title="Workers see only published plans. Until you publish, every one of them opens an empty day.">
+              <Tag
+                color="error"
+                style={{ fontSize: 10, margin: 0, fontWeight: 700, cursor: 'default' }}
+              >
+                🔒 NOT VISIBLE TO THE TEAM
+              </Tag>
+            </Tooltip>
           )}
 
           {/* Spacer */}
