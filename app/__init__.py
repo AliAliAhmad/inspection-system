@@ -544,19 +544,54 @@ def create_app(config_name='development'):
             print('Give me a name, SAP id, role id or email.')
             return
 
+        # Every way a person is identified in this app, and all of them
+        # case-insensitively. The first version of this command compared
+        # sap_id and role_id with `==`, and searched neither username nor
+        # minor_role_id — so Ali looked for a real employee by his real
+        # employee id, `spc-011`, and was told nobody matched, because the
+        # column holds `SPC-011`. The screen calls role_id "employee id";
+        # both spellings are searched here so either works.
         like = f'%{needle}%'
+        exact = needle.lower()
         people = User.query.filter(
-            db.or_(User.full_name.ilike(like), User.email.ilike(like),
-                   User.sap_id == needle, User.role_id == needle)
+            db.or_(
+                User.full_name.ilike(like),
+                User.email.ilike(like),
+                User.username.ilike(like),
+                db.func.lower(User.sap_id) == exact,
+                db.func.lower(User.role_id) == exact,
+                db.func.lower(User.minor_role_id) == exact,
+            )
         ).all()
+
+        # Still nothing? A name is usually right but spelled differently —
+        # "Ali Jameel Haidar" against "Ali J. Hayder". Match on any single word
+        # and OFFER the candidates rather than declaring the man missing.
+        suggestions = []
+        if not people:
+            words = [w for w in needle.replace('.', ' ').split() if len(w) > 2]
+            if words:
+                suggestions = User.query.filter(
+                    db.or_(*[User.full_name.ilike(f'%{w}%') for w in words])
+                ).limit(15).all()
 
         print('=' * 78)
         if not people:
             print(f'NOBODY MATCHES {needle!r}')
             print('=' * 78)
-            print('  A worker who is not in the app cannot be assigned to anything,')
-            print('  and his plan will always be empty. Check the spelling, or the')
-            print('  SAP id, against the Users screen.')
+            if suggestions:
+                print('  Did you mean one of these? (matched on part of the name)')
+                for p in suggestions:
+                    print(f'    {p.full_name:28}  user={p.username or "-":12} '
+                          f'emp={p.role_id or "-":10} sap={p.sap_id or "-"}')
+                print()
+                print('  Run it again with the employee id or username above.')
+            else:
+                print('  Not one person matched any part of that. A worker who is not')
+                print('  in the app cannot be assigned to anything, so his plan will')
+                print('  always be empty.')
+            print()
+            print('  Searched: full name, email, username, SAP id, employee id.')
             return
         if len(people) > 1:
             print(f'{len(people)} people match {needle!r} — be more specific:')
