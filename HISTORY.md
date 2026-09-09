@@ -1,3 +1,26 @@
+## 2026-09-09 — Workers could see the whole plan
+
+### Workers could see the whole plan — FIXED 2026-09-09
+- Ali logged in as one of his men: `/my-plan` was right, but the dashboard's plan card
+  opened `WorkPlanOverview` — the entire yard's week, everyone's jobs.
+- **The rule already existed on web:** `AppRouter` guards the same screen with
+  `RoleGuard roles={['admin','engineer']}`. Mobile had no guard, and
+  `list_work_plans` / `get_work_plan` were `@jwt_required()` only, so they answered.
+- **Two doors, both now role-routed:** the Dashboard quick-action card, and a FAB action
+  *labelled* "My Work Plan" that opened the full plan — that label is the evidence it was
+  wired wrong, not a deliberate feature. Non-planners now land on their own `WorkPlan` tab.
+- **Both endpoints gated** to `engineer_or_admin_required()`. Safe: every caller is a
+  planner screen (`WorkPlanningPage`, `WorkPlanDayPage` — both already guarded on web;
+  `WorkPlanOverviewScreen`, `WorkPlanJobDetail`, `UnassignedJobs` — all reached only from
+  the overview). `/my-plan` is deliberately untouched.
+- `WorkPlanOverviewScreen` still contains `isAdminOrEngineer` day-narrowing for
+  non-planners. Now unreachable for them; left in place rather than ripped out.
+- **Needs a mobile OTA** — the card fix is JS-only. Ship the push and the OTA together:
+  a phone on the old build tapping the old card now gets a 403 the screen renders as
+  "No plan has been created for this week", which is a lie.
+- 7 tests in `tests/test_work_plan_visibility.py`.
+
+
 ## 2026-09-09 — Job pool filters
 
 ### Job pool filters — FIXED 2026-09-09
@@ -758,6 +781,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

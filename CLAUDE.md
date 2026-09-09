@@ -93,6 +93,13 @@
 - `MAN-…` pool rows tagged "✎ by hand"; equipment filter list sorted.
 - Full detail in HISTORY.md.
 
+### Workers could see the whole plan — FIXED 2026-09-09
+- The mobile dashboard card (and a FAB action mislabelled "My Work Plan") opened the
+  WHOLE yard's week to every role. Web already guarded it to admin+engineer; mobile and
+  the API did not. Both doors now role-routed; `list_work_plans` and `get_work_plan`
+  gated. `/my-plan` untouched.
+- Full detail in HISTORY.md.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

@@ -170,9 +170,13 @@ export function useFABContext(options: FABContextOptions = {}): UseFABContextRes
         actions = [
           QUICK_REPORT,
           {
+            // Said "My Work Plan" and opened WorkPlanOverview — the whole
+            // yard's week, everyone's jobs. The label was right about the
+            // intent and the destination was wrong. A planner still wants the
+            // overview; anyone else wants the plan the label promises.
             id: 'my_work_plan', label: 'My Work Plan', labelAr: 'خطة عملي',
             icon: '📅', color: C.cyan,
-            onPress: () => navigate('WorkPlanOverview'),
+            onPress: () => navigate(isAdminOrEngineer ? 'WorkPlanOverview' : 'WorkPlan'),
           },
           {
             id: 'new_inspection', label: 'New Inspection', labelAr: 'فحص جديد',

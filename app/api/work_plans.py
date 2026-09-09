@@ -549,7 +549,21 @@ def list_work_plans():
         - status: Filter by status (draft, published)
         - include_days: Include day details (default false for list view)
     """
-    user = get_current_user()
+    # Planners only. The WHOLE yard's week — every job, every man, every
+    # berth — and a worker has no business with it: /my-plan is his view and
+    # it is his alone.
+    #
+    # The web has always said so, in AppRouter:
+    #     <RoleGuard roles={['admin', 'engineer']}><WorkPlanningPage /></RoleGuard>
+    # The mobile Dashboard handed the same screen to everyone through a
+    # "Work Plan" quick-action card, and this endpoint was @jwt_required() with
+    # no role check, so it answered. Ali logged in as one of his men and found
+    # the whole plan behind that card (2026-09-09).
+    #
+    # Every caller is a planner screen: WorkPlanningPage and WorkPlanDayPage on
+    # web (both already guarded), WorkPlanOverviewScreen, WorkPlanJobDetail and
+    # UnassignedJobs on mobile (all reached only from the overview).
+    user = engineer_or_admin_required()
     language = get_language(user)
 
     week_start = request.args.get('week_start')
@@ -601,6 +615,22 @@ def list_work_plans():
 @jwt_required()
 def get_work_plan(plan_id):
     """Get a single work plan with full details."""
+    # Planners only. The WHOLE yard's week — every job, every man, every
+    # berth — and a worker has no business with it: /my-plan is his view and
+    # it is his alone.
+    #
+    # The web has always said so, in AppRouter:
+    #     <RoleGuard roles={['admin', 'engineer']}><WorkPlanningPage /></RoleGuard>
+    # The mobile Dashboard handed the same screen to everyone through a
+    # "Work Plan" quick-action card, and this endpoint was @jwt_required() with
+    # no role check, so it answered. Ali logged in as one of his men and found
+    # the whole plan behind that card (2026-09-09).
+    #
+    # Every caller is a planner screen: WorkPlanningPage and WorkPlanDayPage on
+    # web (both already guarded), WorkPlanOverviewScreen, WorkPlanJobDetail and
+    # UnassignedJobs on mobile (all reached only from the overview).
+    engineer_or_admin_required()
+
     # Use eager loading to prevent N+1 queries (critical for performance)
     plan = WorkPlan.query.options(
         joinedload(WorkPlan.created_by),

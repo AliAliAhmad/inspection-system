@@ -99,11 +99,19 @@ function AssignmentSummary({ stats, isAr, colors, onPress }: { stats: MyAssignme
 
 // ─── Widget 2: Quick Actions ───────────────────────────────
 
-function QuickActions({ isAr, colors, navigation }: { isAr: boolean; colors: any; navigation: any }) {
+function QuickActions({ isAr, colors, navigation, role }: { isAr: boolean; colors: any; navigation: any; role?: string }) {
+  // The plan card pointed EVERY role at WorkPlanOverview — the whole yard's
+  // week, every job and every man. That is a planner's screen: the web has
+  // always guarded it with RoleGuard roles={['admin','engineer']}, and the
+  // server now refuses it to anyone else too. A worker tapping his own
+  // dashboard should land on HIS plan, which is what he meant by the card.
+  const isPlanner = role === 'admin' || role === 'engineer';
   const actions = [
     { icon: '📋', label: isAr ? 'بدء فحص' : 'Start Inspection', screen: 'Assignments', color: '#1976D2' },
     { icon: '⚠️', label: isAr ? 'إبلاغ عيب' : 'Report Defect', screen: 'Defects', color: '#E53935' },
-    { icon: '📅', label: isAr ? 'خطة العمل' : 'Work Plan', screen: 'WorkPlanOverview', color: '#7B1FA2' },
+    isPlanner
+      ? { icon: '📅', label: isAr ? 'خطة العمل' : 'Work Plan', screen: 'WorkPlanOverview', color: '#7B1FA2' }
+      : { icon: '📅', label: isAr ? 'خطتي' : 'My Work Plan', screen: 'WorkPlan', color: '#7B1FA2' },
     { icon: '💬', label: isAr ? 'محادثة' : 'Team Chat', screen: 'ChannelList', color: '#00897B' },
   ];
 
@@ -443,7 +451,7 @@ export default function DashboardScreen() {
           )}
 
           {/* === Widget 2: Quick Actions (always shown first) === */}
-          <QuickActions isAr={isAr} colors={colors} navigation={navigation} />
+          <QuickActions isAr={isAr} colors={colors} navigation={navigation} role={user?.role} />
 
           {/* === Widget 1: Today's Assignment Summary === */}
           {myStats && (
