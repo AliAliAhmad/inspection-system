@@ -301,3 +301,61 @@ def test_gemini_is_asked_not_to_think(db_session):
     assert '"thinkingConfig": {"thinkingBudget": 0}' in src
     assert 'max(len(text) * 3, 100)' not in src.split('_translate_gemini')[1][:2000], \
         'the starved ceiling is back'
+
+
+# ── The yard's own vocabulary ──────────────────────────────────────────────
+#
+# From Ali's production run, 2026-09-09. The translators were working
+# correctly on text they cannot possibly understand:
+#
+#   (PM) -> 'مساءً'              in this yard it is Preventive Maintenance
+#   AC   -> 'التيار المتردد'      here it is air conditioning
+#   hydr -> 'الماء' (water)      here it is hydraulic
+#
+# No provider will ever get these right, so they are hidden before sending.
+
+@pytest.mark.parametrize('source', [
+    'Cabin Slide Door (PM)',
+    'Backlight missing (PM)',
+    'Steering cylinder(PM)',
+    'Landing Pin -PM',
+    'Inspection AC System',
+    'hydr control solenoid leaking (PM)',
+    'HVAC fan abmormal sound',
+    'RS109-250HR-MECH.HOURLY SERVICE',
+    'TT030-25/5H-MECH. HOURLY SERVICE',
+    'ECH02-SP-(EMS)TWL INSPECTION_PB',
+    'Tire set worn out (PM)',
+])
+def test_the_yards_words_survive_a_round_trip(source):
+    """Whatever the translator does, these come back exactly as they went in."""
+    from app.services.phrase_translation import protect_terms, restore_terms
+    masked, protected = protect_terms(source)
+    assert restore_terms(masked, protected) == source
+
+
+def test_pm_is_hidden_from_the_translator():
+    """The specific thing that produced 'in the evening' on Ali's crews' screens."""
+    from app.services.phrase_translation import protect_terms
+    masked, protected = protect_terms('Cabin Slide Door (PM)')
+    assert '(PM)' not in masked
+    assert '(PM)' in protected.values()
+
+
+def test_real_words_are_still_translated():
+    """Protection must hide the vocabulary, not the sentence around it."""
+    from app.services.phrase_translation import protect_terms
+    masked, _ = protect_terms('RS109-250HR-MECH.HOURLY SERVICE')
+    assert 'HOURLY' in masked and 'SERVICE' in masked, \
+        'a greedy code pattern swallowed real words'
+    masked, _ = protect_terms('Cabin Slide Door (PM)')
+    assert 'Cabin Slide Door' in masked
+
+
+def test_restoring_survives_a_reordered_sentence():
+    """Arabic is right-to-left; the placeholder moves. It must still come back."""
+    from app.services.phrase_translation import protect_terms, restore_terms
+    masked, protected = protect_terms('Backlight missing (PM)')
+    token = list(protected)[0]
+    assert restore_terms(f'{token} الإضاءة الخلفية مفقودة', protected) \
+        == '(PM) الإضاءة الخلفية مفقودة'

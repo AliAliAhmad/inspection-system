@@ -578,12 +578,19 @@ def create_app(config_name='development'):
             return
 
         from app.services.translation_service import TranslationService
+        from app.services.phrase_translation import protect_terms, restore_terms
         ok = failed = 0
         print()
         print('--- translating ---')
         for key, text in missing[:limit]:
+            # Hide the yard's own words first. Otherwise (PM) comes back as
+            # 'مساءً' — in the evening — because a general translator has no way
+            # to know it means Preventive Maintenance here. Same for AC, HYDR,
+            # and every machine code.
+            masked, protected = protect_terms(text)
             try:
-                arabic = TranslationService.translate_to_arabic(text)
+                arabic = TranslationService.translate_to_arabic(masked)
+                arabic = restore_terms(arabic, protected)
             except Exception as exc:  # noqa: BLE001
                 arabic, exc_note = None, exc
                 print(f'    FAILED  {text[:50]}  ({exc_note})')
@@ -640,6 +647,18 @@ def create_app(config_name='development'):
         print(f'  with Arabic         : {len(done)}')
         print(f'  reviewed by a person: {sum(1 for r in rows if r.is_reviewed)}')
         print(f'  look wrong          : {len(suspect)}')
+
+        # Phrases whose Arabic contains a word the yard's own vocabulary should
+        # have kept out of it. 'مساء' is the evening — it is (PM) mistranslated,
+        # every time. These were stored before terms were protected.
+        from app.services.phrase_translation import protect_terms
+        WRONG_MEANINGS = ('مساء', 'التيار المتردد')
+        spoiled = [r for r in done
+                   if not r.is_reviewed and r.ar_text
+                   and any(w in r.ar_text for w in WRONG_MEANINGS)]
+        print(f'  domain word wrong   : {len(spoiled)}')
+        # Anything protected is worth redoing, since it was translated blind.
+        suspect = suspect + [r for r in spoiled if r not in suspect]
 
         show = suspect if only_suspect or forget_suspect else done
         if not show:

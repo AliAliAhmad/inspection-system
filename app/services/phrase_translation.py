@@ -62,6 +62,76 @@ def normalise(text):
     return re.sub(r'\s+', ' ', text).strip().upper()
 
 
+# ── Protecting the yard's own vocabulary ───────────────────────────────────
+#
+# From Ali's production run, 2026-09-09. Every one of these is a translator
+# doing its job correctly on text it has no way to understand:
+#
+#   'Cabin Slide Door (PM)'   -> 'باب منزلق للمقصورة (مساءً)'   PM = the EVENING
+#   'Backlight missing (PM)'  -> 'الإضاءة الخلفية مفقودة (مساء)'
+#   'Steering cylinder(PM)'   -> 'أسطوانة التوجيه (م)'
+#   'Inspection AC System'    -> 'نظام فحص التيار المتردد'      AC = ALTERNATING CURRENT
+#   'hydr control solenoid'   -> '...للتحكم في الماء'            hydr = WATER
+#
+# In this yard (PM) is Preventive Maintenance, AC is air conditioning and HYDR
+# is hydraulic. A general translator cannot know that and will keep guessing
+# wrong forever, on every phrase, no matter which provider answers.
+#
+# So these are hidden behind placeholders before the text is sent and put back
+# afterwards. They come through untouched — an English abbreviation a fitter
+# reads every day beats a confidently wrong Arabic word.
+#
+# Machine codes are protected the same way: RS109, TT030-25/5H, 2000HR. Those
+# are names, and 'RS109-250HR' is not a sentence.
+
+# Longest first: 2000HR must win before HR, HVAC before AC.
+_PROTECTED_TERMS = [
+    # maintenance markers, in the brackets they actually arrive in
+    r'\(\s*P\.?M\.?\s*\)', r'\(\s*P\.?R\.?\s*\)', r'\(\s*C\.?M\.?\s*\)',
+    r'\bPM\b(?=\s*$)', r'\-PM\b',
+    # machine / order codes: two-to-four letters then digits, plus any tail
+    # Each tail segment stays SHORT and dot-free, so 'RS109-250HR-MECH' is
+    # protected but the '.HOURLY SERVICE' after it is still translated. A
+    # greedier tail swallowed real words and left the Arabic saying less.
+    r'\b[A-Z]{2,4}\d{2,4}(?:[-/][A-Za-z0-9]{1,6})*',
+    # service intervals
+    r'\b\d{2,4}\s*HRS?\b', r'\b\d{1,3}/\d{1,2}\s*H\b',
+    # trade abbreviations this yard uses
+    r'\bHVAC\b', r'\bHYDR\b', r'\bELME\b', r'\bMECH\b', r'\bELEC\b',
+    r'\bAC\b', r'\bEMS\b', r'\bTWL\b', r'\bRNR\b',
+]
+_PROTECT_RE = re.compile('|'.join(_PROTECTED_TERMS), re.IGNORECASE)
+
+# Digits inside a placeholder, so a translator cannot decide to localise them.
+_PLACEHOLDER = 'ZQX%dXQZ'
+
+
+def protect_terms(text):
+    """(masked, mapping) — the yard's own words hidden from the translator."""
+    if not text:
+        return text, {}
+    mapping = {}
+
+    def swap(match):
+        token = _PLACEHOLDER % len(mapping)
+        mapping[token] = match.group(0)
+        return token
+
+    return _PROTECT_RE.sub(swap, str(text)), mapping
+
+
+def restore_terms(text, mapping):
+    """Put the real words back, however the translator moved them about."""
+    if not text or not mapping:
+        return text
+    out = str(text)
+    for token, original in mapping.items():
+        # A translator may space or case the placeholder differently.
+        out = re.sub(re.escape(token).replace('\\ ', r'\s*'), original, out,
+                     flags=re.IGNORECASE)
+    return out
+
+
 def looks_truncated(source, arabic):
     """True when a translation is obviously a fragment rather than a translation.
 

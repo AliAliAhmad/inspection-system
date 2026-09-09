@@ -137,6 +137,15 @@
 - **`flask review-phrases --suspect` / `--forget`** — 49 rows were written before the fix;
   `--forget` deletes the bad ones so `translate-phrases --apply` redoes them.
 - Google Translate (the free last resort) produced GOOD Arabic throughout.
+- **⚠️ The yard's vocabulary is now HIDDEN from translators** (`protect_terms` /
+  `restore_terms`). Real damage from Ali's run: `(PM)` -> `مساءً` (in the evening) on
+  every phrase, `AC` -> `التيار المتردد` (alternating current), `hydr` -> `الماء` (water).
+  No provider can know (PM) means Preventive Maintenance HERE. Machine codes
+  (`RS109-250HR-MECH`), intervals (`2000HR`, `25/5H`) and trade abbreviations
+  (HYDR/HVAC/MECH/ELEC/AC) are masked before sending and restored after — an English
+  abbreviation a fitter reads daily beats a confidently wrong Arabic word.
+- `review-phrases` also flags rows whose Arabic contains `مساء` / `التيار المتردد` —
+  those were stored before protection existed. **`--forget` then `--apply` redoes them.**
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
