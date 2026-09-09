@@ -520,6 +520,128 @@ def create_app(config_name='development'):
             print(f"    retired : {report.get('orders_skipped_retired')} on "
                   f"{', '.join(retired)} (sold — skipped on purpose)")
 
+    @app.cli.command('why-no-plan')
+    @click.argument('who')
+    @click.option('--date', 'on_date', default=None,
+                  help='Which day to check. Defaults to the planning day.')
+    def why_no_plan(who, on_date):
+        """Why does this person see nothing in My Work Plan?
+
+        WHO is a name, a SAP id, a role id or an email — anything that
+        identifies one person.
+
+        Built for the same reason as pool-status: when a man says "my plan is
+        empty" the answer is one of four things, and every one of them is
+        invisible from the app itself. This walks the exact conditions
+        /my-plan applies, in order, and stops at the first one that fails.
+        """
+        from datetime import datetime
+        from app.models import User, WorkPlan, WorkPlanDay, WorkPlanJob, WorkPlanAssignment
+        from app.utils.decorators import planning_today
+
+        needle = (who or '').strip()
+        if not needle:
+            print('Give me a name, SAP id, role id or email.')
+            return
+
+        like = f'%{needle}%'
+        people = User.query.filter(
+            db.or_(User.full_name.ilike(like), User.email.ilike(like),
+                   User.sap_id == needle, User.role_id == needle)
+        ).all()
+
+        print('=' * 78)
+        if not people:
+            print(f'NOBODY MATCHES {needle!r}')
+            print('=' * 78)
+            print('  A worker who is not in the app cannot be assigned to anything,')
+            print('  and his plan will always be empty. Check the spelling, or the')
+            print('  SAP id, against the Users screen.')
+            return
+        if len(people) > 1:
+            print(f'{len(people)} people match {needle!r} — be more specific:')
+            print('=' * 78)
+            for p in people:
+                print(f'  {p.full_name}   sap={p.sap_id or "-"}  '
+                      f'role_id={p.role_id or "-"}  {p.email}')
+            return
+
+        person = people[0]
+        day = (datetime.strptime(on_date, '%Y-%m-%d').date()
+               if on_date else planning_today())
+        print(f'{person.full_name}  ({person.role}, sap={person.sap_id or "-"})')
+        print(f'checking {day}')
+        print('=' * 78)
+
+        if not person.is_active:
+            print('STOP: this account is switched off. Nothing will show.')
+            return
+
+        # 1. Is there a plan covering that day at all?
+        covering = (WorkPlan.query
+                    .filter(WorkPlan.week_start <= day, WorkPlan.week_end >= day)
+                    .order_by(WorkPlan.week_start.desc()).all())
+        if not covering:
+            print('STOP: no work plan exists whose week contains this day.')
+            print('      Nobody sees anything, not just this person.')
+            return
+        for plan in covering:
+            print(f'  plan #{plan.id}  {plan.week_start} .. {plan.week_end}  '
+                  f'[{plan.status}]')
+
+        # 2. /my-plan only ever matches a PUBLISHED plan.
+        published = [p for p in covering if p.status == 'published']
+        if not published:
+            print()
+            print('STOP: the plan covering this day is still a DRAFT.')
+            print('      /my-plan matches published plans only, so EVERY worker')
+            print('      sees an empty week until you press Publish.')
+            return
+        plan = published[0]
+
+        # 3. Is there anything on that day?
+        wp_day = WorkPlanDay.query.filter_by(work_plan_id=plan.id, date=day).first()
+        if not wp_day:
+            print()
+            print(f'STOP: plan #{plan.id} has no row for {day}.')
+            return
+        jobs = WorkPlanJob.query.filter_by(work_plan_day_id=wp_day.id).all()
+        print()
+        print(f'  {day} holds {len(jobs)} job(s) in plan #{plan.id}')
+        if not jobs:
+            print()
+            print('STOP: that day is empty for everyone.')
+            return
+
+        # 4. Is this person on any of them? This is the usual answer.
+        mine = [j for j in jobs
+                if any(a.user_id == person.id for a in (j.assignments or []))]
+        print(f'  {person.full_name} is on {len(mine)} of them')
+        if not mine:
+            print()
+            print('STOP: he is not assigned to any job on this day.')
+            print('      A published plan shows a worker HIS jobs and nothing')
+            print('      else, so an unstaffed day looks identical to no plan.')
+            staffed = sorted({a.user.full_name
+                              for j in jobs for a in (j.assignments or [])
+                              if a.user})
+            print(f'      Assigned that day: {", ".join(staffed) if staffed else "NOBODY"}')
+            if not staffed:
+                print('      -> not one job on this day has a team. That is the bug')
+                print('         to chase, and it is not about this person.')
+            return
+
+        print()
+        print('  HE SHOULD SEE THESE:')
+        for j in mine:
+            eq = j.equipment.name if j.equipment else '?'
+            print(f'    job #{j.id}  {eq}  {(j.description or "")[:44]}')
+        print()
+        print('If the phone still shows nothing, it is the app and not the data:')
+        print('  * the phone caches the week — pull down to refresh')
+        print('  * check the date it is showing; the yard is UTC+3 and the')
+        print('    server is UTC, so around midnight they disagree')
+
     @app.cli.command('add-missing-equipment')
     @click.option('--apply', 'do_apply', is_flag=True,
                   help='Write the row. Without this nothing is changed.')
