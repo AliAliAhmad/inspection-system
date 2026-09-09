@@ -96,6 +96,7 @@ import {
   type ViewMode,
   GeneratePlanButton,
   BundleCard,
+  JobAttachments,
   PlanScoreCard,
   GenerationActionBar,
   PdfFilterModal,
@@ -4038,6 +4039,16 @@ export default function WorkPlanningPage() {
                 </div>
               </Card>
             )}
+
+            {/* Photos and voice notes on the job itself.
+                Ali, 2026-09-09: they belong HERE, in the details window, not
+                behind the "+" on the card. They stick to the job wherever it
+                goes — see JobAttachments for why that is storage and not a
+                feature. */}
+            <JobAttachments
+              jobId={selectedJob.id}
+              planId={currentPlan?.id}
+            />
 
             {/* Timing */}
             <Row gutter={16}>

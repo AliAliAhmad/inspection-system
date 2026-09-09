@@ -150,10 +150,17 @@
 ### Photo + voice on any job, and Arabic that means what the yard means — 2026-09-09
 - Ali: "when i drop a job to a day, i can add a photo, a voice so it can be clear for the
   team. the finding coming from the inspection already has them, but other jobs do not."
-- Photo/voice hang on `work_plan_job_tasks` (new `attachment_file_id` / `attachment_kind`)
-  — the same anchor that already survives a trip through the pool. Buttons live in the
-  job's `+` popover on the board; a **planner** adds them, and an **assigned worker** may
-  add evidence too but still cannot write plain sub-tasks.
+- Photo/voice hang on `work_plan_job_tasks` (`attachment_file_id` / `attachment_kind`)
+  — the same anchor that already survives a trip through the pool. **The buttons are in
+  the JOB DETAILS modal** (`JobAttachments.tsx`), NOT the `+` popover — Ali moved them
+  there 2026-09-09. The popover still DISPLAYS attachments; it just cannot create them.
+  A **planner** adds them, and an **assigned worker** may add evidence too but still
+  cannot write plain sub-tasks.
+- Sticking is the storage choice, not a feature: they hang on the SAP order, so move,
+  pool round-trip and carry-over all keep them. Three tests say so explicitly.
+- **The file id is checked** — must exist, must be one the caller uploaded, must match
+  its claimed kind. An IDOR review caught this: an id off the wire is a request, not a
+  fact.
 - **`DOMAIN_ARABIC` in `phrase_translation.py`** — `(PM)` now reads `(صيانة وقائية)`,
   `AC` -> `تكييف`, `HYDR` -> `هيدروليك`. These are what the abbreviation MEANS HERE, not
   a translation of the letters. **Ali is the authority on every line; correcting one

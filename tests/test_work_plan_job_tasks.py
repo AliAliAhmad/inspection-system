@@ -652,3 +652,78 @@ def test_your_own_file_still_attaches(db_session, engineer, worker, client, plan
                        json={'attachment_file_id': mine.id,
                              'attachment_kind': 'photo'})
     assert resp.status_code == 201, resp.get_json()
+
+
+# ── "they should stick with the job, if drag drop or anywhere" ─────────────
+#
+# Ali, 2026-09-09. This is the same guarantee the written sub-tasks already
+# have, and for the same reason: a photo is not attached to the job's slot in
+# the week, it is attached to the job's identity. These tests prove it for the
+# attachments specifically, because that is what he asked about.
+
+def test_a_photo_survives_a_move_to_another_day(db_session, engineer, client,
+                                                plan):
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    photo = _a_file(db_session, engineer)
+    db.session.commit()
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                json={'attachment_file_id': photo.id, 'attachment_kind': 'photo'})
+
+    resp = client.post(f'/api/work-plans/{plan.id}/jobs/{job.id}/move',
+                       json={'target_day_id': _day(plan, 4).id}, headers=headers)
+    assert resp.status_code == 200, resp.get_json()
+
+    resp = client.get(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers)
+    kinds = [t['attachment_kind'] for t in resp.get_json()['tasks']]
+    assert 'photo' in kinds
+
+
+def test_a_photo_survives_the_job_going_back_to_the_pool(db_session, engineer,
+                                                         client, plan):
+    """The row is DELETED here. The photo is not on the row."""
+    from app.api.work_plans import purge_job_rows
+
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    photo = _a_file(db_session, engineer)
+    db.session.commit()
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                json={'attachment_file_id': photo.id, 'attachment_kind': 'photo',
+                      'content': 'the cracked glass'})
+
+    old_id = job.id
+    purge_job_rows(job)
+    db.session.commit()
+    assert db.session.get(WorkPlanJob, old_id) is None
+
+    # Planned again weeks later — the same SAP order, a brand new row.
+    again = _sap_job(plan, eq, offset=3)
+    resp = client.get(f'/api/work-plans/jobs/{again.id}/tasks', headers=headers)
+    tasks = resp.get_json()['tasks']
+    assert [t['attachment_kind'] for t in tasks] == ['photo']
+    assert tasks[0]['content'] == 'the cracked glass'
+    assert tasks[0]['attachment_url'], 'the file itself must still resolve'
+
+
+def test_a_photo_follows_a_carry_over(db_session, engineer, client, plan):
+    """An unfinished job rides to the next day as a NEW row."""
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    photo = _a_file(db_session, engineer)
+    db.session.commit()
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                json={'attachment_file_id': photo.id, 'attachment_kind': 'photo'})
+
+    carried = WorkPlanJob(
+        work_plan_day_id=_day(plan, 1).id, job_type=job.job_type,
+        equipment_id=job.equipment_id, sap_order_number=job.sap_order_number,
+        sap_order_type=job.sap_order_type, estimated_hours=2)
+    db.session.add(carried)
+    db.session.commit()
+
+    resp = client.get(f'/api/work-plans/jobs/{carried.id}/tasks', headers=headers)
+    assert [t['attachment_kind'] for t in resp.get_json()['tasks']] == ['photo']

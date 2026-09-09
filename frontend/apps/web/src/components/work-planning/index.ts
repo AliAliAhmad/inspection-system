@@ -42,3 +42,4 @@ export { WorkerAssignmentRulesManager } from './WorkerAssignmentRulesManager';
 export { BundleCard } from './BundleCard';
 export { PdfFilterModal } from './PdfFilterModal';
 export { JobSubTasks } from './JobSubTasks';
+export { JobAttachments } from './JobAttachments';
