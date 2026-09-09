@@ -84,6 +84,15 @@
   more; the button will now be on them.
 - Full detail in HISTORY.md.
 
+### Job pool filters — FIXED 2026-09-09
+- Headline "Jobs Pool N" was counted after the Hourly/Calendar sub-tab filter, so the
+  total changed when you switched view (5 then 7). Now stable; counts sit on the
+  `Hourly (n)` / `Calendar (n)` buttons.
+- App defects were hard-coded `priority:'normal'`, so a CRITICAL defect vanished under
+  the Urgent filter. Now mapped from `defect.severity`.
+- `MAN-…` pool rows tagged "✎ by hand"; equipment filter list sorted.
+- Full detail in HISTORY.md.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

@@ -30,6 +30,20 @@ const PRIORITY_ORDER: Record<string, number> = {
 // Cycle hours for sorting (descending)
 const HOURS_CYCLES = [4000, 3000, 2000, 1500, 1000, 500, 250];
 
+/** True for the placeholder the app mints when a hand-typed job goes back to
+ *  the pool. Mirrors is_manual_order_number() on the server. */
+export const isHandTypedOrder = (job: any): boolean =>
+  String(job?.order_number || '').startsWith('MAN-') || job?.order_type === 'MANUAL';
+
+// A defect carries a SEVERITY; the pool filters on PRIORITY. Same idea, two
+// vocabularies, and nothing was translating between them.
+export const SEVERITY_TO_PRIORITY: Record<string, string> = {
+  critical: 'urgent',
+  high: 'high',
+  medium: 'normal',
+  low: 'low',
+};
+
 // Calendar cycles for sorting (ascending)
 const CALENDAR_ORDER: Record<string, number> = {
   '3-weeks': 1,
@@ -210,6 +224,14 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
             {cycleLabel}
           </Tag>
         )}
+        {/* A job the planner typed in and later returned to the pool. The
+            `MAN-<plan>-<job>` it carries is the app's own placeholder, not a
+            SAP order — saying so stops it reading like corrupt SAP data. */}
+        {isHandTypedOrder(job) && (
+          <Tag color="default" style={{ fontSize: 9, margin: 0, padding: '0 4px', lineHeight: '16px' }}>
+            ✎ by hand
+          </Tag>
+        )}
         {/* Trade badge — show for defects */}
         {(() => {
           const wc = (job.work_center || '').toUpperCase();
@@ -302,7 +324,11 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       }
     });
 
-    return Array.from(equipmentMap.values());
+    // Sorted, like the equipment-type list beside it. Insertion order is
+    // whatever the pool happened to be sorted by, which is unscannable once
+    // there are more than a handful of machines.
+    return Array.from(equipmentMap.values())
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [availableJobs]);
 
   // Get unique equipment types for filter
@@ -317,8 +343,9 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   }, [availableJobs]);
 
   // Filter and sort jobs
-  const { prmJobs, defectJobs } = useMemo(() => {
-    if (!availableJobs) return { prmJobs: [], defectJobs: [] };
+  const { prmJobs, defectJobs, prmAllCount, hourlyCount, calendarCount } = useMemo(() => {
+    if (!availableJobs) return { prmJobs: [], defectJobs: [], prmAllCount: 0,
+                                 hourlyCount: 0, calendarCount: 0 };
 
     const sapOrders = availableJobs.sap_orders || [];
     const defects = availableJobs.defect_jobs || [];
@@ -402,12 +429,21 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       return 0;
     });
 
-    // Filter PRM by sub-tab
-    if (prmSubTab === 'hourly') {
-      prm = prm.filter((j: SAPWorkOrder) => j.maintenance_base === 'running_hours');
-    } else {
-      prm = prm.filter((j: SAPWorkOrder) => j.maintenance_base === 'calendar' || j.maintenance_base !== 'running_hours');
-    }
+    // Split PRM by sub-tab, keeping BOTH sides.
+    //
+    // The headline "Jobs Pool N" used to be counted after this filter, so it
+    // changed when the planner flipped between Hourly and Calendar — 5 one
+    // moment, 7 the next, with nothing added. A total that moves when you
+    // change your view is the definition of untrustworthy.
+    //
+    // The catch-all on the calendar side is deliberate: a job with no
+    // maintenance_base at all must appear SOMEWHERE rather than be invisible.
+    const prmHourly = prm.filter(
+      (j: SAPWorkOrder) => j.maintenance_base === 'running_hours');
+    const prmCalendar = prm.filter(
+      (j: SAPWorkOrder) => j.maintenance_base !== 'running_hours');
+    const prmAll = prm;
+    prm = prmSubTab === 'hourly' ? prmHourly : prmCalendar;
 
     // Defect Jobs - from SAP orders with job_type === 'defect' + defect_jobs
     let defect = [
@@ -416,7 +452,13 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
         ...d,
         equipment: d.equipment,
         description: d.defect?.description,
-        priority: 'normal',
+        // From the defect's own severity, NOT a hard-coded 'normal'.
+        //
+        // Every app defect used to arrive as 'normal', so a CRITICAL defect
+        // showed an "N" on its card and vanished the moment the planner pressed
+        // Urgent or High. The filter looked broken because it was hiding the
+        // very jobs those buttons are for.
+        priority: SEVERITY_TO_PRIORITY[(d as any).defect?.severity || ''] || 'normal',
       })),
     ].filter(filterJob);
 
@@ -450,7 +492,10 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       return aPriority - bPriority;
     });
 
-    return { prmJobs: prm, defectJobs: defect };
+    return { prmJobs: prm, defectJobs: defect,
+             prmAllCount: prmAll.length,
+             hourlyCount: prmHourly.length,
+             calendarCount: prmCalendar.length };
   }, [availableJobs, searchText, equipmentFilter, equipmentTypeFilter, priorityFilter, prmSubTab, tradeFilter]);
 
   // Worst overdue (per unit) across the pool — normalises the overdue heat so the
@@ -463,7 +508,9 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
   // Counts
   const prmCount = prmJobs.length;
   const defectCount = defectJobs.length;
-  const totalCount = prmCount + defectCount;
+  // Everything the filters let through, on BOTH sub-tabs. This is what the
+  // headline badge shows, so it stops moving when the sub-tab changes.
+  const totalCount = prmAllCount + defectCount;
 
   // Get current jobs based on active tab
   const currentJobs = activeTab === 'prm' ? prmJobs : defectJobs;
@@ -698,14 +745,14 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
                   onClick={() => setPrmSubTab('hourly')}
                   icon={<ClockCircleOutlined />}
                 >
-                  Hourly
+                  Hourly ({hourlyCount})
                 </Button>
                 <Button
                   size="small"
                   type={prmSubTab === 'calendar' ? 'primary' : 'default'}
                   onClick={() => setPrmSubTab('calendar')}
                 >
-                  Calendar
+                  Calendar ({calendarCount})
                 </Button>
               </Space>
               <span style={{ fontSize: 10, color: '#8c8c8c', marginLeft: 8 }}>

@@ -1,3 +1,26 @@
+## 2026-09-09 — Job pool filters
+
+### Job pool filters — FIXED 2026-09-09
+- Ali: "i feel that i have issue in the filters that is in the job pool ... specially
+  when i open web on ipad". Four provable causes, measured in an iPad-sized browser:
+  1. **The headline count was not a total.** `prmCount` was taken AFTER the
+     Hourly/Calendar sub-tab filter, so "Jobs Pool N" changed when you flipped sub-tabs
+     — 5 then 7, with nothing added. Now counts both sides; per-sub-tab counts moved
+     onto the `Hourly (n)` / `Calendar (n)` buttons.
+  2. **App defects were hard-coded `priority: 'normal'`.** A CRITICAL defect showed "N"
+     and vanished when Urgent was pressed. Now mapped from `defect.severity`
+     (critical→urgent, high→high, medium→normal, low→low).
+  3. **`MAN-…` placeholders look like corrupt SAP rows** in the pool. Tagged "✎ by hand".
+  4. Equipment filter list was unsorted while the type list beside it was sorted.
+- Ruled out: `refetchOnWindowFocus` is already false on the pool query. The
+  Calendar catch-all (`!== 'running_hours'`) is deliberate — a job with no
+  maintenance_base must appear somewhere rather than nowhere.
+- Part of the iPad feel was the touch-drag conflict fixed 2026-09-08; a hard refresh is
+  needed to get it.
+- 5 vitest tests in `JobsPool.filters.test.ts`; counts verified in-browser instead
+  (5→7 before, 9→9 after).
+
+
 ## 2026-09-09 — The job that came back
 
 ### The job that came back — FIXED 2026-09-09
@@ -735,6 +758,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
