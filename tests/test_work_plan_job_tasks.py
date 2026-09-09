@@ -437,7 +437,12 @@ def _a_file(db_session, user, name='photo.jpg'):
              # Cloudinary-hosted, like production. File.get_url() returns a
              # URL only for an http path, so a local one would test nothing.
              file_path=f'https://res.cloudinary.com/demo/{name}', file_size=1024,
-             mime_type='image/jpeg', uploaded_by=user.id)
+             # From the extension, because the endpoint now checks that a file
+             # IS what it is labelled as — a helper that always says image/jpeg
+             # would make the voice tests lie.
+             mime_type=('audio/mp4' if name.endswith(('.m4a', '.webm'))
+                        else 'image/jpeg'),
+             uploaded_by=user.id)
     db.session.add(f)
     db.session.flush()
     return f
@@ -561,3 +566,89 @@ def test_a_bad_attachment_kind_is_refused(db_session, engineer, worker, client,
     assert client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=wrk,
                        json={'attachment_file_id': f.id,
                              'attachment_kind': 'video'}).status_code == 400
+
+
+# ── The hole this endpoint shipped with ────────────────────────────────────
+#
+# Flagged by a security review of commit a6d2824, and correctly.
+# attachment_file_id arrived from the browser and was stored without being
+# looked at, so a user on a job he WAS entitled to could name any file id and
+# have the task list hand back its URL. An authenticated read of arbitrary
+# files, wearing the shape of attaching a photo.
+
+def test_a_worker_cannot_attach_someone_elses_file(db_session, engineer, worker,
+                                                   client, plan):
+    """THE attack. He is on the job; the file is not his."""
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+    someone_elses = _a_file(db_session, engineer, 'private-inspection.jpg')
+    db.session.commit()
+
+    headers = get_auth_header(client, 'worker@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': someone_elses.id,
+                             'attachment_kind': 'photo'})
+    assert resp.status_code == 403, resp.get_json()
+    from app.models import WorkPlanJobTask
+    assert WorkPlanJobTask.query.count() == 0, 'the file was published anyway'
+
+
+def test_a_planner_cannot_attach_someone_elses_file_either(db_session, engineer,
+                                                           worker, client, plan):
+    """Being a planner is not the same as owning the file."""
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    someone_elses = _a_file(db_session, worker, 'workers-photo.jpg')
+    db.session.commit()
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': someone_elses.id,
+                             'attachment_kind': 'photo'})
+    assert resp.status_code == 403
+
+
+def test_a_file_that_does_not_exist_is_refused(db_session, engineer, client,
+                                               plan):
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.commit()
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': 999999,
+                             'attachment_kind': 'photo'})
+    assert resp.status_code == 404
+
+
+def test_a_file_must_be_what_it_claims_to_be(db_session, engineer, client, plan):
+    """A PDF labelled 'photo' would be rendered as an image on every crew's screen."""
+    from app.models import File
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    pdf = File(original_filename='report.pdf', stored_filename='r.pdf',
+               file_path='https://res.cloudinary.com/demo/report.pdf',
+               file_size=10, mime_type='application/pdf', uploaded_by=engineer.id)
+    db.session.add(pdf)
+    db.session.commit()
+
+    headers = get_auth_header(client, 'eng@test.com', 'test123')
+    assert client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': pdf.id,
+                             'attachment_kind': 'photo'}).status_code == 400
+    assert client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': pdf.id,
+                             'attachment_kind': 'voice'}).status_code == 400
+
+
+def test_your_own_file_still_attaches(db_session, engineer, worker, client, plan):
+    """The fix must not break the thing it protects."""
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+    mine = _a_file(db_session, worker, 'my-photo.jpg')
+    db.session.commit()
+    headers = get_auth_header(client, 'worker@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': mine.id,
+                             'attachment_kind': 'photo'})
+    assert resp.status_code == 201, resp.get_json()

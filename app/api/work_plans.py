@@ -5667,6 +5667,34 @@ def add_job_task(job_id):
     if attachment_file_id and not attachment_kind:
         raise ValidationError("attachment_kind is required with a file")
 
+    if attachment_file_id:
+        # The file must EXIST and must be HIS.
+        #
+        # This id arrives from the browser, and the first version of this
+        # endpoint stored it without looking at it. That let any logged-in user,
+        # on a job he was legitimately on, post attachment_file_id: 1 and have
+        # the task list hand back that file's URL — somebody else's inspection
+        # photo, a document, anything ever uploaded. An authenticated read of
+        # arbitrary files, dressed up as attaching a photo.
+        #
+        # The rule is the one the flow already implies: you attach a file you
+        # just uploaded. Anything else is not yours to publish onto a job that
+        # a whole crew can read.
+        from app.models import File as FileModel
+        attachment = db.session.get(FileModel, attachment_file_id)
+        if attachment is None:
+            raise NotFoundError("Attachment not found")
+        if attachment.uploaded_by != user.id:
+            raise ForbiddenError("You can only attach a file you uploaded yourself")
+        # And it has to BE what it says it is, so a PDF cannot arrive labelled
+        # as a photo and be rendered as one.
+        mime = (attachment.mime_type or '').lower()
+        if attachment_kind == 'photo' and not mime.startswith('image/'):
+            raise ValidationError("That file is not an image")
+        if attachment_kind == 'voice' and not (mime.startswith('audio/')
+                                               or mime.startswith('video/')):
+            raise ValidationError("That file is not a recording")
+
     # An attachment IS the content, so a caption is optional beside one.
     if not content and attachment_file_id:
         content = ('صورة' if get_language(user) == 'ar' else 'Photo') \
