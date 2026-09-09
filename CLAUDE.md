@@ -111,6 +111,15 @@
   shell, walking /my-plan's conditions in order and stopping at the first failure.
   Searches every identity field case-insensitively and suggests near-matches by name.
 
+### Job description on the card + Arabic that stops changing — 2026-09-09
+- Descriptions were translated on EVERY request through a mostly-dead AI chain, so the
+  same job read differently each time. Now a `phrase_translations` store: translated once
+  by `flask translate-phrases`, read-only on every screen, English on a miss.
+- `flask translate-phrases` with no flags also reports the vocabulary size.
+- **Ali's lever:** anything still English needs a working key — `TOGETHER_API_KEY` is
+  ready but not set on Render.
+- Card now shows the job description. Full detail in HISTORY.md.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

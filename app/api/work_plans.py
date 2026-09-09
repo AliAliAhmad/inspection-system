@@ -1615,9 +1615,21 @@ def get_job_details(job_id):
     want_ar = language == 'ar'
 
     def job_desc():
-        # work_plan_jobs has no description_ar column, so this is translated per
-        # request. Only the long-lived defect text is worth caching.
-        return _arabic_or_original(job.description, None) if want_ar else job.description
+        # Read from the phrase store; never call a provider here.
+        #
+        # This used to translate on EVERY request, uncached, through a chain of
+        # AI providers that is mostly down. The same job opened twice gave
+        # English once and Arabic the next time, and the Arabic itself varied.
+        # That is what Ali meant by "not reliable" — not wrong, INCONSISTENT.
+        #
+        # A phrase is now translated once by `flask translate-phrases` and
+        # remembered, so the same words always read the same way. A phrase not
+        # yet in the store falls back to English, which is exactly what a dead
+        # provider produced anyway.
+        if not want_ar:
+            return job.description
+        from app.services.phrase_translation import to_arabic
+        return to_arabic(job.description)
 
     eq = job.equipment
     equipment = None
@@ -2479,6 +2491,10 @@ def get_my_plan():
                             'status': job.defect.status
                         } if job.defect else None,
                         'sap_order_number': job.sap_order_number,
+                        # The card shows this now, not just the details screen —
+                        # a worker was seeing a machine name and no hint of what
+                        # the job actually was. Arabic comes from the phrase
+                        # store, filled in one query below.
                         'description': job.description,
                         'estimated_hours': job.estimated_hours,
                         'planned_time_hours': float(job.planned_time_hours) if job.planned_time_hours is not None else None,
@@ -2530,6 +2546,17 @@ def get_my_plan():
                 'day_name': day.date.strftime('%A'),
                 'jobs': day_jobs
             })
+
+    # Arabic for every job description on the screen, in ONE query. Read-only:
+    # a week of jobs must never wait on a translation provider.
+    if want_ar and dicts_by_job_id:
+        from app.services.phrase_translation import to_arabic_many
+        arabic = to_arabic_many([d.get('description') for d in dicts_by_job_id.values()])
+        if arabic:
+            for target in dicts_by_job_id.values():
+                swapped = arabic.get(target.get('description'))
+                if swapped:
+                    target['description'] = swapped
 
     # Sub-task lists for the whole week in ONE query, not one per job. The
     # worker may tick these; he may not add or edit them (see the endpoints).

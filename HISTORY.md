@@ -1,3 +1,30 @@
+## 2026-09-09 — Job description on the card, and Arabic that stops changing
+
+### Job description on the card + Arabic that stops changing — 2026-09-09
+- Ali: (1) description should be on the My Work Plan card, not only in job details;
+  (2) "the arabic translation is not good and not reliable, sometimes not all the words
+  are translated."
+- **One cause, two symptoms.** `get_job_details` translated the description on EVERY
+  request, uncached, through the 7-provider AI chain that is mostly down (Groq 401,
+  OpenAI no credits, Gemini 429). Same job opened twice → English once, Arabic the next,
+  and different Arabic each time. Not wrong — INCONSISTENT, which is what he means.
+- **`phrase_translations`** (`app/services/phrase_translation.py`, model in
+  `app/models/`): one row per distinct English phrase, keyed by NFC + collapsed
+  whitespace + upper case, so SAP's spelling drift shares one answer. SAP text is a small
+  repeating vocabulary, not prose.
+- **A screen never calls a provider.** `to_arabic()` / `to_arabic_many()` read the store
+  only; a miss returns English (today's behaviour). Filling it is a deliberate act:
+  `flask translate-phrases` (report-only without `--apply`).
+- `is_reviewed` marks a human-corrected phrase; the filler never overwrites one.
+- **`flask translate-phrases` also answers "how big is the vocabulary?"** — run it with no
+  flags. That number decides whether a hand-reviewed glossary beats batch AI.
+- **Ali's lever:** anything still English needs a working key. `TOGETHER_API_KEY` is
+  ready but not set on Render.
+- Card now shows `description` (equipment-name prefix stripped, same as the web planner).
+- 8 tests in `tests/test_phrase_translation.py`. **Needs a push AND an OTA** — push first,
+  the card degrades to no-description on an old backend.
+
+
 ## 2026-09-09 — Workers could see the whole plan
 
 ### Workers could see the whole plan — FIXED 2026-09-09
@@ -781,6 +808,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

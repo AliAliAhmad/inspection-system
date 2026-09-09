@@ -492,11 +492,29 @@ export default function MyWorkPlanScreen() {
             <Text style={styles.equipmentName}>{job.equipment.name}</Text>
           )}
 
-          {job.defect && (
-            <Text style={styles.defectDesc} numberOfLines={2}>
-              {job.defect.description}
-            </Text>
-          )}
+          {/* What the job actually IS.
+              The card used to show the machine name and, for a defect only, the
+              defect text — so a man looking at his day saw "Pump A-101" three
+              times over and had to open each one to find out which was which.
+              A PM job showed nothing at all. Ali, 2026-09-09: the description
+              belongs on the card, not only in the details screen. */}
+          {(() => {
+            const raw = job.defect?.description || job.description || '';
+            if (!raw) return null;
+            // The backend often prefixes the machine name onto the description
+            // ("Pump A-101 - 250HR SERVICE"); the card prints the name directly
+            // above, so repeating it wastes the one line we have. Same strip the
+            // web planner does in BundleCard.stripEquipmentPrefix.
+            const eq = job.equipment?.name || '';
+            const text = eq && raw.startsWith(eq)
+              ? raw.slice(eq.length).replace(/^[\s\-_.]+/, '').trim() || raw
+              : raw;
+            return (
+              <Text style={styles.defectDesc} numberOfLines={2}>
+                {text}
+              </Text>
+            );
+          })()}
 
           <View style={styles.jobDetails}>
             <Text style={styles.hoursText}>

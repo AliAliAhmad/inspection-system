@@ -520,6 +520,92 @@ def create_app(config_name='development'):
             print(f"    retired : {report.get('orders_skipped_retired')} on "
                   f"{', '.join(retired)} (sold — skipped on purpose)")
 
+    @app.cli.command('translate-phrases')
+    @click.option('--apply', 'do_apply', is_flag=True,
+                  help='Actually translate. Without it, only reports.')
+    @click.option('--limit', default=50, show_default=True,
+                  help='How many phrases to translate in one run.')
+    def translate_phrases(do_apply, limit):
+        """Fill the Arabic phrase store, and say how big the vocabulary is.
+
+        Job descriptions used to be translated on every request through a chain
+        of AI providers that is mostly down, so the same job read differently
+        each time it was opened. They are translated ONCE here and remembered.
+
+        Run it with no flags first: it counts the distinct phrases in the yard
+        and shows what is still missing, without calling anything.
+        """
+        from app.models import SAPWorkOrder, WorkPlanJob
+        from app.services.phrase_translation import (
+            PhraseTranslation, normalise, remember, MAX_PHRASE_LENGTH)
+
+        # Every description a worker could be shown, from both the pool and the
+        # plans, counted by its normalised form.
+        seen = {}
+        for source in (db.session.query(SAPWorkOrder.description),
+                       db.session.query(WorkPlanJob.description)):
+            for (text,) in source:
+                key = normalise(text)
+                if key and len(key) <= MAX_PHRASE_LENGTH:
+                    seen.setdefault(key, text)
+
+        known = {r.source_key: r for r in PhraseTranslation.query.all()}
+        done = {k: r for k, r in known.items() if r.ar_text}
+        missing = [(k, t) for k, t in seen.items() if k not in done]
+
+        print('=' * 78)
+        print('ARABIC PHRASE STORE')
+        print('=' * 78)
+        print(f'  distinct phrases in the yard : {len(seen)}')
+        print(f'  already translated           : {len(done)}')
+        print(f'  reviewed by a person         : {sum(1 for r in known.values() if r.is_reviewed)}')
+        print(f'  still English                : {len(missing)}')
+
+        if not missing:
+            print()
+            print('  Nothing to do. Every phrase a worker can see has Arabic.')
+            return
+
+        print()
+        print(f'--- the {min(limit, len(missing))} that would be translated next ---')
+        for key, text in missing[:limit]:
+            print(f'    {text[:70]}')
+
+        if not do_apply:
+            print()
+            print('  Report only. Re-run with --apply to translate them.')
+            print('  Nothing was called and nothing was written.')
+            return
+
+        from app.services.translation_service import TranslationService
+        ok = failed = 0
+        print()
+        print('--- translating ---')
+        for key, text in missing[:limit]:
+            try:
+                arabic = TranslationService.translate_to_arabic(text)
+            except Exception as exc:  # noqa: BLE001
+                arabic, exc_note = None, exc
+                print(f'    FAILED  {text[:50]}  ({exc_note})')
+            if arabic and arabic != text:
+                remember(text, arabic)
+                ok += 1
+                print(f'    ok      {text[:44]}  ->  {arabic[:34]}')
+            else:
+                failed += 1
+        db.session.commit()
+
+        print()
+        print(f'  translated {ok}, failed {failed}')
+        if failed:
+            print()
+            print('  A failure here is almost always a dead provider, not bad text.')
+            print('  CLAUDE.md: Groq returns 401, OpenAI has no credits, Gemini is')
+            print('  rate limited, and TOGETHER_API_KEY is ready but not yet set on')
+            print('  Render. Add one working key and re-run; nothing else changes.')
+        print()
+        print('  Anything still English simply shows in English. No screen breaks.')
+
     @app.cli.command('why-no-plan')
     @click.argument('who')
     @click.option('--date', 'on_date', default=None,

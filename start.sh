@@ -806,6 +806,35 @@ with app.app_context():
         db.session.rollback()
         print('work_center backfill skipped: %s' % exc)
 
+    # Create phrase_translations table
+    #
+    # One row per distinct English phrase out of SAP, with its Arabic. Job
+    # descriptions were translated on EVERY request through an AI chain that is
+    # mostly down, so the same job read differently each time it was opened.
+    # See app/services/phrase_translation.py.
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS phrase_translations (
+                id SERIAL PRIMARY KEY,
+                source_key VARCHAR(220) NOT NULL UNIQUE,
+                source_text TEXT NOT NULL,
+                ar_text TEXT,
+                is_reviewed BOOLEAN DEFAULT FALSE NOT NULL,
+                hits INTEGER DEFAULT 0 NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+        '''))
+        db.session.execute(text('''
+            CREATE INDEX IF NOT EXISTS ix_phrase_translations_source_key
+            ON phrase_translations (source_key)
+        '''))
+        db.session.commit()
+        print('Created phrase_translations table')
+    except Exception:
+        db.session.rollback()
+        print('phrase_translations table already exists')
+
     # Create maintenance_cycles table
     try:
         db.session.execute(text('''
