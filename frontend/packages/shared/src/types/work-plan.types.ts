@@ -288,6 +288,33 @@ export interface AddJobPayload {
   difficulty?: 'minor' | 'major' | null;
   engineer_id?: number | null;
   work_center?: 'ELEC' | 'MECH' | 'ELME' | null;
+  /**
+   * Also sweep in every other open job for the same machine.
+   *
+   * Defaults to TRUE on the server, which is what it has always done. The web
+   * board passes false and asks the planner which of the related jobs he wants
+   * — Ali, 2026-09-09: "i need the app to ask me if i need to transfer all jobs
+   * or only this job".
+   */
+  auto_group?: boolean;
+}
+
+/**
+ * One piece of other open work on the same machine, offered but not yet added.
+ *
+ * Returned by addJob / scheduleSAPOrder when auto_group is false. Hours are on
+ * it because a planner choosing what to pull into a day is really deciding what
+ * it costs that day.
+ */
+export interface RelatedJobCandidate {
+  kind: 'defect' | 'sap';
+  id: number;
+  description: string;
+  estimated_hours: number | null;
+  severity?: string | null;
+  /** SAP order number, when this came from SAP. */
+  reference?: string | null;
+  job_type?: string;
 }
 
 export interface UpdateJobPayload {

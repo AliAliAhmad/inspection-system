@@ -31,6 +31,7 @@ import { useRoute } from '@react-navigation/native';
 import { workPlansApi } from '@inspection/shared';
 import type { JobDetails } from '@inspection/shared';
 import JobSubTasksCard from '../../components/JobSubTasksCard';
+import JobAttachmentsCard from '../../components/JobAttachmentsCard';
 
 const SEVERITY_COLORS: Record<string, string> = {
   low: '#9E9E9E',
@@ -165,6 +166,11 @@ export default function JobDetailsScreen() {
       </View>
 
       {/* ── Sub-tasks & notes the planner left on this job ── */}
+      {/* The planner's photos and voice notes come BEFORE the tick list:
+          they explain what the job IS, and the sub-tasks are what to do about
+          it. Ali, 2026-09-09: "the goal of this photo and voice is to make the
+          job clear for them". */}
+      <JobAttachmentsCard jobId={jobId} />
       <JobSubTasksCard jobId={jobId} />
 
       {/* ── SAP block ── */}

@@ -591,3 +591,42 @@ whether the old one went through `t()`. Precision never outranks being readable.
 LESSON: Chrome cannot verify a Safari fix → When the failing environment is out
 of reach, simulate its API answers in a unit test. It proves more than a browser
 click-through and stays as a regression test.
+
+LESSON: "The Publish button is hiding under the pool panel" was not a z-index or
+stacking problem — the button had overflowed its own column and was clipped at
+exactly the panel's edge → When something looks like it is BEHIND another element,
+measure its rectangle against its container before reaching for z-index. 23px past
+the edge and "underneath" look identical to the person reporting it.
+
+LESSON: A convenience that acts without asking (sweeping every job for a machine
+onto a day) becomes a bug the moment the user has an opinion → When adding a
+"choose" step to an automatic behaviour, keep the automatic path as the DEFAULT on
+the server and let the one caller that wants to ask opt out. Every other caller,
+cached client and test then stays correct for free.
+
+LESSON: A chooser built from a second, similar query will eventually disagree with
+the thing that acts → Have the list and the action read ONE query. A chooser that
+offers a job the adder would skip is worse than no chooser.
+
+LESSON: Follow-up adds after a chooser must also opt out of the automatic
+behaviour, or the first tick re-triggers the sweep → the user is asked, answers,
+and is then overruled by his own answer.
+
+LESSON: "The user cannot see the photo" was not a permissions or payload problem —
+the data arrived and the component drew only the text field → When something is
+invisible, check the RENDERER before the API. Confirm what the payload contains
+first; it reframes the whole search.
+
+LESSON: A photo rendered as a tickable checkbox labelled "Photo" is worse than
+showing nothing, because it looks like a failed upload → When a list holds mixed
+kinds of row, filter by kind and render each where it belongs.
+
+LESSON: Browsers do not agree on audio format — Chrome records webm, Safari m4a,
+and iOS cannot play webm at all → Never hand a recorded URL straight to a mobile
+player. Ask the CDN to re-encode (`/upload/f_mp3/`). And set
+`playsInSilentModeIOS: true`: a phone on silent is the normal state on a yard, and
+iOS plays nothing while reporting no error.
+
+LESSON: A TypeScript interface that omits a field the server sends makes real data
+unreadable, and the error looks like the data is missing → When a field "does not
+exist on type", check whether the API sends it before assuming it must be fetched.

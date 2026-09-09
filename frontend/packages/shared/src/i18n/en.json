@@ -51,7 +51,8 @@
     "deleted": "Deleted successfully",
     "confirmDelete": "Are you sure you want to delete this item?",
     "day": "Day",
-    "week": "Week"
+    "week": "Week",
+    "tap_to_close": "Tap anywhere to close"
   },
   "auth": {
     "login": "Login",
@@ -1989,5 +1990,12 @@
     "mic_busy": "The microphone is busy in another app. Close it and try again.",
     "mic_unsupported": "This browser cannot record audio. Update Safari or Chrome.",
     "mic_failed": "Could not start recording."
+  },
+  "job_attachments": {
+    "title": "Photos & voice notes",
+    "hint": "Added by the planner to make the job clearer",
+    "play": "Voice note from the planner",
+    "playing": "Playing — tap to stop",
+    "tap_for_details": "tap for details"
   }
 }

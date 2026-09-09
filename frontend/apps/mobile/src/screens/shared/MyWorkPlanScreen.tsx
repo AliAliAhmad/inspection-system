@@ -21,6 +21,7 @@ import { workPlansApi, workPlanTrackingApi, AITimeEstimate } from '@inspection/s
 import type {
   MyWorkPlanDay,
   WorkPlanJob,
+  JobSubTask,
   JobType,
   JobPriority,
   TrackingStatus,
@@ -43,6 +44,15 @@ interface ExtendedWorkPlanJob extends WorkPlanJob {
     is_running: boolean;
     is_paused: boolean;
   };
+  /**
+   * The planner's sub-tasks, and among them his photos and voice notes.
+   *
+   * /my-plan has shipped these all along (work_plans.py builds `sub_tasks` from
+   * WorkPlanJobTask.for_jobs) — the type just never said so, so the card could
+   * not read what was already in its hands.
+   */
+  sub_tasks?: JobSubTask[];
+  sub_tasks_done?: number;
 }
 
 // Status configuration with emojis
@@ -513,6 +523,29 @@ export default function MyWorkPlanScreen() {
               <Text style={styles.defectDesc} numberOfLines={2}>
                 {text}
               </Text>
+            );
+          })()}
+
+          {/* A photo or a voice note the planner left on this job.
+              /my-plan already ships `sub_tasks` with the attachment fields, so
+              this costs no extra request. Without it the media sits in the
+              details screen and nobody knows to go looking — which is the same
+              as not having it. Ali, 2026-09-09: "he should be able to see them". */}
+          {(() => {
+            const media = (job.sub_tasks || []).filter((task: any) => task.attachment_kind);
+            if (media.length === 0) return null;
+            const photos = media.filter((m: any) => m.attachment_kind === 'photo').length;
+            const voices = media.length - photos;
+            return (
+              <View style={[styles.mediaHintRow, language === 'ar' && styles.mediaHintRowRtl]}>
+                <Text style={styles.mediaHintText}>
+                  {photos > 0 ? `📷 ${photos}` : ''}
+                  {photos > 0 && voices > 0 ? '   ' : ''}
+                  {voices > 0 ? `🎤 ${voices}` : ''}
+                  {'   '}
+                  {t('job_attachments.tap_for_details', 'tap for details')}
+                </Text>
+              </View>
             );
           })()}
 
@@ -1299,6 +1332,13 @@ const styles = StyleSheet.create({
   priorityBadgeText: { fontSize: 10, fontWeight: '600', color: '#fff', textTransform: 'capitalize' },
   equipmentName: { fontSize: 15, fontWeight: '600', color: '#212121', marginBottom: 4 },
   defectDesc: { fontSize: 13, color: '#616161', marginBottom: 6 },
+  mediaHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  mediaHintRowRtl: { flexDirection: 'row-reverse' },
+  mediaHintText: { fontSize: 11, color: '#1565C0', fontWeight: '600' },
   jobDetails: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
   hoursText: { fontSize: 13, fontWeight: '600', color: '#1976D2' },
   berthText: { fontSize: 12, color: '#757575', fontWeight: '500' },

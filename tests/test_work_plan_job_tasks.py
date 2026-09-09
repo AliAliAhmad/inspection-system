@@ -640,6 +640,46 @@ def test_a_file_must_be_what_it_claims_to_be(db_session, engineer, client, plan)
                              'attachment_kind': 'voice'}).status_code == 400
 
 
+def test_the_worker_gets_the_attachment_and_the_arabic_name(db_session, engineer,
+                                                            worker, client, plan):
+    """Ali, 2026-09-09: "the user side cannot see the photo or voice i added".
+
+    Nothing was ever missing from this payload — the phone drew only the text.
+    This pins the two things the phone needs so a drawing fix cannot be undone
+    by a payload change later:
+
+      * attachment_url and attachment_kind reach the reader
+      * created_by_name is in the READER's language. This endpoint passed no
+        language at all, so an Arabic worker saw his planner's name in English
+        here and in Arabic on /my-plan — the same man, two names, one screen apart.
+    """
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+
+    engineer.full_name_ar = 'علي جميل حيدر'
+    worker.language = 'ar'
+    photo = _a_file(db_session, engineer, 'brief.jpg')
+    db.session.commit()
+
+    eng_headers = get_auth_header(client, 'eng@test.com', 'test123')
+    assert client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=eng_headers,
+                       json={'attachment_file_id': photo.id,
+                             'attachment_kind': 'photo'}).status_code == 201
+
+    # Now the WORKER reads it, in Arabic.
+    resp = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                      headers=get_auth_header(client, 'worker@test.com', 'test123'))
+    assert resp.status_code == 200
+    tasks = resp.get_json()['tasks']
+    media = [t for t in tasks if t['attachment_kind']]
+    assert len(media) == 1, 'the worker cannot see the photo at all'
+    assert media[0]['attachment_kind'] == 'photo'
+    assert media[0]['attachment_url'], 'no url means nothing to draw'
+    assert media[0]['created_by_name'] == 'علي جميل حيدر', \
+        'the planner name came back in the wrong language'
+
+
 def test_a_photo_with_no_mime_label_is_still_a_photo(db_session, engineer, client, plan):
     """Ali, iPad, 2026-09-09: "FROM TH CAMERA IT IS NOT WORING".
 

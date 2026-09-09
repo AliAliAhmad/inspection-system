@@ -193,6 +193,35 @@
   **The input-lifetime theory is unproven — the iPad is the verification.**
 - Web only; mobile uses `expo-av` and never had this. Full detail in HISTORY.md.
 
+### Publish hid behind the pool + the machine that came in uninvited — 2026-09-09
+- Header row had `flexShrink:0` on both button groups and no wrap, inside a column
+  that is 1024-300=723px on an iPad. Publish sat at 746px — 23px past its own column,
+  clipped exactly where the pool panel starts. `flexWrap:'wrap'` fixes it; MEASURED in
+  headless Chrome at 768/1024 (was invisible, now visible) and 1440/1920 (unchanged).
+- **Dropping a job no longer sweeps the whole machine in.** `auto_group` on
+  `POST /jobs` + `/schedule-sap-order`, **default TRUE** so nothing else changes; the
+  board passes false and gets `related_candidates` back, then shows `RelatedJobsModal`
+  — tick-list with hours, *Only this job* / *Add selected* / *All jobs*.
+- The dragged job lands FIRST, so cancel = only this job. All rows ticked on open, so
+  "all jobs" is still one tap. Follow-up adds also pass `auto_group:false` or the
+  planner would be asked, answer, and then be overruled.
+- `_related_equipment_work()` is the ONE query behind both the list and the sweep.
+- 8 tests in `tests/test_related_jobs_choice.py`. Web+backend only, no OTA.
+
+### The worker could never see the planner's photo — FIXED 2026-09-09
+- Server was always fine: `/my-plan` and `/jobs/<id>/tasks` both carry
+  `attachment_url`/`attachment_kind`, and the read endpoint is open to any user.
+  **The phone drew only `task.content`** — so a photo showed as a tick-box labelled
+  "Photo" with no photo, which reads like a failed upload.
+- New `mobile/components/JobAttachmentsCard.tsx` (view-only) in `JobDetailsScreen`,
+  above the tick list. Media filtered OUT of `JobSubTasksCard`.
+- **⚠️ Voice URLs go through `/upload/f_mp3/`** — Chrome records webm, Safari m4a,
+  and **iOS cannot play webm**. Plus `playsInSilentModeIOS: true`. Without these two
+  the fix looks complete and is silent on every iPhone.
+- `_task_payload` passed no language (English planner name on one screen, Arabic on
+  the other) — all 5 call sites fixed. `📷/🎤 tap for details` hint on the plan card.
+- **Needs an OTA, not just a Render deploy.** Full detail in HISTORY.md.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

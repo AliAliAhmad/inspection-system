@@ -194,7 +194,7 @@ export const workPlansApi = {
   },
 
   // Schedule SAP order from pool to a day
-  scheduleSAPOrder(planId: number, payload: { sap_order_id: number; day_id: number; position?: number }) {
+  scheduleSAPOrder(planId: number, payload: { sap_order_id: number; day_id: number; position?: number; auto_group?: boolean }) {
     return getApiClient().post<ApiResponse<WorkPlanJob>>(
       `/api/work-plans/${planId}/schedule-sap-order`,
       payload

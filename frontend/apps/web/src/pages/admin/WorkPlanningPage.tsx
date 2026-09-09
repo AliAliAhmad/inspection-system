@@ -74,7 +74,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, workPlanTrackingApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, jobSubTasksApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType, type PdfFilters } from '@inspection/shared';
+import { workPlansApi, workPlanTrackingApi, equipmentApi, rosterApi, usersApi, materialsApi, defectsApi, jobSubTasksApi, getApiClient, type WorkPlan, type WorkPlanJob, type WorkPlanDay, type Berth, type JobType, type JobPriority, type WorkPlanMaterial, type Material, type MaterialKit, type GenerationResult, type PlanScore as PlanScoreType, type PdfFilters, type RelatedJobCandidate } from '@inspection/shared';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import {
@@ -97,6 +97,7 @@ import {
   GeneratePlanButton,
   BundleCard,
   JobAttachments,
+  RelatedJobsModal,
   PlanScoreCard,
   GenerationActionBar,
   PdfFilterModal,
@@ -689,6 +690,22 @@ export default function WorkPlanningPage() {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'jobs' | 'team'>('jobs');
   const [rightPanelVisible, setRightPanelVisible] = useState(true);
+
+  /**
+   * The "also on this machine?" question, or null when there is nothing to ask.
+   *
+   * Ali, 2026-09-09: dragging one job used to drag in every other open job for
+   * the same machine, unannounced. The dragged job still lands instantly; this
+   * holds the EXTRAS the server offered so he can pick.
+   */
+  const [relatedPrompt, setRelatedPrompt] = useState<{
+    candidates: RelatedJobCandidate[];
+    dayId: number;
+    berth?: Berth;
+    equipmentName?: string;
+    dayLabel?: string;
+  } | null>(null);
+  const [relatedBusy, setRelatedBusy] = useState(false);
   const [atRiskDrawerOpen, setAtRiskDrawerOpen] = useState(false);
   const [teamPoolDisc, setTeamPoolDisc] = useState<'all' | 'mechanical' | 'electrical'>('all');
   const [teamPoolBerth, setTeamPoolBerth] = useState<'all' | 'east' | 'west'>('all');
@@ -1000,7 +1017,7 @@ export default function WorkPlanningPage() {
 
   // Add job mutation (for drag from pool - non-SAP jobs)
   const addJobMutation = useMutation({
-    mutationFn: (payload: { planId: number; dayId: number; jobType: JobType; berth: Berth; equipmentId?: number; defectId?: number; inspectionAssignmentId?: number; estimatedHours: number; sourceJob?: any }) =>
+    mutationFn: (payload: { planId: number; dayId: number; jobType: JobType; berth: Berth; equipmentId?: number; defectId?: number; inspectionAssignmentId?: number; estimatedHours: number; sourceJob?: any; autoGroup?: boolean; askAbout?: { equipmentName?: string; dayLabel?: string } }) =>
       workPlansApi.addJob(payload.planId, {
         day_id: payload.dayId,
         job_type: payload.jobType,
@@ -1009,6 +1026,9 @@ export default function WorkPlanningPage() {
         defect_id: payload.defectId,
         inspection_assignment_id: payload.inspectionAssignmentId,
         estimated_hours: payload.estimatedHours,
+        // undefined leaves the server on its old default (sweep everything in).
+        // The board passes false when it intends to ASK — see askAboutRelated.
+        auto_group: payload.autoGroup,
       }),
     // Dragging from the pool is THE core planning action, so it must land
     // instantly like the day-to-day drags do.
@@ -1038,10 +1058,23 @@ export default function WorkPlanningPage() {
       );
       return { previous };
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, vars: any) => {
       const autoAdded = data?.data?.auto_added_defects || 0;
       if (autoAdded > 0) {
         message.success(`+${autoAdded} related defect${autoAdded > 1 ? 's' : ''} auto-added`);
+      }
+      // When the board opted out of the sweep, the server hands back what it
+      // WOULD have added and the planner picks. Nothing to show if the machine
+      // has no other open work — no dialog for an empty list.
+      const related = data?.data?.related_candidates || [];
+      if (vars?.askAbout && related.length > 0) {
+        setRelatedPrompt({
+          candidates: related,
+          dayId: vars.dayId,
+          berth: vars.berth,
+          equipmentName: vars.askAbout.equipmentName,
+          dayLabel: vars.askAbout.dayLabel,
+        });
       }
     },
     onError: (err: any, _vars, context: any) => {
@@ -1056,10 +1089,11 @@ export default function WorkPlanningPage() {
 
   // Schedule SAP order mutation (for drag SAP orders from pool)
   const scheduleSAPMutation = useMutation({
-    mutationFn: (payload: { planId: number; sapOrderId: number; dayId: number; berth?: Berth; sourceJob?: any }) =>
+    mutationFn: (payload: { planId: number; sapOrderId: number; dayId: number; berth?: Berth; sourceJob?: any; autoGroup?: boolean; askAbout?: { equipmentName?: string; dayLabel?: string } }) =>
       workPlansApi.scheduleSAPOrder(payload.planId, {
         sap_order_id: payload.sapOrderId,
         day_id: payload.dayId,
+        auto_group: payload.autoGroup,
       }),
     onMutate: async (vars) => {
       await queryClient.cancelQueries({ queryKey: planQueryKey });
@@ -1086,10 +1120,20 @@ export default function WorkPlanningPage() {
       );
       return { previous };
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, vars: any) => {
       const autoAdded = data?.data?.auto_added_defects || 0;
       if (autoAdded > 0) {
         message.success(`+${autoAdded} related defect${autoAdded > 1 ? 's' : ''} auto-added`);
+      }
+      const related = data?.data?.related_candidates || [];
+      if (vars?.askAbout && related.length > 0) {
+        setRelatedPrompt({
+          candidates: related,
+          dayId: vars.dayId,
+          berth: vars.berth,
+          equipmentName: vars.askAbout.equipmentName,
+          dayLabel: vars.askAbout.dayLabel,
+        });
       }
     },
     onError: (err: any, _vars, context: any) => {
@@ -1894,6 +1938,16 @@ export default function WorkPlanningPage() {
 
       // Handle SAP orders specially (PRM tab uses jobType 'sap', but SAP defects come with jobType 'defect' + order_number)
       const isSAPOrder = jobType === 'sap' || (job.order_number && job.status === 'pending');
+
+      // Ali, 2026-09-09: dropping one job used to drag every other open job for
+      // the same machine in with it. Now the server is told NOT to sweep, and
+      // hands back the list so he can choose. askAbout carries the words the
+      // dialog needs — the mutation only knows ids.
+      const askAbout = {
+        equipmentName: job.equipment?.name || (job as any).equipment_name,
+        dayLabel: dayjs(targetDay.date).format('ddd D MMM'),
+      };
+
       if (isSAPOrder && job.id) {
         scheduleSAPMutation.mutate({
           planId: currentPlan.id,
@@ -1901,6 +1955,8 @@ export default function WorkPlanningPage() {
           dayId: targetDay.id,
           berth: targetBerth,
           sourceJob: job,   // used to render the optimistic placeholder card
+          autoGroup: false,
+          askAbout,
         });
       } else {
         // Regular job from pool — resolve equipment_id even for defect pool items
@@ -1920,6 +1976,8 @@ export default function WorkPlanningPage() {
           inspectionAssignmentId,
           estimatedHours,
           sourceJob: job,   // used to render the optimistic placeholder card
+          autoGroup: false,
+          askAbout,
         });
       }
     }
@@ -2006,6 +2064,62 @@ export default function WorkPlanningPage() {
     }
   }, [currentPlan, isDraft, addJobMutation, moveMutation, scheduleSAPMutation, removeJobMutation,
       bulkMoveJobsMutation, bulkRemoveJobsMutation, userLeaveDatesMap]);
+
+  /**
+   * Add the related jobs the planner ticked.
+   *
+   * No new bulk endpoint: this reuses the two calls the board already makes,
+   * with auto_group false on every one of them. That last part matters — without
+   * it, adding a related defect would set off ANOTHER sweep and pull the rest of
+   * the machine's work in behind the planner's back, which is the exact thing he
+   * asked to stop.
+   *
+   * One at a time and awaited, so a failure halfway is visible rather than a
+   * half-filled day nobody was told about. N here is one machine's open work.
+   */
+  const addChosenRelated = useCallback(async (chosen: RelatedJobCandidate[]) => {
+    if (!currentPlan || !relatedPrompt) return;
+    setRelatedBusy(true);
+    let added = 0;
+    try {
+      for (const c of chosen) {
+        if (c.kind === 'sap') {
+          await scheduleSAPMutation.mutateAsync({
+            planId: currentPlan.id,
+            sapOrderId: c.id,
+            dayId: relatedPrompt.dayId,
+            berth: relatedPrompt.berth,
+            sourceJob: { description: c.description, order_number: c.reference,
+                         estimated_hours: c.estimated_hours, job_type: c.job_type },
+            autoGroup: false,
+          });
+        } else {
+          await addJobMutation.mutateAsync({
+            planId: currentPlan.id,
+            dayId: relatedPrompt.dayId,
+            jobType: 'defect' as JobType,
+            berth: (relatedPrompt.berth || 'both') as Berth,
+            defectId: c.id,
+            estimatedHours: c.estimated_hours || 2,
+            sourceJob: { description: c.description },
+            autoGroup: false,
+          });
+        }
+        added += 1;
+      }
+      message.success(`Added ${added} job${added !== 1 ? 's' : ''} to the day`);
+    } catch (err: any) {
+      message.error(
+        added > 0
+          ? `Added ${added}, then failed — check the day`
+          : (err?.response?.data?.message || 'Could not add the related jobs'),
+      );
+    } finally {
+      setRelatedBusy(false);
+      setRelatedPrompt(null);
+      queryClient.invalidateQueries({ queryKey: planQueryKey });
+    }
+  }, [currentPlan, relatedPrompt, scheduleSAPMutation, addJobMutation, queryClient, planQueryKey]);
 
   const handleCreatePlan = (values: any) => {
     const weekStart = values.week_start.startOf('week').format('YYYY-MM-DD');
@@ -2188,7 +2302,14 @@ export default function WorkPlanningPage() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
         {/* COMPACT TOOLBAR */}
-        <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 12 }}>
+        {/* flexWrap is load-bearing on an iPad.
+            This row sits in the left column (flex:1, minWidth:0, overflow:hidden)
+            beside the 300px pool panel, so on a 1024-wide board it gets ~724px.
+            Both button groups were flexShrink:0 with no wrap, so the right-hand
+            group ran past the column edge and was clipped exactly at the panel —
+            which is Ali seeing Publish "hiding under the pool". Wrapping puts it
+            on a second line instead of nowhere. */}
+        <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 12, flexWrap: 'wrap', rowGap: 8 }}>
 
           {/* Left side: Week Nav + View Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -4596,6 +4717,19 @@ export default function WorkPlanningPage() {
         }}
       />
     )}
+
+    {/* "Also on this machine?" — the dragged job is already on the day; this
+        asks about the OTHER open work that used to come along uninvited.
+        Cancel means only this job, which is why cancel is not destructive. */}
+    <RelatedJobsModal
+      open={!!relatedPrompt}
+      candidates={relatedPrompt?.candidates ?? []}
+      equipmentName={relatedPrompt?.equipmentName}
+      dayLabel={relatedPrompt?.dayLabel}
+      busy={relatedBusy}
+      onCancel={() => { if (!relatedBusy) setRelatedPrompt(null); }}
+      onConfirm={addChosenRelated}
+    />
     </>
   );
 }

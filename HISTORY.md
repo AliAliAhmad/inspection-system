@@ -1,3 +1,142 @@
+## 2026-09-09 — The worker could never see the planner's photo
+
+Ali: "the mobile app, the user side cannot see the photo or voice i added them
+when i plan the job, he should be able to see them as the goal of this photo and
+voice is to make the job clear for them more details about the job".
+
+### Nothing was missing from the server
+
+Both payloads already carried them. `/my-plan` builds `sub_tasks` from
+`WorkPlanJobTask.for_jobs` with `to_dict(language)`, and `/jobs/<id>/tasks`
+returns the same rows — `attachment_url` and `attachment_kind` included. The read
+endpoint is open to any logged-in user, so permissions were never the problem
+either.
+
+**The phone fetched the photo rows and drew only their text.**
+`JobSubTasksCard` renders `task.content` and nothing else, and a photo row's
+content is the auto-caption "Photo". So a worker saw a tickable checkbox saying
+"Photo" with no photo on it — worse than showing nothing, because it reads as a
+photo that failed to load.
+
+### The fix
+
+- **`JobAttachmentsCard.tsx`** (new, mobile) — photo thumbnails in a horizontal
+  strip, tap for a full-screen viewer; voice notes as a play/stop row. Rendered in
+  `JobDetailsScreen` ABOVE the tick list, because the media explains what the job
+  IS and the sub-tasks are what to do about it.
+- **Media filtered OUT of `JobSubTasksCard`.** A photo is not a task to tick off.
+- **View-only, deliberately.** The planner adds these on the board; the worker
+  reads them before he walks to the machine. Adding from the phone is a separate ask.
+- Same React Query key `['job-sub-tasks', jobId]`, so both cards share ONE request.
+
+### ⚠️ The line that decides whether it actually plays
+
+A planner on Chrome records **webm**; on Safari, **m4a**. **iOS cannot play webm
+at all.** Every note is therefore requested through Cloudinary's on-the-fly
+re-encode — `/upload/` -> `/upload/f_mp3/` — the same trick
+`mobile/components/VoiceNoteRecorder.tsx:67` already uses. Without it this fix
+would have looked complete and produced silence on every iPhone in the yard.
+
+Also `Audio.setAudioModeAsync({ playsInSilentModeIOS: true })` before playing: a
+phone on silent is the normal state on a noisy yard, and without it iOS plays
+nothing and reports no error. `JobDetailsScreen`'s own older player does neither
+— left alone, not in scope, but worth knowing.
+
+Multiple notes on one job: starting a second stops the first, and the card
+unloads its own sound on unmount (the screen's cleanup does not cover a
+card-owned `Audio.Sound`).
+
+### Two smaller things fixed on the way
+
+- **`_task_payload` passed no language**, so `created_by_name` came back English
+  from `/jobs/<id>/tasks` while `/my-plan` returned Arabic — the same man, two
+  names, one screen apart. All five call sites now pass the reader's language.
+- **A `📷 2  🎤 1  tap for details` hint on the My Work Plan card.** `/my-plan`
+  already ships the data, so it costs no extra request. Without it the media sits
+  in a details screen nobody knows to open, which is the same as not having it.
+  `ExtendedWorkPlanJob` never declared `sub_tasks` — the type was hiding a field
+  the server had been sending all along.
+
+### Scope
+Mobile + backend. Bilingual (`job_attachments.*` in en/ar) with RTL rows.
+1046 backend tests pass (1 new, pinning attachment_url AND the Arabic name).
+Mobile `tsc`: 5 errors, all pre-existing, none in the files touched.
+
+**⚠️ This is the first MOBILE change in a while — it needs an OTA after the push,
+not just a Render deploy.**
+
+## 2026-09-09 — Publish hid behind the pool, and the machine that came in uninvited
+
+Ali: "the publish button in the ipad is hiding under the pool (job pool and team
+pool) panel" and "when i drag any job from the pool to the card it bring with it
+all the jobs related to the reference machine, what i need, the app to ask me if
+i need to transfer all jobs or only this job, better that the app can display all
+the job and i select from them what i need to load in the day, with button for
+only this job or all jobs".
+
+### Publish — MEASURED, not guessed
+
+The header row lives inside the left column (`flex:1, minWidth:0,
+overflow:hidden`) which sits beside the 300px pool panel. The page carries
+`minWidth: 1024`, so on an iPad the column is 1024 − 300 ≈ 723px. Both button
+groups were `flexShrink: 0` with no wrapping, so the right-hand group simply ran
+off the end of its own column and was clipped — and the clip lands exactly where
+the pool panel begins, which is why it reads as hiding *under* it.
+
+Reproduced the exact flex structure in a standalone page and measured it in
+headless Chrome:
+
+| width | Publish right edge | column ends | verdict |
+|---|---|---|---|
+| 1024 BEFORE | 746px | 723px | **23px past the edge, invisible** |
+| 1024 AFTER  | 305px | 723px | visible |
+| 768 BEFORE  | 746px | 723px | **invisible** |
+| 768 AFTER   | 305px | 723px | visible |
+| 1440 / 1920 | 1090 / 1570 | 1139 / 1619 | **identical before and after** |
+
+Fix is `flexWrap: 'wrap'` + `rowGap: 8` on that one container. Desktop is
+pixel-identical because wrapping only engages when there is no room.
+
+### The chooser — "only this job, or all of them?"
+
+`_auto_group_equipment_jobs` swept in every open defect and every pending SAP
+order for the same machine, silently, on every drop. Now:
+
+- Split into `_related_equipment_work()` (the query) and the existing adder.
+  **Both read the same query**, so the list the planner is shown can never offer
+  a job the adder would have skipped. A chooser that lies is worse than none.
+- `auto_group` on `POST /jobs` and `POST /schedule-sap-order`, **defaulting to
+  TRUE** — every other caller, every cached client and every existing test keeps
+  today's behaviour. Only the web board passes false.
+- With `auto_group: false` the server adds nothing extra and returns
+  `related_candidates: [{kind, id, description, estimated_hours, severity,
+  reference}]`.
+- **`db.session.flush()` before the query** — without it the just-added defect is
+  not yet visible to the already-scheduled subquery and the planner is asked
+  whether he would like to add the job he just dragged. One test names this.
+
+Board (`RelatedJobsModal.tsx`):
+- **The dragged job lands first, instantly, as before.** There is nothing to ask
+  about the job he dragged. The modal asks only about the extras, so closing it
+  with the X means "only this job" — cancel is the safe answer, not a lost drag.
+- Every row ticked on open, so **"All jobs" is still one tap** and the old habit
+  costs nothing. Buttons: *Only this job* / *Add selected (n)* / *All jobs (n)*.
+- Hours on every row and a running "Xh selected of Yh" — capacity is the whole
+  game on that board.
+- Adding the chosen ones reuses the two existing calls, each with
+  `auto_group: false`. **Without that, ticking one related job would sweep the
+  rest in behind him** — asked, answered, then overruled.
+
+8 new tests in `tests/test_related_jobs_choice.py`, including the un-ticked order
+staying `pending` with `work_plan_id NULL` in the global box.
+
+### Scope
+Web + backend. The planning board does not exist on mobile — no OTA.
+1045 backend tests pass, 23 web tests pass.
+
+**Two defaults chosen, both cheap to flip:** everything starts ticked; the
+Telegram bot and the generator keep sweeping (they cannot answer a dialog).
+
 ## 2026-09-09 — Voice was never recording on any iPad, and the camera path
 
 Ali, on the iPad: "RECORD VOICE IS NOT RECORDEING, PICTURE IS WORKING FROM TH
@@ -958,6 +1097,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

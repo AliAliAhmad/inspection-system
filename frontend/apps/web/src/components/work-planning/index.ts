@@ -43,3 +43,4 @@ export { BundleCard } from './BundleCard';
 export { PdfFilterModal } from './PdfFilterModal';
 export { JobSubTasks } from './JobSubTasks';
 export { JobAttachments } from './JobAttachments';
+export { RelatedJobsModal } from './RelatedJobsModal';

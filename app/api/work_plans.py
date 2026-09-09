@@ -88,6 +88,85 @@ def _difficulty_from_severity(severity):
     return 'major' if severity in ('high', 'critical') else 'minor'
 
 
+def _related_equipment_work(plan_id, equipment_id, exclude_sap_order_id=None):
+    """(open_defects, pending_sap_orders) — the OTHER open work on this machine.
+
+    Ali, 2026-09-09: "when i drag any job from the pool to the card it bring
+    with it all the jobs related to the reference machine ... i need the app to
+    ask me".
+
+    Split out of `_auto_group_equipment_jobs` so the board can SHOW this list
+    and let a planner pick, instead of only ever adding all of it. Both callers
+    read from here, so what the modal offers and what auto-grouping adds can
+    never drift apart — a chooser that lists a job the adder would have skipped
+    is worse than no chooser.
+
+    Every exclusion the sweep already had lives here:
+      * defects already scheduled anywhere in this plan
+      * defects a specialist is already working directly
+      * the SAP order the planner just dropped (exclude_sap_order_id)
+      * pool_orders_query, which is the global box, NOT this week's rows
+    """
+    if not equipment_id:
+        return [], []
+
+    already_scheduled_defects = db.session.query(WorkPlanJob.defect_id).join(WorkPlanDay).filter(
+        WorkPlanDay.work_plan_id == plan_id,
+        WorkPlanJob.defect_id.isnot(None)
+    ).subquery()
+
+    from app.models.inspection import Inspection
+    open_defects = Defect.query.filter(
+        Defect.status.in_(['open', 'in_progress']),
+        ~Defect.id.in_(already_scheduled_defects),
+        db.or_(
+            Defect.equipment_id_direct == equipment_id,
+            Defect.inspection.has(Inspection.equipment_id == equipment_id)
+        )
+    ).all()
+
+    # Don't offer or pull defects already assigned directly to a specialist.
+    specialist_owned = _defect_ids_with_active_specialist_job([d.id for d in open_defects])
+    open_defects = [d for d in open_defects if d.id not in specialist_owned]
+
+    pending_sap = pool_orders_query(plan_id).filter(
+        SAPWorkOrder.equipment_id == equipment_id,
+    ).all()
+    if exclude_sap_order_id:
+        pending_sap = [s for s in pending_sap if s.id != exclude_sap_order_id]
+
+    return open_defects, pending_sap
+
+
+def _candidates_payload(open_defects, pending_sap, language='en'):
+    """The same list, as something the board can draw a tick-box beside.
+
+    Hours are included because capacity is the whole game on that board — a
+    planner deciding what to pull in needs to see what it costs the day.
+    """
+    rows = []
+    for defect in open_defects:
+        rows.append({
+            'kind': 'defect',
+            'id': defect.id,
+            'description': (defect.description or defect.description_ar or ''),
+            'estimated_hours': 2.0,
+            'severity': defect.severity,
+            'reference': None,
+        })
+    for sap in pending_sap:
+        rows.append({
+            'kind': 'sap',
+            'id': sap.id,
+            'description': sap.description or '',
+            'estimated_hours': sap.estimated_hours,
+            'severity': None,
+            'reference': sap.order_number,
+            'job_type': sap.job_type,
+        })
+    return rows
+
+
 def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_id=None):
     """Auto-add ALL related jobs for the same equipment to the same day.
     Includes: open defects (from inspections + direct) AND pending SAP orders.
@@ -116,28 +195,12 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
         work_plan_day_id=day_id
     ).scalar() or 0
 
+    # One query, shared with the chooser modal — see _related_equipment_work.
+    open_defects, pending_sap = _related_equipment_work(
+        plan_id, equipment_id, exclude_sap_order_id=exclude_sap_order_id)
+
     # ── 1. Open defects (from inspections + direct equipment link) ──
-    already_scheduled_defects = db.session.query(WorkPlanJob.defect_id).join(WorkPlanDay).filter(
-        WorkPlanDay.work_plan_id == plan_id,
-        WorkPlanJob.defect_id.isnot(None)
-    ).subquery()
-
-    from app.models.inspection import Inspection
-    open_defects = Defect.query.filter(
-        Defect.status.in_(['open', 'in_progress']),
-        ~Defect.id.in_(already_scheduled_defects),
-        db.or_(
-            Defect.equipment_id_direct == equipment_id,
-            Defect.inspection.has(Inspection.equipment_id == equipment_id)
-        )
-    ).all()
-
-    # Don't auto-pull defects that are already assigned directly to a specialist
-    specialist_owned = _defect_ids_with_active_specialist_job([d.id for d in open_defects])
-
     for defect in open_defects:
-        if defect.id in specialist_owned:
-            continue
         max_pos += 1
         eq_id = defect.equipment_id_direct or (defect.inspection.equipment_id if defect.inspection else None)
         db.session.add(WorkPlanJob(
@@ -155,17 +218,11 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
         added += 1
 
     # ── 2. Pending SAP orders for same equipment (PM + defect types) ──
-    # pool_orders_query, not work_plan_id == plan_id. Since the pool became one
-    # global box, robot-fed orders carry work_plan_id NULL — an exact-plan match
-    # finds none of them, so "also add the other open work on this machine"
-    # silently added nothing at all.
-    pending_sap = pool_orders_query(plan_id).filter(
-        SAPWorkOrder.equipment_id == equipment_id,
-    ).all()
-
+    # The query lives in _related_equipment_work, and it uses pool_orders_query
+    # rather than work_plan_id == plan_id: since the pool became one global box,
+    # robot-fed orders carry work_plan_id NULL, so an exact-plan match found
+    # none of them and this silently added nothing at all.
     for sap in pending_sap:
-        if exclude_sap_order_id and sap.id == exclude_sap_order_id:
-            continue
         max_pos += 1
 
         # Find PM template if applicable
@@ -955,9 +1012,24 @@ def add_job(plan_id):
             logging.getLogger('app').warning(f'Auto-kit attach failed: {e}')
 
     # Auto-add open defects for the same equipment (any job type triggers grouping)
+    #
+    # DEFAULT TRUE ON PURPOSE. Ali wants to be ASKED on the board, but this
+    # endpoint has other callers and a long history of expecting the sweep. The
+    # web board opts out explicitly with auto_group: false and shows him the
+    # list instead; nothing that does not pass the flag changes behaviour.
+    auto_group = data.get('auto_group', True) is not False
     auto_defect_count = 0
+    related = []
     try:
-        auto_defect_count = _auto_group_equipment_jobs(plan_id, day.id, equipment_id)
+        if auto_group:
+            auto_defect_count = _auto_group_equipment_jobs(plan_id, day.id, equipment_id)
+        else:
+            # Flush first: the job just added must be visible to the
+            # already-scheduled subquery, or a dropped defect offers itself.
+            db.session.flush()
+            related = _candidates_payload(
+                *_related_equipment_work(plan_id, equipment_id),
+                language=(user.language or 'en'))
     except Exception as e:
         logger.warning(f'Auto-group defects failed: {e}')
 
@@ -972,6 +1044,7 @@ def add_job(plan_id):
         'message': msg,
         'job': job.to_dict(user.language or 'en'),
         'auto_added_defects': auto_defect_count,
+        'related_candidates': related,
     }), 201
 
 
@@ -1106,10 +1179,19 @@ def schedule_sap_order(plan_id):
     sap_order.status = 'scheduled'
     sap_order.work_plan_id = plan_id  # leaves the box, into this week
 
-    # Auto-add open defects for same equipment
+    # Auto-add open defects for same equipment. Default true — see add_job.
+    auto_group = data.get('auto_group', True) is not False
     auto_defect_count = 0
+    related = []
     try:
-        auto_defect_count = _auto_group_equipment_jobs(plan_id, day.id, sap_order.equipment_id, exclude_sap_order_id=sap_order.id)
+        if auto_group:
+            auto_defect_count = _auto_group_equipment_jobs(plan_id, day.id, sap_order.equipment_id, exclude_sap_order_id=sap_order.id)
+        else:
+            db.session.flush()
+            related = _candidates_payload(
+                *_related_equipment_work(plan_id, sap_order.equipment_id,
+                                         exclude_sap_order_id=sap_order.id),
+                language=(user.language or 'en'))
     except Exception as e:
         logger.warning(f'Auto-group jobs failed: {e}')
 
@@ -1124,6 +1206,7 @@ def schedule_sap_order(plan_id):
         'message': msg,
         'job': job.to_dict(user.language or 'en'),
         'auto_added_defects': auto_defect_count,
+        'related_candidates': related,
     }), 201
 
 
@@ -5609,14 +5692,18 @@ def _tasks_for_job(job):
             .all())
 
 
-def _task_payload(job, tasks):
+def _task_payload(job, tasks, language='en'):
     done = len([t for t in tasks if t.is_done])
     kind, key = anchor_for_job(job)
     return {
         'job_id': job.id,
         'anchor_kind': kind,
         'anchor_key': key,
-        'tasks': [t.to_dict() for t in tasks],
+        # The reader's language, not the default. These carry created_by_name /
+        # done_by_name, and /my-plan already passes it — this path did not, so
+        # an Arabic worker opening a job saw his foreman's name in English on
+        # one screen and Arabic on the other.
+        'tasks': [t.to_dict(language) for t in tasks],
         'total': len(tasks),
         'done': done,
     }
@@ -5660,11 +5747,16 @@ def get_plan_job_tasks(plan_id):
 @bp.route('/jobs/<int:job_id>/tasks', methods=['GET'])
 @jwt_required()
 def get_job_tasks(job_id):
-    """One job's sub-task list. Used by the phone and by the task popover."""
-    get_current_user()
+    """One job's sub-task list. Used by the phone and by the task popover.
+
+    This is what the WORKER reads before he walks to the machine — it carries
+    the planner's photos and voice notes (attachment_url / attachment_kind).
+    """
+    user = get_current_user()
     job = _job_for_tasks(job_id)
     return jsonify({'status': 'success',
-                    **_task_payload(job, _tasks_for_job(job))}), 200
+                    **_task_payload(job, _tasks_for_job(job),
+                                    get_language(user))}), 200
 
 
 @bp.route('/jobs/<int:job_id>/tasks', methods=['POST'])
@@ -5745,8 +5837,8 @@ def add_job_task(job_id):
         if task.content == content:
             return jsonify({'status': 'success',
                             'message': 'That line is already on this job',
-                            'task': task.to_dict(),
-                            **_task_payload(job, existing)}), 200
+                            'task': task.to_dict(get_language(user)),
+                            **_task_payload(job, existing, get_language(user))}), 200
 
     task = WorkPlanJobTask(
         anchor_kind=kind,
@@ -5765,8 +5857,8 @@ def add_job_task(job_id):
 
     return jsonify({'status': 'success',
                     'message': 'Sub-task added',
-                    'task': task.to_dict(),
-                    **_task_payload(job, _tasks_for_job(job))}), 201
+                    'task': task.to_dict(get_language(user)),
+                    **_task_payload(job, _tasks_for_job(job), get_language(user))}), 201
 
 
 @bp.route('/jobs/<int:job_id>/tasks/<int:task_id>', methods=['PATCH'])
@@ -5814,8 +5906,8 @@ def update_job_task(job_id, task_id):
     db.session.commit()
 
     return jsonify({'status': 'success',
-                    'task': task.to_dict(),
-                    **_task_payload(job, _tasks_for_job(job))}), 200
+                    'task': task.to_dict(get_language(user)),
+                    **_task_payload(job, _tasks_for_job(job), get_language(user))}), 200
 
 
 @bp.route('/jobs/<int:job_id>/tasks/<int:task_id>', methods=['DELETE'])
@@ -5844,7 +5936,7 @@ def delete_job_task(job_id, task_id):
 
     return jsonify({'status': 'success',
                     'message': 'Sub-task removed',
-                    **_task_payload(job, _tasks_for_job(job))}), 200
+                    **_task_payload(job, _tasks_for_job(job), get_language(user))}), 200
 
 
 # ==================== CONFLICTS ====================
