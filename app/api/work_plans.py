@@ -5642,11 +5642,36 @@ def add_job_task(job_id):
 
     Request body: {"content": "Grease the boom pins"}
     """
-    user = engineer_or_admin_required()
+    user = get_current_user()
     job = _job_for_tasks(job_id)
 
     data = request.get_json() or {}
     content = normalise_task_text(data.get('content'))
+    attachment_file_id = data.get('attachment_file_id')
+    attachment_kind = (data.get('attachment_kind') or '').lower() or None
+
+    # A worker may add a PHOTO or a VOICE NOTE, and nothing else.
+    #
+    # Ali, 2026-09-09: "in the work details i need to be able to add photo and
+    # voice". The man standing at the machine is the one who can see it. He
+    # still may not write or reword the planner's own sub-tasks — that split is
+    # unchanged; only evidence is his to add.
+    if not _may_tick(user, job):
+        raise ForbiddenError("Only the assigned team, engineers and admins can add to a job")
+    if user.role not in PLANNING_ROLES and not attachment_file_id:
+        raise ForbiddenError("Workers may attach a photo or a voice note; "
+                             "written sub-tasks are set by the planner")
+
+    if attachment_kind and attachment_kind not in ('photo', 'voice'):
+        raise ValidationError("attachment_kind must be 'photo' or 'voice'")
+    if attachment_file_id and not attachment_kind:
+        raise ValidationError("attachment_kind is required with a file")
+
+    # An attachment IS the content, so a caption is optional beside one.
+    if not content and attachment_file_id:
+        content = ('صورة' if get_language(user) == 'ar' else 'Photo') \
+            if attachment_kind == 'photo' \
+            else ('ملاحظة صوتية' if get_language(user) == 'ar' else 'Voice note')
     if not content:
         raise ValidationError("content is required")
     if len(content) > 500:
@@ -5656,7 +5681,9 @@ def add_job_task(job_id):
 
     existing = _tasks_for_job(job)
     # Same text twice on the same job is a double-tap, not a second job step.
-    for task in existing:
+    # An attachment is never a duplicate — two photos of the same crack are two
+    # photos.
+    for task in existing if not attachment_file_id else []:
         if task.content == content:
             return jsonify({'status': 'success',
                             'message': 'That line is already on this job',
@@ -5670,6 +5697,8 @@ def add_job_task(job_id):
         # keeps anchored lists alive through purge_job_rows(). See the model.
         work_plan_job_id=job.id if kind == 'job' else None,
         content=content,
+        attachment_file_id=attachment_file_id,
+        attachment_kind=attachment_kind,
         created_by_id=user.id,
         position=(max([t.position for t in existing]) + 1) if existing else 0,
     )
@@ -5734,14 +5763,23 @@ def update_job_task(job_id, task_id):
 @bp.route('/jobs/<int:job_id>/tasks/<int:task_id>', methods=['DELETE'])
 @jwt_required()
 def delete_job_task(job_id, task_id):
-    """Remove one line from a job's list."""
-    engineer_or_admin_required()
+    """Remove one line from a job's list.
+
+    A worker may remove an attachment HE added — a blurred photo, a voice note
+    recorded by mistake. He may not remove anything else, and cannot touch a
+    line the planner wrote.
+    """
+    user = get_current_user()
     job = _job_for_tasks(job_id)
 
     task = db.session.get(WorkPlanJobTask, task_id)
     kind, key = anchor_for_job(job)
     if not task or task.anchor_kind != kind or task.anchor_key != key:
         raise NotFoundError("Sub-task not found on this job")
+
+    if user.role not in PLANNING_ROLES:
+        if not (task.attachment_file_id and task.created_by_id == user.id):
+            raise ForbiddenError("You can only remove a photo or voice note you added")
 
     db.session.delete(task)
     db.session.commit()

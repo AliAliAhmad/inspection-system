@@ -831,6 +831,9 @@ export interface JobSubTask {
   done_by_name: string | null;
   done_at: string | null;
   created_at: string | null;
+  /** 'photo' | 'voice' when this line carries one. */
+  attachment_kind: 'photo' | 'voice' | null;
+  attachment_url: string | null;
 }
 
 export interface JobSubTaskList {
@@ -860,10 +863,20 @@ export const jobSubTasksApi = {
     return getApiClient().get<JobSubTaskList>(`/api/work-plans/jobs/${jobId}/tasks`);
   },
 
-  add(jobId: number, content: string) {
+  /**
+   * Add a line to a job — words, a photo, a voice note, or words with one.
+   *
+   * Ali, 2026-09-09: a job dropped onto a day should be able to carry a photo
+   * and a voice note so the crew can see what it is about. A finding raised by
+   * an inspection already has them; a SAP order or a hand-typed job never did.
+   */
+  add(jobId: number, content: string,
+      attachment?: { fileId: number; kind: 'photo' | 'voice' }) {
     return getApiClient().post<JobSubTaskList & { task: JobSubTask }>(
       `/api/work-plans/jobs/${jobId}/tasks`,
-      { content }
+      attachment
+        ? { content, attachment_file_id: attachment.fileId, attachment_kind: attachment.kind }
+        : { content }
     );
   },
 

@@ -391,3 +391,50 @@ def test_no_placeholder_is_glued_onto_a_word(source):
     masked, _ = protect_terms(source)
     assert not re.search(r'XQZ[A-Za-z]', masked), \
         f'a word was cut in half: {masked}'
+
+
+# ── The yard's words, in Arabic ────────────────────────────────────────────
+#
+# Ali, 2026-09-09: "i need those to be translated, any description, MY TEAM ARE
+# ARABIC". Leaving (PM) and AC in Latin letters was the cautious choice and the
+# wrong one.
+
+@pytest.mark.parametrize('source, translated_body, expected_tail', [
+    ('Cabin Slide Door (PM)', 'باب منزلق للمقصورة', '(صيانة وقائية)'),
+    ('Backlight missing (PM)', 'الإضاءة الخلفية مفقودة', '(صيانة وقائية)'),
+    ('Landing Pin -PM', 'دبوس الهبوط', '-صيانة وقائية'),
+])
+def test_pm_comes_back_as_preventive_maintenance(source, translated_body,
+                                                 expected_tail):
+    from app.services.phrase_translation import protect_terms, restore_terms
+    masked, protected = protect_terms(source)
+    token = list(protected)[0]
+    out = restore_terms(f'{translated_body} {token}', protected, arabic=True)
+    assert out == f'{translated_body} {expected_tail}'
+    assert 'مساء' not in out, 'PM must never read as the evening again'
+
+
+def test_a_machine_code_stays_a_machine_code():
+    """RS109 is painted on the machine. It is a name, not a word."""
+    from app.services.phrase_translation import protect_terms, restore_terms
+    masked, protected = protect_terms('RS109-250HR-MECH.HOURLY SERVICE')
+    token = list(protected)[0]
+    out = restore_terms(f'{token}. خدمة كل ساعة', protected, arabic=True)
+    assert out.startswith('RS109-250HR-MECH')
+
+
+def test_english_restore_is_unchanged():
+    """Without arabic=True nothing moves — the round-trip guarantee holds."""
+    from app.services.phrase_translation import protect_terms, restore_terms
+    for src in ['Cabin Slide Door (PM)', 'Inspection AC System']:
+        assert restore_terms(*protect_terms(src)) == src
+
+
+def test_an_unknown_abbreviation_is_left_alone(db_session):
+    """PR is not in the glossary because nobody has said what it means, and a
+    confident wrong expansion is worse than the letters."""
+    from app.services.phrase_translation import protect_terms, restore_terms
+    masked, protected = protect_terms('Cabin Door Lock (PR)')
+    token = list(protected)[0]
+    out = restore_terms(f'قفل باب المقصورة {token}', protected, arabic=True)
+    assert out.endswith('(PR)')

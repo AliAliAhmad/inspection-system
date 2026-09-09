@@ -423,3 +423,141 @@ def test_weekly_pdf_reaches_the_sub_task_renderer(db_session, engineer, client, 
         WorkPlanPDF._render_sub_task_lines = original
 
     assert job.id in seen, 'the weekly PDF never asked for this job\'s sub-tasks'
+
+
+# ── Photo and voice, added by the man at the machine ───────────────────────
+#
+# Ali, 2026-09-09: "in the work details i need to be able to add photo and
+# voice". They hang on the job's list because that is the one thing that already
+# survives the job going back to the pool and coming out again.
+
+def _a_file(db_session, user, name='photo.jpg'):
+    from app.models import File
+    f = File(original_filename=name, stored_filename=f'{user.id}-{name}',
+             # Cloudinary-hosted, like production. File.get_url() returns a
+             # URL only for an http path, so a local one would test nothing.
+             file_path=f'https://res.cloudinary.com/demo/{name}', file_size=1024,
+             mime_type='image/jpeg', uploaded_by=user.id)
+    db.session.add(f)
+    db.session.flush()
+    return f
+
+
+def test_a_worker_can_attach_a_photo(db_session, engineer, worker, client, plan):
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id,
+                                      user_id=worker.id, is_lead=True))
+    photo = _a_file(db_session, worker)
+    db.session.commit()
+
+    headers = get_auth_header(client, 'worker@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': photo.id,
+                             'attachment_kind': 'photo'})
+    assert resp.status_code == 201, resp.get_json()
+    task = resp.get_json()['task']
+    assert task['attachment_kind'] == 'photo'
+    assert task['attachment_url']
+    # A caption is optional beside a photo — the photo IS the content.
+    assert task['content']
+
+
+def test_a_worker_can_attach_a_voice_note(db_session, engineer, worker, client,
+                                          plan):
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+    voice = _a_file(db_session, worker, 'note.m4a')
+    db.session.commit()
+
+    headers = get_auth_header(client, 'worker@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': voice.id,
+                             'attachment_kind': 'voice',
+                             'content': 'the noise it makes'})
+    assert resp.status_code == 201, resp.get_json()
+    assert resp.get_json()['task']['content'] == 'the noise it makes'
+
+
+def test_a_worker_still_cannot_write_a_plain_sub_task(db_session, engineer,
+                                                      worker, client, plan):
+    """Only evidence is his to add. The planner's list stays the planner's."""
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+    db.session.commit()
+
+    headers = get_auth_header(client, 'worker@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'content': 'a step I invented'})
+    assert resp.status_code == 403
+
+
+def test_a_worker_cannot_attach_to_someone_elses_job(db_session, engineer,
+                                                     worker, client, plan):
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    photo = _a_file(db_session, worker)
+    db.session.commit()
+    headers = get_auth_header(client, 'worker@test.com', 'test123')
+    resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                       json={'attachment_file_id': photo.id,
+                             'attachment_kind': 'photo'})
+    assert resp.status_code == 403
+
+
+def test_a_worker_may_delete_his_own_attachment_only(db_session, engineer,
+                                                     worker, client, plan):
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+    photo = _a_file(db_session, worker)
+    db.session.commit()
+
+    eng = get_auth_header(client, 'eng@test.com', 'test123')
+    planner_line = client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                               json={'content': 'Grease the boom pins'},
+                               headers=eng).get_json()['task']['id']
+
+    wrk = get_auth_header(client, 'worker@test.com', 'test123')
+    mine = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=wrk,
+                       json={'attachment_file_id': photo.id,
+                             'attachment_kind': 'photo'}).get_json()['task']['id']
+
+    assert client.delete(f'/api/work-plans/jobs/{job.id}/tasks/{planner_line}',
+                         headers=wrk).status_code == 403
+    assert client.delete(f'/api/work-plans/jobs/{job.id}/tasks/{mine}',
+                         headers=wrk).status_code == 200
+
+
+def test_two_photos_of_the_same_crack_are_two_photos(db_session, engineer,
+                                                     worker, client, plan):
+    """The duplicate guard is for repeated words, not repeated evidence."""
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+    a = _a_file(db_session, worker, 'one.jpg')
+    b = _a_file(db_session, worker, 'two.jpg')
+    db.session.commit()
+
+    wrk = get_auth_header(client, 'worker@test.com', 'test123')
+    for f in (a, b):
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=wrk,
+                           json={'attachment_file_id': f.id,
+                                 'attachment_kind': 'photo'})
+        assert resp.status_code == 201
+    assert resp.get_json()['total'] == 2
+
+
+def test_a_bad_attachment_kind_is_refused(db_session, engineer, worker, client,
+                                          plan):
+    eq = make_equipment(db_session, serial='RS109')
+    job = _sap_job(plan, eq)
+    db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+    f = _a_file(db_session, worker)
+    db.session.commit()
+    wrk = get_auth_header(client, 'worker@test.com', 'test123')
+    assert client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=wrk,
+                       json={'attachment_file_id': f.id,
+                             'attachment_kind': 'video'}).status_code == 400

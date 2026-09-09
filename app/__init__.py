@@ -525,7 +525,9 @@ def create_app(config_name='development'):
                   help='Actually translate. Without it, only reports.')
     @click.option('--limit', default=50, show_default=True,
                   help='How many phrases to translate in one run.')
-    def translate_phrases(do_apply, limit):
+    @click.option('--all', 'do_all', is_flag=True,
+                  help='Keep going until every phrase is done.')
+    def translate_phrases(do_apply, limit, do_all):
         """Fill the Arabic phrase store, and say how big the vocabulary is.
 
         Job descriptions used to be translated on every request through a chain
@@ -566,10 +568,16 @@ def create_app(config_name='development'):
             print('  Nothing to do. Every phrase a worker can see has Arabic.')
             return
 
+        # "i need those to be translated, any description" — --all means all.
+        if do_all:
+            limit = len(missing)
+
         print()
         print(f'--- the {min(limit, len(missing))} that would be translated next ---')
-        for key, text in missing[:limit]:
+        for key, text in missing[:min(limit, 50)]:
             print(f'    {text[:70]}')
+        if limit > 50:
+            print(f'    ... and {limit - 50} more')
 
         if not do_apply:
             print()
@@ -590,7 +598,7 @@ def create_app(config_name='development'):
             masked, protected = protect_terms(text)
             try:
                 arabic = TranslationService.translate_to_arabic(masked)
-                arabic = restore_terms(arabic, protected)
+                arabic = restore_terms(arabic, protected, arabic=True)
             except Exception as exc:  # noqa: BLE001
                 arabic, exc_note = None, exc
                 print(f'    FAILED  {text[:50]}  ({exc_note})')
@@ -600,6 +608,10 @@ def create_app(config_name='development'):
                 print(f'    ok      {text[:44]}  ->  {arabic[:34]}')
             else:
                 failed += 1
+            # Commit as we go. A long --all run WILL meet a rate limit, and
+            # everything translated before that point must survive it.
+            if (ok + failed) % 10 == 0:
+                db.session.commit()
         db.session.commit()
 
         print()

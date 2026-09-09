@@ -847,6 +847,19 @@ with app.app_context():
         db.session.rollback()
         print('users.full_name_ar already exists')
 
+    # A job sub-task line may carry a photo or a voice note.
+    for col_name, col_type in (('attachment_file_id', 'INTEGER'),
+                               ('attachment_kind', 'VARCHAR(10)')):
+        try:
+            db.session.execute(text(
+                'ALTER TABLE work_plan_job_tasks ADD COLUMN %s %s'
+                % (col_name, col_type)))
+            db.session.commit()
+            print('Added work_plan_job_tasks.%s' % col_name)
+        except Exception:
+            db.session.rollback()
+            print('work_plan_job_tasks.%s already exists' % col_name)
+
     # Create maintenance_cycles table
     try:
         db.session.execute(text('''

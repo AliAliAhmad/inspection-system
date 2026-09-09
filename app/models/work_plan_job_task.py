@@ -98,7 +98,16 @@ class WorkPlanJobTask(db.Model):
                                  db.ForeignKey('work_plan_jobs.id'),
                                  nullable=True, index=True)
 
+    # A line may be words, a photo, a voice note, or words WITH one attached.
+    #
+    # Ali, 2026-09-09: "in the work details i need to be able to add photo and
+    # voice". They hang here rather than on the tracking row because a photo of
+    # a cracked glass is about the JOB, and this list is the one thing that
+    # already survives the job going back to the pool and coming out again.
     content = db.Column(db.Text, nullable=False)
+    attachment_file_id = db.Column(db.Integer, db.ForeignKey('files.id'),
+                                   nullable=True)
+    attachment_kind = db.Column(db.String(10), nullable=True)  # photo | voice
 
     is_done = db.Column(db.Boolean, default=False, nullable=False)
     done_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -113,6 +122,7 @@ class WorkPlanJobTask(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow,
                            onupdate=datetime.utcnow, nullable=False)
 
+    attachment = db.relationship('File', foreign_keys=[attachment_file_id])
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     done_by = db.relationship('User', foreign_keys=[done_by_id])
 
@@ -165,6 +175,9 @@ class WorkPlanJobTask(db.Model):
             'position': self.position,
             'anchor_kind': self.anchor_kind,
             'anchor_key': self.anchor_key,
+            'attachment_kind': self.attachment_kind,
+            'attachment_url': (self.attachment.get_url()
+                               if self.attachment else None),
             'created_by_id': self.created_by_id,
             'created_by_name': (self.created_by.display_name(language)
                                 if self.created_by else None),

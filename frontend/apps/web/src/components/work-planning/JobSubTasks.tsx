@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Popover, Checkbox, Input, Button, Tooltip, Spin, Empty, Typography, message } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, CameraOutlined, AudioOutlined,
+         AudioMutedOutlined, PictureOutlined, SoundOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { jobSubTasksApi, type JobSubTask } from '@inspection/shared';
+import { jobSubTasksApi, filesApi, type JobSubTask } from '@inspection/shared';
 
 const { Text } = Typography;
 
@@ -67,7 +68,9 @@ const JobSubTasksInner: React.FC<JobSubTasksProps> = ({
   };
 
   const addMutation = useMutation({
-    mutationFn: (content: string) => jobSubTasksApi.add(jobId, content),
+    mutationFn: ({ content, attachment }:
+                 { content: string; attachment?: { fileId: number; kind: 'photo' | 'voice' } }) =>
+      jobSubTasksApi.add(jobId, content, attachment),
     onSuccess: () => {
       setDraft('');
       refresh();
@@ -75,6 +78,65 @@ const JobSubTasksInner: React.FC<JobSubTasksProps> = ({
     onError: (err: any) =>
       message.error(err?.response?.data?.message || 'Could not add the sub-task'),
   });
+
+  // A photo and a voice note on the job itself.
+  //
+  // Ali, 2026-09-09: "when i drop a job to a day, i can add a photo, a voice so
+  // it can be clear for the team. the finding coming from the inspection
+  // already has them, but other jobs do not."
+  //
+  // A defect raised by an inspection carries the inspector's photo and voice
+  // recording. A SAP order and a hand-typed job carry a line of text and
+  // nothing else, so the crew arrives at the machine knowing less. These hang
+  // on the job's own list, which is the one thing that already survives the job
+  // going back to the pool.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [recording, setRecording] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+
+  const attach = async (file: File, kind: 'photo' | 'voice') => {
+    try {
+      const uploaded = await filesApi.upload(file, 'work_plan_job', jobId, 'work_plan');
+      const fileId = (uploaded.data as any)?.data?.id;
+      if (!fileId) throw new Error('upload returned no file');
+      await addMutation.mutateAsync({ content: draft.trim(), attachment: { fileId, kind } });
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || `Could not attach the ${kind}`);
+    }
+  };
+
+  const onPickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';                       // so the same file can be picked twice
+    if (file) await attach(file, 'photo');
+  };
+
+  const toggleRecording = async () => {
+    if (recording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      chunksRef.current = [];
+      recorder.ondataavailable = (ev) => ev.data.size && chunksRef.current.push(ev.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());   // release the microphone
+        setRecording(false);
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        if (blob.size > 0) {
+          await attach(new File([blob], `job-${jobId}-note.webm`, { type: 'audio/webm' }), 'voice');
+        }
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      message.error('No microphone available');
+    }
+  };
 
   const toggleMutation = useMutation({
     mutationFn: ({ taskId, isDone }: { taskId: number; isDone: boolean }) =>
@@ -94,7 +156,7 @@ const JobSubTasksInner: React.FC<JobSubTasksProps> = ({
   const submitDraft = () => {
     const content = draft.trim();
     if (!content) return;
-    addMutation.mutate(content);
+    addMutation.mutate({ content });
   };
 
   const content = (
@@ -139,8 +201,26 @@ const JobSubTasksInner: React.FC<JobSubTasksProps> = ({
                     color: task.is_done ? '#8c8c8c' : '#262626',
                   }}
                 >
+                  {task.attachment_kind === 'photo' ? <PictureOutlined /> : null}
+                  {task.attachment_kind === 'voice' ? <SoundOutlined /> : null}
+                  {task.attachment_kind ? ' ' : null}
                   {task.content}
                 </Text>
+                {task.attachment_url && task.attachment_kind === 'photo' && (
+                  <a href={task.attachment_url} target="_blank" rel="noreferrer">
+                    <img
+                      src={task.attachment_url}
+                      alt={task.content}
+                      style={{ marginTop: 4, maxWidth: '100%', maxHeight: 120,
+                               borderRadius: 4, display: 'block' }}
+                    />
+                  </a>
+                )}
+                {task.attachment_url && task.attachment_kind === 'voice' && (
+                  // controls only — a plan board must never start playing by itself
+                  <audio src={task.attachment_url} controls preload="none"
+                         style={{ marginTop: 4, width: '100%', height: 30 }} />
+                )}
                 {task.is_done && task.done_by_name ? (
                   <div>
                     <Text type="secondary" style={{ fontSize: 10 }}>
@@ -165,16 +245,48 @@ const JobSubTasksInner: React.FC<JobSubTasksProps> = ({
       )}
 
       {canEdit ? (
-        <Input.Search
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onSearch={submitDraft}
-          placeholder="Add a sub-task or note"
-          maxLength={500}
-          size="small"
-          enterButton={<PlusOutlined />}
-          loading={addMutation.isPending}
-        />
+        <>
+          <Input.Search
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onSearch={submitDraft}
+            placeholder="Add a sub-task or note"
+            maxLength={500}
+            size="small"
+            enterButton={<PlusOutlined />}
+            loading={addMutation.isPending}
+          />
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={onPickPhoto}
+            />
+            <Button
+              size="small"
+              icon={<CameraOutlined />}
+              onClick={() => fileInputRef.current?.click()}
+              loading={addMutation.isPending}
+              style={{ flex: 1 }}
+            >
+              Photo
+            </Button>
+            <Button
+              size="small"
+              danger={recording}
+              icon={recording ? <AudioMutedOutlined /> : <AudioOutlined />}
+              onClick={toggleRecording}
+              style={{ flex: 1 }}
+            >
+              {recording ? 'Stop' : 'Voice'}
+            </Button>
+          </div>
+          <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 4 }}>
+            Anything typed above is used as the caption.
+          </Text>
+        </>
       ) : null}
     </div>
   );

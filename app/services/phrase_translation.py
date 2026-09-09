@@ -111,6 +111,49 @@ _PROTECT_RE = re.compile('|'.join(_PROTECTED_TERMS), re.IGNORECASE)
 _PLACEHOLDER = 'ZQX%dXQZ'
 
 
+# What the protected words should SAY in Arabic.
+#
+# Ali, 2026-09-09: "i need those to be translated, any description, MY TEAM ARE
+# ARABIC". Leaving (PM) and AC in Latin letters was the cautious choice and it
+# was the wrong one — a crew that reads Arabic should read Arabic.
+#
+# These are NOT translations of the English words. They are what the
+# abbreviation MEANS IN THIS YARD, which is exactly the knowledge no translator
+# has. (PM) is Preventive Maintenance, so it becomes صيانة وقائية and not
+# 'مساءً'.
+#
+# A term absent from here keeps its original text, which is right for a machine
+# code: RS109 is a name painted on the machine and the same in every language.
+# PR is deliberately absent — nobody has told me what it stands for, and a
+# confident wrong expansion is worse than the letters themselves.
+#
+# Ali is the authority on every line below. Correcting one corrects it
+# everywhere, on every phrase, at once.
+DOMAIN_ARABIC = {
+    'PM': 'صيانة وقائية',
+    'AC': 'تكييف',
+    'HYDR': 'هيدروليك',
+    'HVAC': 'تكييف وتهوية',
+    'MECH': 'ميكانيك',
+    'ELEC': 'كهرباء',
+    'ELME': 'ميكانيك وكهرباء',
+}
+
+
+def _arabic_for_term(original):
+    """The yard's Arabic for a protected term, or the term unchanged."""
+    # Keep the brackets the phrase arrived with: '(PM)' -> '(صيانة وقائية)'.
+    inner = original.strip().strip('()').strip().strip('.').strip('-').strip()
+    replacement = DOMAIN_ARABIC.get(inner.upper())
+    if not replacement:
+        return original
+    if original.strip().startswith('(') and original.strip().endswith(')'):
+        return f'({replacement})'
+    if original.strip().startswith('-'):
+        return f'-{replacement}'
+    return replacement
+
+
 def protect_terms(text):
     """(masked, mapping) — the yard's own words hidden from the translator."""
     if not text:
@@ -125,12 +168,19 @@ def protect_terms(text):
     return _PROTECT_RE.sub(swap, str(text)), mapping
 
 
-def restore_terms(text, mapping):
-    """Put the real words back, however the translator moved them about."""
+def restore_terms(text, mapping, arabic=False):
+    """Put the protected words back, however the translator moved them about.
+
+    With `arabic`, a term the yard has Arabic for comes back in Arabic —
+    '(PM)' as '(صيانة وقائية)'. Machine codes have no entry and return as
+    themselves, which is correct: RS109 is a name.
+    """
     if not text or not mapping:
         return text
     out = str(text)
     for token, original in mapping.items():
+        if arabic:
+            original = _arabic_for_term(original)
         # A translator may space or case the placeholder differently.
         out = re.sub(re.escape(token).replace('\\ ', r'\s*'), original, out,
                      flags=re.IGNORECASE)

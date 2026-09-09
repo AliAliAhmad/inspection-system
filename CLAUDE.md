@@ -147,6 +147,21 @@
 - `review-phrases` also flags rows whose Arabic contains `مساء` / `التيار المتردد` —
   those were stored before protection existed. **`--forget` then `--apply` redoes them.**
 
+### Photo + voice on any job, and Arabic that means what the yard means — 2026-09-09
+- Ali: "when i drop a job to a day, i can add a photo, a voice so it can be clear for the
+  team. the finding coming from the inspection already has them, but other jobs do not."
+- Photo/voice hang on `work_plan_job_tasks` (new `attachment_file_id` / `attachment_kind`)
+  — the same anchor that already survives a trip through the pool. Buttons live in the
+  job's `+` popover on the board; a **planner** adds them, and an **assigned worker** may
+  add evidence too but still cannot write plain sub-tasks.
+- **`DOMAIN_ARABIC` in `phrase_translation.py`** — `(PM)` now reads `(صيانة وقائية)`,
+  `AC` -> `تكييف`, `HYDR` -> `هيدروليك`. These are what the abbreviation MEANS HERE, not
+  a translation of the letters. **Ali is the authority on every line; correcting one
+  corrects it everywhere.** `PR` is deliberately absent — nobody has said what it means.
+- Machine codes (RS109) keep their own text: a name is the same in every language.
+- **`flask translate-phrases --all`** does the whole vocabulary in one run, committing
+  every 10 so a rate limit mid-way loses nothing.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
