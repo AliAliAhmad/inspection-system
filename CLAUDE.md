@@ -160,7 +160,15 @@
   corrects it everywhere.** `PR` is deliberately absent — nobody has said what it means.
 - Machine codes (RS109) keep their own text: a name is the same in every language.
 - **`flask translate-phrases --all`** does the whole vocabulary in one run, committing
-  every 10 so a rate limit mid-way loses nothing.
+  every 10 so a rate limit mid-way loses nothing. **386 of 387 done 2026-09-09**; the one
+  refusal is `ECH02-SP-(EMS)TWL INSPECTION_PB`, which is pure code and has nothing to
+  translate.
+- **`flask fix-phrase "<english>" "<arabic>"`** — Ali's correction, marked reviewed, never
+  overwritten by any later run. This is the last mile and only he can walk it: a machine
+  renders 'Fifth Wheel bushes' as شجيرات (garden shrubs) and will do so forever.
+- `review-phrases` flags the everyday meanings a workshop does not want:
+  شجيرات (shrubs), الإرسال (broadcasting, for the gearbox), قضية (a legal case),
+  ارتداء (wearing clothes), مساء (the evening), التيار المتردد (alternating current).
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).

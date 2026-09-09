@@ -625,6 +625,47 @@ def create_app(config_name='development'):
         print()
         print('  Anything still English simply shows in English. No screen breaks.')
 
+    @app.cli.command('fix-phrase')
+    @click.argument('english')
+    @click.argument('arabic')
+    def fix_phrase(english, arabic):
+        """Correct one phrase's Arabic, permanently.
+
+        Marks it REVIEWED, which means no translation run will ever touch it
+        again. This is how the yard's own words get into the app: a machine has
+        no idea that a Fifth Wheel bush is a جلبة and not a garden shrub, and it
+        will keep guessing wrong every time it is asked.
+
+            flask fix-phrase "Fifth Wheel bushes" "جلب العجلة الخامسة"
+
+        The English must be the phrase as SAP sends it — run review-phrases to
+        see them exactly. Spacing and capitalisation do not matter.
+        """
+        from app.models import PhraseTranslation
+        from app.services.phrase_translation import normalise, remember
+
+        key = normalise(english)
+        before = PhraseTranslation.query.filter_by(source_key=key).first()
+
+        print('=' * 78)
+        print(f'  english : {english}')
+        if before and before.ar_text:
+            print(f'  was     : {before.ar_text}')
+        print(f'  now     : {arabic}')
+        print('=' * 78)
+
+        row = remember(english, arabic, reviewed=True)
+        if row is None:
+            print('  REFUSED. The phrase is longer than the store accepts.')
+            return
+        db.session.commit()
+        print('  Saved and marked reviewed. No translation run will change it.')
+        if not before:
+            print()
+            print('  Note: that phrase was not in the store yet, so it has been')
+            print('  added. If SAP spells it differently the app will not match')
+            print('  it — check with review-phrases.')
+
     @app.cli.command('review-phrases')
     @click.option('--suspect', 'only_suspect', is_flag=True,
                   help='Only phrases whose Arabic looks wrong.')
@@ -664,11 +705,23 @@ def create_app(config_name='development'):
         # have kept out of it. 'مساء' is the evening — it is (PM) mistranslated,
         # every time. These were stored before terms were protected.
         from app.services.phrase_translation import protect_terms
-        WRONG_MEANINGS = ('مساء', 'التيار المتردد')
+        # Words a general translator reaches for that are wrong in a workshop.
+        # Every one of these was produced on Ali's real vocabulary:
+        #   شجيرات   garden shrubs, for a bush (جلبة)
+        #   الإرسال  broadcasting, for the gearbox (ناقل الحركة)
+        #   قضية     a legal case, for a fault
+        #   ارتداء   wearing clothes, for worn out
+        #   مساء     the evening, for (PM)
+        #   التيار المتردد  alternating current, for air conditioning
+        WRONG_MEANINGS = ('مساء', 'التيار المتردد', 'شجيرات', 'الإرسال',
+                          'قضية', 'ارتداء', 'الربيع', 'شحوب')
         spoiled = [r for r in done
                    if not r.is_reviewed and r.ar_text
                    and any(w in r.ar_text for w in WRONG_MEANINGS)]
-        print(f'  domain word wrong   : {len(spoiled)}')
+        print(f'  reads wrong to a fitter: {len(spoiled)}')
+        if spoiled:
+            print('    -> these need YOUR words, not another provider.')
+            print('       flask fix-phrase \"<english>\" \"<arabic>\"')
         # Anything protected is worth redoing, since it was translated blind.
         suspect = suspect + [r for r in spoiled if r not in suspect]
 

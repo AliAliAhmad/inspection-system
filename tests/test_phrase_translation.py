@@ -438,3 +438,55 @@ def test_an_unknown_abbreviation_is_left_alone(db_session):
     token = list(protected)[0]
     out = restore_terms(f'قفل باب المقصورة {token}', protected, arabic=True)
     assert out.endswith('(PR)')
+
+
+# ── Correcting the machine ─────────────────────────────────────────────────
+#
+# From Ali's full run over all 387 phrases. Every one of these is a translator
+# choosing the everyday meaning of a word that means something else in a
+# workshop, and no provider will ever do better:
+#
+#   'Fifth Wheel bushes'  -> شجيرات   garden shrubs; a bush is a جلبة
+#   'Transmission Issue'  -> الإرسال  broadcasting; the gearbox is ناقل الحركة
+#   'Steering gear issue' -> قضية     a legal case
+#   'hose worn'           -> ارتداء   wearing clothes
+#
+# The only cure is a person who knows the yard, so the store has to let him say
+# so once and be obeyed forever.
+
+def test_a_correction_outlives_every_later_run(db_session):
+    remember('Fifth Wheel bushes', 'شجيرات العجلة الخامسة')   # what a machine said
+    db.session.commit()
+    assert to_arabic('Fifth Wheel bushes') == 'شجيرات العجلة الخامسة'
+
+    remember('Fifth Wheel bushes', 'جلب العجلة الخامسة', reviewed=True)  # what Ali says
+    db.session.commit()
+    assert to_arabic('Fifth Wheel bushes') == 'جلب العجلة الخامسة'
+
+    # A later machine run must not undo him.
+    remember('Fifth Wheel bushes', 'شجيرات مرة أخرى')
+    db.session.commit()
+    assert to_arabic('Fifth Wheel bushes') == 'جلب العجلة الخامسة'
+
+
+def test_a_correction_survives_a_different_spelling(db_session):
+    """SAP's capitalisation drifts between exports; a correction must not."""
+    remember('FIFTH  WHEEL  BUSHES', 'جلب العجلة الخامسة', reviewed=True)
+    db.session.commit()
+    assert to_arabic('Fifth Wheel bushes') == 'جلب العجلة الخامسة'
+
+
+@pytest.mark.parametrize('wrong_word', [
+    'شجيرات',          # garden shrubs, for a bush
+    'الإرسال',          # broadcasting, for the gearbox
+    'قضية',            # a legal case, for a fault
+    'ارتداء',          # wearing clothes, for worn out
+    'مساء',            # the evening, for (PM)
+    'التيار المتردد',   # alternating current, for air conditioning
+])
+def test_the_review_list_knows_a_workshop_word_when_it_sees_one(wrong_word):
+    """These are the words review-phrases puts in front of a person."""
+    import io
+    src = io.open('app/__init__.py', encoding='utf-8').read()
+    block = src.split('WRONG_MEANINGS = (')[1].split(')')[0]
+    assert wrong_word in block, f'{wrong_word} is no longer flagged for review'
