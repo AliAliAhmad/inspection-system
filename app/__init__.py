@@ -507,6 +507,14 @@ def create_app(config_name='development'):
             return
         print(f"  source    : {report.get('source_file')} "
               f"received {report.get('source_received_at')}")
+        # WHICH FILES LANDED. The operations live in IW49, so "no operations"
+        # and "no IW49" look identical from the outside and need telling apart
+        # before anybody goes looking for a bug in the parser.
+        inputs = report.get('inputs') or {}
+        if inputs:
+            print('  files     : ' + ' · '.join(
+                f"{name}={'yes' if present else 'NO'}"
+                for name, present in inputs.items()))
         print(f"  candidates: {report.get('candidates')}")
         print(f"    created : {report.get('created')}")
         print(f"    updated : {report.get('updated')}")
@@ -519,6 +527,37 @@ def create_app(config_name='development'):
         if retired:
             print(f"    retired : {report.get('orders_skipped_retired')} on "
                   f"{', '.join(retired)} (sold — skipped on purpose)")
+
+        # The operations inside each order, and — when the layout is not
+        # recognised — the real IW49 column names, so the guessing can end
+        # without a second command.
+        ops = report.get('operations') or {}
+        print()
+        print('--- operations inside the orders (IW49) ---')
+        if not ops:
+            print('  nothing reported (this report predates the feature)')
+        elif not ops.get('usable'):
+            print('  NOT IMPORTED: ' + str(ops.get('reason')
+                                           or 'IW49 columns not recognised'))
+            matched = ops.get('matched') or {}
+            for field, hit in matched.items():
+                print(f"    {field:<12} -> {hit or 'NOT FOUND'}")
+            headers = ops.get('headers') or []
+            if headers:
+                print(f'  the file actually has {len(headers)} columns:')
+                for header in headers:
+                    print(f'    {header}')
+                print('  Add the real names to OPERATION_COLUMN_CANDIDATES in')
+                print('  app/services/sap_order_parser.py')
+        else:
+            stored = ops.get('stored') or {}
+            print(f"  read      : {ops.get('operations')} operations on "
+                  f"{ops.get('orders')} orders ({ops.get('rows')} rows)")
+            print(f"    added   : {stored.get('added')}")
+            print(f"    updated : {stored.get('updated')}")
+            print(f"    removed : {stored.get('removed')} (untouched, gone from SAP)")
+            print(f"    KEPT    : {stored.get('kept_but_gone_from_sap')} "
+                  f"(work was done on them — flagged, not deleted)")
 
     @app.cli.command('translate-phrases')
     @click.option('--apply', 'do_apply', is_flag=True,
@@ -1106,6 +1145,56 @@ def create_app(config_name='development'):
         db.session.add(admin)
         db.session.commit()
         print(f'Admin user created (id={admin.id})')
+
+    @app.cli.command('rebuild-pool')
+    @click.option('--dry-run', is_flag=True,
+                  help='Read the files and report, without writing anything.')
+    def rebuild_pool_command(dry_run):
+        """Re-read the delivered SAP files now, instead of waiting for 02:02.
+
+        The sync already runs nightly, and the only other way to trigger it is
+        an HTTP endpoint behind a robot key. After a deploy that changes what the
+        sync READS, waiting until tomorrow morning to find out whether it worked
+        is a long time to not know.
+        """
+        from app.services.sap_pool_sync import sync_pool_from_delivered_files
+
+        print('Reading the delivered SAP files...')
+        report = sync_pool_from_delivered_files(dry_run=dry_run)
+        status = report.get('status')
+        print(f"status: {status}")
+        if status != 'ok':
+            print(f"reason: {report.get('reason')}")
+            return
+
+        inputs = report.get('inputs') or {}
+        print('files : ' + ' · '.join(
+            f"{name}={'yes' if present else 'NO'}"
+            for name, present in inputs.items()))
+        print(f"orders: {report.get('created')} created, "
+              f"{report.get('updated')} updated")
+
+        ops = report.get('operations') or {}
+        print()
+        print('--- operations (IW49) ---')
+        if not ops.get('headers'):
+            print('  no IW49 file was read at all')
+        elif not ops.get('usable'):
+            print('  NOT IMPORTED: ' + str(ops.get('reason')
+                                           or 'columns not recognised'))
+            for field, hit in (ops.get('matched') or {}).items():
+                print(f"    {field:<12} -> {hit or 'NOT FOUND'}")
+            print(f"  the file has {len(ops['headers'])} columns:")
+            for header in ops['headers']:
+                print(f'    {header}')
+        else:
+            stored = ops.get('stored') or {}
+            print(f"  {ops.get('operations')} operations on {ops.get('orders')} orders")
+            print(f"    added {stored.get('added')} · updated {stored.get('updated')} "
+                  f"· removed {stored.get('removed')} · kept {stored.get('kept_but_gone_from_sap')}")
+        if dry_run:
+            print()
+            print('DRY RUN — nothing was written.')
 
     @app.cli.command('sap-operation-headers')
     def sap_operation_headers():
