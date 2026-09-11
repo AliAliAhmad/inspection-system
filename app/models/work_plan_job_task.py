@@ -59,20 +59,33 @@ _SPLIT_SUFFIX = re.compile(r'-P\d+$')
 ANCHOR_KINDS = ('sap', 'defect', 'inspection', 'job')
 
 
+def anchor_for_values(sap_order_number, defect_id, inspection_assignment_id,
+                      job_id):
+    """The anchor rule, on plain values.
+
+    Split out so callers can ask "what WOULD this job's anchor be if its order
+    number were X" without building a throwaway WorkPlanJob to ask with — which
+    is what re-anchoring on link needs, and what a scratch model object should
+    never be used for.
+    """
+    sap = (sap_order_number or '').strip()
+    if sap:
+        return 'sap', _SPLIT_SUFFIX.sub('', sap)
+    if defect_id:
+        return 'defect', str(defect_id)
+    if inspection_assignment_id:
+        return 'inspection', str(inspection_assignment_id)
+    return 'job', str(job_id)
+
+
 def anchor_for(job):
     """(kind, key) — the durable identity this job's list hangs on.
 
     Order matters: a SAP order number outlives everything else, and a job that
     has one is the same job wherever it turns up.
     """
-    sap = (job.sap_order_number or '').strip()
-    if sap:
-        return 'sap', _SPLIT_SUFFIX.sub('', sap)
-    if job.defect_id:
-        return 'defect', str(job.defect_id)
-    if job.inspection_assignment_id:
-        return 'inspection', str(job.inspection_assignment_id)
-    return 'job', str(job.id)
+    return anchor_for_values(job.sap_order_number, job.defect_id,
+                             job.inspection_assignment_id, job.id)
 
 
 def normalise_text(value):
@@ -109,6 +122,46 @@ class WorkPlanJobTask(db.Model):
                                    nullable=True)
     attachment_kind = db.Column(db.String(10), nullable=True)  # photo | voice
 
+    # ── SAP operations live in this same list ──────────────────────────────
+    #
+    # Ali, 2026-09-10: "inside a general refurbishment order you can check the
+    # spreader, replace or repair harness, open telescopic chain ... user should
+    # see the operations inside the order and he can deal with each same as he
+    # deal with the order".
+    #
+    # WHY HERE AND NOT IN A TABLE OF THEIR OWN
+    #
+    # Ali's own words settle it: a line HE typed and a line SAP sent must behave
+    # identically. One table with `source` gives that; two tables leave a
+    # hand-typed operation homeless between them.
+    #
+    # And the durability of this table — surviving the pool, carry-over, split
+    # and purge_job_rows, plus for_jobs() batching — was expensive to get right.
+    # A second table re-implements all of it, and would re-earn the same bugs.
+    source = db.Column(db.String(10), default='manual', nullable=False)  # manual | sap
+    operation_number = db.Column(db.String(10), nullable=True)  # SAP 0010, 0020
+    # An order can hold MECH and ELEC operations. This is what splits them
+    # between the two teams INSIDE one order (Ali, 2026-09-11).
+    work_center = db.Column(db.String(10), nullable=True)
+    planned_hours = db.Column(db.Numeric(6, 2), nullable=True)
+
+    # ── One timer per operation ────────────────────────────────────────────
+    #
+    # Ali chose start/pause/finish per operation over a simple tick, knowing it
+    # was the bigger build. These columns are nullable: a plain written note
+    # never uses them, and `is_done` alone still works for one.
+    #
+    # These sit on the ANCHOR, so they follow the order through the pool and
+    # across weeks. That is correct — half-finished work is half-finished in
+    # January and in March. Nothing person-bound is stored here for the same
+    # reason inverted: the electrician assigned in week 37 must not silently own
+    # it in week 40, so assignment stays on the job row.
+    status = db.Column(db.String(20), nullable=True)  # pending|in_progress|paused|completed
+    started_at = db.Column(db.DateTime, nullable=True)
+    paused_at = db.Column(db.DateTime, nullable=True)
+    total_paused_minutes = db.Column(db.Integer, default=0, nullable=False)
+    actual_hours = db.Column(db.Numeric(6, 2), nullable=True)
+
     is_done = db.Column(db.Boolean, default=False, nullable=False)
     done_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     done_at = db.Column(db.DateTime, nullable=True)
@@ -128,6 +181,9 @@ class WorkPlanJobTask(db.Model):
 
     __table_args__ = (
         db.Index('ix_work_plan_job_tasks_anchor', 'anchor_kind', 'anchor_key'),
+        # One row per SAP operation per order. The sync upserts on this.
+        db.UniqueConstraint('anchor_kind', 'anchor_key', 'operation_number',
+                            name='uq_work_plan_job_task_operation'),
         db.CheckConstraint(
             "anchor_kind IN ('sap', 'defect', 'inspection', 'job')",
             name='check_work_plan_job_task_anchor_kind'
@@ -176,6 +232,16 @@ class WorkPlanJobTask(db.Model):
             'anchor_kind': self.anchor_kind,
             'anchor_key': self.anchor_key,
             'attachment_kind': self.attachment_kind,
+            'source': self.source or 'manual',
+            'operation_number': self.operation_number,
+            'work_center': self.work_center,
+            'planned_hours': (float(self.planned_hours)
+                              if self.planned_hours is not None else None),
+            'status': self.status or ('completed' if self.is_done else 'pending'),
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'paused_at': self.paused_at.isoformat() if self.paused_at else None,
+            'actual_hours': (float(self.actual_hours)
+                             if self.actual_hours is not None else None),
             'attachment_url': (self.attachment.get_url()
                                if self.attachment else None),
             'created_by_id': self.created_by_id,

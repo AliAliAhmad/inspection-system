@@ -42,11 +42,24 @@ def job_cost_man_hours(job):
 
 
 def _job_wallet_key(job):
-    """Which wallet a job spends — mirrors the generator's charging."""
+    """Which wallet a job spends — mirrors the generator's charging.
+
+    Defect work spends 'spec', the two crews merged, exactly as it always has.
+    With TRADE_SPLIT_BUDGET on it spends the crew that matches the order's trade
+    instead — and an order that needs BOTH stays on the merged wallet, because
+    dividing it needs the operations and there is no honest way to guess.
+    See app/services/trade_split.py for why that flag ships off.
+    """
     if job.job_type == 'pm':
         return None if is_ac_service(job.description) else 'pm'
     from app.services.work_plan_generator_service import _job_is_defect_work
     if _job_is_defect_work(job):
+        from app.services.trade_split import (trade_split_enabled,
+                                              wallet_key_for_trade, _job_trade)
+        if trade_split_enabled():
+            trade = _job_trade(job)
+            if trade in ('MECH', 'ELEC'):
+                return wallet_key_for_trade(trade)
         return 'spec'
     return None
 

@@ -323,6 +323,170 @@ def load_iw39(iw39_bytes):
     return _read_excel(iw39_bytes, list(IW39_COLUMNS))
 
 
+# IW49 header names for the operation columns.
+#
+# WE DO NOT KNOW THE REAL ONES. The only IW49 fixture in this repo is synthetic
+# and carries just the three columns parse_operation_hours already reads, and
+# SAP layouts differ between systems and between users' saved variants. So every
+# field below is a LIST of candidates, matched case-insensitively, and every one
+# of them is OPTIONAL.
+#
+# This matters more than it looks. rows_to_frame() raises KeyError on a missing
+# column — loudly, on purpose, so a vanished column cannot silently disable a
+# rule. Naming a guessed column in the required list would therefore not read as
+# empty; it would take the WHOLE POOL SYNC DOWN on the first run against a real
+# export. Optional matching means the worst case is "no operations imported this
+# run, and the report says which headers were actually there".
+#
+# `flask sap-operation-headers` prints what a real export contains so the right
+# names can be added here.
+OPERATION_COLUMN_CANDIDATES = {
+    'order': ['Order', 'Order Number', 'OrderNumber'],
+    'operation': ['Oper./Activity', 'Operation/Activity', 'Operation', 'Activity',
+                  'Oper.', 'Op.', 'OpAc', 'Operation Number'],
+    'description': ['Opr. short text', 'Operation short text', 'Oper. short text',
+                    'Short Text', 'Description', 'Operation Description'],
+    'work_center': ['Work ctr', 'Work Center', 'Work centre', 'WorkCtr',
+                    'Oper.WorkCenter', 'Work center'],
+    'work': ['Work', 'Work Actual', 'Wrk'],
+    'unit': ['Unit for work', 'Unit', 'Work Unit', 'Un.'],
+}
+
+
+def _match_header(header, candidates):
+    """First candidate present in the header row, compared loosely.
+
+    SAP exports vary in case and in trailing spaces, and a user's saved variant
+    can rename a column. Returns the ACTUAL header string, or None.
+    """
+    seen = {}
+    for name in header:
+        if name is None:
+            continue
+        seen.setdefault(str(name).strip().lower(), str(name))
+    for candidate in candidates:
+        hit = seen.get(candidate.strip().lower())
+        if hit is not None:
+            return hit
+    return None
+
+
+def read_iw49_headers(iw49_bytes):
+    """Every column name in an IW49 export, plus what we matched.
+
+    Exists so a real export can TELL US its column names instead of us guessing.
+    """
+    import openpyxl
+    import io as _io
+
+    workbook = openpyxl.load_workbook(_io.BytesIO(iw49_bytes), read_only=True,
+                                      data_only=True)
+    try:
+        rows = workbook[workbook.sheetnames[0]].iter_rows(values_only=True)
+        header = next(rows, ()) or ()
+    finally:
+        workbook.close()
+
+    header = [str(h) for h in header if h is not None]
+    matched = {field: _match_header(header, names)
+               for field, names in OPERATION_COLUMN_CANDIDATES.items()}
+    return {'headers': header, 'matched': matched,
+            'missing': [f for f, v in matched.items() if v is None]}
+
+
+def parse_operations(iw49_bytes):
+    """Every operation row, not just the hours total.
+
+    Ali, 2026-09-10: "in SAP there is an operation ... inside a general
+    refurbishment order you can check the spreader, replace or repair harness,
+    open telescopic chain ... user should see the operations inside the order and
+    he can deal with each".
+
+    The app has ALWAYS read this file — parse_operation_hours() sums the hours
+    per order and throws every individual row away. 56,131 operation rows a run,
+    2.56 per order, discarded. This keeps them.
+
+    Returns ({order_number: [operation, ...]}, report). NEVER raises for a
+    missing column: an export whose headers we cannot recognise yields no
+    operations and a report saying so, leaving the existing hours path untouched.
+    """
+    import openpyxl
+    import io as _io
+
+    report = {'rows': 0, 'orders': 0, 'operations': 0, 'skipped': 0,
+              'matched': {}, 'headers': [], 'usable': False}
+    if not iw49_bytes:
+        return {}, report
+
+    workbook = openpyxl.load_workbook(_io.BytesIO(iw49_bytes), read_only=True,
+                                      data_only=True)
+    try:
+        rows = workbook[workbook.sheetnames[0]].iter_rows(values_only=True)
+        header = next(rows, None)
+        if not header:
+            return {}, report
+
+        header = list(header)
+        report['headers'] = [str(h) for h in header if h is not None]
+        matched = {field: _match_header(header, names)
+                   for field, names in OPERATION_COLUMN_CANDIDATES.items()}
+        report['matched'] = matched
+
+        # Order and operation number are the identity. Without both there is
+        # nothing to key on, so keep the old behaviour and say why.
+        if not matched['order'] or not matched['operation']:
+            report['reason'] = ('IW49 has no recognised Order and Operation '
+                                'columns; operations were not imported')
+            return {}, report
+        report['usable'] = True
+
+        index = {}
+        for position, name in enumerate(header):
+            if name is not None:
+                index.setdefault(str(name), position)
+
+        def cell(row, field):
+            name = matched.get(field)
+            if not name:
+                return None
+            slot = index.get(name)
+            if slot is None or slot >= len(row):
+                return None
+            return _cell_to_str(row[slot])
+
+        by_order = defaultdict(list)
+        for row in rows:
+            report['rows'] += 1
+            order = (cell(row, 'order') or '').strip()
+            operation = (cell(row, 'operation') or '').strip()
+            if not order or not operation:
+                report['skipped'] += 1
+                continue
+
+            work = cell(row, 'work')
+            unit = (cell(row, 'unit') or '').strip().upper()
+            hours = None
+            try:
+                if work not in (None, ''):
+                    value = float(work)
+                    hours = value / 60.0 if unit in MINUTE_UNITS else value
+            except (TypeError, ValueError):
+                hours = None
+
+            by_order[order].append({
+                'operation_number': operation,
+                'description': (cell(row, 'description') or '').strip(),
+                'work_center': (cell(row, 'work_center') or '').strip().upper() or None,
+                'planned_hours': hours,
+            })
+            report['operations'] += 1
+
+        report['orders'] = len(by_order)
+        return dict(by_order), report
+    finally:
+        workbook.close()
+
+
 def parse_operation_hours(iw49_bytes):
     """Planned hours per order, summed across operations and unit-corrected.
 

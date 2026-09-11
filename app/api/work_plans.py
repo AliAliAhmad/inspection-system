@@ -1243,6 +1243,9 @@ def update_job(plan_id, job_id):
     if 'position' in data:
         job.position = data['position']
     if 'sap_order_number' in data:
+        # Move what is attached BEFORE the number changes, or it is orphaned.
+        # See reanchor_job_tasks() for the proof; this is a live data-loss bug.
+        reanchor_job_tasks(job, data['sap_order_number'])
         job.sap_order_number = data['sap_order_number']
     if 'work_center' in data:
         # Was missing entirely, so picking a Trade on an EXISTING job did
@@ -1542,6 +1545,148 @@ def purge_job_rows(job):
             {'jid': job_id}
         )
     db.session.execute(db.text('DELETE FROM work_plan_jobs WHERE id = :jid'), {'jid': job_id})
+
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/link-sap-order', methods=['POST'])
+@jwt_required()
+def link_sap_order(plan_id, job_id):
+    """Attach a real SAP order number to a job that was typed by hand.
+
+    Ali, 2026-09-10: "sometimes i make a manual job before i open the order in
+    SAP then when i opened in sap i need a connection between them and the order
+    number i think is the best one".
+
+    WHY THIS IS NOT `PUT /jobs/<id>` WITH A NEW NUMBER
+    =================================================
+
+    Four things have to happen together, and the plain update does none of them:
+
+      1. the order must actually EXIST — a typo becomes a job pinned to an order
+         number nobody will ever close
+      2. the notes and photos must MOVE to the new anchor (reanchor_job_tasks;
+         this was live data loss)
+      3. the SAP order must leave the pool, or the same work sits in the box
+         twice and the related-jobs chooser offers this job to itself
+      4. the day must be re-priced
+
+    On (4), Ali's answer 2026-09-11 was "show both, sap hours win": the response
+    carries his estimate AND the order's hours, and the day takes the order's —
+    once SAP has the order, SAP has the number.
+    """
+    user = engineer_or_admin_required()
+
+    plan = db.session.get(WorkPlan, plan_id)
+    if not plan:
+        raise NotFoundError("Work plan not found")
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    data = request.get_json() or {}
+    order_number = str(data.get('order_number') or '').strip()
+    if not order_number:
+        raise ValidationError("order_number is required")
+
+    if job.sap_order_number and not is_manual_order_number(job.sap_order_number):
+        raise ValidationError(
+            f"This job is already SAP order {job.sap_order_number}")
+
+    order = (SAPWorkOrder.query
+             .filter(SAPWorkOrder.order_number == order_number)
+             .order_by(SAPWorkOrder.id.desc())
+             .first())
+    if order is None:
+        # Deliberately not "create it anyway". The app cannot open an order in
+        # SAP, so a number SAP has never heard of is a typo, and a job pinned to
+        # a typo is a job nobody will ever close.
+        raise NotFoundError(
+            f"SAP order {order_number} is not in the system. Import it first.")
+
+    # Already on this week's board? Then this is a duplicate of work already
+    # planned, and linking would leave two rows for one order.
+    clash = (WorkPlanJob.query.join(WorkPlanDay)
+             .filter(WorkPlanDay.work_plan_id == plan_id,
+                     WorkPlanJob.sap_order_number == order_number,
+                     WorkPlanJob.id != job.id)
+             .first())
+    if clash:
+        raise ValidationError(
+            f"Order {order_number} is already on this plan. Move or delete that one first.")
+
+    manual_hours = float(job.estimated_hours or 0)
+    sap_hours = float(order.estimated_hours or 0)
+
+    moved = reanchor_job_tasks(job, order_number)
+
+    job.sap_order_number = order_number
+    job.sap_order_type = order.order_type
+    job.job_type = order.job_type or job.job_type
+    if order.work_center:
+        job.work_center = order.work_center
+    if order.cycle_id:
+        job.cycle_id = order.cycle_id
+    if order.overdue_value is not None:
+        job.overdue_value = order.overdue_value
+        job.overdue_unit = order.overdue_unit
+    if sap_hours > 0:
+        job.estimated_hours = sap_hours
+
+    # Out of the box: it is planned now, in this week.
+    order.status = 'scheduled'
+    order.work_plan_id = plan_id
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Linked to SAP order {order_number}',
+        'job': job.to_dict(get_language(user)),
+        'moved_attachments': moved,
+        'hours': {
+            'manual_estimate': manual_hours,
+            'sap': sap_hours,
+            # Which one the day is now charged. SAP wins when it has a number.
+            'applied': float(job.estimated_hours or 0),
+        },
+    }), 200
+
+
+@bp.route('/<int:plan_id>/jobs/<int:job_id>/link-candidates', methods=['GET'])
+@jwt_required()
+def link_candidates(plan_id, job_id):
+    """Orders in the pool that could be the one this hand-typed job is waiting for.
+
+    Same machine, still in the box. Deliberately NOT matched on description:
+    the yard writes in Arabic and English, and a wrong link silently fuses two
+    different pieces of work. The machine narrows it; a person confirms it.
+    """
+    engineer_or_admin_required()
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job or job.day.work_plan_id != plan_id:
+        raise NotFoundError("Job not found in this plan")
+
+    orders = []
+    if job.equipment_id:
+        orders = (pool_orders_query(plan_id)
+                  .filter(SAPWorkOrder.equipment_id == job.equipment_id)
+                  .order_by(SAPWorkOrder.order_number)
+                  .all())
+
+    return jsonify({
+        'status': 'success',
+        'already_linked': bool(job.sap_order_number
+                               and not is_manual_order_number(job.sap_order_number)),
+        'candidates': [{
+            'order_number': o.order_number,
+            'order_type': o.order_type,
+            'job_type': o.job_type,
+            'description': o.description or '',
+            'estimated_hours': o.estimated_hours,
+            'work_center': o.work_center,
+        } for o in orders],
+    }), 200
 
 
 @bp.route('/<int:plan_id>/jobs/<int:job_id>', methods=['DELETE'])
@@ -5684,6 +5829,73 @@ def _attachment_matches_kind(attachment, kind):
     return ext in (_PHOTO_EXTENSIONS if kind == 'photo' else _VOICE_EXTENSIONS)
 
 
+def reanchor_job_tasks(job, new_sap_order_number):
+    """Move a job's sub-tasks, photos and voice notes onto a new order number.
+
+    THE BUG THIS EXISTS TO CLOSE
+    ============================
+
+    Sub-tasks and attachments hang on `anchor_for(job)`, which is DERIVED from
+    `job.sap_order_number`. That is what makes them survive a trip through the
+    pool. It also means changing the number moves the anchor — and everything
+    already attached is left behind. The rows are not deleted; the job simply
+    stops being able to see them.
+
+    Proven against the live endpoints, 2026-09-10:
+
+        BEFORE: ['Check the spreader']  anchor sap MAN-1-1
+        PUT sap_order_number = 700000123456  ->  200 OK
+        AFTER:  []                     anchor sap 700000123456
+        rows still in the table: 1
+
+    And it is exactly the move Ali described wanting to make — "sometimes i make
+    a manual job before i open the order in SAP, then when i opened in sap i need
+    a connection between them". Typing a hand-written job's real order number
+    silently threw away the notes and photos put on it while it waited.
+
+    Call this BEFORE assigning the new number.
+
+    Returns how many rows moved.
+    """
+    old_kind, old_key = anchor_for_job(job)
+    new_number = (new_sap_order_number or '').strip()
+
+    # Ask the anchor rule itself rather than guessing the new key — it strips
+    # the split suffix ('-P2'), and a second copy of that logic here would drift.
+    from app.models.work_plan_job_task import anchor_for_values
+    new_kind, new_key = anchor_for_values(
+        new_number, job.defect_id, job.inspection_assignment_id, job.id)
+
+    if (old_kind, old_key) == (new_kind, new_key):
+        return 0
+
+    rows = (WorkPlanJobTask.query
+            .filter_by(anchor_kind=old_kind, anchor_key=old_key)
+            .all())
+    for row in rows:
+        row.anchor_kind = new_kind
+        row.anchor_key = new_key
+        # An anchored row must not keep a plan-row foreign key: purge_job_rows
+        # deletes by work_plan_job_id, and a linked job now belongs to the order.
+        if new_kind == 'sap':
+            row.work_plan_job_id = None
+    return len(rows)
+
+
+def _trade_split_of(job):
+    """MECH/ELEC hours for this order, or None if the sums are unavailable.
+
+    Never allowed to break the task list: a job's notes must still load if the
+    trade maths trips over something unexpected.
+    """
+    try:
+        from app.services.trade_split import describe
+        return describe(job)
+    except Exception:
+        logger.warning('trade split failed for job %s', job.id, exc_info=True)
+        return None
+
+
 def _tasks_for_job(job):
     kind, key = anchor_for_job(job)
     return (WorkPlanJobTask.query
@@ -5706,6 +5918,11 @@ def _task_payload(job, tasks, language='en'):
         'tasks': [t.to_dict(language) for t in tasks],
         'total': len(tasks),
         'done': done,
+        # None when this job has no SAP operations — the plain sub-task case.
+        'operations_progress': operations_progress(tasks),
+        # What this order costs each crew. Reported whether or not the budget
+        # split is switched on — see app/services/trade_split.py.
+        'trade_split': _trade_split_of(job),
     }
 
 
@@ -5908,6 +6125,130 @@ def update_job_task(job_id, task_id):
     return jsonify({'status': 'success',
                     'task': task.to_dict(get_language(user)),
                     **_task_payload(job, _tasks_for_job(job), get_language(user))}), 200
+
+
+@bp.route('/jobs/<int:job_id>/tasks/<int:task_id>/timer', methods=['POST'])
+@jwt_required()
+def job_task_timer(job_id, task_id):
+    """Start, pause, resume or finish ONE operation inside an order.
+
+    Ali, 2026-09-11, choosing this over a simple tick: "an order with many
+    operations he should do 1 by 1", each with its own start/stop and real hours.
+
+    Body: {"action": "start" | "pause" | "resume" | "finish"}
+
+    WHY THE ORDER'S OWN TIMER IS NOT TOUCHED HERE
+    =============================================
+
+    `work_plan_job_trackings.work_plan_job_id` is UNIQUE — one timer per job, by
+    constraint — and everything downstream (carry-over, the day ripple, the
+    Telegram finish, /my-plan) reads it. Rather than fork that into two competing
+    truths, the ORDER's state is DERIVED from its operations: see
+    operations_progress(). The first operation to start marks the order started;
+    the order is finishable when none are left.
+    """
+    user = get_current_user()
+    job = _job_for_tasks(job_id)
+
+    task = db.session.get(WorkPlanJobTask, task_id)
+    kind, key = anchor_for_job(job)
+    if not task or task.anchor_kind != kind or task.anchor_key != key:
+        raise NotFoundError("Operation not found on this job")
+
+    if not _may_tick(user, job):
+        raise ForbiddenError("Only the assigned team, engineers and admins can do this")
+
+    action = (request.get_json() or {}).get('action')
+    if action not in ('start', 'pause', 'resume', 'finish'):
+        raise ValidationError("action must be start, pause, resume or finish")
+
+    now = datetime.utcnow()
+    status = task.status or ('completed' if task.is_done else 'pending')
+
+    if action == 'start':
+        if status in ('in_progress', 'paused'):
+            raise ValidationError("That operation is already started")
+        task.started_at = now
+        task.paused_at = None
+        task.total_paused_minutes = 0
+        task.status = 'in_progress'
+
+    elif action == 'pause':
+        if status != 'in_progress':
+            raise ValidationError("That operation is not running")
+        task.paused_at = now
+        task.status = 'paused'
+
+    elif action == 'resume':
+        if status != 'paused':
+            raise ValidationError("That operation is not paused")
+        if task.paused_at:
+            task.total_paused_minutes = (task.total_paused_minutes or 0) + int(
+                (now - task.paused_at).total_seconds() // 60)
+        task.paused_at = None
+        task.status = 'in_progress'
+
+    else:  # finish
+        if status == 'completed':
+            raise ValidationError("That operation is already finished")
+        if not task.started_at:
+            # Finishing something never started is legitimate — a man does the
+            # work and remembers the app afterwards. Record it as zero elapsed
+            # rather than refusing and losing the fact that it is done.
+            task.started_at = now
+        if status == 'paused' and task.paused_at:
+            task.total_paused_minutes = (task.total_paused_minutes or 0) + int(
+                (now - task.paused_at).total_seconds() // 60)
+        task.paused_at = None
+        elapsed = (now - task.started_at).total_seconds() / 3600.0
+        worked = max(elapsed - (task.total_paused_minutes or 0) / 60.0, 0.0)
+        task.actual_hours = round(worked, 2)
+        task.status = 'completed'
+        task.is_done = True
+        task.done_by_id = user.id
+        task.done_at = now
+
+    db.session.commit()
+
+    tasks = _tasks_for_job(job)
+    return jsonify({'status': 'success',
+                    'task': task.to_dict(get_language(user)),
+                    'progress': operations_progress(tasks),
+                    **_task_payload(job, tasks, get_language(user))}), 200
+
+
+def operations_progress(tasks):
+    """The order's state, worked out FROM its operations. Never stored twice.
+
+    Two separate truths about whether an order is under way would drift apart
+    within a week, so there is only one: the operations.
+
+      * any operation started  -> the order is started
+      * every operation done   -> the order can be finished
+      * actual hours           -> the sum of the operations' actual hours
+      * remaining              -> the planned hours of what is still undone
+    """
+    ops = [t for t in tasks if (t.source or 'manual') == 'sap'
+           or t.operation_number]
+    if not ops:
+        return None
+
+    done = [t for t in ops if t.is_done]
+    running = [t for t in ops if (t.status or '') == 'in_progress']
+    started = [t for t in ops if t.started_at]
+    remaining = sum(float(t.planned_hours or 0) for t in ops if not t.is_done)
+    actual = sum(float(t.actual_hours or 0) for t in ops if t.actual_hours)
+
+    return {
+        'total': len(ops),
+        'done': len(done),
+        'running': len(running),
+        'is_started': bool(started),
+        'all_done': len(done) == len(ops),
+        'remaining_hours': round(remaining, 2),
+        'actual_hours': round(actual, 2),
+        'planned_hours': round(sum(float(t.planned_hours or 0) for t in ops), 2),
+    }
 
 
 @bp.route('/jobs/<int:job_id>/tasks/<int:task_id>', methods=['DELETE'])

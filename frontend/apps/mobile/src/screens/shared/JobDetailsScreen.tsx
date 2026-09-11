@@ -32,6 +32,8 @@ import { workPlansApi } from '@inspection/shared';
 import type { JobDetails } from '@inspection/shared';
 import JobSubTasksCard from '../../components/JobSubTasksCard';
 import JobAttachmentsCard from '../../components/JobAttachmentsCard';
+import JobOperationsCard from '../../components/JobOperationsCard';
+import { useAuth } from '../../providers/AuthProvider';
 
 const SEVERITY_COLORS: Record<string, string> = {
   low: '#9E9E9E',
@@ -49,6 +51,7 @@ const JOB_TYPE_COLORS: Record<string, string> = {
 
 export default function JobDetailsScreen() {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const route = useRoute<any>();
   const { jobId } = route.params || {};
   const isAr = i18n.language === 'ar';
@@ -171,6 +174,20 @@ export default function JobDetailsScreen() {
           it. Ali, 2026-09-09: "the goal of this photo and voice is to make the
           job clear for them". */}
       <JobAttachmentsCard jobId={jobId} />
+
+      {/* The operations inside the order, each with its own timer.
+          Ali, 2026-09-11: "an order with many operations he should do 1 by 1".
+          His trade decides which lines come first; the other trade folds away
+          rather than disappearing, so a missing line never reads as lost data. */}
+      <JobOperationsCard
+        jobId={jobId}
+        workCenter={
+          user?.specialization === 'electrical' ? 'ELEC'
+            : user?.specialization === 'mechanical' ? 'MECH'
+              : null
+        }
+      />
+
       <JobSubTasksCard jobId={jobId} />
 
       {/* ── SAP block ── */}

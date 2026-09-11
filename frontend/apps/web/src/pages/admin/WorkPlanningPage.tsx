@@ -98,6 +98,7 @@ import {
   BundleCard,
   JobAttachments,
   RelatedJobsModal,
+  LinkSapOrder,
   PlanScoreCard,
   GenerationActionBar,
   PdfFilterModal,
@@ -4166,6 +4167,18 @@ export default function WorkPlanningPage() {
                 behind the "+" on the card. They stick to the job wherever it
                 goes — see JobAttachments for why that is storage and not a
                 feature. */}
+            {/* Ali, 2026-09-10: a job typed before the order existed can be
+                joined to it here. Linking MOVES the notes and photos onto the
+                order number — a bare rename used to orphan them. */}
+            {currentPlan && (
+              <LinkSapOrder
+                planId={currentPlan.id}
+                jobId={selectedJob.id}
+                isManual={isManuallyAddedJob(selectedJob)}
+                currentHours={Number(selectedJob.estimated_hours) || 0}
+              />
+            )}
+
             <JobAttachments
               jobId={selectedJob.id}
               planId={currentPlan?.id}

@@ -223,6 +223,26 @@
 - ✅ **DEPLOYED 2026-09-10** — commit `7886287`, web bundle `index-B9cZgYlV.js`,
   OTA group `1c222b02` on the `preview` channel (runtime 1.0.0). Full detail in HISTORY.md.
 
+### SAP operations + linking a job to an order — BUILT 2026-09-11, NOT PUSHED
+- **A live bug is fixed:** typing a real order number onto a manual job silently
+  orphaned its notes/photos (they hang on the order number). Proven, then closed in
+  `reanchor_job_tasks()` — wired into BOTH the new link endpoint and plain `PUT`.
+- `POST /jobs/<id>/link-sap-order`: order must exist, attachments move, order leaves
+  the pool, day re-priced with SAP hours ("show both, sap hours win").
+- **Operations live in `work_plan_job_tasks`** (`source`, `operation_number`,
+  `work_center`, `planned_hours` + own timer). One list holds Ali's typed lines AND
+  SAP's operations, as he asked. Order state is DERIVED, never tracked twice.
+- **⚠️ IW49 columns are GUESSED and all optional.** `rows_to_frame` RAISES on a
+  missing column, so a wrong name would kill the whole pool sync. Worst case now:
+  no operations, and the report names the real headers.
+  **`flask sap-operation-headers` on Render ends the guessing — needs Ali's file.**
+- Re-sync NEVER resets `is_done`/timers. A dropped operation with work on it is kept
+  and flagged, not deleted.
+- **⚠️ Phase 2 (`TRADE_SPLIT_BUDGET`) SHIPS OFF.** It re-prices every day in every
+  week. The numbers are exposed regardless. Do not enable until BOTH `defect_mech`
+  and `defect_elec` rules exist per berth — a crew with no rule gets an empty wallet.
+- 1090 backend tests. Full detail in `tasks/sap-operations-and-order-linking.md`.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

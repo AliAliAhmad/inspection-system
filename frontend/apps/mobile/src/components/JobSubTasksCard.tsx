@@ -82,7 +82,13 @@ export default function JobSubTasksCard({ jobId }: Props) {
   // "Photo" — so before this filter a worker saw a tickable box saying "Photo"
   // with no photo on it, which reads like the photo failed to load. A photo is
   // not a task to tick off; it is what the job IS.
-  const tasks = (data?.tasks ?? []).filter((task) => !task.attachment_kind);
+  // Neither media nor SAP operations belong in this plain tick list: photos are
+  // drawn by JobAttachmentsCard and operations by JobOperationsCard, which gives
+  // each its own start/pause/finish. What is left is what it was built for —
+  // the planner's written notes.
+  const tasks = (data?.tasks ?? []).filter(
+    (task) => !task.attachment_kind && task.source !== 'sap' && !task.operation_number,
+  );
 
   // Nothing to say when the planner left no list — no empty card on the screen.
   if (isLoading || tasks.length === 0) return null;

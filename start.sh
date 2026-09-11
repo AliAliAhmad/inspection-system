@@ -860,6 +860,49 @@ with app.app_context():
             db.session.rollback()
             print('work_plan_job_tasks.%s already exists' % col_name)
 
+    # SAP operations live in the sub-task list, each with its own timer.
+    # Ali, 2026-09-10: an order can hold many operations and a worker deals with
+    # them one by one. source tells his hand-typed lines from SAP-imported ones.
+    for col_name, col_type in (('source', 'VARCHAR(10)'),
+                               ('operation_number', 'VARCHAR(10)'),
+                               ('work_center', 'VARCHAR(10)'),
+                               ('planned_hours', 'NUMERIC(6,2)'),
+                               ('status', 'VARCHAR(20)'),
+                               ('started_at', 'TIMESTAMP'),
+                               ('paused_at', 'TIMESTAMP'),
+                               ('total_paused_minutes', 'INTEGER DEFAULT 0'),
+                               ('actual_hours', 'NUMERIC(6,2)')):
+        try:
+            db.session.execute(text(
+                'ALTER TABLE work_plan_job_tasks ADD COLUMN %s %s'
+                % (col_name, col_type)))
+            db.session.commit()
+            print('Added work_plan_job_tasks.%s' % col_name)
+        except Exception:
+            db.session.rollback()
+            print('work_plan_job_tasks.%s already exists' % col_name)
+
+    # Existing rows predate the column and are all hand-typed by definition.
+    try:
+        q = chr(39)
+        db.session.execute(text(
+            'UPDATE work_plan_job_tasks SET source = '
+            + q + 'manual' + q + ' WHERE source IS NULL'))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    # One row per operation per order, so a re-sync updates instead of duplicating.
+    try:
+        db.session.execute(text(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_work_plan_job_task_operation '
+            'ON work_plan_job_tasks (anchor_kind, anchor_key, operation_number)'))
+        db.session.commit()
+        print('Added uq_work_plan_job_task_operation')
+    except Exception:
+        db.session.rollback()
+        print('uq_work_plan_job_task_operation already exists')
+
     # Create maintenance_cycles table
     try:
         db.session.execute(text('''

@@ -40,6 +40,7 @@ from app.services.sap_order_parser import (
     load_maintenance_plan_types,
     parse_open_orders,
     parse_operation_hours,
+    parse_operations,
     pm_interval_hours,
 )
 from app.services.sap_removal_rules import _Reporter, reconcile_scheduled_orders
@@ -206,6 +207,18 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     iw49, _ = _current_file_bytes(sheet_name='IW49')
     had_iw49 = bool(iw49)
     hours_by_order, _ = parse_operation_hours(iw49) if iw49 else ({}, {})
+    # The same file, read a second time for the individual operations.
+    #
+    # Ali, 2026-09-10: "user should see the operations inside the order and he
+    # can deal with each". They were always in this file — parse_operation_hours
+    # summed them and threw every row away, 56,131 rows a run.
+    #
+    # parse_operations NEVER raises for an unrecognised layout: it returns
+    # nothing and reports the headers it saw. We do not have a real export, and
+    # a guessed column name in the strict reader would take this whole sync down
+    # rather than just skipping the operations.
+    operations_by_order, operations_report = (
+        parse_operations(iw49) if iw49 else ({}, {}))
     del iw49
 
     ik17, _ = _current_file_bytes(sheet_name='IK17')
@@ -545,6 +558,11 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         'retired_codes': sorted(retired_hits),
         'orders_skipped_retired': skipped_retired,
         'inputs': {'iw49': had_iw49, 'ik17': had_ik17, 'maintenance_plan': had_plan_file},
+        # What the operation import actually managed. `usable: false` with the
+        # real headers listed is how we learn this export's column names.
+        'operations': dict(operations_report,
+                           stored=sync_order_operations(operations_by_order,
+                                                        dry_run=dry_run)),
         'delivered': _delivered_summary(),
         'removal_rules': removal,
         'parse': parse_report,
@@ -561,6 +579,104 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
 # does not stop the boot and the table would silently not exist.
 REPORT_FILENAME = 'last_report.json'
 DRY_RUN_REPORT_FILENAME = 'last_dry_run.json'
+
+
+def sync_order_operations(operations_by_order, dry_run=False):
+    """Store IW49's operations as rows on each order's task list.
+
+    UPSERT, NEVER REPLACE
+    =====================
+
+    Keyed on (anchor, operation_number). A re-sync refreshes the text, the hours
+    and the work centre — and NEVER touches `is_done`, `status`, `started_at`,
+    `paused_at` or `actual_hours`. A man ticked that box and a timer ran against
+    that operation; a Tuesday morning file refresh must not undo either.
+
+    An operation SAP no longer sends is kept, not deleted, when work has been
+    done against it. Deleting it would erase the record that the work happened.
+    An untouched one is dropped, because it is simply not part of the order any
+    more.
+
+    Returns a small report.
+    """
+    from app.models.work_plan_job_task import WorkPlanJobTask
+    from app.models.work_plan_job_task import _SPLIT_SUFFIX
+
+    counts = {'orders': 0, 'added': 0, 'updated': 0,
+              'kept_but_gone_from_sap': 0, 'removed': 0}
+    if not operations_by_order:
+        return counts
+
+    for order_number, operations in operations_by_order.items():
+        key = _SPLIT_SUFFIX.sub('', str(order_number).strip())
+        if not key:
+            continue
+        counts['orders'] += 1
+
+        existing = {row.operation_number: row for row in
+                    WorkPlanJobTask.query.filter_by(
+                        anchor_kind='sap', anchor_key=key, source='sap').all()}
+        seen = set()
+
+        for position, op in enumerate(operations):
+            number = op['operation_number']
+            seen.add(number)
+            row = existing.get(number)
+            text_ = op['description'] or f'Operation {number}'
+            if row is None:
+                if not dry_run:
+                    db.session.add(WorkPlanJobTask(
+                        anchor_kind='sap', anchor_key=key,
+                        source='sap',
+                        operation_number=number,
+                        content=text_,
+                        work_center=op['work_center'],
+                        planned_hours=op['planned_hours'],
+                        status='pending',
+                        position=position,
+                        # SAP is the author, not a person. created_by_id is NOT
+                        # NULL, so the sync's own user is used where one exists.
+                        created_by_id=_sync_author_id(),
+                    ))
+                counts['added'] += 1
+            else:
+                # Refresh what SAP owns. Never what a man did.
+                row.content = text_
+                row.work_center = op['work_center']
+                row.planned_hours = op['planned_hours']
+                row.position = position
+                counts['updated'] += 1
+
+        for number, row in existing.items():
+            if number in seen:
+                continue
+            touched = bool(row.is_done or row.started_at or row.actual_hours)
+            if touched:
+                # Keep the evidence. Flag it so the screen can say so.
+                row.status = 'removed_in_sap'
+                counts['kept_but_gone_from_sap'] += 1
+            else:
+                if not dry_run:
+                    db.session.delete(row)
+                counts['removed'] += 1
+
+    if not dry_run:
+        db.session.commit()
+    return counts
+
+
+def _sync_author_id():
+    """A user id to stamp SAP-authored rows with.
+
+    created_by_id is NOT NULL and the sync is a robot. Prefer any admin; fall
+    back to the lowest user id so a fresh database still imports.
+    """
+    from app.models import User
+    admin = User.query.filter_by(role='admin').order_by(User.id).first()
+    if admin:
+        return admin.id
+    any_user = User.query.order_by(User.id).first()
+    return any_user.id if any_user else None
 
 
 def _report_path(dry_run=False):

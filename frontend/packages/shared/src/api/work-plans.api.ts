@@ -122,6 +122,28 @@ export const workPlansApi = {
     return getApiClient().post<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs`, payload);
   },
 
+  /**
+   * Attach a real SAP order number to a job that was typed by hand.
+   *
+   * NOT the same as updateJob({sap_order_number}) — this checks the order
+   * exists, MOVES the job's notes and photos onto the new order number (they
+   * hang on it, so a bare rename orphans them), takes the order out of the pool,
+   * and re-prices the day with SAP's hours.
+   */
+  linkSapOrder(planId: number, jobId: number, orderNumber: string) {
+    return getApiClient().post<ApiResponse<any>>(
+      `/api/work-plans/${planId}/jobs/${jobId}/link-sap-order`,
+      { order_number: orderNumber },
+    );
+  },
+
+  /** Pool orders on the same machine that this hand-typed job might be. */
+  linkCandidates(planId: number, jobId: number) {
+    return getApiClient().get<any>(
+      `/api/work-plans/${planId}/jobs/${jobId}/link-candidates`,
+    );
+  },
+
   updateJob(planId: number, jobId: number, payload: UpdateJobPayload) {
     return getApiClient().put<ApiResponse<WorkPlanJob>>(`/api/work-plans/${planId}/jobs/${jobId}`, payload);
   },
@@ -818,6 +840,23 @@ export const workerAssignmentRulesApi = {
 // back out of the pool next week carries the same list. The backend resolves a
 // job id to that anchor, so the client only ever needs the job id.
 
+export type OperationAction = 'start' | 'pause' | 'resume' | 'finish';
+
+/**
+ * The order's state, worked out FROM its operations — never stored twice.
+ * null when the job has no SAP operations (a plain sub-task list).
+ */
+export interface OperationsProgress {
+  total: number;
+  done: number;
+  running: number;
+  is_started: boolean;
+  all_done: boolean;
+  remaining_hours: number;
+  actual_hours: number;
+  planned_hours: number;
+}
+
 export interface JobSubTask {
   id: number;
   content: string;
@@ -834,6 +873,15 @@ export interface JobSubTask {
   /** 'photo' | 'voice' when this line carries one. */
   attachment_kind: 'photo' | 'voice' | null;
   attachment_url: string | null;
+  /** 'sap' rows come from IW49; 'manual' ones Ali typed. They behave the same. */
+  source?: 'manual' | 'sap';
+  operation_number?: string | null;
+  work_center?: string | null;
+  planned_hours?: number | null;
+  status?: string | null;
+  started_at?: string | null;
+  paused_at?: string | null;
+  actual_hours?: number | null;
 }
 
 export interface JobSubTaskList {
@@ -844,6 +892,8 @@ export interface JobSubTaskList {
   tasks: JobSubTask[];
   total: number;
   done: number;
+  /** null when the job carries no SAP operations. */
+  operations_progress?: OperationsProgress | null;
 }
 
 export interface PlanJobSubTasks {
@@ -881,6 +931,17 @@ export const jobSubTasksApi = {
   },
 
   /** Tick/untick is open to the assigned worker; editing content is not. */
+  /**
+   * Start, pause, resume or finish ONE operation inside an order.
+   *
+   * Ali, 2026-09-11: "an order with many operations he should do 1 by 1".
+   * The ORDER's own timer is not touched — its state is derived from these.
+   */
+  timer(jobId: number, taskId: number, action: OperationAction) {
+    return getApiClient().post<any>(
+      `/api/work-plans/jobs/${jobId}/tasks/${taskId}/timer`, { action });
+  },
+
   update(jobId: number, taskId: number, payload: { is_done?: boolean; content?: string }) {
     return getApiClient().patch<JobSubTaskList & { task: JobSubTask }>(
       `/api/work-plans/jobs/${jobId}/tasks/${taskId}`,

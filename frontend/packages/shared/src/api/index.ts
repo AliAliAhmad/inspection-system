@@ -187,6 +187,8 @@ export type {
   JobSubTask,
   JobSubTaskList,
   PlanJobSubTasks,
+  OperationAction,
+  OperationsProgress,
 } from './work-plans.api';
 export { materialsApi } from './materials.api';
 export type {

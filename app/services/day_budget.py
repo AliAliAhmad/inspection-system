@@ -61,16 +61,33 @@ def _rule_member_ids(rule):
 
 
 def team_pools():
-    """{berth: {'pm': set_of_user_ids, 'spec': set_of_user_ids}} from the rules."""
+    """{berth: {'pm': ids, 'spec': ids, 'spec_mech': ids, 'spec_elec': ids}}.
+
+    `spec` is the two defect crews merged, and that is how every wallet has been
+    priced since the beginning. `spec_mech` and `spec_elec` are the SAME men,
+    kept apart — the rules already distinguish `defect_mech` from `defect_elec`,
+    so nothing new is being invented here; the merge is simply not applied.
+
+    They are only USED when TRADE_SPLIT_BUDGET is on (see
+    app/services/trade_split.py). Building them always keeps the two paths from
+    drifting apart, and costs one pass over the same rules.
+    """
     from app.models.worker_assignment_rule import WorkerAssignmentRule
-    pools = {berth: {'pm': set(), 'spec': set()} for berth in ('east', 'west')}
+    pools = {berth: {'pm': set(), 'spec': set(),
+                     'spec_mech': set(), 'spec_elec': set()}
+             for berth in ('east', 'west')}
     for rule in WorkerAssignmentRule.query.filter_by(is_active=True).all():
         if rule.berth not in pools:
             continue
         if rule.team_type in PM_TEAM_TYPES:
             pools[rule.berth]['pm'] |= _rule_member_ids(rule)
         elif rule.team_type in SPEC_TEAM_TYPES:
-            pools[rule.berth]['spec'] |= _rule_member_ids(rule)
+            members = _rule_member_ids(rule)
+            pools[rule.berth]['spec'] |= members
+            if rule.team_type == 'defect_mech':
+                pools[rule.berth]['spec_mech'] |= members
+            elif rule.team_type == 'defect_elec':
+                pools[rule.berth]['spec_elec'] |= members
     return pools
 
 
@@ -125,6 +142,14 @@ def build_week_wallets(plan, days):
             else:
                 wallets[day.id][berth] = {'pm': Wallet(pm_here),
                                           'spec': Wallet(spec_here)}
+
+            # The two defect crews, kept apart. Only consulted when
+            # TRADE_SPLIT_BUDGET is on; present always so the two paths cannot
+            # drift. A crew with no rule of its own gets an EMPTY wallet, which
+            # reads as "no hours", so the flag must not be switched on until
+            # both defect_mech and defect_elec rules exist for the berth.
+            wallets[day.id][berth]['spec_mech'] = Wallet(pool['spec_mech'] - absent)
+            wallets[day.id][berth]['spec_elec'] = Wallet(pool['spec_elec'] - absent)
     return wallets
 
 

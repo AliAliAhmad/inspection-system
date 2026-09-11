@@ -1107,6 +1107,48 @@ def create_app(config_name='development'):
         db.session.commit()
         print(f'Admin user created (id={admin.id})')
 
+    @app.cli.command('sap-operation-headers')
+    def sap_operation_headers():
+        """Print the column names in the latest IW49 export.
+
+        THE POINT OF THIS COMMAND
+
+        We do not have a real IW49 file, and SAP layouts differ between systems
+        and between a user's saved variants. `parse_operations` therefore tries a
+        list of candidate names for each field and imports nothing if it
+        recognises none — deliberately, because the strict reader RAISES on a
+        missing column and a guessed name would take the whole pool sync down
+        rather than just skipping the operations.
+
+        Run this against a real export and it prints exactly what the columns are
+        called, so the right names can be added to OPERATION_COLUMN_CANDIDATES
+        and the guessing ends.
+        """
+        from app.services.sap_pool_sync import _current_file_bytes
+        from app.services.sap_order_parser import read_iw49_headers
+
+        data, name = _current_file_bytes(sheet_name='IW49')
+        if not data:
+            print('No IW49 file found in the delivered files.')
+            return
+
+        info = read_iw49_headers(data)
+        print(f'IW49 file: {name}')
+        print(f'\n{len(info["headers"])} columns:')
+        for header in info['headers']:
+            print(f'  {header}')
+
+        print('\nMatched:')
+        for field, matched in info['matched'].items():
+            print(f'  {field:<12} -> {matched or "NOT FOUND"}')
+
+        if info['missing']:
+            print('\nMissing: ' + ', '.join(info['missing']))
+            print('Add the real names to OPERATION_COLUMN_CANDIDATES in')
+            print('app/services/sap_order_parser.py')
+        else:
+            print('\nEvery operation column was recognised.')
+
     @app.cli.command('reset-data')
     def reset_data():
         """

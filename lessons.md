@@ -630,3 +630,22 @@ iOS plays nothing while reporting no error.
 LESSON: A TypeScript interface that omits a field the server sends makes real data
 unreadable, and the error looks like the data is missing → When a field "does not
 exist on type", check whether the API sends it before assuming it must be fetched.
+
+LESSON: A durable anchor (hanging attachments on the SAP order number) is also a
+RENAME HAZARD — changing the number orphaned everything attached → When identity
+is derived from a mutable field, every writer of that field must re-anchor. Close
+the plain update too, not only the new front door.
+
+LESSON: A strict column reader that RAISES on a missing column turns a guessed
+header name from "imports nothing" into "the whole sync dies" → When you do not
+have the real file, match columns loosely, make every field optional, and report
+the headers actually seen so the guessing can end.
+
+LESSON: A re-sync that refreshes rows must never reset what a person did.
+`is_done`, timers and actual hours are evidence; description and hours are SAP's
+→ Split every upsert into "what the source owns" and "what a human owns".
+
+LESSON: When the user asks for a VISIBILITY change, do not silently ship the
+CAPACITY change that follows from it → Build it, test it, ship it behind a flag
+that defaults off, and say so. Re-pricing every day of every week while nobody is
+watching is not a side effect a deploy should have.
