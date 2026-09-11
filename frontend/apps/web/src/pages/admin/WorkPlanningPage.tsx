@@ -99,6 +99,7 @@ import {
   JobAttachments,
   RelatedJobsModal,
   LinkSapOrder,
+  JobOperations,
   PlanScoreCard,
   GenerationActionBar,
   PdfFilterModal,
@@ -4178,6 +4179,11 @@ export default function WorkPlanningPage() {
                 currentHours={Number(selectedJob.estimated_hours) || 0}
               />
             )}
+
+            {/* The operations inside the order: SAP's, and Ali's own.
+                Ali, 2026-09-11: "how i can added or see operations?" — the phone
+                had them and this board did not. */}
+            <JobOperations jobId={selectedJob.id} planId={currentPlan?.id} />
 
             <JobAttachments
               jobId={selectedJob.id}

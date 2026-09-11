@@ -5947,6 +5947,17 @@ def get_plan_job_tasks(plan_id):
 
     by_job = WorkPlanJobTask.for_jobs(jobs)
 
+    # The board's "+" badge counts WRITTEN NOTES, not operations.
+    #
+    # Operations arrive in this same list — 1,560 of them after the first real
+    # IW49 import — and counting them turned a job card's quiet '+' into
+    # '0/10' overnight, for lines the popover does not even draw. Operations get
+    # their own card and their own progress bar in the job details window.
+    def notes_only(tasks):
+        return [t for t in tasks if not t.operation_number and not t.parent_task_id]
+
+    counted = {job_id: notes_only(tasks) for job_id, tasks in by_job.items()}
+
     return jsonify({
         'status': 'success',
         'plan_id': plan_id,
@@ -5956,7 +5967,7 @@ def get_plan_job_tasks(plan_id):
                 'total': len(tasks),
                 'done': len([t for t in tasks if t.is_done]),
             }
-            for job_id, tasks in by_job.items() if tasks
+            for job_id, tasks in counted.items() if tasks
         },
     }), 200
 
@@ -5991,6 +6002,20 @@ def add_job_task(job_id):
     attachment_file_id = data.get('attachment_file_id')
     attachment_kind = (data.get('attachment_kind') or '').lower() or None
 
+    # An operation Ali adds himself, alongside the ones SAP sends.
+    #
+    # Ali, 2026-09-10: "what will happen with the operation added manually". The
+    # answer is: nothing different. Give a line an operation number and it joins
+    # the operations list, gets its own start/pause/finish, and counts towards
+    # the order's progress exactly like a SAP one. `source` stays 'manual', so a
+    # re-sync never touches it — SAP does not know it exists and must not.
+    operation_number = (str(data.get('operation_number') or '').strip() or None)
+    planned_hours = data.get('planned_hours')
+    work_center = (str(data.get('work_center') or '').strip().upper() or None)
+
+    # Media hung on ONE operation rather than on the whole job.
+    parent_task_id = data.get('parent_task_id')
+
     # A worker may add a PHOTO or a VOICE NOTE, and nothing else.
     #
     # Ali, 2026-09-09: "in the work details i need to be able to add photo and
@@ -6005,6 +6030,45 @@ def add_job_task(job_id):
 
     if attachment_kind and attachment_kind not in ('photo', 'voice'):
         raise ValidationError("attachment_kind must be 'photo' or 'voice'")
+
+    if operation_number is not None:
+        if user.role not in PLANNING_ROLES:
+            raise ForbiddenError("Only engineers and admins can add an operation")
+        if len(operation_number) > 10:
+            raise ValidationError("operation_number must be 10 characters or fewer")
+        if work_center and work_center not in ('ELEC', 'MECH', 'ELME'):
+            raise ValidationError("work_center must be ELEC, MECH, or ELME")
+        if planned_hours is not None:
+            try:
+                planned_hours = float(planned_hours)
+            except (TypeError, ValueError):
+                raise ValidationError("planned_hours must be a number")
+            if planned_hours < 0 or planned_hours > 999:
+                raise ValidationError("planned_hours must be between 0 and 999")
+        # SAP owns its own numbering. Re-using one would make a re-sync
+        # overwrite Ali's line, or his line shadow SAP's.
+        kind_, key_ = anchor_for_job(job)
+        clash = WorkPlanJobTask.query.filter_by(
+            anchor_kind=kind_, anchor_key=key_,
+            operation_number=operation_number).first()
+        if clash:
+            raise ValidationError(
+                f"Operation {operation_number} already exists on this order")
+    else:
+        planned_hours = None
+        work_center = None
+
+    parent = None
+    if parent_task_id:
+        parent = db.session.get(WorkPlanJobTask, parent_task_id)
+        kind_, key_ = anchor_for_job(job)
+        if (not parent or parent.anchor_kind != kind_
+                or parent.anchor_key != key_):
+            raise NotFoundError("Operation not found on this job")
+        if not parent.operation_number:
+            raise ValidationError("Only an operation can hold its own media")
+        if not attachment_file_id:
+            raise ValidationError("parent_task_id is only for a photo or voice note")
     if attachment_file_id and not attachment_kind:
         raise ValidationError("attachment_kind is required with a file")
 
@@ -6035,6 +6099,8 @@ def add_job_task(job_id):
                                   else "That file is not a recording")
 
     # An attachment IS the content, so a caption is optional beside one.
+    if not content and operation_number:
+        content = f'Operation {operation_number}'
     if not content and attachment_file_id:
         content = ('صورة' if get_language(user) == 'ar' else 'Photo') \
             if attachment_kind == 'photo' \
@@ -6066,6 +6132,13 @@ def add_job_task(job_id):
         content=content,
         attachment_file_id=attachment_file_id,
         attachment_kind=attachment_kind,
+        # 'manual' either way: SAP's own rows are written by the sync, never here.
+        source='manual',
+        operation_number=operation_number,
+        work_center=work_center,
+        planned_hours=planned_hours,
+        status='pending' if operation_number else None,
+        parent_task_id=parent.id if parent else None,
         created_by_id=user.id,
         position=(max([t.position for t in existing]) + 1) if existing else 0,
     )
@@ -6272,6 +6345,10 @@ def delete_job_task(job_id, task_id):
         if not (task.attachment_file_id and task.created_by_id == user.id):
             raise ForbiddenError("You can only remove a photo or voice note you added")
 
+    # An operation's photos and voice notes go with it. They were attached TO
+    # that line; leaving them behind would strand media nothing can display.
+    for child in list(task.children or []):
+        db.session.delete(child)
     db.session.delete(task)
     db.session.commit()
 

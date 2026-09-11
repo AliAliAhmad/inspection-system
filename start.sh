@@ -873,7 +873,8 @@ with app.app_context():
                                ('total_paused_minutes', 'INTEGER DEFAULT 0'),
                                ('actual_hours', 'NUMERIC(6,2)'),
                                ('purchase_requisition', 'VARCHAR(20)'),
-                               ('material_text', 'VARCHAR(255)')):
+                               ('material_text', 'VARCHAR(255)'),
+                               ('parent_task_id', 'INTEGER')):
         try:
             db.session.execute(text(
                 'ALTER TABLE work_plan_job_tasks ADD COLUMN %s %s'

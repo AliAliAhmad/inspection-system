@@ -72,8 +72,10 @@ export default function JobAttachmentsCard({ jobId }: Props) {
     enabled: !!jobId,
   });
 
+  // Media with a parent belongs to ONE operation and is drawn under that
+  // operation by JobOperationsCard. This card is the job's own.
   const media: JobSubTask[] = (data?.tasks ?? []).filter(
-    (task) => task.attachment_kind && task.attachment_url,
+    (task) => task.attachment_kind && task.attachment_url && !task.parent_task_id,
   );
   const photos = media.filter((m) => m.attachment_kind === 'photo');
   const voices = media.filter((m) => m.attachment_kind === 'voice');

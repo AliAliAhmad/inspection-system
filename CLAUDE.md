@@ -246,6 +246,17 @@
   `Confirmation`, `Actual start/finish`. SAP knows which operations it thinks are
   done; pre-marking them could argue with what a crew enters. Raised, left alone.
 - `flask rebuild-pool` runs the sync now instead of waiting for 02:02.
+- **Operations are on the WEB board too** (`JobOperations.tsx`, Job Details): number,
+  hours, trade, timer, progress, waiting-for-material, per-operation photo/voice.
+- **Ali can ADD an operation** — `operation_number` + `planned_hours` + `work_center`
+  on `POST /jobs/<id>/tasks`. `source` stays `manual` so a re-sync never touches it.
+  Cannot re-use a SAP number. Planners only. Board suggests 0900 upwards.
+- **Photo/voice hang on ONE operation** via `parent_task_id`. Job-level panels
+  exclude them; deleting an operation takes its media; an operation carrying media
+  counts as TOUCHED so SAP dropping it keeps-and-flags instead of deleting.
+- **⚠️ The `+` badge counts WRITTEN NOTES only** — operations arriving in the same
+  list turned a quiet `+` into `0/10`. Filtered client-side AND in the plan-wide
+  endpoint so the badge and the popover agree.
 - ✅ **ORPHANS CLEARED 2026-09-11 13:26.** 55,381 rows from the first unscoped run
   are gone; verified by a fresh count (`safe to remove: 0`) and Ali's 9 hand-typed
   lines were 9 before and after. Table holds 1,560 operations + 9 notes.

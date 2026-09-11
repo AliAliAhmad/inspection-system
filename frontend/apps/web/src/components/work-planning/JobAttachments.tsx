@@ -54,9 +54,13 @@ export const JobAttachments: React.FC<JobAttachmentsProps> = ({ jobId, planId, c
     enabled: !!jobId,
   });
 
-  // The same list holds the planner's written sub-tasks; this panel shows only
-  // the lines that carry a photo or a recording.
-  const media: JobSubTask[] = (data?.tasks ?? []).filter((t) => t.attachment_kind);
+  // The same list holds the planner's written sub-tasks AND, since operations
+  // arrived, media hung on one particular operation. This panel is the JOB's
+  // own media, so anything with a parent belongs to an operation and is drawn
+  // under that operation instead — a photo of the cracked glass on 0020 must
+  // not float up here where it loses which line it is about.
+  const media: JobSubTask[] = (data?.tasks ?? []).filter(
+    (t) => t.attachment_kind && !t.parent_task_id);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey });

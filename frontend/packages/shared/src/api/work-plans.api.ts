@@ -883,6 +883,8 @@ export interface JobSubTask {
    * Ali, 2026-09-11: "PR means that this order waiting a material under
    * purchase order" — and PR is NOT translated; it stays as the yard writes it.
    */
+  /** Set when this photo/voice belongs to ONE operation rather than the job. */
+  parent_task_id?: number | null;
   purchase_requisition?: string | null;
   material_text?: string | null;
   waiting_on_material?: boolean;
@@ -945,6 +947,31 @@ export const jobSubTasksApi = {
    * Ali, 2026-09-11: "an order with many operations he should do 1 by 1".
    * The ORDER's own timer is not touched — its state is derived from these.
    */
+  /**
+   * Add an operation of Ali's own, alongside SAP's.
+   *
+   * Same list, same timer, same progress. `source` stays 'manual' on the server
+   * so a re-sync never touches it — SAP does not know it exists.
+   */
+  addOperation(jobId: number, payload: {
+    content: string;
+    operation_number: string;
+    planned_hours?: number;
+    work_center?: 'ELEC' | 'MECH' | 'ELME';
+  }) {
+    return getApiClient().post<JobSubTaskList & { task: JobSubTask }>(
+      `/api/work-plans/jobs/${jobId}/tasks`, payload);
+  },
+
+  /** A photo or voice note hung on ONE operation rather than on the job. */
+  addOperationMedia(jobId: number, parentTaskId: number,
+                    fileId: number, kind: 'photo' | 'voice') {
+    return getApiClient().post<JobSubTaskList & { task: JobSubTask }>(
+      `/api/work-plans/jobs/${jobId}/tasks`,
+      { attachment_file_id: fileId, attachment_kind: kind,
+        parent_task_id: parentTaskId });
+  },
+
   timer(jobId: number, taskId: number, action: OperationAction) {
     return getApiClient().post<any>(
       `/api/work-plans/jobs/${jobId}/tasks/${taskId}/timer`, { action });

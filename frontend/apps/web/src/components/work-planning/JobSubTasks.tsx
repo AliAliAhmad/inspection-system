@@ -57,9 +57,16 @@ const JobSubTasksInner: React.FC<JobSubTasksProps> = ({
     enabled: open,
   });
 
-  const tasks: JobSubTask[] = data?.tasks ?? [];
-  const shownTotal = data?.total ?? total;
-  const shownDone = data?.done ?? done;
+  // Operations and their media are drawn by JobOperations in the job details
+  // window, each with its number, hours, trade and timer. Left in here they
+  // arrived as plain tick boxes with none of that, and a ten-operation order
+  // turned this popover — and the card's badge — into noise.
+  const tasks: JobSubTask[] = (data?.tasks ?? []).filter(
+    (task) => !task.operation_number && !task.parent_task_id);
+  // Counted from the FILTERED list once it is loaded, so the badge agrees with
+  // what the popover shows. Before it opens, the plan-wide number is all we have.
+  const shownTotal = data ? tasks.length : total;
+  const shownDone = data ? tasks.filter((task) => task.is_done).length : done;
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: subTaskQueryKey(jobId) });

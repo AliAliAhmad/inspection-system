@@ -1,3 +1,53 @@
+## 2026-09-11 — Operations you can see on the board, and add yourself
+
+Ali: "how i can added or see operations?" The honest answer was that the phone
+showed them, the web did not, and nobody could add one by hand. Both fixed, plus
+"yes photo and voice too".
+
+### The web board had no operations view — and they were leaking
+
+`JobSubTasks` (the "+" popover) never filtered by source, so after the first IW49
+import 1,560 SAP operations arrived in it as plain tick-boxes: no number, no
+hours, no trade, no timer. A ten-operation order turned a job card's quiet `+`
+into `☑ 0/10` overnight, for lines the popover could not usefully draw.
+
+- `JobOperations.tsx` — its own card in the Job Details window: number, text,
+  status, trade, planned and actual hours, who finished it, a progress bar, the
+  waiting-for-material strip, Start/Pause/Resume/Finish, and per-operation media.
+- The popover now shows only written notes, and **the badge counts them too** —
+  both client-side and in the plan-wide endpoint, so the number before you open
+  it and the number inside it agree.
+
+### An operation Ali adds himself
+
+`POST /jobs/<id>/tasks` now takes `operation_number`, `planned_hours` and
+`work_center`. Give a line a number and it joins the operations list with its own
+timer and its place in the order's progress. `source` stays `'manual'`, so a
+re-sync never touches it — SAP does not know it exists.
+
+It cannot re-use a number SAP uses, or a re-sync would overwrite his line and his
+would shadow SAP's. Planners only: workers add evidence; deciding what the work IS
+stays with the planner. The board suggests 0900 upwards.
+
+### Photo and voice on ONE operation
+
+New self-FK `parent_task_id`. A ten-hour refurbishment has one photo of the whole
+machine and a different one of the cracked glass on 0020 — hung at job level both
+float in the same pile and lose which line they are about.
+
+- Job-level panels on web AND mobile now exclude rows with a parent.
+- Deleting an operation takes its media with it: media left behind would be
+  attached to a line nothing can display.
+- **An operation carrying media counts as TOUCHED**, so SAP dropping the line
+  keeps-and-flags it instead of deleting. His evidence is work too. The prune
+  command's SQL excludes them the same way.
+- The mobile card grew its own viewer and player rather than reaching into the
+  screen's, including the `/upload/f_mp3/` rewrite — Chrome records webm, which
+  iOS cannot play at all.
+
+### Totals
+1111 backend tests (9 new), 32 web. Mobile tsc clean in every file touched.
+
 ## 2026-09-11 — Cleanup finished and verified
 
 `flask prune-orphan-operations --apply` after the bulk-delete fix: 27 batches,
@@ -1234,6 +1284,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

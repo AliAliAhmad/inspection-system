@@ -635,7 +635,7 @@ def find_orphan_operations(known_orders=None):
     for row in WorkPlanJobTask.query.filter_by(source='sap').all():
         if row.anchor_kind != 'sap' or row.anchor_key in known_orders:
             continue
-        if row.is_done or row.started_at or row.actual_hours:
+        if row.is_done or row.started_at or row.actual_hours or row.children:
             kept.append(row)
         else:
             safe.append(row)
@@ -661,12 +661,19 @@ def orphan_operation_ids(known_orders=None, limit=None):
     if known_orders is None:
         known_orders = _orders_the_app_knows()
 
+    # Anything with media hung on it is excluded the same way work is: the
+    # children subquery is the SQL spelling of `or row.children`.
+    has_children = (db.session.query(WorkPlanJobTask.parent_task_id)
+                    .filter(WorkPlanJobTask.parent_task_id.isnot(None))
+                    .subquery())
+
     query = (db.session.query(WorkPlanJobTask.id)
              .filter(WorkPlanJobTask.source == 'sap',
                      WorkPlanJobTask.anchor_kind == 'sap',
                      WorkPlanJobTask.is_done.is_(False),
                      WorkPlanJobTask.started_at.is_(None),
-                     WorkPlanJobTask.actual_hours.is_(None)))
+                     WorkPlanJobTask.actual_hours.is_(None),
+                     ~WorkPlanJobTask.id.in_(db.session.query(has_children))))
     if known_orders:
         query = query.filter(~WorkPlanJobTask.anchor_key.in_(known_orders))
     if limit:
@@ -781,7 +788,10 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
         for number, row in existing.items():
             if number in seen:
                 continue
-            touched = bool(row.is_done or row.started_at or row.actual_hours)
+            # A photo or voice note hung on this operation is a person's work
+            # too. SAP dropping the line does not make his evidence disposable.
+            touched = bool(row.is_done or row.started_at or row.actual_hours
+                           or row.children)
             if touched:
                 # Keep the evidence. Flag it so the screen can say so.
                 row.status = 'removed_in_sap'

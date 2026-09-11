@@ -202,6 +202,197 @@ class TestARefreshCannotUndoWork:
         assert WorkPlanJobTask.query.count() == 2
 
 
+class TestAnOperationAliAddsHimself:
+    """Ali, 2026-09-10: "what will happen with the operation added manually".
+
+    The answer is: nothing different. Give a line an operation number and it
+    joins the operations list, gets its own start/pause/finish, and counts
+    towards the order's progress exactly like a SAP one. `source` stays 'manual'
+    so a re-sync never touches it — SAP does not know it exists.
+    """
+
+    def test_it_appears_beside_sap_operations(self, client, admin_user,
+                                              db_session, plan_day):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MAN01', 'SM01')
+        job = _job(plan, day, eq)
+        sync_order_operations(_operations())
+        headers = _headers(client, admin_user)
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                           json={'content': 'Grease the boom pins',
+                                 'operation_number': '0900',
+                                 'planned_hours': 1.5, 'work_center': 'MECH'})
+        assert resp.status_code == 201, resp.get_json()
+
+        task = resp.get_json()['task']
+        assert task['source'] == 'manual', 'a re-sync must never own this'
+        assert task['operation_number'] == '0900'
+        assert task['planned_hours'] == 1.5
+        assert task['status'] == 'pending'
+
+        progress = resp.get_json()['operations_progress']
+        assert progress['total'] == 4, 'it counts with SAP\'s three'
+        assert progress['planned_hours'] == pytest.approx(10.5)
+
+    def test_it_has_its_own_timer(self, client, admin_user, db_session, plan_day):
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MAN02', 'SM02')
+        job = _job(plan, day, eq)
+        headers = _headers(client, admin_user)
+        made = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                           json={'content': 'Open the telescopic chain',
+                                 'operation_number': '0910'}).get_json()['task']
+
+        url = f"/api/work-plans/jobs/{job.id}/tasks/{made['id']}/timer"
+        assert client.post(url, json={'action': 'start'}, headers=headers).status_code == 200
+        assert client.post(url, json={'action': 'finish'}, headers=headers).status_code == 200
+
+        row = db.session.get(WorkPlanJobTask, made['id'])
+        assert row.is_done is True and row.actual_hours is not None
+
+    def test_a_resync_leaves_it_alone(self, client, admin_user, db_session,
+                                      plan_day):
+        """SAP does not know it exists, so SAP must not be able to remove it."""
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MAN03', 'SM03')
+        job = _job(plan, day, eq)
+        sync_order_operations(_operations())
+        headers = _headers(client, admin_user)
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                    json={'content': 'Mine', 'operation_number': '0920'})
+
+        sync_order_operations(_operations())      # the file lands again
+
+        mine = WorkPlanJobTask.query.filter_by(operation_number='0920').first()
+        assert mine is not None, 'a re-sync deleted a hand-added operation'
+        assert mine.content == 'Mine'
+
+    def test_it_cannot_steal_a_number_sap_uses(self, client, admin_user,
+                                               db_session, plan_day):
+        """Otherwise a re-sync overwrites his line, or his shadows SAP's."""
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MAN04', 'SM04')
+        job = _job(plan, day, eq)
+        sync_order_operations(_operations())
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=_headers(client, admin_user),
+                           json={'content': 'Clash', 'operation_number': '0010'})
+        assert resp.status_code == 400
+
+    def test_a_worker_cannot_add_one(self, client, admin_user, worker,
+                                     db_session, plan_day):
+        """Workers add evidence. Deciding what the work IS stays with the planner."""
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MAN05', 'SM05')
+        job = _job(plan, day, eq)
+        db.session.add(WorkPlanAssignment(work_plan_job_id=job.id, user_id=worker.id))
+        db.session.commit()
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=get_auth_header(client, 'opsworker@test.com', 'test123'),
+                           json={'content': 'Mine', 'operation_number': '0930'})
+        assert resp.status_code == 403
+
+
+class TestMediaOnOneOperation:
+    """Ali, 2026-09-11: "yes photo and voice too".
+
+    A ten-hour refurbishment has one photo of the whole machine and a different
+    one of the cracked glass on operation 0020. Hanging both at job level loses
+    which is which.
+    """
+
+    def _photo(self, db_session, user, name='crack.jpg'):
+        from app.models import File
+        f = File(original_filename=name, stored_filename=f'{user.id}-{name}',
+                 file_path=f'https://res.cloudinary.com/demo/{name}',
+                 file_size=1024, mime_type='image/jpeg', uploaded_by=user.id)
+        db.session.add(f)
+        db.session.commit()
+        return f
+
+    def test_a_photo_hangs_on_the_operation_not_the_job(self, client, admin_user,
+                                                        db_session, plan_day):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MED01', 'SD01')
+        job = _job(plan, day, eq)
+        sync_order_operations(_operations())
+        headers = _headers(client, admin_user)
+
+        operation = WorkPlanJobTask.query.filter_by(operation_number='0020').first()
+        photo = self._photo(db_session, admin_user)
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                           json={'attachment_file_id': photo.id,
+                                 'attachment_kind': 'photo',
+                                 'parent_task_id': operation.id})
+        assert resp.status_code == 201, resp.get_json()
+        assert resp.get_json()['task']['parent_task_id'] == operation.id
+
+    def test_media_must_name_a_real_operation(self, client, admin_user,
+                                              db_session, plan_day):
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MED02', 'SD02')
+        job = _job(plan, day, eq)
+        photo = self._photo(db_session, admin_user)
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=_headers(client, admin_user),
+                           json={'attachment_file_id': photo.id,
+                                 'attachment_kind': 'photo',
+                                 'parent_task_id': 999999})
+        assert resp.status_code == 404
+
+    def test_deleting_an_operation_takes_its_media(self, client, admin_user,
+                                                   db_session, plan_day):
+        """Media left behind would be attached to a line nothing can display."""
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MED03', 'SD03')
+        job = _job(plan, day, eq)
+        headers = _headers(client, admin_user)
+        operation = client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                                json={'content': 'Mine', 'operation_number': '0940'}
+                                ).get_json()['task']
+        photo = self._photo(db_session, admin_user, 'two.jpg')
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                    json={'attachment_file_id': photo.id, 'attachment_kind': 'photo',
+                          'parent_task_id': operation['id']})
+        assert WorkPlanJobTask.query.count() == 2
+
+        client.delete(f"/api/work-plans/jobs/{job.id}/tasks/{operation['id']}",
+                      headers=headers)
+        assert WorkPlanJobTask.query.count() == 0
+
+    def test_a_sap_operation_carrying_a_photo_survives_being_dropped(
+            self, client, admin_user, db_session, plan_day):
+        """His evidence is work too. SAP dropping the line does not bin it."""
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MED04', 'SD04')
+        job = _job(plan, day, eq)
+        sync_order_operations(_operations())
+        headers = _headers(client, admin_user)
+
+        third = WorkPlanJobTask.query.filter_by(operation_number='0030').first()
+        photo = self._photo(db_session, admin_user, 'three.jpg')
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                    json={'attachment_file_id': photo.id, 'attachment_kind': 'photo',
+                          'parent_task_id': third.id})
+
+        shrunk = {'700000123456': _operations()['700000123456'][:2]}
+        counts = sync_order_operations(shrunk)
+
+        assert counts['kept_but_gone_from_sap'] == 1
+        db.session.refresh(third)
+        assert third.status == 'removed_in_sap'
+
+
 class TestOnlyOrdersTheAppKnows:
     """The first real run imported 100x more than anyone can ever open.
 

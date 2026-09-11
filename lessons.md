@@ -695,3 +695,17 @@ infer completion from a message scrolling past; verify with a fresh query.
 LESSON: When a safety filter is rewritten from Python objects into a SQL WHERE
 clause, test that BOTH select the same rows → A filter that is right in Python and
 subtly wrong in SQL deletes the wrong rows quietly.
+
+LESSON: Adding a new KIND of row to a shared table silently changes every screen
+that reads it — 1,560 SAP operations turned a job card's quiet "+" into "0/10"
+overnight → When a table grows a new kind, walk every existing reader and decide
+what each should now show. Filter in BOTH the client and the batch endpoint, or
+the badge and the thing it counts will disagree.
+
+LESSON: Media attached to a parent line rather than the whole job needs the parent
+to count as "touched" for every cleanup rule → Otherwise the row holding a
+person's photo is treated as disposable by a sync that only checks timers.
+
+LESSON: A card that owns a media player must own its cleanup too. Reaching into
+the screen's player through callbacks looks tidier and leaves the sound playing
+when the card unmounts on its own.

@@ -2011,6 +2011,7 @@
     "show_other": "{{n}} for the other trade",
     "hide_other": "Hide the other trade",
     "failed": "Could not update",
-    "waiting_material": "Waiting for material"
+    "waiting_material": "Waiting for material",
+    "voice": "voice note"
   }
 }

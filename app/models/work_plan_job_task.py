@@ -157,6 +157,22 @@ class WorkPlanJobTask(db.Model):
     purchase_requisition = db.Column(db.String(20), nullable=True)
     material_text = db.Column(db.String(255), nullable=True)
 
+    # A photo or voice note attached to ONE operation, rather than the job.
+    #
+    # Ali, 2026-09-11, on hand-added operations: "yes photo and voice too". A
+    # ten-hour refurbishment has one photo of the whole machine and a different
+    # one of the cracked glass on operation 0020; hanging both at job level
+    # loses which is which.
+    #
+    # NULL means the row belongs to the job itself, which is every row written
+    # before this existed — so nothing had to be migrated.
+    parent_task_id = db.Column(db.Integer,
+                               db.ForeignKey('work_plan_job_tasks.id'),
+                               nullable=True, index=True)
+    children = db.relationship('WorkPlanJobTask',
+                               backref=db.backref('parent', remote_side=[id]),
+                               lazy='select')
+
     # ── One timer per operation ────────────────────────────────────────────
     #
     # Ali chose start/pause/finish per operation over a simple tick, knowing it
@@ -249,6 +265,7 @@ class WorkPlanJobTask(db.Model):
             'work_center': self.work_center,
             'planned_hours': (float(self.planned_hours)
                               if self.planned_hours is not None else None),
+            'parent_task_id': self.parent_task_id,
             'purchase_requisition': self.purchase_requisition,
             'material_text': self.material_text,
             # One flag so no screen has to know what a requisition is.

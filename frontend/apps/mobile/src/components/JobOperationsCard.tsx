@@ -27,10 +27,12 @@
  * missing line reads as lost data. So the other trade is folded away behind a
  * count he can tap.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
+  Image, ScrollView, Modal, Dimensions,
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { jobSubTasksApi } from '@inspection/shared';
@@ -56,6 +58,47 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
   const queryClient = useQueryClient();
   const queryKey = ['job-sub-tasks', jobId];
   const [showOtherTrade, setShowOtherTrade] = useState(false);
+  const [openPhoto, setOpenPhoto] = useState<string | null>(null);
+  const [playingUrl, setPlayingUrl] = useState<string | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  // This card owns its player, so this card releases it. The screen's cleanup
+  // does not reach a sound created here.
+  useEffect(() => () => {
+    soundRef.current?.unloadAsync().catch(() => {});
+    soundRef.current = null;
+  }, []);
+
+  const playVoice = useCallback(async (rawUrl: string) => {
+    if (soundRef.current) {
+      await soundRef.current.unloadAsync().catch(() => {});
+      soundRef.current = null;
+      if (playingUrl === rawUrl) { setPlayingUrl(null); return; }
+    }
+    try {
+      // A phone on silent is normal on a yard; without this iOS plays nothing
+      // and reports no error. And Chrome records webm, which iOS cannot play at
+      // all — Cloudinary re-encodes when the URL asks for mp3.
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false,
+                                      playsInSilentModeIOS: true });
+      const uri = rawUrl.includes('cloudinary.com')
+        ? rawUrl.replace('/upload/', '/upload/f_mp3/')
+        : rawUrl;
+      const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
+      soundRef.current = sound;
+      setPlayingUrl(rawUrl);
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync().catch(() => {});
+          soundRef.current = null;
+          setPlayingUrl(null);
+        }
+      });
+    } catch (err) {
+      console.warn('Could not play the operation voice note', err);
+      setPlayingUrl(null);
+    }
+  }, [playingUrl]);
 
   const { data, isLoading } = useQuery({
     queryKey,
@@ -78,9 +121,17 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
       ),
   });
 
+  const all: JobSubTask[] = data?.tasks ?? [];
   const operations: JobSubTask[] = useMemo(
-    () => (data?.tasks ?? []).filter((task) => task.source === 'sap' || task.operation_number),
-    [data],
+    () => all.filter((task) => !!task.operation_number),
+    [all],
+  );
+
+  /** Media the planner hung on ONE operation, not on the whole job. */
+  const mediaFor = useCallback(
+    (operationId: number) =>
+      all.filter((task) => task.parent_task_id === operationId && task.attachment_url),
+    [all],
   );
 
   const mine = useMemo(() => {
@@ -151,6 +202,44 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
               {op.material_text ? ` · ${op.material_text}` : ''}
             </Text>
           </View>
+        )}
+
+        {/* What this operation looks like, or what the planner said about it.
+            Hung on the LINE, so a photo of the cracked glass on 0020 stays
+            attached to 0020 instead of floating in the job's pile. */}
+        {mediaFor(op.id).length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.opMediaStrip}
+            contentContainerStyle={styles.opMediaContent}
+          >
+            {mediaFor(op.id).map((item) => (
+              item.attachment_kind === 'photo' ? (
+                <TouchableOpacity
+                  key={item.id}
+                  testID={`operation-photo-${item.id}`}
+                  activeOpacity={0.8}
+                  onPress={() => setOpenPhoto(item.attachment_url!)}
+                >
+                  <Image source={{ uri: item.attachment_url! }} style={styles.opThumb} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  key={item.id}
+                  testID={`operation-voice-${item.id}`}
+                  activeOpacity={0.7}
+                  onPress={() => playVoice(item.attachment_url!)}
+                  style={styles.opVoiceChip}
+                >
+                  <Text style={styles.opVoiceText}>
+                    {playingUrl === item.attachment_url ? '■' : '▶'}{' '}
+                    {t('job_operations.voice', 'voice note')}
+                  </Text>
+                </TouchableOpacity>
+              )
+            ))}
+          </ScrollView>
         )}
 
         {!dimmed && !done && (
@@ -246,6 +335,21 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
       {timer.isPending && (
         <ActivityIndicator size="small" color="#1976D2" style={styles.spinner} />
       )}
+
+      <Modal visible={!!openPhoto} transparent animationType="fade"
+             onRequestClose={() => setOpenPhoto(null)}>
+        <TouchableOpacity style={styles.viewerBackdrop} activeOpacity={1}
+                          onPress={() => setOpenPhoto(null)}>
+          {openPhoto && (
+            <Image source={{ uri: openPhoto }}
+                   style={{ width: Dimensions.get('window').width, height: '80%' }}
+                   resizeMode="contain" />
+          )}
+          <Text style={styles.viewerHint}>
+            {t('common.tap_to_close', 'Tap anywhere to close')}
+          </Text>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -290,6 +394,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8E1', borderRadius: 4,
   },
   waitingText: { fontSize: 11, color: '#E65100', fontWeight: '600' },
+  opMediaStrip: { marginTop: 6, marginLeft: 42 },
+  opMediaContent: { gap: 6 },
+  opThumb: { width: 64, height: 64, borderRadius: 6, backgroundColor: '#EEE' },
+  opVoiceChip: {
+    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 6,
+    backgroundColor: '#E3F2FD', justifyContent: 'center',
+  },
+  opVoiceText: { fontSize: 11, color: '#1565C0', fontWeight: '700' },
   opActions: { flexDirection: 'row', gap: 8, marginTop: 8, marginLeft: 42 },
   btn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6 },
   btnStart: { backgroundColor: '#1976D2' },
@@ -300,4 +412,9 @@ const styles = StyleSheet.create({
   otherToggle: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#F5F5F5' },
   otherToggleText: { fontSize: 12, color: '#1565C0', fontWeight: '600' },
   spinner: { marginTop: 8 },
+  viewerBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  viewerHint: { color: '#BDBDBD', fontSize: 12, marginTop: 12 },
 });
