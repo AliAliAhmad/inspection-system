@@ -1204,6 +1204,63 @@ def create_app(config_name='development'):
             print()
             print('DRY RUN — nothing was written.')
 
+    @app.cli.command('prune-orphan-operations')
+    @click.option('--apply', 'do_apply', is_flag=True,
+                  help='Actually delete. Without it, only reports.')
+    def prune_orphan_operations(do_apply):
+        """Remove operation rows for orders the app no longer knows.
+
+        WHY THESE EXIST
+
+        The first production import ran before the scope filter and stored
+        operations for every order in the year-to-date export — 56,941 rows
+        across 19,375 orders, while the pool held 183. The filter that followed
+        stops NEW ones, but it cannot reach the ones already written: the sync
+        now skips those orders entirely, so nothing will ever update or delete
+        them. They sit in work_plan_job_tasks forever.
+
+        WHAT IT WILL NOT TOUCH
+
+          * anything Ali typed (source != 'sap') — his notes, photos and voice
+          * any operation with work on it: ticked, started, or with real hours
+          * any order still in the pool or on a plan
+
+        Reports by default. --apply deletes.
+        """
+        from app.models.work_plan_job_task import WorkPlanJobTask
+        from app.services.sap_pool_sync import (_orders_the_app_knows,
+                                                find_orphan_operations)
+
+        known = _orders_the_app_knows()
+        print(f'Orders the app knows: {len(known)}')
+        print('SAP operation rows in the table: '
+              f'{WorkPlanJobTask.query.filter_by(source="sap").count()}')
+
+        orphans, protected = find_orphan_operations(known)
+        print(f'  belong to orders nobody can open: {len(orphans) + len(protected)}')
+        print(f'    with work recorded on them (KEPT): {len(protected)}')
+        print(f'    safe to remove                  : {len(orphans)}')
+
+        manual = WorkPlanJobTask.query.filter(
+            WorkPlanJobTask.source != 'sap').count()
+        print(f'  hand-written lines, never touched : {manual}')
+
+        if not do_apply:
+            print()
+            print('Nothing deleted. Re-run with --apply to remove them.')
+            return
+
+        # In batches: 55,000 deletes in one transaction on a 512 MB instance is
+        # how a cleanup becomes an outage.
+        removed = 0
+        for index in range(0, len(orphans), 500):
+            for row in orphans[index:index + 500]:
+                db.session.delete(row)
+            db.session.commit()
+            removed += len(orphans[index:index + 500])
+            print(f'  removed {removed}/{len(orphans)}')
+        print(f'Done. {removed} rows removed.')
+
     @app.cli.command('sap-operation-headers')
     def sap_operation_headers():
         """Print the column names in the latest IW49 export.

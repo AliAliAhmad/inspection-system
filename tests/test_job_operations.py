@@ -244,6 +244,69 @@ class TestOnlyOrdersTheAppKnows:
         assert counts['added'] == 3
 
 
+class TestCleaningUpTheFirstRun:
+    """The first production import stored 56,941 rows; 1,560 are reachable.
+
+    It ran before the scope filter, so it kept operations for every order in the
+    year-to-date export. The filter stops new ones but cannot reach those — the
+    sync now skips those orders entirely, so nothing will ever update or delete
+    them. 55,381 rows would sit there forever.
+
+    The danger in a cleanup like this is deleting the wrong thing, so these tests
+    are mostly about what it must NOT touch.
+    """
+
+    def _orphan(self, order='700000555555', **kwargs):
+        row = WorkPlanJobTask(anchor_kind='sap', anchor_key=order, source='sap',
+                              operation_number='0010', content='Ancient history',
+                              created_by_id=1, **kwargs)
+        db.session.add(row)
+        db.session.commit()
+        return row
+
+    def test_an_unreachable_operation_is_offered_for_removal(self, db_session,
+                                                             admin_user):
+        from app.services.sap_pool_sync import find_orphan_operations
+        self._orphan()
+        safe, kept = find_orphan_operations(known_orders={'700000123456'})
+        assert len(safe) == 1
+        assert kept == []
+
+    def test_an_order_the_app_knows_is_never_offered(self, db_session, admin_user):
+        from app.services.sap_pool_sync import find_orphan_operations
+        self._orphan(order='700000123456')
+        safe, kept = find_orphan_operations(known_orders={'700000123456'})
+        assert safe == [] and kept == []
+
+    def test_an_operation_with_work_on_it_is_kept(self, db_session, admin_user):
+        """Evidence that work happened outlives the order leaving the pool."""
+        from datetime import datetime
+        from app.services.sap_pool_sync import find_orphan_operations
+        self._orphan(started_at=datetime.utcnow())
+        safe, kept = find_orphan_operations(known_orders={'700000123456'})
+        assert safe == [] and len(kept) == 1
+
+    def test_a_finished_operation_is_kept(self, db_session, admin_user):
+        from app.services.sap_pool_sync import find_orphan_operations
+        self._orphan(is_done=True)
+        safe, kept = find_orphan_operations(known_orders={'700000123456'})
+        assert safe == [] and len(kept) == 1
+
+    def test_a_hand_typed_line_is_never_touched(self, db_session, admin_user):
+        """Ali's notes, photos and voice live in this same table.
+
+        This is the one that would hurt: a cleanup that swept his own work away
+        while removing SAP's leftovers.
+        """
+        from app.services.sap_pool_sync import find_orphan_operations
+        db.session.add(WorkPlanJobTask(
+            anchor_kind='sap', anchor_key='700000555555', source='manual',
+            content='Bring the 32mm socket', created_by_id=1))
+        db.session.commit()
+        safe, kept = find_orphan_operations(known_orders={'700000123456'})
+        assert safe == [] and kept == []
+
+
 class TestWaitingOnMaterial:
     """Ali, 2026-09-11: "PR means that this order waiting a material under
     purchase order".

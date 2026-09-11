@@ -668,3 +668,16 @@ OPERATION → When you finally see a real data source, read the WHOLE schema. Al
 LESSON: A status flag imported from an external system must refresh in BOTH
 directions. A requisition that is cleared when the part arrives, but only ever
 written when present, leaves a man waiting for something already on the shelf.
+
+LESSON: A scope filter added after a bad import stops NEW rows but cannot reach
+the ones already written — they belong to records the new code skips entirely, so
+nothing ever updates or deletes them → Every time you narrow an import, ask what
+the previous width already wrote, and ship a cleanup with the filter.
+
+LESSON: "added 0 · updated 1560" was the tell. The number that mattered was the
+one that did NOT appear → Read an import report for what is missing, not only for
+what it reports.
+
+LESSON: A cleanup that shares a table with the user's own work is the dangerous
+kind. Write the tests for what it must NOT delete first, and batch the deletes —
+55,000 in one transaction on a small instance is how a tidy-up becomes an outage.

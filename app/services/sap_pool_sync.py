@@ -612,6 +612,36 @@ def _orders_the_app_knows():
     return known
 
 
+def find_orphan_operations(known_orders=None):
+    """(safe_to_remove, kept_because_work_was_done) among SAP operation rows.
+
+    The first production import ran before the scope filter and stored
+    operations for every order in the year-to-date export — 56,941 rows across
+    19,375 orders, while the pool held 183. The filter stops NEW ones; it cannot
+    reach the ones already written, because the sync now skips those orders
+    entirely. They would sit in work_plan_job_tasks forever.
+
+    Three things are never returned as removable:
+      * anything a person typed (source != 'sap')
+      * any operation with work on it — ticked, started, or with real hours
+      * any order still in the pool or on a plan
+    """
+    from app.models.work_plan_job_task import WorkPlanJobTask
+
+    if known_orders is None:
+        known_orders = _orders_the_app_knows()
+
+    safe, kept = [], []
+    for row in WorkPlanJobTask.query.filter_by(source='sap').all():
+        if row.anchor_kind != 'sap' or row.anchor_key in known_orders:
+            continue
+        if row.is_done or row.started_at or row.actual_hours:
+            kept.append(row)
+        else:
+            safe.append(row)
+    return safe, kept
+
+
 def sync_order_operations(operations_by_order, dry_run=False, known_orders=None):
     """Store IW49's operations as rows on each order's task list.
 

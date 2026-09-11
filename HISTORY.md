@@ -1,3 +1,35 @@
+## 2026-09-11 — The scope fix worked, and left 55,381 rows behind
+
+Second production run, with the filter in place:
+
+    07:13:18  start
+    07:17:02  parse done      3m44s
+    07:17:04  finished        2 SECONDS for the operations (was 6m23s)
+
+    STORED for 161 orders the app knows (19,214 skipped)
+      added 0 · updated 1560
+
+**`added 0` is the finding.** Those 1,560 already existed, from the first
+unscoped run — which means the other **55,381 rows are orphaned**. They belong to
+orders the sync now skips entirely, so nothing will ever update or delete them.
+The filter stops new ones; it cannot reach the ones already written.
+
+`flask prune-orphan-operations` (reports by default, `--apply` deletes) and
+`find_orphan_operations()` behind it. Three things it will never remove:
+
+  * anything a person typed (`source != 'sap'`) — Ali's notes, photos and voice
+    live in this same table, and sweeping those away while tidying SAP's
+    leftovers is the one mistake that would actually hurt
+  * any operation with work on it — ticked, started, or with real hours
+  * any order still in the pool or on a plan
+
+Deletes in batches of 500 and commits each one: 55,000 deletes in a single
+transaction on a 512 MB instance is how a cleanup becomes an outage. Five tests,
+four of them about what it must NOT touch.
+
+Also from this run: **`waiting on material: 180`** — operations blocked on a
+purchase requisition, countable for the first time.
+
 ## 2026-09-11 — The operations landed, and I imported 100x too many
 
 The first real `flask rebuild-pool` on production. All six guessed IW49 column
@@ -1158,6 +1190,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

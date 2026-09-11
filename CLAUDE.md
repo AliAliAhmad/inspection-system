@@ -246,6 +246,11 @@
   `Confirmation`, `Actual start/finish`. SAP knows which operations it thinks are
   done; pre-marking them could argue with what a crew enters. Raised, left alone.
 - `flask rebuild-pool` runs the sync now instead of waiting for 02:02.
+- **⚠️ 55,381 ORPHAN ROWS from the first unscoped run** — the filter stops new ones
+  but cannot reach those. Run `flask prune-orphan-operations` (reports; `--apply`
+  deletes). It never touches hand-typed lines or operations with work on them.
+- Confirmed 2026-09-11: scope fix took the operations step from **6m23s to 2s**;
+  1,560 operations on 161 orders. `waiting on material: 180` across the yard.
 - Re-sync NEVER resets `is_done`/timers. A dropped operation with work on it is kept
   and flagged, not deleted.
 - **⚠️ Phase 2 (`TRADE_SPLIT_BUDGET`) SHIPS OFF.** It re-prices every day in every
