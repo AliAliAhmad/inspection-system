@@ -553,6 +553,9 @@ def create_app(config_name='development'):
             stored = ops.get('stored') or {}
             print(f"  read      : {ops.get('operations')} operations on "
                   f"{ops.get('orders')} orders ({ops.get('rows')} rows)")
+            print(f"    waiting : {ops.get('waiting_on_material')} on material (PR)")
+            print(f"    stored  : {stored.get('orders')} orders the app knows, "
+                  f"{stored.get('skipped_unknown_orders')} skipped")
             print(f"    added   : {stored.get('added')}")
             print(f"    updated : {stored.get('updated')}")
             print(f"    removed : {stored.get('removed')} (untouched, gone from SAP)")
@@ -1189,7 +1192,12 @@ def create_app(config_name='development'):
                 print(f'    {header}')
         else:
             stored = ops.get('stored') or {}
-            print(f"  {ops.get('operations')} operations on {ops.get('orders')} orders")
+            print(f"  {ops.get('operations')} operations read on "
+                  f"{ops.get('orders')} orders in the file")
+            print(f"  waiting on material: {ops.get('waiting_on_material')}")
+            print(f"  STORED for {stored.get('orders')} orders the app knows "
+                  f"({stored.get('skipped_unknown_orders')} orders skipped — "
+                  f"closed, or never in the pool)")
             print(f"    added {stored.get('added')} · updated {stored.get('updated')} "
                   f"· removed {stored.get('removed')} · kept {stored.get('kept_but_gone_from_sap')}")
         if dry_run:

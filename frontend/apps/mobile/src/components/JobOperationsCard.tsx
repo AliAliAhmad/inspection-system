@@ -139,6 +139,20 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
           )}
         </View>
 
+        {/* Waiting on a part. SAP puts the requisition on the OPERATION, so the
+            man is told WHICH line is blocked instead of reading (PR) off the
+            order and guessing which half of the job he can start today.
+            'PR' is deliberately not translated — Ali, 2026-09-11. */}
+        {!!op.waiting_on_material && !done && (
+          <View style={[styles.waitingRow, isAr && styles.rowRtl]}>
+            <Text style={styles.waitingText}>
+              {t('job_operations.waiting_material', 'Waiting for material')}
+              {' · PR '}{op.purchase_requisition}
+              {op.material_text ? ` · ${op.material_text}` : ''}
+            </Text>
+          </View>
+        )}
+
         {!dimmed && !done && (
           <View style={[styles.opActions, isAr && styles.rowRtl]}>
             {!running && !paused && (
@@ -271,6 +285,11 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 11, color: '#9E9E9E' },
   actualText: { color: '#2E7D32', fontWeight: '600' },
   removedText: { fontSize: 10, color: '#C62828', fontWeight: '700' },
+  waitingRow: {
+    marginTop: 4, marginLeft: 42, paddingVertical: 4, paddingHorizontal: 8,
+    backgroundColor: '#FFF8E1', borderRadius: 4,
+  },
+  waitingText: { fontSize: 11, color: '#E65100', fontWeight: '600' },
   opActions: { flexDirection: 'row', gap: 8, marginTop: 8, marginLeft: 42 },
   btn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 6 },
   btnStart: { backgroundColor: '#1976D2' },

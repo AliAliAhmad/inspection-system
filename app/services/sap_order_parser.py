@@ -350,6 +350,17 @@ OPERATION_COLUMN_CANDIDATES = {
                     'Oper.WorkCenter', 'Work center'],
     'work': ['Work', 'Work Actual', 'Wrk'],
     'unit': ['Unit for work', 'Unit', 'Work Unit', 'Un.'],
+    # Ali, 2026-09-11: "PR means that this order waiting a material under
+    # purchase order". IW49 carries the requisition PER OPERATION, so the app can
+    # name the line that is actually blocked and the part it is waiting for —
+    # rather than reading '(PR)' out of a description and guessing which half of
+    # the job it refers to.
+    'purchase_requisition': ['Purchase Requisition', 'PurchaseRequisition',
+                             'Purch. Requisition', 'Purchase requisition'],
+    'requisition_item': ['Item of Requisition', 'Item of requisition'],
+    'material_text': ['Material Description', 'Material description',
+                      'Description of assembly'],
+    'material': ['Material', 'Material Number'],
 }
 
 
@@ -414,6 +425,7 @@ def parse_operations(iw49_bytes):
     import io as _io
 
     report = {'rows': 0, 'orders': 0, 'operations': 0, 'skipped': 0,
+              'waiting_on_material': 0,
               'matched': {}, 'headers': [], 'usable': False}
     if not iw49_bytes:
         return {}, report
@@ -473,12 +485,24 @@ def parse_operations(iw49_bytes):
             except (TypeError, ValueError):
                 hours = None
 
+            requisition = (cell(row, 'purchase_requisition') or '').strip()
+            # SAP writes 0 rather than blank when there is no requisition.
+            if requisition in ('0', '0.0'):
+                requisition = ''
+            material = ((cell(row, 'material_text') or '').strip()
+                        or (cell(row, 'material') or '').strip())
+
             by_order[order].append({
                 'operation_number': operation,
                 'description': (cell(row, 'description') or '').strip(),
                 'work_center': (cell(row, 'work_center') or '').strip().upper() or None,
                 'planned_hours': hours,
+                # Present = this operation is waiting on a part.
+                'purchase_requisition': requisition or None,
+                'material_text': material or None,
             })
+            if requisition:
+                report['waiting_on_material'] = report.get('waiting_on_material', 0) + 1
             report['operations'] += 1
 
         report['orders'] = len(by_order)

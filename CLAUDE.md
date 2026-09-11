@@ -232,10 +232,20 @@
 - **Operations live in `work_plan_job_tasks`** (`source`, `operation_number`,
   `work_center`, `planned_hours` + own timer). One list holds Ali's typed lines AND
   SAP's operations, as he asked. Order state is DERIVED, never tracked twice.
-- **⚠️ IW49 columns are GUESSED and all optional.** `rows_to_frame` RAISES on a
-  missing column, so a wrong name would kill the whole pool sync. Worst case now:
-  no operations, and the report names the real headers.
-  **`flask sap-operation-headers` on Render ends the guessing — needs Ali's file.**
+- ✅ **IW49 COLUMNS CONFIRMED on production 2026-09-11.** All six guesses matched:
+  `Order` / `Operation/Activity` / `Operation short text` / `Work Center` / `Work` /
+  `Unit for work`. 56,941 operations on 19,375 orders read.
+- **⚠️ Operations are stored ONLY for orders the app knows** (pool + on a plan,
+  ~200). The first run stored all 19,375 and added 6m23s to a 3m43s sync.
+  `skipped_unknown_orders` in the report makes the filter visible.
+- **(PR) = waiting on a material under a purchase order** (Ali, 2026-09-11).
+  NOT translated, by his instruction — already in `_PROTECTED_TERMS`. IW49 carries
+  `Purchase Requisition` PER OPERATION, so the blocked LINE and the part are named;
+  `waiting_on_material` flag + amber strip on the phone. A part arriving clears it.
+- **Not acted on:** IW49 also carries per-operation `System Status`, `Actual work`,
+  `Confirmation`, `Actual start/finish`. SAP knows which operations it thinks are
+  done; pre-marking them could argue with what a crew enters. Raised, left alone.
+- `flask rebuild-pool` runs the sync now instead of waiting for 02:02.
 - Re-sync NEVER resets `is_done`/timers. A dropped operation with work on it is kept
   and flagged, not deleted.
 - **⚠️ Phase 2 (`TRADE_SPLIT_BUDGET`) SHIPS OFF.** It re-prices every day in every

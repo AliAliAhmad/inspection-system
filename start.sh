@@ -871,7 +871,9 @@ with app.app_context():
                                ('started_at', 'TIMESTAMP'),
                                ('paused_at', 'TIMESTAMP'),
                                ('total_paused_minutes', 'INTEGER DEFAULT 0'),
-                               ('actual_hours', 'NUMERIC(6,2)')):
+                               ('actual_hours', 'NUMERIC(6,2)'),
+                               ('purchase_requisition', 'VARCHAR(20)'),
+                               ('material_text', 'VARCHAR(255)')):
         try:
             db.session.execute(text(
                 'ALTER TABLE work_plan_job_tasks ADD COLUMN %s %s'

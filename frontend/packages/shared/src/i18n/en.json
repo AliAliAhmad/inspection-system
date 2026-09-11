@@ -2010,6 +2010,7 @@
     "removed_in_sap": "no longer in SAP",
     "show_other": "{{n}} for the other trade",
     "hide_other": "Hide the other trade",
-    "failed": "Could not update"
+    "failed": "Could not update",
+    "waiting_material": "Waiting for material"
   }
 }

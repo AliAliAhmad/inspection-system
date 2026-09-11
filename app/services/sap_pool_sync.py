@@ -19,6 +19,7 @@ Two safety rules shape everything here:
 import gc
 import logging
 import os
+import re
 from datetime import date, datetime
 from collections import Counter, defaultdict
 
@@ -581,8 +582,41 @@ REPORT_FILENAME = 'last_report.json'
 DRY_RUN_REPORT_FILENAME = 'last_dry_run.json'
 
 
-def sync_order_operations(operations_by_order, dry_run=False):
+_SPLIT_SUFFIX_RE = re.compile(r'-P\d+$')
+
+
+def _orders_the_app_knows():
+    """Order numbers worth keeping operations for.
+
+    WHY THIS FILTER EXISTS
+
+    The first real run imported 56,941 operations across 19,375 orders — every
+    order in the year-to-date export, including thousands closed months ago. The
+    pool holds 183. It added six and a half minutes to a three-and-a-half minute
+    sync, and would have re-written all 56,941 rows every night, for data nobody
+    can ever open: an order that is not in the pool and not on a plan has no
+    screen to appear on.
+
+    So: the pool, plus anything already placed on a week. Roughly 200 orders.
+    """
+    known = set()
+    for (number,) in db.session.query(SAPWorkOrder.order_number).all():
+        if number:
+            known.add(str(number).strip())
+    from app.models import WorkPlanJob
+    for (number,) in (db.session.query(WorkPlanJob.sap_order_number)
+                      .filter(WorkPlanJob.sap_order_number.isnot(None)).all()):
+        if number:
+            # A split job carries '<order>-P2'; its operations hang on the parent.
+            known.add(_SPLIT_SUFFIX_RE.sub('', str(number).strip()))
+    return known
+
+
+def sync_order_operations(operations_by_order, dry_run=False, known_orders=None):
     """Store IW49's operations as rows on each order's task list.
+
+    Only for orders the app knows — see _orders_the_app_knows(). None asks the
+    database; an explicit empty set means "no filter", which only tests want.
 
     UPSERT, NEVER REPLACE
     =====================
@@ -603,13 +637,20 @@ def sync_order_operations(operations_by_order, dry_run=False):
     from app.models.work_plan_job_task import _SPLIT_SUFFIX
 
     counts = {'orders': 0, 'added': 0, 'updated': 0,
-              'kept_but_gone_from_sap': 0, 'removed': 0}
+              'kept_but_gone_from_sap': 0, 'removed': 0,
+              'skipped_unknown_orders': 0}
     if not operations_by_order:
         return counts
+
+    if known_orders is None:
+        known_orders = _orders_the_app_knows()
 
     for order_number, operations in operations_by_order.items():
         key = _SPLIT_SUFFIX.sub('', str(order_number).strip())
         if not key:
+            continue
+        if known_orders and key not in known_orders:
+            counts['skipped_unknown_orders'] += 1
             continue
         counts['orders'] += 1
 
@@ -632,6 +673,8 @@ def sync_order_operations(operations_by_order, dry_run=False):
                         content=text_,
                         work_center=op['work_center'],
                         planned_hours=op['planned_hours'],
+                        purchase_requisition=op.get('purchase_requisition'),
+                        material_text=op.get('material_text'),
                         status='pending',
                         position=position,
                         # SAP is the author, not a person. created_by_id is NOT
@@ -644,6 +687,11 @@ def sync_order_operations(operations_by_order, dry_run=False):
                 row.content = text_
                 row.work_center = op['work_center']
                 row.planned_hours = op['planned_hours']
+                # A part arriving CLEARS the block, so this must refresh both
+                # ways — a stale requisition would leave a man thinking he is
+                # still waiting for something that is already on the shelf.
+                row.purchase_requisition = op.get('purchase_requisition')
+                row.material_text = op.get('material_text')
                 row.position = position
                 counts['updated'] += 1
 

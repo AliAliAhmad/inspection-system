@@ -145,6 +145,18 @@ class WorkPlanJobTask(db.Model):
     work_center = db.Column(db.String(10), nullable=True)
     planned_hours = db.Column(db.Numeric(6, 2), nullable=True)
 
+    # Waiting on a part.
+    #
+    # Ali, 2026-09-11: "PR means that this order waiting a material under
+    # purchase order". IW49 carries the requisition on the OPERATION, so the man
+    # is told which line is blocked and what it is waiting for — instead of
+    # reading (PR) off the order's description and guessing which half of a
+    # ten-hour refurbishment he can actually start today.
+    #
+    # Ali also said: do NOT translate 'PR'. It stays the letters the yard uses.
+    purchase_requisition = db.Column(db.String(20), nullable=True)
+    material_text = db.Column(db.String(255), nullable=True)
+
     # ── One timer per operation ────────────────────────────────────────────
     #
     # Ali chose start/pause/finish per operation over a simple tick, knowing it
@@ -237,6 +249,10 @@ class WorkPlanJobTask(db.Model):
             'work_center': self.work_center,
             'planned_hours': (float(self.planned_hours)
                               if self.planned_hours is not None else None),
+            'purchase_requisition': self.purchase_requisition,
+            'material_text': self.material_text,
+            # One flag so no screen has to know what a requisition is.
+            'waiting_on_material': bool(self.purchase_requisition),
             'status': self.status or ('completed' if self.is_done else 'pending'),
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'paused_at': self.paused_at.isoformat() if self.paused_at else None,

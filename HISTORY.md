@@ -1,3 +1,64 @@
+## 2026-09-11 — The operations landed, and I imported 100x too many
+
+The first real `flask rebuild-pool` on production. All six guessed IW49 column
+names matched Ali's export exactly:
+
+    order        -> Order
+    operation    -> Operation/Activity
+    description  -> Operation short text
+    work_center  -> Work Center
+    work         -> Work
+    unit         -> Unit for work
+
+**56,941 operations on 19,375 orders imported.** And that was the problem.
+
+### The scope bug, from Ali's own log
+
+    06:15:00  sync starts
+    06:18:43  parse done      <- 3m43s, the existing work
+    06:25:06  finished        <- 6m23s MORE, writing my rows
+
+The pool holds **183** orders. I stored operations for every order in the
+year-to-date export, thousands of them closed months ago, and every future run
+would have re-written all 56,941 rows. An order that is neither in the pool nor on
+a plan has no screen to appear on.
+
+`_orders_the_app_knows()` now scopes the import to the pool plus anything already
+on a week — roughly 200 orders. `skipped_unknown_orders` is reported so the
+filter is visible rather than silent. Two tests: an unknown order is skipped, and
+a pool order that is not yet planned still counts as known (not yet planned is not
+the same as not wanted).
+
+### What the real header list revealed — (PR) answered properly
+
+Ali: "PR means that this order waiting a material under purchase order."
+
+IW49 carries **`Purchase Requisition`, `Item of Requisition`, `Material`,
+`Material Description`, `Vendor` — per OPERATION.** So instead of reading `(PR)`
+off a ten-hour order and guessing which half is blocked, the app now names the
+LINE that is waiting and the part it waits for.
+
+`purchase_requisition` + `material_text` on the operation row, and one derived
+`waiting_on_material` flag so no screen has to know what a requisition is. The
+phone shows an amber strip: `Waiting for material · PR 10045567 · HARNESS ASSY`.
+
+**A part arriving CLEARS the block** — the upsert refreshes the requisition both
+ways. A stale one would leave a man waiting for something already on the shelf.
+There is a test named for exactly that.
+
+**(PR) is NOT translated** — Ali's instruction. It was already in
+`_PROTECTED_TERMS` so it always came through as the letters the yard reads; the
+meaning is now recorded there for whoever reads it next.
+
+### Also in that header list, deliberately NOT acted on
+`System Status` and `User Status` per operation, `Actual work`, `Confirmation`,
+`Actual start/finish (date)`. SAP already knows which operations it considers
+done. Pre-marking them could argue with what a crew enters, so it was raised and
+left alone.
+
+### Totals
+1094 backend tests (4 new). Web 32. Mobile tsc clean in every file touched.
+
 ## 2026-09-09 — The worker could never see the planner's photo
 
 Ali: "the mobile app, the user side cannot see the photo or voice i added them
@@ -1097,6 +1158,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

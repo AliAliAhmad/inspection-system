@@ -86,7 +86,14 @@ def normalise(text):
 
 # Longest first: 2000HR must win before HR, HVAC before AC.
 _PROTECTED_TERMS = [
-    # maintenance markers, in the brackets they actually arrive in
+    # maintenance markers, in the brackets they actually arrive in.
+    #
+    # (PR) means the order is WAITING ON A MATERIAL under a purchase order —
+    # Ali, 2026-09-11. It is deliberately NOT in DOMAIN_ARABIC and not
+    # translated: Ali's instruction was "no need to translate (PR)". It stays the
+    # two letters the yard reads. The real answer to "what is this waiting for"
+    # now comes from IW49's Purchase Requisition on the OPERATION, which names
+    # the part instead of hinting at one.
     r'\(\s*P\.?M\.?\s*\)', r'\(\s*P\.?R\.?\s*\)', r'\(\s*C\.?M\.?\s*\)',
     r'\bPM\b(?=\s*$)', r'\-PM\b',
     # machine / order codes: two-to-four letters then digits, plus any tail

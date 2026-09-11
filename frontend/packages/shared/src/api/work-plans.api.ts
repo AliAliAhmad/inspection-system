@@ -878,6 +878,14 @@ export interface JobSubTask {
   operation_number?: string | null;
   work_center?: string | null;
   planned_hours?: number | null;
+  /**
+   * SAP purchase requisition on this operation. Present = waiting on a part.
+   * Ali, 2026-09-11: "PR means that this order waiting a material under
+   * purchase order" — and PR is NOT translated; it stays as the yard writes it.
+   */
+  purchase_requisition?: string | null;
+  material_text?: string | null;
+  waiting_on_material?: boolean;
   status?: string | null;
   started_at?: string | null;
   paused_at?: string | null;

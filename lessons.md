@@ -649,3 +649,22 @@ LESSON: When the user asks for a VISIBILITY change, do not silently ship the
 CAPACITY change that follows from it → Build it, test it, ship it behind a flag
 that defaults off, and say so. Re-pricing every day of every week while nobody is
 watching is not a side effect a deploy should have.
+
+LESSON: A year-to-date SAP export holds ~100x more rows than the app can ever show
+— 56,941 operations across 19,375 orders while the pool held 183 → Scope an import
+to the records that have a screen to appear on. Measure the sync time before and
+after: mine went from 3m43s to 10 minutes and the log said so plainly.
+
+LESSON: Guessing column names was the RIGHT call because the guesses were made
+survivable — optional, loosely matched, and reported → When you cannot see the
+input, design so a wrong guess costs one message instead of an outage. All six
+guesses turned out correct, but that was luck; the tolerance was the engineering.
+
+LESSON: The real header list was worth more than the feature it unblocked. IW49
+carries Purchase Requisition, Material, Confirmation and System Status PER
+OPERATION → When you finally see a real data source, read the WHOLE schema. Ali's
+"(PR)" question was answered properly by a column, not by a glossary entry.
+
+LESSON: A status flag imported from an external system must refresh in BOTH
+directions. A requisition that is cleared when the part arrives, but only ever
+written when present, leaves a man waiting for something already on the shelf.

@@ -202,6 +202,105 @@ class TestARefreshCannotUndoWork:
         assert WorkPlanJobTask.query.count() == 2
 
 
+class TestOnlyOrdersTheAppKnows:
+    """The first real run imported 100x more than anyone can ever open.
+
+    56,941 operations across 19,375 orders — the whole year-to-date export —
+    while the pool held 183. It added 6m23s to a 3m43s sync and would have
+    re-written every row nightly. An order that is neither in the pool nor on a
+    plan has no screen to appear on.
+    """
+
+    def test_an_unknown_order_is_skipped(self, db_session, admin_user, plan_day):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPS20', 'SO20')
+        _job(plan, day, eq, order='700000123456')     # the app knows THIS one
+
+        operations = dict(_operations('700000123456'))
+        operations['700000555555'] = [                # closed months ago
+            {'operation_number': '0010', 'description': 'Ancient history',
+             'work_center': 'MECH', 'planned_hours': 1.0},
+        ]
+
+        counts = sync_order_operations(operations)
+        assert counts['added'] == 3, 'only the known order was stored'
+        assert counts['skipped_unknown_orders'] == 1
+        assert WorkPlanJobTask.query.filter_by(anchor_key='700000555555').count() == 0
+
+    def test_an_order_still_in_the_pool_counts_as_known(self, db_session,
+                                                        admin_user, plan_day):
+        """Not yet planned is not the same as not wanted."""
+        from app.models import SAPWorkOrder
+        from app.services.sap_pool_sync import sync_order_operations
+        eq = make_equipment(db_session, 'OPS21', 'SO21')
+        db.session.add(SAPWorkOrder(work_plan_id=None, order_number='700000123456',
+                                    order_type='PRM', job_type='pm',
+                                    equipment_id=eq.id, estimated_hours=9.0,
+                                    priority='normal', status='pending'))
+        db.session.commit()
+
+        counts = sync_order_operations(_operations())
+        assert counts['added'] == 3
+
+
+class TestWaitingOnMaterial:
+    """Ali, 2026-09-11: "PR means that this order waiting a material under
+    purchase order".
+
+    IW49 carries the requisition on the OPERATION, so the man is told which LINE
+    is blocked — instead of reading (PR) off a ten-hour order and guessing which
+    half of it he can start today.
+    """
+
+    def test_the_requisition_reaches_the_worker(self, client, admin_user,
+                                                db_session, plan_day):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPS22', 'SO22')
+        job = _job(plan, day, eq)
+        sync_order_operations({'700000123456': [
+            {'operation_number': '0010', 'description': 'Check the spreader',
+             'work_center': 'MECH', 'planned_hours': 2.0,
+             'purchase_requisition': None, 'material_text': None},
+            {'operation_number': '0020', 'description': 'Replace harness',
+             'work_center': 'ELEC', 'planned_hours': 3.0,
+             'purchase_requisition': '10045567', 'material_text': 'HARNESS ASSY'},
+        ]})
+
+        tasks = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=_headers(client, admin_user)).get_json()['tasks']
+        first, second = tasks
+        assert first['waiting_on_material'] is False
+        assert second['waiting_on_material'] is True
+        assert second['purchase_requisition'] == '10045567'
+        assert second['material_text'] == 'HARNESS ASSY'
+
+    def test_a_part_arriving_clears_the_block(self, db_session, admin_user,
+                                              plan_day):
+        """A stale requisition leaves a man waiting for something on the shelf."""
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPS23', 'SO23')
+        _job(plan, day, eq)
+        sync_order_operations({'700000123456': [
+            {'operation_number': '0010', 'description': 'Replace harness',
+             'work_center': 'ELEC', 'planned_hours': 3.0,
+             'purchase_requisition': '10045567', 'material_text': 'HARNESS ASSY'},
+        ]})
+        row = WorkPlanJobTask.query.filter_by(operation_number='0010').first()
+        assert row.purchase_requisition == '10045567'
+
+        # Next file: the part has arrived, SAP drops the requisition.
+        sync_order_operations({'700000123456': [
+            {'operation_number': '0010', 'description': 'Replace harness',
+             'work_center': 'ELEC', 'planned_hours': 3.0,
+             'purchase_requisition': None, 'material_text': None},
+        ]})
+        db.session.refresh(row)
+        assert row.purchase_requisition is None, 'the man is still told to wait'
+
+
 class TestOneByOne:
     """Ali: "he should do 1 by 1"."""
 
