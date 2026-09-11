@@ -612,51 +612,76 @@ def _orders_the_app_knows():
     return known
 
 
-def widen_order_trade_to_both(order_key):
-    """An order whose operations span both trades must show for BOTH teams.
+def apply_order_trade(order_key):
+    """Give an order the trade label its OPERATIONS say it needs.
 
-    THE HOLE THIS CLOSES
-    ====================
+    TWO HOLES, ONE FIX
+    ==================
 
-    A job sits in a team's column by its OWN work_center — MECH, ELEC, or ELME
-    for both. Nothing was reconciling that with the operations inside it.
+    1. A job sits in a team's column by its own work_center, and nothing was
+       reconciling that with the operations inside it. An order SAP labels MECH
+       containing an electrical operation showed only to the mechanical team —
+       the electrician never saw it, and the line he was supposed to do was
+       invisible to the only man who could do it.
 
-    So an order SAP labels MECH, containing one electrical operation, appeared
-    only under the mechanical team. The electrician never saw it on the board and
-    was never assigned, and the operation he was supposed to do was invisible to
-    the only man who could do it. `is_mixed` was already computed and never
-    written back.
+    2. Worse, and only visible once the real data was read (2026-09-11):
+       195 of 196 pool orders have NO work centre at all. IW39 simply does not
+       fill it. The operations DO — IW49 carries MES-MECH / MES-ELEC / MES-ELME
+       per line — which makes IW49 a better source of trade than IW39.
 
-    ONLY EVER WIDENS
-    ================
+    FILL, OR WIDEN. NEVER NARROW.
+    =============================
 
-    Both trades present -> ELME. Nothing else is touched. An order SAP
-    deliberately marked ELEC with only electrical operations keeps that label:
-    narrowing or re-labelling on our own reading of the file would be us
-    overruling SAP about its own order, which is a much bigger claim than
-    "this needs both teams".
+      * no label at all -> take what the operations say
+      * label already covers what the operations need -> leave it alone
+      * operations need something the label does not cover -> ELME
 
-    Returns how many rows were changed.
+    Re-labelling an order because our reading of the file differs would be
+    overruling SAP about its own order. Making it reach one more crew is not the
+    same claim.
+
+    MES-SUPV is supervision, not a trade (Ali, 2026-09-12), so it never pushes an
+    order into a trade and never makes one "both".
+
+    Returns how many rows changed.
     """
     from app.models.work_plan_job_task import WorkPlanJobTask
     from app.models import WorkPlanJob
+    from app.services.sap_order_parser import trade_label_for
 
-    trades = {row.work_center for row in WorkPlanJobTask.query.filter_by(
-        anchor_kind='sap', anchor_key=order_key).all() if row.work_center}
-    if not {'MECH', 'ELEC'} <= trades:
+    needed = trade_label_for(
+        row.work_center for row in WorkPlanJobTask.query.filter_by(
+            anchor_kind='sap', anchor_key=order_key).all())
+    if not needed:
         return 0
+
+    def settle(current):
+        if not current:
+            return needed
+        if current == needed or current == 'ELME':
+            return current
+        # The label and the operations disagree: reach both crews rather than
+        # pick a winner.
+        return 'ELME'
 
     changed = 0
     for order in SAPWorkOrder.query.filter_by(order_number=order_key).all():
-        if order.work_center != 'ELME':
-            order.work_center = 'ELME'
+        wanted = settle(order.work_center)
+        if order.work_center != wanted:
+            order.work_center = wanted
             changed += 1
     for job in WorkPlanJob.query.filter(
             WorkPlanJob.sap_order_number == order_key).all():
-        if job.work_center != 'ELME':
-            job.work_center = 'ELME'
+        wanted = settle(job.work_center)
+        if job.work_center != wanted:
+            job.work_center = wanted
             changed += 1
     return changed
+
+
+def widen_order_trade_to_both(order_key):
+    """Kept as the old name. See apply_order_trade()."""
+    return apply_order_trade(order_key)
 
 
 def find_orphan_operations(known_orders=None):
@@ -853,9 +878,8 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
         for order_number in operations_by_order:
             key = _SPLIT_SUFFIX.sub('', str(order_number).strip())
             if key and (not known_orders or key in known_orders):
-                counts['widened_to_both_trades'] = (
-                    counts.get('widened_to_both_trades', 0)
-                    + widen_order_trade_to_both(key))
+                counts['trade_labels_set'] = (
+                    counts.get('trade_labels_set', 0) + apply_order_trade(key))
         db.session.commit()
     return counts
 

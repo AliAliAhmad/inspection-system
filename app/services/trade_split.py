@@ -71,6 +71,10 @@ def hours_by_trade(job, operations=None):
     if priced:
         for op in priced:
             trade = (op.work_center or '').upper()
+            # ELME needs both crews and SUPV is supervision, so neither is a
+            # single trade's hours. They fall back to the order's own label, and
+            # land in UNSET when it has none — reported, never guessed onto one
+            # crew's budget.
             bucket = trade if trade in TRADES else _job_trade(job)
             result[bucket] += float(op.planned_hours or 0)
         return result

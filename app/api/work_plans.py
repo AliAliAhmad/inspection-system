@@ -6151,9 +6151,9 @@ def add_job_task(job_id):
     if operation_number and work_center:
         db.session.flush()
         try:
-            from app.services.sap_pool_sync import widen_order_trade_to_both
+            from app.services.sap_pool_sync import apply_order_trade
             if kind == 'sap':
-                widen_order_trade_to_both(key)
+                apply_order_trade(key)
         except Exception:
             logger.warning('trade widening failed for job %s', job.id, exc_info=True)
     db.session.commit()

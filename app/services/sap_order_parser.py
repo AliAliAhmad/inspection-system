@@ -364,6 +364,69 @@ OPERATION_COLUMN_CANDIDATES = {
 }
 
 
+# What SAP actually writes in the work centre column, seen on production
+# 2026-09-11: MES-SUPV 685, MES-ELEC 346, MES-MECH 328, MES-ELME 201.
+#
+# Nothing was translating these. The app compares against MECH / ELEC / ELME
+# everywhere — the team columns on the board, the trade filter on the worker's
+# phone, the ELME widening — and 'MES-MECH' matches none of them. So every
+# operation folded into "for the other trade" on every phone, and a mixed order
+# never reached the second crew.
+#
+# MES-SUPV is SUPERVISION, not a trade (Ali, 2026-09-12: "supv is supervision,
+# yes shown to everyone"). It is kept as its own value so those lines can be
+# shown to EVERYONE, and it never counts towards "this order needs both teams".
+TRADE_ALIASES = {
+    'MECH': 'MECH', 'MES-MECH': 'MECH', 'MECHANICAL': 'MECH', 'M': 'MECH',
+    'ELEC': 'ELEC', 'MES-ELEC': 'ELEC', 'ELECTRICAL': 'ELEC', 'E': 'ELEC',
+    'ELME': 'ELME', 'MES-ELME': 'ELME', 'BOTH': 'ELME', 'EM': 'ELME',
+    'ME': 'ELME', 'B': 'ELME',
+    'SUPV': 'SUPV', 'MES-SUPV': 'SUPV', 'SUPERVISION': 'SUPV',
+}
+
+#: The two real trades. SUPV is deliberately absent — see above.
+TRADES = ('MECH', 'ELEC')
+
+
+def normalise_work_center(value):
+    """'MES-MECH' -> 'MECH'. Unknown codes come back untouched, not dropped.
+
+    Returning the raw value for something unrecognised is deliberate: a code we
+    have never seen should be VISIBLE in the report and on the screen so somebody
+    asks about it, rather than silently becoming None and disappearing.
+    """
+    if not value:
+        return None
+    raw = str(value).strip().upper()
+    if not raw:
+        return None
+    if raw in TRADE_ALIASES:
+        return TRADE_ALIASES[raw]
+    # 'MES-XYZ' shapes we have not met: try the tail before giving up.
+    tail = raw.rsplit('-', 1)[-1]
+    return TRADE_ALIASES.get(tail, raw)
+
+
+def trade_label_for(work_centers):
+    """The label an ORDER should carry, given what its operations need.
+
+    'ELME' when both trades are wanted, the single trade when only one is, and
+    None when the operations say nothing about trade (supervision only).
+    """
+    trades = set()
+    for value in work_centers:
+        normalised = normalise_work_center(value)
+        if normalised == 'ELME':
+            trades.update(TRADES)
+        elif normalised in TRADES:
+            trades.add(normalised)
+    if not trades:
+        return None
+    if len(trades) > 1:
+        return 'ELME'
+    return next(iter(trades))
+
+
 def _match_header(header, candidates):
     """First candidate present in the header row, compared loosely.
 
@@ -495,7 +558,7 @@ def parse_operations(iw49_bytes):
             by_order[order].append({
                 'operation_number': operation,
                 'description': (cell(row, 'description') or '').strip(),
-                'work_center': (cell(row, 'work_center') or '').strip().upper() or None,
+                'work_center': normalise_work_center(cell(row, 'work_center')),
                 'planned_hours': hours,
                 # Present = this operation is waiting on a part.
                 'purchase_requisition': requisition or None,

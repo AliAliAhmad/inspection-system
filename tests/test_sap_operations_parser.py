@@ -128,3 +128,64 @@ class TestTheOldPathIsUntouched:
         hours, _ = parse_operation_hours(data)
         assert hours['700000123456'] == pytest.approx(1.0)
         assert hours['700000123457'] == pytest.approx(2.0)
+
+
+class TestTheRealWorkCentreCodes:
+    """What SAP actually writes, seen on production 2026-09-11:
+
+        MES-SUPV 685 · MES-ELEC 346 · MES-MECH 328 · MES-ELME 201
+
+    Nothing translated these. The app compares against MECH / ELEC / ELME
+    everywhere — the board's team columns, the worker's trade filter, the ELME
+    widening — and 'MES-MECH' matches none of them. So every operation folded
+    into "for the other trade" on every phone, and a mixed order never reached
+    the second crew.
+    """
+
+    def test_the_four_real_codes_translate(self):
+        from app.services.sap_order_parser import normalise_work_center
+        assert normalise_work_center('MES-MECH') == 'MECH'
+        assert normalise_work_center('MES-ELEC') == 'ELEC'
+        assert normalise_work_center('MES-ELME') == 'ELME'
+        assert normalise_work_center('MES-SUPV') == 'SUPV'
+
+    def test_case_and_spacing_do_not_matter(self):
+        from app.services.sap_order_parser import normalise_work_center
+        assert normalise_work_center('  mes-mech ') == 'MECH'
+
+    def test_a_code_we_have_never_seen_is_kept_not_dropped(self):
+        """It must be VISIBLE so somebody asks, not silently become None."""
+        from app.services.sap_order_parser import normalise_work_center
+        assert normalise_work_center('MES-WELD') == 'MES-WELD'
+        assert normalise_work_center('') is None
+
+    def test_an_operation_row_arrives_already_translated(self):
+        data = _sheet(['Order', 'Operation', 'Work Center'],
+                      [['700000123456', '0010', 'MES-MECH']])
+        ops, _ = parse_operations(data)
+        assert ops['700000123456'][0]['work_center'] == 'MECH'
+
+
+class TestTheLabelAnOrderShouldCarry:
+
+    def test_both_trades_means_both_teams(self):
+        from app.services.sap_order_parser import trade_label_for
+        assert trade_label_for(['MES-MECH', 'MES-ELEC']) == 'ELME'
+
+    def test_one_line_marked_both_is_enough(self):
+        from app.services.sap_order_parser import trade_label_for
+        assert trade_label_for(['MES-ELME']) == 'ELME'
+
+    def test_one_trade_stays_one_trade(self):
+        from app.services.sap_order_parser import trade_label_for
+        assert trade_label_for(['MES-MECH', 'MES-MECH']) == 'MECH'
+
+    def test_supervision_is_not_a_trade(self):
+        """Ali, 2026-09-12: "supv is supervision, yes shown to everyone".
+
+        It is the LARGEST group in the real data. Counting it as a trade would
+        mislabel most of the yard.
+        """
+        from app.services.sap_order_parser import trade_label_for
+        assert trade_label_for(['MES-SUPV']) is None
+        assert trade_label_for(['MES-SUPV', 'MES-MECH']) == 'MECH'

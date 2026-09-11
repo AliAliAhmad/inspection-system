@@ -556,8 +556,8 @@ def create_app(config_name='development'):
             print(f"    waiting : {ops.get('waiting_on_material')} on material (PR)")
             print(f"    stored  : {stored.get('orders')} orders the app knows, "
                   f"{stored.get('skipped_unknown_orders')} skipped")
-            print(f"    ELME    : {stored.get('widened_to_both_trades', 0)} rows "
-                  f"widened (orders needing BOTH teams)")
+            print(f"    trade   : {stored.get('trade_labels_set', 0)} rows given "
+                  f"a trade from their operations (filled or widened to ELME)")
             print(f"    added   : {stored.get('added')}")
             print(f"    updated : {stored.get('updated')}")
             print(f"    removed : {stored.get('removed')} (untouched, gone from SAP)")
@@ -1202,8 +1202,8 @@ def create_app(config_name='development'):
                   f"closed, or never in the pool)")
             print(f"    added {stored.get('added')} · updated {stored.get('updated')} "
                   f"· removed {stored.get('removed')} · kept {stored.get('kept_but_gone_from_sap')}")
-            print(f"  needing BOTH teams (widened to ELME): "
-                  f"{stored.get('widened_to_both_trades', 0)} rows")
+            print(f"  trade labels set from operations: "
+                  f"{stored.get('trade_labels_set', 0)} rows")
         if dry_run:
             print()
             print('DRY RUN — nothing was written.')

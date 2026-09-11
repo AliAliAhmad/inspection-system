@@ -234,10 +234,19 @@ class TestAMixedOrderReachesBothTeams:
         order = SAPWorkOrder.query.filter_by(order_number='700000123456').first()
         assert order.work_center == 'ELME', 'the pool still hides it from them'
 
-    def test_a_single_trade_order_is_left_exactly_as_sap_labelled_it(
+    def test_a_disagreement_reaches_both_crews_rather_than_picking_a_winner(
             self, db_session, admin_user, plan_day):
-        """Widening only. Re-labelling would be us overruling SAP about its own
-        order, which is a far bigger claim than "this needs both teams"."""
+        """The order says ELEC; every operation in it is mechanical.
+
+        The first version of this rule left the label alone, so the MECHANIC —
+        the only man who can do the work — never saw the job. Widening to ELME
+        shows it to both crews, which is strictly better: it takes nothing away
+        from the electrical team and gives the work to the men who must do it.
+
+        It still does not RE-LABEL. Turning this order into MECH would be
+        overruling SAP about its own order; making it visible to one more crew
+        is not the same claim.
+        """
         from app.services.sap_pool_sync import sync_order_operations
         plan, day = plan_day
         eq = make_equipment(db_session, 'MIX02', 'SX02')
@@ -251,7 +260,73 @@ class TestAMixedOrderReachesBothTeams:
         ]})
 
         db.session.refresh(job)
-        assert job.work_center == 'ELEC', 'SAP was overruled on its own order'
+        assert job.work_center == 'ELME', 'the mechanic still cannot see it'
+
+    def test_a_label_that_already_agrees_is_untouched(self, db_session,
+                                                      admin_user, plan_day):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MIX05', 'SX05')
+        job = _job(plan, day, eq, order='700000446000')
+        job.work_center = 'MECH'
+        db.session.commit()
+
+        sync_order_operations({'700000446000': [
+            {'operation_number': '0010', 'description': 'Mechanical',
+             'work_center': 'MECH', 'planned_hours': 2.0},
+        ]})
+        db.session.refresh(job)
+        assert job.work_center == 'MECH'
+
+    def test_an_unlabelled_order_takes_the_trade_from_its_operations(
+            self, db_session, admin_user, plan_day):
+        """195 of 196 pool orders have NO work centre — IW39 does not fill it.
+
+        The operations do, which makes IW49 a better source of trade than IW39.
+        """
+        from app.models import SAPWorkOrder
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MIX06', 'SX06')
+        job = _job(plan, day, eq, order='700000447000')
+        job.work_center = None
+        db.session.add(SAPWorkOrder(work_plan_id=None, order_number='700000447000',
+                                    order_type='PRM', job_type='pm',
+                                    equipment_id=eq.id, estimated_hours=4.0,
+                                    priority='normal', status='pending',
+                                    work_center=None))
+        db.session.commit()
+
+        sync_order_operations({'700000447000': [
+            {'operation_number': '0010', 'description': 'Electrical',
+             'work_center': 'ELEC', 'planned_hours': 2.0},
+        ]})
+
+        db.session.refresh(job)
+        assert job.work_center == 'ELEC', 'the order stayed trade-less'
+        order = SAPWorkOrder.query.filter_by(order_number='700000447000').first()
+        assert order.work_center == 'ELEC', 'the pool still cannot sort it'
+
+    def test_supervision_alone_never_gives_an_order_a_trade(
+            self, db_session, admin_user, plan_day):
+        """Ali, 2026-09-12: "supv is supervision, yes shown to everyone".
+
+        685 of 1,560 operations are MES-SUPV — the largest group. Letting it
+        count as a trade would label most of the yard wrongly.
+        """
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MIX07', 'SX07')
+        job = _job(plan, day, eq, order='700000448000')
+        job.work_center = None
+        db.session.commit()
+
+        sync_order_operations({'700000448000': [
+            {'operation_number': '0010', 'description': 'Supervise',
+             'work_center': 'SUPV', 'planned_hours': 1.0},
+        ]})
+        db.session.refresh(job)
+        assert job.work_center is None, 'supervision was treated as a trade'
 
     def test_adding_an_elec_operation_by_hand_widens_it_too(
             self, client, admin_user, db_session, plan_day):

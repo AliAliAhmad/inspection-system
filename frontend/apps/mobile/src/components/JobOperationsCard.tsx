@@ -134,11 +134,28 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
     [all],
   );
 
+  /**
+   * His lines: his own trade, plus the ones that belong to nobody in particular.
+   *
+   * SUPV is SUPERVISION, not a trade — Ali, 2026-09-12: "supv is supervision,
+   * yes shown to everyone". It is the LARGEST group in the real data (685 of
+   * 1,560 operations), so hiding it from either crew would hide most of the
+   * yard's lines from somebody.
+   *
+   * ELME means the line needs both trades, so it is every man's business.
+   *
+   * The values arrive already translated — SAP writes MES-MECH and the import
+   * turns it into MECH. Before that translation existed, this comparison matched
+   * NOTHING and every operation folded into "for the other trade": a mechanic
+   * opened a job and saw his own work presented as somebody else's.
+   */
   const mine = useMemo(() => {
     if (!workCenter) return operations;
-    return operations.filter(
-      (op) => !op.work_center || op.work_center === workCenter || workCenter === 'ELME',
-    );
+    return operations.filter((op) => {
+      const trade = op.work_center;
+      if (!trade || trade === 'SUPV' || trade === 'ELME') return true;
+      return trade === workCenter || workCenter === 'ELME';
+    });
   }, [operations, workCenter]);
   const others = operations.filter((op) => !mine.includes(op));
 
