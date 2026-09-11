@@ -1270,6 +1270,65 @@ def create_app(config_name='development'):
             print('Run it again to continue — every batch is committed, so '
                   'nothing is lost by stopping.')
 
+    @app.cli.command('operation-trades')
+    def operation_trades():
+        """What the work centre column ACTUALLY contains.
+
+        `widened_to_both_trades: 0` could mean "no order needs both teams", or it
+        could mean the check is looking for words that are not there. The pool
+        sync passes SAP's work centre through RAW — only the manual Excel import
+        maps ELEC/MECH/ELME — so if SAP writes something like MES-MECH, both the
+        ELME widening AND the phone's trade filter silently match nothing.
+
+        This prints the real values so the mapping is written from the data
+        rather than from a guess.
+        """
+        from app.models.work_plan_job_task import WorkPlanJobTask
+        from app.models import SAPWorkOrder, WorkPlanJob
+
+        print('=' * 70)
+        print('OPERATION work centres (from IW49)')
+        print('=' * 70)
+        rows = (db.session.query(WorkPlanJobTask.work_center, db.func.count())
+                .filter(WorkPlanJobTask.source == 'sap')
+                .group_by(WorkPlanJobTask.work_center)
+                .order_by(db.func.count().desc()).all())
+        if not rows:
+            print('  (no SAP operations stored)')
+        for value, count in rows:
+            print(f'  {str(value):<24} {count}')
+
+        print()
+        print('ORDER work centres (from IW39, in the pool)')
+        for value, count in (db.session.query(SAPWorkOrder.work_center,
+                                              db.func.count())
+                             .group_by(SAPWorkOrder.work_center)
+                             .order_by(db.func.count().desc()).all()):
+            print(f'  {str(value):<24} {count}')
+
+        print()
+        print('JOB work centres (on plans)')
+        for value, count in (db.session.query(WorkPlanJob.work_center,
+                                              db.func.count())
+                             .group_by(WorkPlanJob.work_center)
+                             .order_by(db.func.count().desc()).all()):
+            print(f'  {str(value):<24} {count}')
+
+        print()
+        print('Orders whose operations use MORE THAN ONE work centre:')
+        pairs = (db.session.query(WorkPlanJobTask.anchor_key,
+                                  WorkPlanJobTask.work_center)
+                 .filter(WorkPlanJobTask.source == 'sap',
+                         WorkPlanJobTask.work_center.isnot(None))
+                 .distinct().all())
+        by_order = {}
+        for key, wc in pairs:
+            by_order.setdefault(key, set()).add(wc)
+        mixed = {k: v for k, v in by_order.items() if len(v) > 1}
+        print(f'  {len(mixed)} of {len(by_order)} orders')
+        for key, trades in list(mixed.items())[:15]:
+            print(f'    {key}: {sorted(trades)}')
+
     @app.cli.command('sap-operation-headers')
     def sap_operation_headers():
         """Print the column names in the latest IW49 export.
