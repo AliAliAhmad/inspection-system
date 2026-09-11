@@ -246,12 +246,12 @@
   `Confirmation`, `Actual start/finish`. SAP knows which operations it thinks are
   done; pre-marking them could argue with what a crew enters. Raised, left alone.
 - `flask rebuild-pool` runs the sync now instead of waiting for 02:02.
-- **⚠️ ORPHAN ROWS from the first unscoped run** — `flask prune-orphan-operations`
-  (reports; `--apply` deletes). Never touches hand-typed lines or operations with
-  work on them. **52,881 still to remove as of 2026-09-11 08:47.**
-  The first `--apply` removed only 2,500 before the Render shell died: the delete
-  was one round trip PER ROW. Now one `DELETE ... IN` per 2,000. Re-runnable —
-  every batch commits.
+- ✅ **ORPHANS CLEARED 2026-09-11 13:26.** 55,381 rows from the first unscoped run
+  are gone; verified by a fresh count (`safe to remove: 0`) and Ali's 9 hand-typed
+  lines were 9 before and after. Table holds 1,560 operations + 9 notes.
+  `flask prune-orphan-operations` (reports; `--apply` deletes; `--limit N` bounds a
+  run) stays for next time. The first `--apply` removed only 2,500 before the shell
+  died — the delete was one round trip PER ROW; now one `DELETE ... IN` per 2,000.
 - Confirmed 2026-09-11: scope fix took the operations step from **6m23s to 2s**;
   1,560 operations on 161 orders. `waiting on material: 180` across the yard.
 - Re-sync NEVER resets `is_done`/timers. A dropped operation with work on it is kept

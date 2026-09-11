@@ -1,3 +1,20 @@
+## 2026-09-11 — Cleanup finished and verified
+
+`flask prune-orphan-operations --apply` after the bulk-delete fix: 27 batches,
+**52,881 rows removed**, and the command's own re-count said `Still orphaned: 0`.
+
+A separate report afterwards confirmed it independently:
+
+    SAP operation rows in the table: 1560   <- the reachable ones, matching
+                                               rebuild-pool's 'updated 1560'
+      safe to remove                  : 0
+      hand-written lines, never touched : 9
+
+**9 before, 9 after.** The table went from 56,950 rows to 1,569.
+
+Two numbers agreeing from different directions — the sync's `updated 1560` and
+`56,941 - 55,381` — is what made the deletion safe to run at all.
+
 ## 2026-09-11 — The cleanup was too slow, and its progress line lied
 
 `flask prune-orphan-operations --apply` on production removed **2,500 of 55,381**
@@ -1217,6 +1234,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
