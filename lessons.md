@@ -709,3 +709,17 @@ person's photo is treated as disposable by a sync that only checks timers.
 LESSON: A card that owns a media player must own its cleanup too. Reaching into
 the screen's player through callbacks looks tidier and leaves the sound playing
 when the card unmounts on its own.
+
+LESSON: A value computed for one purpose and never written back leaves a hole
+elsewhere — `is_mixed` was calculated for the trade split and never applied to the
+job's work_center, so mixed orders stayed invisible to half the crew → When you
+derive a fact, ask which OTHER screen is still deciding without it.
+
+LESSON: When reconciling our reading of an external file against that system's own
+label, only ever WIDEN. Re-labelling an order because its lines look different is
+overruling SAP about its own data; making it visible to one more team is not.
+
+LESSON: A browser-recorded audio file has NO duration — the length field is written
+before the recording stops → Never play a MediaRecorder file directly. Ask the CDN
+to re-encode. The symptom is a player that works but shows --:-- forever, which
+reads as "broken upload" and is not.

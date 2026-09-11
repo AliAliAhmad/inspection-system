@@ -3,6 +3,7 @@ import { Popover, Checkbox, Input, Button, Tooltip, Spin, Empty, Typography, mes
 import { PlusOutlined, DeleteOutlined, PictureOutlined, SoundOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobSubTasksApi, type JobSubTask } from '@inspection/shared';
+import { playableAudioUrl } from '../../utils/audio-recording';
 
 const { Text } = Typography;
 
@@ -163,7 +164,7 @@ const JobSubTasksInner: React.FC<JobSubTasksProps> = ({
                 )}
                 {task.attachment_url && task.attachment_kind === 'voice' && (
                   // controls only — a plan board must never start playing by itself
-                  <audio src={task.attachment_url} controls preload="none"
+                  <audio src={playableAudioUrl(task.attachment_url)} controls preload="metadata"
                          style={{ marginTop: 4, width: '100%', height: 30 }} />
                 )}
                 {task.is_done && task.done_by_name ? (

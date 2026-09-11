@@ -6143,6 +6143,19 @@ def add_job_task(job_id):
         position=(max([t.position for t in existing]) + 1) if existing else 0,
     )
     db.session.add(task)
+
+    # Adding an ELEC operation to an order the board calls MECH must make that
+    # order reach the electrical team too — otherwise the man who has to do the
+    # line Ali just wrote never sees the job. Only ever widens to ELME; see
+    # widen_order_trade_to_both().
+    if operation_number and work_center:
+        db.session.flush()
+        try:
+            from app.services.sap_pool_sync import widen_order_trade_to_both
+            if kind == 'sap':
+                widen_order_trade_to_both(key)
+        except Exception:
+            logger.warning('trade widening failed for job %s', job.id, exc_info=True)
     db.session.commit()
 
     return jsonify({'status': 'success',

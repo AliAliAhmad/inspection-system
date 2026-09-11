@@ -612,6 +612,53 @@ def _orders_the_app_knows():
     return known
 
 
+def widen_order_trade_to_both(order_key):
+    """An order whose operations span both trades must show for BOTH teams.
+
+    THE HOLE THIS CLOSES
+    ====================
+
+    A job sits in a team's column by its OWN work_center — MECH, ELEC, or ELME
+    for both. Nothing was reconciling that with the operations inside it.
+
+    So an order SAP labels MECH, containing one electrical operation, appeared
+    only under the mechanical team. The electrician never saw it on the board and
+    was never assigned, and the operation he was supposed to do was invisible to
+    the only man who could do it. `is_mixed` was already computed and never
+    written back.
+
+    ONLY EVER WIDENS
+    ================
+
+    Both trades present -> ELME. Nothing else is touched. An order SAP
+    deliberately marked ELEC with only electrical operations keeps that label:
+    narrowing or re-labelling on our own reading of the file would be us
+    overruling SAP about its own order, which is a much bigger claim than
+    "this needs both teams".
+
+    Returns how many rows were changed.
+    """
+    from app.models.work_plan_job_task import WorkPlanJobTask
+    from app.models import WorkPlanJob
+
+    trades = {row.work_center for row in WorkPlanJobTask.query.filter_by(
+        anchor_kind='sap', anchor_key=order_key).all() if row.work_center}
+    if not {'MECH', 'ELEC'} <= trades:
+        return 0
+
+    changed = 0
+    for order in SAPWorkOrder.query.filter_by(order_number=order_key).all():
+        if order.work_center != 'ELME':
+            order.work_center = 'ELME'
+            changed += 1
+    for job in WorkPlanJob.query.filter(
+            WorkPlanJob.sap_order_number == order_key).all():
+        if job.work_center != 'ELME':
+            job.work_center = 'ELME'
+            changed += 1
+    return changed
+
+
 def find_orphan_operations(known_orders=None):
     """(safe_to_remove, kept_because_work_was_done) among SAP operation rows.
 
@@ -801,7 +848,14 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
                     db.session.delete(row)
                 counts['removed'] += 1
 
+    # An order needing both trades must reach both teams' columns.
     if not dry_run:
+        for order_number in operations_by_order:
+            key = _SPLIT_SUFFIX.sub('', str(order_number).strip())
+            if key and (not known_orders or key in known_orders):
+                counts['widened_to_both_trades'] = (
+                    counts.get('widened_to_both_trades', 0)
+                    + widen_order_trade_to_both(key))
         db.session.commit()
     return counts
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { pickAudioFormat, createRecorder, describeMicError } from './audio-recording';
+import { pickAudioFormat, createRecorder, describeMicError, playableAudioUrl } from './audio-recording';
 
 /**
  * Ali's bug, 2026-09-09 (iPad): "RECORD VOICE IS NOT RECORDEING".
@@ -87,6 +87,31 @@ describe('constructing the recorder', () => {
     // The server picks storage and transcription from this extension, so a
     // Safari recording called .webm would be labelled as something it is not.
     expect(`note.${format.extension}`).toBe('note.m4a');
+  });
+});
+
+describe('the url a recording is played from', () => {
+  it('asks Cloudinary to re-encode, which is what gives it a LENGTH', () => {
+    // Ali, 2026-09-11: "it plays, but it keeps showing the load sign and
+    // details keeps --:--". A browser writes the length field at the TOP of the
+    // file, before it knows when the speaking will stop, so it stays unknown.
+    expect(playableAudioUrl('https://res.cloudinary.com/demo/video/upload/v1/note.webm'))
+      .toBe('https://res.cloudinary.com/demo/video/upload/f_mp3/v1/note.webm');
+  });
+
+  it('does not ask twice', () => {
+    const already = 'https://res.cloudinary.com/demo/video/upload/f_mp3/v1/note.webm';
+    expect(playableAudioUrl(already)).toBe(already);
+  });
+
+  it('leaves a url it does not recognise alone', () => {
+    expect(playableAudioUrl('https://example.com/note.webm'))
+      .toBe('https://example.com/note.webm');
+  });
+
+  it('survives nothing at all', () => {
+    expect(playableAudioUrl(null)).toBeUndefined();
+    expect(playableAudioUrl(undefined)).toBeUndefined();
   });
 });
 

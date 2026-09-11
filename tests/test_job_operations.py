@@ -202,6 +202,92 @@ class TestARefreshCannotUndoWork:
         assert WorkPlanJobTask.query.count() == 2
 
 
+class TestAMixedOrderReachesBothTeams:
+    """Ali, 2026-09-11: "what if i have mechanical and electrical operation".
+
+    A job sits in a team's column by its OWN work_center. Nothing reconciled that
+    with the operations inside it, so an order SAP labels MECH containing one
+    electrical operation appeared ONLY under the mechanical team — and the
+    electrician never saw the line he was supposed to do.
+    """
+
+    def test_a_sync_widens_a_mech_order_holding_elec_work(self, db_session,
+                                                          admin_user, plan_day):
+        from app.models import SAPWorkOrder
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MIX01', 'SX01')
+        job = _job(plan, day, eq)
+        job.work_center = 'MECH'
+        db.session.add(SAPWorkOrder(work_plan_id=None, order_number='700000123456',
+                                    order_type='PRM', job_type='pm',
+                                    equipment_id=eq.id, estimated_hours=9.0,
+                                    priority='normal', status='pending',
+                                    work_center='MECH'))
+        db.session.commit()
+
+        sync_order_operations(_operations())      # 0010 MECH, 0020 ELEC, 0030 MECH
+
+        db.session.refresh(job)
+        assert job.work_center == 'ELME', \
+            'the electrical team cannot see this order'
+        order = SAPWorkOrder.query.filter_by(order_number='700000123456').first()
+        assert order.work_center == 'ELME', 'the pool still hides it from them'
+
+    def test_a_single_trade_order_is_left_exactly_as_sap_labelled_it(
+            self, db_session, admin_user, plan_day):
+        """Widening only. Re-labelling would be us overruling SAP about its own
+        order, which is a far bigger claim than "this needs both teams"."""
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MIX02', 'SX02')
+        job = _job(plan, day, eq, order='700000444000')
+        job.work_center = 'ELEC'
+        db.session.commit()
+
+        sync_order_operations({'700000444000': [
+            {'operation_number': '0010', 'description': 'All mechanical',
+             'work_center': 'MECH', 'planned_hours': 2.0},
+        ]})
+
+        db.session.refresh(job)
+        assert job.work_center == 'ELEC', 'SAP was overruled on its own order'
+
+    def test_adding_an_elec_operation_by_hand_widens_it_too(
+            self, client, admin_user, db_session, plan_day):
+        """The man who has to do the line Ali just wrote must be able to see it."""
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MIX03', 'SX03')
+        job = _job(plan, day, eq, order='700000555000')
+        job.work_center = 'MECH'
+        db.session.commit()
+        headers = _headers(client, admin_user)
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                    json={'content': 'Mechanical line', 'operation_number': '0900',
+                          'work_center': 'MECH'})
+        db.session.refresh(job)
+        assert job.work_center == 'MECH', 'one trade should change nothing'
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks', headers=headers,
+                    json={'content': 'Rewire the panel', 'operation_number': '0910',
+                          'work_center': 'ELEC'})
+        db.session.refresh(job)
+        assert job.work_center == 'ELME', 'the electrician still cannot see it'
+
+    def test_an_order_already_marked_both_is_untouched(self, db_session,
+                                                       admin_user, plan_day):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'MIX04', 'SX04')
+        job = _job(plan, day, eq)
+        job.work_center = 'ELME'
+        db.session.commit()
+
+        counts = sync_order_operations(_operations())
+        assert counts.get('widened_to_both_trades', 0) == 0, 'it changed what was already right'
+
+
 class TestAnOperationAliAddsHimself:
     """Ali, 2026-09-10: "what will happen with the operation added manually".
 

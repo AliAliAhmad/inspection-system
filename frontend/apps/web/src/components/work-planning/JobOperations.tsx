@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobSubTasksApi, filesApi, type JobSubTask } from '@inspection/shared';
-import { createRecorder, describeMicError } from '../../utils/audio-recording';
+import { createRecorder, describeMicError, playableAudioUrl } from '../../utils/audio-recording';
 import { openCamera, openGallery } from '../../utils/file-picker';
 
 const { Text } = Typography;
@@ -351,7 +351,7 @@ export const JobOperations: React.FC<JobOperationsProps> = ({
                             </a>
                           ) : (
                             // controls only — a plan board must never start playing by itself
-                            <audio src={item.attachment_url || undefined} controls preload="none"
+                            <audio src={playableAudioUrl(item.attachment_url)} controls preload="metadata"
                                    style={{ width: '100%', height: 28 }} />
                           )}
                           {canEdit && (

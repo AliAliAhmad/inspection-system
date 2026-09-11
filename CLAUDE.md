@@ -254,6 +254,17 @@
 - **Photo/voice hang on ONE operation** via `parent_task_id`. Job-level panels
   exclude them; deleting an operation takes its media; an operation carrying media
   counts as TOUCHED so SAP dropping it keeps-and-flags instead of deleting.
+- **Mixed-trade orders reach BOTH teams** — `widen_order_trade_to_both()` sets the
+  order and its job rows to ELME when the operations span MECH and ELEC. Only ever
+  WIDENS; an order SAP marked ELEC with only ELEC operations keeps that label.
+  Runs on sync AND when an operation is added by hand.
+- **Assignment stays on the ORDER, not the operation.** Assign a mechanic AND an
+  electrician; each phone shows his own trade first, the other folded behind a tap.
+  Per-operation assignment deliberately NOT built — a person must not follow an
+  order across weeks the way a half-finished timer correctly does.
+- **Voice `--:--` fixed** — a browser writes the length field before it knows the
+  length, so it stays unknown. `playableAudioUrl()` asks Cloudinary for `f_mp3`,
+  which has a real one. Also fixes webm notes being silent on iPads.
 - **⚠️ The `+` badge counts WRITTEN NOTES only** — operations arriving in the same
   list turned a quiet `+` into `0/10`. Filtered client-side AND in the plan-wide
   endpoint so the badge and the popover agree.

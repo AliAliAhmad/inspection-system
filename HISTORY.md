@@ -1,3 +1,50 @@
+## 2026-09-11 — An order needing both trades now reaches both teams, and --:-- fixed
+
+### Ali: "what if i have mechanical and electrical operation"
+
+A job sits in a team's column by its OWN `work_center`. **Nothing reconciled that
+with the operations inside it.** An order SAP labels MECH containing one
+electrical operation appeared only under the mechanical team — the electrician
+never saw it on the board, was never assigned, and the line he was supposed to do
+was invisible to the only man who could do it. `is_mixed` had been computed since
+the trade-split work and never written back.
+
+`widen_order_trade_to_both()` — both trades present in the operations, the order
+and every job row carrying it become ELME. Called from the sync and from the
+add-operation endpoint, because adding an ELEC line by hand to a MECH order has
+exactly the same consequence.
+
+**It only ever WIDENS.** An order SAP deliberately marked ELEC with only
+electrical operations keeps that label. Re-labelling on our own reading of the
+file would be overruling SAP about its own order — a far bigger claim than "this
+needs both teams". A test pins that.
+
+Assignment stays on the ORDER, not the operation: assign a mechanic AND an
+electrician, and each man's phone shows his own trade's lines first with the
+other folded away. Per-operation assignment was discussed and deliberately not
+built — a person must not follow an order across weeks the way a half-finished
+timer correctly does.
+
+### "it plays, but it keeps showing the load sign and details keeps --:--"
+
+Nothing wrong with the recording or the upload. **A browser records live**, and
+the length field sits at the TOP of the file, written before anyone knows when the
+speaking will stop. MediaRecorder leaves it unknown, so the player honestly
+reports `--:--` and never fills the bar. It plays because it just reads until the
+data runs out.
+
+`playableAudioUrl()` asks Cloudinary to re-encode (`/upload/f_mp3/`), and a
+re-encoded file carries a real length. Applied to all three web players; `preload`
+moved from `none` to `metadata` so the duration shows before pressing play.
+
+**The phone has done this for ages** — `VoiceNoteRecorder` and the new
+`JobAttachmentsCard` both rewrite the URL. The web board played the raw recording.
+It also quietly fixes something not yet hit: a note recorded on the office PC
+(Chrome makes webm) was SILENT on the iPad, because Safari cannot play webm any
+more than it can record it.
+
+1115 backend tests, 36 web.
+
 ## 2026-09-11 — Operations you can see on the board, and add yourself
 
 Ali: "how i can added or see operations?" The honest answer was that the phone
@@ -1284,6 +1331,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

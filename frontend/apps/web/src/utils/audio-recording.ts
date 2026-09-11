@@ -145,3 +145,33 @@ export const micErrorKey = (err: unknown): string => {
       return 'voice.mic_failed';
   }
 };
+
+
+/**
+ * The URL to PLAY a recording from, as opposed to the one it was stored at.
+ *
+ * Ali, 2026-09-11: "when i play it, it plays, but it keeps showing the load sign
+ * and details keeps --:--".
+ *
+ * THE FILE HONESTLY DOES NOT KNOW HOW LONG IT IS
+ *
+ * A browser records live. The length field sits at the TOP of the file and is
+ * written before anybody knows when the speaking will stop, so MediaRecorder
+ * leaves it unknown. The player is not stuck — it is telling the truth: it
+ * cannot report a duration, so the time reads --:-- and the bar never fills.
+ * Playback still works because it simply reads until the data runs out.
+ *
+ * Cloudinary re-encodes on request, and a re-encoded file has a real length in
+ * its header. The phone has always asked for that (VoiceNoteRecorder, and
+ * JobAttachmentsCard); the web board played the raw recording instead.
+ *
+ * The same transform also fixes a second problem the board had not hit yet:
+ * Chrome records webm, and Safari cannot PLAY webm any more than it can record
+ * it — so a note recorded on the office PC was silent on the iPad.
+ */
+export const playableAudioUrl = (url?: string | null): string | undefined => {
+  if (!url) return undefined;
+  if (!url.includes('cloudinary.com')) return url;
+  if (url.includes('/upload/f_mp3/')) return url;   // already asked
+  return url.replace('/upload/', '/upload/f_mp3/');
+};
