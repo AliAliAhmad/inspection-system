@@ -1315,6 +1315,30 @@ def create_app(config_name='development'):
             print(f'  {str(value):<24} {count}')
 
         print()
+        print('=' * 70)
+        print('DO THE POOL ORDERS HAVE OPERATIONS AT ALL?')
+        print('=' * 70)
+        # 35 rows changed when well over a hundred was expected, and the pool's
+        # work centres did not move at all. Either the pool's orders are not in
+        # IW49, or their numbers do not match the ones stored on the operations.
+        pool = [n for (n,) in db.session.query(SAPWorkOrder.order_number)
+                .filter(SAPWorkOrder.work_plan_id.is_(None),
+                        SAPWorkOrder.status == 'pending').all() if n]
+        with_ops = {k for (k,) in db.session.query(WorkPlanJobTask.anchor_key)
+                    .filter(WorkPlanJobTask.source == 'sap').distinct().all()}
+        have = [n for n in pool if str(n).strip() in with_ops]
+        missing = [n for n in pool if str(n).strip() not in with_ops]
+        print(f'  pool orders            : {len(pool)}')
+        print(f'  ...with operations     : {len(have)}')
+        print(f'  ...WITHOUT operations  : {len(missing)}')
+        print('  sample pool numbers WITHOUT operations:')
+        for number in missing[:8]:
+            print(f'    {number!r}')
+        print('  sample anchor keys that DO have operations:')
+        for key in list(with_ops)[:8]:
+            print(f'    {key!r}')
+
+        print()
         print('Orders whose operations use MORE THAN ONE work centre:')
         pairs = (db.session.query(WorkPlanJobTask.anchor_key,
                                   WorkPlanJobTask.work_center)
