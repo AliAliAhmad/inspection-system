@@ -642,6 +642,59 @@ def find_orphan_operations(known_orders=None):
     return safe, kept
 
 
+def orphan_operation_ids(known_orders=None, limit=None):
+    """Just the ids, chosen in SQL. No ORM objects loaded.
+
+    The first version of the cleanup loaded all 56,941 rows as objects and then
+    deleted them one at a time — one database round trip PER ROW. On production
+    it managed 2,500 before the Render shell gave up, and the progress line made
+    it look finished when it was not.
+
+    This asks the database the same question and gets back only the ids, so the
+    delete can be one statement per batch instead of one per row.
+
+    The three exclusions are identical to find_orphan_operations(), expressed as
+    a WHERE clause: SAP-authored only, order not known, and no work recorded.
+    """
+    from app.models.work_plan_job_task import WorkPlanJobTask
+
+    if known_orders is None:
+        known_orders = _orders_the_app_knows()
+
+    query = (db.session.query(WorkPlanJobTask.id)
+             .filter(WorkPlanJobTask.source == 'sap',
+                     WorkPlanJobTask.anchor_kind == 'sap',
+                     WorkPlanJobTask.is_done.is_(False),
+                     WorkPlanJobTask.started_at.is_(None),
+                     WorkPlanJobTask.actual_hours.is_(None)))
+    if known_orders:
+        query = query.filter(~WorkPlanJobTask.anchor_key.in_(known_orders))
+    if limit:
+        query = query.limit(limit)
+    return [row_id for (row_id,) in query.all()]
+
+
+def delete_operation_rows(ids, batch_size=2000, on_progress=None):
+    """Delete by id, one statement per batch.
+
+    `synchronize_session=False` because nothing in this process is holding those
+    objects — checking would re-load the very rows being removed.
+    """
+    from app.models.work_plan_job_task import WorkPlanJobTask
+
+    removed = 0
+    for start in range(0, len(ids), batch_size):
+        chunk = ids[start:start + batch_size]
+        (WorkPlanJobTask.query
+         .filter(WorkPlanJobTask.id.in_(chunk))
+         .delete(synchronize_session=False))
+        db.session.commit()
+        removed += len(chunk)
+        if on_progress:
+            on_progress(removed, len(ids))
+    return removed
+
+
 def sync_order_operations(operations_by_order, dry_run=False, known_orders=None):
     """Store IW49's operations as rows on each order's task list.
 

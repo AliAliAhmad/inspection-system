@@ -307,6 +307,105 @@ class TestCleaningUpTheFirstRun:
         assert safe == [] and kept == []
 
 
+class TestTheFastCleanupPicksTheSameRows:
+    """The safety rules were rewritten as a WHERE clause. They must not drift.
+
+    The first cleanup loaded every row as an object and deleted one at a time —
+    a round trip per row. On production it removed 2,500 of 55,381 before the
+    Render shell gave up, and its progress line read as if it had finished.
+
+    The rewrite is one DELETE per batch. These tests pin that the SQL picks
+    EXACTLY what the object version picked, because a filter that is right in
+    Python and subtly wrong in SQL deletes the wrong rows quietly.
+    """
+
+    def _rows(self, admin_user):
+        from datetime import datetime
+        rows = [
+            # unreachable, untouched -> removable
+            WorkPlanJobTask(anchor_kind='sap', anchor_key='700000555555',
+                            source='sap', operation_number='0010',
+                            content='Ancient history', created_by_id=admin_user.id),
+            # unreachable but STARTED -> keep
+            WorkPlanJobTask(anchor_kind='sap', anchor_key='700000555555',
+                            source='sap', operation_number='0020',
+                            content='Started once', created_by_id=admin_user.id,
+                            started_at=datetime.utcnow()),
+            # unreachable but DONE -> keep
+            WorkPlanJobTask(anchor_kind='sap', anchor_key='700000555555',
+                            source='sap', operation_number='0030',
+                            content='Finished', created_by_id=admin_user.id,
+                            is_done=True),
+            # unreachable but has real hours -> keep
+            WorkPlanJobTask(anchor_kind='sap', anchor_key='700000555555',
+                            source='sap', operation_number='0040',
+                            content='Hours logged', created_by_id=admin_user.id,
+                            actual_hours=1.5),
+            # a KNOWN order -> keep
+            WorkPlanJobTask(anchor_kind='sap', anchor_key='700000123456',
+                            source='sap', operation_number='0010',
+                            content='Still planned', created_by_id=admin_user.id),
+            # Ali typed this -> never touch
+            WorkPlanJobTask(anchor_kind='sap', anchor_key='700000555555',
+                            source='manual', content='Bring the 32mm socket',
+                            created_by_id=admin_user.id),
+        ]
+        db.session.add_all(rows)
+        db.session.commit()
+        return rows
+
+    def test_sql_and_object_selection_agree(self, db_session, admin_user):
+        from app.services.sap_pool_sync import (find_orphan_operations,
+                                                orphan_operation_ids)
+        self._rows(admin_user)
+        known = {'700000123456'}
+
+        safe, _kept = find_orphan_operations(known_orders=known)
+        ids = orphan_operation_ids(known_orders=known)
+
+        assert sorted(ids) == sorted(r.id for r in safe), \
+            'the fast path picks different rows from the careful one'
+        assert len(ids) == 1, 'only the untouched, unreachable operation'
+
+    def test_the_delete_removes_only_those(self, db_session, admin_user):
+        from app.services.sap_pool_sync import (orphan_operation_ids,
+                                                delete_operation_rows)
+        self._rows(admin_user)
+        known = {'700000123456'}
+
+        before = WorkPlanJobTask.query.count()
+        removed = delete_operation_rows(orphan_operation_ids(known_orders=known),
+                                       batch_size=2)
+        assert removed == 1
+        assert WorkPlanJobTask.query.count() == before - 1
+
+        # Everything protected is still there, by name.
+        remaining = {r.content for r in WorkPlanJobTask.query.all()}
+        assert 'Bring the 32mm socket' in remaining, 'a hand-typed line was deleted'
+        assert 'Started once' in remaining
+        assert 'Finished' in remaining
+        assert 'Hours logged' in remaining
+        assert 'Still planned' in remaining
+        assert 'Ancient history' not in remaining
+
+    def test_batching_commits_as_it_goes(self, db_session, admin_user):
+        """An interrupted cleanup must be a SHORTER cleanup, not a lost one."""
+        from app.services.sap_pool_sync import (orphan_operation_ids,
+                                                delete_operation_rows)
+        for index in range(7):
+            db.session.add(WorkPlanJobTask(
+                anchor_kind='sap', anchor_key='700000555555', source='sap',
+                operation_number=f'{index:04d}', content=f'op {index}',
+                created_by_id=admin_user.id))
+        db.session.commit()
+
+        seen = []
+        delete_operation_rows(orphan_operation_ids(known_orders={'x'}),
+                              batch_size=3, on_progress=lambda d, t: seen.append(d))
+        assert seen == [3, 6, 7], 'progress must be the count DONE, not the total'
+        assert WorkPlanJobTask.query.count() == 0
+
+
 class TestWaitingOnMaterial:
     """Ali, 2026-09-11: "PR means that this order waiting a material under
     purchase order".

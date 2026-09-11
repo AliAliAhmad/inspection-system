@@ -681,3 +681,17 @@ what it reports.
 LESSON: A cleanup that shares a table with the user's own work is the dangerous
 kind. Write the tests for what it must NOT delete first, and batch the deletes —
 55,000 in one transaction on a small instance is how a tidy-up becomes an outage.
+
+LESSON: `db.session.delete(row)` in a loop is one database round trip per row, and
+55,381 of them do not fit inside a remote shell's lifetime → For bulk removal use
+one `DELETE ... WHERE id IN (...)` per batch, and select ids in SQL rather than
+loading every row as an object to read its id.
+
+LESSON: A progress line reading `removed 2500/55381` was read as "55381 removed",
+and I then told the user it had finished → Print `removed N of TOTAL` in words, and
+have a long-running command RE-COUNT when it ends and state what remains. Never
+infer completion from a message scrolling past; verify with a fresh query.
+
+LESSON: When a safety filter is rewritten from Python objects into a SQL WHERE
+clause, test that BOTH select the same rows → A filter that is right in Python and
+subtly wrong in SQL deletes the wrong rows quietly.

@@ -1,3 +1,30 @@
+## 2026-09-11 — The cleanup was too slow, and its progress line lied
+
+`flask prune-orphan-operations --apply` on production removed **2,500 of 55,381**
+before the Render shell gave up. Two faults, one of them mine twice over:
+
+1. **`db.session.delete(row)` in a loop is one round trip PER ROW.** 55,381 rows
+   never stood a chance inside a shell's lifetime. It also loaded all 56,941 rows
+   as ORM objects first, on a 512 MB instance, purely to collect their ids.
+2. **The progress line read `removed 2500/55381`** — total on the right, count on
+   the left — which Ali reasonably read as "55381 removed". I then told him the
+   work had finished. It had not. The numbers from a second report caught it:
+   56,941 -> 54,441 is 2,500, exactly five batches.
+
+`orphan_operation_ids()` now asks the database the same question and gets back
+only ids; `delete_operation_rows()` issues ONE `DELETE ... WHERE id IN (...)` per
+2,000-row batch. Progress prints `removed N of TOTAL`, and the command re-counts
+afterwards and says how many remain.
+
+**The batching was the one thing that held.** Every batch was committed, so a
+dropped shell left a clean database and a shorter job — not a lost one, and not a
+hanging transaction. Three new tests: the SQL selection must pick EXACTLY what the
+object version picked (a filter right in Python and subtly wrong in SQL deletes
+the wrong rows quietly), the protected rows are still there by name, and progress
+reports the count DONE.
+
+**Ali's 9 hand-written lines were 9 before and 9 after**, through all of it.
+
 ## 2026-09-11 — The scope fix worked, and left 55,381 rows behind
 
 Second production run, with the filter in place:
@@ -1190,6 +1217,7 @@ hand: it rejected `.xlsm` and parses a different layout.
 - Review found 3 blockers pre-apply: 5 sites read `roster.shift_type` (does not exist,
   would have 500'd bulk assign); a duplicate SAP id would have lost the WHOLE import
   forever; the roster job gated on a marker the pool job deletes.
+See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.
 See HISTORY.md for full changelog. Only keep last 3 entries here.

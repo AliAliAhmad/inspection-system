@@ -1207,7 +1207,10 @@ def create_app(config_name='development'):
     @app.cli.command('prune-orphan-operations')
     @click.option('--apply', 'do_apply', is_flag=True,
                   help='Actually delete. Without it, only reports.')
-    def prune_orphan_operations(do_apply):
+    @click.option('--limit', default=0, type=int,
+                  help='Remove at most this many, then stop. For a shell that '
+                       'keeps dying: run it a few times, it always resumes.')
+    def prune_orphan_operations(do_apply, limit):
         """Remove operation rows for orders the app no longer knows.
 
         WHY THESE EXIST
@@ -1229,20 +1232,20 @@ def create_app(config_name='development'):
         """
         from app.models.work_plan_job_task import WorkPlanJobTask
         from app.services.sap_pool_sync import (_orders_the_app_knows,
-                                                find_orphan_operations)
+                                                orphan_operation_ids,
+                                                delete_operation_rows)
 
         known = _orders_the_app_knows()
-        print(f'Orders the app knows: {len(known)}')
-        print('SAP operation rows in the table: '
-              f'{WorkPlanJobTask.query.filter_by(source="sap").count()}')
-
-        orphans, protected = find_orphan_operations(known)
-        print(f'  belong to orders nobody can open: {len(orphans) + len(protected)}')
-        print(f'    with work recorded on them (KEPT): {len(protected)}')
-        print(f'    safe to remove                  : {len(orphans)}')
-
+        sap_total = WorkPlanJobTask.query.filter_by(source='sap').count()
         manual = WorkPlanJobTask.query.filter(
             WorkPlanJobTask.source != 'sap').count()
+
+        ids = orphan_operation_ids(known, limit=limit or None)
+
+        print(f'Orders the app knows: {len(known)}')
+        print(f'SAP operation rows in the table: {sap_total}')
+        print(f'  safe to remove                  : {len(ids)}'
+              + (f'  (limited to {limit})' if limit else ''))
         print(f'  hand-written lines, never touched : {manual}')
 
         if not do_apply:
@@ -1250,16 +1253,18 @@ def create_app(config_name='development'):
             print('Nothing deleted. Re-run with --apply to remove them.')
             return
 
-        # In batches: 55,000 deletes in one transaction on a 512 MB instance is
-        # how a cleanup becomes an outage.
-        removed = 0
-        for index in range(0, len(orphans), 500):
-            for row in orphans[index:index + 500]:
-                db.session.delete(row)
-            db.session.commit()
-            removed += len(orphans[index:index + 500])
-            print(f'  removed {removed}/{len(orphans)}')
-        print(f'Done. {removed} rows removed.')
+        # One DELETE per batch, not one per row. The first version did a round
+        # trip per row and managed 2,500 of 55,381 before the Render shell gave
+        # up — while its progress line 'removed 2500/55381' read as finished.
+        def say(done, total):
+            print(f'  removed {done} of {total}', flush=True)
+
+        removed = delete_operation_rows(ids, on_progress=say)
+        left = len(orphan_operation_ids(known))
+        print(f'Removed {removed} rows. Still orphaned: {left}')
+        if left:
+            print('Run it again to continue — every batch is committed, so '
+                  'nothing is lost by stopping.')
 
     @app.cli.command('sap-operation-headers')
     def sap_operation_headers():
