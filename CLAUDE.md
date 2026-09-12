@@ -382,6 +382,29 @@
   `test_com_stays_a_defect_however_wrong_the_word_looks`.
 - 1166 backend tests.
 
+### "I choose all related jobs, but not all come" — FIXED 2026-09-13
+- Ali: "in drag a job to a day, i get the pop up i choose drag all related job with, but
+  not all comming or displaying in the day". **"coming OR displaying" was exactly right —
+  there was one of each.**
+- **(1) EVERY related DEFECT was refused, always.** The board's confirm sent no
+  `equipment_id` and `POST /jobs` requires one (`equipment_id is required for PM, defect,
+  and corrective jobs`). Defects are listed FIRST and the web loop awaited inside ONE
+  try/catch — so the first refusal left every SAP order behind it unattempted. Fixed:
+  `_candidates_payload` stamps `equipment_id` on every row; per-item try/catch in
+  `addChosenRelated`, which now NAMES what it could not add.
+- **(2) Jobs landed in the MACHINE's berth, not the dropped one.** `schedule_sap_order`
+  stored `sap_order.berth` and ignored the column; `add_job` always honoured the client's.
+  `WorkPlanDay.to_dict` splits the payload into `jobs_east`/`jobs_west`/`jobs_both` and the
+  board draws each separately — so the work WAS in the day and invisible where he looked.
+  **It hit the dragged job too:** the optimistic card drew where he dropped, then the
+  refetch moved it. Now `_normalize_berth(data.get('berth')) or sap_order.berth` — optional,
+  old value as fallback, so any caller sending no berth is unchanged.
+- **The sweep needed it too.** `_auto_group_equipment_jobs` takes `berth=` now; without it
+  the default `auto_group=True` path re-created the split through the other door.
+- **The rule, in one line: a job lands in the column you drop it on.**
+- 5 new tests in `tests/test_related_jobs_choice.py`, each verified to fail without its fix.
+  1178 backend tests, web+mobile `tsc` clean. Web+backend only, no OTA.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
@@ -393,9 +416,9 @@
   men's shift nor whether they have picked up other work since; a FAILED swap leaves
   that crew unaskable for the rest of the day; `exclude_orders` matches only a bundle's
   first member (over-suppresses, which is the safe direction).
-- **`schedule_sap_order` diverges from the generator** (`app/api/work_plans.py:934`): no
-  re-pricing, no berth normalisation, no capacity check, staffs nobody. `place_one` replaces
-  that behaviour for the bot; the endpoint is untouched.
+- **`schedule_sap_order` diverges from the generator**: no re-pricing, no capacity check,
+  staffs nobody. `place_one` replaces that behaviour for the bot; the endpoint is otherwise
+  untouched. **Berth IS now handled** (fixed 2026-09-13, see below).
 - **Night shift disagrees with itself:** `day_budget._unavailable_by_date` excludes `night`,
   `_step_assign`'s own lookup does not — so a man giving the wallet zero hours can still be
   staffed onto day work.

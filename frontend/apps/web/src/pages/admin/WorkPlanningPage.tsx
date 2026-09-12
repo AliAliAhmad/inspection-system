@@ -2083,39 +2083,56 @@ export default function WorkPlanningPage() {
     if (!currentPlan || !relatedPrompt) return;
     setRelatedBusy(true);
     let added = 0;
+    // ONE FAILURE USED TO CANCEL EVERY JOB BEHIND IT. The loop awaited inside a
+    // single try/catch, so the first rejection left the rest unattempted — and
+    // the rejection was reliable: a defect was sent with no equipment_id, which
+    // `POST /jobs` refuses, and defects are listed FIRST. Ali, 2026-09-13:
+    // "i choose drag all related job with, but not all comming".
+    //
+    // Per item now, so the order of the list stops mattering, and whatever could
+    // not be added is NAMED rather than counted.
+    const failed: string[] = [];
     try {
       for (const c of chosen) {
-        if (c.kind === 'sap') {
-          await scheduleSAPMutation.mutateAsync({
-            planId: currentPlan.id,
-            sapOrderId: c.id,
-            dayId: relatedPrompt.dayId,
-            berth: relatedPrompt.berth,
-            sourceJob: { description: c.description, order_number: c.reference,
-                         estimated_hours: c.estimated_hours, job_type: c.job_type },
-            autoGroup: false,
-          });
-        } else {
-          await addJobMutation.mutateAsync({
-            planId: currentPlan.id,
-            dayId: relatedPrompt.dayId,
-            jobType: 'defect' as JobType,
-            berth: (relatedPrompt.berth || 'both') as Berth,
-            defectId: c.id,
-            estimatedHours: c.estimated_hours || 2,
-            sourceJob: { description: c.description },
-            autoGroup: false,
-          });
+        try {
+          if (c.kind === 'sap') {
+            await scheduleSAPMutation.mutateAsync({
+              planId: currentPlan.id,
+              sapOrderId: c.id,
+              dayId: relatedPrompt.dayId,
+              berth: relatedPrompt.berth,
+              sourceJob: { description: c.description, order_number: c.reference,
+                           estimated_hours: c.estimated_hours, job_type: c.job_type },
+              autoGroup: false,
+            });
+          } else {
+            await addJobMutation.mutateAsync({
+              planId: currentPlan.id,
+              dayId: relatedPrompt.dayId,
+              jobType: 'defect' as JobType,
+              berth: (relatedPrompt.berth || 'both') as Berth,
+              // The server stamps this on every candidate. Without it the add is
+              // refused outright — see RelatedJobCandidate.equipment_id.
+              equipmentId: c.equipment_id ?? undefined,
+              defectId: c.id,
+              estimatedHours: c.estimated_hours || 2,
+              sourceJob: { description: c.description },
+              autoGroup: false,
+            });
+          }
+          added += 1;
+        } catch {
+          failed.push(c.reference || c.description || `#${c.id}`);
         }
-        added += 1;
       }
-      message.success(`Added ${added} job${added !== 1 ? 's' : ''} to the day`);
-    } catch (err: any) {
-      message.error(
-        added > 0
-          ? `Added ${added}, then failed — check the day`
-          : (err?.response?.data?.message || 'Could not add the related jobs'),
-      );
+      if (failed.length === 0) {
+        message.success(`Added ${added} job${added !== 1 ? 's' : ''} to the day`);
+      } else if (added > 0) {
+        message.warning(
+          `Added ${added}. Could not add: ${failed.join(', ')}`, 6);
+      } else {
+        message.error(`Could not add: ${failed.join(', ')}`, 6);
+      }
     } finally {
       setRelatedBusy(false);
       setRelatedPrompt(null);

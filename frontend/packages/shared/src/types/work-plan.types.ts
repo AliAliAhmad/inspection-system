@@ -315,6 +315,14 @@ export interface RelatedJobCandidate {
   /** SAP order number, when this came from SAP. */
   reference?: string | null;
   job_type?: string;
+  /**
+   * The machine this candidate belongs to.
+   *
+   * REQUIRED when adding a defect: `POST /jobs` refuses one without it, so
+   * before the server sent this every related defect came back 400 — and being
+   * listed first, it cancelled the SAP orders behind it too.
+   */
+  equipment_id?: number | null;
 }
 
 export interface UpdateJobPayload {

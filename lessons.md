@@ -762,3 +762,17 @@ rename would have silently de-prioritised 128 of 208 open orders with nothing
 appearing broken. → A label that looks wrong is not evidence it IS wrong. Find
 every branch that reads it before renaming it, and if the behaviour is right,
 write the reason into a TEST — a comment does not stop the next tidy-up.
+
+LESSON (2026-09-13): Two endpoints created jobs and chose the berth DIFFERENTLY —
+add_job honoured what the client sent, schedule_sap_order overwrote it with the
+machine's own. Nothing looked broken because both values are valid; the job just
+appeared in a different column from the one the planner dropped on, and
+WorkPlanDay.to_dict draws each column separately. → When two endpoints create the
+same row, diff the field lists, not the behaviour. A field one of them silently
+decides for itself is invisible until a user says "it is not where I put it".
+
+LESSON (2026-09-13): A loop of `await mutateAsync(...)` inside ONE try/catch means
+the first failure abandons every item after it. Combined with a payload that was
+always refused, and that item being FIRST in the list, "add all" reliably added
+nothing. → Per-item try/catch in any bulk action, and name what failed. A count
+("added 2") does not tell a user which one is missing.

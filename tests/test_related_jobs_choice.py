@@ -253,3 +253,165 @@ class TestPickingSome:
                           headers=_headers(client, admin_user))
         numbers = [o['order_number'] for o in resp.get_json()['sap_orders']]
         assert '700000009012' in numbers
+
+
+class TestEverythingIChoseLandsWhereIDroppedIt:
+    """Ali, 2026-09-13: "in drag a job to a day, i get the pop up i choose drag
+    all related job with, but not all comming or displaying in the day".
+
+    Two separate faults, and his "coming OR displaying" was the right instinct —
+    one of each.
+
+    1. EVERY RELATED DEFECT WAS REFUSED. The board's confirm sent no
+       equipment_id, and `POST /jobs` requires one for a defect. Defects are
+       listed FIRST, and the web loop awaited inside a single try/catch, so the
+       first refusal left every SAP order behind it unattempted.
+
+    2. THEY LANDED IN THE MACHINE'S BERTH, NOT THE DROPPED ONE.
+       `schedule_sap_order` stored `sap_order.berth` and ignored the column
+       entirely, while `add_job` has always honoured what the client sent. Since
+       `WorkPlanDay.to_dict` splits the payload into jobs_east / jobs_west /
+       jobs_both and the board draws each column separately, the work was in the
+       day and invisible in the column he was looking at.
+
+       It hit the DRAGGED job too — the optimistic card drew where he dropped,
+       then the refetch moved it to the other column in front of him.
+    """
+
+    def _west_machine(self, db_session, name='RSW1'):
+        eq = make_equipment(db_session, name, name)
+        eq.berth = 'west'
+        db.session.commit()
+        return eq
+
+    def test_a_defect_is_added_with_the_payload_the_modal_actually_sends(
+            self, client, admin_user, db_session, plan_day):
+        """THE regression. This returned 400 every single time."""
+        plan, day = plan_day
+        eq = self._west_machine(db_session, 'RSW2')
+        defect = _defect(db_session, eq)
+        h = _headers(client, admin_user)
+
+        candidates = client.post(
+            f'/api/work-plans/{plan.id}/jobs',
+            json={'day_id': day.id, 'job_type': 'pm', 'berth': 'east',
+                  'equipment_id': eq.id, 'estimated_hours': 4,
+                  'auto_group': False}, headers=h).get_json()['related_candidates']
+        row = [c for c in candidates if c['kind'] == 'defect'][0]
+        assert row['equipment_id'] == eq.id, \
+            'the server must stamp the machine on every candidate'
+
+        resp = client.post(f'/api/work-plans/{plan.id}/jobs',
+                           json={'day_id': day.id, 'job_type': 'defect',
+                                 'berth': 'east', 'defect_id': row['id'],
+                                 'equipment_id': row['equipment_id'],
+                                 'estimated_hours': row['estimated_hours'],
+                                 'auto_group': False}, headers=h)
+        assert resp.status_code == 201, resp.get_json()
+        assert defect.id == row['id']
+
+    def test_a_sap_order_lands_in_the_column_it_was_dropped_on(
+            self, client, admin_user, db_session, plan_day):
+        plan, day = plan_day
+        eq = self._west_machine(db_session, 'RSW3')
+        order = _order(db_session, eq, '700000900101')
+        order.berth = 'west'
+        db.session.commit()
+
+        resp = client.post(f'/api/work-plans/{plan.id}/schedule-sap-order',
+                           json={'sap_order_id': order.id, 'day_id': day.id,
+                                 'berth': 'east', 'auto_group': False},
+                           headers=_headers(client, admin_user))
+        assert resp.status_code == 201
+        assert resp.get_json()['job']['berth'] == 'east', \
+            "the planner dropped on east; the machine's own berth does not win"
+
+    def test_without_a_berth_it_still_uses_the_orders_own(
+            self, client, admin_user, db_session, plan_day):
+        """The fallback, pinned. Any caller that sends no berth is unchanged."""
+        plan, day = plan_day
+        eq = self._west_machine(db_session, 'RSW4')
+        order = _order(db_session, eq, '700000900102')
+        order.berth = 'west'
+        db.session.commit()
+
+        resp = client.post(f'/api/work-plans/{plan.id}/schedule-sap-order',
+                           json={'sap_order_id': order.id, 'day_id': day.id,
+                                 'auto_group': False},
+                           headers=_headers(client, admin_user))
+        assert resp.get_json()['job']['berth'] == 'west'
+
+    def test_the_sweep_puts_its_jobs_in_the_dropped_column_too(
+            self, client, admin_user, db_session, plan_day):
+        """Otherwise the split comes back through the default path.
+
+        auto_group=True is what every caller but the board uses. With the dragged
+        job now honouring the dropped berth, a sweep still using the machine's
+        berth would scatter the machine's work across two columns again.
+        """
+        plan, day = plan_day
+        eq = self._west_machine(db_session, 'RSW5')
+        first = _order(db_session, eq, '700000900103')
+        second = _order(db_session, eq, '700000900104')
+        for o in (first, second):
+            o.berth = 'west'
+        db.session.commit()
+
+        client.post(f'/api/work-plans/{plan.id}/schedule-sap-order',
+                    json={'sap_order_id': first.id, 'day_id': day.id,
+                          'berth': 'east'},
+                    headers=_headers(client, admin_user))
+
+        berths = {j.berth for j in _day_jobs(plan)}
+        assert berths == {'east'}, f'the machine got split across {berths}'
+
+    def test_everything_chosen_is_drawn_in_the_one_column(
+            self, client, admin_user, db_session, plan_day):
+        """Ali's sentence, as an assertion.
+
+        The board draws jobs_east / jobs_west / jobs_both separately, so "in the
+        day" is not the same as "where I am looking". This walks the whole
+        gesture: drop on east, tick everything, confirm.
+        """
+        plan, day = plan_day
+        eq = self._west_machine(db_session, 'RSW6')
+        dragged = _order(db_session, eq, '700000900105')
+        for number in ('700000900106', '700000900107'):
+            o = _order(db_session, eq, number)
+            o.berth = 'west'
+        dragged.berth = 'west'
+        _defect(db_session, eq)
+        db.session.commit()
+        h = _headers(client, admin_user)
+
+        candidates = client.post(
+            f'/api/work-plans/{plan.id}/schedule-sap-order',
+            json={'sap_order_id': dragged.id, 'day_id': day.id,
+                  'berth': 'east', 'auto_group': False},
+            headers=h).get_json()['related_candidates']
+        assert len(candidates) == 3, candidates
+
+        for c in candidates:
+            if c['kind'] == 'sap':
+                resp = client.post(
+                    f'/api/work-plans/{plan.id}/schedule-sap-order',
+                    json={'sap_order_id': c['id'], 'day_id': day.id,
+                          'berth': 'east', 'auto_group': False}, headers=h)
+            else:
+                resp = client.post(
+                    f'/api/work-plans/{plan.id}/jobs',
+                    json={'day_id': day.id, 'job_type': 'defect',
+                          'berth': 'east', 'defect_id': c['id'],
+                          'equipment_id': c['equipment_id'],
+                          'estimated_hours': c['estimated_hours'],
+                          'auto_group': False}, headers=h)
+            assert resp.status_code == 201, (c, resp.get_json())
+
+        jobs = _day_jobs(plan)
+        assert len(jobs) == 4, 'the dragged job plus all three chosen'
+
+        payload = day.to_dict()
+        assert len(payload['jobs_east']) == 4, (
+            'every job he chose must be in the column he dropped on — '
+            f"east={len(payload['jobs_east'])} west={len(payload['jobs_west'])} "
+            f"both={len(payload['jobs_both'])}")

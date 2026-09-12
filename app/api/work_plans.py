@@ -138,11 +138,22 @@ def _related_equipment_work(plan_id, equipment_id, exclude_sap_order_id=None):
     return open_defects, pending_sap
 
 
-def _candidates_payload(open_defects, pending_sap, language='en'):
+def _candidates_payload(open_defects, pending_sap, language='en', equipment_id=None):
     """The same list, as something the board can draw a tick-box beside.
 
     Hours are included because capacity is the whole game on that board — a
     planner deciding what to pull in needs to see what it costs the day.
+
+    EVERY CANDIDATE CARRIES ITS equipment_id, and that is not decoration.
+    `POST /jobs` REFUSES a defect without one ("equipment_id is required for PM,
+    defect, and corrective jobs"), so before this the board's confirm sent no
+    equipment and EVERY related defect came back 400 — every time, for everybody.
+    Defects are listed first, so with one `await` loop behind a single try/catch
+    the first refusal cancelled every SAP order behind it too.
+
+    The board could rebuild it from the drag context, which is exactly how it
+    went missing. The caller already holds the id it queried with; stamping it
+    here means the client cannot get it wrong.
     """
     rows = []
     for defect in open_defects:
@@ -153,6 +164,7 @@ def _candidates_payload(open_defects, pending_sap, language='en'):
             'estimated_hours': 2.0,
             'severity': defect.severity,
             'reference': None,
+            'equipment_id': equipment_id,
         })
     for sap in pending_sap:
         rows.append({
@@ -163,14 +175,22 @@ def _candidates_payload(open_defects, pending_sap, language='en'):
             'severity': None,
             'reference': sap.order_number,
             'job_type': sap.job_type,
+            'equipment_id': equipment_id or sap.equipment_id,
         })
     return rows
 
 
-def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_id=None):
+def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_id=None,
+                               berth=None):
     """Auto-add ALL related jobs for the same equipment to the same day.
     Includes: open defects (from inspections + direct) AND pending SAP orders.
     Called after any job is scheduled. Returns count of auto-added jobs.
+
+    `berth` is the column the planner actually dropped onto. Without it this
+    swept every job onto the MACHINE's berth while the dragged job went where it
+    was dropped — the same split, arriving through the default path instead of
+    the chooser. Omitted, it falls back to the machine's own berth, which is
+    exactly what it always did.
     """
     if not equipment_id:
         return 0
@@ -188,7 +208,7 @@ def _auto_group_equipment_jobs(plan_id, day_id, equipment_id, exclude_sap_order_
     # not. Not observed on production, fixed because it is a real failure mode
     # and the guard is free.
     from app.services.work_plan_generator_service import _normalize_berth
-    berth = _normalize_berth(eq.berth) if eq else None
+    berth = _normalize_berth(berth) or (_normalize_berth(eq.berth) if eq else None)
 
     # Get next position
     max_pos = db.session.query(db.func.max(WorkPlanJob.position)).filter_by(
@@ -1022,14 +1042,16 @@ def add_job(plan_id):
     related = []
     try:
         if auto_group:
-            auto_defect_count = _auto_group_equipment_jobs(plan_id, day.id, equipment_id)
+            auto_defect_count = _auto_group_equipment_jobs(
+                plan_id, day.id, equipment_id, berth=effective_berth)
         else:
             # Flush first: the job just added must be visible to the
             # already-scheduled subquery, or a dropped defect offers itself.
             db.session.flush()
             related = _candidates_payload(
                 *_related_equipment_work(plan_id, equipment_id),
-                language=(user.language or 'en'))
+                language=(user.language or 'en'),
+                equipment_id=equipment_id)
     except Exception as e:
         logger.warning(f'Auto-group defects failed: {e}')
 
@@ -1096,6 +1118,24 @@ def schedule_sap_order(plan_id):
     if sap_order.status != 'pending':
         raise ValidationError("SAP order has already been scheduled")
 
+    # A JOB LANDS IN THE COLUMN THE PLANNER DROPPED IT ON.
+    #
+    # This used to store `sap_order.berth` — the MACHINE's berth — and ignore the
+    # column entirely. Ali, 2026-09-13: "i choose drag all related job with, but
+    # not all comming or displaying in the day". They were in the day; they were
+    # in the other berth's column, because WorkPlanDay.to_dict splits the payload
+    # into jobs_east / jobs_west / jobs_both and the board draws each separately.
+    #
+    # It hit the DRAGGED job too: the optimistic card appeared in the column he
+    # dropped on, then the refetch moved it to the machine's column in front of
+    # him. `add_job` has always honoured the client's berth; this endpoint was the
+    # odd one out.
+    #
+    # Optional, with the old value as the fallback, so any caller that does not
+    # send a berth behaves exactly as before.
+    from app.services.work_plan_generator_service import _normalize_berth
+    effective_berth = _normalize_berth(data.get('berth')) or sap_order.berth
+
     # Get the day
     day = db.session.get(WorkPlanDay, day_id)
     if not day or day.work_plan_id != plan_id:
@@ -1121,7 +1161,7 @@ def schedule_sap_order(plan_id):
     job = WorkPlanJob(
         work_plan_day_id=day.id,
         job_type=sap_order.job_type,
-        berth=sap_order.berth,
+        berth=effective_berth,
         work_center=sap_order.work_center,
         equipment_id=sap_order.equipment_id,
         sap_order_number=sap_order.order_number,
@@ -1185,13 +1225,16 @@ def schedule_sap_order(plan_id):
     related = []
     try:
         if auto_group:
-            auto_defect_count = _auto_group_equipment_jobs(plan_id, day.id, sap_order.equipment_id, exclude_sap_order_id=sap_order.id)
+            auto_defect_count = _auto_group_equipment_jobs(
+                plan_id, day.id, sap_order.equipment_id,
+                exclude_sap_order_id=sap_order.id, berth=effective_berth)
         else:
             db.session.flush()
             related = _candidates_payload(
                 *_related_equipment_work(plan_id, sap_order.equipment_id,
                                          exclude_sap_order_id=sap_order.id),
-                language=(user.language or 'en'))
+                language=(user.language or 'en'),
+                equipment_id=sap_order.equipment_id)
     except Exception as e:
         logger.warning(f'Auto-group jobs failed: {e}')
 
