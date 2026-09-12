@@ -312,11 +312,17 @@
   (a tab, not a root route — the FAB action from commit `0bb8974`); `colleagueData`
   read in a deps array 130 lines above its own `const` in `InspectionWizardScreen`;
   `EPICard`'s hand-written `t` type; a removed `expo-file-system` option.
-- **⚠️ STILL BROKEN, needs Ali's call:** mobile punch-list Resolve calls
-  `defectsApi.resolve(id)` with no body, and `app/api/defects.py:108` **requires**
-  `resolution_notes` — so that button has never worked. Fixing it needs a decision:
-  prompt the man for a note, or record a fixed one.
+- **Punch-list Resolve had NEVER worked** — `defectsApi.resolve(id)` sent no body and
+  `app/api/defects.py:108` requires `resolution_notes`, so every tap returned 400. With
+  no `onError` the row just stayed put, which reads as a slow network, not a refusal.
+  Fixed with a fixed note matching `DefectKanban.tsx:396`, plus a bilingual failure
+  message. **A typed note per item is still possible** — the panel already imports
+  `Modal`/`TextInput` and has the assign-modal pattern to copy.
+- **Mobile `tsc`: 0 errors**, down from 5.
 - 1133 backend tests. Web `tsc` clean.
+- ✅ **DEPLOYED 2026-09-12** — commits `ff08fb7` + `71832f8`; OTA update group
+  `02091deb-492b-4108-99be-ab7d4e379639` on the `preview` channel (runtime 1.0.0,
+  both platforms). API verified `{"database":"connected","status":"healthy"}`.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
