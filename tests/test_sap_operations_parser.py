@@ -189,3 +189,45 @@ class TestTheLabelAnOrderShouldCarry:
         from app.services.sap_order_parser import trade_label_for
         assert trade_label_for(['MES-SUPV']) is None
         assert trade_label_for(['MES-SUPV', 'MES-MECH']) == 'MECH'
+
+
+class TestSapHoldsNoPartialProgressToImport:
+    """Ali, 2026-09-12: "you will not find a open operation and close operation in
+    the same order as we close the order after all finish."
+
+    An order stays open until every operation in it is done, and only then is it
+    closed. So for an OPEN order — the only kind the app plans — nothing is
+    confirmed in SAP, ever.
+
+    Two things follow, and both are easy to get wrong later:
+
+    1. Pre-ticking operations from SAP's own confirmation columns is not a
+       deferred feature. It is an empty one. Every row that matters is blank.
+    2. The app's tick-marks and timers are therefore the ONLY record anywhere
+       that a crew is partway through an order — which is what makes the
+       never-reset rule in sync_order_operations load-bearing rather than
+       courteous. There is no second copy to restore from.
+    """
+
+    def test_no_status_or_confirmation_column_is_read(self):
+        from app.services.sap_order_parser import OPERATION_COLUMN_CANDIDATES
+        every_name = ' '.join(
+            name for names in OPERATION_COLUMN_CANDIDATES.values()
+            for name in names).lower()
+        for word in ('status', 'confirm', 'actual start', 'actual finish'):
+            assert word not in every_name, (
+                f"a '{word}' column joined the operations parser — an OPEN order "
+                'has nothing confirmed against it, so this imports a blank on '
+                'every row that matters. Read the note above '
+                'OPERATION_COLUMN_CANDIDATES.')
+
+    def test_actual_work_is_not_mistaken_for_planned_work(self):
+        """'Work' is the PLANNED figure and is what prices an order.
+
+        'Work Actual' sits in the same candidate list as a fallback spelling, and
+        on an open order it would be empty anyway — but the two must never be
+        confused, because confirmed work is a copy of the plan for faults (1,122
+        of 1,122 breakdowns agreeing to the decimal) and worthless as a measure.
+        """
+        from app.services.sap_order_parser import OPERATION_COLUMN_CANDIDATES
+        assert OPERATION_COLUMN_CANDIDATES['work'][0] == 'Work'

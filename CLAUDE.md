@@ -242,9 +242,15 @@
   NOT translated, by his instruction — already in `_PROTECTED_TERMS`. IW49 carries
   `Purchase Requisition` PER OPERATION, so the blocked LINE and the part are named;
   `waiting_on_material` flag + amber strip on the phone. A part arriving clears it.
-- **Not acted on:** IW49 also carries per-operation `System Status`, `Actual work`,
-  `Confirmation`, `Actual start/finish`. SAP knows which operations it thinks are
-  done; pre-marking them could argue with what a crew enters. Raised, left alone.
+- ✅ **CLOSED, not deferred: there is nothing to pre-mark.** Ali, 2026-09-12: "you will
+  not find a open operation and close operation in the same order as we close the order
+  after all finish." An order stays open until EVERY operation is done, so an open order
+  — the only kind the app plans — has nothing confirmed in SAP, ever. Pre-ticking from
+  `System Status`/`Confirmation` was never a feature, it was a blank column.
+- **⚠️ THEREFORE the app's ticks and timers are the ONLY record anywhere** that a crew is
+  3 operations into a 9-operation order. That makes "a re-sync never resets `is_done`"
+  load-bearing, not polite — there is no second copy to restore from. Guarded by
+  `test_no_status_or_confirmation_column_is_read`.
 - `flask rebuild-pool` runs the sync now instead of waiting for 02:02.
 - **Operations are on the WEB board too** (`JobOperations.tsx`, Job Details): number,
   hours, trade, timer, progress, waiting-for-material, per-operation photo/voice.

@@ -365,6 +365,17 @@ def load_iw39(iw39_bytes):
 #
 # `flask sap-operation-headers` prints what a real export contains so the right
 # names can be added here.
+# NO STATUS COLUMN IS READ, AND ADDING ONE WOULD GAIN NOTHING.
+#
+# IW49 carries System Status, Confirmation, Actual work and Actual start/finish
+# per operation, and the obvious idea is to pre-tick what SAP already believes is
+# done. Ali, 2026-09-12: "you will not find a open operation and close operation
+# in the same order as we close the order after all finish."
+#
+# The order is closed only once everything in it is finished. So for an OPEN
+# order — the only kind the app plans — every operation is unconfirmed, always.
+# There is nothing to pre-tick, and a column read for that purpose would import a
+# blank on every row that matters.
 OPERATION_COLUMN_CANDIDATES = {
     'order': ['Order', 'Order Number', 'OrderNumber'],
     'operation': ['Oper./Activity', 'Operation/Activity', 'Operation', 'Activity',

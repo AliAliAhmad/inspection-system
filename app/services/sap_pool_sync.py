@@ -840,6 +840,20 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
     `paused_at` or `actual_hours`. A man ticked that box and a timer ran against
     that operation; a Tuesday morning file refresh must not undo either.
 
+    AND SAP CANNOT PUT ANY OF IT BACK. Ali, 2026-09-12: "you will not find a open
+    operation and close operation in the same order as we close the order after
+    all finish."
+
+    An order stays open until every one of its operations is done, and only then
+    is it closed. So an OPEN order has NOTHING confirmed against it in SAP — half
+    a job done is a state SAP never holds. The app's own tick-marks and timers are
+    the only record anywhere that a crew is three operations into a nine-operation
+    order.
+
+    That makes the rule above load-bearing rather than polite. If a re-sync reset
+    a tick, the information would be gone from every system at once — there is no
+    other copy to restore it from.
+
     A HAND-TYPED OPERATION IS INVISIBLE HERE, AND THAT IS THE POINT
     ===============================================================
 
