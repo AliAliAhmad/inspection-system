@@ -563,7 +563,8 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         # real headers listed is how we learn this export's column names.
         'operations': dict(operations_report,
                            stored=sync_order_operations(operations_by_order,
-                                                        dry_run=dry_run)),
+                                                        dry_run=dry_run),
+                           pool_coverage=pool_operation_coverage()),
         'delivered': _delivered_summary(),
         'removal_rules': removal,
         'parse': parse_report,
@@ -684,6 +685,42 @@ def widen_order_trade_to_both(order_key):
     return apply_order_trade(order_key)
 
 
+def pool_operation_coverage():
+    """How much of the LIVE pool this IW49 actually covers.
+
+    Found the hard way, 2026-09-11: the export contained 56,941 operations across
+    19,375 orders and **none** of the 185 orders in the pool. Its columns say why
+    — Actual work, Confirmation, Actual start/finish — it is a history report of
+    work already done, so the orders a planner actually drags onto a week have no
+    operations in it.
+
+    Nothing was wrong with the code. Every number it produced was true, and about
+    last year's work.
+
+    A saved variant in SAP feeds the courier, so this can be fixed once and then
+    silently regress. This number goes in the sync report every run, so the next
+    time it happens somebody sees it instead of finding out three weeks later that
+    the operations screens are empty.
+    """
+    from app.models.work_plan_job_task import WorkPlanJobTask
+
+    pool = {str(n).strip() for (n,) in
+            db.session.query(SAPWorkOrder.order_number)
+            .filter(SAPWorkOrder.work_plan_id.is_(None),
+                    SAPWorkOrder.status == 'pending').all() if n}
+    if not pool:
+        return {'pool_orders': 0, 'with_operations': 0, 'covered_percent': None}
+
+    with_ops = {k for (k,) in db.session.query(WorkPlanJobTask.anchor_key)
+                .filter(WorkPlanJobTask.source == 'sap').distinct().all()}
+    covered = len(pool & with_ops)
+    return {
+        'pool_orders': len(pool),
+        'with_operations': covered,
+        'covered_percent': round(100.0 * covered / len(pool), 1),
+    }
+
+
 def find_orphan_operations(known_orders=None):
     """(safe_to_remove, kept_because_work_was_done) among SAP operation rows.
 
@@ -774,6 +811,21 @@ def delete_operation_rows(ids, batch_size=2000, on_progress=None):
     return removed
 
 
+def _orders_with_hand_typed_operations():
+    """Anchor keys carrying an operation a PERSON typed.
+
+    Used to build a review list, not to change behaviour. See the note in
+    sync_order_operations about the same work arriving twice.
+    """
+    from app.models.work_plan_job_task import WorkPlanJobTask
+    rows = (db.session.query(WorkPlanJobTask.anchor_key)
+            .filter(WorkPlanJobTask.anchor_kind == 'sap',
+                    WorkPlanJobTask.source != 'sap',
+                    WorkPlanJobTask.operation_number.isnot(None))
+            .distinct().all())
+    return {row[0] for row in rows}
+
+
 def sync_order_operations(operations_by_order, dry_run=False, known_orders=None):
     """Store IW49's operations as rows on each order's task list.
 
@@ -788,6 +840,27 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
     `paused_at` or `actual_hours`. A man ticked that box and a timer ran against
     that operation; a Tuesday morning file refresh must not undo either.
 
+    A HAND-TYPED OPERATION IS INVISIBLE HERE, AND THAT IS THE POINT
+    ===============================================================
+
+    `existing` is filtered to source='sap'. So an operation Ali typed himself is
+    never updated and never deleted by a sync, whatever the file says. That is
+    the protection, and it is also why two things can happen that no code can
+    resolve:
+
+      * SAP arrives with a NUMBER Ali already used. `uq_work_plan_job_task_operation`
+        allows one row per number per order, so inserting would raise
+        IntegrityError — and with a single commit at the end of this function,
+        that one order would take down the operations import for ALL of them.
+        So SAP's line is SKIPPED and named. Nothing is renumbered (a number a
+        crew was told must not move by itself) and nothing is overwritten.
+        SAP resends the whole file every night, so the skip is not a loss: the
+        moment Ali renames or deletes his line, the next sync imports SAP's.
+      * SAP arrives with THE SAME WORK under a different number. There is no way
+        to know that two differently-numbered lines are one job. Nothing is
+        merged, and `orders_to_review` lists every order holding both a typed
+        line and a SAP line so a person can look.
+
     An operation SAP no longer sends is kept, not deleted, when work has been
     done against it. Deleting it would erase the record that the work happened.
     An untouched one is dropped, because it is simply not part of the order any
@@ -800,9 +873,18 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
 
     counts = {'orders': 0, 'added': 0, 'updated': 0,
               'kept_but_gone_from_sap': 0, 'removed': 0,
-              'skipped_unknown_orders': 0}
+              'skipped_unknown_orders': 0,
+              # Orders holding BOTH a hand-typed operation and a SAP one. Not a
+              # fault — a review list. The same work can arrive twice under two
+              # numbers, and only a person can see that.
+              'orders_to_review': [],
+              # SAP lines not imported because a person owns that number on
+              # that order. Retried on every sync — see the docstring.
+              'skipped_number_taken_by_hand': []}
     if not operations_by_order:
         return counts
+
+    hand_typed = _orders_with_hand_typed_operations()
 
     if known_orders is None:
         known_orders = _orders_the_app_knows()
@@ -815,10 +897,21 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
             counts['skipped_unknown_orders'] += 1
             continue
         counts['orders'] += 1
+        if key in hand_typed and operations:
+            counts['orders_to_review'].append(key)
 
-        existing = {row.operation_number: row for row in
-                    WorkPlanJobTask.query.filter_by(
-                        anchor_kind='sap', anchor_key=key, source='sap').all()}
+        # ONE query, then split by author. The numbers a person owns have to be
+        # known before the first insert, or the insert is what discovers them —
+        # as an IntegrityError, after the loop has built up every other order's
+        # rows in the same session.
+        rows = WorkPlanJobTask.query.filter(
+            WorkPlanJobTask.anchor_kind == 'sap',
+            WorkPlanJobTask.anchor_key == key,
+            WorkPlanJobTask.operation_number.isnot(None)).all()
+        existing = {row.operation_number: row for row in rows
+                    if row.source == 'sap'}
+        taken_by_hand = {row.operation_number for row in rows
+                         if row.source != 'sap'}
         seen = set()
 
         for position, op in enumerate(operations):
@@ -826,6 +919,13 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
             seen.add(number)
             row = existing.get(number)
             text_ = op['description'] or f'Operation {number}'
+            if row is None and number in taken_by_hand:
+                # Ali's line holds this number. His text, his hours and any
+                # timer running against it all stay exactly as they are.
+                counts['skipped_number_taken_by_hand'].append(
+                    {'order': key, 'operation_number': number,
+                     'sap_text': text_})
+                continue
             if row is None:
                 if not dry_run:
                     db.session.add(WorkPlanJobTask(

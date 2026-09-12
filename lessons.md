@@ -723,3 +723,18 @@ LESSON: A browser-recorded audio file has NO duration — the length field is wr
 before the recording stops → Never play a MediaRecorder file directly. Ask the CDN
 to re-encode. The symptom is a player that works but shows --:-- forever, which
 reads as "broken upload" and is not.
+
+LESSON (2026-09-12): I designed a whole fix — a derived API flag, a web Tag, a
+mobile chip, bilingual strings, five tests — for "SAP sends a number Ali already
+typed, so two rows share it". A unique index made two such rows impossible; the
+real behaviour was an IntegrityError that rolls back the entire operations import
+for every order in the run. I had read `work_plan_job_task.py` twice that week and
+not seen line 213. → BEFORE designing around "what happens when X is written
+twice", WRITE THE TEST THAT WRITES IT TWICE. Reading the code that writes tells
+you the intent; only attempting the write tells you what the database permits.
+
+LESSON (2026-09-12): I reported the blast radius of that crash as "a duplicate row
+inflates a progress bar, not a wallet" after grepping which services read
+`planned_hours`. That part was right and worth doing — but I had already told Ali
+a story about duplicates before checking whether duplicates could exist. → Check
+what the schema FORBIDS before explaining what a bad row would DO.

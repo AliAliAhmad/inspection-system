@@ -157,6 +157,24 @@ export default function InspectionWizardScreen() {
     });
   }, [inspection?.answers]);
 
+  // Fetch colleague's answers for pre-fill.
+  //
+  // MOVED UP 2026-09-12. It sat 130 lines BELOW inspectorCategory, which reads
+  // colleagueData in its callback and lists it as a dependency — and a deps
+  // array is evaluated during the render, before a `const` further down exists.
+  // TypeScript called it (TS2448, use before declaration). It depends on nothing
+  // but `id` from the route, so it belongs here.
+  const {
+    data: colleagueData,
+  } = useOfflineQuery<{ answers: any[]; colleague: { id: number; name: string; type: string; inspection_status: string } | null }>({
+    queryKey: ['colleague-answers', id],
+    queryFn: async () => {
+      const res = await inspectionsApi.getColleagueAnswers(id);
+      return (res.data as any).data;
+    },
+    cacheKey: `colleague-answers-${id}`,
+  });
+
   // Determine inspector's category — from inspection response (always available)
   // Falls back to colleague data if inspection doesn't have it
   const inspectorCategory = useMemo(() => {
@@ -298,17 +316,6 @@ export default function InspectionWizardScreen() {
   // Track pre-filled items from colleague
   const [prefilledItems, setPrefilledItems] = useState<Record<number, { name: string; type: string }>>({});
 
-  // Fetch colleague's answers for pre-fill
-  const {
-    data: colleagueData,
-  } = useOfflineQuery<{ answers: any[]; colleague: { id: number; name: string; type: string; inspection_status: string } | null }>({
-    queryKey: ['colleague-answers', id],
-    queryFn: async () => {
-      const res = await inspectionsApi.getColleagueAnswers(id);
-      return (res.data as any).data;
-    },
-    cacheKey: `colleague-answers-${id}`,
-  });
 
   // Sync server answers into local state (only once when inspection loads)
   const inspectionAnswersJson = JSON.stringify(inspection?.answers?.map(a => a.id) || []);

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   leaderboardsApi,
   LeaderboardEntry,
@@ -100,7 +101,10 @@ const EPI_COMPONENTS: {
   { key: 'safety', labelKey: 'leaderboard.epi_safety', fallback: 'Safety', color: '#eb2f96' },
 ];
 
-function EPICard({ epi, loading, t }: { epi?: EPIBreakdown | null; loading: boolean; t: (k: string, f?: string) => string }) {
+// `t` is i18next's own TFunction. The hand-written `(k, f?) => string` it used
+// to declare looks like the same thing and is not assignable — every call
+// site was a type error, which is how the next real one would have hidden.
+function EPICard({ epi, loading, t }: { epi?: EPIBreakdown | null; loading: boolean; t: TFunction }) {
   if (loading) {
     return (
       <View style={styles.epiCard}>

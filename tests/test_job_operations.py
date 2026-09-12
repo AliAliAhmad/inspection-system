@@ -963,3 +963,179 @@ class TestTheOrderStateIsDerived:
         body = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
                           headers=headers).get_json()
         assert body['operations_progress'] is None
+
+
+class TestWhenSapClaimsANumberAliAlreadyTyped:
+    """Ali, 2026-09-12: "what when i added an ope manually and the sap send the
+    order wiyhout it, or the sap and app has different sectin or work center".
+
+    The first half has a reassuring answer: a hand-typed operation is INVISIBLE
+    to the sync, because `existing` is filtered to source='sap'. It is never
+    edited and never deleted, whatever the file says.
+
+    That protection is what allows a collision, and the first version of this
+    test is how the real bug was found. `uq_work_plan_job_task_operation` —
+    on the model AND on production (start.sh) — allows ONE row per number per
+    order. So the second row is not a duplicate. It is an IntegrityError, and
+    sync_order_operations commits ONCE at the end for every order, so a single
+    clashing order would lose the operations import for the whole yard.
+
+    It is rare (Ali numbers from 0900, SAP from 0010) and it becomes likely
+    exactly once: the day the IW49 variant is fixed and orders he has been
+    hand-typing onto receive SAP's real operations for the first time.
+    """
+
+    def _typed(self, client, headers, job, number='0900'):
+        return client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                           json={'content': 'Grease the fifth wheel',
+                                 'operation_number': number,
+                                 'planned_hours': 1.5,
+                                 'work_center': 'MECH'},
+                           headers=headers)
+
+    def _sap_0900(self, order):
+        return {order: [
+            {'operation_number': '0900', 'description': 'Lubricate turntable',
+             'work_center': 'MECH', 'planned_hours': 2.0}]}
+
+    def test_the_typed_line_is_untouched_and_sap_is_named_not_dropped(
+            self, client, admin_user, db_session, plan_day):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPSC1', 'SOC1')
+        job = _job(plan, day, eq, order='700000900001')
+        headers = _headers(client, admin_user)
+        assert self._typed(client, headers, job).status_code == 201
+
+        counts = sync_order_operations(self._sap_0900('700000900001'))
+
+        tasks = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=headers).get_json()['tasks']
+        assert len(tasks) == 1
+        assert tasks[0]['content'] == 'Grease the fifth wheel', \
+            'a sync must never rewrite what a man typed'
+        assert tasks[0]['planned_hours'] == 1.5
+        assert tasks[0]['operation_number'] == '0900', \
+            'and it must not be renumbered either — a crew was told this number'
+
+        assert counts['added'] == 0
+        assert counts['skipped_number_taken_by_hand'] == [
+            {'order': '700000900001', 'operation_number': '0900',
+             'sap_text': 'Lubricate turntable'}], \
+            'SAP\'s line is not silently lost — it is reported by name'
+
+    def test_one_clashing_order_does_not_break_every_other_order(
+            self, client, admin_user, db_session, plan_day):
+        """THE regression. There is one commit for the whole run.
+
+        Before the skip, the IntegrityError from a single order rolled back the
+        session that held every other order's operations too.
+        """
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq1 = make_equipment(db_session, 'OPSC2', 'SOC2')
+        eq2 = make_equipment(db_session, 'OPSC3', 'SOC3')
+        clashing = _job(plan, day, eq1, order='700000900002')
+        clean = _job(plan, day, eq2, order='700000900003')
+        headers = _headers(client, admin_user)
+        self._typed(client, headers, clashing)
+
+        payload = dict(self._sap_0900('700000900002'))
+        payload['700000900003'] = [
+            {'operation_number': '0010', 'description': 'Check the spreader',
+             'work_center': 'MECH', 'planned_hours': 2.0},
+            {'operation_number': '0020', 'description': 'Replace harness',
+             'work_center': 'ELEC', 'planned_hours': 3.0}]
+        counts = sync_order_operations(payload)
+
+        assert counts['added'] == 2, 'the clean order imported'
+        clean_tasks = client.get(f'/api/work-plans/jobs/{clean.id}/tasks',
+                                 headers=headers).get_json()['tasks']
+        assert [t['operation_number'] for t in clean_tasks] == ['0010', '0020']
+
+    def test_clearing_the_number_lets_the_next_sync_bring_sap_in(
+            self, client, admin_user, db_session, plan_day):
+        """Why skipping costs nothing: SAP resends the whole file every night."""
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPSC4', 'SOC4')
+        job = _job(plan, day, eq, order='700000900004')
+        headers = _headers(client, admin_user)
+        typed_id = self._typed(client, headers, job).get_json()['task']['id']
+        sync_order_operations(self._sap_0900('700000900004'))
+
+        client.delete(f'/api/work-plans/jobs/{job.id}/tasks/{typed_id}',
+                      headers=headers)
+        counts = sync_order_operations(self._sap_0900('700000900004'))
+
+        assert counts['added'] == 1
+        assert counts['skipped_number_taken_by_hand'] == []
+        tasks = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=headers).get_json()['tasks']
+        assert [t['content'] for t in tasks] == ['Lubricate turntable']
+
+    def test_a_re_sync_still_updates_saps_own_rows(
+            self, client, admin_user, db_session, plan_day):
+        """The split into two sets must not break the ordinary upsert."""
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPSC5', 'SOC5')
+        job = _job(plan, day, eq)
+        sync_order_operations(_operations())
+
+        counts = sync_order_operations({'700000123456': [
+            {'operation_number': '0010', 'description': 'Check the spreader AGAIN',
+             'work_center': 'MECH', 'planned_hours': 5.0}]})
+        assert counts['added'] == 0 and counts['updated'] == 1
+
+        tasks = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=_headers(client, admin_user)).get_json()['tasks']
+        first = [t for t in tasks if t['operation_number'] == '0010'][0]
+        assert first['content'] == 'Check the spreader AGAIN'
+        assert first['planned_hours'] == 5.0
+
+    def test_a_plain_note_holds_no_number_so_it_blocks_nothing(
+            self, client, admin_user, db_session, plan_day):
+        """A sub-task has no operation_number. It must not shadow an operation."""
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPSC6', 'SOC6')
+        job = _job(plan, day, eq)
+        headers = _headers(client, admin_user)
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                    json={'content': 'Bring the 32mm socket'}, headers=headers)
+
+        counts = sync_order_operations(_operations())
+        assert counts['added'] == 3
+        assert counts['skipped_number_taken_by_hand'] == []
+
+    def test_the_report_names_an_order_holding_both_kinds_of_line(
+            self, client, admin_user, db_session, plan_day):
+        """The case no code can solve.
+
+        SAP's line for the same work usually arrives under a DIFFERENT number,
+        and then there is no collision to detect — just the same job listed
+        twice, with its hours counted twice on the progress bar. Nothing is
+        merged and nothing is guessed; the order is named.
+        """
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPSC7', 'SOC7')
+        job = _job(plan, day, eq, order='700000900007')
+        self._typed(client, _headers(client, admin_user), job, number='0900')
+
+        counts = sync_order_operations({'700000900007': [
+            {'operation_number': '0010', 'description': 'Grease fifth wheel',
+             'work_center': 'MECH', 'planned_hours': 1.5}]})
+
+        assert counts['orders_to_review'] == ['700000900007']
+        assert counts['added'] == 1, 'no collision, so nothing was skipped'
+
+    def test_an_order_with_no_typed_lines_is_not_flagged_for_review(
+            self, client, admin_user, db_session, plan_day):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, 'OPSC8', 'SOC8')
+        _job(plan, day, eq)
+        counts = sync_order_operations(_operations())
+        assert counts['orders_to_review'] == []

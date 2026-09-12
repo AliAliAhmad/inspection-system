@@ -283,6 +283,41 @@
   and `defect_elec` rules exist per berth — a crew with no rule gets an empty wallet.
 - 1090 backend tests. Full detail in `tasks/sap-operations-and-order-linking.md`.
 
+### A hand-typed operation vs. SAP's own numbering — FIXED 2026-09-12
+- Ali: "what when i added an ope manually and the sap send the order wiyhout it, or
+  the sap and app has different sectin or work center".
+- **His line was always safe** — `sync_order_operations` reads only `source='sap'`
+  rows, so a sync can never edit or delete one a person typed. That is also what
+  made the bug possible.
+- **`uq_work_plan_job_task_operation` allows ONE row per number per order** (model
+  AND production via `start.sh:902`). So SAP arriving with a number Ali already used
+  was not a harmless duplicate — it was an **IntegrityError**, and with ONE commit
+  at the end of the function for all ~161 orders, that single order would have lost
+  **the whole yard's operations import for that run**.
+- Now SAP's line is **SKIPPED and named**, never renumbered (a number a crew was
+  told must not move by itself) and never overwritten. Self-healing: SAP resends
+  the whole file nightly, so clearing the number imports SAP's line by itself.
+  `skipped_number_taken_by_hand` in the report; printed by `rebuild-pool`/`pool-status`.
+- **The case no code can solve:** SAP's line for the same work usually arrives under
+  a DIFFERENT number — same job listed twice, hours double-counted on the progress
+  bar. `orders_to_review` names those orders. **This becomes likely the day the IW49
+  variant is fixed** and hand-typed orders receive real operations for the first time.
+- **An unexplained work centre now shows to EVERYONE** on the phone. `MES-WELD` is
+  kept untranslated on purpose, matched neither MECH nor ELEC, and so folded away as
+  "for the other trade" for BOTH crews — a line belonging to nobody.
+- **`job_operations` + `job_attachments` had NO translations at all** — every string
+  on the worker's operations and media cards was falling back to English. Both blocks
+  added to `en.mobile.json` and `ar.mobile.json`.
+- Mobile `tsc` went 5 errors → 1. Fixed: `navigate('WorkPlan')` typed as unreachable
+  (a tab, not a root route — the FAB action from commit `0bb8974`); `colleagueData`
+  read in a deps array 130 lines above its own `const` in `InspectionWizardScreen`;
+  `EPICard`'s hand-written `t` type; a removed `expo-file-system` option.
+- **⚠️ STILL BROKEN, needs Ali's call:** mobile punch-list Resolve calls
+  `defectsApi.resolve(id)` with no body, and `app/api/defects.py:108` **requires**
+  `resolution_notes` — so that button has never worked. Fixing it needs a decision:
+  prompt the man for a note, or record a fixed one.
+- 1133 backend tests. Web `tsc` clean.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

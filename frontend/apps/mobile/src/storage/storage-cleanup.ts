@@ -304,7 +304,9 @@ export async function checkStorageHealth(): Promise<StorageHealthCheck> {
       const files = await FileSystem.readDirectoryAsync(dir);
       for (const fileName of files) {
         try {
-          const fileInfo = await FileSystem.getInfoAsync(`${dir}${fileName}`, { size: true });
+          // `{ size: true }` was dropped from InfoOptions — size comes back
+          // regardless now, and the read below is unchanged.
+          const fileInfo = await FileSystem.getInfoAsync(`${dir}${fileName}`);
           if (fileInfo.exists && 'size' in fileInfo) offlineFileBytes += fileInfo.size ?? 0;
         } catch { /* skip individual file */ }
       }

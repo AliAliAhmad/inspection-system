@@ -558,6 +558,7 @@ def create_app(config_name='development'):
                   f"{stored.get('skipped_unknown_orders')} skipped")
             print(f"    trade   : {stored.get('trade_labels_set', 0)} rows given "
                   f"a trade from their operations (filled or widened to ELME)")
+            _print_pool_coverage(ops)
             print(f"    added   : {stored.get('added')}")
             print(f"    updated : {stored.get('updated')}")
             print(f"    removed : {stored.get('removed')} (untouched, gone from SAP)")
@@ -1204,6 +1205,7 @@ def create_app(config_name='development'):
                   f"· removed {stored.get('removed')} · kept {stored.get('kept_but_gone_from_sap')}")
             print(f"  trade labels set from operations: "
                   f"{stored.get('trade_labels_set', 0)} rows")
+            _print_pool_coverage(ops)
         if dry_run:
             print()
             print('DRY RUN — nothing was written.')
@@ -1269,6 +1271,67 @@ def create_app(config_name='development'):
         if left:
             print('Run it again to continue — every batch is committed, so '
                   'nothing is lost by stopping.')
+
+    def _print_pool_coverage(ops):
+        """Does this IW49 actually cover the orders a planner works with?
+
+        2026-09-11: an export with 56,941 operations covered ZERO of the 185
+        orders in the pool — it was a history report of finished work. A saved
+        variant in SAP feeds the courier, so this can be fixed once and quietly
+        regress. Printing it every run means somebody sees it.
+        """
+        coverage = (ops or {}).get('pool_coverage') or {}
+        total = coverage.get('pool_orders') or 0
+        if not total:
+            return
+        covered = coverage.get('with_operations') or 0
+        percent = coverage.get('covered_percent')
+        print(f"  POOL COVERAGE: {covered} of {total} live pool orders "
+              f"have operations ({percent}%)")
+        if covered == 0:
+            print("    ^ NONE. This IW49 does not contain open orders — its")
+            print("      selection in SAP is pulling finished work only. The")
+            print("      operations screens will be empty for everything a")
+            print("      planner drags onto a week.")
+        _print_orders_to_review(ops)
+
+    def _print_orders_to_review(ops):
+        """Where a typed operation and a SAP operation meet on the same order.
+
+        Two separate things, both needing a person rather than more code: a SAP
+        line that could not be imported because its number is taken, and orders
+        where the same work may now be listed twice under two numbers.
+
+        Nobody did anything wrong. A line typed by hand while SAP was silent,
+        and SAP's own line for the same work, are two rows with two numbers and
+        no way for code to know they are one job. The only honest answer is to
+        name the orders so a person can look.
+        """
+        skipped = (ops or {}).get('skipped_number_taken_by_hand') or []
+        if skipped:
+            print()
+            print(f"  NOT IMPORTED: {len(skipped)} SAP operation(s) use a number")
+            print("    you already typed on that order. Your line was left")
+            print("    exactly as it is. Rename or delete yours and the next")
+            print("    sync brings SAP's in by itself — nothing is lost.")
+            for item in skipped[:20]:
+                print(f"      {item['order']} op {item['operation_number']}"
+                      f" — SAP calls it: {item['sap_text']}")
+            if len(skipped) > 20:
+                print(f"      ... and {len(skipped) - 20} more")
+
+        review = (ops or {}).get('orders_to_review') or []
+        if not review:
+            return
+        print()
+        print(f"  CHECK BY HAND: {len(review)} order(s) now hold BOTH an")
+        print("    operation you typed and an operation from SAP. If they are")
+        print("    the same work, the hours are counted twice on the progress")
+        print("    bar. Delete whichever line is the duplicate.")
+        for order in review[:20]:
+            print(f"      {order}")
+        if len(review) > 20:
+            print(f"      ... and {len(review) - 20} more")
 
     @app.cli.command('operation-trades')
     def operation_trades():

@@ -144,6 +144,14 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
    *
    * ELME means the line needs both trades, so it is every man's business.
    *
+   * ANY code that is not one of the two trades is treated the same way. The
+   * import deliberately KEEPS a work centre it has never met (MES-WELD stays
+   * MES-WELD) so somebody asks about it. Matching it against a man's trade
+   * would fail for BOTH crews and fold it away as "for the other trade" on
+   * every phone in the yard — a line belonging to nobody instead of everybody.
+   * Showing it to everyone is the safe direction: a man reads one extra line,
+   * rather than nobody reading it at all.
+   *
    * The values arrive already translated — SAP writes MES-MECH and the import
    * turns it into MECH. Before that translation existed, this comparison matched
    * NOTHING and every operation folded into "for the other trade": a mechanic
@@ -153,7 +161,7 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
     if (!workCenter) return operations;
     return operations.filter((op) => {
       const trade = op.work_center;
-      if (!trade || trade === 'SUPV' || trade === 'ELME') return true;
+      if (!trade || (trade !== 'MECH' && trade !== 'ELEC')) return true;
       return trade === workCenter || workCenter === 'ELME';
     });
   }, [operations, workCenter]);

@@ -968,5 +968,27 @@
   "job_sub_tasks": {
     "title": "Sub-tasks & notes",
     "done_by": "done by {{name}}"
+  },
+  "job_operations": {
+    "actual": "took",
+    "done_by": "done by {{name}}",
+    "failed": "Could not update",
+    "finish": "Finish",
+    "hide_other": "Hide the other trade",
+    "pause": "Pause",
+    "remaining": "{{h}}h left of {{total}}h",
+    "removed_in_sap": "no longer in SAP",
+    "resume": "Resume",
+    "show_other": "{{n}} for the other trade",
+    "start": "Start",
+    "title": "Operations in this order",
+    "voice": "voice note",
+    "waiting_material": "Waiting for material"
+  },
+  "job_attachments": {
+    "hint": "Added by the planner to make the job clearer",
+    "play": "Voice note from the planner",
+    "playing": "Playing — tap to stop",
+    "title": "Photos & voice notes"
   }
 }

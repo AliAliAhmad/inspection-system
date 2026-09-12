@@ -145,6 +145,28 @@ import CreateChannelScreen from '../screens/communication/CreateChannelScreen';
 // Sync Queue (offline dashboard)
 import SyncQueueScreen from '../screens/shared/SyncQueueScreen';
 
+/**
+ * The TABS inside MainTabs, reachable by bare name.
+ *
+ * React Navigation resolves a nested route by name, so `navigate('WorkPlan')`
+ * lands on the worker's own plan even though WorkPlan is not a root screen.
+ * The types did not know that, so every such call was an error — and the one in
+ * useFABContext was the FAB action a worker taps for his own week (commit
+ * 0bb8974). A type error on a live navigation is how a dead button hides.
+ *
+ * Listed here rather than imported from MainTabNavigator so this file keeps no
+ * dependency on the screens it registers.
+ */
+export type MainTabName =
+  | 'Home'
+  | 'Assignments'
+  | 'Jobs'
+  | 'Reviews'
+  | 'WorkPlan'
+  | 'Chat'
+  | 'Profile'
+  | 'More';
+
 export type RootStackParamList = {
   MainTabs: undefined;
   InspectionChecklist: { id: number };
