@@ -351,6 +351,26 @@
   avoids.
 - 19 tests in `tests/test_nested_pm_packages.py`. 1152 backend tests.
 
+### INS was priced at double its own measurement — FIXED 2026-09-12
+- Ali asked "which word i do not understand?" — and looking for an honest answer found
+  this. `FAULT_HOURS['INS']` was **3.0h**; `docs/job-durations.md` measures **1.5h**
+  across 372 finished orders.
+- **3 of the 4 with-PM figures match the document EXACTLY** (COM 2.0, DAM 1.0, ACD 2.5).
+  INS was the only mismatch and was exactly DOUBLE. The document's own summary names
+  only three letters as settled — INS is absent and was never confirmed.
+- **One number explained two complaints.** At 3.0 an INS cost LESS alone (2.0) than
+  riding with a PM, backwards from Ali's rule. At 1.5 it costs more alone, like COM/DAM.
+- **The test suite had ENCODED the bug.** `TestAFaultCostsLessWhenThePMTeamIsAlreadyThere`
+  asserted `('INS', 3.0, 2.0)` — a class named after the rule, holding a row that breaks
+  it. Asserting figures one by one can only confirm what was typed. Now
+  `test_riding_along_is_never_dearer_than_its_own_trip` asserts **the rule**, and
+  `test_the_measured_medians_are_what_the_table_holds` pins the table to the evidence.
+- Impact today is nil — **there are no open INS orders** (78 PRM, 128 COM, 1 DAM, 1 ACD).
+- **Still unknown: what COM and ACD STAND FOR.** COM is the biggest category (2,342
+  finished) and is treated as `defect`; ACD is mapped to `corrective` and
+  `sap_order_parser.py:62` already calls that "a considered default — worth confirming".
+- 1166 backend tests.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
@@ -377,8 +397,10 @@
 - `pm_interval_hours` MOVED from `sap_order_parser` to `job_durations` (one
   implementation, re-exported so both import paths work) — reading the package is a
   pricing question, and a second regex would forget the `25/5H` case.
-- **⚠️ Confirm the fault price direction.** COM and DAM cost MORE alone (2→3, 1→3) but
-  INS and ACD cost LESS (3→2, 2.5→2). Possible misread of Ali's brackets.
+- **⚠️ ACD is still the wrong way round** — 2.5h riding with a PM against 2.0h on its
+  own trip. Its 2.5 IS the measured median, so the ALONE figure is the suspect one.
+  Deliberately excluded from `test_riding_along_is_never_dearer_than_its_own_trip`;
+  add it to that list the day it is answered.
 - **ECH with 4 men uses the 3-man figure (7h)** until Ali gives the real number.
 - **Rank WITHIN urgent.** 40 of 133 SAP orders are urgent and 33 more are high, so the
   label has stopped sorting anything. The numbers to rank by are already stored:

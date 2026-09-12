@@ -108,12 +108,43 @@ class TestAFaultCostsLessWhenThePMTeamIsAlreadyThere:
     @pytest.mark.parametrize('activity,riding,alone', [
         ('COM', 2.0, 3.0),
         ('DAM', 1.0, 3.0),
-        ('INS', 3.0, 2.0),
+        ('INS', 1.5, 2.0),
         ('ACD', 2.5, 2.0),
     ])
     def test_each_letter_has_both_prices(self, activity, riding, alone):
         assert fault_hours(activity, with_pm=True) == riding
         assert fault_hours(activity, with_pm=False) == alone
+
+    @pytest.mark.parametrize('activity', ['COM', 'DAM', 'INS'])
+    def test_riding_along_is_never_dearer_than_its_own_trip(self, activity):
+        """THE RULE, not the numbers — and the test this class was missing.
+
+        This class was named after Ali's rule while its table encoded INS at 3.0
+        riding against 2.0 alone, which breaks that rule outright. Asserting the
+        figures one by one can only ever confirm what was typed; it took reading
+        docs/job-durations.md against the code to notice INS was double its own
+        measured median.
+
+        So the rule is asserted directly now. Any future letter that costs more
+        with the team already on the machine fails here, whatever its number.
+
+        ACD IS DELIBERATELY ABSENT: it is 2.5 riding against 2.0 alone and breaks
+        the rule today. Its 2.5 is the measured median, so the ALONE figure is the
+        suspect one, and nobody has said. Add it to this list the day that is
+        answered — that is the whole point of leaving it out rather than widening
+        the rule to accommodate it.
+        """
+        assert fault_hours(activity, with_pm=True) <= fault_hours(activity, with_pm=False)
+
+    def test_the_measured_medians_are_what_the_table_holds(self):
+        """docs/job-durations.md, from 8,904 finished MES orders.
+
+        The with-PM column IS the measurement. Pinned so a hand-edit that drifts
+        away from the evidence has to explain itself here first.
+        """
+        measured = {'COM': 2.0, 'DAM': 1.0, 'INS': 1.5, 'ACD': 2.5}
+        for activity, median in measured.items():
+            assert fault_hours(activity, with_pm=True) == median, activity
 
     def test_a_damage_job_is_three_times_dearer_on_its_own_trip(self):
         assert fault_hours('DAM', False) == 3 * fault_hours('DAM', True)

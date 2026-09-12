@@ -45,7 +45,11 @@ class TestAFaultRidingWithAPM:
         normal" — real work the PM team performs, not an app inspection."""
         _, ins = bundle(member('pm', 'PRM', description='250HR'),
                         member('inspection', 'INS'))
-        assert ins['estimated_hours'] == 3.0
+        # 1.5h, corrected 2026-09-12. This line read 3.0 — which was DEARER than
+        # the 2.0 an INS costs on its own trip, so "rides too" was written on a
+        # test that priced it as though it did not. 1.5 is the measured median in
+        # docs/job-durations.md, and it is what the other three letters use.
+        assert ins['estimated_hours'] == 1.5
 
     def test_the_whole_machine_adds_up_to_a_believable_day(self):
         members = bundle(
@@ -53,7 +57,9 @@ class TestAFaultRidingWithAPM:
             member('defect', 'COM'), member('defect', 'COM'),
             member('corrective', 'DAM'), member('inspection', 'INS'),
         )
-        assert sum(m['estimated_hours'] for m in members) == 20.0
+        # 12.0 PM + 2.0 COM + 2.0 COM + 1.0 DAM + 1.5 INS. Was 20.0 while INS
+        # carried the wrong 3.0.
+        assert sum(m['estimated_hours'] for m in members) == 18.5
 
 
 class TestAFaultOnItsOwnTrip:

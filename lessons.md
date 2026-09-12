@@ -738,3 +738,18 @@ inflates a progress bar, not a wallet" after grepping which services read
 `planned_hours`. That part was right and worth doing — but I had already told Ali
 a story about duplicates before checking whether duplicates could exist. → Check
 what the schema FORBIDS before explaining what a bad row would DO.
+
+LESSON (2026-09-12): INS was priced at 3.0h while Ali's own measurement document
+said 1.5h, and it sat there for weeks under a test class literally named
+"TestAFaultCostsLessWhenThePMTeamIsAlreadyThere" whose table encoded INS costing
+MORE with a PM. The test asserted the NUMBERS, so it could only ever confirm
+whatever was typed in. → When a module has a stated RULE, assert the rule, not
+just the values it currently produces. A parametrised list of figures is a
+transcription check; `riding <= alone` is the thing you actually believe.
+
+LESSON (2026-09-12): I had been calling this "possible misread of Ali's brackets"
+in CLAUDE.md for weeks — a vague worry nobody could act on. It took FIVE MINUTES
+to settle once I compared the code against docs/job-durations.md. → A "⚠️ confirm
+this" note with no evidence attached is a debt, not a record. Either spend the
+minutes to make it a specific claim, or say plainly what you would have to read
+to find out.

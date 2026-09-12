@@ -117,11 +117,26 @@ PM_DEFAULT = (2, 3.0)
 
 # Faults. Ali, 2026-08-24 — the with-PM column is what the measurement showed and
 # he accepted; the alone column he set.
+#
+# INS WAS 3.0 AND THE MEASUREMENT SAYS 1.5. Corrected 2026-09-12 on Ali's word.
+#
+# Three of the four with-PM figures match docs/job-durations.md EXACTLY — COM 2.0,
+# DAM 1.0, ACD 2.5, each the median of thousands of finished orders. INS was the
+# only mismatch, and it was exactly double its measured 1.5h. The document's own
+# summary line names only three letters as settled ("COM 2.0h · DAM 1.0h ·
+# ACD 2.5h"); INS is absent from it and was never confirmed.
+#
+# One number explained two complaints. At 3.0 an INS cost LESS on its own trip
+# (2.0) than riding with a PM, which is backwards from the rule below. At 1.5 it
+# costs more alone, exactly like COM and DAM.
+#
+# ⚠️ ACD IS STILL THE WRONG WAY ROUND: 2.5 riding, 2.0 alone. Its 2.5 IS the
+# measurement, so it is the ALONE figure that wants checking. Nobody has said.
 FAULT_HOURS = {
     #            with a PM   alone
     'COM':      (2.0,        3.0),
     'DAM':      (1.0,        3.0),
-    'INS':      (3.0,        2.0),
+    'INS':      (1.5,        2.0),
     'ACD':      (2.5,        2.0),
 }
 FAULT_DEFAULT = (2.0, 3.0)
