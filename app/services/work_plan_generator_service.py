@@ -1051,6 +1051,52 @@ def _price_bundle(bundle: Dict[str, Any]) -> None:
         else:
             member['crew'] = MIN_CREW
 
+    _discount_nested_packages(bundle)
+
+
+def _discount_nested_packages(bundle: Dict[str, Any]) -> None:
+    """A 250HR open beside a 2000HR is ONE visit, not two.
+
+    Ali, 2026-09-12: "2000 hrs service is a service that contain the 250 hrs task
+    and addtional tasks". RS109 carries both open at once and was priced 12h +
+    12h — a day and a half of a crew's week booked for work that happens once.
+
+    This belongs HERE, next to the fault ride-along rule, for the same reason
+    that one does: a member's price depends on the company it keeps, and nothing
+    knows the company until the machine's work is grouped onto one day. The POOL
+    keeps standalone prices, which stay correct — a 250HR really is 12h when it
+    is the only thing open.
+
+    ZEROED, NEVER REMOVED. Both orders are real and both must be closed in SAP
+    after the visit, so the smaller one stays a visible job the crew can tick.
+
+    A 0h job on a board is indistinguishable from a bug, so the reason travels
+    with it: `included_in_package` is the machine-readable marker here, and
+    _create_jobs_for_bundle turns it into the job's `notes` — which every screen
+    already renders and the phrase store already translates into Arabic.
+    """
+    from app.services.job_durations import (contained_packages,
+                                            trade_in_description)
+    from app.services.sap_order_parser import pm_interval_hours
+
+    members = [m for m in bundle.get('members', [])
+               if m.get('job_type') == 'pm' and m.get('source') != 'carry_over']
+    if len(members) < 2:
+        return
+
+    entries = [(index,
+                pm_interval_hours(member.get('description')),
+                trade_in_description(member.get('description')))
+               for index, member in enumerate(members)]
+
+    for index, container_index in contained_packages(entries).items():
+        member = members[index]
+        container = members[container_index]
+        member['included_in_package'] = pm_interval_hours(
+            container.get('description'))
+        member['hours_before_nesting'] = member.get('estimated_hours')
+        member['estimated_hours'] = 0.0
+
 
 def _member_is_ac_pm(member: Dict[str, Any]) -> bool:
     from app.services.job_durations import is_ac_service
@@ -1790,6 +1836,17 @@ def _create_jobs_for_bundle(
             pm_template_id=pm_template_id,
             position=max_pos,
         )
+
+        # A job priced at 0h needs to say why, or it reads as a fault in the
+        # planner. `notes` is untouched on a generated job — it is not in the
+        # kwargs above — so there is nothing here to overwrite, and it is
+        # already drawn on the board, on the phone and in the PDF, already
+        # translated through the phrase store. See _discount_nested_packages.
+        included_in = member.get('included_in_package')
+        if included_in:
+            job_kwargs['notes'] = (
+                f'Included in the {included_in}HR service on this machine '
+                f'— one visit does both.')
 
         # Set work_center if column exists
         if _has_column(WorkPlanJob, 'work_center'):

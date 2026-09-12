@@ -54,6 +54,8 @@ WHAT WAS TESTED AND REJECTED, so nobody re-proposes it:
   No estimate fixes those; the carry-to-tomorrow rule does.
 """
 
+import re
+
 # Ali's minimum. No job is ever planned for one person.
 MIN_CREW = 2
 
@@ -151,6 +153,73 @@ def pm_hours(family, crew=None, description=None):
             if best > MIN_CREW:
                 return (best, curve[best])
     return standard
+
+
+# ---------------------------------------------------------------------------
+# Nested service packages
+# ---------------------------------------------------------------------------
+
+# The trade a PM description names, if any: RS109-250HR-MECH.
+_TRADE_IN_TEXT = re.compile(r'\b(MECH|ELEC|ELME)\b', re.I)
+
+
+def trade_in_description(description):
+    """'RS109-250HR-MECH' -> 'MECH'. None when the text does not say."""
+    match = _TRADE_IN_TEXT.search(str(description or ''))
+    return match.group(1).upper() if match else None
+
+
+def contained_packages(entries):
+    """Which service packages are ALREADY DONE by doing a bigger one.
+
+    Ali, 2026-09-12: "2000 hrs service is a service that contain the 250 hrs
+    task and addtional tasks".
+
+    So RS109 carrying an open 250HR and an open 2000HR is ONE visit, not two.
+    The app priced 12h + 12h = 24h, booking a day and a half of a crew's week for
+    work that happens once.
+
+    `entries` is [(key, interval_hours, trade), ...] for ONE machine. Returns
+    {contained_key: containing_key} — only the ones that ride along. A key absent
+    from the result is charged normally.
+
+    WHY "DIVIDES EVENLY" AND NOT "IS SMALLER"
+    =========================================
+
+    The ladder is 250 / 500 / 1000 / 2000 / 4000 and every step is a multiple of
+    the one below. That is not decoration — it is WHY they fall due together: at
+    2,000 running hours the 250-hour service is due for the eighth time. A package
+    that did not divide evenly would come due on its own schedule and would not be
+    swallowed, so the test is divisibility, not size.
+
+    TRADES DO NOT NEST
+    ==================
+
+    A 2000HR-MECH does not contain a 250HR-ELEC's tasks — different men, different
+    work. Zeroing the electrical package against a mechanical visit would silently
+    under-book real work, which is the dangerous direction. Nesting needs the
+    trades to AGREE, or both to be silent.
+
+    An interval of None (a calendar PM, an AC inspection, a forklift's
+    `HOURLY SERVICE`) never nests and never swallows. SAP did not say which package
+    it is, and a guess here takes real hours out of a real day.
+    """
+    known = [(key, interval, trade) for key, interval, trade in entries if interval]
+    contained = {}
+    for key, interval, trade in known:
+        best_key, best_interval = None, None
+        for other_key, other_interval, other_trade in known:
+            if other_key == key or other_interval <= interval:
+                continue
+            if other_interval % interval:
+                continue
+            if trade and other_trade and trade != other_trade:
+                continue
+            if best_interval is None or other_interval > best_interval:
+                best_key, best_interval = other_key, other_interval
+        if best_key is not None:
+            contained[key] = best_key
+    return contained
 
 
 def fault_hours(activity_type, with_pm):

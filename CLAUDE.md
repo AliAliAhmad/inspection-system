@@ -324,6 +324,33 @@
   `02091deb-492b-4108-99be-ab7d4e379639` on the `preview` channel (runtime 1.0.0,
   both platforms). API verified `{"database":"connected","status":"healthy"}`.
 
+### A 2000-hour service contains the 250-hour one — FIXED 2026-09-12
+- Ali: "2000 hrs service is a service that contain the 250 hrs task and addtional tasks".
+- RS109 carries both open at once and was priced **12h + 12h = 24h** — a day and a half
+  of two men booked for a visit that happens ONCE.
+- `contained_packages()` in `job_durations.py` (pure, no imports) + `_discount_nested_packages`
+  in the generator. The smaller package is **zeroed, never removed** — both SAP orders
+  are real and both must be closed after the visit.
+- **It lives in `_price_bundle`, beside the fault ride-along rule**, for the same stated
+  reason: a member's price depends on the company it keeps, and nothing knows that until
+  a machine's work is grouped onto one day. **The POOL keeps standalone prices** — a
+  250HR really is 12h when it is the only thing open.
+- **Test is DIVISIBILITY, not size.** The ladder is 250/500/1000/2000/4000 and every step
+  is a multiple of the one below — which is WHY they fall due together (at 2,000 hours the
+  250 is due for the 8th time). A 300 beside a 2000 keeps its own schedule and its own price.
+- **Trades do not nest.** A 2000HR-MECH does not do a 250HR-ELEC's work; zeroing it would
+  hide real electrical hours from the day. A silent trade agrees with anything.
+- **A package of `None` never nests and never swallows** — calendar PMs, AC inspections,
+  `FL327-HOURLY SERVICE`. SAP did not say which package it is.
+- **A 0h job reads as a bug**, so the reason is written to the job's `notes` (asserted NOT
+  to be in the generator's kwargs, so nothing is overwritten). Already drawn on board,
+  phone and PDF, already translated by the phrase store.
+- **⚠️ GENERATED PLANS ONLY.** Dragging both orders onto a day by hand still shows 24h —
+  the same known divergence as `schedule_sap_order`. Fixing it would mean mutating stored
+  hours based on a job's neighbours, which is exactly the kind of state this codebase
+  avoids.
+- 19 tests in `tests/test_nested_pm_packages.py`. 1152 backend tests.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
@@ -341,8 +368,10 @@
 - **Night shift disagrees with itself:** `day_budget._unavailable_by_date` excludes `night`,
   `_step_assign`'s own lookup does not — so a man giving the wallet zero hours can still be
   staffed onto day work.
-- **Nested PM packages double-charged.** RS109 carries 250HR and 2000HR open at once,
-  priced 12h + 12h; Ali's rule says the packages are nested task lists of one plan.
+- **⚠️ THE 2000HR's OWN PRICE IS STILL THE 250HR's.** Ali chose "more than 12h — I'll
+  give the number" 2026-09-12 and has not given it yet. Until he does, a nested visit
+  is booked at the family figure (12h for a reach stacker), which he knowingly accepted
+  as a floor. One line in `PM_BY_FAMILY`/a new per-package table when he says.
 - **⚠️ Confirm the fault price direction.** COM and DAM cost MORE alone (2→3, 1→3) but
   INS and ACD cost LESS (3→2, 2.5→2). Possible misread of Ali's brackets.
 - **ECH with 4 men uses the 3-man figure (7h)** until Ali gives the real number.
