@@ -753,3 +753,12 @@ to settle once I compared the code against docs/job-durations.md. → A "⚠️ 
 this" note with no evidence attached is a debt, not a record. Either spend the
 minutes to make it a specific claim, or say plainly what you would have to read
 to find out.
+
+LESSON (2026-09-12): Ali said COM means "corrective maintenance", and the app maps
+COM to job_type 'defect'. The obvious move was to rename it. Tracing what the
+label actually DOES showed 'defect' buys +20 priority, +10 risk and a duration
+estimated from real history — all correct for corrective maintenance — so the
+rename would have silently de-prioritised 128 of 208 open orders with nothing
+appearing broken. → A label that looks wrong is not evidence it IS wrong. Find
+every branch that reads it before renaming it, and if the behaviour is right,
+write the reason into a TEST — a comment does not stop the next tidy-up.

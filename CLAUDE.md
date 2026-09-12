@@ -366,9 +366,14 @@
   `test_riding_along_is_never_dearer_than_its_own_trip` asserts **the rule**, and
   `test_the_measured_medians_are_what_the_table_holds` pins the table to the evidence.
 - Impact today is nil — **there are no open INS orders** (78 PRM, 128 COM, 1 DAM, 1 ACD).
-- **Still unknown: what COM and ACD STAND FOR.** COM is the biggest category (2,342
-  finished) and is treated as `defect`; ACD is mapped to `corrective` and
-  `sap_order_parser.py:62` already calls that "a considered default — worth confirming".
+- **ANSWERED 2026-09-12: COM = corrective maintenance, ACD = accident** (Ali).
+  **No behaviour changed, deliberately.** ACD -> `corrective` was already right. COM ->
+  `defect` is WRONG BY NAME AND RIGHT BY BEHAVIOUR: `job_type` is a behaviour bucket, and
+  `defect` buys +20 priority and +10 risk in `work_plan_ai_service` plus a duration
+  estimated from completed `SpecialistJob` history in `work_plan_tracking`. All three fit
+  corrective maintenance. Renaming it moves **128 of 208 open orders** out of all of it at
+  once and nothing looks broken — they just rank lower and estimate worse. Pinned by
+  `test_com_stays_a_defect_however_wrong_the_word_looks`.
 - 1166 backend tests.
 
 ### Still open

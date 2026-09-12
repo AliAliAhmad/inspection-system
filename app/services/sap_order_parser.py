@@ -59,8 +59,33 @@ PLANNABLE_ACTIVITY_TYPES = ('PRM', 'COM', 'DAM', 'INS', 'ACD')
 
 # MaintActivityType -> the app's job_type CHECK constraint
 # (pm | defect | inspection | corrective).
-# DAM (damage) and ACD map to 'corrective' as a considered default — worth
-# confirming with Ali once real jobs are flowing; only 2 of 208 open orders today.
+#
+# WHAT THE LETTERS MEAN. Ali, 2026-09-12:
+#
+#   PRM  preventive maintenance
+#   COM  CORRECTIVE MAINTENANCE
+#   INS  inspection
+#   DAM  damage
+#   ACD  ACCIDENT
+#
+# ⚠️ COM IS 'defect' ON PURPOSE. DO NOT "CORRECT" IT TO 'corrective'.
+#
+# By the name it is plainly wrong, and that is exactly the trap. `job_type` is not
+# a translation of SAP's letters — it is a BEHAVIOUR BUCKET, and 'defect' means
+# "unplanned, scope unknown, estimate from history, push it up the list":
+#
+#   work_plan_ai_service.py  a 'defect' scores +20 on priority and +10 on risk
+#                            ("Defect repairs often have unknown scope")
+#   work_plan_tracking.py    a 'defect' is estimated from COMPLETED SpecialistJob
+#                            durations — real history rather than a table
+#   email_service.py         the weekly mail counts 'defect' jobs
+#
+# Every one of those is right for corrective maintenance. Renaming COM would move
+# 128 of 208 open orders out of all of it at once, and nothing would look broken —
+# the jobs would simply rank lower and be estimated worse, for ever.
+#
+# ACD -> 'corrective' is an accident repair, which is corrective work. Confirmed.
+# DAM -> 'corrective' likewise.
 ACTIVITY_TO_JOB_TYPE = {
     'PRM': 'pm',
     'COM': 'defect',

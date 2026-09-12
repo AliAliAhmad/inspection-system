@@ -243,3 +243,52 @@ class TestUrgentCrewPolicy:
     def test_a_day_is_eight_hours_per_man(self):
         from app.services.job_durations import MAN_HOURS_PER_DAY
         assert MAN_HOURS_PER_DAY == 8
+
+
+class TestWhatSapsLettersMeanAndWhereTheyLand:
+    """Ali, 2026-09-12: "COM is corrective naintenance, and ACD is accidet".
+
+    He then asked whether knowing that changes anything. It does not, and this
+    class exists to keep it that way — because the obvious "fix" is a regression.
+    """
+
+    def test_com_stays_a_defect_however_wrong_the_word_looks(self):
+        """COM means corrective maintenance and maps to 'defect'. ON PURPOSE.
+
+        `job_type` is a BEHAVIOUR BUCKET, not a translation of SAP's letters.
+        'defect' buys a job +20 priority and +10 risk in work_plan_ai_service, and
+        a duration estimated from completed SpecialistJob history in
+        work_plan_tracking instead of from a table. All three are right for
+        corrective maintenance.
+
+        COM is 128 of 208 open orders. Renaming it moves the majority of the yard
+        out of all of that at once, and NOTHING LOOKS BROKEN — the jobs simply
+        rank lower and are estimated worse from then on. That is why this is a
+        test and not a comment.
+        """
+        from app.services.sap_order_parser import ACTIVITY_TO_JOB_TYPE
+        assert ACTIVITY_TO_JOB_TYPE['COM'] == 'defect', (
+            "COM means CORRECTIVE MAINTENANCE, and mapping it to 'corrective' "
+            'would silently de-prioritise the biggest category in the yard. '
+            'Read the comment above ACTIVITY_TO_JOB_TYPE before changing this.')
+
+    def test_an_accident_is_corrective_work(self):
+        """ACD = accident. The map already said 'corrective' as an admitted
+        default; Ali confirmed the meaning 2026-09-12 and the default was right."""
+        from app.services.sap_order_parser import ACTIVITY_TO_JOB_TYPE
+        assert ACTIVITY_TO_JOB_TYPE['ACD'] == 'corrective'
+        assert ACTIVITY_TO_JOB_TYPE['DAM'] == 'corrective'
+
+    def test_the_two_that_were_never_in_doubt(self):
+        from app.services.sap_order_parser import ACTIVITY_TO_JOB_TYPE
+        assert ACTIVITY_TO_JOB_TYPE['PRM'] == 'pm'
+        assert ACTIVITY_TO_JOB_TYPE['INS'] == 'inspection'
+
+    def test_every_plannable_letter_has_a_home(self):
+        """A letter SAP plans that the app cannot classify would reach the CHECK
+        constraint and fail on insert."""
+        from app.services.sap_order_parser import (ACTIVITY_TO_JOB_TYPE,
+                                                   PLANNABLE_ACTIVITY_TYPES)
+        valid = {'pm', 'defect', 'inspection', 'corrective'}
+        for letter in PLANNABLE_ACTIVITY_TYPES:
+            assert ACTIVITY_TO_JOB_TYPE.get(letter) in valid, letter
