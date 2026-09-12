@@ -778,7 +778,8 @@
     "signature_required": "Please draw your signature.",
     "stamp_applied": "Digital stamp applied successfully!",
     "stamp_failed": "Failed to apply stamp. Please try again.",
-    "transcription_failed": "Voice processing failed. Please try again."
+    "transcription_failed": "Voice processing failed. Please try again.",
+    "resolve_failed": "Could not resolve this item. Please try again."
   },
   "qualityReviews": {
     "approved": "Approved",

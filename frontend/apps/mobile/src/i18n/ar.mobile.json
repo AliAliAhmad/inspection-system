@@ -801,7 +801,8 @@
     "signature_required": "يرجى رسم توقيعك.",
     "stamp_applied": "تم تطبيق الختم الرقمي بنجاح!",
     "stamp_failed": "فشل تطبيق الختم. يرجى المحاولة مرة أخرى.",
-    "transcription_failed": "فشلت معالجة الصوت. يرجى المحاولة مرة أخرى."
+    "transcription_failed": "فشلت معالجة الصوت. يرجى المحاولة مرة أخرى.",
+    "resolve_failed": "لم تتم معالجة هذا البند. حاول مرة أخرى."
   },
   "qualityReviews": {
     "approved": "مُوافَق عليها",

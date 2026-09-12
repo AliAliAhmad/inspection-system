@@ -167,11 +167,27 @@ export function PunchListPanel({
 
   // Mutations
   const resolveMutation = useMutation({
-    mutationFn: (id: number) => defectsApi.resolve(id),
+    // `resolution_notes` is REQUIRED by the server (app/api/defects.py:108
+    // raises ValidationError without it), so this call had no body and every
+    // tap of Resolve returned 400. The button had never worked.
+    //
+    // A fixed note naming where it was resolved from, matching what the web
+    // kanban already stores (DefectKanban.tsx). English on purpose: this is a
+    // maintenance record an engineer reads later, not screen text — the
+    // defect's own description carries what the fault was.
+    mutationFn: (id: number) => defectsApi.resolve(id, {
+      resolution_notes: 'Resolved from the punch list',
+    }),
     onSuccess: (_, id) => {
       Vibration.vibrate(100);
       queryClient.invalidateQueries({ queryKey: ['punchList'] });
       onItemResolved?.(id);
+    },
+    // Without this, a refusal was completely silent: the row simply stayed
+    // where it was, which reads as a slow network rather than a rejection.
+    onError: () => {
+      Alert.alert(t('quality.resolve_item', 'Resolve Item'),
+                  t('quality.resolve_failed', 'Could not resolve this item. Please try again.'));
     },
   });
 
