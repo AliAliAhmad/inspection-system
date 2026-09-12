@@ -130,14 +130,19 @@ PM_DEFAULT = (2, 3.0)
 # (2.0) than riding with a PM, which is backwards from the rule below. At 1.5 it
 # costs more alone, exactly like COM and DAM.
 #
-# ⚠️ ACD IS STILL THE WRONG WAY ROUND: 2.5 riding, 2.0 alone. Its 2.5 IS the
-# measurement, so it is the ALONE figure that wants checking. Nobody has said.
+# ACD's ALONE figure was 2.0 — cheaper than riding with a PM, the same shape of
+# error INS had. Ali, 2026-09-12: "ACD alone is 3h". Its 2.5 was never in doubt,
+# being the measured median; it was the alone column that was wrong.
+#
+# ALL FOUR LETTERS NOW OBEY THE RULE, and the rule is asserted for all four in
+# test_riding_along_is_never_dearer_than_its_own_trip. There are no exceptions
+# left to carry.
 FAULT_HOURS = {
     #            with a PM   alone
     'COM':      (2.0,        3.0),
     'DAM':      (1.0,        3.0),
     'INS':      (1.5,        2.0),
-    'ACD':      (2.5,        2.0),
+    'ACD':      (2.5,        3.0),
 }
 FAULT_DEFAULT = (2.0, 3.0)
 

@@ -109,13 +109,13 @@ class TestAFaultCostsLessWhenThePMTeamIsAlreadyThere:
         ('COM', 2.0, 3.0),
         ('DAM', 1.0, 3.0),
         ('INS', 1.5, 2.0),
-        ('ACD', 2.5, 2.0),
+        ('ACD', 2.5, 3.0),
     ])
     def test_each_letter_has_both_prices(self, activity, riding, alone):
         assert fault_hours(activity, with_pm=True) == riding
         assert fault_hours(activity, with_pm=False) == alone
 
-    @pytest.mark.parametrize('activity', ['COM', 'DAM', 'INS'])
+    @pytest.mark.parametrize('activity', ['COM', 'DAM', 'INS', 'ACD'])
     def test_riding_along_is_never_dearer_than_its_own_trip(self, activity):
         """THE RULE, not the numbers — and the test this class was missing.
 
@@ -128,11 +128,10 @@ class TestAFaultCostsLessWhenThePMTeamIsAlreadyThere:
         So the rule is asserted directly now. Any future letter that costs more
         with the team already on the machine fails here, whatever its number.
 
-        ACD IS DELIBERATELY ABSENT: it is 2.5 riding against 2.0 alone and breaks
-        the rule today. Its 2.5 is the measured median, so the ALONE figure is the
-        suspect one, and nobody has said. Add it to this list the day that is
-        answered — that is the whole point of leaving it out rather than widening
-        the rule to accommodate it.
+        ACD WAS DELIBERATELY ABSENT from this list, at 2.5 riding against 2.0
+        alone. Leaving it out is what kept the question visible instead of
+        widening the rule to swallow it — and Ali answered it the same day:
+        "ACD alone is 3h". All four letters are here now, with nothing carried.
         """
         assert fault_hours(activity, with_pm=True) <= fault_hours(activity, with_pm=False)
 

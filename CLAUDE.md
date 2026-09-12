@@ -402,10 +402,10 @@
 - `pm_interval_hours` MOVED from `sap_order_parser` to `job_durations` (one
   implementation, re-exported so both import paths work) — reading the package is a
   pricing question, and a second regex would forget the `25/5H` case.
-- **⚠️ ACD is still the wrong way round** — 2.5h riding with a PM against 2.0h on its
-  own trip. Its 2.5 IS the measured median, so the ALONE figure is the suspect one.
-  Deliberately excluded from `test_riding_along_is_never_dearer_than_its_own_trip`;
-  add it to that list the day it is answered.
+- ✅ **ACD alone is 3h** (Ali, 2026-09-12) — was 2.0, cheaper than riding with a PM,
+  the same shape of error INS had. **All four fault letters now obey the rule** and all
+  four are in `test_riding_along_is_never_dearer_than_its_own_trip`, verified by breaking
+  each one in turn. No exceptions carried.
 - **ECH with 4 men uses the 3-man figure (7h)** until Ali gives the real number.
 - **Rank WITHIN urgent.** 40 of 133 SAP orders are urgent and 33 more are high, so the
   label has stopped sorting anything. The numbers to rank by are already stored:
