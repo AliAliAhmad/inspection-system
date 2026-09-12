@@ -934,42 +934,12 @@ def build_last_completion_index(iw39_bytes):
 # where there are 478, which is exactly what the first pass at the material
 # kits reported before this function existed.
 
-# Ali's fleet is serviced at these five points and no others. A stray `750HR`
-# is a typo, and a kit keyed to it would match nothing anyway — the
-# `maintenance_cycles` table has no 750 row.
-PM_PACKAGE_HOURS = (250, 500, 1000, 2000, 4000)
-
-# `25/5H` is the 250-hour service. Ali confirmed 2026-08-26; the data had
-# already proved it, with 448 `25/5H` orders and 30 `250H` orders sharing six
-# core materials at six identical quantities and nothing in one absent from the
-# other. Matched BEFORE the number search, which cannot see it: `25` and `5`
-# are too short for the three-digit minimum that keeps machine numbers out.
-_25_5H = re.compile(r'25\s*/\s*5\s*H', re.I)
-
-# Three digits minimum, so `RS115` and `TT028` are never read as the service.
-# `H(?:OUR|R)?S?` covers H / HR / HRS / HOUR / HOURS — RS119 alone is written
-# `250Hrs`, and an `HR?\b` that demands a boundary straight after `HR` refuses
-# every one of them. `\s*` covers `500 HR` and `PM-250 Hrs`.
-_PACKAGE = re.compile(r'(\d{3,5})\s*H(?:OUR|R)?S?\b', re.I)
-
-
-def pm_interval_hours(description):
-    """Which service package this order is, in hours, or None.
-
-    None means SAP did not say — a forklift's `FL327-HOURLY SERVICE`, a
-    calendar `3-Week INSPECTION_RS`, an AC inspection. Returning a guess there
-    would put a 250-hour kit on a machine SAP has never described that way.
-    """
-    text = unicodedata.normalize('NFC', str(description or '')).strip()
-    if not text:
-        return None
-    if _25_5H.search(text):
-        return 250
-    match = _PACKAGE.search(text)
-    if not match:
-        return None
-    hours = int(match.group(1))
-    return hours if hours in PM_PACKAGE_HOURS else None
+# Which service package an order is, and the five points Ali's fleet is serviced
+# at, now live in job_durations beside the PRICES they select — a 2000HR costs
+# more than a 250HR, so reading the package IS a pricing question. Imported here
+# so every existing caller of `from sap_order_parser import pm_interval_hours`
+# keeps working, and so there is exactly ONE implementation to keep correct.
+from app.services.job_durations import PM_PACKAGE_HOURS, pm_interval_hours  # noqa: F401
 
 
 PM_SERVICE_INTERVAL_HOURS = 250.0

@@ -55,6 +55,7 @@ WHAT WAS TESTED AND REJECTED, so nobody re-proposes it:
 """
 
 import re
+import unicodedata
 
 # Ali's minimum. No job is ever planned for one person.
 MIN_CREW = 2
@@ -66,6 +67,27 @@ PM_BY_FAMILY = {
     'ech': (2, 8.0),
     'forklift': (2, 4.0),
     'trailer': (2, 3.0),
+}
+
+
+# A BIGGER SERVICE PACKAGE COSTS MORE. Ali, 2026-09-12.
+#
+# PM_BY_FAMILY above is the ORDINARY service — the 250-hour one, which is what
+# almost every PM order in the yard is. This table is only for packages that
+# differ, keyed by family then by package hours.
+#
+#   "18 hours with 2 men"  — Ali, on the reach stacker's 2000HR
+#
+# He had already said the 2000HR "contain the 250 hrs task and addtional tasks",
+# and 18h against 12h is those additional tasks, measured.
+#
+# A family or a package missing here falls back to PM_BY_FAMILY. That fallback is
+# deliberate and it UNDER-prices: a 2000HR on a machine whose figure nobody has
+# given is booked as an ordinary service. It is the honest direction — a number
+# invented by multiplying 12 by something would look just as confident and be
+# wrong in a way nobody could see.
+PM_BY_PACKAGE = {
+    'reach_stacker': {2000: (2, 18.0)},
 }
 
 # Where a bigger crew genuinely releases the machine sooner — one row per
@@ -132,7 +154,13 @@ def urgent_max_crew(family):
 
 
 def pm_hours(family, crew=None, description=None):
-    """(crew, hours) for a regular PM on this machine family.
+    """(crew, hours) for a PM on this machine family.
+
+    A package with its own price (PM_BY_PACKAGE — the reach stacker's 2000HR)
+    beats the family figure. The crew CURVE is not applied to it: the curve
+    points were measured on ordinary services, and stretching them over a
+    service half again as long would be a guess wearing a chart, which is the
+    one thing this module refuses to do.
 
     Pass `crew` to ask for a specific crew size; without it, the standard pair.
     A crew size between measured points takes the LARGEST measured point at or
@@ -142,10 +170,14 @@ def pm_hours(family, crew=None, description=None):
     """
     if is_ac_service(description):
         return (AC_PM_CREW, AC_PM_HOURS)
-    standard = PM_BY_FAMILY.get(family, PM_DEFAULT)
+    # A 2000HR is not an ordinary service. Read from the description rather than
+    # taken as an argument, so a caller cannot forget to pass it and quietly get
+    # the 250-hour price for a job that takes six hours longer.
+    package = PM_BY_PACKAGE.get(family, {}).get(pm_interval_hours(description))
+    standard = package or PM_BY_FAMILY.get(family, PM_DEFAULT)
     if crew is None:
         return standard
-    curve = PM_CREW_CURVE.get(family)
+    curve = None if package else PM_CREW_CURVE.get(family)
     if curve:
         eligible = [size for size in sorted(curve) if size <= crew]
         if eligible:
@@ -153,6 +185,54 @@ def pm_hours(family, crew=None, description=None):
             if best > MIN_CREW:
                 return (best, curve[best])
     return standard
+
+
+# ---------------------------------------------------------------------------
+# Which service package an order is
+# ---------------------------------------------------------------------------
+#
+# Moved here from sap_order_parser 2026-09-12. It reads as parsing, but it is a
+# PRICING question: a 2000HR takes 18h where a 250HR takes 12h, so the package is
+# what selects the number. Keeping it in the parser meant either importing pandas
+# into this module or writing a second regex that would drift — and the `25/5H`
+# special case is exactly the kind of detail one copy would forget.
+
+# Ali's fleet is serviced at these five points and no others. A stray `750HR`
+# is a typo, and a kit keyed to it would match nothing anyway — the
+# `maintenance_cycles` table has no 750 row.
+PM_PACKAGE_HOURS = (250, 500, 1000, 2000, 4000)
+
+# `25/5H` is the 250-hour service. Ali confirmed 2026-08-26; the data had
+# already proved it, with 448 `25/5H` orders and 30 `250H` orders sharing six
+# core materials at six identical quantities and nothing in one absent from the
+# other. Matched BEFORE the number search, which cannot see it: `25` and `5`
+# are too short for the three-digit minimum that keeps machine numbers out.
+_25_5H = re.compile(r'25\s*/\s*5\s*H', re.I)
+
+# Three digits minimum, so `RS115` and `TT028` are never read as the service.
+# `H(?:OUR|R)?S?` covers H / HR / HRS / HOUR / HOURS — RS119 alone is written
+# `250Hrs`, and an `HR?\b` that demands a boundary straight after `HR` refuses
+# every one of them. `\s*` covers `500 HR` and `PM-250 Hrs`.
+_PACKAGE = re.compile(r'(\d{3,5})\s*H(?:OUR|R)?S?\b', re.I)
+
+
+def pm_interval_hours(description):
+    """Which service package this order is, in hours, or None.
+
+    None means SAP did not say — a forklift's `FL327-HOURLY SERVICE`, a
+    calendar `3-Week INSPECTION_RS`, an AC inspection. Returning a guess there
+    would put a 250-hour kit on a machine SAP has never described that way.
+    """
+    text = unicodedata.normalize('NFC', str(description or '')).strip()
+    if not text:
+        return None
+    if _25_5H.search(text):
+        return 250
+    match = _PACKAGE.search(text)
+    if not match:
+        return None
+    hours = int(match.group(1))
+    return hours if hours in PM_PACKAGE_HOURS else None
 
 
 # ---------------------------------------------------------------------------

@@ -368,10 +368,15 @@
 - **Night shift disagrees with itself:** `day_budget._unavailable_by_date` excludes `night`,
   `_step_assign`'s own lookup does not — so a man giving the wallet zero hours can still be
   staffed onto day work.
-- **⚠️ THE 2000HR's OWN PRICE IS STILL THE 250HR's.** Ali chose "more than 12h — I'll
-  give the number" 2026-09-12 and has not given it yet. Until he does, a nested visit
-  is booked at the family figure (12h for a reach stacker), which he knowingly accepted
-  as a floor. One line in `PM_BY_FAMILY`/a new per-package table when he says.
+- **The 2000HR has its own price: 18h with 2 men** (Ali, 2026-09-12). `PM_BY_PACKAGE`
+  in `job_durations.py`. RS109 with both open: **48 man-hours → 36**, and the same
+  36 whether or not the 250HR order happens to be open. The crew curve is NOT stretched
+  over it — 3 men still get 18h until measured. **Only the reach stacker's 2000HR is
+  known**; every other family/package falls back to the ordinary figure, which
+  under-prices on purpose.
+- `pm_interval_hours` MOVED from `sap_order_parser` to `job_durations` (one
+  implementation, re-exported so both import paths work) — reading the package is a
+  pricing question, and a second regex would forget the `25/5H` case.
 - **⚠️ Confirm the fault price direction.** COM and DAM cost MORE alone (2→3, 1→3) but
   INS and ACD cost LESS (3→2, 2.5→2). Possible misread of Ali's brackets.
 - **ECH with 4 men uses the 3-man figure (7h)** until Ali gives the real number.

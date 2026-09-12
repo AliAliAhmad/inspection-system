@@ -92,8 +92,9 @@ class TestWhatABundleEndsUpCosting:
         _price_bundle(bundle)
         small, big = bundle['members']
 
-        assert big['estimated_hours'] == pytest.approx(12.0), \
-            'the visit that actually happens keeps its full price'
+        assert big['estimated_hours'] == pytest.approx(18.0), \
+            "the 2000HR's own price (Ali, 2026-09-12: 18h with 2 men), not the " \
+            'ordinary service figure'
         assert small['estimated_hours'] == 0.0
         assert small['included_in_package'] == 2000, \
             'a day showing 12h instead of 24h has to be able to say why'
@@ -129,8 +130,27 @@ class TestWhatABundleEndsUpCosting:
     def test_a_single_pm_is_unchanged(self):
         bundle = {'members': [_pm('RS109-2000HR-MECH')]}
         _price_bundle(bundle)
-        assert bundle['members'][0]['estimated_hours'] == pytest.approx(12.0)
+        assert bundle['members'][0]['estimated_hours'] == pytest.approx(18.0)
         assert 'included_in_package' not in bundle['members'][0]
+
+    def test_the_2000hr_costs_the_same_whether_the_250_is_open_or_not(self):
+        """The point of the whole change.
+
+        Doing the 2000HR is the same work either way, so the day must cost the
+        same either way. Before this, an open 250HR added 12 phantom hours.
+        """
+        from app.services.work_plan_generator_service import bundle_man_hours
+        alone = {'members': [_pm('RS109-2000HR-MECH')]}
+        together = {'members': [_pm('RS109-250HR-MECH'), _pm('RS109-2000HR-MECH')]}
+        _price_bundle(alone)
+        _price_bundle(together)
+        assert bundle_man_hours(alone) == bundle_man_hours(together) == 36.0
+
+    def test_the_250hr_on_its_own_keeps_the_ordinary_price(self):
+        """The pool's standalone price stays correct — nothing was taken away."""
+        bundle = {'members': [_pm('RS109-250HR-MECH')]}
+        _price_bundle(bundle)
+        assert bundle['members'][0]['estimated_hours'] == pytest.approx(12.0)
 
     def test_a_fault_beside_the_packages_still_rides_along_cheaply(self):
         """`_bundle_has_regular_pm` must stay true — the crew IS on the machine."""
@@ -181,3 +201,73 @@ class TestThePlannerCanSeeWhyItIsZero:
         head = source.split('job_kwargs = dict(')[1].split(')')[0]
         assert 'notes' not in head, \
             'notes joined the generator kwargs — the nesting note now overwrites it'
+
+
+class TestTheBiggerPackageHasItsOwnPrice:
+    """Ali, 2026-09-12: "18 hours with 2 men" for the reach stacker's 2000HR.
+
+    PM_BY_FAMILY is the ORDINARY service, which is what nearly every PM order in
+    the yard is. A package that differs gets its own row.
+    """
+
+    def test_the_reach_stacker_2000hr_is_eighteen_hours(self):
+        from app.services.job_durations import pm_hours
+        assert pm_hours('reach_stacker',
+                        description='RS109-2000HR-MECH') == (2, 18.0)
+
+    def test_the_ordinary_service_is_untouched(self):
+        from app.services.job_durations import pm_hours
+        assert pm_hours('reach_stacker',
+                        description='RS109-250HR-MECH') == (2, 12.0)
+        assert pm_hours('reach_stacker', description='RS115-25/5H-MECH') == (2, 12.0)
+
+    def test_the_crew_curve_is_not_stretched_over_the_big_package(self):
+        """The curve points were measured on ordinary services.
+
+        A third man takes a 250HR from 12h to 8h. Applying that ratio to an 18h
+        service would be a guess wearing a chart — so until Ali measures the
+        2000HR with three men, three men get the measured two-man figure.
+        """
+        from app.services.job_durations import pm_hours
+        assert pm_hours('reach_stacker', 3,
+                        description='RS109-2000HR-MECH') == (2, 18.0)
+        assert pm_hours('reach_stacker', 3,
+                        description='RS109-250HR-MECH') == (3, 8.0), \
+            'the curve still applies to the ordinary service'
+
+    def test_a_family_with_no_figure_falls_back_and_UNDER_prices(self):
+        """Deliberate, and the honest direction.
+
+        Nobody has given the ECH's 2000HR figure. Inventing one by multiplying
+        would look just as confident and be wrong invisibly; booking it as an
+        ordinary service is wrong in a way a planner can notice.
+        """
+        from app.services.job_durations import pm_hours, PM_BY_FAMILY
+        assert pm_hours('ech', description='ECH02-2000HR-MECH') == PM_BY_FAMILY['ech']
+
+    def test_a_job_with_no_package_keeps_the_family_figure(self):
+        from app.services.job_durations import pm_hours
+        assert pm_hours('reach_stacker',
+                        description='3-Week INSPECTION_RS') == (2, 12.0)
+
+
+class TestTheIntervalReaderMovedButDidNotCHANGE:
+    """It now lives in job_durations beside the prices it selects.
+
+    Both import paths must keep working — `sap_order_parser` re-exports it — and
+    there must be exactly ONE implementation, because the `25/5H` special case is
+    precisely what a second copy would forget.
+    """
+
+    def test_both_import_paths_are_the_same_function(self):
+        from app.services.sap_order_parser import pm_interval_hours as viaparser
+        from app.services.job_durations import pm_interval_hours as viaprices
+        assert viaparser is viaprices, 'two copies would drift'
+
+    def test_the_25_5h_special_case_survived_the_move(self):
+        from app.services.job_durations import pm_interval_hours
+        assert pm_interval_hours('RS115-25/5H-MECH') == 250
+
+    def test_a_package_off_the_ladder_is_still_refused(self):
+        from app.services.job_durations import pm_interval_hours
+        assert pm_interval_hours('RS115-750HR-MECH') is None
