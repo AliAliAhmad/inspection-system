@@ -1139,3 +1139,134 @@ class TestWhenSapClaimsANumberAliAlreadyTyped:
         _job(plan, day, eq)
         counts = sync_order_operations(_operations())
         assert counts['orders_to_review'] == []
+
+
+class TestEitherOfThemCanSayItIsFinished:
+    """Ali, 2026-09-15: "i need a way to mention that the operation is finish i
+    know that the user say this also i need me to say this".
+
+    He chose ONE tick rather than a second confirming layer: whoever taps it owns
+    it, and `done_by_id` records which of them did. `_may_tick` had always
+    allowed engineers and admins, so the API already permitted this — what was
+    missing was a button on a line NOBODY had started, because the web board only
+    offered Finish once a timer was running.
+
+    AND THE HOURS ARE ASKED FOR, NOT INVENTED. Finishing an unstarted operation
+    sets started_at = now, so the elapsed sum computes ~0 and records that the
+    work took no time at all. This app is built on honest durations — a confident
+    zero is worse than an empty field.
+    """
+
+    def _job_with_ops(self, client, admin_user, db_session, plan_day, tag):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, tag, tag)
+        job = _job(plan, day, eq)
+        sync_order_operations(_operations())
+        return job
+
+    def test_a_planner_can_finish_a_line_nobody_started(
+            self, client, admin_user, db_session, plan_day):
+        job = self._job_with_ops(client, admin_user, db_session, plan_day, 'FIN01')
+        h = _headers(client, admin_user)
+        op = WorkPlanJobTask.query.filter_by(
+            anchor_key='700000123456', operation_number='0010').one()
+
+        resp = client.post(
+            f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+            json={'action': 'finish', 'actual_hours': 3.5}, headers=h)
+        assert resp.status_code == 200, resp.get_json()
+
+        db.session.refresh(op)
+        assert op.is_done is True
+        assert op.status == 'completed'
+        assert op.done_by_id == admin_user.id, 'the name records WHICH of them said so'
+        assert op.actual_hours == pytest.approx(3.5)
+
+    def test_without_the_hours_it_is_still_finished_but_reads_as_no_time(
+            self, client, admin_user, db_session, plan_day):
+        """The behaviour the override exists to avoid, pinned so it is a choice.
+
+        Finishing with no figure is allowed — sometimes nobody knows — but it
+        records ~0, and that is exactly why the board asks.
+        """
+        job = self._job_with_ops(client, admin_user, db_session, plan_day, 'FIN02')
+        op = WorkPlanJobTask.query.filter_by(
+            anchor_key='700000123456', operation_number='0010').one()
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+                    json={'action': 'finish'},
+                    headers=_headers(client, admin_user))
+        db.session.refresh(op)
+        assert op.is_done is True
+        assert op.actual_hours == pytest.approx(0.0, abs=0.05)
+
+    def test_a_running_timer_still_decides_when_no_figure_is_given(
+            self, client, admin_user, db_session, plan_day):
+        """The worker's path must not change. His hours are MEASURED."""
+        from datetime import datetime, timedelta as td
+        job = self._job_with_ops(client, admin_user, db_session, plan_day, 'FIN03')
+        h = _headers(client, admin_user)
+        op = WorkPlanJobTask.query.filter_by(
+            anchor_key='700000123456', operation_number='0010').one()
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+                    json={'action': 'start'}, headers=h)
+        db.session.refresh(op)
+        op.started_at = datetime.utcnow() - td(hours=2)
+        db.session.commit()
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+                    json={'action': 'finish'}, headers=h)
+        db.session.refresh(op)
+        assert op.actual_hours == pytest.approx(2.0, abs=0.1), \
+            'the measured time, not a typed one'
+
+    def test_a_typed_figure_overrules_a_timer_that_ran_all_night(
+            self, client, admin_user, db_session, plan_day):
+        """The other half of why this exists: a man goes home with it running."""
+        from datetime import datetime, timedelta as td
+        job = self._job_with_ops(client, admin_user, db_session, plan_day, 'FIN04')
+        h = _headers(client, admin_user)
+        op = WorkPlanJobTask.query.filter_by(
+            anchor_key='700000123456', operation_number='0010').one()
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+                    json={'action': 'start'}, headers=h)
+        db.session.refresh(op)
+        op.started_at = datetime.utcnow() - td(hours=19)
+        db.session.commit()
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+                    json={'action': 'finish', 'actual_hours': 3},
+                    headers=h)
+        db.session.refresh(op)
+        assert op.actual_hours == pytest.approx(3.0), '19 hours was the clock, not the work'
+
+    def test_a_silly_figure_is_refused(self, client, admin_user, db_session, plan_day):
+        job = self._job_with_ops(client, admin_user, db_session, plan_day, 'FIN05')
+        h = _headers(client, admin_user)
+        op = WorkPlanJobTask.query.filter_by(
+            anchor_key='700000123456', operation_number='0010').one()
+
+        for bad in ('three', -1, 1000):
+            resp = client.post(
+                f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+                json={'action': 'finish', 'actual_hours': bad}, headers=h)
+            assert resp.status_code == 400, bad
+
+    def test_the_payload_says_who_ticked_it(
+            self, client, admin_user, db_session, plan_day):
+        """'done by Hassan' and 'marked by Ali' are different facts."""
+        job = self._job_with_ops(client, admin_user, db_session, plan_day, 'FIN06')
+        h = _headers(client, admin_user)
+        op = WorkPlanJobTask.query.filter_by(
+            anchor_key='700000123456', operation_number='0010').one()
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+                    json={'action': 'finish', 'actual_hours': 1}, headers=h)
+
+        tasks = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=h).get_json()['tasks']
+        row = [t for t in tasks if t['operation_number'] == '0010'][0]
+        assert row['done_by_name'] == admin_user.full_name
+        assert row['is_done'] is True

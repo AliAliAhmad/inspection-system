@@ -6318,7 +6318,15 @@ def job_task_timer(job_id, task_id):
     Ali, 2026-09-11, choosing this over a simple tick: "an order with many
     operations he should do 1 by 1", each with its own start/stop and real hours.
 
-    Body: {"action": "start" | "pause" | "resume" | "finish"}
+    Body: {"action": "start" | "pause" | "resume" | "finish",
+           "actual_hours": 3.5}     # optional, only meaningful on finish
+
+    EITHER OF THEM CAN TICK IT, AND THE NAME SAYS WHICH. Ali, 2026-09-15 —
+    `_may_tick` has always allowed the assigned team, engineers and admins, so a
+    planner could already finish a line; what was missing was the button on a
+    line nobody had started. `done_by_id` records who said so, which is the whole
+    audit trail this needs: "done by Hassan" and "marked by Ali" are different
+    facts and the screen shows them differently.
 
     WHY THE ORDER'S OWN TIMER IS NOT TOUCHED HERE
     =============================================
@@ -6341,9 +6349,28 @@ def job_task_timer(job_id, task_id):
     if not _may_tick(user, job):
         raise ForbiddenError("Only the assigned team, engineers and admins can do this")
 
-    action = (request.get_json() or {}).get('action')
+    body = request.get_json() or {}
+    action = body.get('action')
     if action not in ('start', 'pause', 'resume', 'finish'):
         raise ValidationError("action must be start, pause, resume or finish")
+
+    # HOW LONG IT REALLY TOOK, when no timer measured it.
+    #
+    # Ali, 2026-09-15: "i need a way to mention that the operation is finish i
+    # know that the user say this also i need me to say this." A planner marking
+    # a line the crew did yesterday has no timer behind it, and the elapsed sum
+    # below would compute ~0 and record that the work took no time. This app is
+    # built on honest durations; a confident zero is worse than an empty field.
+    #
+    # Given, it wins. Absent on a timed operation, the timer still decides.
+    hours_override = body.get('actual_hours')
+    if hours_override is not None:
+        try:
+            hours_override = float(hours_override)
+        except (TypeError, ValueError):
+            raise ValidationError("actual_hours must be a number")
+        if hours_override < 0 or hours_override > 999:
+            raise ValidationError("actual_hours must be between 0 and 999")
 
     now = datetime.utcnow()
     status = task.status or ('completed' if task.is_done else 'pending')
@@ -6383,9 +6410,12 @@ def job_task_timer(job_id, task_id):
             task.total_paused_minutes = (task.total_paused_minutes or 0) + int(
                 (now - task.paused_at).total_seconds() // 60)
         task.paused_at = None
-        elapsed = (now - task.started_at).total_seconds() / 3600.0
-        worked = max(elapsed - (task.total_paused_minutes or 0) / 60.0, 0.0)
-        task.actual_hours = round(worked, 2)
+        if hours_override is not None:
+            task.actual_hours = round(hours_override, 2)
+        else:
+            elapsed = (now - task.started_at).total_seconds() / 3600.0
+            worked = max(elapsed - (task.total_paused_minutes or 0) / 60.0, 0.0)
+            task.actual_hours = round(worked, 2)
         task.status = 'completed'
         task.is_done = True
         task.done_by_id = user.id

@@ -1008,9 +1008,18 @@ export const jobSubTasksApi = {
         parent_task_id: parentTaskId });
   },
 
-  timer(jobId: number, taskId: number, action: OperationAction) {
+  /**
+   * Start, pause, resume or finish ONE operation.
+   *
+   * `actualHours` is only meaningful on 'finish', and only matters when no timer
+   * measured the work — a planner marking a line the crew did yesterday, or a
+   * man correcting a timer he left running overnight. Omitted, the timer decides.
+   */
+  timer(jobId: number, taskId: number, action: OperationAction,
+        actualHours?: number) {
     return getApiClient().post<any>(
-      `/api/work-plans/jobs/${jobId}/tasks/${taskId}/timer`, { action });
+      `/api/work-plans/jobs/${jobId}/tasks/${taskId}/timer`,
+      actualHours === undefined ? { action } : { action, actual_hours: actualHours });
   },
 
   update(jobId: number, taskId: number, payload: { is_done?: boolean; content?: string }) {

@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   Card, Button, Typography, Tag, Space, Input, InputNumber, Select, Progress,
-  Popconfirm, Empty, Spin, Tooltip, message,
+  Popconfirm, Empty, Spin, Tooltip, Modal, message,
 } from 'antd';
 import {
   PlusOutlined, CameraOutlined, AudioOutlined, AudioMutedOutlined,
@@ -161,11 +161,29 @@ export const JobOperations: React.FC<JobOperationsProps> = ({
   };
 
   const runTimer = useMutation({
-    mutationFn: ({ taskId, action }: { taskId: number; action: any }) =>
-      jobSubTasksApi.timer(jobId, taskId, action),
+    mutationFn: ({ taskId, action, actualHours }:
+                 { taskId: number; action: any; actualHours?: number }) =>
+      jobSubTasksApi.timer(jobId, taskId, action, actualHours),
     onSuccess: refresh,
     onError: (err: any) => message.error(err?.response?.data?.message || 'Could not update'),
   });
+
+  /**
+   * Marking a line done that nobody ever started.
+   *
+   * Ali, 2026-09-15: "i need a way to mention that the operation is finish i
+   * know that the user say this also i need me to say this". The API always
+   * allowed him — `_may_tick` covers engineers and admins — but the board only
+   * offered Finish once a timer was running, so a line the crew did yesterday
+   * could not be ticked at all.
+   *
+   * It ASKS FOR THE HOURS. Finishing an unstarted operation sets started_at to
+   * now, so the elapsed sum would record that the work took no time. Leaving the
+   * box empty is allowed, because sometimes nobody knows — but a confident zero
+   * should be a choice, not an accident.
+   */
+  const [finishing, setFinishing] = useState<{ id: number; label: string } | null>(null);
+  const [finishHours, setFinishHours] = useState<number | undefined>(undefined);
 
   if (isLoading) {
     return <Card size="small" style={{ marginBottom: 16 }}><Spin size="small" /></Card>;
@@ -369,9 +387,19 @@ export const JobOperations: React.FC<JobOperationsProps> = ({
                       {status !== 'completed' && (
                         <>
                           {status === 'pending' && (
-                            <Button size="small" onClick={() => runTimer.mutate({ taskId: op.id, action: 'start' })}>
-                              Start
-                            </Button>
+                            <>
+                              <Button size="small" onClick={() => runTimer.mutate({ taskId: op.id, action: 'start' })}>
+                                Start
+                              </Button>
+                              {/* For work already done. See the note on `finishing`. */}
+                              <Button size="small" type="primary" ghost
+                                      onClick={() => {
+                                        setFinishHours(op.planned_hours ?? undefined);
+                                        setFinishing({ id: op.id, label: `${op.operation_number} ${op.content}` });
+                                      }}>
+                                Mark done
+                              </Button>
+                            </>
                           )}
                           {status === 'in_progress' && (
                             <>
@@ -421,6 +449,39 @@ export const JobOperations: React.FC<JobOperationsProps> = ({
           );
         })}
       </div>
+
+      {/* Marking a line done that no timer measured. The hours are ASKED FOR,
+          not assumed — see the note on `finishing`. */}
+      <Modal
+        open={!!finishing}
+        title="Mark this operation done"
+        okText="Mark done"
+        onCancel={() => setFinishing(null)}
+        confirmLoading={runTimer.isPending}
+        onOk={() => {
+          if (!finishing) return;
+          runTimer.mutate(
+            { taskId: finishing.id, action: 'finish', actualHours: finishHours },
+            { onSuccess: () => setFinishing(null) },
+          );
+        }}
+      >
+        <Text style={{ display: 'block', marginBottom: 12 }}>{finishing?.label}</Text>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+          How many hours did it really take? No timer ran on this one, so leaving
+          it empty records no time at all.
+        </Text>
+        <InputNumber
+          min={0}
+          max={999}
+          step={0.5}
+          value={finishHours}
+          onChange={(v) => setFinishHours(v ?? undefined)}
+          style={{ width: 140 }}
+          addonAfter="h"
+          autoFocus
+        />
+      </Modal>
     </Card>
   );
 };
