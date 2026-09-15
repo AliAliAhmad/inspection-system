@@ -39,7 +39,7 @@ describe('JobOperationRows', () => {
   });
 
   it('shows the number, the text, the trade and the hours', () => {
-    render(<JobOperationRows operations={[op()]} job={JOB} dayId={3} />);
+    render(<JobOperationRows operations={[op()]} job={JOB} dayId={3} dayExpanded />);
     expect(screen.getByText('0010')).toBeInTheDocument();
     expect(screen.getByText('Check the spreader')).toBeInTheDocument();
     expect(screen.getByText('MECH')).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe('JobOperationRows', () => {
   });
 
   it('shows the initials of whoever is on that line', () => {
-    render(<JobOperationRows job={JOB} dayId={3} operations={[op({
+    render(<JobOperationRows job={JOB} dayId={3} dayExpanded operations={[op({
       assignees: [{ id: 1, task_id: 1, user_id: 9, user_name: 'Hassan Ali' }],
     })]} />);
     expect(screen.getByText('HA')).toBeInTheDocument();
@@ -55,7 +55,7 @@ describe('JobOperationRows', () => {
 
   it('registers each row as its OWN drop target', () => {
     droppableCalls.length = 0;
-    render(<JobOperationRows job={JOB} dayId={3} operations={[
+    render(<JobOperationRows job={JOB} dayId={3} dayExpanded operations={[
       op({ id: 11 }), op({ id: 12, operation_number: '0020' }),
     ]} />);
     expect(droppableCalls.map((c) => c.id)).toEqual(['operation-11', 'operation-12']);
@@ -63,5 +63,57 @@ describe('JobOperationRows', () => {
     // here and a drop on a line silently assigns the whole order instead.
     expect(droppableCalls[0].data.type).toBe('operation');
     expect(droppableCalls[0].data.job).toBe(JOB);
+  });
+
+  describe('a retracted day column', () => {
+    /**
+     * Ali, 2026-09-15: "the operations are shown very good when the day is
+     * expand when is retrakted it ruin the day". Seven days share the board, so
+     * a retracted column is about 160px — no room for a row that needs a number,
+     * text, a trade, hours and initials after 30px of indent.
+     */
+    it('shows ONE summary line instead of every row', () => {
+      render(<JobOperationRows job={JOB} dayId={3} operations={[
+        op({ id: 21, is_done: true }),
+        op({ id: 22, operation_number: '0020', work_center: 'ELEC' }),
+        op({ id: 23, operation_number: '0030' }),
+      ]} />);
+
+      expect(screen.getByText('1/3')).toBeInTheDocument();
+      // The trades are the point: does this order need an electrician?
+      expect(screen.getByText('M')).toBeInTheDocument();
+      expect(screen.getByText('E')).toBeInTheDocument();
+      // ...and NOT the rows themselves.
+      expect(screen.queryByText('Check the spreader')).not.toBeInTheDocument();
+      expect(screen.queryByText('0010')).not.toBeInTheDocument();
+    });
+
+    it('registers NO drop targets — there is nothing to drop onto', () => {
+      droppableCalls.length = 0;
+      render(<JobOperationRows job={JOB} dayId={3} operations={[op(), op({ id: 2 })]} />);
+      expect(droppableCalls).toEqual([]);
+    });
+
+    it('counts a line needing BOTH trades as each of them', () => {
+      render(<JobOperationRows job={JOB} dayId={3}
+                               operations={[op({ work_center: 'ELME' })]} />);
+      expect(screen.getByText('M')).toBeInTheDocument();
+      expect(screen.getByText('E')).toBeInTheDocument();
+    });
+
+    it('does not let supervision claim a trade', () => {
+      // SUPV is the LARGEST group in the real data (685 of 1,560). Counting it
+      // would put a letter on nearly every order and say nothing.
+      render(<JobOperationRows job={JOB} dayId={3}
+                               operations={[op({ work_center: 'SUPV' })]} />);
+      expect(screen.queryByText('M')).not.toBeInTheDocument();
+      expect(screen.queryByText('E')).not.toBeInTheDocument();
+      expect(screen.getByText('0/1')).toBeInTheDocument();
+    });
+
+    it('still says nothing at all when the order has no operations', () => {
+      const { container } = render(<JobOperationRows operations={[]} job={JOB} dayId={3} />);
+      expect(container).toBeEmptyDOMElement();
+    });
   });
 });

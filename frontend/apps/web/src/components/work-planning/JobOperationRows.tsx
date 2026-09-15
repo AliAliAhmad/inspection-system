@@ -65,16 +65,21 @@ const OperationRow: React.FC<{
       <Text style={{ fontSize: 10, fontWeight: 700, color: '#8c8c8c', flexShrink: 0 }}>
         {op.operation_number}
       </Text>
-      <Text
-        style={{
-          fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          textDecoration: done ? 'line-through' : undefined,
-          color: done ? '#8c8c8c' : '#434343',
-        }}
-      >
-        {op.content}
-      </Text>
+      {/* Who ticked it matters: "done by Hassan" and "marked by Ali" are
+          different facts. The row is too narrow to print a name, so the struck
+          -through text carries it. */}
+      <Tooltip title={done && op.done_by_name ? `Done — ${op.done_by_name}` : undefined}>
+        <Text
+          style={{
+            fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            textDecoration: done ? 'line-through' : undefined,
+            color: done ? '#8c8c8c' : '#434343',
+          }}
+        >
+          {op.content}
+        </Text>
+      </Tooltip>
 
       {op.waiting_on_material && (
         <Tooltip title={`Waiting for material${op.purchase_requisition ? ` — PR ${op.purchase_requisition}` : ''}`}>
@@ -118,12 +123,91 @@ const OperationRow: React.FC<{
   );
 };
 
+/**
+ * What a narrow day column gets instead of the full list.
+ *
+ * Ali, 2026-09-15: "the operations are shown very good when the day is expand
+ * when is retrakted it ruin the day". Seven days share the board, so a retracted
+ * column is about 160px — and a row needs its number, its text, its trade, its
+ * hours and its initials, after 30px of indent. There is no room, so the rows
+ * wrapped and broke the card.
+ *
+ * One line survives instead, and it keeps the thing that made this worth
+ * building: whether the order needs a mechanic, an electrician, or both.
+ *
+ *     ⚙ 1/3 · M E      three operations, one done, needs MECH and ELEC
+ */
+const OperationSummary: React.FC<{ operations: JobSubTask[] }> = ({ operations }) => {
+  const done = operations.filter((o) => o.is_done || o.status === 'completed').length;
+  const waiting = operations.some((o) => o.waiting_on_material);
+
+  // ELME means the line needs BOTH trades, so it counts as each. SUPV is
+  // supervision and belongs to everyone, so it says nothing about who is needed.
+  const trades = new Set<string>();
+  operations.forEach((o) => {
+    const t = o.work_center;
+    if (t === 'MECH' || t === 'ELME') trades.add('M');
+    if (t === 'ELEC' || t === 'ELME') trades.add('E');
+  });
+  const letters = ['M', 'E'].filter((l) => trades.has(l));
+
+  return (
+    <Tooltip
+      title={
+        <div>
+          {operations.map((o) => (
+            <div key={o.id} style={{ fontSize: 11 }}>
+              {o.operation_number} {o.content}
+              {o.work_center ? ` · ${o.work_center}` : ''}
+              {(o.assignees || []).length
+                ? ` · ${(o.assignees || []).map((a) => a.user_name).join(', ')}`
+                : ''}
+            </div>
+          ))}
+          <div style={{ fontSize: 10, opacity: 0.7, marginTop: 4 }}>
+            Open the day to assign people to a line
+          </div>
+        </div>
+      }
+    >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        paddingLeft: 10, marginTop: 1,
+      }}>
+        <Text style={{ fontSize: 9, color: '#8c8c8c' }}>⚙</Text>
+        <Text style={{ fontSize: 9, color: done === operations.length ? '#52c41a' : '#8c8c8c', fontWeight: 600 }}>
+          {done}/{operations.length}
+        </Text>
+        {letters.length > 0 && (
+          <Text style={{ fontSize: 9, color: '#8c8c8c' }}>·</Text>
+        )}
+        {letters.map((l) => (
+          <span key={l} style={{
+            fontSize: 9, fontWeight: 700,
+            color: l === 'M' ? TRADE_COLOR.MECH : TRADE_COLOR.ELEC,
+          }}>
+            {l}
+          </span>
+        ))}
+        {waiting && <span style={{ fontSize: 9 }}>⏳</span>}
+      </div>
+    </Tooltip>
+  );
+};
+
 export const JobOperationRows: React.FC<{
   operations?: JobSubTask[];
   job: WorkPlanJob;
   dayId: number;
-}> = ({ operations, job, dayId }) => {
+  /**
+   * Is this day opened wide? Seven narrow columns cannot hold a full row — see
+   * OperationSummary. Defaults to false so a caller that forgets to pass it gets
+   * the compact form rather than the broken one.
+   */
+  dayExpanded?: boolean;
+}> = ({ operations, job, dayId, dayExpanded = false }) => {
   if (!operations || operations.length === 0) return null;
+  if (!dayExpanded) return <OperationSummary operations={operations} />;
   return (
     <div style={{ marginTop: 2, marginBottom: 2 }}>
       {operations.map((op) => (

@@ -436,6 +436,18 @@
   outside.
 - **⚠️ UNVERIFIED: the drag on a real iPad.** The priority logic is fixed and tested; whether
   a thin indented row is a comfortable finger target is not something a test can answer.
+- **A RETRACTED day column gets ONE summary line, not the rows** (Ali, 2026-09-15: "when is
+  retrakted it ruin the day"). Seven days share the board beside a 300px pool, so a column is
+  ~160px and a row needs 30px of indent before number/text/trade/hours/initials. `⚙ 1/3 · M E`
+  = 3 operations, 1 done, needs MECH and ELEC. ELME counts as BOTH; SUPV claims neither (it is
+  685 of 1,560 — a letter on every order would say nothing). **No drop targets when retracted**
+  — asserted. Assign by opening the day wide; the tooltip says so.
+- **Either of them can tick an operation finished** (Ali, 2026-09-15). `_may_tick` always
+  allowed engineers/admins; the board only offered Finish once a timer ran, so a line the crew
+  did yesterday could not be ticked. **Mark done** now sits beside Start, and **asks for the
+  hours** — finishing an unmeasured line would otherwise record ~0, a confident wrong number
+  beside the measured ones. One tick, `done_by_id` says which of them. Also lets anyone correct
+  a timer left running overnight (19h clock, 3h work).
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).

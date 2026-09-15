@@ -3378,6 +3378,7 @@ export default function WorkPlanningPage() {
                                             planId={currentPlan?.id}
                                             subTaskCounts={subTaskCounts}
                                             operationsByJob={operationsByJob}
+                                            dayExpanded={isExpanded}
                                           />
                                         ));
                                       })()}

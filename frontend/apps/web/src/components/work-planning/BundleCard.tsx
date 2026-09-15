@@ -35,6 +35,8 @@ interface BundleCardProps {
    * meant opening it first.
    */
   operationsByJob?: Record<string, JobSubTask[]>;
+  /** Is this DAY opened wide? A retracted column cannot hold a full operation row. */
+  dayExpanded?: boolean;
 }
 
 /** Pull team category (mech / elec) from the assignment user.specialization */
@@ -102,9 +104,10 @@ interface IndividualJobRowProps {
   planId?: number;
   subTaskCount?: { total: number; done: number };
   operations?: JobSubTask[];
+  dayExpanded?: boolean;
 }
 
-const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax, planId, subTaskCount, operations }) => {
+const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax, planId, subTaskCount, operations, dayExpanded }) => {
   const overdue = getOverdueInfo(job as any);
   const isOverdue = overdue.isOverdue;
   const heat = getOverdueHeat(job as any, overdueMax);
@@ -348,7 +351,8 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
       </div>
       {/* The operations, indented under their own job. Each row is its own drop
           target — a person dropped on one goes onto THAT line. */}
-      <JobOperationRows operations={operations} job={job} dayId={dayId} />
+      <JobOperationRows operations={operations} job={job} dayId={dayId}
+                        dayExpanded={dayExpanded} />
     </div>
   );
 };
@@ -363,6 +367,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
   planId,
   subTaskCounts,
   operationsByJob,
+  dayExpanded,
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -661,6 +666,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                     planId={planId}
                     subTaskCount={subTaskCounts?.[String(job.id)]}
                     operations={operationsByJob?.[String(job.id)]}
+                    dayExpanded={dayExpanded}
                   />
                 ))}
               </div>
@@ -710,6 +716,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                     planId={planId}
                     subTaskCount={subTaskCounts?.[String(job.id)]}
                     operations={operationsByJob?.[String(job.id)]}
+                    dayExpanded={dayExpanded}
                   />
                 ))}
               </div>
@@ -745,5 +752,6 @@ export const BundleCard = React.memo(BundleCardInner, (prev, next) =>
   // Leaving it out of this comparator meant a new count never reached the row.
   prev.subTaskCounts === next.subTaskCounts &&
   prev.operationsByJob === next.operationsByJob &&
+  prev.dayExpanded === next.dayExpanded &&
   sameJobs(prev.jobs, next.jobs)
 );
