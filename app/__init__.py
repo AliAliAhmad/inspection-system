@@ -1416,6 +1416,136 @@ def create_app(config_name='development'):
         for key, trades in list(mixed.items())[:15]:
             print(f'    {key}: {sorted(trades)}')
 
+    @app.cli.command('iw49-audit')
+    @click.option('--samples', default=8, show_default=True,
+                  help='How many order numbers to print from each side.')
+    def iw49_audit(samples):
+        """Does IW49 contain the orders a planner actually plans? PROVE IT.
+
+        WHY THIS EXISTS
+
+        Every run reports `POOL COVERAGE: 0 of 180`, and the conclusion drawn
+        from it — that the courier's saved IW49 variant is selecting finished
+        work — sends Ali to change something in SAP. That is a real cost, and it
+        rests on a number produced by two queries and a set intersection.
+
+        A zero has more than one cause. The orders might genuinely be absent; or
+        the two sides might be written differently (leading zeros, a stray space,
+        a number read as a float and rendered `700000123456.0`), in which case
+        nothing is wrong in SAP at all and the fault is here.
+
+        So this prints BOTH SIDES RAW and does the comparison in the open:
+        counts, the overlap, samples from each, and — because the file carries
+        `System Status` — what SAP says the state of its orders is.
+
+        Read-only. It writes nothing.
+        """
+        from app.services.sap_pool_sync import _current_file_bytes
+        from app.services.sap_order_parser import OPERATION_COLUMN_CANDIDATES
+        from app.models import SAPWorkOrder, WorkPlanJob
+        from collections import Counter
+
+        data, record = _current_file_bytes(sheet_name='IW49')
+        if not data:
+            print('No IW49 has been delivered, or its file is unreadable.')
+            return
+        print(f'IW49: {record.source_filename}  received {record.received_at}')
+        print()
+
+        # --- the app's side ---
+        pool = {str(n).strip() for (n,) in
+                db.session.query(SAPWorkOrder.order_number)
+                .filter(SAPWorkOrder.work_plan_id.is_(None),
+                        SAPWorkOrder.status == 'pending').all() if n}
+        planned = {str(n).strip() for (n,) in
+                   db.session.query(WorkPlanJob.sap_order_number)
+                   .filter(WorkPlanJob.sap_order_number.isnot(None)).all() if n}
+        print(f'LIVE POOL       : {len(pool)} orders')
+        print(f'ON A PLAN       : {len(planned)} orders')
+
+        # --- the file's side, read raw ---
+        import openpyxl, io as _io
+        book = openpyxl.load_workbook(_io.BytesIO(data), read_only=True,
+                                      data_only=True)
+        sheet = book[book.sheetnames[0]]
+        rows = sheet.iter_rows(values_only=True)
+        header = [str(h).strip() if h is not None else '' for h in next(rows)]
+
+        def column(name_options):
+            lowered = {h.lower(): i for i, h in enumerate(header)}
+            for want in name_options:
+                if want.lower() in lowered:
+                    return lowered[want.lower()]
+            return None
+
+        order_col = column(OPERATION_COLUMN_CANDIDATES['order'])
+        status_col = column(['System Status'])
+        user_status_col = column(['User Status'])
+        if order_col is None:
+            print('No Order column recognised — nothing can be compared.')
+            return
+
+        in_file = set()
+        status_counter = Counter()
+        status_of = {}
+        for row in rows:
+            raw = row[order_col] if order_col < len(row) else None
+            if raw is None:
+                continue
+            # RAW, exactly as the cell holds it. A float here is the whole point.
+            key = str(raw).strip()
+            in_file.add(key)
+            if status_col is not None and status_col < len(row):
+                state = str(row[status_col] or '').strip()
+                status_counter[state] += 1
+                status_of.setdefault(key, state)
+        book.close()
+
+        print(f'ORDERS IN IW49  : {len(in_file)}')
+        print()
+
+        overlap = pool & in_file
+        print(f'POOL ORDERS PRESENT IN IW49: {len(overlap)} of {len(pool)}')
+        print(f'PLANNED ORDERS PRESENT     : {len(planned & in_file)} of {len(planned)}')
+        print()
+
+        print('A few LIVE POOL order numbers (what the app holds):')
+        for n in sorted(pool)[:samples]:
+            print(f'    {n!r}   len={len(n)}')
+        print('A few IW49 order numbers (what the file holds):')
+        for n in sorted(in_file)[:samples]:
+            print(f'    {n!r}   len={len(n)}')
+        print()
+
+        if overlap:
+            print('THE FILE DOES CONTAIN POOL ORDERS. System Status of a few:')
+            for n in sorted(overlap)[:samples]:
+                print(f'    {n}  ->  {status_of.get(n)}')
+            print()
+            print('  So the export is not the problem. If their operations are')
+            print('  still not stored, the fault is in this app.')
+        else:
+            print('NOT ONE live pool order appears in IW49.')
+            # The two sides could still be the same orders written differently.
+            pool_lengths = Counter(len(n) for n in pool)
+            file_lengths = Counter(len(n) for n in in_file)
+            print(f'    pool number lengths: {dict(pool_lengths)}')
+            print(f'    file number lengths: {dict(file_lengths)}')
+            if set(pool_lengths) != set(file_lengths):
+                print('    ^ THE TWO SIDES ARE WRITTEN DIFFERENTLY. This is a')
+                print('      FORMAT problem in the app, not a selection problem')
+                print('      in SAP. Do not change the SAP variant.')
+            else:
+                print('    ^ Same shape, no overlap: the file genuinely holds')
+                print('      different orders. The SAP selection is the cause.')
+
+        print()
+        print('What SAP says the state of the orders in this file is:')
+        for state, n in status_counter.most_common(12):
+            print(f'    {state or "(blank)":<28} {n}')
+        if user_status_col is not None:
+            print('  (User Status column is also present and unread by the app.)')
+
     @app.cli.command('sap-operation-headers')
     def sap_operation_headers():
         """Print the column names in the latest IW49 export.
