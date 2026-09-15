@@ -428,7 +428,12 @@
 - Operations travel in their **own key** on `/job-tasks` — the `+` badge still counts notes.
 - Phone shows who is on each line, his own as a green **You / أنت**.
 - 11 tests in `tests/test_operation_assignment.py`, 4 in `JobOperationRows.test.tsx`.
-  1189 backend, 40 web. **Deploy: Render restart creates the table; web same deploy; one OTA.**
+  1189 backend, 40 web.
+- ✅ **DEPLOYED 2026-09-15** — commit `8eca336`; API verified live by a real restart
+  (502 → 200). OTA group `03da0c67-158a-4d1e-b8df-6870f6600b48` on `preview` (runtime
+  1.0.0, both platforms). **Check the Render log says `Created
+  work_plan_operation_assignments table`** — it is the one thing not verifiable from
+  outside.
 - **⚠️ UNVERIFIED: the drag on a real iPad.** The priority logic is fixed and tested; whether
   a thin indented row is a comfortable finger target is not something a test can answer.
 
