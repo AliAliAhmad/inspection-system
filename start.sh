@@ -906,6 +906,42 @@ with app.app_context():
         db.session.rollback()
         print('uq_work_plan_job_task_operation already exists')
 
+    # Create work_plan_operation_assignments table
+    #
+    # Who does WHICH LINE of an order. work_plan_job_id is the WEEK's row, and
+    # this table is in JOB_CHILD_TABLES, so purge_job_rows deletes it exactly as
+    # it already deletes work_plan_assignments -- the operation and its timer
+    # survive a trip through the pool, the person does not. Rosters change
+    # weekly; a name that followed an order across weeks would be quietly wrong.
+    #
+    # ON DELETE CASCADE on task_id because an operation is removed in three
+    # places (the nightly sync, prune-orphan-operations, a planner deleting one
+    # he typed) and none of them should have to know this table exists.
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_operation_assignments (
+                id SERIAL PRIMARY KEY,
+                task_id INTEGER NOT NULL REFERENCES work_plan_job_tasks(id) ON DELETE CASCADE,
+                work_plan_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                CONSTRAINT uq_operation_assignment UNIQUE (task_id, user_id)
+            )
+        '''))
+        db.session.execute(text('''
+            CREATE INDEX IF NOT EXISTS ix_operation_assignment_task
+            ON work_plan_operation_assignments (task_id)
+        '''))
+        db.session.execute(text('''
+            CREATE INDEX IF NOT EXISTS ix_operation_assignment_job
+            ON work_plan_operation_assignments (work_plan_job_id)
+        '''))
+        db.session.commit()
+        print('Created work_plan_operation_assignments table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_operation_assignments table already exists')
+
     # Create maintenance_cycles table
     try:
         db.session.execute(text('''

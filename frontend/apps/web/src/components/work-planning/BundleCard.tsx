@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Tag, Tooltip, Typography, Badge } from 'antd';
+import { JobOperationRows } from './JobOperationRows';
 import { CSS } from '@dnd-kit/utilities';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { WorkPlanJob } from '@inspection/shared';
+import type { JobSubTask, WorkPlanJob } from '@inspection/shared';
 import { getOverdueInfo, isJobOverdue, getOverdueHeat, type OverdueMax } from '../../utils/overdue';
 import { JobSubTasks } from './JobSubTasks';
 
@@ -25,6 +26,15 @@ interface BundleCardProps {
   /** {jobId: {total, done}} from the ONE plan-wide sub-task fetch, so each row
    *  can show its badge without asking the server per job. */
   subTaskCounts?: Record<string, { total: number; done: number }>;
+  /**
+   * SAP operations per job id, drawn INDENTED under each job.
+   *
+   * Ali, 2026-09-15: "is thier a way to be shown also when under the job father
+   * with an indent, so i can easly assign people". Until now they were only
+   * inside Job Details, so knowing an order needed a mechanic AND an electrician
+   * meant opening it first.
+   */
+  operationsByJob?: Record<string, JobSubTask[]>;
 }
 
 /** Pull team category (mech / elec) from the assignment user.specialization */
@@ -91,9 +101,10 @@ interface IndividualJobRowProps {
   overdueMax?: OverdueMax;
   planId?: number;
   subTaskCount?: { total: number; done: number };
+  operations?: JobSubTask[];
 }
 
-const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax, planId, subTaskCount }) => {
+const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax, planId, subTaskCount, operations }) => {
   const overdue = getOverdueInfo(job as any);
   const isOverdue = overdue.isOverdue;
   const heat = getOverdueHeat(job as any, overdueMax);
@@ -335,6 +346,9 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
           </div>
         )}
       </div>
+      {/* The operations, indented under their own job. Each row is its own drop
+          target — a person dropped on one goes onto THAT line. */}
+      <JobOperationRows operations={operations} job={job} dayId={dayId} />
     </div>
   );
 };
@@ -348,6 +362,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
   overdueMax,
   planId,
   subTaskCounts,
+  operationsByJob,
 }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -645,6 +660,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                     overdueMax={overdueMax}
                     planId={planId}
                     subTaskCount={subTaskCounts?.[String(job.id)]}
+                    operations={operationsByJob?.[String(job.id)]}
                   />
                 ))}
               </div>
@@ -693,6 +709,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                     overdueMax={overdueMax}
                     planId={planId}
                     subTaskCount={subTaskCounts?.[String(job.id)]}
+                    operations={operationsByJob?.[String(job.id)]}
                   />
                 ))}
               </div>
@@ -727,5 +744,6 @@ export const BundleCard = React.memo(BundleCardInner, (prev, next) =>
   // cache, so it only changes identity when a sub-task actually changed.
   // Leaving it out of this comparator meant a new count never reached the row.
   prev.subTaskCounts === next.subTaskCounts &&
+  prev.operationsByJob === next.operationsByJob &&
   sameJobs(prev.jobs, next.jobs)
 );

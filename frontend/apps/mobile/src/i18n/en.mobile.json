@@ -984,7 +984,8 @@
     "start": "Start",
     "title": "Operations in this order",
     "voice": "voice note",
-    "waiting_material": "Waiting for material"
+    "waiting_material": "Waiting for material",
+    "you": "You"
   },
   "job_attachments": {
     "hint": "Added by the planner to make the job clearer",

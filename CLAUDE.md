@@ -264,10 +264,9 @@
   order and its job rows to ELME when the operations span MECH and ELEC. Only ever
   WIDENS; an order SAP marked ELEC with only ELEC operations keeps that label.
   Runs on sync AND when an operation is added by hand.
-- **Assignment stays on the ORDER, not the operation.** Assign a mechanic AND an
-  electrician; each phone shows his own trade first, the other folded behind a tap.
-  Per-operation assignment deliberately NOT built — a person must not follow an
-  order across weeks the way a half-finished timer correctly does.
+- **Per-operation assignment SHIPPED 2026-09-15** (was deliberately not built; Ali chose
+  it from three options with the staleness warning in front of him — see below). Order-level
+  assignment is unchanged and still what the phone's trade filter reads.
 - **Voice `--:--` fixed** — a browser writes the length field before it knows the
   length, so it stays unknown. `playableAudioUrl()` asks Cloudinary for `f_mp3`,
   which has a real one. Also fixes webm notes being silent on iPads.
@@ -404,6 +403,34 @@
 - **The rule, in one line: a job lands in the column you drop it on.**
 - 5 new tests in `tests/test_related_jobs_choice.py`, each verified to fail without its fix.
   1178 backend tests, web+mobile `tsc` clean. Web+backend only, no OTA.
+
+### Operations under the job on the board, and a name per line — BUILT 2026-09-15
+- Ali: "is thier a way to be shown also when under the job father with an indent, so i can
+  easly assign people". Operations now draw INDENTED under their job card; each row is its
+  own drop target.
+- **The staleness warning he accepted is engineered away.** `work_plan_operation_assignments`
+  carries `work_plan_job_id` — the WEEK's row — and is in `JOB_CHILD_TABLES`, so
+  `purge_job_rows` deletes it exactly as it already deletes `work_plan_assignments`. **Two
+  clocks on purpose:** the operation + tick + timer hang on the SAP ORDER and survive into
+  next week; the NAME hangs on the week and is cleared. Rosters change weekly.
+- **Assigning to a line ALSO assigns to the job** — `/my-plan` finds a worker's week through
+  `WorkPlanJob.assignments`, so a man placed only on a line would see an empty day.
+- **Removing him from the JOB clears his lines** (`_clear_operation_assignments`). The
+  reverse is deliberately NOT symmetric.
+- **⚠️ NESTED DROPPABLE NEEDED A COLLISION-PRIORITY ENTRY.** The rows sit INSIDE the
+  `droppable-job-` element, and `customCollision` checked jobs first — a drop on a line
+  would have silently assigned the whole order. `operation-` now ranks above it, employee
+  drags only. Pinned by `JobOperationRows.test.tsx` (the id prefix is the contract).
+- An **assigned** operation now counts as TOUCHED, so SAP dropping the line keeps-and-flags
+  instead of unassigning a man overnight.
+- `for_jobs` eager-loads assignees + users, or `to_dict` fired 2 queries PER OPERATION;
+  a test asserts ≤3 task queries for 20 operations.
+- Operations travel in their **own key** on `/job-tasks` — the `+` badge still counts notes.
+- Phone shows who is on each line, his own as a green **You / أنت**.
+- 11 tests in `tests/test_operation_assignment.py`, 4 in `JobOperationRows.test.tsx`.
+  1189 backend, 40 web. **Deploy: Render restart creates the table; web same deploy; one OTA.**
+- **⚠️ UNVERIFIED: the drag on a real iPad.** The priority logic is fixed and tested; whether
+  a thin indented row is a comfortable finger target is not something a test can answer.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).

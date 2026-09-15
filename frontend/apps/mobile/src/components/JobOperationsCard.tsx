@@ -35,6 +35,7 @@ import {
 import { Audio } from 'expo-av';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../providers/AuthProvider';
 import { jobSubTasksApi } from '@inspection/shared';
 import type { JobSubTask, JobSubTaskList, OperationAction } from '@inspection/shared';
 
@@ -53,6 +54,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function JobOperationsCard({ jobId, workCenter }: Props) {
+  const { user } = useAuth();
   const { t, i18n } = useTranslation();
   const isAr = i18n.language === 'ar';
   const queryClient = useQueryClient();
@@ -213,6 +215,20 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
               {t('job_operations.removed_in_sap', 'no longer in SAP')}
             </Text>
           )}
+          {/* Who the planner put on this line. "You" first, because a man
+              opening a nine-line order needs to find HIS lines, not read a
+              roster. The names are empty again next week if the order carries
+              over — they hang on the week, not on the order. */}
+          {(op.assignees || []).map((a) => {
+            const isMe = a.user_id === user?.id;
+            return (
+              <View key={a.id} style={[styles.personChip, isMe && styles.myChip]}>
+                <Text style={[styles.personChipText, isMe && styles.myChipText]}>
+                  {isMe ? t('job_operations.you', 'You') : a.user_name}
+                </Text>
+              </View>
+            );
+          })}
         </View>
 
         {/* Waiting on a part. SAP puts the requisition on the OPERATION, so the
@@ -411,6 +427,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECEFF1',
   },
   tradeChipText: { fontSize: 10, fontWeight: '700', color: '#546E7A' },
+  personChip: {
+    backgroundColor: '#ECEFF1', borderRadius: 4,
+    paddingHorizontal: 5, paddingVertical: 1,
+  },
+  personChipText: { fontSize: 10, fontWeight: '600', color: '#546E7A' },
+  // His own line, loud on purpose: it is the only thing on the screen he has to
+  // find.
+  myChip: { backgroundColor: '#C8E6C9' },
+  myChipText: { color: '#1B5E20', fontWeight: '700' },
   metaText: { fontSize: 11, color: '#9E9E9E' },
   actualText: { color: '#2E7D32', fontWeight: '600' },
   removedText: { fontSize: 10, color: '#C62828', fontWeight: '700' },

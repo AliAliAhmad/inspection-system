@@ -1560,6 +1560,16 @@ def _delete_job_record(plan_id, job, discard=False):
 JOB_CHILD_TABLES = ('job_checklist_responses', 'work_plan_assignments',
                     'work_plan_materials', 'work_plan_job_ratings',
                     'work_plan_job_trackings',
+                    # BEFORE work_plan_job_tasks, and the order is load-bearing:
+                    # these rows point AT tasks, and a manual job's typed
+                    # operations carry work_plan_job_id and are deleted below.
+                    # Deleting the tasks first trips the foreign key.
+                    #
+                    # Being here at all is the whole design of per-operation
+                    # assignment: the operation survives a trip through the pool
+                    # with its tick and its timer, the PERSON does not. Rosters
+                    # change weekly. See app/models/work_plan_operation_assignment.py.
+                    'work_plan_operation_assignments',
                     # Only MANUAL-job sub-task lists carry work_plan_job_id, so
                     # this DELETE clears those (right — that job is gone) and
                     # cannot touch a list anchored to a SAP order, defect or
@@ -2394,13 +2404,33 @@ def unassign_user(plan_id, job_id, assignment_id):
     if not assignment or assignment.work_plan_job_id != job_id:
         raise NotFoundError("Assignment not found")
 
+    # Off the job means off its lines. Without this his face would sit on an
+    # operation of a job he is no longer on, and the board would be lying in the
+    # one place a planner looks to decide who is free.
+    #
+    # The reverse is deliberately NOT symmetric: taking a man off his last
+    # operation leaves him on the job. He may have been put there before the
+    # operations arrived, or put there on purpose to help.
+    removed_operations = _clear_operation_assignments(job_id, assignment.user_id)
+
     db.session.delete(assignment)
     db.session.commit()
 
     return jsonify({
         'status': 'success',
-        'message': 'User unassigned from job'
+        'message': 'User unassigned from job',
+        'operations_cleared': removed_operations,
     }), 200
+
+
+def _clear_operation_assignments(job_id, user_id):
+    """Take one person off every operation of one job. Returns how many."""
+    from app.models import WorkPlanOperationAssignment
+    rows = WorkPlanOperationAssignment.query.filter_by(
+        work_plan_job_id=job_id, user_id=user_id).all()
+    for row in rows:
+        db.session.delete(row)
+    return len(rows)
 
 
 # ==================== MATERIALS ====================
@@ -6001,6 +6031,26 @@ def get_plan_job_tasks(plan_id):
 
     counted = {job_id: notes_only(tasks) for job_id, tasks in by_job.items()}
 
+    # ...and the operations go in their OWN key, so the board can draw them
+    # indented under each job without touching the badge counts above.
+    #
+    # Ali, 2026-09-15: "is thier a way to be shown also when under the job father
+    # with an indent, so i can easly assign people". Until now they were only
+    # inside Job Details, so knowing an order needed a mechanic AND an
+    # electrician meant opening it first.
+    #
+    # A sub-operation (parent_task_id set) is a photo or a voice note hung on one
+    # line — media, not a line of its own. Excluded here; the details window
+    # still draws it under its operation.
+    language = get_language(get_current_user())
+
+    def operations_only(tasks):
+        return [t for t in tasks
+                if t.operation_number and not t.parent_task_id]
+
+    ops_by_job = {job_id: operations_only(tasks)
+                  for job_id, tasks in by_job.items()}
+
     return jsonify({
         'status': 'success',
         'plan_id': plan_id,
@@ -6011,6 +6061,10 @@ def get_plan_job_tasks(plan_id):
                 'done': len([t for t in tasks if t.is_done]),
             }
             for job_id, tasks in counted.items() if tasks
+        },
+        'operations': {
+            str(job_id): [t.to_dict(language) for t in ops]
+            for job_id, ops in ops_by_job.items() if ops
         },
     }), 200
 
@@ -6378,6 +6432,118 @@ def operations_progress(tasks):
         'actual_hours': round(actual, 2),
         'planned_hours': round(sum(float(t.planned_hours or 0) for t in ops), 2),
     }
+
+
+@bp.route('/jobs/<int:job_id>/tasks/<int:task_id>/assignees', methods=['POST'])
+@jwt_required()
+def assign_to_operation(job_id, task_id):
+    """Put one person on ONE operation of an order.
+
+    Ali, 2026-09-15, asking for the operations under the job on the board "so i
+    can easly assign people".
+
+    TWO THINGS HAPPEN, AND THE SECOND IS NOT OPTIONAL
+    =================================================
+
+    The operation assignment is created, AND the person is assigned to the JOB if
+    he is not already. `/my-plan` selects a worker's week through
+    `WorkPlanJob.assignments`, so a man placed only on a line would open his
+    phone and see nothing at all — assigned, and unaware of it. That is worse
+    than not being assigned.
+
+    The row carries `work_plan_job_id`, so it dies with the week exactly as a job
+    assignment already does. The operation and its timer survive a trip through
+    the pool; the name does not.
+    """
+    from app.models import WorkPlanOperationAssignment
+    user = engineer_or_admin_required()
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job:
+        raise NotFoundError("Job not found")
+
+    day = db.session.get(WorkPlanDay, job.work_plan_day_id)
+    plan = db.session.get(WorkPlan, day.work_plan_id) if day else None
+    if plan and plan.status == 'published':
+        raise ForbiddenError("Cannot modify a published work plan")
+
+    task = db.session.get(WorkPlanJobTask, task_id)
+    kind, key = anchor_for_job(job)
+    if not task or task.anchor_kind != kind or task.anchor_key != key:
+        raise NotFoundError("Operation not found on this job")
+    if not task.operation_number:
+        raise ValidationError("Only an operation can be assigned, not a note")
+
+    data = request.get_json() or {}
+    user_id = data.get('user_id')
+    if not user_id:
+        raise ValidationError("user_id is required")
+
+    worker = db.session.get(User, user_id)
+    if not worker:
+        raise NotFoundError("User not found")
+
+    # unique(task_id, user_id) is a database constraint, and a second tap on the
+    # same man must not become a 500. Checked, not caught.
+    existing = WorkPlanOperationAssignment.query.filter_by(
+        task_id=task_id, user_id=user_id).first()
+    if existing:
+        return jsonify({'status': 'success',
+                        'message': 'Already on this operation',
+                        'assignment': existing.to_dict(get_language(user))}), 200
+
+    row = WorkPlanOperationAssignment(
+        task_id=task_id, work_plan_job_id=job_id, user_id=user_id)
+    db.session.add(row)
+
+    # See the docstring: without this he cannot see the job at all.
+    job_assignment = WorkPlanAssignment.query.filter_by(
+        work_plan_job_id=job_id, user_id=user_id).first()
+    added_to_job = False
+    if not job_assignment:
+        db.session.add(WorkPlanAssignment(
+            work_plan_job_id=job_id, user_id=user_id, is_lead=False))
+        added_to_job = True
+
+    db.session.commit()
+    return jsonify({'status': 'success',
+                    'message': 'Assigned to the operation',
+                    'added_to_job': added_to_job,
+                    'assignment': row.to_dict(get_language(user))}), 201
+
+
+@bp.route('/jobs/<int:job_id>/tasks/<int:task_id>/assignees/<int:user_id>',
+          methods=['DELETE'])
+@jwt_required()
+def unassign_from_operation(job_id, task_id, user_id):
+    """Take one person off ONE operation.
+
+    He STAYS on the job. He may have been put there before the operations
+    arrived, or put there deliberately to help — and a planner who wants him off
+    the order entirely already has the gesture for that, which also clears his
+    lines.
+    """
+    from app.models import WorkPlanOperationAssignment
+    engineer_or_admin_required()
+
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job:
+        raise NotFoundError("Job not found")
+
+    day = db.session.get(WorkPlanDay, job.work_plan_day_id)
+    plan = db.session.get(WorkPlan, day.work_plan_id) if day else None
+    if plan and plan.status == 'published':
+        raise ForbiddenError("Cannot modify a published work plan")
+
+    row = WorkPlanOperationAssignment.query.filter_by(
+        task_id=task_id, user_id=user_id, work_plan_job_id=job_id).first()
+    if not row:
+        raise NotFoundError("That person is not on this operation")
+
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({'status': 'success',
+                    'message': 'Removed from the operation'}), 200
 
 
 @bp.route('/jobs/<int:job_id>/tasks/<int:task_id>', methods=['DELETE'])

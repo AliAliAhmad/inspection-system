@@ -888,6 +888,15 @@ export interface JobSubTask {
   purchase_requisition?: string | null;
   material_text?: string | null;
   waiting_on_material?: boolean;
+  /**
+   * Who is on THIS line, this week.
+   *
+   * Empty again next week if the order carries over: the assignment row hangs on
+   * the WEEK's job row and dies with it, while the operation hangs on the SAP
+   * order and survives with its timer. Rosters change weekly — see
+   * app/models/work_plan_operation_assignment.py.
+   */
+  assignees?: { id: number; task_id: number; user_id: number; user_name: string | null }[];
   status?: string | null;
   started_at?: string | null;
   paused_at?: string | null;
@@ -911,6 +920,14 @@ export interface PlanJobSubTasks {
   plan_id: number;
   /** Keyed by job id as a STRING — JSON object keys are always strings. */
   jobs: Record<string, { tasks: JobSubTask[]; total: number; done: number }>;
+  /**
+   * SAP operations per job, so the board can draw them indented under each card.
+   *
+   * A SEPARATE key from `jobs` on purpose: that one counts written notes for the
+   * '+' badge, and operations arriving in it once turned a quiet '+' into '0/10'
+   * for lines the popover does not even draw.
+   */
+  operations?: Record<string, JobSubTask[]>;
 }
 
 export const jobSubTasksApi = {
@@ -921,6 +938,25 @@ export const jobSubTasksApi = {
 
   list(jobId: number) {
     return getApiClient().get<JobSubTaskList>(`/api/work-plans/jobs/${jobId}/tasks`);
+  },
+
+  /**
+   * Put one person on ONE operation.
+   *
+   * The server also assigns him to the JOB — /my-plan selects a worker's week
+   * through the job's assignments, so a man placed only on a line would open his
+   * phone to an empty day.
+   */
+  assignToOperation(jobId: number, taskId: number, userId: number) {
+    return getApiClient().post<{ added_to_job: boolean }>(
+      `/api/work-plans/jobs/${jobId}/tasks/${taskId}/assignees`,
+      { user_id: userId });
+  },
+
+  /** Take one person off ONE operation. He stays on the job. */
+  unassignFromOperation(jobId: number, taskId: number, userId: number) {
+    return getApiClient().delete(
+      `/api/work-plans/jobs/${jobId}/tasks/${taskId}/assignees/${userId}`);
   },
 
   /**

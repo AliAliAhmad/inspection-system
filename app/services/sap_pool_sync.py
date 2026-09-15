@@ -976,8 +976,13 @@ def sync_order_operations(operations_by_order, dry_run=False, known_orders=None)
                 continue
             # A photo or voice note hung on this operation is a person's work
             # too. SAP dropping the line does not make his evidence disposable.
+            #
+            # An ASSIGNED operation counts the same way. A planner put a name on
+            # that line and told a man to do it; deleting the row would unassign
+            # him overnight with nothing said. Keep it and flag it, and let a
+            # person decide.
             touched = bool(row.is_done or row.started_at or row.actual_hours
-                           or row.children)
+                           or row.children or row.assignees)
             if touched:
                 # Keep the evidence. Flag it so the screen can say so.
                 row.status = 'removed_in_sap'

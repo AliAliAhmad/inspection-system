@@ -776,3 +776,19 @@ the first failure abandons every item after it. Combined with a payload that was
 always refused, and that item being FIRST in the list, "add all" reliably added
 nothing. → Per-item try/catch in any bulk action, and name what failed. A count
 ("added 2") does not tell a user which one is missing.
+
+LESSON (2026-09-15): I nested a new droppable inside an existing one and it would
+have silently done the wrong thing — the board's customCollision priority list
+matched `droppable-job-` before anything inside it, so a drop on an operation row
+would have assigned the whole order. No error, no warning, just the wrong action.
+→ Before adding a droppable INSIDE another, read the collision-detection function
+first. Nesting only works if the priority list is told which target is meant, and
+the failure mode is a silent wrong action, not a crash.
+
+LESSON (2026-09-15): Ali picked per-operation assignment from an options list that
+warned him names would go stale across weeks. The right response was not to accept
+the trade-off he agreed to — it was to look for a design without it. Hanging the
+assignment on the WEEK's job row instead of the order removed the whole problem,
+using a pattern already in the codebase. → When a user accepts a drawback, treat it
+as permission to proceed, not as permission to stop engineering. Check whether an
+existing pattern already solves it before shipping the compromise.

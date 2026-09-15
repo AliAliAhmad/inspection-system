@@ -234,7 +234,15 @@ class WorkPlanJobTask(db.Model):
 
         keys = {key for _, key in anchors}
         kinds = {kind for kind, _ in anchors}
+        # Assignees and their users come along, or `to_dict` fires two queries
+        # PER OPERATION while it builds the names — 1,560 operations on a real
+        # board, which is the exact N+1 this classmethod exists to prevent.
+        from sqlalchemy.orm import joinedload
+        from app.models.work_plan_operation_assignment import (
+            WorkPlanOperationAssignment)
         rows = (cls.query
+                .options(joinedload(cls.assignees).joinedload(
+                    WorkPlanOperationAssignment.user))
                 .filter(cls.anchor_kind.in_(kinds), cls.anchor_key.in_(keys))
                 .order_by(cls.position, cls.id)
                 .all())
@@ -261,6 +269,10 @@ class WorkPlanJobTask(db.Model):
             'anchor_key': self.anchor_key,
             'attachment_kind': self.attachment_kind,
             'source': self.source or 'manual',
+            # Who is on THIS line, this week. Empty for a note, and empty again
+            # next week if the order carries over — the names die with the week's
+            # row. See work_plan_operation_assignment.py.
+            'assignees': [a.to_dict(language) for a in (self.assignees or [])],
             'operation_number': self.operation_number,
             'work_center': self.work_center,
             'planned_hours': (float(self.planned_hours)

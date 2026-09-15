@@ -1328,6 +1328,10 @@ export default function WorkPlanningPage() {
     enabled: !!currentPlan?.id,
   });
   const subTaskCounts = subTaskCountsData?.jobs;
+  // The same one request also carries the SAP operations per job, in their own
+  // key — the badge above counts written NOTES, and operations landing in it
+  // once turned a quiet '+' into '0/10'.
+  const operationsByJob = subTaskCountsData?.operations;
 
   // Fetch roster for leave status
   const { data: rosterData } = useQuery({
@@ -2041,6 +2045,29 @@ export default function WorkPlanningPage() {
       setAssignModalOpen(true);
     }
 
+    // Case 3a-ii: Dropping an employee on ONE OPERATION of a job.
+    //
+    // Ali, 2026-09-15, asking for the operations under the job "so i can easly
+    // assign people". No Lead/Member dialog here: a line is one man's piece of
+    // work, and the lead is a property of the ORDER, which he already has.
+    if (activeData.type === 'employee' && overData.type === 'operation') {
+      const user = activeData.user;
+      const job = overData.job as WorkPlanJob;
+      const op = overData.operation;
+
+      // Same leave check as the job drop. A man on leave cannot be given a line
+      // any more than he can be given an order.
+      const jobDay = currentPlan?.days?.find((d: any) => d.id === job.work_plan_day_id);
+      const leaveDates = userLeaveDatesMap.get(user.id);
+      if (jobDay && leaveDates?.has(jobDay.date)) {
+        message.warning(`${user.full_name} is on leave on ${jobDay.date}. Cannot assign to this day.`);
+        return;
+      }
+
+      assignOperationMutation.mutate({ jobId: job.id, taskId: op.id, userId: user.id });
+      return;
+    }
+
     // Case 3b: Dropping employee on a whole BUNDLE — staff every job on the card
     if (activeData.type === 'employee' && overData.type === 'bundle-target') {
       const user = activeData.user;
@@ -2079,6 +2106,21 @@ export default function WorkPlanningPage() {
    * One at a time and awaited, so a failure halfway is visible rather than a
    * half-filled day nobody was told about. N here is one machine's open work.
    */
+  // Putting one person on ONE line of an order. The server also puts him on the
+  // JOB — /my-plan finds a worker's week through the job's assignments, so a man
+  // placed only on a line would open his phone to an empty day.
+  const assignOperationMutation = useMutation({
+    mutationFn: (v: { jobId: number; taskId: number; userId: number }) =>
+      jobSubTasksApi.assignToOperation(v.jobId, v.taskId, v.userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plan-job-sub-tasks', currentPlan?.id] });
+      queryClient.invalidateQueries({ queryKey: planQueryKey });
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Could not assign to that operation');
+    },
+  });
+
   const addChosenRelated = useCallback(async (chosen: RelatedJobCandidate[]) => {
     if (!currentPlan || !relatedPrompt) return;
     setRelatedBusy(true);
@@ -2263,12 +2305,26 @@ export default function WorkPlanningPage() {
       // Priority 2: At-risk drawer — drag scheduled job to unschedule it
       const atRiskHit = hits.find(h => h.id === 'at-risk-drop');
       if (atRiskHit) return [atRiskHit];
-      // Priority 3: Job droppables — employee dragged onto ONE job card.
+      // Priority 3: ONE OPERATION of a job — the innermost target there is.
+      //
+      // The operation rows are rendered INSIDE the element that carries the
+      // `droppable-job-` ref, so pointerWithin returns BOTH and the job would
+      // win every time on the next line — a drop on a line would silently
+      // assign the whole order instead. Nesting a droppable inside a droppable
+      // only works if the priority list says which one is meant.
+      //
+      // Only an employee drag: dragging the JOB itself must still resolve to
+      // the day, exactly as the bundle filter above already ensures.
+      if (activeType === 'employee') {
+        const operationHit = hits.find(h => String(h.id).startsWith('operation-'));
+        if (operationHit) return [operationHit];
+      }
+      // Priority 4: Job droppables — employee dragged onto ONE job card.
       // Deliberately ABOVE the bundle target so per-job assignment still wins
       // when the pointer is over a specific row.
       const jobHit = hits.find(h => String(h.id).startsWith('droppable-job-'));
       if (jobHit) return [jobHit];
-      // Priority 4: Bundle target — employee dropped anywhere else on the card
+      // Priority 5: Bundle target — employee dropped anywhere else on the card
       const bundleHit = hits.find(h => String(h.id).startsWith('droppable-bundle-'));
       if (bundleHit) return [bundleHit];
       if (hits.length > 0) return hits;
@@ -3321,6 +3377,7 @@ export default function WorkPlanningPage() {
                                             overdueMax={overdueMax}
                                             planId={currentPlan?.id}
                                             subTaskCounts={subTaskCounts}
+                                            operationsByJob={operationsByJob}
                                           />
                                         ));
                                       })()}

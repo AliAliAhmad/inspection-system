@@ -46,3 +46,4 @@ export { JobAttachments } from './JobAttachments';
 export { RelatedJobsModal } from './RelatedJobsModal';
 export { LinkSapOrder } from './LinkSapOrder';
 export { JobOperations } from './JobOperations';
+export { JobOperationRows } from './JobOperationRows';
