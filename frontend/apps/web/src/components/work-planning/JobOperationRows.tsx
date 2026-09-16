@@ -170,84 +170,6 @@ const OperationRow: React.FC<{
   );
 };
 
-/**
- * What a narrow day column gets instead of the full list.
- *
- * Ali, 2026-09-15: "the operations are shown very good when the day is expand
- * when is retrakted it ruin the day". Seven days share the board, so a retracted
- * column is about 160px — and a row needs its number, its text, its trade, its
- * hours and its initials, after 30px of indent. There is no room, so the rows
- * wrapped and broke the card.
- *
- * One line survives instead, and it keeps the thing that made this worth
- * building: whether the order needs a mechanic, an electrician, or both.
- *
- *     ⚙ 1/3 · M E      three operations, one done, needs MECH and ELEC
- */
-const OperationSummary: React.FC<{ operations: JobSubTask[] }> = ({ operations }) => {
-  const done = operations.filter((o) => o.is_done || o.status === 'completed').length;
-  const waiting = operations.some((o) => o.waiting_on_material);
-
-  // ELME means the line needs BOTH trades, so it counts as each. SUPV is
-  // supervision and belongs to everyone, so it says nothing about who is needed.
-  const trades = new Set<string>();
-  operations.forEach((o) => {
-    const t = o.work_center;
-    if (t === 'MECH' || t === 'ELME') trades.add('M');
-    if (t === 'ELEC' || t === 'ELME') trades.add('E');
-  });
-  const letters = ['M', 'E'].filter((l) => trades.has(l));
-
-  return (
-    <Tooltip
-      title={
-        <div>
-          {operations.map((o) => (
-            <div key={o.id} style={{ fontSize: 11 }}>
-              {o.operation_number} {o.content}
-              {o.work_center ? ` · ${o.work_center}` : ''}
-              {(o.assignees || []).length
-                ? ` · ${(o.assignees || []).map((a) => a.user_name).join(', ')}`
-                : ''}
-            </div>
-          ))}
-          <div style={{ fontSize: 10, opacity: 0.7, marginTop: 4 }}>
-            Open the day to assign people to a line
-          </div>
-        </div>
-      }
-    >
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        paddingLeft: 10, marginTop: 1,
-        // Every child refuses to wrap and refuses to shrink. In a retracted
-        // column '1/3' was wrapping to three lines — the vertical letters.
-        overflow: 'hidden', whiteSpace: 'nowrap',
-      }}>
-        <Text style={{ fontSize: 9, color: '#8c8c8c', flexShrink: 0 }}>⚙</Text>
-        <Text style={{
-          fontSize: 9, flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 600,
-          color: done === operations.length ? '#52c41a' : '#8c8c8c',
-        }}>
-          {done}/{operations.length}
-        </Text>
-        {letters.length > 0 && (
-          <Text style={{ fontSize: 9, color: '#8c8c8c', flexShrink: 0 }}>·</Text>
-        )}
-        {letters.map((l) => (
-          <span key={l} style={{
-            fontSize: 9, fontWeight: 700, flexShrink: 0,
-            color: l === 'M' ? TRADE_COLOR.MECH : TRADE_COLOR.ELEC,
-          }}>
-            {l}
-          </span>
-        ))}
-        {waiting && <span style={{ fontSize: 9 }}>⏳</span>}
-      </div>
-    </Tooltip>
-  );
-};
-
 export const JobOperationRows: React.FC<{
   operations?: JobSubTask[];
   job: WorkPlanJob;
@@ -258,15 +180,27 @@ export const JobOperationRows: React.FC<{
    */
   trade?: 'mech' | 'elec';
   /**
-   * Is this day opened wide? Seven narrow columns cannot hold a full row — see
-   * OperationSummary. Defaults to false so a caller that forgets to pass it gets
-   * the compact form rather than the broken one.
+   * Is this day opened wide?
+   *
+   * A RETRACTED day shows NOTHING of this component. Ali, 2026-09-16: "still
+   * when the day is retracted and the job or eqt bulk jobs is expanded the day
+   * become a mess".
+   *
+   * A one-line summary was tried first and was still too much. The arithmetic
+   * says why: seven days share the board beside a 300px pool, so a column is
+   * ~160px, and a job row inside an expanded bundle has about 105px left after
+   * the card, block, row and handle have taken theirs. A job needing both trades
+   * is also drawn TWICE — once under each heading — so three such jobs become
+   * six rows before anything of ours is added.
+   *
+   * Defaults to false, so a caller that forgets to pass it shows nothing rather
+   * than something broken.
    */
   dayExpanded?: boolean;
 }> = ({ operations, job, dayId, dayExpanded = false, trade }) => {
+  if (!dayExpanded) return null;
   const mine = (operations || []).filter((op) => belongsToTrade(op, trade));
   if (mine.length === 0) return null;
-  if (!dayExpanded) return <OperationSummary operations={mine} />;
   return (
     <div style={{ marginTop: 2, marginBottom: 2 }}>
       {mine.map((op) => (

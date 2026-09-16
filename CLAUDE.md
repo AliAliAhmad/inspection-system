@@ -452,12 +452,15 @@
   + `nowrap`.
 - **A hand-typed operation is marked `✎` in purple** — Ali asked whether the day shows
   manual or SAP operations. BOTH. The mark matters because a re-sync can never touch his.
-- **A RETRACTED day column gets ONE summary line, not the rows** (Ali, 2026-09-15: "when is
-  retrakted it ruin the day"). Seven days share the board beside a 300px pool, so a column is
-  ~160px and a row needs 30px of indent before number/text/trade/hours/initials. `⚙ 1/3 · M E`
-  = 3 operations, 1 done, needs MECH and ELEC. ELME counts as BOTH; SUPV claims neither (it is
-  685 of 1,560 — a letter on every order would say nothing). **No drop targets when retracted**
-  — asserted. Assign by opening the day wide; the tooltip says so.
+- **A RETRACTED day shows NOTHING from this component** (2026-09-16). A one-line summary was
+  tried first (2026-09-15) and was STILL a mess — Ali reported it twice. The arithmetic: a
+  column is ~160px, a job row inside an expanded bundle has ~105px left after card/block/row/
+  handle, and **a job needing both trades is drawn TWICE**, once under each heading, so three
+  become six rows before anything of ours is added. `dayExpanded` defaults to false, so a
+  caller that forgets it shows nothing rather than something broken.
+- **⚠️ UNDIAGNOSED: what the "mess" actually is.** Hiding our rows is a SAFE REVERT, not a
+  diagnosis — a screenshot was requested and not yet seen. The doubled job rows in a narrow
+  expanded bundle are pre-existing and may be the real cause.
 - **Either of them can tick an operation finished** (Ali, 2026-09-15). `_may_tick` always
   allowed engineers/admins; the board only offered Finish once a timer ran, so a line the crew
   did yesterday could not be ticked. **Mark done** now sits beside Start, and **asks for the

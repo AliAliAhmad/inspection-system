@@ -807,3 +807,11 @@ MECH and ELEC drew every line in both places. The logic already existed, in
 another file, for the other platform. → When a rule is written for one platform,
 ask immediately where the same data is displayed elsewhere. "Apply to both
 platforms" is not only about new features; a filter is a feature too.
+
+LESSON (2026-09-16): Ali reported the retracted day was "a mess". I reasoned
+about widths from the code, shipped a summary line, and he reported it again. I
+then fixed the vertical letters — a real bug, but not his bug — and he reported
+it a THIRD time. Each fix was plausible and none was diagnosed. → Two reports of
+the same symptom means stop fixing and start LOOKING. Ask for a screenshot. A
+picture of a layout problem costs one message and ends the guessing; three
+confident inferences cost three deploys and the user's patience.

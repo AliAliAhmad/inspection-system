@@ -67,52 +67,36 @@ describe('JobOperationRows', () => {
 
   describe('a retracted day column', () => {
     /**
-     * Ali, 2026-09-15: "the operations are shown very good when the day is
-     * expand when is retrakted it ruin the day". Seven days share the board, so
-     * a retracted column is about 160px — no room for a row that needs a number,
-     * text, a trade, hours and initials after 30px of indent.
+     * Ali, 2026-09-16: "still when the day is retracted and the job or eqt bulk
+     * jobs is expanded the day become a mess".
+     *
+     * A one-line summary was tried first and was still too much. Seven days
+     * share the board beside a 300px pool, so a column is ~160px and a job row
+     * inside an expanded bundle has about 105px left — and a job needing both
+     * trades is drawn TWICE, once under each heading, so three of them are six
+     * rows before anything of ours is added.
+     *
+     * So a retracted day gets NOTHING from this component. The board is exactly
+     * what it was before the feature existed.
      */
-    it('shows ONE summary line instead of every row', () => {
-      render(<JobOperationRows job={JOB} dayId={3} operations={[
+    it('draws nothing at all', () => {
+      const { container } = render(<JobOperationRows job={JOB} dayId={3} operations={[
         op({ id: 21, is_done: true }),
         op({ id: 22, operation_number: '0020', work_center: 'ELEC' }),
-        op({ id: 23, operation_number: '0030' }),
       ]} />);
-
-      expect(screen.getByText('1/3')).toBeInTheDocument();
-      // The trades are the point: does this order need an electrician?
-      expect(screen.getByText('M')).toBeInTheDocument();
-      expect(screen.getByText('E')).toBeInTheDocument();
-      // ...and NOT the rows themselves.
-      expect(screen.queryByText('Check the spreader')).not.toBeInTheDocument();
-      expect(screen.queryByText('0010')).not.toBeInTheDocument();
+      expect(container).toBeEmptyDOMElement();
     });
 
-    it('registers NO drop targets — there is nothing to drop onto', () => {
+    it('registers NO drop targets', () => {
       droppableCalls.length = 0;
       render(<JobOperationRows job={JOB} dayId={3} operations={[op(), op({ id: 2 })]} />);
       expect(droppableCalls).toEqual([]);
     });
 
-    it('counts a line needing BOTH trades as each of them', () => {
-      render(<JobOperationRows job={JOB} dayId={3}
-                               operations={[op({ work_center: 'ELME' })]} />);
-      expect(screen.getByText('M')).toBeInTheDocument();
-      expect(screen.getByText('E')).toBeInTheDocument();
-    });
-
-    it('does not let supervision claim a trade', () => {
-      // SUPV is the LARGEST group in the real data (685 of 1,560). Counting it
-      // would put a letter on nearly every order and say nothing.
-      render(<JobOperationRows job={JOB} dayId={3}
-                               operations={[op({ work_center: 'SUPV' })]} />);
-      expect(screen.queryByText('M')).not.toBeInTheDocument();
-      expect(screen.queryByText('E')).not.toBeInTheDocument();
-      expect(screen.getByText('0/1')).toBeInTheDocument();
-    });
-
-    it('still says nothing at all when the order has no operations', () => {
-      const { container } = render(<JobOperationRows operations={[]} job={JOB} dayId={3} />);
+    it('defaults to hidden when nobody passes dayExpanded', () => {
+      // A caller that forgets the prop must get nothing, never something broken.
+      const { container } = render(
+        <JobOperationRows job={JOB} dayId={3} trade="mech" operations={[op()]} />);
       expect(container).toBeEmptyDOMElement();
     });
   });
@@ -176,10 +160,16 @@ describe('JobOperationRows', () => {
       expect(container).toBeEmptyDOMElement();
     });
 
-    it('the retracted summary counts only this crew\'s lines', () => {
-      render(<JobOperationRows job={JOB} dayId={3} trade="mech" operations={MIXED} />);
-      // MECH + ELME + SUPV + MES-WELD = 4 of the 5, none done.
-      expect(screen.getByText('0/4')).toBeInTheDocument();
+    it('an expanded day shows this crew four of the five lines', () => {
+      // MECH + ELME + SUPV + MES-WELD are the mechanic's business; the ELEC one
+      // is not.
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded trade="mech"
+                               operations={MIXED} />);
+      expect(screen.getByText('Check spreader')).toBeInTheDocument();
+      expect(screen.getByText('Needs both')).toBeInTheDocument();
+      expect(screen.getByText('Supervise')).toBeInTheDocument();
+      expect(screen.getByText('Weld it')).toBeInTheDocument();
+      expect(screen.queryByText('Replace harness')).not.toBeInTheDocument();
     });
 
     it('no trade given shows every line', () => {
