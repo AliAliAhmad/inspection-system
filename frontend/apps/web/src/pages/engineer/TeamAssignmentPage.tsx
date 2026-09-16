@@ -20,6 +20,7 @@ import dayjs from 'dayjs';
 import {
   inspectionAssignmentsApi,
   usersApi,
+  rosterApi,
   InspectionList,
   InspectionAssignment,
   User,
@@ -55,6 +56,54 @@ export default function TeamAssignmentPage() {
 
   const inspectors: User[] = assignableUsersData?.data ?? [];
 
+  /**
+   * WHO CANNOT BE ASSIGNED ON THIS LIST'S DATE.
+   *
+   * Ali, 2026-09-16: "haidar ghulam assign inspection for team but for me kept
+   * unassigned". The chain was: this dropdown offered EVERY active inspector,
+   * including men on approved leave for the list's target date; the server
+   * refused with "<name> is on leave on <date>"; and the error handler read the
+   * wrong field so he saw only "An error occurred". Nothing was written, so the
+   * assignment correctly stayed unassigned for everyone else.
+   *
+   * The ADMIN page has always done this — it marks such men red with "On Leave"
+   * (InspectionAssignmentsPage). The engineer's page never did, which is why the
+   * report said "when any ENGINEER assign team".
+   *
+   * `/users/for-assignment` carries `is_on_leave`, but that is a TODAY flag and
+   * a list is usually for tomorrow. The roster's day-availability asks the right
+   * question, and its conditions are IDENTICAL to the ones the server enforces
+   * (status='approved', date_from <= target <= date_to), so a man greyed out here
+   * is exactly a man the server would refuse. Disabling cannot block a valid
+   * assignment.
+   */
+  const [openListId, setOpenListId] = useState<number | null>(null);
+  const openList = lists.find((l) => l.id === openListId) ?? lists[0];
+
+  const { data: availabilityData } = useQuery({
+    queryKey: ['roster', 'day-availability', openList?.target_date, openList?.shift],
+    queryFn: () => rosterApi.getDayAvailability(openList!.target_date, openList!.shift),
+    enabled: !!openList?.target_date && !!openList?.shift,
+  });
+
+  // Same unwrapping the admin page uses — the payload is nested one deeper.
+  const availData = (availabilityData?.data as any)?.data ?? availabilityData?.data;
+  const onLeaveIds = new Set<number>(
+    ((availData?.on_leave ?? []) as any[]).map((u) => u.id));
+
+  /** One option, with the reason visible when a man cannot take the work. */
+  const inspectorOption = (u: User) => {
+    const onLeave = onLeaveIds.has(u.id);
+    return {
+      value: u.id,
+      label: onLeave
+        ? `🔴 ${u.full_name} — ${t('common.on_leave', 'On Leave')}`
+        : u.full_name,
+      // The server would refuse this anyway, and it used to refuse it silently.
+      disabled: onLeave,
+    };
+  };
+
   const mechanicalInspectors = inspectors.filter(
     (u) => u.specialization === 'mechanical' || !u.specialization
   );
@@ -73,7 +122,7 @@ export default function TeamAssignmentPage() {
       queryClient.invalidateQueries({ queryKey: ['inspection-lists'] });
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -90,7 +139,7 @@ export default function TeamAssignmentPage() {
       queryClient.invalidateQueries({ queryKey: ['inspection-lists'] });
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -195,10 +244,7 @@ export default function TeamAssignmentPage() {
             optionFilterProp="label"
             value={teamSelections[record.id]?.mechanical_inspector_id}
             onChange={(val) => updateSelection(record.id, 'mechanical_inspector_id', val)}
-            options={mechanicalInspectors.map((u) => ({
-              value: u.id,
-              label: u.full_name,
-            }))}
+            options={mechanicalInspectors.map(inspectorOption)}
           />
         );
       },
@@ -220,10 +266,7 @@ export default function TeamAssignmentPage() {
             optionFilterProp="label"
             value={teamSelections[record.id]?.electrical_inspector_id}
             onChange={(val) => updateSelection(record.id, 'electrical_inspector_id', val)}
-            options={electricalInspectors.map((u) => ({
-              value: u.id,
-              label: u.full_name,
-            }))}
+            options={electricalInspectors.map(inspectorOption)}
           />
         );
       },
@@ -297,7 +340,12 @@ export default function TeamAssignmentPage() {
           </Typography.Text>
         ) : (
           <Collapse
-            defaultActiveKey={lists.length > 0 ? [lists[0].id] : []}
+            accordion
+            activeKey={openListId ?? (lists.length > 0 ? lists[0].id : undefined)}
+            onChange={(key) => {
+              const next = Array.isArray(key) ? key[0] : key;
+              setOpenListId(next != null ? Number(next) : null);
+            }}
             items={lists.map((list) => ({
               key: list.id,
               label: (

@@ -116,7 +116,7 @@ export default function EngineerJobDetailPage() {
       plannedForm.resetFields();
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -127,7 +127,7 @@ export default function EngineerJobDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['engineer-job', id] });
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -141,7 +141,7 @@ export default function EngineerJobDetailPage() {
       completeForm.resetFields();
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -157,7 +157,7 @@ export default function EngineerJobDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['engineer-job', id, 'pause-history'] });
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 

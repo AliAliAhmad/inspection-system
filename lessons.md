@@ -825,3 +825,29 @@ with no names on them, so the two looked unrelated. A blank cell said neither
 properties, and only one of them has tests. When a user says a design feels
 wrong, do not answer with the data model — go and look at what the screen
 actually says.
+
+LESSON (2026-09-16): The API returns its reason in `data.message`, and 30 error
+handlers across 15 files read `data.error` — so every real refusal ("X is on
+leave on 2026-09-17") was replaced by "An error occurred". A user then cannot
+tell a refusal from a glitch, and walks away believing the action succeeded.
+→ When adding an error handler, check the shape the API ACTUALLY returns, once,
+and grep for the other handlers. A wrong field name in a catch block is invisible
+until the day something legitimately fails.
+
+LESSON (2026-09-16): I fixed those 30 sites with a regex whose capture group did
+not include the variable prefix, so `err?.response?.data?.error` became
+`err?.response?.data?.message || response?.data?.error` — a reference to an
+undefined `response`, i.e. a crash inside the error handler, on the exact path
+that only runs when something has already gone wrong. I caught it only because I
+printed one line before trusting the loop. → For any mechanical multi-file
+replace, DRY RUN FIRST and read the before/after of real lines. A regex that
+looks right and a regex that is right differ by one capture boundary.
+
+LESSON (2026-09-16): Ali's report said "when any ENGINEER assign team ... kept
+unassigned". I spent the first half of the investigation on caching, filters,
+pagination and duplicate rows. The word "engineer" was the actual clue: the admin
+page fetched roster availability and marked men on leave, and the engineer page
+never did — so the same gesture succeeded for one role and was silently refused
+for the other. → Read the user's sentence for the DISCRIMINATOR. When a report
+names a role, a screen, or a device, that word is usually not incidental detail —
+it is the difference between the path that works and the path that does not.

@@ -38,7 +38,7 @@ export default function PauseApprovalsPage() {
       queryClient.invalidateQueries({ queryKey: ['pending-pauses'] });
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -49,7 +49,7 @@ export default function PauseApprovalsPage() {
       queryClient.invalidateQueries({ queryKey: ['pending-pauses'] });
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 

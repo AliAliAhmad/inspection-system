@@ -72,7 +72,7 @@ export default function ReviewDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['pending-reviews'] });
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -91,7 +91,7 @@ export default function ReviewDetailPage() {
       rejectForm.resetFields();
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 

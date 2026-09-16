@@ -483,6 +483,46 @@
   beside the measured ones. One tick, `done_by_id` says which of them. Also lets anyone correct
   a timer left running overnight (19h clock, 3h work).
 
+### An engineer assigns an inspection team and nobody else sees it — 2026-09-16
+- Ali: "haidar ghulam assign inspection for team but for me kept unassigned".
+- **ROOT CAUSE FOUND — the word "engineer" in his report was the clue.** The dropdown on the
+  ENGINEER's page offered every active inspector, **including men on approved leave for the
+  list's target date**. The server refuses those (`<name> is on leave on <date>`), the error
+  handler showed only "An error occurred", nothing was written, and the row correctly stayed
+  unassigned for everybody else.
+  - **The ADMIN page has always got this right** — it fetches roster day-availability and
+    marks such men red with "On Leave". The engineer's page never did. That asymmetry is
+    exactly why it was engineers who hit it.
+  - `/users/for-assignment` does carry `is_on_leave`, but that is a **TODAY** flag and a list
+    is usually for tomorrow — and the engineer page never read it anyway (0 uses).
+  - Fixed: the engineer page now fetches day-availability for the OPEN list's date+shift and
+    renders on-leave men as `🔴 <name> — On Leave`, **disabled**. Safe to disable because the
+    roster's conditions are IDENTICAL to the server's (`status='approved'`,
+    `date_from <= target <= date_to`), so a greyed man is exactly a refused man.
+  - `Collapse` made controlled + `accordion` so only the open list is queried: one request,
+    not one per list.
+  - Hypothesis (b) RULED OUT from the code: daily generation dedupes asset types via `set()`
+    and returns early if the list exists; the 1:05 PM follow-up task creates only
+    `status='assigned'` rows, so it cannot produce the unassigned row Ali saw.
+- **What IS proven and fixed: the refusal reason was being thrown away.**
+  `TeamAssignmentPage.tsx` read `err.response.data.error`, but the API returns
+  `message` (`app/exceptions/api_exceptions.py` sets `rv['message']`). So all seven real
+  reasons — "X is on leave on <date>", "Assignment cannot be reassigned in current status",
+  "User is not an inspector, specialist, or maintenance" — became **"An error occurred"**.
+  An engineer seeing that would reasonably think it was a glitch and walk away.
+- **Same bug in 30 places / 15 files**: leaves (every manager and modal), bonus requests,
+  review detail, pause approvals, create job, engineer job detail. All fixed ADDITIVELY —
+  `data?.message || data?.error || fallback` — because `'error':` IS genuinely returned by
+  `approvals.py` and `auto_approvals.py`, so the fallback is load-bearing.
+- `LoginPage.tsx` and `AiAssistantChat.tsx` deliberately NOT swept — different shapes.
+- The read path is innocent: `/lists` has **no per-user filter**, both pages hit the same
+  endpoint, and the hard-coded `.limit(50)` is identical for everyone.
+- Web only, no OTA — every mobile site already read `message`.
+- **No `flask why-unassigned` needed** — the cause is now visible in the UI itself.
+- **⚠️ STILL UNVERIFIED against production data.** The chain is proven in code, not yet
+  confirmed by the row Haidar actually touched. If a check ever shows `status='assigned'`
+  with an `assigned_at`, there is a second bug on the read side.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

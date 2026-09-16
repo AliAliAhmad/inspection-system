@@ -86,7 +86,7 @@ export function EncashmentList({
       queryClient.invalidateQueries({ queryKey: ['encashments'] });
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err.response?.data?.message || err.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -97,7 +97,7 @@ export function EncashmentList({
       queryClient.invalidateQueries({ queryKey: ['encashments'] });
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err.response?.data?.message || err.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -108,7 +108,7 @@ export function EncashmentList({
       queryClient.invalidateQueries({ queryKey: ['encashments'] });
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err.response?.data?.message || err.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 

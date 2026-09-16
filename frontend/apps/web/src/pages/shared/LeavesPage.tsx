@@ -103,7 +103,7 @@ export default function LeavesPage() {
       form.resetFields();
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error'));
     },
   });
 

@@ -45,7 +45,7 @@ export default function CreateJobPage() {
       navigate('/engineer/jobs');
     },
     onError: (err: any) => {
-      message.error(err?.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err?.response?.data?.message || err?.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 

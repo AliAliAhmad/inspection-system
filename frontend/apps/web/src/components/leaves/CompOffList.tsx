@@ -83,7 +83,7 @@ export function CompOffList({ userId, showAllUsers = false, compact = false }: C
       queryClient.invalidateQueries({ queryKey: ['comp-off'] });
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err.response?.data?.message || err.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -94,7 +94,7 @@ export function CompOffList({ userId, showAllUsers = false, compact = false }: C
       queryClient.invalidateQueries({ queryKey: ['comp-off'] });
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err.response?.data?.message || err.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 

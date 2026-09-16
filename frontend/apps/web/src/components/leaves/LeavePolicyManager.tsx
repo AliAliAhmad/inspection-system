@@ -89,7 +89,7 @@ export function LeavePolicyManager({
       handleCloseModal();
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err.response?.data?.message || err.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -103,7 +103,7 @@ export function LeavePolicyManager({
       handleCloseModal();
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err.response?.data?.message || err.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
@@ -114,7 +114,7 @@ export function LeavePolicyManager({
       queryClient.invalidateQueries({ queryKey: ['leave-policies'] });
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.error || t('common.error', 'An error occurred'));
+      message.error(err.response?.data?.message || err.response?.data?.error || t('common.error', 'An error occurred'));
     },
   });
 
