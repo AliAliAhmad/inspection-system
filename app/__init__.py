@@ -1494,6 +1494,12 @@ def create_app(config_name='development'):
                 continue
             # RAW, exactly as the cell holds it. A float here is the whole point.
             key = str(raw).strip()
+            if not key:
+                # A trailing empty row. Counted as an order once, it made the
+                # shape comparison below report a mismatch on the strength of a
+                # single blank cell — and print "do not change the SAP variant"
+                # when the opposite was true. Skipped.
+                continue
             in_file.add(key)
             if status_col is not None and status_col < len(row):
                 state = str(row[status_col] or '').strip()
@@ -1526,25 +1532,69 @@ def create_app(config_name='development'):
             print('  still not stored, the fault is in this app.')
         else:
             print('NOT ONE live pool order appears in IW49.')
-            # The two sides could still be the same orders written differently.
+            # Same orders written differently, or genuinely different orders?
+            # Compare the SHAPE most of each side uses. An earlier version
+            # compared the full set of lengths and a single blank cell in the
+            # file made it cry "format problem" and tell Ali NOT to change the
+            # SAP variant — the exact opposite of the truth.
             pool_lengths = Counter(len(n) for n in pool)
             file_lengths = Counter(len(n) for n in in_file)
             print(f'    pool number lengths: {dict(pool_lengths)}')
             print(f'    file number lengths: {dict(file_lengths)}')
-            if set(pool_lengths) != set(file_lengths):
-                print('    ^ THE TWO SIDES ARE WRITTEN DIFFERENTLY. This is a')
-                print('      FORMAT problem in the app, not a selection problem')
-                print('      in SAP. Do not change the SAP variant.')
+            pool_shape = pool_lengths.most_common(1)[0][0]
+            file_shape = file_lengths.most_common(1)[0][0]
+            if pool_shape != file_shape:
+                print(f'    ^ Most pool numbers are {pool_shape} characters and most')
+                print(f'      file numbers are {file_shape}. THE TWO SIDES ARE WRITTEN')
+                print('      DIFFERENTLY — a format problem in THIS APP, not a')
+                print('      selection problem in SAP. Do not change the variant.')
             else:
-                print('    ^ Same shape, no overlap: the file genuinely holds')
-                print('      different orders. The SAP selection is the cause.')
+                print(f'    ^ Both sides are {pool_shape} characters, and there is no')
+                print('      overlap at all. The file genuinely holds DIFFERENT')
+                print('      orders than the pool.')
 
         print()
-        print('What SAP says the state of the orders in this file is:')
+        print('What SAP says about the operations in this file:')
         for state, n in status_counter.most_common(12):
             print(f'    {state or "(blank)":<28} {n}')
+
+        # THE DEFINITIVE TEST, and the one the counts above only hint at.
+        #
+        # An operation SAP has confirmed is finished work. Ali, 2026-09-12: "you
+        # will not find a open operation and close operation in the same order as
+        # we close the order after all finish" — so a file in which EVERY row is
+        # confirmed cannot contain a single line a crew still has to do, whatever
+        # its order numbers look like.
+        total = sum(status_counter.values())
+        confirmed = sum(n for state, n in status_counter.items()
+                        if 'CNF' in state.upper())
+        teco = sum(n for state, n in status_counter.items()
+                   if 'TECO' in state.upper())
+        if total:
+            print()
+            print(f'    confirmed (CNF)        : {confirmed} of {total}'
+                  f'  ({confirmed * 100 // total}%)')
+            print(f'    technically complete   : {teco} of {total}'
+                  f'  ({teco * 100 // total}%)')
+            if confirmed == total:
+                print()
+                print('  >> EVERY OPERATION IN THIS FILE IS CONFIRMED.')
+                print('     There is not one line a crew still has to do. This is')
+                print('     a record of finished work, and no amount of fixing in')
+                print('     the app can find open operations in it.')
+                print('     THE SAP SELECTION IS THE CAUSE: the variant is')
+                print('     filtering to CONFIRMED operations and must include')
+                print('     UNCONFIRMED ones.')
+            elif confirmed < total:
+                print()
+                print(f'  >> {total - confirmed} operation(s) are NOT confirmed — real')
+                print('     outstanding work. This file can feed the planner.')
+                print('     If the pool still shows no operations after a')
+                print('     rebuild-pool, the fault is in this app.')
         if user_status_col is not None:
-            print('  (User Status column is also present and unread by the app.)')
+            print('  (User Status is also present, and deliberately unread: an open')
+            print('   order has nothing confirmed against it, so it is always blank')
+            print('   on the rows that matter.)')
 
     @app.cli.command('sap-operation-headers')
     def sap_operation_headers():
