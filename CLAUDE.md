@@ -463,6 +463,8 @@
     details, phone); the order's list relabelled **"Team on this job"**.
   - A name is NOT a lock: anyone on the team may still tick any line. It says who is
     expected, not who is permitted.
+  - ✅ **DEPLOYED 2026-09-16** — commit `8862df8`; OTA group
+    `754203db-b900-4637-9f2f-da59cca02d7f` on `preview` (runtime 1.0.0, both platforms).
 - **A hand-typed operation is marked `✎` in purple** — Ali asked whether the day shows
   manual or SAP operations. BOTH. The mark matters because a re-sync can never touch his.
 - **A RETRACTED day shows NOTHING from this component** (2026-09-16). A one-line summary was
