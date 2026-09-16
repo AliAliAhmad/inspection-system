@@ -349,3 +349,133 @@ class TestTheBoardGetsThemInOneRequest:
         assert len(task_queries) <= 3, (
             f'{len(task_queries)} task queries for 20 operations — the eager '
             'load on assignees has been lost')
+
+
+class TestTheTwoLevelsCannotContradictEachOther:
+    """Ali, 2026-09-16: "now i can assign team for the hall order and for
+    operation right? if yes is that good or it will have conflict".
+
+    Yes to both, and no conflict is possible — because the two levels are not two
+    opinions about the same thing. They answer different questions:
+
+        ORDER     : is this man on this job at all?   (drives /my-plan)
+        OPERATION : which line in particular is his?  (drives his phone's list)
+
+    The second implies the first and the first outlives the second. Written as
+    rules, with a test for each:
+
+      * putting him on a line puts him on the job          (he must be able to see it)
+      * taking him off the job takes him off its lines     (no orphan face on a row)
+      * taking him off a line leaves him on the job        (he may be there to help)
+      * a man on the job with NO line is legitimate        (the whole crew case)
+
+    There is no state where the order says one thing and an operation says the
+    opposite, because nothing is stored twice: the order's assignment list is the
+    only record of who is on the job, and an operation's list is a SUBSET of it.
+    """
+
+    def _setup(self, client, admin_user, db_session, plan_day, tag):
+        from app.services.sap_pool_sync import sync_order_operations
+        plan, day = plan_day
+        eq = make_equipment(db_session, tag, tag)
+        job = _job(plan, day, eq)
+        sync_order_operations(_operations())
+        return plan, job, _ops_of(), _headers(client, admin_user)
+
+    def _second_worker(self, db_session):
+        from app.models import User
+        user = User(email='opsmate@test.com', full_name='Karim Saleh',
+                    role='maintenance', role_id='MNT902', shift='day')
+        user.set_password('test123')
+        db.session.add(user)
+        db.session.commit()
+        return user
+
+    def test_a_man_on_the_job_with_no_line_is_a_normal_state(
+            self, client, admin_user, db_session, plan_day, worker):
+        """The ordinary case, and it must stay ordinary.
+
+        A planner drops a man on the whole order and never touches a line. He is
+        on the job, every line is unnamed, and unnamed means the crew's.
+        """
+        plan, job, ops, h = self._setup(client, admin_user, db_session, plan_day, 'CNF01')
+
+        resp = client.post(f'/api/work-plans/{plan.id}/jobs/{job.id}/assignments',
+                           json={'user_id': worker.id}, headers=h)
+        assert resp.status_code in (200, 201)
+
+        tasks = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=h).get_json()['tasks']
+        assert all(t['assignees'] == [] for t in tasks), \
+            'assigning the ORDER must not silently claim every line'
+        assert WorkPlanAssignment.query.filter_by(
+            work_plan_job_id=job.id, user_id=worker.id).count() == 1
+
+    def test_two_men_can_own_different_lines_of_one_order(
+            self, client, admin_user, db_session, plan_day, worker):
+        """The case Ali is really asking about: a mechanic and an electrician."""
+        plan, job, ops, h = self._setup(client, admin_user, db_session, plan_day, 'CNF02')
+        mate = self._second_worker(db_session)
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{ops[0].id}/assignees',
+                    json={'user_id': worker.id}, headers=h)
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{ops[1].id}/assignees',
+                    json={'user_id': mate.id}, headers=h)
+
+        tasks = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=h).get_json()['tasks']
+        by_number = {t['operation_number']: t for t in tasks}
+        assert [a['user_name'] for a in by_number['0010']['assignees']] == ['Hassan Ali']
+        assert [a['user_name'] for a in by_number['0020']['assignees']] == ['Karim Saleh']
+
+        # BOTH are on the order, so BOTH find the job on their phone.
+        on_job = {a.user_id for a in WorkPlanAssignment.query.filter_by(
+            work_plan_job_id=job.id).all()}
+        assert on_job == {worker.id, mate.id}
+
+    def test_an_operation_list_is_always_a_subset_of_the_order_list(
+            self, client, admin_user, db_session, plan_day, worker):
+        """THE invariant. Nothing is stored twice, so nothing can disagree.
+
+        Whatever sequence of gestures a planner makes, a name on a line must
+        also be a name on the job.
+        """
+        plan, job, ops, h = self._setup(client, admin_user, db_session, plan_day, 'CNF03')
+        mate = self._second_worker(db_session)
+
+        # A deliberately awkward sequence.
+        client.post(f'/api/work-plans/{plan.id}/jobs/{job.id}/assignments',
+                    json={'user_id': worker.id}, headers=h)
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{ops[0].id}/assignees',
+                    json={'user_id': mate.id}, headers=h)
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{ops[1].id}/assignees',
+                    json={'user_id': worker.id}, headers=h)
+        client.delete(f'/api/work-plans/jobs/{job.id}/tasks/{ops[1].id}/assignees/{worker.id}',
+                      headers=h)
+
+        on_lines = {r.user_id for r in WorkPlanOperationAssignment.query.filter_by(
+            work_plan_job_id=job.id).all()}
+        on_job = {a.user_id for a in WorkPlanAssignment.query.filter_by(
+            work_plan_job_id=job.id).all()}
+        assert on_lines <= on_job, f'{on_lines - on_job} on a line but not on the job'
+        assert worker.id in on_job, 'off his last line, still on the job'
+        assert worker.id not in on_lines
+
+    def test_removing_the_man_who_owned_a_line_leaves_that_line_to_the_crew(
+            self, client, admin_user, db_session, plan_day, worker):
+        """Not an orphan, not a hole: an unnamed line is the crew's again."""
+        plan, job, ops, h = self._setup(client, admin_user, db_session, plan_day, 'CNF04')
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks/{ops[0].id}/assignees',
+                    json={'user_id': worker.id}, headers=h)
+        assignment = WorkPlanAssignment.query.filter_by(
+            work_plan_job_id=job.id, user_id=worker.id).one()
+
+        client.delete(
+            f'/api/work-plans/{plan.id}/jobs/{job.id}/assignments/{assignment.id}',
+            headers=h)
+
+        tasks = client.get(f'/api/work-plans/jobs/{job.id}/tasks',
+                           headers=h).get_json()['tasks']
+        assert all(t['assignees'] == [] for t in tasks)
+        assert [t for t in tasks if t['operation_number'] == '0010'], \
+            'the operation itself is untouched — only the name went'
