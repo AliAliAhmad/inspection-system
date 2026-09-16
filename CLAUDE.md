@@ -429,6 +429,11 @@
 - Phone shows who is on each line, his own as a green **You / أنت**.
 - 11 tests in `tests/test_operation_assignment.py`, 4 in `JobOperationRows.test.tsx`.
   1189 backend, 40 web.
+- ✅ **IW49 FIXED AT SOURCE 2026-09-15 21:37** — the courier's new export carries open
+  orders. **Pool coverage 0% → 100%** (180 of 180), 62,205 operations, and **146 orders got
+  their trade label from operations** (IW39 fills almost no work centre, so the board's team
+  columns changed that morning). `orders_to_review: ['700001896146']` fired for real — that
+  order holds both a hand-typed and a SAP operation, and needs Ali's eyes once.
 - ✅ **DEPLOYED 2026-09-15** — commit `8eca336`; API verified live by a real restart
   (502 → 200). OTA group `03da0c67-158a-4d1e-b8df-6870f6600b48` on `preview` (runtime
   1.0.0, both platforms). **Check the Render log says `Created
@@ -436,6 +441,17 @@
   outside.
 - **⚠️ UNVERIFIED: the drag on a real iPad.** The priority logic is fixed and tested; whether
   a thin indented row is a comfortable finger target is not something a test can answer.
+- **Each crew's section shows only ITS lines** (fixed 2026-09-16). An ELME order is listed
+  under BOTH 🔧 MECH and ⚡ ELEC — right — but every line was drawn in both, so an
+  electrician read 3 mechanical lines to find his one. `belongsToTrade()`: own trade, plus
+  ELME (needs both) and SUPV / unexplained codes (belong to everyone, never to nobody).
+- **`minWidth: 0` stopped the letters stacking vertically.** A flex item defaults to
+  `min-width:auto` and will NOT shrink below its own text, so everything beside it was
+  crushed to a few pixels and wrapped one letter per line. The `overflow:hidden` +
+  ellipsis only works once the item is allowed to shrink. All siblings now `flexShrink:0`
+  + `nowrap`.
+- **A hand-typed operation is marked `✎` in purple** — Ali asked whether the day shows
+  manual or SAP operations. BOTH. The mark matters because a re-sync can never touch his.
 - **A RETRACTED day column gets ONE summary line, not the rows** (Ali, 2026-09-15: "when is
   retrakted it ruin the day"). Seven days share the board beside a 300px pool, so a column is
   ~160px and a row needs 30px of indent before number/text/trade/hours/initials. `⚙ 1/3 · M E`

@@ -792,3 +792,18 @@ assignment on the WEEK's job row instead of the order removed the whole problem,
 using a pattern already in the codebase. → When a user accepts a drawback, treat it
 as permission to proceed, not as permission to stop engineering. Check whether an
 existing pattern already solves it before shipping the compromise.
+
+LESSON (2026-09-16): Text rendered one letter per line in a narrow column, and I
+had already written overflow:hidden + textOverflow:ellipsis on it. The rule was
+not being ignored — it could never apply, because a flex item defaults to
+min-width:auto and refuses to shrink below its own content, so the SIBLINGS got
+crushed instead. → When an ellipsis "does not work", the bug is almost never the
+ellipsis. Check that the item is allowed to shrink (minWidth:0) before touching
+the overflow rules at all.
+
+LESSON (2026-09-16): I built the trade filter for the WORKER'S phone and never
+applied the same rule to the planner's board, so an ELME order listed under both
+MECH and ELEC drew every line in both places. The logic already existed, in
+another file, for the other platform. → When a rule is written for one platform,
+ask immediately where the same data is displayed elsewhere. "Apply to both
+platforms" is not only about new features; a filter is a feature too.

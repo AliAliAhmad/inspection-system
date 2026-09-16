@@ -116,4 +116,92 @@ describe('JobOperationRows', () => {
       expect(container).toBeEmptyDOMElement();
     });
   });
+
+  describe('each crew sees its own lines', () => {
+    /**
+     * Ali, 2026-09-16: "now mechanical and electrical get all the operation
+     * whatever is mech or electrical, electrical side should show electrical
+     * operation and the mechanical side should show the mechanical ones".
+     *
+     * An order needing both trades is listed under BOTH headings — right, both
+     * crews must see the job — but every line was drawn in both places, so an
+     * electrician read three mechanical lines to find his one.
+     */
+    const MIXED = [
+      op({ id: 31, content: 'Check spreader', work_center: 'MECH' }),
+      op({ id: 32, content: 'Replace harness', work_center: 'ELEC' }),
+      op({ id: 33, content: 'Needs both', work_center: 'ELME' }),
+      op({ id: 34, content: 'Supervise', work_center: 'SUPV' }),
+      op({ id: 35, content: 'Weld it', work_center: 'MES-WELD' }),
+    ];
+
+    it('the mechanical section hides the electrical line', () => {
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded trade="mech"
+                               operations={MIXED} />);
+      expect(screen.getByText('Check spreader')).toBeInTheDocument();
+      expect(screen.queryByText('Replace harness')).not.toBeInTheDocument();
+    });
+
+    it('the electrical section hides the mechanical line', () => {
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded trade="elec"
+                               operations={MIXED} />);
+      expect(screen.getByText('Replace harness')).toBeInTheDocument();
+      expect(screen.queryByText('Check spreader')).not.toBeInTheDocument();
+    });
+
+    it('a line needing BOTH trades shows to both', () => {
+      const mech = render(<JobOperationRows job={JOB} dayId={3} dayExpanded
+                                            trade="mech" operations={MIXED} />);
+      expect(mech.getByText('Needs both')).toBeInTheDocument();
+      mech.unmount();
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded trade="elec"
+                               operations={MIXED} />);
+      expect(screen.getByText('Needs both')).toBeInTheDocument();
+    });
+
+    it('supervision and an unexplained code show to EVERYONE', () => {
+      // MES-WELD is kept untranslated on purpose so somebody asks about it.
+      // Matching it against a trade would hide it from both crews — a line
+      // belonging to nobody instead of everybody.
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded trade="elec"
+                               operations={MIXED} />);
+      expect(screen.getByText('Supervise')).toBeInTheDocument();
+      expect(screen.getByText('Weld it')).toBeInTheDocument();
+    });
+
+    it('draws nothing when this crew has no line on the order', () => {
+      const { container } = render(
+        <JobOperationRows job={JOB} dayId={3} dayExpanded trade="elec"
+                          operations={[op({ work_center: 'MECH' })]} />);
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('the retracted summary counts only this crew\'s lines', () => {
+      render(<JobOperationRows job={JOB} dayId={3} trade="mech" operations={MIXED} />);
+      // MECH + ELME + SUPV + MES-WELD = 4 of the 5, none done.
+      expect(screen.getByText('0/4')).toBeInTheDocument();
+    });
+
+    it('no trade given shows every line', () => {
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded operations={MIXED} />);
+      expect(screen.getByText('Check spreader')).toBeInTheDocument();
+      expect(screen.getByText('Replace harness')).toBeInTheDocument();
+    });
+  });
+
+  describe('telling a hand-typed line from SAP\'s', () => {
+    /** Ali, 2026-09-16: "i just need to know the operation that displayed in the
+     *  day are the ones added manual or the ones comming from the sap?" */
+    it('marks the one a person typed', () => {
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded
+                               operations={[op({ source: 'manual', operation_number: '0900' })]} />);
+      expect(screen.getByText('✎0900')).toBeInTheDocument();
+    });
+
+    it("leaves SAP's own line unmarked", () => {
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded operations={[op()]} />);
+      expect(screen.getByText('0010')).toBeInTheDocument();
+      expect(screen.queryByText('✎0010')).not.toBeInTheDocument();
+    });
+  });
 });

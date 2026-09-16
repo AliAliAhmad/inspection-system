@@ -105,9 +105,11 @@ interface IndividualJobRowProps {
   subTaskCount?: { total: number; done: number };
   operations?: JobSubTask[];
   dayExpanded?: boolean;
+  /** Which crew's section this row sits under, so it shows only that trade's lines. */
+  trade?: 'mech' | 'elec';
 }
 
-const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax, planId, subTaskCount, operations, dayExpanded }) => {
+const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobClick, expanded, overdueMax, planId, subTaskCount, operations, dayExpanded, trade }) => {
   const overdue = getOverdueInfo(job as any);
   const isOverdue = overdue.isOverdue;
   const heat = getOverdueHeat(job as any, overdueMax);
@@ -352,7 +354,7 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
       {/* The operations, indented under their own job. Each row is its own drop
           target — a person dropped on one goes onto THAT line. */}
       <JobOperationRows operations={operations} job={job} dayId={dayId}
-                        dayExpanded={dayExpanded} />
+                        dayExpanded={dayExpanded} trade={trade} />
     </div>
   );
 };
@@ -667,6 +669,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                     subTaskCount={subTaskCounts?.[String(job.id)]}
                     operations={operationsByJob?.[String(job.id)]}
                     dayExpanded={dayExpanded}
+                    trade="mech"
                   />
                 ))}
               </div>
@@ -717,6 +720,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                     subTaskCount={subTaskCounts?.[String(job.id)]}
                     operations={operationsByJob?.[String(job.id)]}
                     dayExpanded={dayExpanded}
+                    trade="elec"
                   />
                 ))}
               </div>

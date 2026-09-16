@@ -31,6 +31,34 @@ const TRADE_COLOR: Record<string, string> = {
   SUPV: '#8c8c8c',
 };
 
+/**
+ * Does this line belong to the crew whose section we are drawing?
+ *
+ * Ali, 2026-09-16: "now mechanical and electrical get all the operation
+ * whatever is mech or electrical, electrical side should show electrical
+ * operation and the mechanical side should show the mechanical ones".
+ *
+ * An order needing both trades is listed under BOTH headings on the card — that
+ * is right, both crews must see the job. But it was showing EVERY line in both
+ * places, so an electrician read three mechanical lines to find his one.
+ *
+ * The rule is the one the worker's phone already uses:
+ *
+ *   * a line of this crew's trade          -> show it
+ *   * ELME, needing both                   -> show it to both
+ *   * SUPV, or a code nobody has explained -> show it to EVERYONE
+ *
+ * That last case is deliberate. `MES-WELD` is kept untranslated on purpose so
+ * somebody asks about it, and matching it against a trade would hide it from
+ * both crews — a line belonging to nobody instead of everybody.
+ */
+const belongsToTrade = (op: JobSubTask, trade?: 'mech' | 'elec') => {
+  if (!trade) return true;
+  const wc = (op.work_center || '').toUpperCase();
+  if (wc !== 'MECH' && wc !== 'ELEC') return true;
+  return wc === (trade === 'mech' ? 'MECH' : 'ELEC');
+};
+
 const initialsOf = (name?: string | null) =>
   (name || '?').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
@@ -47,6 +75,7 @@ const OperationRow: React.FC<{
   const done = op.is_done || op.status === 'completed';
   const gone = op.status === 'removed_in_sap';
   const trade = op.work_center || '';
+  const manual = (op.source || 'manual') !== 'sap';
 
   return (
     <div
@@ -55,6 +84,8 @@ const OperationRow: React.FC<{
         display: 'flex', alignItems: 'center', gap: 4,
         // The indent Ali asked for, plus a rule so the eye follows the nesting.
         paddingLeft: 18, paddingRight: 4, paddingTop: 1, paddingBottom: 1,
+        // Nothing may spill out of a 160px column.
+        overflow: 'hidden',
         borderLeft: '2px solid #f0f0f0',
         marginLeft: 12,
         background: isOver ? '#e6f7ff' : 'transparent',
@@ -62,8 +93,14 @@ const OperationRow: React.FC<{
         borderRadius: 2,
       }}
     >
-      <Text style={{ fontSize: 10, fontWeight: 700, color: '#8c8c8c', flexShrink: 0 }}>
-        {op.operation_number}
+      {/* Ali, 2026-09-16: "i just need to know the operation that displayed in
+          the day are the ones added manual or the ones comming from the sap?"
+          Both are shown. A hand-typed one is marked, because a re-sync can never
+          touch it and that is worth seeing at a glance. */}
+      <Text style={{ fontSize: 10, fontWeight: 700, flexShrink: 0,
+                     whiteSpace: 'nowrap',
+                     color: manual ? '#722ed1' : '#8c8c8c' }}>
+        {manual ? '✎' : ''}{op.operation_number}
       </Text>
       {/* Who ticked it matters: "done by Hassan" and "marked by Ali" are
           different facts. The row is too narrow to print a name, so the struck
@@ -73,6 +110,15 @@ const OperationRow: React.FC<{
           style={{
             fontSize: 11, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            // minWidth:0 is what stops the letters stacking VERTICALLY.
+            //
+            // Ali, 2026-09-16: "the word leters come verticall and not
+            // professional". A flex item defaults to min-width:auto, so it
+            // refuses to shrink below its own text however narrow the column
+            // gets — and everything BESIDE it is squeezed to a few pixels
+            // instead, where a word has nowhere to go but downwards, one letter
+            // per line. The ellipsis above only works once this lets it shrink.
+            minWidth: 0,
             textDecoration: done ? 'line-through' : undefined,
             color: done ? '#8c8c8c' : '#434343',
           }}
@@ -94,14 +140,15 @@ const OperationRow: React.FC<{
 
       {!!trade && (
         <span style={{
-          fontSize: 9, fontWeight: 700, flexShrink: 0,
+          fontSize: 9, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap',
           color: TRADE_COLOR[trade] || '#595959',
         }}>
           {trade}
         </span>
       )}
       {op.planned_hours != null && (
-        <Text style={{ fontSize: 9, color: '#8c8c8c', flexShrink: 0 }}>
+        <Text style={{ fontSize: 9, color: '#8c8c8c', flexShrink: 0,
+                       whiteSpace: 'nowrap' }}>
           {op.planned_hours.toFixed(1)}h
         </Text>
       )}
@@ -173,17 +220,23 @@ const OperationSummary: React.FC<{ operations: JobSubTask[] }> = ({ operations }
       <div style={{
         display: 'flex', alignItems: 'center', gap: 4,
         paddingLeft: 10, marginTop: 1,
+        // Every child refuses to wrap and refuses to shrink. In a retracted
+        // column '1/3' was wrapping to three lines — the vertical letters.
+        overflow: 'hidden', whiteSpace: 'nowrap',
       }}>
-        <Text style={{ fontSize: 9, color: '#8c8c8c' }}>⚙</Text>
-        <Text style={{ fontSize: 9, color: done === operations.length ? '#52c41a' : '#8c8c8c', fontWeight: 600 }}>
+        <Text style={{ fontSize: 9, color: '#8c8c8c', flexShrink: 0 }}>⚙</Text>
+        <Text style={{
+          fontSize: 9, flexShrink: 0, whiteSpace: 'nowrap', fontWeight: 600,
+          color: done === operations.length ? '#52c41a' : '#8c8c8c',
+        }}>
           {done}/{operations.length}
         </Text>
         {letters.length > 0 && (
-          <Text style={{ fontSize: 9, color: '#8c8c8c' }}>·</Text>
+          <Text style={{ fontSize: 9, color: '#8c8c8c', flexShrink: 0 }}>·</Text>
         )}
         {letters.map((l) => (
           <span key={l} style={{
-            fontSize: 9, fontWeight: 700,
+            fontSize: 9, fontWeight: 700, flexShrink: 0,
             color: l === 'M' ? TRADE_COLOR.MECH : TRADE_COLOR.ELEC,
           }}>
             {l}
@@ -200,17 +253,23 @@ export const JobOperationRows: React.FC<{
   job: WorkPlanJob;
   dayId: number;
   /**
+   * Which crew's section this is being drawn under. Omitted, every line shows —
+   * which is right for a card with no trade sections at all.
+   */
+  trade?: 'mech' | 'elec';
+  /**
    * Is this day opened wide? Seven narrow columns cannot hold a full row — see
    * OperationSummary. Defaults to false so a caller that forgets to pass it gets
    * the compact form rather than the broken one.
    */
   dayExpanded?: boolean;
-}> = ({ operations, job, dayId, dayExpanded = false }) => {
-  if (!operations || operations.length === 0) return null;
-  if (!dayExpanded) return <OperationSummary operations={operations} />;
+}> = ({ operations, job, dayId, dayExpanded = false, trade }) => {
+  const mine = (operations || []).filter((op) => belongsToTrade(op, trade));
+  if (mine.length === 0) return null;
+  if (!dayExpanded) return <OperationSummary operations={mine} />;
   return (
     <div style={{ marginTop: 2, marginBottom: 2 }}>
-      {operations.map((op) => (
+      {mine.map((op) => (
         <OperationRow key={op.id} op={op} job={job} dayId={dayId} />
       ))}
     </div>
