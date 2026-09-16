@@ -450,6 +450,19 @@
   crushed to a few pixels and wrapped one letter per line. The `overflow:hidden` +
   ellipsis only works once the item is allowed to shrink. All siblings now `flexShrink:0`
   + `nowrap`.
+- **RULE A, confirmed by Ali 2026-09-16 ("yes this is how we work"): the order's people are
+  the TEAM; a name on a line means that line is HIS; a line with NO name belongs to the
+  team.** He had asked whether assigning both levels was "unlogic" — the data could never
+  contradict (an operation's list is always a SUBSET of the order's, proven by 4 tests), but
+  the SCREEN never said the rule, and a blank line meant neither "team" nor "nobody yet".
+  - **The real fault: `JobOperations.tsx` showed NO per-line names at all** — so Job Details
+    showed the order's people beside a list of nameless lines, two things that looked
+    unrelated. That was the whole confusion.
+  - Fixed as WORDING AND DISPLAY ONLY — nothing stored changed, nothing already assigned
+    moved. Per-line names in Job Details; `— team` on an unnamed line everywhere (board,
+    details, phone); the order's list relabelled **"Team on this job"**.
+  - A name is NOT a lock: anyone on the team may still tick any line. It says who is
+    expected, not who is permitted.
 - **A hand-typed operation is marked `✎` in purple** — Ali asked whether the day shows
   manual or SAP operations. BOTH. The mark matters because a re-sync can never touch his.
 - **A RETRACTED day shows NOTHING from this component** (2026-09-16). A one-line summary was

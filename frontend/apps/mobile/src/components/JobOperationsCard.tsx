@@ -219,16 +219,27 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
               opening a nine-line order needs to find HIS lines, not read a
               roster. The names are empty again next week if the order carries
               over — they hang on the week, not on the order. */}
-          {(op.assignees || []).map((a) => {
-            const isMe = a.user_id === user?.id;
-            return (
-              <View key={a.id} style={[styles.personChip, isMe && styles.myChip]}>
-                <Text style={[styles.personChipText, isMe && styles.myChipText]}>
-                  {isMe ? t('job_operations.you', 'You') : a.user_name}
-                </Text>
-              </View>
-            );
-          })}
+          {(op.assignees || []).length > 0 ? (
+            (op.assignees || []).map((a) => {
+              const isMe = a.user_id === user?.id;
+              return (
+                <View key={a.id} style={[styles.personChip, isMe && styles.myChip]}>
+                  <Text style={[styles.personChipText, isMe && styles.myChipText]}>
+                    {isMe ? t('job_operations.you', 'You') : a.user_name}
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            /* RULE A. No name does not mean nobody — it means the TEAM on this
+               order, which includes the man reading this. A blank chip said
+               neither, and a worker cannot ask the screen what it meant. */
+            <View style={styles.teamChip}>
+              <Text style={styles.teamChipText}>
+                {t('job_operations.team', 'team')}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Waiting on a part. SAP puts the requisition on the OPERATION, so the
@@ -436,6 +447,13 @@ const styles = StyleSheet.create({
   // find.
   myChip: { backgroundColor: '#C8E6C9' },
   myChipText: { color: '#1B5E20', fontWeight: '700' },
+  // Quieter than a name on purpose: it is a statement about nobody in
+  // particular, and must not compete with the man's own green line.
+  teamChip: {
+    backgroundColor: '#F5F5F5', borderRadius: 4,
+    paddingHorizontal: 5, paddingVertical: 1,
+  },
+  teamChipText: { fontSize: 10, fontWeight: '600', color: '#9E9E9E' },
   metaText: { fontSize: 11, color: '#9E9E9E' },
   actualText: { color: '#2E7D32', fontWeight: '600' },
   removedText: { fontSize: 10, color: '#C62828', fontWeight: '700' },

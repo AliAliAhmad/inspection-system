@@ -4074,7 +4074,11 @@ export default function WorkPlanningPage() {
 
             {/* Team */}
             <Card size="small" style={{ marginBottom: 16 }}>
-              <Text type="secondary">Assigned Team</Text>
+              {/* "Team on this job", not just "Assigned Team" — RULE A. These
+                  are the people coming to the machine. A line with nobody's
+                  name on it belongs to THEM; a named line belongs to that man.
+                  Anyone named on a line is always in this list too. */}
+              <Text type="secondary">Team on this job</Text>
               {selectedJob.assignments?.length > 0 ? (
                 <div style={{ marginTop: 8 }}>
                   {selectedJob.assignments.map((a) => (

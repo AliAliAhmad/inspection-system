@@ -815,3 +815,13 @@ it a THIRD time. Each fix was plausible and none was diagnosed. → Two reports 
 the same symptom means stop fixing and start LOOKING. Ask for a screenshot. A
 picture of a layout problem costs one message and ends the guessing; three
 confident inferences cost three deploys and the user's patience.
+
+LESSON (2026-09-16): Ali asked whether assigning a team to the order AND to an
+operation would "conflict". I tested the DATA — no contradictory state is
+reachable — and told him it was fine. He came back saying it still felt unlogic,
+and he was right: Job Details showed the order's people beside a list of lines
+with no names on them, so the two looked unrelated. A blank cell said neither
+"the team" nor "nobody yet". → "Consistent" and "understandable" are different
+properties, and only one of them has tests. When a user says a design feels
+wrong, do not answer with the data model — go and look at what the screen
+actually says.

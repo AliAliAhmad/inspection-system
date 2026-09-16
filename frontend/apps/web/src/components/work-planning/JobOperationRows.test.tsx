@@ -194,4 +194,46 @@ describe('JobOperationRows', () => {
       expect(screen.queryByText('✎0010')).not.toBeInTheDocument();
     });
   });
+
+  describe('Rule A — a line with no name belongs to the team', () => {
+    /**
+     * Ali, 2026-09-16, on being able to assign the order AND a line: "both can
+     * be different, which is unlogic".
+     *
+     * They are not two competing lists. The order says who is coming to the
+     * machine; a line name says who does that part. Anyone named on a line is
+     * always on the order too, so the order list is the BIGGER list, never a
+     * different one.
+     *
+     * What was missing was the word. A blank line said nothing — it could mean
+     * "the team" or "nobody has decided yet", and a planner cannot ask the
+     * screen which. He confirmed this is how his crews work: "yes this is how
+     * we work, do rule A".
+     */
+    it('says "team" on a line nobody is named on', () => {
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded
+                               operations={[op({ assignees: [] })]} />);
+      expect(screen.getByText('team')).toBeInTheDocument();
+    });
+
+    it('shows the name instead once somebody owns the line', () => {
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded operations={[op({
+        assignees: [{ id: 1, task_id: 1, user_id: 9, user_name: 'Hassan Ali' }],
+      })]} />);
+      expect(screen.getByText('HA')).toBeInTheDocument();
+      expect(screen.queryByText('team')).not.toBeInTheDocument();
+    });
+
+    it('marks each line separately on one order', () => {
+      // The case Ali described: one line owned, the rest the team's.
+      render(<JobOperationRows job={JOB} dayId={3} dayExpanded operations={[
+        op({ id: 41, content: 'Check spreader' }),
+        op({ id: 42, content: 'Replace harness', assignees: [
+          { id: 2, task_id: 42, user_id: 9, user_name: 'Karim Saleh' }] }),
+        op({ id: 43, content: 'Telescopic chain' }),
+      ]} />);
+      expect(screen.getAllByText('team')).toHaveLength(2);
+      expect(screen.getByText('KS')).toBeInTheDocument();
+    });
+  });
 });

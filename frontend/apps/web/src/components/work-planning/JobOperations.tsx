@@ -342,6 +342,28 @@ export const JobOperations: React.FC<JobOperationsProps> = ({
                           · {op.done_by_name}
                         </Text>
                       )}
+
+                      {/* RULE A, and this is where it was invisible.
+                          Ali, 2026-09-16: he could assign a team to the order
+                          AND to a line, and this card showed the order's people
+                          while every line sat blank — two things that looked
+                          unrelated. A blank says nothing: it could mean "the
+                          team" or "nobody has decided".
+
+                          A name means that line is his. No name means the TEAM
+                          — whoever is on the order. The word is the whole fix. */}
+                      {(op.assignees || []).length > 0 ? (
+                        (op.assignees || []).map((a) => (
+                          <Tag key={a.id} color="green"
+                               style={{ margin: 0, fontSize: 10 }}>
+                            {a.user_name}
+                          </Tag>
+                        ))
+                      ) : (
+                        <Tooltip title="Nobody in particular — whoever is on this job's team does it">
+                          <Text type="secondary" style={{ fontSize: 10 }}>— team</Text>
+                        </Tooltip>
+                      )}
                     </Space>
                   </div>
 

@@ -153,19 +153,26 @@ const OperationRow: React.FC<{
         </Text>
       )}
 
-      {/* Who is on this line. Empty is the normal state, and drawing nothing
-          keeps the row quiet until somebody is put there. */}
-      {(op.assignees || []).map((a) => (
-        <Tooltip key={a.id} title={a.user_name || 'User'}>
-          <div style={{
-            width: 15, height: 15, borderRadius: '50%', fontSize: 8, fontWeight: 700,
-            background: '#52c41a', color: '#fff', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            {initialsOf(a.user_name)}
-          </div>
+      {/* RULE A. A name means the line is his; no name means the TEAM — whoever
+          is on the order. A blank used to say neither. */}
+      {(op.assignees || []).length > 0 ? (
+        (op.assignees || []).map((a) => (
+          <Tooltip key={a.id} title={a.user_name || 'User'}>
+            <div style={{
+              width: 15, height: 15, borderRadius: '50%', fontSize: 8, fontWeight: 700,
+              background: '#52c41a', color: '#fff', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {initialsOf(a.user_name)}
+            </div>
+          </Tooltip>
+        ))
+      ) : (
+        <Tooltip title="Nobody in particular — the job's team does this line">
+          <Text style={{ fontSize: 8, color: '#bfbfbf', flexShrink: 0,
+                         whiteSpace: 'nowrap' }}>team</Text>
         </Tooltip>
-      ))}
+      )}
     </div>
   );
 };
