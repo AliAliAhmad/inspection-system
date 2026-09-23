@@ -602,7 +602,7 @@
   Worth knowing: a failed OTA leaves the pushed commit live with no phone half.
 - Plan: `tasks/supervisor-on-a-job.md`.
 
-### Changing a crew on a PUBLISHED week, and a supervisor asking — BUILT 2026-09-24, NOT PUSHED
+### Changing a crew on a PUBLISHED week, and a supervisor asking — DEPLOYED 2026-09-24
 - Ali: "how the supervisor can change the employee already assigned to a job, is the plan
   should be in edit mode or no issue if in publish mode???" then "this need the admin or the
   planner approval". Who can plan: **engineers and admins** (`PLANNING_ROLES`).
@@ -639,6 +639,8 @@
 - **Fixed on the way:** removing a man in Job Details left his name on screen until reopened.
 - 30 tests in `tests/test_crew_change.py`. 1261 backend, 55 web, web+mobile `tsc` clean.
   **Deploy needs:** push (Render restart creates the table) + a mobile OTA.
+- ✅ **DEPLOYED 2026-09-24** — commit `95b9758`; OTA group
+  `44c39d2a-bb74-492c-ae84-e8ddb509ea35` on `preview` (runtime 1.0.0, both platforms).
 - Plan: `tasks/crew-swap-on-published.md`.
 
 ### Still open
