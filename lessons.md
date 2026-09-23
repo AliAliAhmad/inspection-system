@@ -861,3 +861,20 @@ work, and failed silently for exactly the people the feature is for. → When
 adding a view for a NEW kind of user, check the case where they have none of the
 OLD thing. The empty-of-everything-else user is the one the feature exists for,
 and every scaffold built around the old user is undefined for them.
+
+LESSON (2026-09-23): Ali widened who may SUPERVISE to include specialists and
+maintenance, but `get_job_details` and every write endpoint gate on
+PLANNING_ROLES = ('admin','engineer') or an assignment row — and a supervisor has
+neither. Making his card tappable without checking would have given exactly those
+people a 403 on the one job they are responsible for. → When a new role is added,
+grep every permission gate BEFORE building the screen that role will use. A role
+that exists in one validator and not in the others is a feature that works for
+everybody except its intended user.
+
+LESSON (2026-09-23): Asked what a supervisor should be allowed to do, the answer
+was already written in CLAUDE.md — "the app's ticks and timers are the ONLY record
+anywhere that a crew is 3 operations into a 9-operation order". That one sentence
+decided it: he may photograph, he may not tick. → Before offering a design opinion,
+re-read the project's own notes for a constraint that already settles it. A
+recorded reason beats a fresh judgement, and it keeps decisions consistent across
+months.

@@ -26,12 +26,12 @@ import pytest
 from tests.conftest import get_auth_header, make_equipment
 from app.extensions import db
 from app.models import (WorkPlan, WorkPlanDay, WorkPlanJob, WorkPlanAssignment,
-                        Notification, User)
+                        WorkPlanJobTask, Notification, User)
 
 
 def _user(email, role, name):
     person = User(email=email, full_name=name, role=role,
-                  role_id=email[:6].upper(), shift='day')
+                  role_id=email.split('@')[0].upper()[:12], shift='day')
     person.set_password('test123')
     db.session.add(person)
     db.session.commit()
@@ -344,3 +344,207 @@ class TestHisPhoneShowsJobsHeWatches:
         watched = body['supervised_jobs'][0]['jobs'][0]
         assert watched['status'] == 'in_progress'
         assert watched['started_at'] is not None
+
+
+class TestHeCanOpenTheJobHeWatches:
+    """Ali, 2026-09-23: "he should be able to tap the job to see details".
+
+    `get_job_details` refused anyone who was neither admin/engineer nor
+    ASSIGNED — and a supervisor is deliberately neither. A maintenance-role
+    supervisor tapping a job he is responsible for would have been told "You are
+    not assigned to this job", which is the feature failing for exactly the
+    people it was widened to include.
+    """
+
+    def _published(self, db_session, admin_user, tag, supervisor_id=None):
+        start = date.today() - timedelta(days=date.today().weekday())
+        plan = WorkPlan(week_start=start, week_end=start + timedelta(days=6),
+                        status='published', created_by_id=admin_user.id)
+        db_session.session.add(plan)
+        db_session.session.flush()
+        day = WorkPlanDay(work_plan_id=plan.id, date=date.today())
+        db_session.session.add(day)
+        db_session.session.flush()
+        eq = make_equipment(db_session, tag, tag)
+        job = WorkPlanJob(work_plan_day_id=day.id, job_type='pm',
+                          equipment_id=eq.id, description='SERVICE',
+                          estimated_hours=4, position=1,
+                          engineer_id=supervisor_id)
+        db.session.add(job)
+        db.session.commit()
+        return job
+
+    def test_a_maintenance_supervisor_can_open_it(self, client, db_session,
+                                                  admin_user):
+        """The case that was broken. He is not a planner and not assigned."""
+        watcher = _user('watch_t1@test.com', 'maintenance', 'Senior Fitter')
+        job = self._published(db_session, admin_user, 'SUPT1', watcher.id)
+
+        resp = client.get(f'/api/work-plans/jobs/{job.id}/details',
+                          headers=get_auth_header(client, watcher.email,
+                                                  'test123'))
+        assert resp.status_code == 200, resp.get_json()
+
+    def test_an_unrelated_man_still_cannot(self, client, db_session, admin_user):
+        """The widening must not leak. Job ids stay un-enumerable."""
+        watcher = _user('watch_t2@test.com', 'maintenance', 'Senior Fitter')
+        stranger = _user('watch_t3@test.com', 'maintenance', 'Somebody Else')
+        job = self._published(db_session, admin_user, 'SUPT2', watcher.id)
+
+        resp = client.get(f'/api/work-plans/jobs/{job.id}/details',
+                          headers=get_auth_header(client, stranger.email,
+                                                  'test123'))
+        assert resp.status_code == 403
+
+    def test_a_job_he_does_not_watch_is_still_refused(self, client, db_session,
+                                                      admin_user):
+        watcher = _user('watch_t4@test.com', 'maintenance', 'Senior Fitter')
+        other = self._published(db_session, admin_user, 'SUPT4', None)
+
+        resp = client.get(f'/api/work-plans/jobs/{other.id}/details',
+                          headers=get_auth_header(client, watcher.email,
+                                                  'test123'))
+        assert resp.status_code == 403
+
+    def test_opening_it_creates_no_assignment(self, client, db_session,
+                                              admin_user):
+        """Reading must not quietly make him a worker."""
+        watcher = _user('watch_t5@test.com', 'maintenance', 'Senior Fitter')
+        job = self._published(db_session, admin_user, 'SUPT5', watcher.id)
+
+        client.get(f'/api/work-plans/jobs/{job.id}/details',
+                   headers=get_auth_header(client, watcher.email, 'test123'))
+
+        assert WorkPlanAssignment.query.filter_by(
+            work_plan_job_id=job.id).count() == 0
+
+
+class TestWhatHeMayAndMayNotDo:
+    """The boundary, and it is the whole design.
+
+    Ali, 2026-09-23, confirmed a supervisor may add a photo or a voice note to a
+    job he is not assigned to — a man at the machine who sees a cracked hose
+    should be able to record it. He may NOT tick and may NOT run a timer.
+
+    That split is not caution. A tick is the worker's record of his OWN work,
+    and it is the only record anywhere that a crew is three operations into a
+    nine-operation order, because SAP holds no partial progress for an open
+    order. A supervisor ticking would make it stop meaning "the man did it".
+    """
+
+    def _setup(self, client, db_session, admin_user, tag, supervisor):
+        start = date.today() - timedelta(days=date.today().weekday())
+        plan = WorkPlan(week_start=start, week_end=start + timedelta(days=6),
+                        status='published', created_by_id=admin_user.id)
+        db_session.session.add(plan)
+        db_session.session.flush()
+        day = WorkPlanDay(work_plan_id=plan.id, date=date.today())
+        db_session.session.add(day)
+        db_session.session.flush()
+        eq = make_equipment(db_session, tag, tag)
+        job = WorkPlanJob(work_plan_day_id=day.id, job_type='pm',
+                          equipment_id=eq.id, description='SERVICE',
+                          sap_order_number=f'7000009{tag[-4:]}',
+                          estimated_hours=4, position=1,
+                          engineer_id=supervisor.id)
+        db.session.add(job)
+        db.session.commit()
+        return job
+
+    def _a_photo_of_his(self, uploader):
+        """A File row owned by this user — the endpoint checks ownership."""
+        from app.models import File
+        import uuid
+        photo = File(original_filename='hose.jpg',
+                     stored_filename=f'{uuid.uuid4().hex}.jpg',
+                     file_path='uploads/hose.jpg', mime_type='image/jpeg',
+                     file_size=1024, uploaded_by=uploader.id)
+        db.session.add(photo)
+        db.session.commit()
+        return photo
+
+    def test_he_may_add_a_photo_to_a_job_he_is_not_assigned_to(
+            self, client, db_session, admin_user):
+        watcher = _user('watch_a1@test.com', 'maintenance', 'Senior Fitter')
+        job = self._setup(client, db_session, admin_user, 'SUPA1', watcher)
+        photo = self._a_photo_of_his(watcher)
+        h = get_auth_header(client, watcher.email, 'test123')
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                           json={'content': 'Cracked hose',
+                                 'attachment_file_id': photo.id,
+                                 'attachment_kind': 'photo'}, headers=h)
+        assert resp.status_code == 201, resp.get_json()
+
+    def test_he_may_NOT_tick_an_operation(self, client, db_session, admin_user):
+        """THE boundary. His name on a line would not mean the work was done."""
+        from app.services.sap_pool_sync import sync_order_operations
+        watcher = _user('watch_a2@test.com', 'maintenance', 'Senior Fitter')
+        job = self._setup(client, db_session, admin_user, 'SUPA2', watcher)
+        sync_order_operations({job.sap_order_number: [
+            {'operation_number': '0010', 'description': 'Check the spreader',
+             'work_center': 'MECH', 'planned_hours': 2.0}]})
+        op = WorkPlanJobTask.query.filter_by(
+            anchor_key=job.sap_order_number, source='sap').one()
+        h = get_auth_header(client, watcher.email, 'test123')
+
+        resp = client.patch(f'/api/work-plans/jobs/{job.id}/tasks/{op.id}',
+                            json={'is_done': True}, headers=h)
+        assert resp.status_code == 403
+
+    def test_he_may_NOT_run_a_timer(self, client, db_session, admin_user):
+        from app.services.sap_pool_sync import sync_order_operations
+        watcher = _user('watch_a3@test.com', 'maintenance', 'Senior Fitter')
+        job = self._setup(client, db_session, admin_user, 'SUPA3', watcher)
+        sync_order_operations({job.sap_order_number: [
+            {'operation_number': '0010', 'description': 'Check the spreader',
+             'work_center': 'MECH', 'planned_hours': 2.0}]})
+        op = WorkPlanJobTask.query.filter_by(
+            anchor_key=job.sap_order_number, source='sap').one()
+        h = get_auth_header(client, watcher.email, 'test123')
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks/{op.id}/timer',
+                           json={'action': 'start'}, headers=h)
+        assert resp.status_code == 403
+
+    def test_he_may_NOT_write_a_plain_sub_task(self, client, db_session,
+                                               admin_user):
+        """Only evidence is his to add. Words are the planner's."""
+        watcher = _user('watch_a4@test.com', 'maintenance', 'Senior Fitter')
+        job = self._setup(client, db_session, admin_user, 'SUPA4', watcher)
+        h = get_auth_header(client, watcher.email, 'test123')
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                           json={'content': 'Bring the 32mm socket'}, headers=h)
+        assert resp.status_code == 403
+
+    def test_an_unrelated_man_still_may_not_attach(self, client, db_session,
+                                                   admin_user):
+        """The widening must not leak beyond the one job he was named on."""
+        watcher = _user('watch_a5@test.com', 'maintenance', 'Senior Fitter')
+        stranger = _user('watch_a6@test.com', 'maintenance', 'Somebody Else')
+        job = self._setup(client, db_session, admin_user, 'SUPA5', watcher)
+        photo = self._a_photo_of_his(stranger)
+        h = get_auth_header(client, stranger.email, 'test123')
+
+        resp = client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                           json={'content': 'Cracked hose',
+                                 'attachment_file_id': photo.id,
+                                 'attachment_kind': 'photo'}, headers=h)
+        assert resp.status_code == 403
+
+    def test_adding_a_photo_makes_him_no_more_of_a_worker(
+            self, client, db_session, admin_user):
+        """The invariant, again: he is still counted in no hours anywhere."""
+        watcher = _user('watch_a7@test.com', 'maintenance', 'Senior Fitter')
+        job = self._setup(client, db_session, admin_user, 'SUPA7', watcher)
+        photo = self._a_photo_of_his(watcher)
+        h = get_auth_header(client, watcher.email, 'test123')
+
+        client.post(f'/api/work-plans/jobs/{job.id}/tasks',
+                    json={'content': 'Cracked hose',
+                          'attachment_file_id': photo.id,
+                          'attachment_kind': 'photo'}, headers=h)
+
+        assert WorkPlanAssignment.query.filter_by(
+            work_plan_job_id=job.id).count() == 0

@@ -941,6 +941,7 @@
     "pause_reason": "Pause Reason",
     "running": "running now",
     "swipe_hint": "Swipe left or right to see another day.",
+    "tap_for_details": "tap for details",
     "today": "TODAY"
   },
   "workload": {

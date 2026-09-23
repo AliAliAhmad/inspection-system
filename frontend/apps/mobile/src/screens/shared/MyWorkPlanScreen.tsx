@@ -883,7 +883,18 @@ export default function MyWorkPlanScreen() {
             <View key={day.date}>
               <Text style={styles.supervisedDay}>{day.day_name}</Text>
               {(day.jobs ?? []).map((job: any) => (
-                <View key={job.id} style={styles.supervisedJob}>
+                /* Tappable. Ali, 2026-09-23: "he should be able to tap the job
+                   to see details". The same screen a worker opens, and the same
+                   navigation — but he reaches it because `engineer_id` names
+                   him, not because he is assigned. `get_job_details` had to
+                   learn that or he would tap a job he is responsible for and be
+                   told he is not assigned to it. */
+                <TouchableOpacity
+                  key={job.id}
+                  style={styles.supervisedJob}
+                  activeOpacity={0.6}
+                  onPress={() => navigation.navigate('JobDetails', { jobId: job.id })}
+                >
                   <Text style={styles.supervisedJobTitle} numberOfLines={1}>
                     {job.equipment_name ? `${job.equipment_name} · ` : ''}
                     {job.description}
@@ -898,7 +909,10 @@ export default function MyWorkPlanScreen() {
                         ? ` · ${t('work_plan.done', 'done')}`
                         : ''}
                   </Text>
-                </View>
+                  <Text style={styles.supervisedJobTap}>
+                    {t('work_plan.tap_for_details', 'tap for details')} ›
+                  </Text>
+                </TouchableOpacity>
               ))}
             </View>
           ))}
@@ -1288,6 +1302,7 @@ const styles = StyleSheet.create({
   },
   supervisedJobTitle: { fontSize: 12, fontWeight: '600', color: '#262626' },
   supervisedJobMeta: { fontSize: 11, color: '#8C8C8C', marginTop: 1 },
+  supervisedJobTap: { fontSize: 10, color: '#9254DE', marginTop: 2 },
   weekStatusBar: {
     flexDirection: 'row',
     alignItems: 'center',

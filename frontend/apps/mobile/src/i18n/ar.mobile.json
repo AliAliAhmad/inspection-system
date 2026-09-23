@@ -968,6 +968,7 @@
     "pause_reason": "سبب الإيقاف",
     "running": "يعمل الآن",
     "swipe_hint": "اسحب يميناً أو يساراً لعرض يوم آخر.",
+    "tap_for_details": "اضغط للتفاصيل",
     "today": "اليوم"
   },
   "workload": {

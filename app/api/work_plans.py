@@ -1935,9 +1935,20 @@ def get_job_details(job_id):
 
     # A worker may only open jobs they are assigned to; admins/engineers may open
     # any. Without this, job ids could be enumerated.
+    #
+    # ...AND THE JOB'S SUPERVISOR, who is neither. Ali, 2026-09-23: "he should be
+    # able to tap the job to see details". A supervisor may be a specialist or a
+    # maintenance man (SUPERVISOR_ROLES is wider than PLANNING_ROLES), and he is
+    # deliberately given no assignment row — so without this line he would tap a
+    # job he is responsible for and be told "You are not assigned to this job".
+    #
+    # This is not a widening of powers. It lets him READ the one job he was
+    # named on; enumeration is still impossible, because `engineer_id` is set by
+    # a planner and cannot be guessed into.
     if user.role not in ('admin', 'engineer'):
         assigned = any(a.user_id == user.id for a in job.assignments)
-        if not assigned:
+        supervises = job.engineer_id == user.id
+        if not assigned and not supervises:
             raise ForbiddenError("You are not assigned to this job")
 
     want_ar = language == 'ar'
@@ -5941,10 +5952,32 @@ def _job_for_tasks(job_id, plan_id=None):
 
 
 def _may_tick(user, job):
-    """A planner, or one of the people actually assigned to this job."""
+    """A planner, or one of the people actually assigned to this job.
+
+    Guards TICKING and TIMERS, and deliberately does NOT include the job's
+    supervisor. Ali, 2026-09-23, chose a watcher rather than a worker — and a
+    tick is the worker's record of his OWN work. It is also the only record
+    anywhere that a crew is three operations into a nine-operation order,
+    because SAP holds no partial progress for an open order. A supervisor
+    ticking would make that record stop meaning "the man did it".
+    """
     if user.role in PLANNING_ROLES:
         return True
     return any(a.user_id == user.id for a in (job.assignments or []))
+
+
+def _may_attach(user, job):
+    """Everyone _may_tick allows, PLUS the job's supervisor.
+
+    Evidence is different from a tick. A supervisor standing at the machine who
+    sees a cracked hose should be able to photograph it — that is watching,
+    written down, not doing the work. Ali confirmed the widening 2026-09-23.
+
+    Only attachments use this. The second guard in `add_job_task` already stops
+    a non-planner writing sub-tasks or operations, so a supervisor who passes
+    here can still add nothing but a photo or a voice note.
+    """
+    return _may_tick(user, job) or job.engineer_id == user.id
 
 
 _PHOTO_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'heif',
@@ -6196,8 +6229,12 @@ def add_job_task(job_id):
     # voice". The man standing at the machine is the one who can see it. He
     # still may not write or reword the planner's own sub-tasks — that split is
     # unchanged; only evidence is his to add.
-    if not _may_tick(user, job):
-        raise ForbiddenError("Only the assigned team, engineers and admins can add to a job")
+    # _may_attach, not _may_tick: the job's SUPERVISOR is here too. The next
+    # check is what keeps him to evidence only — he is not a planner, so without
+    # an attachment_file_id he is refused exactly like a worker.
+    if not _may_attach(user, job):
+        raise ForbiddenError("Only the assigned team, the supervisor, engineers "
+                             "and admins can add to a job")
     if user.role not in PLANNING_ROLES and not attachment_file_id:
         raise ForbiddenError("Workers may attach a photo or a voice note; "
                              "written sub-tasks are set by the planner")

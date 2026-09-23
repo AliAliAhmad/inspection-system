@@ -560,10 +560,31 @@
   - Purple, matching the 👁 on the board. `أعمال تشرف عليها` in Arabic.
 - ✅ **DEPLOYED 2026-09-23** — commits `67e2b00` + `9b28749`; OTA group
   `c2decaaf-7f05-4a39-9cb3-a5ed5c38facc` on `preview` (runtime 1.0.0, both platforms).
+- **He can TAP a watched job** (Ali, 2026-09-23). `get_job_details` refused anyone who was
+  neither admin/engineer nor ASSIGNED — and a supervisor is deliberately neither, so a
+  maintenance-role supervisor would have tapped his own job and been told "You are not
+  assigned to this job". Now `assigned or supervises`. Not a widening of powers: enumeration
+  is still impossible because `engineer_id` is set by a planner and cannot be guessed into.
+- **⚠️ WHAT HE MAY DO, AND THE LINE:** look at everything, **and add a photo or voice note**
+  (Ali confirmed the widening 2026-09-23). He may **NOT tick and may NOT run a timer**, and
+  that is not caution — a tick is the worker's record of his OWN work and, since SAP holds no
+  partial progress for an open order, **it is the only record anywhere** that a crew is 3
+  operations into a 9-operation order. A supervisor ticking makes it stop meaning "the man
+  did it".
+  - `_may_tick` (tick, timer) UNCHANGED — planners or the assigned team.
+  - `_may_attach` (photo, voice) = `_may_tick(...) or job.engineer_id == user.id`. Only
+    `add_job_task` uses it; `update_job_task` and `job_task_timer` stay on `_may_tick`.
+  - The existing second guard in `add_job_task` (non-planner must supply
+    `attachment_file_id`) already keeps him to evidence — he cannot write sub-tasks or
+    operations. Nothing new was needed for that.
+  - Verified by wrongly widening `_may_tick` and watching both NOT-tests fail.
+- **Deliberately NOT built: "mark job done" and reassignment for a supervisor** — the first
+  is a worker's or planner's call, the second is planning and he may not be a planner.
 - **Deliberately NOT built: the 685 MES-SUPV operations stay team lines.** Ali chose a
   named watcher (option A), not "supervision is a line someone owns" (option B). Linking
   them is a small addition on top of per-operation assignment if he ever wants it.
-- 11 tests in `tests/test_job_supervisor.py`; dedupe verified by breaking it. 1210 backend.
+- 26 tests in `tests/test_job_supervisor.py`; the dedupe and the tick boundary both verified
+  by breaking them. 1225 backend, 55 web, both `tsc` clean.
 - Plan: `tasks/supervisor-on-a-job.md`.
 
 ### Still open
