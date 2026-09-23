@@ -1203,12 +1203,42 @@ export default function WorkPlanningPage() {
   const unassignMutation = useMutation({
     mutationFn: ({ planId, jobId, assignmentId }: { planId: number; jobId: number; assignmentId: number }) =>
       workPlansApi.unassignUser(planId, jobId, assignmentId),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
       message.success('User unassigned');
+      // Job Details holds a snapshot of the job; without this the removed name
+      // stayed on screen until the window was closed and opened again.
+      setSelectedJob((prev) => prev && prev.id === vars.jobId
+        ? { ...prev, assignments: (prev.assignments || []).filter((a) => a.id !== vars.assignmentId) }
+        : prev);
       queryClient.invalidateQueries({ queryKey: ['work-plans'] });
     },
     onError: (err: any) => {
       message.error(err.response?.data?.message || 'Failed to unassign user');
+    },
+  });
+
+  // Add a person from Job Details. The only way to add someone to a PUBLISHED
+  // week: the drag is draft-only because it also moves jobs. Ali, 2026-09-23 —
+  // a published job nobody has started may change its crew without Revise
+  // (Revise hides the whole week from every phone). The server refuses a started
+  // job and a man on leave that day; its reason is shown as it is.
+  const detailsAssignMutation = useMutation({
+    mutationFn: ({ planId, jobId, userId }: { planId: number; jobId: number; userId: number }) =>
+      workPlansApi.assignUser(planId, jobId, { user_id: userId }),
+    onSuccess: (res: any, vars) => {
+      const added = res?.data?.assignment;
+      message.success(currentPlan?.status === 'published'
+        ? 'Added — he has been told'
+        : 'Added to the job');
+      if (added) {
+        setSelectedJob((prev) => prev && prev.id === vars.jobId
+          ? { ...prev, assignments: [...(prev.assignments || []).filter((a) => a.user_id !== added.user_id), added] }
+          : prev);
+      }
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+    onError: (err: any) => {
+      message.error(err.response?.data?.message || 'Failed to add to the job');
     },
   });
 
@@ -4099,9 +4129,14 @@ export default function WorkPlanningPage() {
                       <Tag color={a.is_lead ? 'gold' : 'blue'} style={{ margin: 0 }}>{a.is_lead ? 'Lead' : 'Member'}</Tag>
                       <span style={{ flex: 1 }}>{a.user?.full_name}</span>
                       <Text type="secondary" style={{ fontSize: 12 }}>({a.user?.role})</Text>
-                      {isDraft && (
+                      {/* Draft OR published. On a published week the server
+                          allows it only while nobody has started the job, and
+                          tells the man. */}
+                      {currentPlan && (
                         <Popconfirm
-                          title={`Remove ${a.user?.full_name} from this job?`}
+                          title={isDraft
+                            ? `Remove ${a.user?.full_name} from this job?`
+                            : `Remove ${a.user?.full_name}? The plan is published — he will be told.`}
                           onConfirm={() => currentPlan && unassignMutation.mutate({ planId: currentPlan.id, jobId: selectedJob.id, assignmentId: a.id })}
                           okText="Yes"
                           cancelText="No"
@@ -4114,6 +4149,33 @@ export default function WorkPlanningPage() {
                 </div>
               ) : (
                 <div style={{ color: '#8c8c8c', marginTop: 8 }}>No team assigned yet</div>
+              )}
+              {currentPlan && (
+                <Select
+                  showSearch
+                  size="small"
+                  style={{ width: '100%', marginTop: 8 }}
+                  placeholder={isDraft ? '+ Add a person' : '+ Add a person (published — he will be told)'}
+                  optionFilterProp="label"
+                  value={null as any}
+                  loading={detailsAssignMutation.isPending}
+                  onSelect={(userId: number) => {
+                    detailsAssignMutation.mutate({ planId: currentPlan.id, jobId: selectedJob.id, userId });
+                  }}
+                  options={((assignableUsersData as any)?.data || [])
+                    .filter((u: any) => !(selectedJob.assignments || []).some((a) => a.user_id === u.id))
+                    .map((u: any) => {
+                      // Same leave rule the drag uses — the man on leave that
+                      // day is shown, and cannot be picked.
+                      const day = currentPlan.days?.find((d: any) => d.id === selectedJob.work_plan_day_id);
+                      const onLeave = !!(day && userLeaveDatesMap.get(u.id)?.has(day.date));
+                      return {
+                        value: u.id,
+                        disabled: onLeave,
+                        label: onLeave ? `🔴 ${u.full_name} — On Leave` : `${u.full_name} (${u.role})`,
+                      };
+                    })}
+                />
               )}
             </Card>
 

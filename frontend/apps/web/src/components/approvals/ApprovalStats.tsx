@@ -4,6 +4,7 @@ import {
   PauseCircleOutlined,
   GiftOutlined,
   SwapOutlined,
+  TeamOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +21,8 @@ export interface ApprovalStatsProps {
   loading?: boolean;
   onTypeClick?: (type: ApprovalType | 'all') => void;
   activeType?: ApprovalType | 'all';
+  /** The kinds this reader may act on. An engineer sees crew changes only. */
+  visibleTypes?: ApprovalType[];
 }
 
 const TYPE_CONFIG: Record<ApprovalType, { icon: React.ReactNode; color: string; label: string }> = {
@@ -27,6 +30,7 @@ const TYPE_CONFIG: Record<ApprovalType, { icon: React.ReactNode; color: string; 
   pause: { icon: <PauseCircleOutlined />, color: '#fa8c16', label: 'Pause' },
   bonus: { icon: <GiftOutlined />, color: '#faad14', label: 'Bonus' },
   takeover: { icon: <SwapOutlined />, color: '#722ed1', label: 'Takeover' },
+  crew_change: { icon: <TeamOutlined />, color: '#13c2c2', label: 'Crew change' },
 };
 
 export function ApprovalStats({
@@ -34,6 +38,7 @@ export function ApprovalStats({
   loading,
   onTypeClick,
   activeType = 'all',
+  visibleTypes,
 }: ApprovalStatsProps) {
   const { t } = useTranslation();
 
@@ -99,11 +104,13 @@ export function ApprovalStats({
             label={t('approvals.all', 'All')}
           />
         </Col>
-        {(Object.keys(TYPE_CONFIG) as ApprovalType[]).map((type) => (
-          <Col key={type} xs={12} sm={8} md={5}>
+        {(Object.keys(TYPE_CONFIG) as ApprovalType[])
+          .filter((type) => !visibleTypes || visibleTypes.includes(type))
+          .map((type) => (
+          <Col key={type} xs={12} sm={8} md={4}>
             <StatCard
               type={type}
-              count={counts[type]}
+              count={counts[type] ?? 0}
               icon={TYPE_CONFIG[type].icon}
               color={TYPE_CONFIG[type].color}
               label={t(`approvals.type.${type}`, TYPE_CONFIG[type].label)}

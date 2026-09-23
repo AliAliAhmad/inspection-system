@@ -887,3 +887,20 @@ jobs by hand, the one path where the field existed. → Test a new field on the
 jobs the user actually has, not the ones that are easiest to create. In this yard
 that means a SAP order or a generated job; a hand-typed job is the exception.
 Also: a display that renders only when the value is set can never be used to SET it.
+
+LESSON (2026-09-24): Ali chose "any engineer or admin approves" and "in the
+Approvals page" in the same round of questions — and the Approvals page is
+`@admin_required()` on the server and `roles: ['admin']` in the menu and router.
+Built as answered, an engineer would have been told he may approve with nowhere to
+do it. → When two answers each depend on an existing screen or permission, check
+that they are compatible BEFORE building, and bring the conflict back as one
+question. Opening a door for a new role also means enforcing the narrower scope on
+the SERVER (list, counts and every write), never only by hiding tabs.
+
+LESSON (2026-09-24): "Has this job started?" had an existing answer
+(`job_work_state`) that reads only the job's tracking row — but the operation
+timers were designed NOT to touch that row. Reusing it as-is would have let a
+planner swap a man off in the middle of a running line. → Before reusing a
+predicate for a new decision, check every place the fact it claims to know can be
+recorded. Two records of "work happened" means the check must read both.
+

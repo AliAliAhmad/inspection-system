@@ -561,7 +561,9 @@
     "team_members": "أعضاء",
     "job_type_pm": "صيانة",
     "job_type_defect": "عيب",
-    "job_type_inspection": "تفتيش"
+    "job_type_inspection": "تفتيش",
+    "jobs_you_watch": "أعمال تشرف عليها",
+    "no_team_yet": "لا يوجد فريق بعد"
   },
   "leaderboard": {
     "title": "لوحة المتصدرين",
@@ -1816,5 +1818,39 @@
     "failed": "تعذر التحديث",
     "waiting_material": "بانتظار وصول المواد",
     "voice": "ملاحظة صوتية"
+  },
+  "approvals": {
+    "type": {
+      "crew_change": "تغيير الفريق"
+    },
+    "crew": {
+      "off": "إزالة",
+      "on": "إضافة"
+    },
+    "crewApproved": "تم تغيير الفريق",
+    "crewRejected": "رُفض تغيير الفريق"
+  },
+  "crew_change": {
+    "button": "اطلب تغيير الفريق",
+    "title": "طلب تغيير الفريق",
+    "explain": "لن يتغير شيء حتى يوافق مهندس أو مدير.",
+    "started": "بدأ العمل على هذه المهمة، ولا يمكن تغيير فريقها الآن.",
+    "take_off": "إزالة",
+    "put_on": "إضافة",
+    "nobody": "لا أحد",
+    "lead": "قائد",
+    "reason": "السبب؟ (اختياري — يقرؤه المخطط)",
+    "send": "أرسل للموافقة",
+    "sent": "أُرسل الطلب إلى المخططين للموافقة",
+    "history": "طلباتك",
+    "withdraw": "سحب الطلب",
+    "off": "إزالة",
+    "on": "إضافة",
+    "status_pending": "بانتظار الموافقة",
+    "status_approved": "تمت الموافقة",
+    "status_rejected": "مرفوض",
+    "status_cancelled": "مسحوب",
+    "status_started": "أُلغي — بدأ العمل",
+    "failed": "تعذّر إرسال الطلب"
   }
 }

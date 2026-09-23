@@ -602,6 +602,45 @@
   Worth knowing: a failed OTA leaves the pushed commit live with no phone half.
 - Plan: `tasks/supervisor-on-a-job.md`.
 
+### Changing a crew on a PUBLISHED week, and a supervisor asking — BUILT 2026-09-24, NOT PUSHED
+- Ali: "how the supervisor can change the employee already assigned to a job, is the plan
+  should be in edit mode or no issue if in publish mode???" then "this need the admin or the
+  planner approval". Who can plan: **engineers and admins** (`PLANNING_ROLES`).
+- **Before:** every assignment door refused a published plan, so one name change meant
+  **Revise → the whole week turns draft → it vanishes from EVERY phone** (`/my-plan` reads
+  published only) until re-published. The same trap as 2026-09-09.
+- **His five answers:** (1) a planner changes the crew of a published job directly, only while
+  nobody has started it; (2) a non-planner supervisor only ASKS; (3) any engineer or admin
+  approves, first press wins; (4) in the Approvals inbox + a notification — **engineers now
+  enter the inbox, crew changes ONLY**; (5) a job that starts while a request waits cancels it.
+- **All the rules live in `app/services/crew_change.py`** so the direct swap, the approval and
+  the auto-cancel cannot disagree.
+- **⚠️ "STARTED" READS TWO RECORDS.** A line's timer does NOT touch the job's tracking row (by
+  design, `job_task_timer`), so tracking alone would say "not started" while a man is 3h into
+  line 0010. `job_has_started()` = tracking worked OR a line running now OR a line started/ticked
+  **on or after this job's day** — lines hang on the SAP order and outlive the week, so a
+  carried-over order half done last week must not lock this week's crew for ever.
+- **⚠️ THE INBOX TYPE FILTER IS ENFORCED ON THE SERVER** (`_approver()` in `approvals.py`), in
+  list, counts AND bulk-action. Hiding tabs would have let an engineer POST `{"type":"leave"}`.
+  Test `test_engineer_cannot_approve_a_leave`; verified by breaking it.
+- The four doors (`assign_user`, `unassign_user`, operation assign/unassign) use
+  `assert_crew_editable`. `bulk_assign_users` stays **draft-only** — a bundle drop is planning.
+  On a published week the server now **refuses a man on leave that day** (the board's leave check
+  was browser-only) and **tells** the added/removed man, Arabic written by us.
+- A replacement **inherits the lead role**. The removed man's LINES are cleared and deliberately
+  NOT handed over — Rule A: an unnamed line is the team's.
+- `/start` and a line timer's start/finish cancel pending requests and tell the supervisor; a
+  plain tick is caught when a planner presses Approve (re-checked, saved as `cancelled`).
+- Table `work_plan_crew_change_requests` (in `start.sh` + `JOB_CHILD_TABLES`).
+- Web: Job Details has **+ Add a person** and remove on a published plan (the drag stays
+  draft-only); Approvals shows **Crew change**; My Work Plan shows **Jobs you watch** with
+  **Ask to change crew** (menu now also for `maintenance`). Phone: `CrewChangeCard` in Job
+  Details, shown only when the server says `can_request_crew_change`.
+- **Fixed on the way:** removing a man in Job Details left his name on screen until reopened.
+- 30 tests in `tests/test_crew_change.py`. 1261 backend, 55 web, web+mobile `tsc` clean.
+  **Deploy needs:** push (Render restart creates the table) + a mobile OTA.
+- Plan: `tasks/crew-swap-on-published.md`.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
@@ -609,6 +648,11 @@
   waits. Fix is a background thread if it is ever felt. (2) `expires_at` is LOCAL
   midnight compared against `datetime.utcnow()`, so buttons stay alive ~3h past Baghdad
   midnight and can place a job on a day already over. Pre-existing Stage 1 pattern.
+- **`job_has_started()` day boundary (2026-09-24, known, not fixed):** `since` is the job's
+  day at LOCAL midnight, `started_at`/`done_at` are UTC. A line TICKED done 00:00-03:00
+  Baghdad time on the job's day is not counted. Running/paused lines are always caught by
+  status, so the gap is one finished line, nothing else touched, in the small hours. Same
+  shape as the `expires_at` residual above.
 - **Three smaller Stage 2 residuals, all deliberate.** A press re-checks neither the
   men's shift nor whether they have picked up other work since; a FAILED swap leaves
   that crew unaskable for the rest of the day; `exclude_orders` matches only a bundle's

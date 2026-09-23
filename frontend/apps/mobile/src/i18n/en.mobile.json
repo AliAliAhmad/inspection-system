@@ -998,5 +998,28 @@
     "play": "Voice note from the planner",
     "playing": "Playing — tap to stop",
     "title": "Photos & voice notes"
+  },
+  "crew_change": {
+    "button": "Ask to change crew",
+    "title": "Ask to change the crew",
+    "explain": "Nothing changes until an engineer or admin approves.",
+    "started": "This job has started. Its crew can no longer change.",
+    "take_off": "Take off",
+    "put_on": "Put on",
+    "nobody": "Nobody",
+    "lead": "Lead",
+    "reason": "Why? (optional — the planner reads this)",
+    "send": "Send for approval",
+    "sent": "Sent to the planners for approval",
+    "history": "Your requests",
+    "withdraw": "Withdraw",
+    "off": "Off",
+    "on": "On",
+    "status_pending": "Waiting for approval",
+    "status_approved": "Approved",
+    "status_rejected": "Refused",
+    "status_cancelled": "Withdrawn",
+    "status_started": "Cancelled — the job started",
+    "failed": "Could not send the request"
   }
 }

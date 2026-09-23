@@ -1579,6 +1579,7 @@ def _validate_supervisor(engineer_id):
 
 
 JOB_CHILD_TABLES = ('job_checklist_responses', 'work_plan_assignments',
+                    'work_plan_crew_change_requests',
                     'work_plan_materials', 'work_plan_job_ratings',
                     'work_plan_job_trackings',
                     # BEFORE work_plan_job_tasks, and the order is load-bearing:
@@ -1953,6 +1954,12 @@ def get_job_details(job_id):
 
     want_ar = language == 'ar'
 
+    # The server decides whether the phone offers "Ask to change crew". One
+    # rule in one place: the job's supervisor, not a planner (a planner changes
+    # the crew directly on the board).
+    can_request_crew_change = (user.role not in PLANNING_ROLES
+                               and job.engineer_id == user.id)
+
     def job_desc():
         # Read from the phrase store; never call a provider here.
         #
@@ -2074,6 +2081,7 @@ def get_job_details(job_id):
                 }
                 for a in job.assignments
             ],
+            'can_request_crew_change': can_request_crew_change,
         }
     }), 200
 
@@ -2381,12 +2389,16 @@ def assign_user(plan_id, job_id):
     if not plan:
         raise NotFoundError("Work plan not found")
 
-    if plan.status == 'published':
-        raise ForbiddenError("Cannot modify a published work plan")
-
     job = db.session.get(WorkPlanJob, job_id)
     if not job or job.day.work_plan_id != plan_id:
         raise NotFoundError("Job not found in this plan")
+
+    # A published week is open for an UNTOUCHED job (Ali, 2026-09-23). Revise
+    # would blank the whole week on every phone to change one name.
+    from app.services.crew_change import (assert_crew_editable,
+                                          validate_new_member,
+                                          notify_crew_moved)
+    assert_crew_editable(plan, job)
 
     data = request.get_json()
     if not data or not data.get('user_id'):
@@ -2395,6 +2407,10 @@ def assign_user(plan_id, job_id):
     assigned_user = db.session.get(User, data['user_id'])
     if not assigned_user:
         raise NotFoundError("User not found")
+    if plan.status == 'published':
+        # The board's leave check is client-side only. On a live week the man
+        # is told at once, so the server must refuse a man on leave itself.
+        validate_new_member(assigned_user.id, job)
 
     # is_lead absent → leave an existing assignment's role untouched
     was_new = WorkPlanAssignment.query.filter_by(
@@ -2404,6 +2420,8 @@ def assign_user(plan_id, job_id):
 
     assignment = _assign_user_to_job(job_id, data['user_id'], data.get('is_lead'))
     db.session.commit()
+    if was_new and plan.status == 'published':
+        notify_crew_moved(job, added_id=assigned_user.id)
 
     if was_new:
         return jsonify({
@@ -2429,12 +2447,14 @@ def unassign_user(plan_id, job_id, assignment_id):
     if not plan:
         raise NotFoundError("Work plan not found")
 
-    if plan.status == 'published':
-        raise ForbiddenError("Cannot modify a published work plan")
-
     assignment = db.session.get(WorkPlanAssignment, assignment_id)
     if not assignment or assignment.work_plan_job_id != job_id:
         raise NotFoundError("Assignment not found")
+
+    from app.services.crew_change import assert_crew_editable, notify_crew_moved
+    job = db.session.get(WorkPlanJob, job_id)
+    assert_crew_editable(plan, job)
+    removed_user_id = assignment.user_id
 
     # Off the job means off its lines. Without this his face would sit on an
     # operation of a job he is no longer on, and the board would be lying in the
@@ -2447,6 +2467,8 @@ def unassign_user(plan_id, job_id, assignment_id):
 
     db.session.delete(assignment)
     db.session.commit()
+    if plan.status == 'published':
+        notify_crew_moved(job, removed_id=removed_user_id)
 
     return jsonify({
         'status': 'success',
@@ -6537,6 +6559,14 @@ def job_task_timer(job_id, task_id):
 
     db.session.commit()
 
+    # A line under way means the job is under way, even though the job's own
+    # tracking row is untouched. Any waiting crew-change request stops here.
+    # (A plain tick elsewhere is caught when a planner presses Approve — the
+    # approval re-checks and cancels then.)
+    if action in ('start', 'finish'):
+        from app.services.crew_change import cancel_pending_for_started_job
+        cancel_pending_for_started_job(job)
+
     tasks = _tasks_for_job(job)
     return jsonify({'status': 'success',
                     'task': task.to_dict(get_language(user)),
@@ -6608,8 +6638,9 @@ def assign_to_operation(job_id, task_id):
 
     day = db.session.get(WorkPlanDay, job.work_plan_day_id)
     plan = db.session.get(WorkPlan, day.work_plan_id) if day else None
-    if plan and plan.status == 'published':
-        raise ForbiddenError("Cannot modify a published work plan")
+    if plan:
+        from app.services.crew_change import assert_crew_editable
+        assert_crew_editable(plan, job)
 
     task = db.session.get(WorkPlanJobTask, task_id)
     kind, key = anchor_for_job(job)
@@ -6626,6 +6657,10 @@ def assign_to_operation(job_id, task_id):
     worker = db.session.get(User, user_id)
     if not worker:
         raise NotFoundError("User not found")
+    published = bool(plan and plan.status == 'published')
+    if published:
+        from app.services.crew_change import validate_new_member
+        validate_new_member(worker.id, job)
 
     # unique(task_id, user_id) is a database constraint, and a second tap on the
     # same man must not become a 500. Checked, not caught.
@@ -6650,6 +6685,9 @@ def assign_to_operation(job_id, task_id):
         added_to_job = True
 
     db.session.commit()
+    if added_to_job and published:
+        from app.services.crew_change import notify_crew_moved
+        notify_crew_moved(job, added_id=worker.id)
     return jsonify({'status': 'success',
                     'message': 'Assigned to the operation',
                     'added_to_job': added_to_job,
@@ -6676,8 +6714,9 @@ def unassign_from_operation(job_id, task_id, user_id):
 
     day = db.session.get(WorkPlanDay, job.work_plan_day_id)
     plan = db.session.get(WorkPlan, day.work_plan_id) if day else None
-    if plan and plan.status == 'published':
-        raise ForbiddenError("Cannot modify a published work plan")
+    if plan:
+        from app.services.crew_change import assert_crew_editable
+        assert_crew_editable(plan, job)
 
     row = WorkPlanOperationAssignment.query.filter_by(
         task_id=task_id, user_id=user_id, work_plan_job_id=job_id).first()
@@ -6688,6 +6727,128 @@ def unassign_from_operation(job_id, task_id, user_id):
     db.session.commit()
     return jsonify({'status': 'success',
                     'message': 'Removed from the operation'}), 200
+
+
+# ==================== CREW CHANGE REQUESTS ====================
+#
+# A job's supervisor who is not a planner ASKS; any engineer or admin approves
+# on the Approvals page. The rules live in app/services/crew_change.py.
+
+def _crew_job_for(user, job_id):
+    """The job, if this user may look at its crew requests: a planner, or the
+    job's own supervisor. Nobody else — a worker has no business with them."""
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job:
+        raise NotFoundError("Job not found")
+    if user.role not in PLANNING_ROLES and job.engineer_id != user.id:
+        raise ForbiddenError("Only planners and this job's supervisor can see this")
+    return job
+
+
+@bp.route('/jobs/<int:job_id>/crew-change-options', methods=['GET'])
+@jwt_required()
+def crew_change_options(job_id):
+    """Who is on the job, and who could be put on it — each marked if he is on
+    leave on the JOB's day. The supervisor cannot read /users/for-assignment
+    (planners only), so this is his list."""
+    from app.models import Leave
+    from app.services.crew_change import CREW_ROLES, job_has_started
+    user = get_current_user()
+    language = get_language(user)
+    job = _crew_job_for(user, job_id)
+    day = db.session.get(WorkPlanDay, job.work_plan_day_id)
+
+    team_ids = {a.user_id for a in job.assignments}
+    team = [{'user_id': a.user_id,
+             'name': a.user.display_name(language) if a.user else None,
+             'role': a.user.role if a.user else None,
+             'is_lead': bool(a.is_lead)} for a in job.assignments]
+
+    on_leave = set()
+    if day and day.date:
+        on_leave = {l.user_id for l in Leave.query.filter(
+            Leave.status == 'approved',
+            Leave.date_from <= day.date,
+            Leave.date_to >= day.date).all()}
+
+    candidates = [{'id': u.id,
+                   'name': u.display_name(language),
+                   'role': u.role,
+                   'specialization': getattr(u, 'specialization', None),
+                   'on_leave': u.id in on_leave}
+                  for u in User.query.filter(
+                      User.is_active == True,  # noqa: E712
+                      User.role.in_(CREW_ROLES)).order_by(User.full_name).all()
+                  if u.id not in team_ids]
+
+    return jsonify({'status': 'success', 'data': {
+        'team': team,
+        'candidates': candidates,
+        'started': job_has_started(job),
+        'day_date': day.date.isoformat() if day and day.date else None,
+    }}), 200
+
+
+@bp.route('/jobs/<int:job_id>/crew-change-requests', methods=['GET'])
+@jwt_required()
+def list_crew_change_requests(job_id):
+    from app.models import WorkPlanCrewChangeRequest
+    user = get_current_user()
+    job = _crew_job_for(user, job_id)
+    rows = (WorkPlanCrewChangeRequest.query
+            .filter_by(work_plan_job_id=job.id)
+            .order_by(WorkPlanCrewChangeRequest.created_at.desc())
+            .limit(20).all())
+    language = get_language(user)
+    return jsonify({'status': 'success',
+                    'data': [r.to_dict(language) for r in rows]}), 200
+
+
+@bp.route('/jobs/<int:job_id>/crew-change-requests', methods=['POST'])
+@jwt_required()
+def create_crew_change_request(job_id):
+    """Body: {remove_user_id?, add_user_id?, reason?} — at least one id."""
+    from app.services.crew_change import create_request
+    user = get_current_user()
+    job = db.session.get(WorkPlanJob, job_id)
+    if not job:
+        raise NotFoundError("Job not found")
+    data = request.get_json() or {}
+
+    def as_id(value):
+        if value in (None, ''):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            raise ValidationError("A person must be given by id")
+
+    reason = data.get('reason')
+    if reason is not None:
+        import unicodedata
+        reason = unicodedata.normalize('NFC', str(reason))[:500]
+
+    req = create_request(user, job,
+                         remove_user_id=as_id(data.get('remove_user_id')),
+                         add_user_id=as_id(data.get('add_user_id')),
+                         reason=reason)
+    return jsonify({'status': 'success',
+                    'message': 'Request sent to the planners',
+                    'data': req.to_dict(get_language(user))}), 201
+
+
+@bp.route('/crew-change-requests/<int:request_id>', methods=['DELETE'])
+@jwt_required()
+def withdraw_crew_change_request(request_id):
+    from app.models import WorkPlanCrewChangeRequest
+    from app.services.crew_change import withdraw_request
+    user = get_current_user()
+    req = db.session.get(WorkPlanCrewChangeRequest, request_id)
+    if not req:
+        raise NotFoundError("Request not found")
+    withdraw_request(req, user)
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': 'Request withdrawn'}), 200
 
 
 @bp.route('/jobs/<int:job_id>/tasks/<int:task_id>', methods=['DELETE'])

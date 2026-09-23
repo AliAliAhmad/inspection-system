@@ -95,6 +95,7 @@ from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.work_plan_material import WorkPlanMaterial
 from app.models.work_plan_job_task import WorkPlanJobTask
 from app.models.work_plan_operation_assignment import WorkPlanOperationAssignment
+from app.models.work_plan_crew_change_request import WorkPlanCrewChangeRequest
 from app.models.phrase_translation import PhraseTranslation
 from app.models.sap_work_order import SAPWorkOrder
 
@@ -250,6 +251,7 @@ __all__ = [
     'WorkPlanJob',
     'WorkPlanJobTask',
     'WorkPlanOperationAssignment',
+    'WorkPlanCrewChangeRequest',
     'PhraseTranslation',
     'WorkPlanAssignment',
     'WorkPlanMaterial',

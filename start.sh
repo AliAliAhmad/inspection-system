@@ -942,6 +942,45 @@ with app.app_context():
         db.session.rollback()
         print('work_plan_operation_assignments table already exists')
 
+    # Create work_plan_crew_change_requests table
+    #
+    # A supervisor who is not a planner ASKS to change a job's crew; any
+    # engineer or admin approves. One request is one change: remove, add, or
+    # both (a swap). In JOB_CHILD_TABLES, so purging a job row clears them.
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS work_plan_crew_change_requests (
+                id SERIAL PRIMARY KEY,
+                work_plan_job_id INTEGER NOT NULL REFERENCES work_plan_jobs(id),
+                requested_by_id INTEGER NOT NULL REFERENCES users(id),
+                remove_user_id INTEGER REFERENCES users(id),
+                add_user_id INTEGER REFERENCES users(id),
+                reason TEXT,
+                status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+                reviewed_by_id INTEGER REFERENCES users(id),
+                reviewed_at TIMESTAMP,
+                review_notes TEXT,
+                created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+                CONSTRAINT check_valid_crew_change_status
+                    CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+                CONSTRAINT check_crew_change_has_a_change
+                    CHECK (remove_user_id IS NOT NULL OR add_user_id IS NOT NULL)
+            )
+        '''))
+        db.session.execute(text('''
+            CREATE INDEX IF NOT EXISTS ix_crew_change_job
+            ON work_plan_crew_change_requests (work_plan_job_id)
+        '''))
+        db.session.execute(text('''
+            CREATE INDEX IF NOT EXISTS ix_crew_change_status
+            ON work_plan_crew_change_requests (status)
+        '''))
+        db.session.commit()
+        print('Created work_plan_crew_change_requests table')
+    except Exception:
+        db.session.rollback()
+        print('work_plan_crew_change_requests table already exists')
+
     # Create maintenance_cycles table
     try:
         db.session.execute(text('''

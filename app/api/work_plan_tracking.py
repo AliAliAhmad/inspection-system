@@ -181,6 +181,11 @@ def start_job(job_id):
         f'{user.full_name} started {job.description or "a job"}',
     )
 
+    # A crew that has started keeps its men (Ali, 2026-09-23), so any request
+    # to change it stops being a question. Its supervisor is told why.
+    from app.services.crew_change import cancel_pending_for_started_job
+    cancel_pending_for_started_job(job)
+
     logger.info("Job %s started by user %s", job_id, user.id)
     return jsonify({
         'status': 'success',

@@ -36,6 +36,33 @@ import {
   type ApprovalCounts,
 } from '../../components/approvals';
 import VoiceTextArea from '../../components/VoiceTextArea';
+import { useAuth } from '../../providers/AuthProvider';
+
+// Ali, 2026-09-23: any engineer or admin approves a supervisor's crew change.
+// Engineers enter this page for crew changes ONLY — the server enforces the
+// same list in app/api/approvals.py, so this only decides what to show.
+const ALL_TYPES: ApprovalType[] = ['leave', 'pause', 'bonus', 'takeover', 'crew_change'];
+const ENGINEER_TYPES: ApprovalType[] = ['crew_change'];
+
+function transformCrewChangeToApproval(c: UnifiedApproval): ApprovalItem {
+  return {
+    id: c.id,
+    type: 'crew_change',
+    status: c.status,
+    requestedAt: c.requested_at,
+    requestedBy: c.requested_by,
+    details: {
+      jobId: c.details.job_id,
+      equipmentName: c.details.equipment_name,
+      jobDescription: c.details.job_description,
+      sapOrderNumber: c.details.sap_order_number,
+      dayDate: c.details.day_date,
+      removeUser: c.details.remove_user,
+      addUser: c.details.add_user,
+      reason: c.details.reason,
+    },
+  };
+}
 
 const { Title } = Typography;
 
@@ -111,9 +138,14 @@ export default function UnifiedApprovalsPage() {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [itemToReject, setItemToReject] = useState<ApprovalItem | null>(null);
   const [rejectForm] = Form.useForm();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const visibleTypes = isAdmin ? ALL_TYPES : ENGINEER_TYPES;
 
-  // Get active tab from URL
-  const activeTab = (searchParams.get('tab') as ApprovalType | 'all') || 'all';
+  // Get active tab from URL. A tab this reader may not see falls back to 'all'.
+  const requestedTab = (searchParams.get('tab') as ApprovalType | 'all') || 'all';
+  const activeTab = requestedTab === 'all' || visibleTypes.includes(requestedTab)
+    ? requestedTab : 'all';
 
   // Fetch all approval data
   const {
@@ -122,6 +154,7 @@ export default function UnifiedApprovalsPage() {
     error: leavesError,
   } = useQuery({
     queryKey: ['leaves', 'pending'],
+    enabled: isAdmin,
     queryFn: () => leavesApi.getPending({ per_page: 100 }),
   });
 
@@ -131,6 +164,7 @@ export default function UnifiedApprovalsPage() {
     error: pausesError,
   } = useQuery({
     queryKey: ['pending-pauses'],
+    enabled: isAdmin,
     queryFn: () => specialistJobsApi.getPendingPauses(),
   });
 
@@ -140,6 +174,7 @@ export default function UnifiedApprovalsPage() {
     error: bonusError,
   } = useQuery({
     queryKey: ['bonus-stars'],
+    enabled: isAdmin,
     queryFn: () => bonusStarsApi.list(),
   });
 
@@ -150,7 +185,18 @@ export default function UnifiedApprovalsPage() {
     error: takeoversError,
   } = useQuery({
     queryKey: ['pending-takeovers'],
+    enabled: isAdmin,
     queryFn: () => approvalsApi.listPendingTakeovers(),
+  });
+
+  // Crew change requests — the one kind an engineer sees too.
+  const {
+    data: crewData,
+    isLoading: crewLoading,
+    error: crewError,
+  } = useQuery({
+    queryKey: ['approvals', 'crew_change'],
+    queryFn: () => approvalsApi.list({ type: 'crew_change' }),
   });
 
   // Transform takeover from API format to ApprovalItem
@@ -180,11 +226,12 @@ export default function UnifiedApprovalsPage() {
       .filter((b: BonusStar) => b.is_qe_request && b.request_status === 'pending')
       .map(transformBonusToApproval);
     const takeovers = ((takeoversData?.data?.data as UnifiedApproval[] | undefined) || []).map(transformUnifiedTakeoverToApproval);
+    const crew = ((crewData?.data?.data as UnifiedApproval[] | undefined) || []).map(transformCrewChangeToApproval);
 
-    return [...leaves, ...pauses, ...bonuses, ...takeovers].sort(
+    return [...leaves, ...pauses, ...bonuses, ...takeovers, ...crew].sort(
       (a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime()
     );
-  }, [leavesData, pausesData, bonusData, takeoversData]);
+  }, [leavesData, pausesData, bonusData, takeoversData, crewData]);
 
   // Calculate counts
   const counts: ApprovalCounts = useMemo(() => {
@@ -194,6 +241,7 @@ export default function UnifiedApprovalsPage() {
       pause: pending.filter((a) => a.type === 'pause').length,
       bonus: pending.filter((a) => a.type === 'bonus').length,
       takeover: pending.filter((a) => a.type === 'takeover').length,
+      crew_change: pending.filter((a) => a.type === 'crew_change').length,
       total: pending.length,
     };
   }, [allApprovals]);
@@ -308,6 +356,31 @@ export default function UnifiedApprovalsPage() {
     onError: () => message.error(t('approvals.rejectError', 'Failed to reject')),
   });
 
+  // Crew changes go through the unified endpoint — the server re-checks the job
+  // has not started and that nobody else already decided.
+  const decideCrewChange = useMutation({
+    mutationFn: async ({ ids, action, reason }: { ids: number[]; action: 'approve' | 'reject'; reason?: string }) => {
+      const r = await approvalsApi.bulkAction({
+        items: ids.map((id) => ({ type: 'crew_change' as const, id })),
+        action,
+        reason,
+      });
+      const failed = r.data.data?.results?.filter((x) => !x.success) || [];
+      if (failed.length > 0) throw new Error(failed.map((f) => f.error).join(' · '));
+      return r;
+    },
+    onSuccess: (_, { action }) => {
+      message.success(action === 'approve'
+        ? t('approvals.crewApproved', 'Crew changed')
+        : t('approvals.crewRejected', 'Crew change refused'));
+    },
+    onError: (err: Error) => message.error(err.message || t('approvals.approveError', 'Failed to approve')),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['approvals', 'crew_change'] });
+      queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+    },
+  });
+
   // Bulk leave action
   const bulkLeaveAction = useMutation({
     mutationFn: async ({ ids, action }: { ids: number[]; action: 'approve' | 'reject' }) => {
@@ -340,13 +413,17 @@ export default function UnifiedApprovalsPage() {
         case 'takeover':
           await approveTakeover.mutateAsync(item.id);
           break;
+        case 'crew_change':
+          await decideCrewChange.mutateAsync({ ids: [item.id], action: 'approve' });
+          break;
       }
     },
-    [approveLeave, approvePause, approveBonus, approveTakeover]
+    [approveLeave, approvePause, approveBonus, approveTakeover, decideCrewChange]
   );
 
   const handleReject = useCallback((item: ApprovalItem) => {
-    if (item.type === 'leave') {
+    // A refused supervisor is told, so give the planner room to say why.
+    if (item.type === 'leave' || item.type === 'crew_change') {
       setItemToReject(item);
       setRejectModalOpen(true);
     } else {
@@ -370,6 +447,8 @@ export default function UnifiedApprovalsPage() {
 
     if (itemToReject.type === 'leave') {
       await rejectLeave.mutateAsync({ id: itemToReject.id, reason: values.reason });
+    } else if (itemToReject.type === 'crew_change') {
+      await decideCrewChange.mutateAsync({ ids: [itemToReject.id], action: 'reject', reason: values.reason });
     }
 
     setRejectModalOpen(false);
@@ -384,11 +463,15 @@ export default function UnifiedApprovalsPage() {
       const pauseIds = items.filter((i) => i.type === 'pause').map((i) => i.id);
       const bonusIds = items.filter((i) => i.type === 'bonus').map((i) => i.id);
       const takeoverIds = items.filter((i) => i.type === 'takeover').map((i) => i.id);
+      const crewIds = items.filter((i) => i.type === 'crew_change').map((i) => i.id);
 
       const promises: Promise<unknown>[] = [];
 
       if (leaveIds.length > 0) {
         promises.push(bulkLeaveAction.mutateAsync({ ids: leaveIds, action: 'approve' }));
+      }
+      if (crewIds.length > 0) {
+        promises.push(decideCrewChange.mutateAsync({ ids: crewIds, action: 'approve' }));
       }
 
       // For pauses, bonuses, and takeovers, we need to approve one by one
@@ -396,10 +479,10 @@ export default function UnifiedApprovalsPage() {
       bonusIds.forEach((id) => promises.push(approveBonus.mutateAsync(id)));
       takeoverIds.forEach((id) => promises.push(approveTakeover.mutateAsync(id)));
 
-      await Promise.all(promises);
+      await Promise.allSettled(promises);
       setSelectedIds(new Set());
     },
-    [bulkLeaveAction, approvePause, approveBonus, approveTakeover]
+    [bulkLeaveAction, approvePause, approveBonus, approveTakeover, decideCrewChange]
   );
 
   const handleBulkReject = useCallback(
@@ -408,21 +491,25 @@ export default function UnifiedApprovalsPage() {
       const pauseIds = items.filter((i) => i.type === 'pause').map((i) => i.id);
       const bonusIds = items.filter((i) => i.type === 'bonus').map((i) => i.id);
       const takeoverIds = items.filter((i) => i.type === 'takeover').map((i) => i.id);
+      const crewIds = items.filter((i) => i.type === 'crew_change').map((i) => i.id);
 
       const promises: Promise<unknown>[] = [];
 
       if (leaveIds.length > 0) {
         promises.push(bulkLeaveAction.mutateAsync({ ids: leaveIds, action: 'reject' }));
       }
+      if (crewIds.length > 0) {
+        promises.push(decideCrewChange.mutateAsync({ ids: crewIds, action: 'reject' }));
+      }
 
       pauseIds.forEach((id) => promises.push(rejectPause.mutateAsync(id)));
       bonusIds.forEach((id) => promises.push(rejectBonus.mutateAsync(id)));
       takeoverIds.forEach((id) => promises.push(rejectTakeover.mutateAsync(id)));
 
-      await Promise.all(promises);
+      await Promise.allSettled(promises);
       setSelectedIds(new Set());
     },
-    [bulkLeaveAction, rejectPause, rejectBonus, rejectTakeover]
+    [bulkLeaveAction, rejectPause, rejectBonus, rejectTakeover, decideCrewChange]
   );
 
   const handleSelect = (id: number, selected: boolean) => {
@@ -454,15 +541,21 @@ export default function UnifiedApprovalsPage() {
     handleTabChange(type);
   };
 
-  const isLoading = leavesLoading || pausesLoading || bonusLoading || takeoversLoading;
-  const hasError = leavesError || pausesError || bonusError || takeoversError;
+  // A disabled query reports isLoading=false in TanStack v5, so an engineer's
+  // page is not stuck spinning on the four queries it never runs.
+  const isLoading = crewLoading || (isAdmin && (leavesLoading || pausesLoading || bonusLoading || takeoversLoading));
+  const hasError = crewError || (isAdmin && (leavesError || pausesError || bonusError || takeoversError));
 
+  const tabLabels: Record<ApprovalType, string> = {
+    leave: t('approvals.type.leave', 'Leave'),
+    pause: t('approvals.type.pause', 'Pause'),
+    bonus: t('approvals.type.bonus', 'Bonus'),
+    takeover: t('approvals.type.takeover', 'Takeover'),
+    crew_change: t('approvals.type.crew_change', 'Crew change'),
+  };
   const tabItems = [
     { key: 'all', label: `${t('approvals.all', 'All')} (${counts.total})` },
-    { key: 'leave', label: `${t('approvals.type.leave', 'Leave')} (${counts.leave})` },
-    { key: 'pause', label: `${t('approvals.type.pause', 'Pause')} (${counts.pause})` },
-    { key: 'bonus', label: `${t('approvals.type.bonus', 'Bonus')} (${counts.bonus})` },
-    { key: 'takeover', label: `${t('approvals.type.takeover', 'Takeover')} (${counts.takeover})` },
+    ...visibleTypes.map((type) => ({ key: type, label: `${tabLabels[type]} (${counts[type] ?? 0})` })),
   ];
 
   return (
@@ -478,6 +571,7 @@ export default function UnifiedApprovalsPage() {
         loading={isLoading}
         onTypeClick={handleTypeClick}
         activeType={activeTab}
+        visibleTypes={visibleTypes}
       />
 
       {/* Filters */}
@@ -487,6 +581,7 @@ export default function UnifiedApprovalsPage() {
         onClear={() => setFilters({})}
         collapsible
         defaultCollapsed
+        availableTypes={visibleTypes}
       />
 
       {/* Tabs and Content */}
@@ -530,13 +625,15 @@ export default function UnifiedApprovalsPage() {
                   (item.type === 'leave' && approveLeave.isPending) ||
                   (item.type === 'pause' && approvePause.isPending) ||
                   (item.type === 'bonus' && approveBonus.isPending) ||
-                  (item.type === 'takeover' && approveTakeover.isPending)
+                  (item.type === 'takeover' && approveTakeover.isPending) ||
+                  (item.type === 'crew_change' && decideCrewChange.isPending)
                 }
                 rejecting={
                   (item.type === 'leave' && rejectLeave.isPending) ||
                   (item.type === 'pause' && rejectPause.isPending) ||
                   (item.type === 'bonus' && rejectBonus.isPending) ||
-                  (item.type === 'takeover' && rejectTakeover.isPending)
+                  (item.type === 'takeover' && rejectTakeover.isPending) ||
+                  (item.type === 'crew_change' && decideCrewChange.isPending)
                 }
               />
             ))}
@@ -566,7 +663,7 @@ export default function UnifiedApprovalsPage() {
           rejectForm.resetFields();
         }}
         onOk={() => rejectForm.submit()}
-        confirmLoading={rejectLeave.isPending}
+        confirmLoading={rejectLeave.isPending || decideCrewChange.isPending}
         destroyOnClose
       >
         <Form form={rejectForm} layout="vertical" onFinish={handleConfirmReject}>

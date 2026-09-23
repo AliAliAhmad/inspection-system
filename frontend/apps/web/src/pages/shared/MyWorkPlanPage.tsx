@@ -23,10 +23,13 @@ import {
   EyeOutlined,
   FilePdfOutlined,
   StarFilled,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { workPlansApi, type MyWorkPlanDay, type WorkPlanJob } from '@inspection/shared';
+import { workPlansApi, type MyWorkPlanDay, type WorkPlanJob, type SupervisedJob } from '@inspection/shared';
+import CrewChangeModal from '../../components/work-planning/CrewChangeModal';
+import { useAuth } from '../../providers/AuthProvider';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
@@ -56,6 +59,10 @@ const PRIORITY_COLORS: Record<string, string> = {
 export default function MyWorkPlanPage() {
   const { t } = useTranslation();
   const [weekOffset, setWeekOffset] = useState(0);
+  const { user } = useAuth();
+  // A planner changes a crew on the board; only a non-planner supervisor asks.
+  const mustAsk = user?.role !== 'admin' && user?.role !== 'engineer';
+  const [crewJob, setCrewJob] = useState<SupervisedJob | null>(null);
 
   // Calculate week start (Monday)
   const currentWeekStart = dayjs().startOf('isoWeek').add(weekOffset, 'week');
@@ -251,6 +258,53 @@ export default function MyWorkPlanPage() {
           </Row>
         </Card>
 
+        {/* Jobs you watch — Ali, 2026-09-23. The whole week, not tied to a day:
+            a pure supervisor has no jobs of his own, so nothing else here would
+            show him anything. Purple, matching the 👁 on the board. */}
+        {(myPlanData?.supervised_jobs?.length ?? 0) > 0 && (
+          <Card
+            style={{ marginBottom: 24, borderColor: '#722ed1' }}
+            title={
+              <Space>
+                <EyeOutlined style={{ color: '#722ed1' }} />
+                <span style={{ color: '#722ed1' }}>{t('work_plan.jobs_you_watch', 'Jobs you watch')}</span>
+                <Badge count={myPlanData?.total_supervised ?? 0} color="#722ed1" />
+              </Space>
+            }
+          >
+            {myPlanData!.supervised_jobs!.map((d) => (
+              <div key={d.date} style={{ marginBottom: 12 }}>
+                <Text strong>{d.day_name}, {dayjs(d.date).format('MMMM D')}</Text>
+                <List
+                  size="small"
+                  dataSource={d.jobs}
+                  renderItem={(job) => (
+                    <List.Item
+                      actions={mustAsk ? [
+                        <Button key="crew" size="small" icon={<TeamOutlined />}
+                          onClick={() => setCrewJob(job)}>
+                          {t('crew_change.button', 'Ask to change crew')}
+                        </Button>,
+                      ] : []}
+                    >
+                      <Space direction="vertical" size={0}>
+                        <Space wrap size={4}>
+                          <Tag color={JOB_TYPE_COLORS[job.job_type]}>{job.job_type.toUpperCase()}</Tag>
+                          <Text>{job.equipment_name || job.description}</Text>
+                          {job.status && <Tag color={job.is_running ? 'green' : 'default'}>{job.status}</Tag>}
+                        </Space>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {job.workers.length > 0 ? job.workers.join(', ') : t('work_plan.no_team_yet', 'No team yet')}
+                        </Text>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+              </div>
+            ))}
+          </Card>
+        )}
+
         {/* Jobs by Day */}
         {!myPlanData?.work_plan ? (
           <Empty description="No work plan published for this week" />
@@ -274,6 +328,12 @@ export default function MyWorkPlanPage() {
           ))
         )}
       </Card>
+      <CrewChangeModal
+        open={!!crewJob}
+        jobId={crewJob?.id ?? null}
+        jobLabel={crewJob?.equipment_name || undefined}
+        onClose={() => setCrewJob(null)}
+      />
     </div>
   );
 }

@@ -37,6 +37,8 @@ export interface ApprovalFiltersProps {
   onClear: () => void;
   collapsible?: boolean;
   defaultCollapsed?: boolean;
+  /** The kinds this reader may act on. An engineer sees crew changes only. */
+  availableTypes?: ApprovalType[];
 }
 
 const APPROVAL_TYPES: { value: ApprovalType; label: string; color: string }[] = [
@@ -44,6 +46,7 @@ const APPROVAL_TYPES: { value: ApprovalType; label: string; color: string }[] = 
   { value: 'pause', label: 'Pause', color: 'orange' },
   { value: 'bonus', label: 'Bonus', color: 'gold' },
   { value: 'takeover', label: 'Takeover', color: 'purple' },
+  { value: 'crew_change', label: 'Crew change', color: 'cyan' },
 ];
 
 const STATUS_OPTIONS: { value: ApprovalStatus; label: string; color: string }[] = [
@@ -65,6 +68,7 @@ export function ApprovalFilters({
   onClear,
   collapsible = false,
   defaultCollapsed = false,
+  availableTypes,
 }: ApprovalFiltersProps) {
   const { t } = useTranslation();
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
@@ -223,7 +227,7 @@ export function ApprovalFilters({
             maxTagCount={2}
             allowClear
           >
-            {APPROVAL_TYPES.map((type) => (
+            {APPROVAL_TYPES.filter((type) => !availableTypes || availableTypes.includes(type.value)).map((type) => (
               <Select.Option key={type.value} value={type.value}>
                 <Tag color={type.color} style={{ marginRight: 0 }}>
                   {type.label}

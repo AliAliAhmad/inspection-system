@@ -6,6 +6,8 @@ import {
   WorkPlanAssignment,
   WorkPlanMaterial,
   JobDetails,
+  CrewChangeOptions,
+  CrewChangeRequest,
   MyWorkPlanResponse,
   AvailableJobsResponse,
   CreateWorkPlanPayload,
@@ -683,6 +685,32 @@ export const workPlansApi = {
    */
   getJobDetails(jobId: number) {
     return getApiClient().get<ApiResponse<JobDetails>>(`/api/work-plans/jobs/${jobId}/details`);
+  },
+
+  /**
+   * A job's supervisor who is not a planner ASKS to change its crew; any
+   * engineer or admin approves in the Approvals inbox (Ali, 2026-09-23).
+   * Nothing on the job changes until then.
+   */
+  getCrewChangeOptions(jobId: number) {
+    return getApiClient().get<ApiResponse<CrewChangeOptions>>(
+      `/api/work-plans/jobs/${jobId}/crew-change-options`);
+  },
+
+  listCrewChangeRequests(jobId: number) {
+    return getApiClient().get<ApiResponse<CrewChangeRequest[]>>(
+      `/api/work-plans/jobs/${jobId}/crew-change-requests`);
+  },
+
+  requestCrewChange(jobId: number, payload: {
+    remove_user_id?: number | null; add_user_id?: number | null; reason?: string;
+  }) {
+    return getApiClient().post<ApiResponse<CrewChangeRequest>>(
+      `/api/work-plans/jobs/${jobId}/crew-change-requests`, payload);
+  },
+
+  withdrawCrewChangeRequest(requestId: number) {
+    return getApiClient().delete(`/api/work-plans/crew-change-requests/${requestId}`);
   },
 
   getDayInspections(date: string, berth?: string) {

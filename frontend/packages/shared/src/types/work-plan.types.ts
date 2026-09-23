@@ -1171,4 +1171,33 @@ export interface JobDetails {
   sap: JobDetailsSap | null;
   defect: JobDetailsDefect | null;
   assignments: { user_id: number; full_name: string | null; is_lead: boolean }[];
+  /** The server's answer to "may this reader ASK to change the crew": the
+   *  job's supervisor who is not a planner. Planners change it on the board. */
+  can_request_crew_change?: boolean;
+}
+
+export type CrewChangeStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface CrewChangePerson { id: number; name: string | null; role: string | null }
+
+export interface CrewChangeRequest {
+  id: number;
+  work_plan_job_id: number;
+  requested_by: CrewChangePerson | null;
+  remove_user: CrewChangePerson | null;
+  add_user: CrewChangePerson | null;
+  reason: string | null;
+  status: CrewChangeStatus;
+  reviewed_by: CrewChangePerson | null;
+  reviewed_at: string | null;
+  /** 'job_started' | 'withdrawn' when cancelled; the planner's words when refused. */
+  review_notes: string | null;
+  created_at: string | null;
+}
+
+export interface CrewChangeOptions {
+  team: { user_id: number; name: string | null; role: string | null; is_lead: boolean }[];
+  candidates: { id: number; name: string; role: string; specialization: string | null; on_leave: boolean }[];
+  started: boolean;
+  day_date: string | null;
 }

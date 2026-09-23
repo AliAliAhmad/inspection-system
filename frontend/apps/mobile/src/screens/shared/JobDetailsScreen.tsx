@@ -33,6 +33,7 @@ import type { JobDetails } from '@inspection/shared';
 import JobSubTasksCard from '../../components/JobSubTasksCard';
 import JobAttachmentsCard from '../../components/JobAttachmentsCard';
 import JobOperationsCard from '../../components/JobOperationsCard';
+import CrewChangeCard from '../../components/CrewChangeCard';
 import { useAuth } from '../../providers/AuthProvider';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -302,6 +303,11 @@ export default function JobDetailsScreen() {
           ))}
         </View>
       )}
+
+      {/* ── Ask to change the crew — the job's supervisor only. Ali, 2026-09-23:
+           a supervisor asks, a planner approves. The server decides who sees
+           this (can_request_crew_change), so the rule lives in one place. ── */}
+      {data.can_request_crew_change && <CrewChangeCard jobId={jobId} />}
 
       {/* ── Notes / equipment extras ── */}
       {(!!data.notes || !!equipmentType || !!location) && (

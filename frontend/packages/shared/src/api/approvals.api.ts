@@ -1,8 +1,8 @@
 import { getApiClient } from './client';
 import { ApiResponse } from '../types';
 
-export type ApprovalType = 'leave' | 'pause' | 'bonus' | 'takeover';
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ApprovalType = 'leave' | 'pause' | 'bonus' | 'takeover' | 'crew_change';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface ApprovalUser {
   id: number;
@@ -31,6 +31,14 @@ export interface ApprovalDetails {
   // Takeover
   queue_position?: number;
   takeover_reason?: string;
+  // Crew change — a supervisor asking to change who is on a job
+  equipment_name?: string | null;
+  job_description?: string | null;
+  sap_order_number?: string | null;
+  day_date?: string | null;
+  remove_user?: { id: number; name: string } | null;
+  add_user?: { id: number; name: string } | null;
+  review_notes?: string | null;
 }
 
 export interface UnifiedApproval {
@@ -47,6 +55,7 @@ export interface ApprovalCounts {
   pause: number;
   bonus: number;
   takeover: number;
+  crew_change: number;
   total: number;
 }
 

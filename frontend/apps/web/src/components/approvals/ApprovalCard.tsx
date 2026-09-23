@@ -8,14 +8,16 @@ import {
   GiftOutlined,
   PauseCircleOutlined,
   SwapOutlined,
+  TeamOutlined,
+  ArrowRightOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 
 const { Text, Paragraph } = Typography;
 
-export type ApprovalType = 'leave' | 'pause' | 'bonus' | 'takeover';
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ApprovalType = 'leave' | 'pause' | 'bonus' | 'takeover' | 'crew_change';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface ApprovalItem {
   id: number;
@@ -46,6 +48,13 @@ export interface ApprovalItem {
     // Takeover
     queuePosition?: number;
     takeoverReason?: string;
+    // Crew change
+    equipmentName?: string | null;
+    jobDescription?: string | null;
+    sapOrderNumber?: string | null;
+    dayDate?: string | null;
+    removeUser?: { id: number; name: string } | null;
+    addUser?: { id: number; name: string } | null;
   };
 }
 
@@ -65,6 +74,7 @@ const TYPE_ICONS: Record<ApprovalType, React.ReactNode> = {
   pause: <PauseCircleOutlined />,
   bonus: <GiftOutlined />,
   takeover: <SwapOutlined />,
+  crew_change: <TeamOutlined />,
 };
 
 const TYPE_COLORS: Record<ApprovalType, string> = {
@@ -72,12 +82,14 @@ const TYPE_COLORS: Record<ApprovalType, string> = {
   pause: 'orange',
   bonus: 'gold',
   takeover: 'purple',
+  crew_change: 'cyan',
 };
 
 const STATUS_COLORS: Record<ApprovalStatus, string> = {
   pending: 'processing',
   approved: 'success',
   rejected: 'error',
+  cancelled: 'default',
 };
 
 const LEAVE_TYPE_COLORS: Record<string, string> = {
@@ -185,6 +197,42 @@ export function ApprovalCard({
             )}
           </>
         );
+      case 'crew_change': {
+        // A supervisor asking to change who is on a job. Who goes OFF is shown
+        // in red and who comes ON in green, so the change reads at a glance.
+        const d = item.details;
+        return (
+          <>
+            <Space wrap style={{ marginBottom: 8 }}>
+              <Tag color="cyan" icon={<TeamOutlined />}>
+                {d.equipmentName || d.sapOrderNumber || `#${d.jobId}`}
+              </Tag>
+              {d.dayDate && (
+                <Tag icon={<CalendarOutlined />}>{dayjs(d.dayDate).format('ddd D MMM')}</Tag>
+              )}
+            </Space>
+            <Space wrap style={{ marginBottom: 8 }}>
+              {d.removeUser && (
+                <Tag color="red">{t('approvals.crew.off', 'Off')}: {d.removeUser.name}</Tag>
+              )}
+              {d.removeUser && d.addUser && <ArrowRightOutlined style={{ color: '#8c8c8c' }} />}
+              {d.addUser && (
+                <Tag color="green">{t('approvals.crew.on', 'On')}: {d.addUser.name}</Tag>
+              )}
+            </Space>
+            {d.jobDescription && (
+              <Paragraph type="secondary" ellipsis={{ rows: 1 }} style={{ marginBottom: 4 }}>
+                {d.jobDescription}
+              </Paragraph>
+            )}
+            {d.reason && (
+              <Paragraph ellipsis={{ rows: 2 }} style={{ marginBottom: 0 }}>
+                “{d.reason}”
+              </Paragraph>
+            )}
+          </>
+        );
+      }
       default:
         return null;
     }

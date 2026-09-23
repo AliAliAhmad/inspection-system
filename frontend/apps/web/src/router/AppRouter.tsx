@@ -118,7 +118,7 @@ export default function AppRouter() {
             <Route path="specialist-jobs" element={<RoleGuard roles={['admin']}><AllSpecialistJobsPage /></RoleGuard>} />
             <Route path="engineer-jobs" element={<RoleGuard roles={['admin']}><AllEngineerJobsPage /></RoleGuard>} />
             <Route path="quality-reviews" element={<RoleGuard roles={['admin']}><QualityReviewsAdminPage /></RoleGuard>} />
-            <Route path="approvals" element={<RoleGuard roles={['admin']}><UnifiedApprovalsPage /></RoleGuard>} />
+            <Route path="approvals" element={<RoleGuard roles={['admin', 'engineer']}><UnifiedApprovalsPage /></RoleGuard>} />
             {/* Redirects from old approval routes */}
             <Route path="leave-approvals" element={<Navigate to="/admin/approvals?tab=leave" replace />} />
             <Route path="bonus-approvals" element={<Navigate to="/admin/approvals?tab=bonus" replace />} />

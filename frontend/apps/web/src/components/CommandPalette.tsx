@@ -81,7 +81,7 @@ const ALL_COMMANDS: CommandItem[] = [
   { id: 'p-spec', label: 'Specialist Jobs', labelAr: 'وظائف المتخصصين', emoji: '🧠', path: '/admin/specialist-jobs', category: 'Admin', keywords: ['specialist', 'task', 'متخصص'], roles: ['admin'] },
   { id: 'p-eng', label: 'Engineer Jobs', labelAr: 'وظائف المهندسين', emoji: '🛠️', path: '/admin/engineer-jobs', category: 'Admin', keywords: ['engineer', 'task', 'مهندس'], roles: ['admin'] },
   { id: 'p-qr', label: 'Quality Reviews', labelAr: 'مراجعات الجودة', emoji: '⭐', path: '/admin/quality-reviews', category: 'Admin', keywords: ['quality', 'review', 'qc', 'جودة'], roles: ['admin'] },
-  { id: 'p-appr', label: 'Approvals', labelAr: 'الموافقات', emoji: '✔️', path: '/admin/approvals', category: 'Admin', keywords: ['approve', 'reject', 'pending', 'موافقة'], roles: ['admin'] },
+  { id: 'p-appr', label: 'Approvals', labelAr: 'الموافقات', emoji: '✔️', path: '/admin/approvals', category: 'Admin', keywords: ['approve', 'reject', 'pending', 'موافقة'], roles: ['admin', 'engineer'] },
   { id: 'p-rout', label: 'Routines', labelAr: 'الروتينات', emoji: '🔁', path: '/admin/routines', category: 'Admin', keywords: ['recurring', 'routine', 'متكرر'], roles: ['admin'] },
   { id: 'p-def', label: 'Defects', labelAr: 'العيوب', emoji: '🐛', path: '/admin/defects', category: 'Admin', keywords: ['bug', 'issue', 'problem', 'fault', 'عيب'], roles: ['admin', 'engineer'] },
   { id: 'p-back', label: 'Backlog', labelAr: 'المتأخرات', emoji: '⚠️', path: '/admin/backlog', category: 'Admin', keywords: ['queue', 'waiting', 'todo', 'متأخر'], roles: ['admin'] },
