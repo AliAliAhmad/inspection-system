@@ -643,7 +643,7 @@
   `44c39d2a-bb74-492c-ae84-e8ddb509ea35` on `preview` (runtime 1.0.0, both platforms).
 - Plan: `tasks/crew-swap-on-published.md`.
 
-### Supervisor on the phone, done properly + changeable on a published week — BUILT 2026-09-24, NOT PUSHED
+### Supervisor on the phone, done properly + changeable on a published week — DEPLOYED 2026-09-24
 - Ali asked what a supervisor sees on the phone. Checking found TWO gaps in what was already
   shipped, and he said "fix both, and make supervisor changeable until job starts".
 - **Gap 1 — he was shown buttons he may not use.** Start/Pause/Finish and the tick box were
@@ -663,6 +663,8 @@
 - Web Job Details Supervisor dropdown now shows on a published plan too.
 - 1266 backend tests, web 55, web+mobile `tsc` clean. **Needs push + OTA.**
 - **⚠️ UNVERIFIED on a device:** camera, gallery, microphone permission and the upload.
+- ✅ **DEPLOYED 2026-09-24** — commit `8692520`; OTA group
+  `724a9e82-0b75-4be7-bbb8-b9669339d155` on `preview` (runtime 1.0.0, both platforms).
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
