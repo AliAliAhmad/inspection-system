@@ -558,6 +558,8 @@
   - Smaller payload than a worker's: machine, job, **who is actually on it**, and whether it
     has started. Status comes from `job.tracking` — `WorkPlanJob` has no status column.
   - Purple, matching the 👁 on the board. `أعمال تشرف عليها` in Arabic.
+- ✅ **DEPLOYED 2026-09-23** — commits `67e2b00` + `9b28749`; OTA group
+  `c2decaaf-7f05-4a39-9cb3-a5ed5c38facc` on `preview` (runtime 1.0.0, both platforms).
 - **Deliberately NOT built: the 685 MES-SUPV operations stay team lines.** Ali chose a
   named watcher (option A), not "supervision is a line someone owns" (option B). Linking
   them is a small addition on top of per-operation assignment if he ever wants it.
