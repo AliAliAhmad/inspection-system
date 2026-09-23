@@ -666,7 +666,7 @@
 - ✅ **DEPLOYED 2026-09-24** — commit `8692520`; OTA group
   `724a9e82-0b75-4be7-bbb8-b9669339d155` on `preview` (runtime 1.0.0, both platforms).
 
-### Names on the board: Ali.K.A.A, not Ali — BUILT 2026-09-24, NOT PUSHED
+### Names on the board: Ali.K.A.A, not Ali — DEPLOYED 2026-09-24 (commit `c3dbe7a`, web bundle `index-DWR8OHUj.js`)
 - Ali: "the job pool shows only the employee first name which make me confuse, please add
   the first name and the family name letter, example ali.k.a.a".
 - `frontend/apps/web/src/utils/short-name.ts` → `shortName()`: first name whole, then the
