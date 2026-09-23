@@ -913,3 +913,10 @@ the phone was drawing Start/tick buttons for the supervisor that the server refu
 the client what this reader may do (`can_*` flags from the same functions the
 endpoints use), so the screen can never offer what the server will refuse.
 
+LESSON (2026-09-24): Ali said "I cannot assign a supervisor" on the web board —
+the box existed, was live, and was the LAST section of Job Details, under an
+operations list of 10+ lines. I had tested that it rendered, never where. → A new
+control goes where the user already looks for that kind of thing (the supervisor
+beside the team), not at the bottom where there was room. "It's on the page" is
+not "he can find it" — check the position on a real, long job.
+

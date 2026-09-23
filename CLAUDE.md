@@ -678,6 +678,18 @@
 - Pool name gets `minWidth:0` + ellipsis so a long one cannot push the week dots off; the
   tooltip already shows the whole name. Web only — the phone shows full names.
 
+### Supervisor box moved up + drag-and-drop supervisor — 2026-09-24, NOT PUSHED
+- Ali could not find where to assign a supervisor. It was live but the LAST section of Job
+  Details, below the operations list, photos, hours and berth. Moved to just above "Team on
+  this job", label now purple `👁 Supervisor`. Web only.
+- **Drag-and-drop supervisor** (Ali: "make the supervisor assign also like the team assign
+  drag and drop"): the Lead/Member pop-up has a third button, **👁 As Supervisor** — a PUT of
+  `engineer_id` per job (`supervisorMutation`), never an assignment row. Disabled for
+  inspectors (SUPERVISOR_ROLES) and for a man already WORKING on the job ("watches, not one of
+  the workers"); on a bundle it covers only the jobs he is not working on, and says so. Shows
+  "replaces: X" when a job already had a supervisor. Drag is draft-only as before; on a
+  published week use the Job Details dropdown.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

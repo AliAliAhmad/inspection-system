@@ -1246,6 +1246,46 @@ export default function WorkPlanningPage() {
     },
   });
 
+  // Make the dropped man the SUPERVISOR of one job, or of every job on a bundle.
+  //
+  // Ali, 2026-09-24: "can we make the supervisor assign also like the team
+  // assign drag and drop ... add a supervisor also" — a third button beside
+  // Lead and Member in the same pop-up. A supervisor gets NO assignment row
+  // (he costs the day nothing), so this is a PUT of engineer_id, the same call
+  // the Job Details dropdown makes. One request per job; the server refuses a
+  // started job on a published week and says so, and those are reported by name.
+  const supervisorMutation = useMutation({
+    mutationFn: async ({ planId, jobIds, userId }: { planId: number; jobIds: number[]; userId: number }) => {
+      const results = await Promise.allSettled(
+        jobIds.map((jobId) => workPlansApi.updateJob(planId, jobId, { engineer_id: userId } as any)));
+      const failed = results
+        .map((r, i) => ({ r, jobId: jobIds[i] }))
+        .filter((x) => x.r.status === 'rejected')
+        .map((x) => ({
+          jobId: x.jobId,
+          reason: ((x.r as PromiseRejectedResult).reason?.response?.data?.message) || 'failed',
+        }));
+      return { done: jobIds.length - failed.length, failed };
+    },
+    onSuccess: ({ done, failed }, vars) => {
+      const who = shortName(pendingAssignment?.user?.full_name);
+      if (done > 0) {
+        message.success(done === 1
+          ? `${who} is supervising this job`
+          : `${who} is supervising ${done} jobs`);
+      }
+      if (failed.length > 0) {
+        message.error(failed.length === vars.jobIds.length && failed.length === 1
+          ? failed[0].reason
+          : `${failed.length} not changed: ${failed.map((f) => f.reason).join(' · ')}`, 6);
+      }
+      setAssignModalOpen(false);
+      setPendingAssignment(null);
+    },
+    onError: (err: any) => message.error(err?.message || 'Could not set the supervisor'),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['work-plans'] }),
+  });
+
   // Import SAP mutation
   const [importResult, setImportResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
 
@@ -2290,6 +2330,26 @@ export default function WorkPlanningPage() {
       userId: pendingAssignment.user.id,
       isLead,
       user: pendingAssignment.user,   // rendered optimistically on the card
+    });
+  };
+
+  /** The jobs the dropped man can SUPERVISE: those he is not working on. A
+   *  supervisor "watches over it — not one of the workers" (Ali, 2026-09-23),
+   *  so a man already on a job's team is never made its watcher as well. */
+  const supervisableJobs = (pa: PendingAssignment | null): WorkPlanJob[] => {
+    if (!pa) return [];
+    const jobs = pa.kind === 'bundle' ? pa.jobs : [pa.job];
+    return jobs.filter((j) => !(j.assignments || []).some((a) => a.user_id === pa.user.id));
+  };
+
+  const handleAssignSupervisor = () => {
+    if (!pendingAssignment || !currentPlan) return;
+    const jobs = supervisableJobs(pendingAssignment);
+    if (jobs.length === 0) return;
+    supervisorMutation.mutate({
+      planId: currentPlan.id,
+      jobIds: jobs.map((j) => j.id),
+      userId: pendingAssignment.user.id,
     });
   };
 
@@ -3816,10 +3876,54 @@ export default function WorkPlanningPage() {
               >
                 As Member
               </Button>
+              {(() => {
+                // Same roles as the Job Details dropdown and SUPERVISOR_ROLES
+                // on the server — never offer what the save would refuse.
+                const role = pendingAssignment.user.role;
+                const allowedRole = ['engineer', 'admin', 'specialist', 'maintenance'].includes(role);
+                const jobs = supervisableJobs(pendingAssignment);
+                const total = pendingAssignment.kind === 'bundle' ? pendingAssignment.jobs.length : 1;
+                const why = !allowedRole
+                  ? `A ${role} cannot supervise a job`
+                  : jobs.length === 0
+                    ? 'He is working on this job. A supervisor watches, he does not work — remove him from the team first.'
+                    : jobs.length < total
+                      ? `Supervises ${jobs.length} of ${total} — he is working on the others`
+                      : 'Watches the job. Not one of the workers, costs the day no hours.';
+                return (
+                  <Tooltip title={why}>
+                    <Button
+                      size="large"
+                      onClick={handleAssignSupervisor}
+                      loading={supervisorMutation.isPending}
+                      disabled={!allowedRole || jobs.length === 0}
+                      style={allowedRole && jobs.length > 0
+                        ? { borderColor: '#722ed1', color: '#722ed1' } : undefined}
+                    >
+                      👁 As Supervisor
+                    </Button>
+                  </Tooltip>
+                );
+              })()}
             </Space>
+            {(() => {
+              // Say so when this REPLACES someone, so nobody is swapped out unseen.
+              const current = supervisableJobs(pendingAssignment)
+                .map((j) => (j as any).engineer_id && (j as any).engineer_id !== pendingAssignment.user.id
+                  ? (j as any).engineer_name : null)
+                .filter(Boolean) as string[];
+              const names = Array.from(new Set(current));
+              return names.length > 0 ? (
+                <div style={{ marginTop: 8 }}>
+                  <Text style={{ fontSize: 12, color: '#722ed1' }}>
+                    👁 As Supervisor replaces: {names.map(shortName).join(', ')}
+                  </Text>
+                </div>
+              ) : null;
+            })()}
             <Divider />
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Lead: Responsible for the job | Member: Part of the team
+              Lead: Responsible for the job | Member: Part of the team | Supervisor: Watches it, does not work on it
             </Text>
             {assignmentWarnings.some(w => w.type === 'error' && !w.message.includes('already assigned')) && (
               <div style={{ marginTop: 8 }}>
@@ -4119,6 +4223,93 @@ export default function WorkPlanningPage() {
               </Card>
             )}
 
+            {/* Supervisor & Difficulty — MOVED UP beside the team, 2026-09-24.
+                It was the LAST thing in this window, under the whole operations
+                list (10+ lines on a SAP order), photos, hours and berth. Ali
+                opened Job Details, saw no Supervisor box, and asked why he could
+                not assign one. The person watching a job belongs next to the
+                people doing it. */}
+            {/* `|| isDraft` is the half of the gap that made the rest unusable.
+                Ali, 2026-09-23: "any job should have supervisor". The row was
+                hidden unless the job ALREADY had a supervisor, so a job with
+                none showed no card — and there was nowhere to add one. The only
+                place a supervisor could be named was the "Add Job Manually"
+                window, which almost no real job goes through: everything comes
+                from SAP or the generator. */}
+            {(selectedJob.difficulty || selectedJob.engineer_name
+              || (selectedJob as any).engineer_id || !!currentPlan) && (
+              <Row gutter={16} style={{ marginBottom: 16 }}>
+                <Col span={12}>
+                  <Card size="small">
+                    <Text type="secondary">Difficulty</Text>
+                    <div>
+                      {selectedJob.difficulty ? (
+                        <Tag color={selectedJob.difficulty === 'major' ? 'red' : 'blue'}>
+                          {selectedJob.difficulty === 'major' ? 'Major' : 'Minor'}
+                        </Tag>
+                      ) : (
+                        <span style={{ color: '#8c8c8c' }}>Not set</span>
+                      )}
+                    </div>
+                  </Card>
+                </Col>
+                <Col span={12}>
+                  <Card size="small">
+                    <Text strong style={{ color: '#722ed1' }}>👁 Supervisor</Text>
+                    {currentPlan ? (
+                      /* Editable on ANY job — SAP, generated or hand-typed.
+                         Draft OR published: Ali, 2026-09-24, "make supervisor
+                         changeable until job starts" — the same rule as the
+                         crew. On a published week the server refuses a started
+                         job and tells both supervisors; its reason is shown.
+
+                         Inline, the same shape the Berth transfer above uses,
+                         so there is one pattern in this modal and not two. */
+                      <Select
+                        size="small"
+                        style={{ width: '100%', marginTop: 4 }}
+                        placeholder="Nobody watching"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        value={(selectedJob as any).engineer_id ?? undefined}
+                        options={engineersList.map((u: any) => ({
+                          value: u.id,
+                          label: u.full_name,
+                        }))}
+                        onChange={(value) => {
+                          if (!currentPlan) return;
+                          const chosen = engineersList.find((u: any) => u.id === value);
+                          workPlansApi.updateJob(currentPlan.id, selectedJob.id,
+                                                 { engineer_id: value ?? null } as any)
+                            .then(() => {
+                              message.success(value
+                                ? `${chosen?.full_name} is watching this job${isDraft ? '' : ' — he has been told'}`
+                                : 'Supervisor removed');
+                              queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+                              setSelectedJob({
+                                ...selectedJob,
+                                engineer_id: value ?? null,
+                                engineer_name: chosen?.full_name ?? null,
+                              } as any);
+                            })
+                            .catch((err: any) => message.error(
+                              err?.response?.data?.message
+                              || err?.response?.data?.error
+                              || 'Could not set the supervisor'));
+                        }}
+                      />
+                    ) : (
+                      <div style={{ fontWeight: 600 }}>
+                        {selectedJob.engineer_name
+                          ? <>👁 {selectedJob.engineer_name}</>
+                          : <span style={{ color: '#8c8c8c', fontWeight: 400 }}>Nobody watching</span>}
+                      </div>
+                    )}
+                  </Card>
+                </Col>
+              </Row>
+            )}
             {/* Team */}
             <Card size="small" style={{ marginBottom: 16 }}>
               {/* "Team on this job", not just "Assigned Team" — RULE A. These
@@ -4398,88 +4589,6 @@ export default function WorkPlanningPage() {
               </Col>
             </Row>
 
-            {/* Difficulty & Engineer */}
-            {/* `|| isDraft` is the half of the gap that made the rest unusable.
-                Ali, 2026-09-23: "any job should have supervisor". The row was
-                hidden unless the job ALREADY had a supervisor, so a job with
-                none showed no card — and there was nowhere to add one. The only
-                place a supervisor could be named was the "Add Job Manually"
-                window, which almost no real job goes through: everything comes
-                from SAP or the generator. */}
-            {(selectedJob.difficulty || selectedJob.engineer_name
-              || (selectedJob as any).engineer_id || !!currentPlan) && (
-              <Row gutter={16} style={{ marginTop: 16 }}>
-                <Col span={12}>
-                  <Card size="small">
-                    <Text type="secondary">Difficulty</Text>
-                    <div>
-                      {selectedJob.difficulty ? (
-                        <Tag color={selectedJob.difficulty === 'major' ? 'red' : 'blue'}>
-                          {selectedJob.difficulty === 'major' ? 'Major' : 'Minor'}
-                        </Tag>
-                      ) : (
-                        <span style={{ color: '#8c8c8c' }}>Not set</span>
-                      )}
-                    </div>
-                  </Card>
-                </Col>
-                <Col span={12}>
-                  <Card size="small">
-                    <Text type="secondary">Supervisor</Text>
-                    {currentPlan ? (
-                      /* Editable on ANY job — SAP, generated or hand-typed.
-                         Draft OR published: Ali, 2026-09-24, "make supervisor
-                         changeable until job starts" — the same rule as the
-                         crew. On a published week the server refuses a started
-                         job and tells both supervisors; its reason is shown.
-
-                         Inline, the same shape the Berth transfer above uses,
-                         so there is one pattern in this modal and not two. */
-                      <Select
-                        size="small"
-                        style={{ width: '100%', marginTop: 4 }}
-                        placeholder="Nobody watching"
-                        allowClear
-                        showSearch
-                        optionFilterProp="label"
-                        value={(selectedJob as any).engineer_id ?? undefined}
-                        options={engineersList.map((u: any) => ({
-                          value: u.id,
-                          label: u.full_name,
-                        }))}
-                        onChange={(value) => {
-                          if (!currentPlan) return;
-                          const chosen = engineersList.find((u: any) => u.id === value);
-                          workPlansApi.updateJob(currentPlan.id, selectedJob.id,
-                                                 { engineer_id: value ?? null } as any)
-                            .then(() => {
-                              message.success(value
-                                ? `${chosen?.full_name} is watching this job${isDraft ? '' : ' — he has been told'}`
-                                : 'Supervisor removed');
-                              queryClient.invalidateQueries({ queryKey: ['work-plans'] });
-                              setSelectedJob({
-                                ...selectedJob,
-                                engineer_id: value ?? null,
-                                engineer_name: chosen?.full_name ?? null,
-                              } as any);
-                            })
-                            .catch((err: any) => message.error(
-                              err?.response?.data?.message
-                              || err?.response?.data?.error
-                              || 'Could not set the supervisor'));
-                        }}
-                      />
-                    ) : (
-                      <div style={{ fontWeight: 600 }}>
-                        {selectedJob.engineer_name
-                          ? <>👁 {selectedJob.engineer_name}</>
-                          : <span style={{ color: '#8c8c8c', fontWeight: 400 }}>Nobody watching</span>}
-                      </div>
-                    )}
-                  </Card>
-                </Col>
-              </Row>
-            )}
 
             {/* Mark Complete */}
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
