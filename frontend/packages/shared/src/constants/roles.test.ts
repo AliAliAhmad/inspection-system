@@ -3,22 +3,23 @@ import { ROLES, ROLE_LABELS, ROLE_LABELS_AR, hasRole } from './roles';
 import type { UserRole } from '../types';
 
 describe('ROLES constants', () => {
-  it('contains all five expected roles', () => {
+  it('contains all six expected roles', () => {
     expect(ROLES.ADMIN).toBe('admin');
     expect(ROLES.INSPECTOR).toBe('inspector');
     expect(ROLES.SPECIALIST).toBe('specialist');
     expect(ROLES.ENGINEER).toBe('engineer');
     expect(ROLES.QUALITY_ENGINEER).toBe('quality_engineer');
+    expect(ROLES.MAINTENANCE).toBe('maintenance');
   });
 
-  it('has exactly 5 role entries', () => {
-    expect(Object.keys(ROLES)).toHaveLength(5);
+  it('has exactly 6 role entries', () => {
+    expect(Object.keys(ROLES)).toHaveLength(6);
   });
 });
 
 describe('ROLE_LABELS', () => {
   it('has a label for every role', () => {
-    const allRoles: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
+    const allRoles: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'];
     for (const role of allRoles) {
       expect(ROLE_LABELS[role]).toBeTruthy();
       expect(typeof ROLE_LABELS[role]).toBe('string');
@@ -31,28 +32,29 @@ describe('ROLE_LABELS', () => {
     expect(ROLE_LABELS.specialist).toBe('Specialist');
     expect(ROLE_LABELS.engineer).toBe('Engineer');
     expect(ROLE_LABELS.quality_engineer).toBe('Quality Engineer');
+    expect(ROLE_LABELS.maintenance).toBe('Maintenance');
   });
 
-  it('has exactly 5 entries', () => {
-    expect(Object.keys(ROLE_LABELS)).toHaveLength(5);
+  it('has exactly 6 entries', () => {
+    expect(Object.keys(ROLE_LABELS)).toHaveLength(6);
   });
 });
 
 describe('ROLE_LABELS_AR', () => {
   it('has an Arabic label for every role', () => {
-    const allRoles: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
+    const allRoles: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'];
     for (const role of allRoles) {
       expect(ROLE_LABELS_AR[role]).toBeTruthy();
       expect(typeof ROLE_LABELS_AR[role]).toBe('string');
     }
   });
 
-  it('has exactly 5 entries', () => {
-    expect(Object.keys(ROLE_LABELS_AR)).toHaveLength(5);
+  it('has exactly 6 entries', () => {
+    expect(Object.keys(ROLE_LABELS_AR)).toHaveLength(6);
   });
 
   it('Arabic labels differ from English labels', () => {
-    const allRoles: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
+    const allRoles: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'];
     for (const role of allRoles) {
       expect(ROLE_LABELS_AR[role]).not.toBe(ROLE_LABELS[role]);
     }
@@ -96,7 +98,7 @@ describe('hasRole', () => {
   });
 
   it('checks all roles correctly', () => {
-    const roles: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer'];
+    const roles: UserRole[] = ['admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'];
     for (const role of roles) {
       expect(hasRole(makeUser(role), role)).toBe(true);
       // Ensure other roles don't match

@@ -690,6 +690,19 @@
   "replaces: X" when a job already had a supervisor. Drag is draft-only as before; on a
   published week use the Job Details dropdown.
 
+### GitHub checks were red on every push — FIXED 2026-09-24, NOT PUSHED
+- "Web Frontend — Typecheck, Build & Deploy Guard", "Security Audit" and "Nightly" failed in
+  ~12s on EVERY run since at least 2026-09-16: `Error: No pnpm version is specified.`
+  `pnpm/action-setup@v4` needs a version and there is no root package.json. Added
+  `with: version: 10` to all three (playwright.yml already had it).
+- Running the guard's steps locally BEFORE pushing found the next failure it would have hit:
+  `roles.test.ts` expected 5 roles; `maintenance` was added (5e402d6) and the test never was.
+  Updated to 6. Shared 98 tests, web tsc, web build all pass locally.
+- **⚠️ Still red, NOT fixed: `playwright.yml`.** `work-planner-dragdrop.spec.ts` logs in to
+  `http://localhost:3001` and the workflow never starts a backend (`ECONNREFUSED ::1:3001`).
+  Needs a backend service in CI or the spec skipped there — a decision, not a one-liner.
+- None of these ever blocked Render; they only meant the safety checks checked nothing.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
