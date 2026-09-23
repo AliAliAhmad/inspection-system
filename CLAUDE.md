@@ -578,13 +578,24 @@
     `attachment_file_id`) already keeps him to evidence — he cannot write sub-tasks or
     operations. Nothing new was needed for that.
   - Verified by wrongly widening `_may_tick` and watching both NOT-tests fail.
+- **Any job can have a supervisor now** (Ali, 2026-09-23: "any job should have supervisor").
+  Until then the field existed ONLY in the "Add Job Manually" window — almost no real job goes
+  through it; everything comes from SAP or the generator. Job Details SHOWED the supervisor
+  but could not change it, and **the whole card was hidden unless the job already had one**
+  (`difficulty || engineer_name || engineer_id` — now `|| isDraft`). A loop with no way in.
+  The server was always ready: `PUT` has accepted `engineer_id` since the field existed.
+  - Inline `Select` in Job Details, the same shape as the Berth transfer beside it.
+  - **Draft only — Ali's choice.** He was offered a narrow exception for this one field (it
+    changes no hours, no assignment, nothing a crew sees) and kept "published means frozen"
+    whole. `test_a_published_week_still_refuses` pins it. **Name supervisors before
+    publishing.**
 - **Deliberately NOT built: "mark job done" and reassignment for a supervisor** — the first
   is a worker's or planner's call, the second is planning and he may not be a planner.
 - **Deliberately NOT built: the 685 MES-SUPV operations stay team lines.** Ali chose a
   named watcher (option A), not "supervision is a line someone owns" (option B). Linking
   them is a small addition on top of per-operation assignment if he ever wants it.
-- 26 tests in `tests/test_job_supervisor.py`; the dedupe and the tick boundary both verified
-  by breaking them. 1225 backend, 55 web, both `tsc` clean.
+- 32 tests in `tests/test_job_supervisor.py`; the dedupe and the tick boundary both verified
+  by breaking them. 1231 backend, 55 web, both `tsc` clean.
 - ✅ **TAP + PHOTO DEPLOYED 2026-09-23** — commit `a772c5c`; OTA group
   `6135ecb8-6d35-400f-9bcb-5ff8b4c2361f` on `preview` (runtime 1.0.0, both platforms).
   The first `eas update` FAILED with `Asset processing timed out`; a plain retry worked.

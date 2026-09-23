@@ -878,3 +878,12 @@ decided it: he may photograph, he may not tick. → Before offering a design opi
 re-read the project's own notes for a constraint that already settles it. A
 recorded reason beats a fresh judgement, and it keeps decisions consistent across
 months.
+
+LESSON (2026-09-23): The supervisor feature passed every test and was
+unreachable for nearly every real job. The field lived only in the "Add Job
+Manually" window, and Job Details hid the whole card unless the job ALREADY had a
+supervisor — so a job with none showed nothing to click. I had tested by creating
+jobs by hand, the one path where the field existed. → Test a new field on the
+jobs the user actually has, not the ones that are easiest to create. In this yard
+that means a SAP order or a generated job; a hand-typed job is the exception.
+Also: a display that renders only when the value is set can never be used to SET it.

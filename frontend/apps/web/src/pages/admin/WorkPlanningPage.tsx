@@ -4333,7 +4333,15 @@ export default function WorkPlanningPage() {
             </Row>
 
             {/* Difficulty & Engineer */}
-            {(selectedJob.difficulty || selectedJob.engineer_name || (selectedJob as any).engineer_id) && (
+            {/* `|| isDraft` is the half of the gap that made the rest unusable.
+                Ali, 2026-09-23: "any job should have supervisor". The row was
+                hidden unless the job ALREADY had a supervisor, so a job with
+                none showed no card — and there was nowhere to add one. The only
+                place a supervisor could be named was the "Add Job Manually"
+                window, which almost no real job goes through: everything comes
+                from SAP or the generator. */}
+            {(selectedJob.difficulty || selectedJob.engineer_name
+              || (selectedJob as any).engineer_id || isDraft) && (
               <Row gutter={16} style={{ marginTop: 16 }}>
                 <Col span={12}>
                   <Card size="small">
@@ -4352,11 +4360,55 @@ export default function WorkPlanningPage() {
                 <Col span={12}>
                   <Card size="small">
                     <Text type="secondary">Supervisor</Text>
-                    <div style={{ fontWeight: 600 }}>
-                      {selectedJob.engineer_name
-                        ? <>👁 {selectedJob.engineer_name}</>
-                        : <span style={{ color: '#8c8c8c', fontWeight: 400 }}>Nobody watching</span>}
-                    </div>
+                    {isDraft ? (
+                      /* Editable on ANY job — SAP, generated or hand-typed —
+                         which is the whole point of this change. Draft only,
+                         like every other field here: the server refuses edits to
+                         a published plan and Ali chose to keep that rule whole.
+
+                         Inline, the same shape the Berth transfer above uses,
+                         so there is one pattern in this modal and not two. */
+                      <Select
+                        size="small"
+                        style={{ width: '100%', marginTop: 4 }}
+                        placeholder="Nobody watching"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        value={(selectedJob as any).engineer_id ?? undefined}
+                        options={engineersList.map((u: any) => ({
+                          value: u.id,
+                          label: u.full_name,
+                        }))}
+                        onChange={(value) => {
+                          if (!currentPlan) return;
+                          const chosen = engineersList.find((u: any) => u.id === value);
+                          workPlansApi.updateJob(currentPlan.id, selectedJob.id,
+                                                 { engineer_id: value ?? null } as any)
+                            .then(() => {
+                              message.success(value
+                                ? `${chosen?.full_name} is watching this job`
+                                : 'Supervisor removed');
+                              queryClient.invalidateQueries({ queryKey: ['work-plans'] });
+                              setSelectedJob({
+                                ...selectedJob,
+                                engineer_id: value ?? null,
+                                engineer_name: chosen?.full_name ?? null,
+                              } as any);
+                            })
+                            .catch((err: any) => message.error(
+                              err?.response?.data?.message
+                              || err?.response?.data?.error
+                              || 'Could not set the supervisor'));
+                        }}
+                      />
+                    ) : (
+                      <div style={{ fontWeight: 600 }}>
+                        {selectedJob.engineer_name
+                          ? <>👁 {selectedJob.engineer_name}</>
+                          : <span style={{ color: '#8c8c8c', fontWeight: 400 }}>Nobody watching</span>}
+                      </div>
+                    )}
                   </Card>
                 </Col>
               </Row>

@@ -548,3 +548,128 @@ class TestWhatHeMayAndMayNotDo:
 
         assert WorkPlanAssignment.query.filter_by(
             work_plan_job_id=job.id).count() == 0
+
+
+class TestAnyJobCanHaveOne:
+    """Ali, 2026-09-23: "any job should have supervisor".
+
+    He was right that it could not. The Supervisor field existed ONLY in the
+    "Add Job Manually" window, so a supervisor could be named at the moment a
+    job was typed by hand and never afterwards — and almost no real job goes
+    through that window. Everything comes from SAP or the generator.
+
+    Job Details SHOWED the supervisor but offered no way to change it, and the
+    card was hidden entirely unless the job already had one. Two halves of the
+    same gap: nowhere to set it, and nothing to click even if there were.
+
+    The server was always ready — `PUT /jobs/<id>` has accepted `engineer_id`
+    since the field existed. Only the screen was missing.
+    """
+
+    def _sap_job(self, db_session, admin_user, tag, published=False):
+        """A job as it really arrives: from SAP, not typed by hand."""
+        start = date.today() - timedelta(days=date.today().weekday())
+        plan = WorkPlan(week_start=start, week_end=start + timedelta(days=6),
+                        status='published' if published else 'draft',
+                        created_by_id=admin_user.id)
+        db_session.session.add(plan)
+        db_session.session.flush()
+        day = WorkPlanDay(work_plan_id=plan.id, date=date.today())
+        db_session.session.add(day)
+        db_session.session.flush()
+        eq = make_equipment(db_session, tag, tag)
+        job = WorkPlanJob(work_plan_day_id=day.id, job_type='pm',
+                          equipment_id=eq.id, description='GENERAL REFURBISHMENT',
+                          sap_order_number=f'7000008{tag[-4:]}',
+                          estimated_hours=12, position=1)
+        db.session.add(job)
+        db.session.commit()
+        return plan, job
+
+    def test_a_supervisor_can_be_named_on_a_SAP_job(self, client, db_session,
+                                                    admin_user):
+        """THE fix. This job was never typed by hand and has no supervisor."""
+        plan, job = self._sap_job(db_session, admin_user, 'ANY01')
+        watcher = _user('watch_n01@test.com', 'maintenance', 'Senior Fitter')
+        assert job.engineer_id is None
+
+        resp = client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                          json={'engineer_id': watcher.id},
+                          headers=_headers(client, admin_user))
+        assert resp.status_code == 200, resp.get_json()
+        db.session.refresh(job)
+        assert job.engineer_id == watcher.id
+
+    def test_he_can_be_swapped_for_somebody_else(self, client, db_session,
+                                                 admin_user):
+        plan, job = self._sap_job(db_session, admin_user, 'ANY02')
+        first = _user('watch_n02@test.com', 'engineer', 'Haidar Ghulam')
+        second = _user('watch_n03@test.com', 'specialist', 'Karim Saleh')
+        h = _headers(client, admin_user)
+
+        client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                   json={'engineer_id': first.id}, headers=h)
+        client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                   json={'engineer_id': second.id}, headers=h)
+
+        db.session.refresh(job)
+        assert job.engineer_id == second.id
+
+    def test_he_can_be_removed_again(self, client, db_session, admin_user):
+        """Nobody watching is a legitimate state, and must stay reachable."""
+        plan, job = self._sap_job(db_session, admin_user, 'ANY03')
+        watcher = _user('watch_n04@test.com', 'maintenance', 'Senior Fitter')
+        h = _headers(client, admin_user)
+        client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                   json={'engineer_id': watcher.id}, headers=h)
+
+        resp = client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                          json={'engineer_id': None}, headers=h)
+        assert resp.status_code == 200
+        db.session.refresh(job)
+        assert job.engineer_id is None
+
+    def test_a_published_week_still_refuses(self, client, db_session,
+                                            admin_user):
+        """Ali chose to keep 'published means frozen' whole, 2026-09-23.
+
+        He was offered a narrow exception for this one field — it changes no
+        hours, no assignment, nothing a crew sees — and said no. Pinned so the
+        next person does not quietly widen it.
+        """
+        plan, job = self._sap_job(db_session, admin_user, 'ANY04', published=True)
+        watcher = _user('watch_n05@test.com', 'maintenance', 'Senior Fitter')
+
+        resp = client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                          json={'engineer_id': watcher.id},
+                          headers=_headers(client, admin_user))
+        assert resp.status_code == 403
+        db.session.refresh(job)
+        assert job.engineer_id is None
+
+    def test_naming_one_still_costs_the_day_nothing(self, client, db_session,
+                                                    admin_user):
+        """The invariant, on this path too."""
+        plan, job = self._sap_job(db_session, admin_user, 'ANY05')
+        watcher = _user('watch_n06@test.com', 'maintenance', 'Senior Fitter')
+        before = job.estimated_hours
+
+        client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                   json={'engineer_id': watcher.id},
+                   headers=_headers(client, admin_user))
+
+        db.session.refresh(job)
+        assert job.estimated_hours == before
+        assert WorkPlanAssignment.query.filter_by(
+            work_plan_job_id=job.id).count() == 0
+
+    def test_an_inspector_is_still_refused_on_this_path_too(
+            self, client, db_session, admin_user):
+        """The role rule must not have a back door."""
+        plan, job = self._sap_job(db_session, admin_user, 'ANY06')
+        inspector = _user('watch_n07@test.com', 'inspector', 'An Inspector')
+
+        resp = client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                          json={'engineer_id': inspector.id},
+                          headers=_headers(client, admin_user))
+        assert resp.status_code == 400
