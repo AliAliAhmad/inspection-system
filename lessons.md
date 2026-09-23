@@ -851,3 +851,13 @@ never did — so the same gesture succeeded for one role and was silently refuse
 for the other. → Read the user's sentence for the DISCRIMINATOR. When a report
 names a role, a screen, or a device, that word is usually not incidental detail —
 it is the difference between the path that works and the path that does not.
+
+LESSON (2026-09-23): I hung the supervisor's "jobs you watch" section off the
+selected day tab — the natural place, since that is how the worker's screen is
+built. But a PURE supervisor has no jobs of his own, so the day tabs are empty,
+selectedDay is undefined, and he would have opened his phone to a blank screen
+while watching six jobs. It would have worked perfectly for anyone who also does
+work, and failed silently for exactly the people the feature is for. → When
+adding a view for a NEW kind of user, check the case where they have none of the
+OLD thing. The empty-of-everything-else user is the one the feature exists for,
+and every scaffold built around the old user is undefined for them.

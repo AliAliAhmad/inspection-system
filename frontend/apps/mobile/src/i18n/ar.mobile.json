@@ -957,12 +957,16 @@
   },
   "work_plan": {
     "complete_job": "إنهاء المهمة",
+    "done": "منجز",
     "inspections": "عمليات التفتيش",
     "job": "مهمة",
+    "jobs_you_watch": "أعمال تشرف عليها",
     "no_jobs_short": "لا توجد مهام",
     "no_jobs_today": "لا توجد مهام اليوم",
+    "nobody_assigned": "لم يُسند لأحد بعد",
     "none_this_week": "لم يتم إنشاء خطة لهذا الأسبوع",
     "pause_reason": "سبب الإيقاف",
+    "running": "يعمل الآن",
     "swipe_hint": "اسحب يميناً أو يساراً لعرض يوم آخر.",
     "today": "اليوم"
   },

@@ -19,7 +19,7 @@ Renaming the wire contract would break the mobile payload until an OTA and buy
 nothing: only the DISPLAY says "Supervisor".
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -217,3 +217,130 @@ class TestHeIsToldWhatHappens:
         told = [n.user_id for n in Notification.query.filter_by(
             related_type='work_plan_job', related_id=job.id).all()]
         assert told == [admin_user.id]
+
+
+class TestHisPhoneShowsJobsHeWatches:
+    """Ali: a supervisor should see the job on his phone.
+
+    SEPARATE FROM `my_jobs`, ALWAYS. Merging them would make a watcher look like
+    a worker on the one screen where the difference matters most — the man's own
+    day. And he is given no WorkPlanAssignment row, so he stays out of every
+    count in the app.
+    """
+
+    def _published_plan(self, db_session, admin_user):
+        start = date.today() - timedelta(days=date.today().weekday())
+        plan = WorkPlan(week_start=start, week_end=start + timedelta(days=6),
+                        status='published', created_by_id=admin_user.id)
+        db_session.session.add(plan)
+        db_session.session.flush()
+        day = WorkPlanDay(work_plan_id=plan.id, date=date.today())
+        db_session.session.add(day)
+        db_session.session.commit()
+        return plan, day
+
+    def _job(self, day, equipment, supervisor_id=None):
+        job = WorkPlanJob(work_plan_day_id=day.id, job_type='pm',
+                          equipment_id=equipment.id, description='SERVICE',
+                          estimated_hours=4, position=1,
+                          engineer_id=supervisor_id)
+        db.session.add(job)
+        db.session.commit()
+        return job
+
+    def test_a_job_he_watches_appears_under_supervised_not_my_jobs(
+            self, client, db_session, admin_user):
+        plan, day = self._published_plan(db_session, admin_user)
+        eq = make_equipment(db_session, 'SUPP1', 'SUPP1')
+        watcher = _user('watch_p1@test.com', 'engineer', 'Haidar Ghulam')
+        worker = _user('work_p1@test.com', 'maintenance', 'Hassan Ali')
+        job = self._job(day, eq, supervisor_id=watcher.id)
+        db.session.add(WorkPlanAssignment(work_plan_job_id=job.id,
+                                          user_id=worker.id))
+        db.session.commit()
+
+        body = client.get('/api/work-plans/my-plan',
+                          headers=get_auth_header(client, watcher.email,
+                                                  'test123')).get_json()
+
+        assert body['total_supervised'] == 1
+        assert body['total_jobs'] == 0, 'he does none of the work'
+        watched = body['supervised_jobs'][0]['jobs'][0]
+        assert watched['id'] == job.id
+        assert watched['workers'] == ['Hassan Ali'], 'he sees who is on it'
+
+    def test_the_worker_sees_it_as_HIS_job_not_a_watched_one(
+            self, client, db_session, admin_user):
+        """The other side of the same job. Nothing about the worker changed."""
+        plan, day = self._published_plan(db_session, admin_user)
+        eq = make_equipment(db_session, 'SUPP2', 'SUPP2')
+        watcher = _user('watch_p2@test.com', 'engineer', 'Haidar Ghulam')
+        worker = _user('work_p2@test.com', 'maintenance', 'Hassan Ali')
+        job = self._job(day, eq, supervisor_id=watcher.id)
+        db.session.add(WorkPlanAssignment(work_plan_job_id=job.id,
+                                          user_id=worker.id))
+        db.session.commit()
+
+        body = client.get('/api/work-plans/my-plan',
+                          headers=get_auth_header(client, worker.email,
+                                                  'test123')).get_json()
+
+        assert body['total_jobs'] == 1
+        assert body['total_supervised'] == 0
+
+    def test_a_man_who_watches_and_works_gets_the_job_in_BOTH_lists(
+            self, client, db_session, admin_user):
+        """Legitimate, and the lists must not fight over it.
+
+        A senior fitter can be doing one job and watching another; he can also
+        be doing AND watching the same one. Each list answers its own question.
+        """
+        plan, day = self._published_plan(db_session, admin_user)
+        eq = make_equipment(db_session, 'SUPP3', 'SUPP3')
+        both = _user('watch_p3@test.com', 'maintenance', 'Senior Fitter')
+        job = self._job(day, eq, supervisor_id=both.id)
+        db.session.add(WorkPlanAssignment(work_plan_job_id=job.id,
+                                          user_id=both.id))
+        db.session.commit()
+
+        body = client.get('/api/work-plans/my-plan',
+                          headers=get_auth_header(client, both.email,
+                                                  'test123')).get_json()
+        assert body['total_jobs'] == 1
+        assert body['total_supervised'] == 1
+
+    def test_a_man_watching_nothing_gets_an_empty_list_not_an_error(
+            self, client, db_session, admin_user):
+        plan, day = self._published_plan(db_session, admin_user)
+        eq = make_equipment(db_session, 'SUPP4', 'SUPP4')
+        self._job(day, eq)
+        worker = _user('work_p4@test.com', 'maintenance', 'Nobody Special')
+
+        body = client.get('/api/work-plans/my-plan',
+                          headers=get_auth_header(client, worker.email,
+                                                  'test123')).get_json()
+        assert body['supervised_jobs'] == []
+        assert body['total_supervised'] == 0
+
+    def test_he_sees_whether_the_work_has_started(
+            self, client, db_session, admin_user):
+        """What a watcher actually opens his phone for."""
+        from app.models import WorkPlanJobTracking
+        plan, day = self._published_plan(db_session, admin_user)
+        eq = make_equipment(db_session, 'SUPP5', 'SUPP5')
+        watcher = _user('watch_p5@test.com', 'engineer', 'Haidar Ghulam')
+        worker = _user('work_p5@test.com', 'maintenance', 'Hassan Ali')
+        job = self._job(day, eq, supervisor_id=watcher.id)
+        db.session.add(WorkPlanAssignment(work_plan_job_id=job.id,
+                                          user_id=worker.id))
+        db.session.add(WorkPlanJobTracking(
+            work_plan_job_id=job.id, status='in_progress',
+            started_at=datetime.utcnow()))
+        db.session.commit()
+
+        body = client.get('/api/work-plans/my-plan',
+                          headers=get_auth_header(client, watcher.email,
+                                                  'test123')).get_json()
+        watched = body['supervised_jobs'][0]['jobs'][0]
+        assert watched['status'] == 'in_progress'
+        assert watched['started_at'] is not None

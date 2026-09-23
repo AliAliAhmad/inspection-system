@@ -264,6 +264,39 @@ export interface MyWorkPlanResponse {
   } | null;
   my_jobs: MyWorkPlanDay[];
   total_jobs: number;
+  /**
+   * Jobs this person WATCHES — a separate list from `my_jobs`, never merged.
+   *
+   * Ali, 2026-09-23: a supervisor "watches over it — not one of the workers".
+   * He has no assignment row, so he is counted in no hours anywhere; this is
+   * the only place the app tells him about jobs he is responsible for.
+   *
+   * Smaller than a worker's job on purpose: what job, which machine, who is on
+   * it, and whether it has started.
+   */
+  supervised_jobs?: SupervisedWorkPlanDay[];
+  total_supervised?: number;
+}
+
+export interface SupervisedWorkPlanDay {
+  date: string;
+  day_name: string;
+  jobs: SupervisedJob[];
+}
+
+export interface SupervisedJob {
+  id: number;
+  job_type: string;
+  berth: string | null;
+  description: string | null;
+  equipment_name: string | null;
+  estimated_hours: number | null;
+  /** From the job's tracking row. `null` means nobody has started. */
+  status: string | null;
+  started_at: string | null;
+  is_running: boolean;
+  /** The people actually doing it — what a watcher most wants to know. */
+  workers: string[];
 }
 
 // Request payloads

@@ -547,8 +547,17 @@
   the same person, and being told twice teaches people to stop reading notifications.
 - The web dropdown's roles MATCH `SUPERVISOR_ROLES` exactly — offering people the save
   would refuse is the bug that cost a morning on the inspection assignment page.
-- **⚠️ STILL TO DO: his phone.** A "jobs you watch" section, separate from "jobs you do",
-  via a new read path — **NOT** `/my-plan` and **NOT** an assignment row. Needs an OTA.
+- ✅ **His phone: DONE.** `/my-plan` gained `supervised_jobs` + `total_supervised` — a
+  SECOND list built in the same loop (the days are already eager-loaded; a separate endpoint
+  would repeat the week resolution, the joins and the publish check for nothing). He still
+  gets no assignment row.
+  - **⚠️ THE SECTION IS NOT TIED TO THE SELECTED DAY TAB, and must not be.** A pure
+    supervisor has NO jobs of his own, so `selectedDay` is undefined for him — anything hung
+    off it renders nothing, and he opens his phone to a blank screen while watching six
+    jobs. It lists the whole week on its own.
+  - Smaller payload than a worker's: machine, job, **who is actually on it**, and whether it
+    has started. Status comes from `job.tracking` — `WorkPlanJob` has no status column.
+  - Purple, matching the 👁 on the board. `أعمال تشرف عليها` in Arabic.
 - **Deliberately NOT built: the 685 MES-SUPV operations stay team lines.** Ali chose a
   named watcher (option A), not "supervision is a line someone owns" (option B). Linking
   them is a small addition on top of per-operation assignment if he ever wants it.

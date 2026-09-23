@@ -2812,6 +2812,7 @@ def get_my_plan():
     my_jobs = []
     my_job_objs = []
     dicts_by_job_id = {}
+    supervised_jobs = []
     for day in plan.days:
         day_jobs = []
         for job in day.jobs:
@@ -2901,6 +2902,58 @@ def get_my_plan():
                 'jobs': day_jobs
             })
 
+        # JOBS HE WATCHES, kept apart from jobs he DOES.
+        #
+        # Ali, 2026-09-23: a supervisor "watches over it — not one of the
+        # workers". So this is a SECOND list, never merged into my_jobs, and he
+        # is deliberately given no WorkPlanAssignment row — that would count him
+        # in bundle_man_hours, the day budget, _step_assign, the board's avatars
+        # and every "unassigned" number in the app.
+        #
+        # Built here rather than in its own endpoint because `plan.days` is
+        # already eager-loaded above: a second endpoint would repeat the week
+        # resolution, the joins and the publish check for no gain.
+        #
+        # Deliberately SMALLER than a worker's dict. He needs to know what is
+        # happening on his machines, not to do the work: what job, which
+        # machine, which day, who is on it, and how it is going.
+        watched = []
+        for job in day.jobs:
+            if job.engineer_id != user.id:
+                continue
+            equipment_name = None
+            if job.equipment:
+                equipment_name = ((job.equipment.name_ar or job.equipment.name)
+                                  if want_ar else job.equipment.name)
+            watched.append({
+                'id': job.id,
+                'job_type': job.job_type,
+                'berth': job.berth,
+                'description': job.description,
+                'equipment_name': equipment_name,
+                'estimated_hours': (float(job.estimated_hours)
+                                    if job.estimated_hours is not None else None),
+                # A job has no status column of its own — how it is going lives
+                # on its tracking row, which is also where the worker's screen
+                # reads it. None means nobody has started.
+                'status': job.tracking.status if job.tracking else None,
+                'started_at': ((job.tracking.started_at.isoformat() + 'Z')
+                               if job.tracking and job.tracking.started_at else None),
+                'is_running': job.tracking.is_running() if job.tracking else False,
+                # Who is actually doing it — the thing a watcher most wants.
+                'workers': [
+                    a.user.display_name(language)
+                    for a in job.assignments if a.user
+                ],
+            })
+
+        if watched:
+            supervised_jobs.append({
+                'date': day.date.isoformat(),
+                'day_name': day.date.strftime('%A'),
+                'jobs': watched,
+            })
+
     # Arabic for every job description on the screen, in ONE query. Read-only:
     # a week of jobs must never wait on a translation provider.
     if want_ar and dicts_by_job_id:
@@ -2930,7 +2983,10 @@ def get_my_plan():
             'pdf_url': plan.pdf_file.get_url() if plan.pdf_file else None
         },
         'my_jobs': my_jobs,
-        'total_jobs': sum(len(d['jobs']) for d in my_jobs)
+        'total_jobs': sum(len(d['jobs']) for d in my_jobs),
+        # Separate from my_jobs on purpose — see the loop above.
+        'supervised_jobs': supervised_jobs,
+        'total_supervised': sum(len(d['jobs']) for d in supervised_jobs),
     }), 200
 
 

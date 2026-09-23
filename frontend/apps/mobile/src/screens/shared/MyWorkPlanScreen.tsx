@@ -197,6 +197,25 @@ export default function MyWorkPlanScreen() {
   const myJobs: MyWorkPlanDay[] = useMemo(() => data?.data?.my_jobs ?? [], [data?.data?.my_jobs]);
   const totalJobs = data?.data?.total_jobs ?? 0;
 
+  /**
+   * JOBS HE WATCHES — kept apart from jobs he DOES.
+   *
+   * Ali, 2026-09-23: a supervisor "watches over it — not one of the workers".
+   * So this is its own list and its own section. Merging it into the day's jobs
+   * would make a watcher look like a worker on the one screen where the
+   * difference matters most — and he has no assignment row, so he is counted
+   * nowhere in the plan's hours either.
+   *
+   * Empty for almost everybody, and the section draws nothing at all then.
+   *
+   * NOT tied to the selected day tab. A pure supervisor has NO jobs of his own,
+   * so `selectedDay` is undefined for him and anything hung off it would never
+   * render — he would open his phone to an empty screen while watching six
+   * jobs. The whole week is listed instead, grouped by day.
+   */
+  const supervisedDays: any[] = useMemo(
+    () => data?.data?.supervised_jobs ?? [], [data?.data?.supervised_jobs]);
+
   // The day strip is built from the days the PLAN actually contains, not from a
   // locally computed week. Mobile used to assume weeks start Monday while the
   // web planner creates Sunday-based plans, so the header and the content
@@ -854,6 +873,38 @@ export default function MyWorkPlanScreen() {
         </View>
       )}
 
+      {/* ── Jobs he WATCHES. See supervisedDays. ── */}
+      {supervisedDays.length > 0 && (
+        <View style={styles.supervisedBlock}>
+          <Text style={styles.supervisedHeading}>
+            👁 {t('work_plan.jobs_you_watch', 'Jobs you watch')}
+          </Text>
+          {supervisedDays.map((day: any) => (
+            <View key={day.date}>
+              <Text style={styles.supervisedDay}>{day.day_name}</Text>
+              {(day.jobs ?? []).map((job: any) => (
+                <View key={job.id} style={styles.supervisedJob}>
+                  <Text style={styles.supervisedJobTitle} numberOfLines={1}>
+                    {job.equipment_name ? `${job.equipment_name} · ` : ''}
+                    {job.description}
+                  </Text>
+                  <Text style={styles.supervisedJobMeta} numberOfLines={1}>
+                    {job.workers?.length
+                      ? job.workers.join(', ')
+                      : t('work_plan.nobody_assigned', 'nobody assigned yet')}
+                    {job.status === 'in_progress'
+                      ? ` · ${t('work_plan.running', 'running now')}`
+                      : job.status === 'completed'
+                        ? ` · ${t('work_plan.done', 'done')}`
+                        : ''}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      )}
+
       {/* ── The selected day's jobs (swipe left/right to change day) ── */}
       {!workPlan ? (
         renderEmpty()
@@ -1213,6 +1264,30 @@ const styles = StyleSheet.create({
   tapToday: { fontSize: 11, color: '#757575', marginTop: 2 },
 
   // Week Status Bar
+  // Jobs he WATCHES. Purple throughout, matching the 👁 on the web board, and
+  // visually apart from his own work — the whole point is that these are not his
+  // to do.
+  supervisedBlock: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#F9F0FF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D3ADF7',
+  },
+  supervisedHeading: {
+    fontSize: 13, fontWeight: '700', color: '#531DAB', marginBottom: 6,
+  },
+  supervisedDay: {
+    fontSize: 11, fontWeight: '700', color: '#722ED1', marginTop: 6,
+  },
+  supervisedJob: {
+    paddingVertical: 4, paddingLeft: 8,
+    borderLeftWidth: 2, borderLeftColor: '#D3ADF7', marginTop: 4,
+  },
+  supervisedJobTitle: { fontSize: 12, fontWeight: '600', color: '#262626' },
+  supervisedJobMeta: { fontSize: 11, color: '#8C8C8C', marginTop: 1 },
   weekStatusBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -930,12 +930,16 @@
   },
   "work_plan": {
     "complete_job": "Complete Job",
+    "done": "done",
     "inspections": "Inspections",
     "job": "job",
+    "jobs_you_watch": "Jobs you watch",
     "no_jobs_short": "No jobs",
     "no_jobs_today": "No jobs today",
+    "nobody_assigned": "nobody assigned yet",
     "none_this_week": "No plan has been created for this week",
     "pause_reason": "Pause Reason",
+    "running": "running now",
     "swipe_hint": "Swipe left or right to see another day.",
     "today": "TODAY"
   },
