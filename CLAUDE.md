@@ -585,6 +585,10 @@
   them is a small addition on top of per-operation assignment if he ever wants it.
 - 26 tests in `tests/test_job_supervisor.py`; the dedupe and the tick boundary both verified
   by breaking them. 1225 backend, 55 web, both `tsc` clean.
+- ✅ **TAP + PHOTO DEPLOYED 2026-09-23** — commit `a772c5c`; OTA group
+  `6135ecb8-6d35-400f-9bcb-5ff8b4c2361f` on `preview` (runtime 1.0.0, both platforms).
+  The first `eas update` FAILED with `Asset processing timed out`; a plain retry worked.
+  Worth knowing: a failed OTA leaves the pushed commit live with no phone half.
 - Plan: `tasks/supervisor-on-a-job.md`.
 
 ### Still open
