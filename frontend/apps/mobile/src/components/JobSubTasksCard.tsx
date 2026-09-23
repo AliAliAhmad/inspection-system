@@ -23,9 +23,11 @@ import type { JobSubTask, JobSubTaskList } from '@inspection/shared';
 
 interface Props {
   jobId: number;
+  /** Shown, not tickable — for the job's supervisor (Ali, 2026-09-23). */
+  readOnly?: boolean;
 }
 
-export default function JobSubTasksCard({ jobId }: Props) {
+export default function JobSubTasksCard({ jobId, readOnly = false }: Props) {
   const { t, i18n } = useTranslation();
   const isAr = i18n.language === 'ar';
   const queryClient = useQueryClient();
@@ -114,6 +116,7 @@ export default function JobSubTasksCard({ jobId }: Props) {
           key={task.id}
           testID={`job-sub-task-${task.id}`}
           activeOpacity={0.6}
+          disabled={readOnly}
           onPress={() => onToggle(task)}
           style={[styles.taskRow, isAr && styles.rowRtl]}
         >

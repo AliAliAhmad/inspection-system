@@ -643,6 +643,27 @@
   `44c39d2a-bb74-492c-ae84-e8ddb509ea35` on `preview` (runtime 1.0.0, both platforms).
 - Plan: `tasks/crew-swap-on-published.md`.
 
+### Supervisor on the phone, done properly + changeable on a published week — BUILT 2026-09-24, NOT PUSHED
+- Ali asked what a supervisor sees on the phone. Checking found TWO gaps in what was already
+  shipped, and he said "fix both, and make supervisor changeable until job starts".
+- **Gap 1 — he was shown buttons he may not use.** Start/Pause/Finish and the tick box were
+  drawn for everyone; the server refused him (`_may_tick`) with an error. `get_job_details`
+  now returns **`can_tick`** and **`can_attach`** from the SAME functions the endpoints use;
+  `JobOperationsCard` / `JobSubTasksCard` take `readOnly`.
+- **Gap 2 — "he may add a photo or voice note" was server-only.** `_may_attach` allowed it
+  since 2026-09-23, but the phone had NO add button for anyone (JobAttachmentsCard is view-only).
+  New `mobile/src/components/JobEvidenceButtons.tsx`: 📷 camera/gallery, 🎤 record (2-min cap,
+  .m4a), upload to `/api/files/upload` then `jobSubTasksApi.add(...)` — the web's two steps.
+  Shown when `can_attach`, so the **assigned crew gets it too**.
+- **Supervisor on a published week:** `update_job` accepts a body of **exactly
+  `{engineer_id}`** on a published plan while `job_has_started()` is false. Any other field
+  alongside it → the old refusal (test `test_every_other_field_stays_frozen`). Both the new and
+  the old supervisor are told. This REVERSES the 2026-09-23 "draft only" — Ali's call; the old
+  pinned test was replaced, not deleted silently.
+- Web Job Details Supervisor dropdown now shows on a published plan too.
+- 1266 backend tests, web 55, web+mobile `tsc` clean. **Needs push + OTA.**
+- **⚠️ UNVERIFIED on a device:** camera, gallery, microphone permission and the upload.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

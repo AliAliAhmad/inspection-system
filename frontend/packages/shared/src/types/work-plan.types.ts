@@ -1174,6 +1174,10 @@ export interface JobDetails {
   /** The server's answer to "may this reader ASK to change the crew": the
    *  job's supervisor who is not a planner. Planners change it on the board. */
   can_request_crew_change?: boolean;
+  /** May tick lines and run their timers — planners and the assigned team. */
+  can_tick?: boolean;
+  /** May add a photo or voice note — the same, PLUS the job's supervisor. */
+  can_attach?: boolean;
 }
 
 export type CrewChangeStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';

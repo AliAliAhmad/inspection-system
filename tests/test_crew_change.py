@@ -393,3 +393,23 @@ class TestTheInboxForEngineers:
         w = world
         r = client.get('/api/approvals', headers=_h(client, w['hassan']))
         assert r.status_code == 403
+
+
+class TestThePhoneIsToldWhatHeMayDo:
+    """Ali, 2026-09-24: the supervisor's phone showed Start and tick buttons the
+    server then refused, and had no photo button the server would accept. The
+    server now says which, from the SAME functions its endpoints use."""
+
+    def _details(self, client, w, who):
+        return client.get(f"/api/work-plans/jobs/{w['job'].id}/details",
+                          headers=_h(client, who)).get_json()['data']
+
+    def test_the_supervisor_may_attach_but_not_tick(self, client, world):
+        d = self._details(client, world, world['sup'])
+        assert d['can_tick'] is False
+        assert d['can_attach'] is True
+
+    def test_a_crew_member_may_do_both(self, client, world):
+        d = self._details(client, world, world['hassan'])
+        assert d['can_tick'] is True
+        assert d['can_attach'] is True

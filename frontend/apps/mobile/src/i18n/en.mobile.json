@@ -1021,5 +1021,16 @@
     "status_cancelled": "Withdrawn",
     "status_started": "Cancelled — the job started",
     "failed": "Could not send the request"
+  },
+  "job_evidence": {
+    "title": "Add what you see",
+    "photo": "Photo",
+    "voice": "Voice",
+    "camera": "Take photo",
+    "gallery": "From gallery",
+    "stop_send": "Stop & send",
+    "failed": "Could not add it. Check the connection and try again.",
+    "no_permission": "Permission is needed to add a photo",
+    "no_mic": "Microphone permission is needed"
   }
 }

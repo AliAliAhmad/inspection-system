@@ -904,3 +904,12 @@ planner swap a man off in the middle of a running line. → Before reusing a
 predicate for a new decision, check every place the fact it claims to know can be
 recorded. Two records of "work happened" means the check must read both.
 
+LESSON (2026-09-24): I told Ali a supervisor "can photograph what he finds" after
+widening the SERVER permission (`_may_attach`) — the phone had no add-photo button
+for anyone. He only learned it because he asked what the phone shows. The same day
+the phone was drawing Start/tick buttons for the supervisor that the server refused.
+→ A permission is not a feature until a screen offers it. Before saying a user
+"can" do something, find the button on the device he uses. And let the server tell
+the client what this reader may do (`can_*` flags from the same functions the
+endpoints use), so the screen can never offer what the server will refuse.
+

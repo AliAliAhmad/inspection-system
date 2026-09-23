@@ -1259,9 +1259,6 @@ def update_job(plan_id, job_id):
     if not plan:
         raise NotFoundError("Work plan not found")
 
-    if plan.status == 'published':
-        raise ForbiddenError("Cannot edit jobs in a published work plan")
-
     job = db.session.get(WorkPlanJob, job_id)
     if not job or job.day.work_plan_id != plan_id:
         raise NotFoundError("Job not found in this plan")
@@ -1269,6 +1266,20 @@ def update_job(plan_id, job_id):
     data = request.get_json()
     if not data:
         raise ValidationError("Request body is required")
+
+    # A published week is frozen — with ONE exception, Ali's, 2026-09-24: the
+    # SUPERVISOR may change until the job starts, like the crew. Revise would
+    # hide the whole week from every phone to change one watcher's name. The
+    # exception is the field alone: sent with anything else, the old refusal.
+    old_supervisor_id = job.engineer_id
+    supervisor_only = set(data) == {'engineer_id'}
+    if plan.status == 'published':
+        if not supervisor_only:
+            raise ForbiddenError("Cannot edit jobs in a published work plan")
+        from app.services.crew_change import job_has_started
+        if job_has_started(job):
+            raise ForbiddenError(
+                f"Job #{job.id} has already started — its supervisor cannot change now.")
 
     # Update fields
     if 'berth' in data:
@@ -1303,6 +1314,12 @@ def update_job(plan_id, job_id):
         job.engineer_id = engineer_id
 
     db.session.commit()
+
+    # On a live week the change is news to both men; in a draft nobody has
+    # seen it yet. After the commit — a notification must never roll it back.
+    if plan.status == 'published' and job.engineer_id != old_supervisor_id:
+        from app.services.crew_change import notify_supervisor_moved
+        notify_supervisor_moved(job, job.engineer_id, old_supervisor_id)
 
     return jsonify({
         'status': 'success',
@@ -2082,6 +2099,11 @@ def get_job_details(job_id):
                 for a in job.assignments
             ],
             'can_request_crew_change': can_request_crew_change,
+            # What this reader may DO here, so the phone offers only that.
+            # Ali, 2026-09-24: a supervisor was shown Start and tick buttons
+            # the server then refused. Same functions the endpoints use.
+            'can_tick': _may_tick(user, job),
+            'can_attach': _may_attach(user, job),
         }
     }), 200
 

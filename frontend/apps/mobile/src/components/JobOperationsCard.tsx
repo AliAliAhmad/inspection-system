@@ -43,6 +43,9 @@ interface Props {
   jobId: number;
   /** The trade this man works. His lines come first; the rest fold away. */
   workCenter?: string | null;
+  /** No Start/Pause/Finish. A supervisor sees every line and how far it is,
+   *  but a timer is the worker's record of his own work (Ali, 2026-09-23). */
+  readOnly?: boolean;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -53,7 +56,7 @@ const STATUS_COLOR: Record<string, string> = {
   removed_in_sap: '#C62828',
 };
 
-export default function JobOperationsCard({ jobId, workCenter }: Props) {
+export default function JobOperationsCard({ jobId, workCenter, readOnly = false }: Props) {
   const { user } = useAuth();
   const { t, i18n } = useTranslation();
   const isAr = i18n.language === 'ar';
@@ -294,7 +297,7 @@ export default function JobOperationsCard({ jobId, workCenter }: Props) {
           </ScrollView>
         )}
 
-        {!dimmed && !done && (
+        {!readOnly && !dimmed && !done && (
           <View style={[styles.opActions, isAr && styles.rowRtl]}>
             {!running && !paused && (
               <TouchableOpacity

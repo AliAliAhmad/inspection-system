@@ -34,6 +34,7 @@ import JobSubTasksCard from '../../components/JobSubTasksCard';
 import JobAttachmentsCard from '../../components/JobAttachmentsCard';
 import JobOperationsCard from '../../components/JobOperationsCard';
 import CrewChangeCard from '../../components/CrewChangeCard';
+import JobEvidenceButtons from '../../components/JobEvidenceButtons';
 import { useAuth } from '../../providers/AuthProvider';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -176,12 +177,19 @@ export default function JobDetailsScreen() {
           job clear for them". */}
       <JobAttachmentsCard jobId={jobId} />
 
+      {/* Add a photo or voice note — the assigned crew and the job's
+          supervisor. The server decides (can_attach), 2026-09-24. */}
+      {data.can_attach && <JobEvidenceButtons jobId={jobId} />}
+
       {/* The operations inside the order, each with its own timer.
           Ali, 2026-09-11: "an order with many operations he should do 1 by 1".
           His trade decides which lines come first; the other trade folds away
           rather than disappearing, so a missing line never reads as lost data. */}
+      {/* A supervisor sees every line but may not run a timer: the server
+          says so with can_tick, so he is not offered buttons it would refuse. */}
       <JobOperationsCard
         jobId={jobId}
+        readOnly={data.can_tick === false}
         workCenter={
           user?.specialization === 'electrical' ? 'ELEC'
             : user?.specialization === 'mechanical' ? 'MECH'
@@ -189,7 +197,7 @@ export default function JobDetailsScreen() {
         }
       />
 
-      <JobSubTasksCard jobId={jobId} />
+      <JobSubTasksCard jobId={jobId} readOnly={data.can_tick === false} />
 
       {/* ── SAP block ── */}
       {data.sap && (

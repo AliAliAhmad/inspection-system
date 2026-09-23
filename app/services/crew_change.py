@@ -152,6 +152,19 @@ def notify_crew_moved(job, added_id=None, removed_id=None):
                 'أُزلت من عمل', f'لم تعد ضمن فريق {label}.')
 
 
+def notify_supervisor_moved(job, new_id=None, old_id=None):
+    """A published job's supervisor changed (Ali, 2026-09-24)."""
+    label = _job_label(job)
+    if new_id:
+        _notify(new_id, job,
+                'You supervise a job', f'You are now the supervisor of {label}.',
+                'أنت مشرف على عمل', f'أصبحت مشرفاً على {label}.')
+    if old_id:
+        _notify(old_id, job,
+                'No longer supervising', f'You no longer supervise {label}.',
+                'لم تعد مشرفاً', f'لم تعد مشرفاً على {label}.')
+
+
 # ─── Applying a change ─────────────────────────────────────────────────────
 
 def apply_change(job, remove_user_id=None, add_user_id=None):

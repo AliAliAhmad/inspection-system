@@ -629,23 +629,61 @@ class TestAnyJobCanHaveOne:
         db.session.refresh(job)
         assert job.engineer_id is None
 
-    def test_a_published_week_still_refuses(self, client, db_session,
-                                            admin_user):
-        """Ali chose to keep 'published means frozen' whole, 2026-09-23.
-
-        He was offered a narrow exception for this one field — it changes no
-        hours, no assignment, nothing a crew sees — and said no. Pinned so the
-        next person does not quietly widen it.
-        """
+    def test_a_published_week_accepts_a_supervisor_until_the_job_starts(
+            self, client, db_session, admin_user):
+        """Ali REVERSED 'published means frozen' for this field, 2026-09-24:
+        "make supervisor changeable until job starts" — the same rule as the
+        crew. Revise would hide the whole week from every phone."""
         plan, job = self._sap_job(db_session, admin_user, 'ANY04', published=True)
         watcher = _user('watch_n05@test.com', 'maintenance', 'Senior Fitter')
 
         resp = client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
                           json={'engineer_id': watcher.id},
                           headers=_headers(client, admin_user))
+        assert resp.status_code == 200, resp.get_json()
+        db.session.refresh(job)
+        assert job.engineer_id == watcher.id
+        assert db.session.get(WorkPlan, plan.id).status == 'published'
+        told = Notification.query.filter_by(user_id=watcher.id).all()
+        assert any(n.title == 'You supervise a job' and n.title_ar for n in told)
+
+    def test_the_old_supervisor_is_told_too(self, client, db_session, admin_user):
+        plan, job = self._sap_job(db_session, admin_user, 'ANY06', published=True)
+        old = _user('watch_old@test.com', 'specialist', 'Old Watcher')
+        new = _user('watch_new@test.com', 'engineer', 'New Watcher')
+        job.engineer_id = old.id
+        db.session.commit()
+        client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                   json={'engineer_id': new.id}, headers=_headers(client, admin_user))
+        assert Notification.query.filter_by(
+            user_id=old.id, title='No longer supervising').count() == 1
+
+    def test_a_started_job_keeps_its_supervisor(self, client, db_session,
+                                                admin_user):
+        from app.models import WorkPlanJobTracking
+        plan, job = self._sap_job(db_session, admin_user, 'ANY07', published=True)
+        db.session.add(WorkPlanJobTracking(work_plan_job_id=job.id,
+                                           status='in_progress'))
+        db.session.commit()
+        watcher = _user('watch_n07@test.com', 'maintenance', 'Senior Fitter')
+        resp = client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                          json={'engineer_id': watcher.id},
+                          headers=_headers(client, admin_user))
         assert resp.status_code == 403
         db.session.refresh(job)
         assert job.engineer_id is None
+
+    def test_every_other_field_stays_frozen(self, client, db_session, admin_user):
+        """The exception is the supervisor ALONE. Sneaking hours in beside it
+        must get the old refusal, and change nothing."""
+        plan, job = self._sap_job(db_session, admin_user, 'ANY08', published=True)
+        watcher = _user('watch_n08@test.com', 'maintenance', 'Senior Fitter')
+        resp = client.put(f'/api/work-plans/{plan.id}/jobs/{job.id}',
+                          json={'engineer_id': watcher.id, 'estimated_hours': 1},
+                          headers=_headers(client, admin_user))
+        assert resp.status_code == 403
+        db.session.refresh(job)
+        assert job.engineer_id is None and job.estimated_hours == 12
 
     def test_naming_one_still_costs_the_day_nothing(self, client, db_session,
                                                     admin_user):

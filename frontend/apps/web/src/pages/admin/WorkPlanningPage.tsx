@@ -4403,7 +4403,7 @@ export default function WorkPlanningPage() {
                 window, which almost no real job goes through: everything comes
                 from SAP or the generator. */}
             {(selectedJob.difficulty || selectedJob.engineer_name
-              || (selectedJob as any).engineer_id || isDraft) && (
+              || (selectedJob as any).engineer_id || !!currentPlan) && (
               <Row gutter={16} style={{ marginTop: 16 }}>
                 <Col span={12}>
                   <Card size="small">
@@ -4422,11 +4422,12 @@ export default function WorkPlanningPage() {
                 <Col span={12}>
                   <Card size="small">
                     <Text type="secondary">Supervisor</Text>
-                    {isDraft ? (
-                      /* Editable on ANY job — SAP, generated or hand-typed —
-                         which is the whole point of this change. Draft only,
-                         like every other field here: the server refuses edits to
-                         a published plan and Ali chose to keep that rule whole.
+                    {currentPlan ? (
+                      /* Editable on ANY job — SAP, generated or hand-typed.
+                         Draft OR published: Ali, 2026-09-24, "make supervisor
+                         changeable until job starts" — the same rule as the
+                         crew. On a published week the server refuses a started
+                         job and tells both supervisors; its reason is shown.
 
                          Inline, the same shape the Berth transfer above uses,
                          so there is one pattern in this modal and not two. */
@@ -4449,7 +4450,7 @@ export default function WorkPlanningPage() {
                                                  { engineer_id: value ?? null } as any)
                             .then(() => {
                               message.success(value
-                                ? `${chosen?.full_name} is watching this job`
+                                ? `${chosen?.full_name} is watching this job${isDraft ? '' : ' — he has been told'}`
                                 : 'Supervisor removed');
                               queryClient.invalidateQueries({ queryKey: ['work-plans'] });
                               setSelectedJob({
