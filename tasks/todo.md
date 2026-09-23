@@ -1,5 +1,37 @@
 # Inspection System — Todo
 
+## Tomorrow (Ali, 2026-09-24: "put this task in the to do list we will look at it tomorrow")
+
+### Security check + library upgrades — decide which of 1 / 2 / 3
+The Security Audit workflow now gets past pnpm (fixed in `d186dee`) but fails on two bugs
+in its OWN scripts, found by running it by hand (run 35927984197):
+- **npm half:** runs `npm audit` in a pnpm workspace — no package-lock, so it writes an error,
+  and `json.load` crashes. Should be `pnpm audit --json` from `frontend/`.
+- **Python half:** `v.get('aliases',[''])[0]` → `IndexError` when `aliases` is `[]`.
+  Should be `any(a.startswith('CVE') for a in v.get('aliases', []))`.
+
+`pnpm audit` locally (2026-09-24): **3 critical, 98 high, 63 moderate, 4 low.**
+
+**The three options put to Ali:**
+1. **Fix the two scripts** — no effect on the app or its speed; the robot just reports
+   honestly (it will be RED until 2/3 are done).
+2. **Upgrade axios** `^1.7` → `>=1.15.1` (web, mobile, shared). Same 1.x family, same API,
+   runs for real users (header injection, NO_PROXY bypass). Web build + both tsc + OTA.
+   `form-data` (>=4.0.6) comes with it.
+3. **Everything else (~95)** sits in BUILD tools, never on a phone or in the browser:
+   expo/@expo/cli (tar, undici, node-forge, ws, xmldom, js-yaml), metro, react-native
+   devtools (shell-quote, critical), vite (>=6.4.2), vitest (>=4.1.0, critical — UI server
+   only), rollup, workbox. Most need an **Expo SDK upgrade** → may change the runtime version
+   → installed phones stop taking OTAs until a new APK/IPA. Do it with a planned new build.
+   Web-side items via `@ant-design/pro-layout` (lodash-es, path-to-regexp) need that bumped.
+
+**My recommendation was 1 + 2 now, 3 as its own project.**
+
+### Also still red: Playwright E2E
+`work-planner-dragdrop.spec.ts` logs in to `http://localhost:3001` and `playwright.yml`
+starts no backend (`ECONNREFUSED ::1:3001`). Needs a backend service in CI, or the spec
+skipped in CI. A decision.
+
 ## Parked — talk later
 
 ### Move the server region (Oregon -> Frankfurt)
