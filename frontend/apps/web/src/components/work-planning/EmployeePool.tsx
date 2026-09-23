@@ -5,6 +5,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { usersApi, rosterApi, leavesApi } from '@inspection/shared';
+import { shortName } from '../../utils/short-name';
 
 // Role config
 const ROLE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
@@ -83,7 +84,7 @@ const DraggableEmployeeInner: React.FC<DraggableEmployeeProps> = ({ user, isOnLe
             {initials}
           </Avatar>
           <span style={{ fontSize: 11, color: isOnLeave ? '#8c8c8c' : '#262626', fontWeight: 500 }}>
-            {user.full_name?.split(' ')[0]}
+            {shortName(user.full_name)}
           </span>
           {isOnLeave && <span style={{ fontSize: 9 }}>🏖️</span>}
         </div>
@@ -350,7 +351,7 @@ export const EmployeePool: React.FC<EmployeePoolProps> = ({ weekStart, jobs = []
         }}>
           <WarningOutlined style={{ color: '#fa8c16' }} />
           <span style={{ color: '#ad6800' }}>
-            <strong>On leave:</strong> {usersOnLeave.map(u => u.full_name?.split(' ')[0]).join(', ')}
+            <strong>On leave:</strong> {usersOnLeave.map(u => shortName(u.full_name)).join(', ')}
           </span>
         </div>
       )}

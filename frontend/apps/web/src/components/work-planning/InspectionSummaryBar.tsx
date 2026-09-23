@@ -4,6 +4,7 @@ import { CaretDownOutlined, CaretRightOutlined, SearchOutlined } from '@ant-desi
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { workPlansApi, type DayInspectionSummary, type DayInspections, type DayInspectionsBerth } from '@inspection/shared';
+import { shortName } from '../../utils/short-name';
 
 const { Text } = Typography;
 
@@ -159,9 +160,9 @@ function InspectionCard({ assignment }: { assignment: DayInspectionSummary }) {
 
       {/* Inspectors — compact */}
       <div style={{ color: '#595959', fontSize: 10, marginLeft: 14 }}>
-        {assignment.mechanical_inspector && <span>M: {assignment.mechanical_inspector.split(' ')[0]} </span>}
-        {assignment.electrical_inspector && <span>E: {assignment.electrical_inspector.split(' ')[0]} </span>}
-        {assignment.engineer && <span style={{ color: '#1677ff' }}>Eng: {assignment.engineer.split(' ')[0]}</span>}
+        {assignment.mechanical_inspector && <span>M: {shortName(assignment.mechanical_inspector)} </span>}
+        {assignment.electrical_inspector && <span>E: {shortName(assignment.electrical_inspector)} </span>}
+        {assignment.engineer && <span style={{ color: '#1677ff' }}>Eng: {shortName(assignment.engineer)}</span>}
         {!assignment.mechanical_inspector && !assignment.electrical_inspector && (
           <span style={{ color: '#ff4d4f' }}>Not Assigned</span>
         )}

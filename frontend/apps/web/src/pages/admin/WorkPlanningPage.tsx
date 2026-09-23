@@ -108,6 +108,7 @@ import InspectionSummaryBar, { InspectionCountBadge } from '../../components/wor
 import VoiceTextArea from '../../components/VoiceTextArea';
 import { InputNumber } from 'antd';
 import { getOverdueInfo, isJobOverdue, computeOverdueMax, getOverdueHeat } from '../../utils/overdue';
+import { shortName } from '../../utils/short-name';
 
 dayjs.extend(isoWeek);
 
@@ -213,8 +214,11 @@ const DraggableTeamMember: React.FC<{
         <span style={{ fontSize: 10, width: 18, height: 18, borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: isOnLeave ? '#d9d9d9' : hasPartialLeave ? '#fa8c16' : '#1890ff', color: '#fff', flexShrink: 0 }}>
           {user.full_name?.charAt(0) || '?'}
         </span>
-        <span style={{ fontSize: 14, fontWeight: 700, color: isOnLeave ? '#8c8c8c' : '#262626', whiteSpace: 'nowrap' }}>
-          {user.full_name?.split(' ')[0]}
+        {/* Ali.K.A.A, not just Ali — several men share a first name. minWidth 0
+            lets it end in "…" in a narrow column instead of pushing the week
+            dots off the edge; the tooltip still has the whole name. */}
+        <span style={{ fontSize: 14, fontWeight: 700, color: isOnLeave ? '#8c8c8c' : '#262626', whiteSpace: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {shortName(user.full_name)}
         </span>
         {isOnLeave && leaveInfo && (
           <span style={{ fontSize: 9, color: '#fa8c16' }}>All week</span>
@@ -303,7 +307,7 @@ const EquipmentGroupRow: React.FC<{
               {eqName}
             </Text>
             <Text style={{ fontSize: 10, color: isAssigned ? '#52c41a' : '#fa8c16', whiteSpace: 'nowrap' }}>
-              {isAssigned ? `✓ ${lead?.user?.full_name?.split(' ')[0] || ''}` : '⚠ None'}
+              {isAssigned ? `✓ ${shortName(lead?.user?.full_name) || ''}` : '⚠ None'}
             </Text>
           </div>
         );
@@ -1454,7 +1458,7 @@ export default function WorkPlanningPage() {
     if (!pendingAssignment || !currentPlan) return warnings;
 
     const user = pendingAssignment.user;
-    const firstName = user.full_name?.split(' ')[0];
+    const firstName = shortName(user.full_name);
 
     // Resolve the day. A bundle carries its dayId directly (all its jobs share
     // one day); a single job has to be searched for.

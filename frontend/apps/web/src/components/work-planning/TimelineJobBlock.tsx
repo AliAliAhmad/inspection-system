@@ -4,6 +4,7 @@ import { SearchOutlined } from '@ant-design/icons';
 import { useDroppable } from '@dnd-kit/core';
 import type { WorkPlanJob, ComputedPriority } from '@inspection/shared';
 import { getOverdueInfo } from '../../utils/overdue';
+import { shortName } from '../../utils/short-name';
 
 // Job type emojis
 const JOB_TYPE_EMOJI: Record<string, string> = {
@@ -172,7 +173,7 @@ const TimelineJobBlockInner: React.FC<TimelineJobBlockProps> = ({
             </div>
           ) : (
             <span style={{ fontSize: compact ? '11px' : '12px', color: '#595959' }}>
-              👥 {leadUser ? leadUser.full_name.split(' ')[0] : teamCount}
+              👥 {leadUser ? shortName(leadUser.full_name) : teamCount}
               {teamCount > 1 && !compact && ` +${teamCount - 1}`}
             </span>
           )
@@ -213,7 +214,7 @@ const TimelineJobBlockInner: React.FC<TimelineJobBlockProps> = ({
         {/* Engineer name */}
         {!compact && job.engineer_name && (
           <span style={{ fontSize: '10px', color: '#722ed1' }}>
-            🔧 {job.engineer_name.split(' ')[0]}
+            🔧 {shortName(job.engineer_name)}
           </span>
         )}
 

@@ -6,6 +6,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { JobSubTask, WorkPlanJob } from '@inspection/shared';
 import { getOverdueInfo, isJobOverdue, getOverdueHeat, type OverdueMax } from '../../utils/overdue';
 import { JobSubTasks } from './JobSubTasks';
+import { shortName } from '../../utils/short-name';
 
 const { Text } = Typography;
 
@@ -605,7 +606,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, color: '#595959' }}>
                   <span style={{ color: '#1677ff' }}>🔧</span>
                   <Text style={{ fontSize: 9, color: '#262626', fontWeight: 600 }}>
-                    {mechLead ? mechLead.split(' ')[0] : '—'}
+                    {mechLead ? shortName(mechLead) : '—'}
                     {mechLead && ' ★'}
                   </Text>
                   {mechWorkers.size > 1 && (
@@ -619,7 +620,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, color: '#595959' }}>
                   <span style={{ color: '#fa8c16' }}>⚡</span>
                   <Text style={{ fontSize: 9, color: '#262626', fontWeight: 600 }}>
-                    {elecLead ? elecLead.split(' ')[0] : '—'}
+                    {elecLead ? shortName(elecLead) : '—'}
                     {elecLead && ' ★'}
                   </Text>
                   {elecWorkers.size > 1 && (

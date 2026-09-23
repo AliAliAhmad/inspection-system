@@ -666,6 +666,18 @@
 - ✅ **DEPLOYED 2026-09-24** — commit `8692520`; OTA group
   `724a9e82-0b75-4be7-bbb8-b9669339d155` on `preview` (runtime 1.0.0, both platforms).
 
+### Names on the board: Ali.K.A.A, not Ali — BUILT 2026-09-24, NOT PUSHED
+- Ali: "the job pool shows only the employee first name which make me confuse, please add
+  the first name and the family name letter, example ali.k.a.a".
+- `frontend/apps/web/src/utils/short-name.ts` → `shortName()`: first name whole, then the
+  first letter of every other part (`Ali Kadhim Abbas Ahmed` → `Ali.K.A.A`; Arabic works).
+  6 tests in `short-name.test.ts`.
+- Replaced every `.split(' ')[0]` on the planning board (12 places): team pool, leave
+  summary, lead names on cards, calendar blocks, inspection bar, drop warnings. Dashboard
+  greeting / profile / users page untouched — not the board.
+- Pool name gets `minWidth:0` + ellipsis so a long one cannot push the week dots off; the
+  tooltip already shows the whole name. Web only — the phone shows full names.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
