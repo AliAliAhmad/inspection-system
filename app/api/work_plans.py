@@ -972,13 +972,9 @@ def add_job(plan_id):
     if not difficulty and job_type == 'defect' and defect is not None:
         difficulty = _difficulty_from_severity(defect.severity)
 
-    # Validate engineer_id if provided
+    # The job's SUPERVISOR — see SUPERVISOR_ROLES for why it is still called this.
     engineer_id = data.get('engineer_id')
-    if engineer_id:
-        from app.models import User as UserModel
-        eng = db.session.get(UserModel, engineer_id)
-        if not eng or eng.role not in ('engineer', 'admin'):
-            raise ValidationError("engineer_id must reference an engineer or admin user")
+    _validate_supervisor(engineer_id)
 
     # Auto-populate description from defect if not provided
     description = data.get('description')
@@ -1303,11 +1299,7 @@ def update_job(plan_id, job_id):
         job.difficulty = data['difficulty']
     if 'engineer_id' in data:
         engineer_id = data['engineer_id']
-        if engineer_id:
-            from app.models import User as UserModel
-            eng = db.session.get(UserModel, engineer_id)
-            if not eng or eng.role not in ('engineer', 'admin'):
-                raise ValidationError("engineer_id must reference an engineer or admin user")
+        _validate_supervisor(engineer_id)
         job.engineer_id = engineer_id
 
     db.session.commit()
@@ -1557,6 +1549,35 @@ def _delete_job_record(plan_id, job, discard=False):
 # (production) enforced the FK and raised IntegrityError -> 500 with the job not
 # removed; SQLite (tests, foreign_keys=0) deleted the job anyway and left the
 # rating row dangling.
+SUPERVISOR_ROLES = ('engineer', 'admin', 'specialist', 'maintenance')
+"""Who may be named as a job's supervisor.
+
+Ali, 2026-09-23: "we need to have the option to have supervisor for the job".
+He chose a watcher rather than a worker — responsible for the job, doing none of
+its lines — and chose that ANY senior person may do it, not only an engineer.
+SAP's 685 MES-SUPV operations say supervision is real yard work.
+
+THE FIELD IS STILL CALLED engineer_id, AND DELIBERATELY SO. Nothing in the
+backend ever read it — it was set, stored and displayed — so it was free to
+become this rather than earn a second column beside it. Two records of one fact
+is what this codebase keeps refusing. Renaming the wire contract would buy
+nothing and break the mobile payload until an OTA; only the DISPLAY says
+"Supervisor".
+"""
+
+
+def _validate_supervisor(engineer_id):
+    """Raise unless this user may supervise. None is always fine."""
+    if not engineer_id:
+        return
+    from app.models import User as UserModel
+    person = db.session.get(UserModel, engineer_id)
+    if not person or person.role not in SUPERVISOR_ROLES:
+        raise ValidationError(
+            "The supervisor must be an engineer, admin, specialist or "
+            "maintenance user")
+
+
 JOB_CHILD_TABLES = ('job_checklist_responses', 'work_plan_assignments',
                     'work_plan_materials', 'work_plan_job_ratings',
                     'work_plan_job_trackings',

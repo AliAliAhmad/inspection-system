@@ -1495,10 +1495,23 @@ export default function WorkPlanningPage() {
     queryFn: () => usersApi.getForAssignment().then((r) => r.data),
     staleTime: 0,
   });
+  /**
+   * Who may be named as a job's SUPERVISOR.
+   *
+   * Ali, 2026-09-23: a supervisor "watches over it — not one of the workers",
+   * and any senior person may do it, not only an engineer. Must match
+   * SUPERVISOR_ROLES on the server, or the dropdown offers people the save will
+   * refuse — which is the exact bug that cost a morning on the inspection
+   * assignment page.
+   *
+   * Inspectors are left out: they inspect, they do not run jobs.
+   */
   const engineersList = useMemo(() => {
     if (!assignableUsersData) return [];
     const users = (assignableUsersData as any)?.data || assignableUsersData;
-    return (Array.isArray(users) ? users : []).filter((u: any) => u.role === 'engineer');
+    const allowed = ['engineer', 'admin', 'specialist', 'maintenance'];
+    return (Array.isArray(users) ? users : [])
+      .filter((u: any) => allowed.includes(u.role));
   }, [assignableUsersData]);
 
   // Manual add job mutation
@@ -4338,9 +4351,11 @@ export default function WorkPlanningPage() {
                 </Col>
                 <Col span={12}>
                   <Card size="small">
-                    <Text type="secondary">Engineer</Text>
+                    <Text type="secondary">Supervisor</Text>
                     <div style={{ fontWeight: 600 }}>
-                      {selectedJob.engineer_name || <span style={{ color: '#8c8c8c', fontWeight: 400 }}>Not assigned</span>}
+                      {selectedJob.engineer_name
+                        ? <>👁 {selectedJob.engineer_name}</>
+                        : <span style={{ color: '#8c8c8c', fontWeight: 400 }}>Nobody watching</span>}
                     </div>
                   </Card>
                 </Col>
@@ -4549,9 +4564,13 @@ export default function WorkPlanningPage() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item name="engineer_id" label="Engineer">
+                {/* The field is `engineer_id` for historical reasons — see
+                    SUPERVISOR_ROLES in app/api/work_plans.py. Only the label
+                    changed; the wire contract did not, so the phone keeps
+                    working without an OTA. */}
+                <Form.Item name="engineer_id" label="Supervisor">
                   <Select
-                    placeholder="Select engineer (optional)"
+                    placeholder="Who watches this job? (optional)"
                     allowClear
                     showSearch
                     filterOption={(input, option) =>

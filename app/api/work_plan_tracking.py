@@ -94,17 +94,34 @@ def create_log_entry(job_id, user_id, event_type, event_data=None, notes=None):
 
 
 def notify_engineers_for_job(job, notification_type, title, message, priority='info'):
-    """Send notification to the engineer responsible for a job's work plan."""
+    """Tell the people responsible for this job that something happened to it.
+
+    The plan's creator, and the job's own SUPERVISOR.
+
+    Ali, 2026-09-23, on what a supervisor is: he "watches over it — not one of
+    the workers", and should "be told when it starts and finishes". The field is
+    still called `engineer_id` for the reason written above SUPERVISOR_ROLES in
+    work_plans.py.
+
+    DEDUPED, and that is not tidiness. The supervisor is very often the same
+    person who built the plan, and being told twice that one job started teaches
+    people to stop reading notifications.
+    """
     day = db.session.get(WorkPlanDay, job.work_plan_day_id)
     if not day:
         return
     plan = db.session.get(WorkPlan, day.work_plan_id)
     if not plan:
         return
-    # Notify the plan creator (engineer)
-    if plan.created_by_id:
+
+    recipients = []
+    for user_id in (plan.created_by_id, job.engineer_id):
+        if user_id and user_id not in recipients:
+            recipients.append(user_id)
+
+    for user_id in recipients:
         NotificationService.create_notification(
-            user_id=plan.created_by_id,
+            user_id=user_id,
             type=notification_type,
             title=title,
             message=message,
@@ -152,6 +169,17 @@ def start_job(job_id):
 
     create_log_entry(job_id, user.id, 'started')
     db.session.commit()
+
+    # AFTER the commit, never before. create_notification() commits, so calling
+    # it first would close the worker's transaction early — and a notification
+    # that fails must never roll back the fact that a man started his job. The
+    # same reasoning is written out at the end of complete_job().
+    notify_engineers_for_job(
+        job,
+        'work_plan_job_started',
+        'Job started',
+        f'{user.full_name} started {job.description or "a job"}',
+    )
 
     logger.info("Job %s started by user %s", job_id, user.id)
     return jsonify({
@@ -456,6 +484,16 @@ def complete_job(job_id):
         logger.info("Auto-resolved defect %s via job %s completion", job.defect_id, job_id)
 
     db.session.commit()
+
+    # The supervisor asked to be told when a job finishes (Ali, 2026-09-23).
+    # After the commit for the same reason the Telegram hook below is: the man's
+    # work is already safe, and nothing here may put it at risk.
+    notify_engineers_for_job(
+        job,
+        'work_plan_job_completed',
+        'Job completed',
+        f'{user.full_name} completed {job.description or "a job"}',
+    )
 
     # AFTER the commit, never before. The crew may now be standing in the yard
     # with hours left, and nothing else on this path notices — there is no

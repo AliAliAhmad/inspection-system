@@ -302,6 +302,29 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
           </Text>
         )}
 
+        {/* The SUPERVISOR — deliberately ABOVE the workers and shaped
+            differently, because he is not one of them. Ali, 2026-09-23:
+            "watches over it — not one of the workers". The field is
+            `engineer_name` for historical reasons; see SUPERVISOR_ROLES. */}
+        {!!(job as any).engineer_name && (
+          <Tooltip title={`Supervisor — ${(job as any).engineer_name}`}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              marginTop: 3, padding: '0 4px', borderRadius: 3,
+              background: '#f9f0ff', border: '1px solid #d3adf7',
+              maxWidth: '100%', overflow: 'hidden',
+            }}>
+              <span style={{ fontSize: 9 }}>👁</span>
+              <Text style={{
+                fontSize: 9, color: '#531dab', fontWeight: 600,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {(job as any).engineer_name}
+              </Text>
+            </div>
+          </Tooltip>
+        )}
+
         {/* Assigned workers (avatars) */}
         {(job.assignments || []).length > 0 && (
           <div style={{ display: 'flex', gap: 2, marginTop: 3, flexWrap: 'wrap' }}>

@@ -523,6 +523,38 @@
   confirmed by the row Haidar actually touched. If a check ever shows `status='assigned'`
   with an `assigned_at`, there is a second bug on the read side.
 
+### A supervisor for a job — BUILT 2026-09-23, phone part still to come
+- Ali: "we need to have the option to have supervisor for the job, is it already thier?"
+  Partly: `is_lead` is a WORKER who leads, and `WorkPlanJob.engineer_id` existed but
+  **nothing in the backend ever read it** (`job_showup.py` touches `EngineerJob`, a
+  different model). A pure label.
+- **He chose a WATCHER, not a worker** — responsible for the job, doing none of its lines,
+  told when it starts and finishes. And **any senior person may supervise**: engineer,
+  admin, specialist, maintenance. Inspectors deliberately excluded.
+- **⚠️ THE FIELD IS STILL `engineer_id` ON THE WIRE, ON PURPOSE.** Because nothing read it,
+  it was free to BECOME this rather than earn a second column beside it — two records of
+  one fact is what this codebase keeps refusing. Renaming the payload would break the
+  mobile app until an OTA and buy nothing. Only the DISPLAY says "Supervisor". See
+  `SUPERVISOR_ROLES` in `app/api/work_plans.py`.
+- **THE INVARIANT: naming a supervisor costs a day NOTHING.** He gets no
+  `WorkPlanAssignment` row, so he is never counted by `bundle_man_hours`, the day budget,
+  `_step_assign`, the board avatars or any "unassigned" count. Two tests pin it. Giving him
+  an assignment row would silently turn a watcher into a man the planner thinks is busy.
+- **Start/finish notifications did not exist for ANYBODY** — `notify_engineers_for_job`
+  fired only on pause. Now called at `/start` and `/complete`, **after the commit** (the
+  helper commits, and a notification must never roll back a man's work — same reasoning
+  already written into `complete_job`). Planner + supervisor, **deduped**: he is very often
+  the same person, and being told twice teaches people to stop reading notifications.
+- The web dropdown's roles MATCH `SUPERVISOR_ROLES` exactly — offering people the save
+  would refuse is the bug that cost a morning on the inspection assignment page.
+- **⚠️ STILL TO DO: his phone.** A "jobs you watch" section, separate from "jobs you do",
+  via a new read path — **NOT** `/my-plan` and **NOT** an assignment row. Needs an OTA.
+- **Deliberately NOT built: the 685 MES-SUPV operations stay team lines.** Ali chose a
+  named watcher (option A), not "supervision is a line someone owns" (option B). Linking
+  them is a small addition on top of per-operation assignment if he ever wants it.
+- 11 tests in `tests/test_job_supervisor.py`; dedupe verified by breaking it. 1210 backend.
+- Plan: `tasks/supervisor-on-a-job.md`.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
