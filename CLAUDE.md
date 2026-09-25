@@ -703,7 +703,7 @@
   Needs a backend service in CI or the spec skipped there — a decision, not a one-liner.
 - None of these ever blocked Render; they only meant the safety checks checked nothing.
 
-### Filter audit, web + phone — FIXED 2026-09-24, NOT PUSHED
+### Filter audit, web + phone — DEPLOYED 2026-09-25 (commit `8c21cc6`, OTA `366ffc9b`)
 - Ali: "some of the filters ... are not working ... shows error or nothing showing ... check all
   the filter ... and fix the ones not working". Three read-only audits traced every filter
   screen → param → server; ~60 real faults. Full list: `tasks/filter-audit-2026-09-24.md`.
@@ -727,7 +727,7 @@
   Daily Review Day/Night does not change the job list; performance AI reads monthly rows never
   written.
 
-### Admin sets a new password from Edit User — BUILT 2026-09-25, NOT PUSHED
+### Admin sets a new password from Edit User — DEPLOYED 2026-09-25 (commit `8c21cc6`)
 - Ali asked for a user's password. Passwords are stored HASHED and can never be read back, so
   the fix is SETTING a new one. `PUT /api/users/<id>` always accepted `password` (admin only)
   but the Edit User window had no box, and the server had no length check.
