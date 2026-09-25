@@ -31,6 +31,11 @@ def list_jobs():
 
     if user.role == 'admin':
         query = EngineerJob.query
+        # engineer_id narrows an admin's view to one engineer — the "My Jobs"
+        # page always sent it, and it was ignored (2026-09-24 audit).
+        engineer_id = request.args.get('engineer_id', type=int)
+        if engineer_id:
+            query = query.filter_by(engineer_id=engineer_id)
         if status:
             query = query.filter_by(status=status)
         query = query.order_by(EngineerJob.created_at.desc())

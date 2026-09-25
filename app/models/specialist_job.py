@@ -202,6 +202,9 @@ class SpecialistJob(db.Model):
             'can_view_details': self.can_view_details(),
             'wrong_finding_reason': self.wrong_finding_reason,
             'wrong_finding_photo': self.wrong_finding_photo,
+            # Always present, even in the list payload: the mobile Completed tab
+            # decides which finished jobs are still recent from this timestamp.
+            'completed_at': (self.completed_at.isoformat() + 'Z') if self.completed_at else None,
         }
 
         if include_details and self.can_view_details():
@@ -224,7 +227,6 @@ class SpecialistJob(db.Model):
                 'planned_time_hours': float(self.planned_time_hours) if self.planned_time_hours else None,
                 'planned_time_entered_at': (self.planned_time_entered_at.isoformat() + 'Z') if self.planned_time_entered_at else None,
                 'started_at': (self.started_at.isoformat() + 'Z') if self.started_at else None,
-                'completed_at': (self.completed_at.isoformat() + 'Z') if self.completed_at else None,
                 'actual_time_hours': float(self.actual_time_hours) if self.actual_time_hours else None,
                 'work_notes': translated.get('work_notes', self.work_notes),
                 'completion_status': self.completion_status,

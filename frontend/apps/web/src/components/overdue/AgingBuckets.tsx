@@ -1,6 +1,5 @@
 import { Card, Typography, Space, Spin, Empty, Tooltip, Progress, Tag } from 'antd';
 import { BarChartOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
@@ -21,14 +20,6 @@ interface AgingBucketsProps {
   isLoading?: boolean;
 }
 
-const DEFAULT_BUCKETS: AgingBucket[] = [
-  { label: '1-7 days', key: '1-7', min_days: 1, max_days: 7, count: 0, color: '#52c41a' },
-  { label: '8-14 days', key: '8-14', min_days: 8, max_days: 14, count: 0, color: '#fadb14' },
-  { label: '15-30 days', key: '15-30', min_days: 15, max_days: 30, count: 0, color: '#faad14' },
-  { label: '31-60 days', key: '31-60', min_days: 31, max_days: 60, count: 0, color: '#fa8c16' },
-  { label: '60+ days', key: '60+', min_days: 60, max_days: null, count: 0, color: '#ff4d4f' },
-];
-
 export function AgingBuckets({
   onBucketClick,
   selectedBucket,
@@ -37,22 +28,9 @@ export function AgingBuckets({
 }: AgingBucketsProps) {
   const { t } = useTranslation();
 
-  // Use provided buckets or fetch from API
-  const { data: bucketsData, isLoading: dataLoading } = useQuery({
-    queryKey: ['overdue', 'aging-buckets'],
-    queryFn: async () => {
-      // This would call the overdue API endpoint
-      // For now, return mock data structure
-      return DEFAULT_BUCKETS.map((bucket, index) => ({
-        ...bucket,
-        count: [8, 5, 4, 2, 1][index] || 0,
-      }));
-    },
-    enabled: !buckets,
-  });
-
-  const loading = isLoading || dataLoading;
-  const data = buckets || bucketsData || DEFAULT_BUCKETS;
+  // Buckets come from the page (GET /api/overdue/aging); no fake fallback.
+  const loading = isLoading;
+  const data = buckets ?? [];
 
   const total = data.reduce((sum, bucket) => sum + bucket.count, 0);
 

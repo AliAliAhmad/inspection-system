@@ -11,7 +11,7 @@ from app.utils.pagination import paginate
 from app.utils.decorators import get_language, admin_required
 from app.exceptions.api_exceptions import ValidationError, NotFoundError, ForbiddenError
 from app.extensions import db
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 bp = Blueprint('notifications', __name__)
@@ -48,10 +48,53 @@ def get_notifications():
     query = Notification.query.filter_by(user_id=int(current_user_id))
     if unread_only:
         query = query.filter_by(is_read=False)
-    if priority:
-        query = query.filter_by(priority=priority)
-    if notification_type:
-        query = query.filter_by(type=notification_type)
+
+    # type / priority accept a comma list. The page lets you tick several and
+    # used to send only the first (2026-09-24 filter audit).
+    def _as_list(value):
+        return [v.strip() for v in (value or '').split(',') if v.strip()]
+    priorities = _as_list(priority)
+    if priorities:
+        query = query.filter(Notification.priority.in_(priorities))
+    types = _as_list(notification_type)
+    if types:
+        query = query.filter(Notification.type.in_(types))
+
+    # search / date_from / date_to — the page always sent them, and nothing here
+    # read them, so the search box and the date range did nothing at all.
+    search = (request.args.get('search') or '').strip()
+    if search:
+        import unicodedata
+        term = f'%{unicodedata.normalize("NFC", search)}%'
+        query = query.filter(db.or_(
+            Notification.title.ilike(term),
+            Notification.message.ilike(term),
+            Notification.title_ar.ilike(term),
+            Notification.message_ar.ilike(term),
+        ))
+
+    def _when(name):
+        raw = (request.args.get(name) or '').strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        except ValueError:
+            raise ValidationError(f"{name} must be an ISO date or date-time")
+        # Stored naive UTC (datetime.utcnow); compare like with like.
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+    date_from, date_to = _when('date_from'), _when('date_to')
+    if date_from:
+        query = query.filter(Notification.created_at >= date_from)
+    if date_to:
+        if len((request.args.get('date_to') or '').strip()) == 10:
+            date_to = date_to + timedelta(days=1)   # a bare date means the whole day
+            query = query.filter(Notification.created_at < date_to)
+        else:
+            query = query.filter(Notification.created_at <= date_to)
+
     query = query.order_by(Notification.created_at.desc())
 
     items, pagination_meta = paginate(query)
@@ -64,6 +107,24 @@ def get_notifications():
         'data': [n.to_dict(language=lang) for n in items],
         'pagination': pagination_meta
     }), 200
+
+
+@bp.route('/types', methods=['GET'])
+@jwt_required()
+def get_notification_types():
+    """The notification types this user actually HAS, for the filter.
+
+    The page's type picker was a hard-coded list, and 10 of its 18 entries are
+    types no code ever creates — choosing one always showed an empty list
+    (2026-09-24 audit). Offering only what exists makes that impossible.
+    """
+    current_user_id = int(get_jwt_identity())
+    rows = (db.session.query(Notification.type, db.func.count(Notification.id))
+            .filter(Notification.user_id == current_user_id)
+            .group_by(Notification.type)
+            .order_by(db.func.count(Notification.id).desc()).all())
+    return jsonify({'status': 'success',
+                    'data': [{'type': t, 'count': n} for t, n in rows if t]}), 200
 
 
 @bp.route('/unread-count', methods=['GET'])
@@ -887,6 +948,96 @@ def get_daily_summary():
 # =============================================================================
 # Analytics Endpoints
 # =============================================================================
+
+def _parse_when(name, default):
+    raw = (request.args.get(name) or '').strip()
+    if not raw:
+        return default
+    try:
+        parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+    except ValueError:
+        raise ValidationError(f"{name} must be an ISO date or date-time")
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+@bp.route('/analytics', methods=['GET'])
+@jwt_required()
+@admin_required()
+def get_notification_analytics():
+    """System-wide notification analytics for a date range. Admin only.
+
+    The Notification Analytics page called this and it did not exist — a 404,
+    so the page never showed data and its date range did nothing (2026-09-24
+    audit). Shape = NotificationAnalytics in the shared types.
+
+    Query: date_from, date_to (ISO; default last 30 days), group_by (accepted
+    for the page's picker; the totals below do not depend on it).
+    """
+    from sqlalchemy import func
+    from app.models import User
+    from app.models.notification_escalation import NotificationEscalation
+
+    date_to = _parse_when('date_to', datetime.utcnow())
+    date_from = _parse_when('date_from', date_to - timedelta(days=30))
+    in_range = (Notification.created_at >= date_from, Notification.created_at <= date_to)
+
+    base = Notification.query.filter(*in_range)
+    total_sent = base.count()
+    total_read = base.filter(Notification.is_read == True).count()  # noqa: E712
+
+    avg_minutes = 0
+    read_times = db.session.query(Notification.created_at, Notification.read_at).filter(
+        *in_range, Notification.read_at.isnot(None)).all()
+    if read_times:
+        avg_minutes = round(sum((r - c).total_seconds() for c, r in read_times
+                                if r >= c) / 60 / len(read_times))
+
+    def counts(column):
+        return {k or 'unknown': v for k, v in db.session.query(column, func.count(Notification.id))
+                .filter(*in_range).group_by(column).all()}
+
+    hours = {h: 0 for h in range(24)}
+    for (created,) in db.session.query(Notification.created_at).filter(*in_range).all():
+        hours[created.hour] += 1
+
+    top = (db.session.query(Notification.user_id, func.count(Notification.id).label('n'))
+           .filter(*in_range).group_by(Notification.user_id)
+           .order_by(func.count(Notification.id).desc()).limit(10).all())
+    names = {u.id: u.full_name for u in User.query.filter(User.id.in_([t[0] for t in top])).all()}
+
+    escalations = NotificationEscalation.query.filter(
+        NotificationEscalation.escalated_at >= date_from,
+        NotificationEscalation.escalated_at <= date_to).all()
+    esc_minutes = [
+        (e.escalated_at - e.notification.created_at).total_seconds() / 60
+        for e in escalations
+        if getattr(e, 'notification', None) and e.notification.created_at
+        and e.escalated_at >= e.notification.created_at]
+    urgent = base.filter(Notification.priority.in_(['critical', 'urgent']))
+    escalated_ids = {e.notification_id for e in escalations}
+    resolved_before = sum(1 for n in urgent.filter(Notification.is_read == True).all()  # noqa: E712
+                          if n.id not in escalated_ids)
+
+    return jsonify({'status': 'success', 'data': {
+        'total_sent': total_sent,
+        'total_read': total_read,
+        'read_rate': round(100 * total_read / total_sent, 1) if total_sent else 0,
+        'avg_response_time': avg_minutes,
+        'by_priority': counts(Notification.priority),
+        'by_type': counts(Notification.type),
+        'by_channel': counts(Notification.channel),
+        'hourly_distribution': [{'hour': h, 'count': c} for h, c in hours.items()],
+        'top_users': [{'user_id': uid, 'user_name': names.get(uid, f'User #{uid}'), 'count': n}
+                      for uid, n in top],
+        'escalation_stats': {
+            'total_escalated': len(escalations),
+            'avg_escalation_time': round(sum(esc_minutes) / len(esc_minutes)) if esc_minutes else 0,
+            'resolved_before_escalation': resolved_before,
+        },
+    }}), 200
+
 
 @bp.route('/analytics/dashboard', methods=['GET'])
 @jwt_required()

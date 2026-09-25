@@ -1758,41 +1758,147 @@ def resolve_dispute(rating_id):
 
 # ─── Performance & Reporting ───────────────────────────────────────
 
+PERFORMANCE_PERIODS = ('daily', 'weekly', 'monthly')
+
+# Summed as-is when daily rows roll up into a week or a month.
+_SUMMED_PERFORMANCE_FIELDS = (
+    'total_jobs_assigned', 'total_jobs_completed', 'total_jobs_incomplete',
+    'total_jobs_not_started', 'total_jobs_carried_over', 'total_points_earned',
+    'total_pauses', 'total_pause_minutes', 'late_starts',
+    'materials_planned', 'materials_consumed',
+)
+
+
+def _parse_period(value):
+    if value not in PERFORMANCE_PERIODS:
+        raise ValidationError(
+            f"Invalid period '{value}'. Allowed: {', '.join(PERFORMANCE_PERIODS)}"
+        )
+    return value
+
+
+def _period_bounds(day, period_type):
+    """First and last calendar day of the week (Mon-Sun) or month holding `day`."""
+    if period_type == 'weekly':
+        first = day - timedelta(days=day.weekday())
+        return first, first + timedelta(days=6)
+    first = day.replace(day=1)
+    next_month = (first + timedelta(days=32)).replace(day=1)
+    return first, next_month - timedelta(days=1)
+
+
+def _aggregate_performance(rows, period_type, start=None, end=None):
+    """
+    Roll daily WorkPlanPerformance rows up into weekly/monthly buckets per worker.
+
+    Only daily rows are ever written (`_compute_daily_performance`), so weeks and
+    months are derived on read. Each bucket has the same keys as
+    `WorkPlanPerformance.to_dict()`. Rates are recomputed from the summed counts
+    and hours, never averaged across days; a bucket's dates are clipped to the
+    requested range so it never claims days that were not read.
+    """
+    buckets = {}
+    for row in sorted(rows, key=lambda r: r.period_start):
+        first, last = _period_bounds(row.period_start, period_type)
+        key = (row.user_id, first)
+        bucket = buckets.get(key)
+        if bucket is None:
+            bucket = buckets[key] = {
+                'row': row,
+                'first': max(first, start) if start else first,
+                'last': min(last, end) if end else last,
+                'sums': dict.fromkeys(_SUMMED_PERFORMANCE_FIELDS, 0),
+                'estimated': Decimal('0'),
+                'actual': Decimal('0'),
+                'ratings': {'avg_time_rating': [], 'avg_qc_rating': [], 'avg_cleaning_rating': []},
+                'max_streak': 0,
+                'latest': row,
+            }
+        for field in _SUMMED_PERFORMANCE_FIELDS:
+            bucket['sums'][field] += getattr(row, field) or 0
+        bucket['estimated'] += Decimal(str(row.total_estimated_hours or 0))
+        bucket['actual'] += Decimal(str(row.total_actual_hours or 0))
+        for field, values in bucket['ratings'].items():
+            value = getattr(row, field)
+            if value is not None:
+                values.append(float(value))
+        bucket['max_streak'] = max(bucket['max_streak'], row.max_streak_days or 0)
+        bucket['latest'] = row  # rows are sorted, so the last one seen is the newest
+
+    result = []
+    for (user_id, _), bucket in buckets.items():
+        sums = bucket['sums']
+        assigned = sums['total_jobs_assigned']
+        estimated = float(bucket['estimated'])
+        actual = float(bucket['actual'])
+        entry = bucket['row'].to_dict()
+        entry.update(sums)
+        entry.update({
+            'id': f"{user_id}-{period_type}-{bucket['first'].isoformat()}",
+            'period_type': period_type,
+            'period_start': bucket['first'].isoformat(),
+            'period_end': bucket['last'].isoformat(),
+            'total_estimated_hours': estimated,
+            'total_actual_hours': actual,
+            'completion_rate': round(sums['total_jobs_completed'] / assigned * 100, 2) if assigned else 0,
+            'time_efficiency': round(estimated / actual, 2) if actual else None,
+            'current_streak_days': bucket['latest'].current_streak_days,
+            'max_streak_days': bucket['max_streak'],
+            'created_at': None,
+        })
+        for field, values in bucket['ratings'].items():
+            entry[field] = round(sum(values) / len(values), 1) if values else None
+        result.append(entry)
+    return result
+
+
+def _performance_entries(period_type, start=None, end=None, worker_id=None):
+    """Performance dicts for a period type. Weekly/monthly are built from daily rows."""
+    query = WorkPlanPerformance.query.filter_by(period_type='daily')
+    if worker_id:
+        query = query.filter_by(user_id=worker_id)
+    if start:
+        query = query.filter(WorkPlanPerformance.period_start >= start)
+    if end:
+        query = query.filter(WorkPlanPerformance.period_end <= end)
+    rows = query.all()
+
+    if period_type == 'daily':
+        entries = [r.to_dict() for r in rows]
+    else:
+        entries = _aggregate_performance(rows, period_type, start, end)
+    return sorted(entries, key=lambda e: e['period_start'], reverse=True)
+
+
 @bp.route('/performance', methods=['GET'])
 @jwt_required()
 def get_performance_report():
     """Get performance report for team or specific worker."""
     user = engineer_or_admin_required()
 
-    period_type = request.args.get('period', 'daily')
+    period_type = _parse_period(request.args.get('period', 'daily'))
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     worker_id = request.args.get('worker_id', type=int)
 
-    query = WorkPlanPerformance.query.filter_by(period_type=period_type)
-
-    if worker_id:
-        query = query.filter_by(user_id=worker_id)
-
+    start = end = None
     if start_date:
         try:
-            query = query.filter(WorkPlanPerformance.period_start >= date.fromisoformat(start_date))
+            start = date.fromisoformat(start_date)
         except ValueError:
             raise ValidationError("Invalid start_date format")
 
     if end_date:
         try:
-            query = query.filter(WorkPlanPerformance.period_end <= date.fromisoformat(end_date))
+            end = date.fromisoformat(end_date)
         except ValueError:
             raise ValidationError("Invalid end_date format")
 
-    performances = query.order_by(
-        WorkPlanPerformance.period_start.desc()
-    ).all()
+    performances = _performance_entries(period_type, start, end, worker_id)
 
     return jsonify({
         'status': 'success',
-        'performances': [p.to_dict() for p in performances],
+        'performances': performances,
         'count': len(performances)
     }), 200
 
@@ -1830,7 +1936,7 @@ def get_performance_comparison():
     """Compare workers' performance over a period."""
     user = engineer_or_admin_required()
 
-    period_type = request.args.get('period', 'weekly')
+    period_type = _parse_period(request.args.get('period', 'weekly'))
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
@@ -1843,19 +1949,15 @@ def get_performance_comparison():
     except ValueError:
         raise ValidationError("Invalid date format")
 
-    performances = WorkPlanPerformance.query.filter(
-        WorkPlanPerformance.period_type == period_type,
-        WorkPlanPerformance.period_start >= start,
-        WorkPlanPerformance.period_end <= end
-    ).all()
+    performances = _performance_entries(period_type, start, end)
 
     # Group by user
     by_user = {}
     for p in performances:
-        uid = p.user_id
+        uid = p['user_id']
         if uid not in by_user:
             by_user[uid] = {
-                'user': p.to_dict()['user'],
+                'user': p['user'],
                 'periods': [],
                 'totals': {
                     'jobs_assigned': 0,
@@ -1866,14 +1968,14 @@ def get_performance_comparison():
                     'ratings': []
                 }
             }
-        by_user[uid]['periods'].append(p.to_dict())
-        by_user[uid]['totals']['jobs_assigned'] += p.total_jobs_assigned
-        by_user[uid]['totals']['jobs_completed'] += p.total_jobs_completed
-        by_user[uid]['totals']['estimated_hours'] += float(p.total_estimated_hours or 0)
-        by_user[uid]['totals']['actual_hours'] += float(p.total_actual_hours or 0)
-        by_user[uid]['totals']['points'] += p.total_points_earned
-        if p.avg_time_rating:
-            by_user[uid]['totals']['ratings'].append(float(p.avg_time_rating))
+        by_user[uid]['periods'].append(p)
+        by_user[uid]['totals']['jobs_assigned'] += p['total_jobs_assigned']
+        by_user[uid]['totals']['jobs_completed'] += p['total_jobs_completed']
+        by_user[uid]['totals']['estimated_hours'] += p['total_estimated_hours'] or 0
+        by_user[uid]['totals']['actual_hours'] += p['total_actual_hours'] or 0
+        by_user[uid]['totals']['points'] += p['total_points_earned']
+        if p['avg_time_rating']:
+            by_user[uid]['totals']['ratings'].append(p['avg_time_rating'])
 
     # Calculate averages
     for uid in by_user:

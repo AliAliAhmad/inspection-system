@@ -703,6 +703,38 @@
   Needs a backend service in CI or the spec skipped there — a decision, not a one-liner.
 - None of these ever blocked Render; they only meant the safety checks checked nothing.
 
+### Filter audit, web + phone — FIXED 2026-09-24, NOT PUSHED
+- Ali: "some of the filters ... are not working ... shows error or nothing showing ... check all
+  the filter ... and fix the ones not working". Three read-only audits traced every filter
+  screen → param → server; ~60 real faults. Full list: `tasks/filter-audit-2026-09-24.md`.
+- **The two behind "error, I don't know why":** (1) the rate limiter keyed on the address and
+  Render's proxy made EVERYONE one address — the company shared 200 req/min (login 5/min), any
+  screen 429'd at random. Now per user (`rate_limit_key`, access OR refresh token) +
+  ProxyFix x_for=1; login per address+email (`login_rate_limit_key`) — the yard is one Wi-Fi
+  address, so per-address alone still locked everyone out at shift start. (2) User search
+  filtered on `User.employee_id`, which does not exist — EVERY search was a 500.
+- **Hidden crashes found on the way:** monitor follow-up lists (`equipment_number`), Overdue ageing
+  (`scheduled_date`) — both columns that do not exist.
+- **Missing routes the screens called:** /leaves/pending, /materials/reservations,
+  /notifications/analytics, /notifications/groups, /performance/*?user_id=, running-hours export.
+- **Mobile load-more replaced the list** on 9 screens → `usePagedList` (useInfiniteQuery).
+- Mobile week overview never showed web plans (Sunday vs Monday) → range match.
+- `0 || fallback` sorted urgent/critical as normal in 3 places → `??`.
+- ~95 new tests. 1361 backend, 61 web, 98 shared, both `tsc` clean. **Needs push + OTA.**
+- **Deploy order: push, wait for /health 502→200, THEN the OTA** — the phone now sends comma
+  lists and calls routes the old server does not have.
+- **Open for Ali:** equipment restrictions (screen types ≠ DB types, and nothing reads them);
+  Daily Review Day/Night does not change the job list; performance AI reads monthly rows never
+  written.
+
+### Admin sets a new password from Edit User — BUILT 2026-09-25, NOT PUSHED
+- Ali asked for a user's password. Passwords are stored HASHED and can never be read back, so
+  the fix is SETTING a new one. `PUT /api/users/<id>` always accepted `password` (admin only)
+  but the Edit User window had no box, and the server had no length check.
+- Web + phone Edit User: optional "New Password" (hidden input, `autoComplete="new-password"` so
+  the browser does not paste the ADMIN's saved password). Empty = unchanged; min 6 on the server
+  too. Not stripped (a space is a real character). 4 tests in `tests/test_admin_sets_password.py`.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

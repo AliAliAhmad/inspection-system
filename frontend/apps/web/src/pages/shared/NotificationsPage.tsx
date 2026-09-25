@@ -78,11 +78,14 @@ export default function NotificationsPage() {
       params.search = searchQuery;
     }
 
+    // Every ticked value, comma-joined — the server accepts a list. Only the
+    // first was sent before, so ticking two types showed one.
     if (filters.types?.length) {
-      params.type = filters.types[0];
+      params.type = filters.types.join(',');
     }
-    if (filters.priorities?.length) {
-      params.priority = filters.priorities[0];
+    // The "Critical" tab wins over the priority picker; it is what the tab says.
+    if (filters.priorities?.length && activeTab !== 'critical') {
+      params.priority = filters.priorities.join(',');
     }
     if (filters.date_from) {
       params.date_from = filters.date_from;

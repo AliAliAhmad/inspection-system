@@ -19,6 +19,7 @@ import {
   usersApi,
   aiApi,
 } from '@inspection/shared';
+import { usePagedList } from '../../hooks/usePagedList';
 import type {
   Defect,
   DefectStatus,
@@ -159,7 +160,6 @@ export default function DefectsScreen({ navigation }: any) {
   const { user } = useAuth();
   const canAssignRole = ADMIN_ROLES.includes(user?.role || '');
   const [activeFilter, setActiveFilter] = useState<DefectStatus | null>(null);
-  const [page, setPage] = useState(1);
 
   // Assign modal state
   const [assignModalVisible, setAssignModalVisible] = useState(false);
@@ -184,9 +184,9 @@ export default function DefectsScreen({ navigation }: any) {
     { label: t('defects.filter_false_alarm', 'False Alarm'), value: 'false_alarm' },
   ];
 
-  const defectsQuery = useQuery({
-    queryKey: ['defects', activeFilter, page],
-    queryFn: () =>
+  const defectsQuery = usePagedList({
+    queryKey: ['defects', activeFilter],
+    fetchPage: (page) =>
       defectsApi.list({
         page,
         per_page: 20,
@@ -228,26 +228,17 @@ export default function DefectsScreen({ navigation }: any) {
     },
   });
 
-  const responseData = (defectsQuery.data?.data as any) ?? defectsQuery.data;
-  const defects: Defect[] = responseData?.data ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
+  const defects: Defect[] = defectsQuery.items;
 
   const handleFilterChange = useCallback((value: DefectStatus | null) => {
     setActiveFilter(value);
-    setPage(1);
   }, []);
 
   const handleRefresh = useCallback(() => {
-    setPage(1);
     defectsQuery.refetch();
   }, [defectsQuery]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !defectsQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
-  }, [hasNextPage, defectsQuery.isFetching]);
+  const handleLoadMore = defectsQuery.loadMore;
 
   const handleAssignPress = (defect: Defect) => {
     setSelectedDefect(defect);
@@ -311,7 +302,7 @@ export default function DefectsScreen({ navigation }: any) {
     }
   };
 
-  if (defectsQuery.isLoading && page === 1) {
+  if (defectsQuery.isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -375,14 +366,14 @@ export default function DefectsScreen({ navigation }: any) {
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={defectsQuery.isRefetching && page === 1}
+            refreshing={defectsQuery.isRefreshing}
             onRefresh={handleRefresh}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
-          defectsQuery.isFetching && page > 1 ? (
+          defectsQuery.isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#1976D2" />
             </View>

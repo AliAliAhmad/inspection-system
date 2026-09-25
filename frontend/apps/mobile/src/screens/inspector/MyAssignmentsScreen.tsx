@@ -29,6 +29,7 @@ import StaleDataBanner from '../../components/StaleDataBanner';
 import { useOffline } from '../../providers/OfflineProvider';
 import { offlineCache } from '../../storage/offline-cache';
 import { prefetchAllAssignments } from '../../utils/prefetch-assignments';
+import { fetchAllPages } from '../../utils/pagination';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -381,8 +382,12 @@ export default function MyAssignmentsScreen() {
     isRefetching,
   } = useQuery({
     queryKey: ['myAssignments'],
-    queryFn: () => inspectionAssignmentsApi.getMyAssignments(),
-    select: (res) => (res.data as any).data ?? res.data,
+    // The endpoint pages at 20 by default. The status cards and chips below
+    // classify client-side, so they need EVERY row, not the newest 20.
+    queryFn: () =>
+      fetchAllPages<InspectionAssignment>((page) =>
+        inspectionAssignmentsApi.getMyAssignments({ page, per_page: 200 }),
+      ),
   });
 
   const allAssignments = useMemo(() => {

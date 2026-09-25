@@ -49,6 +49,14 @@ def create_app(config_name='development'):
     # Configure logging
     _setup_logging(app)
 
+    # Render puts a proxy in front of the app. Without this, request.remote_addr
+    # is the PROXY's address for every visitor — which made the rate limiter count
+    # the whole company as one person (see rate_limit_key in extensions.py).
+    # x_for=1: trust exactly the one hop Render adds, so a client cannot choose its
+    # own address by sending a fake X-Forwarded-For.
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)

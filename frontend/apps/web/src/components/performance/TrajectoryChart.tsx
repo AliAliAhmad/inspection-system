@@ -39,10 +39,50 @@ export interface TrajectoryChartProps {
 
 type Period = '30d' | '90d' | '180d';
 
+/** Months of prediction the backend should project for each period tab. */
+const PERIOD_MONTHS: Record<Period, number> = { '30d': 1, '90d': 3, '180d': 6 };
+
+/** What GET /api/performance/trajectory/<user_id> actually returns. */
+interface TrajectoryResponse {
+  has_sufficient_data?: boolean;
+  current_points?: number;
+  trend?: TrajectoryData['trend'];
+  avg_monthly_growth?: number;
+  confidence?: number;
+  predictions?: { month: number; date: string; predicted_points: number }[];
+}
+
 const performanceApi = {
-  getTrajectory: (userId?: number, period?: string) =>
-    apiClient.get('/api/performance/trajectory', { params: { user_id: userId, period } }),
+  getTrajectory: (userId: number, period: Period) =>
+    apiClient.get(`/api/performance/trajectory/${userId}`, {
+      params: { months: PERIOD_MONTHS[period] },
+    }),
 };
+
+/**
+ * The service projects points linearly: each month adds the truncated average
+ * monthly growth. The 30/90-day figures use the same rule so they stay correct
+ * whichever horizon the tab asked for. Only today's points are real history.
+ */
+function toTrajectoryData(raw: TrajectoryResponse | undefined): TrajectoryData | null {
+  if (!raw || raw.has_sufficient_data === false || !raw.predictions?.length) return null;
+  const current = raw.current_points ?? 0;
+  const step = Math.trunc(raw.avg_monthly_growth ?? 0);
+  return {
+    historical: [{ date: dayjs().format('YYYY-MM-DD'), score: current }],
+    predictions: raw.predictions.map((p) => ({
+      date: p.date,
+      score: p.predicted_points,
+      is_prediction: true,
+    })),
+    trend: raw.trend ?? 'stable',
+    trend_confidence: Math.round((raw.confidence ?? 0) * 100),
+    current_score: current,
+    predicted_score_30d: current + step,
+    predicted_score_90d: current + step * 3,
+    insights: [],
+  };
+}
 
 const TREND_CONFIG = {
   improving: { color: '#52c41a', icon: <RiseOutlined />, label: 'Improving' },
@@ -56,10 +96,11 @@ export function TrajectoryChart({ userId, compact = false }: TrajectoryChartProp
 
   const { data, isLoading } = useQuery({
     queryKey: ['performance', 'trajectory', userId, period],
-    queryFn: () => performanceApi.getTrajectory(userId, period).then((r) => r.data),
+    queryFn: () => performanceApi.getTrajectory(userId!, period).then((r) => r.data),
+    enabled: userId != null,
   });
 
-  const trajectoryData: TrajectoryData | null = data?.data || null;
+  const trajectoryData = toTrajectoryData(data?.data);
 
   if (isLoading) {
     return (

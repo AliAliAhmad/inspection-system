@@ -21,6 +21,7 @@ import {
   aiApi,
   getApiClient,
 } from '@inspection/shared';
+import { usePagedList } from '../../hooks/usePagedList';
 import type {
   Inspection,
   InspectionStatus,
@@ -124,7 +125,6 @@ export default function AllInspectionsScreen() {
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState<InspectionStatus | null>(null);
-  const [page, setPage] = useState(1);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedInspectionId, setSelectedInspectionId] = useState<number | null>(null);
 
@@ -165,9 +165,9 @@ export default function AllInspectionsScreen() {
     enabled: insightsModalVisible,
   });
 
-  const inspectionsQuery = useQuery({
-    queryKey: ['all-inspections', activeFilter, page],
-    queryFn: () =>
+  const inspectionsQuery = usePagedList({
+    queryKey: ['all-inspections', activeFilter],
+    fetchPage: (page) =>
       inspectionsApi.list({
         page,
         per_page: 20,
@@ -208,28 +208,19 @@ export default function AllInspectionsScreen() {
     },
   });
 
-  const responseData = (inspectionsQuery.data?.data as any) ?? inspectionsQuery.data;
-  const inspections: Inspection[] = responseData?.data ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
+  const inspections: Inspection[] = inspectionsQuery.items;
   const stats = statsQuery.data;
 
   const handleFilterChange = useCallback((value: InspectionStatus | null) => {
     setActiveFilter(value);
-    setPage(1);
   }, []);
 
   const handleRefresh = useCallback(() => {
-    setPage(1);
     inspectionsQuery.refetch();
     statsQuery.refetch();
   }, [inspectionsQuery, statsQuery]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !inspectionsQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
-  }, [hasNextPage, inspectionsQuery.isFetching]);
+  const handleLoadMore = inspectionsQuery.loadMore;
 
   const handleInspectionPress = (inspection: Inspection) => {
     setSelectedInspectionId(inspection.id);
@@ -320,7 +311,7 @@ export default function AllInspectionsScreen() {
     }
   };
 
-  if (inspectionsQuery.isLoading && page === 1) {
+  if (inspectionsQuery.isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -392,14 +383,14 @@ export default function AllInspectionsScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={inspectionsQuery.isRefetching && page === 1}
+            refreshing={inspectionsQuery.isRefreshing}
             onRefresh={handleRefresh}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
-          inspectionsQuery.isFetching && page > 1 ? (
+          inspectionsQuery.isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#1976D2" />
             </View>

@@ -73,7 +73,8 @@ export default function LeavesPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['leaves', page, statusFilter],
-    queryFn: () => leavesApi.list({ page, per_page: 15, status: statusFilter }).then(r => r.data),
+    // mine: the "My Leaves" tab is this person's own, admin or not.
+    queryFn: () => leavesApi.list({ page, per_page: 15, status: statusFilter, mine: true }).then(r => r.data),
   });
 
   // Fetch current user's leave balance
@@ -280,7 +281,7 @@ export default function LeavesPage() {
                   allowClear
                   style={{ width: 150 }}
                   value={statusFilter}
-                  onChange={setStatusFilter}
+                  onChange={(v) => { setStatusFilter(v); setPage(1); }}
                   options={[
                     { value: 'pending', label: t('status.pending') },
                     { value: 'approved', label: t('status.approved') },

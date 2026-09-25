@@ -137,15 +137,30 @@ def list_users():
     if shift:
         query = query.filter_by(shift=shift)
 
-    # Search by name or email
-    search = request.args.get('search')
+    # Search — every field a person might type to find someone.
+    #
+    # Ali, 2026-09-24: "i try to find a user in the user page or shows error or
+    # nothing showing". This filtered on `User.employee_id`, which does NOT exist
+    # — the employee number is stored as `role_id` and only SERIALISED under the
+    # name 'employee_id' (User.to_dict). So EVERY search raised AttributeError and
+    # the page said "Error loading data", whatever was typed.
+    #
+    # Now also the Arabic name (typed by a person, not transliterated), the
+    # username, the SAP id and the phone. NFC-normalised so Arabic typed on two
+    # different keyboards still matches.
+    search = (request.args.get('search') or '').strip()
     if search:
-        search_term = f'%{search}%'
+        import unicodedata
+        search_term = f'%{unicodedata.normalize("NFC", search)}%'
         query = query.filter(
             db.or_(
                 User.full_name.ilike(search_term),
+                User.full_name_ar.ilike(search_term),
                 User.email.ilike(search_term),
-                User.employee_id.ilike(search_term)
+                User.username.ilike(search_term),
+                User.role_id.ilike(search_term),
+                User.sap_id.ilike(search_term),
+                User.phone.ilike(search_term),
             )
         )
 
@@ -536,9 +551,16 @@ def update_user(user_id):
         user.shift = data['shift']
     if 'is_active' in data:
         user.is_active = data['is_active']
-    if 'password' in data:
+    # A new password, set by an admin from the Edit User window (Ali, 2026-09-25:
+    # a password cannot be read back — it is stored hashed — so the only way to
+    # let someone in again is to set a new one). Blank means "leave it alone".
+    # Same 6-character minimum as Create User; never stripped — a space is a
+    # character the person may really have typed.
+    if data.get('password'):
+        if len(data['password']) < 6:
+            raise ValidationError("Password must be at least 6 characters")
         user.set_password(data['password'])
-    
+
     safe_commit()
     
     return jsonify({

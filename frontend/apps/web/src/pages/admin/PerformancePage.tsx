@@ -15,6 +15,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { usersApi, type User } from '@inspection/shared';
+import { useAuth } from '../../providers/AuthProvider';
 import {
   PerformanceDashboard,
   GoalsManager,
@@ -46,15 +47,18 @@ export default function PerformancePage() {
 
   const users: User[] = usersData?.data || [];
 
-  // Get current user info from localStorage or context
-  const currentUserStr = localStorage.getItem('user');
-  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+  // Nothing writes localStorage['user']; the signed-in user lives in the auth context.
+  const { user: currentUser } = useAuth();
   const isAdminOrEngineer = currentUser?.role === 'admin' || currentUser?.role === 'engineer';
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['performance'] });
     message.success(t('common.refreshed', 'Data refreshed'));
   };
+
+  // The performance endpoints take the user id in the path, so "nobody selected"
+  // must resolve to the signed-in user rather than be left out.
+  const viewedUserId = selectedUserId ?? currentUser?.id;
 
   const selectedUser = selectedUserId
     ? users.find((u) => u.id === selectedUserId)
@@ -127,7 +131,7 @@ export default function PerformancePage() {
         return (
           <Row gutter={[16, 16]}>
             <Col span={24}>
-              <PerformanceDashboard userId={selectedUserId} showFullDashboard />
+              <PerformanceDashboard userId={viewedUserId} showFullDashboard />
             </Col>
           </Row>
         );
@@ -137,7 +141,7 @@ export default function PerformancePage() {
           <Row gutter={[16, 16]}>
             <Col span={24}>
               <GoalsManager
-                userId={selectedUserId}
+                userId={viewedUserId}
                 readOnly={!!selectedUserId && selectedUserId !== currentUser?.id}
               />
             </Col>
@@ -148,10 +152,10 @@ export default function PerformancePage() {
         return (
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={16}>
-              <SkillGapsChart userId={selectedUserId} />
+              <SkillGapsChart userId={viewedUserId} />
             </Col>
             <Col xs={24} lg={8}>
-              <LearningPathCard userId={selectedUserId} compact />
+              <LearningPathCard userId={viewedUserId} compact />
             </Col>
           </Row>
         );
@@ -160,10 +164,10 @@ export default function PerformancePage() {
         return (
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={16}>
-              <TrajectoryChart userId={selectedUserId} />
+              <TrajectoryChart userId={viewedUserId} />
             </Col>
             <Col xs={24} lg={8}>
-              <PeerComparisonCard userId={selectedUserId} />
+              <PeerComparisonCard userId={viewedUserId} />
             </Col>
           </Row>
         );
@@ -172,7 +176,7 @@ export default function PerformancePage() {
         return (
           <Row gutter={[16, 16]}>
             <Col span={24}>
-              <LearningPathCard userId={selectedUserId} />
+              <LearningPathCard userId={viewedUserId} />
             </Col>
           </Row>
         );
@@ -181,7 +185,7 @@ export default function PerformancePage() {
         return isAdminOrEngineer ? (
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={12}>
-              <BurnoutRiskCard userId={selectedUserId || currentUser?.id} />
+              <BurnoutRiskCard userId={viewedUserId} />
             </Col>
             <Col xs={24} lg={12}>
               {/* Team Burnout Overview - only show for admin/engineer viewing team */}

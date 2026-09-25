@@ -85,12 +85,15 @@ export default function WorkPlanOverviewScreen() {
     queryFn: () => workPlansApi.list({ week_start: weekStart, include_days: true }),
   });
 
+  // The server now returns the plan whose range CONTAINS weekStart (a web
+  // plan starts on Sunday, this screen asks for Monday), exact match first.
   const workPlan: WorkPlan | undefined = data?.data?.work_plans?.[0];
   const allDays = workPlan?.days || [];
 
   // Inspector/Specialist: show only today + days with overdue jobs
   // Engineer/Admin: show full week
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Local date — toISOString() is UTC and names yesterday until 03:00 in Baghdad.
+  const todayStr = toLocalDateString(new Date());
   const days = isAdminOrEngineer
     ? allDays
     : allDays.filter(day => {

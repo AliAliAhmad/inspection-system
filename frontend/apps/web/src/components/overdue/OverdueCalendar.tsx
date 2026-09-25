@@ -123,6 +123,7 @@ export function OverdueCalendar({
   // Group items by due date
   const itemsByDate = data.reduce((acc, item) => {
     const date = item.due_date;
+    if (!date) return acc;
     if (!acc[date]) {
       acc[date] = [];
     }

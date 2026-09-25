@@ -19,7 +19,8 @@ export interface ComparisonMetric {
   name: string;
   key: string;
   user_value: number;
-  average_value: number;
+  /** Not provided by the peer-comparison endpoint; the average bar is hidden without it. */
+  average_value?: number;
   percentile: number;
   trend: 'up' | 'down' | 'stable';
   unit?: string;
@@ -27,8 +28,9 @@ export interface ComparisonMetric {
 
 export interface PeerComparisonData {
   user_id: number;
-  rank: number;
-  total_users: number;
+  /** Not provided by the peer-comparison endpoint; the percentile is shown instead. */
+  rank?: number;
+  total_users?: number;
   percentile: number;
   metrics: ComparisonMetric[];
   tier: 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
@@ -39,10 +41,52 @@ export interface PeerComparisonCardProps {
   compact?: boolean;
 }
 
+/** What GET /api/performance/peer-comparison/<user_id> actually returns. */
+interface PeerComparisonResponse {
+  user_id?: number;
+  peer_count?: number;
+  overall_percentile?: number;
+  metrics?: Record<string, { value: number; percentile: number }>;
+}
+
 const performanceApi = {
-  getPeerComparison: (userId?: number) =>
-    apiClient.get('/api/performance/peer-comparison', { params: { user_id: userId } }),
+  getPeerComparison: (userId: number) =>
+    apiClient.get(`/api/performance/peer-comparison/${userId}`),
 };
+
+const METRIC_LABELS: Record<string, { name: string; unit?: string }> = {
+  completion_rate: { name: 'Completion Rate', unit: '%' },
+  points_earned: { name: 'Points Earned' },
+};
+
+/** Highest tier whose minimum percentile the user reaches. */
+function tierFor(percentile: number): PeerComparisonData['tier'] {
+  const tiers = Object.entries(TIER_CONFIG) as [PeerComparisonData['tier'], { minPercentile: number }][];
+  return tiers.filter(([, cfg]) => percentile >= cfg.minPercentile).pop()?.[0] ?? 'bronze';
+}
+
+/**
+ * The endpoint returns percentiles only (no rank, no peer averages) and answers
+ * "no data" / "not enough peers" as a 200 with just a message, so a payload
+ * without metrics is treated as empty.
+ */
+function toPeerComparisonData(raw: PeerComparisonResponse | undefined): PeerComparisonData | null {
+  if (!raw?.metrics || raw.user_id == null) return null;
+  const percentile = raw.overall_percentile ?? 0;
+  return {
+    user_id: raw.user_id,
+    percentile,
+    tier: tierFor(percentile),
+    metrics: Object.entries(raw.metrics).map(([key, m]) => ({
+      key,
+      name: METRIC_LABELS[key]?.name ?? key,
+      unit: METRIC_LABELS[key]?.unit,
+      user_value: m.value,
+      percentile: m.percentile,
+      trend: 'stable',
+    })),
+  };
+}
 
 const TIER_CONFIG = {
   bronze: { color: '#cd7f32', label: 'Bronze', minPercentile: 0 },
@@ -65,10 +109,11 @@ export function PeerComparisonCard({ userId, compact = false }: PeerComparisonCa
 
   const { data, isLoading } = useQuery({
     queryKey: ['performance', 'peer-comparison', userId],
-    queryFn: () => performanceApi.getPeerComparison(userId).then((r) => r.data),
+    queryFn: () => performanceApi.getPeerComparison(userId!).then((r) => r.data),
+    enabled: userId != null,
   });
 
-  const comparisonData: PeerComparisonData | null = data?.data || null;
+  const comparisonData = toPeerComparisonData(data?.data);
 
   if (isLoading) {
     return (
@@ -97,7 +142,8 @@ export function PeerComparisonCard({ userId, compact = false }: PeerComparisonCa
 
   const tierConfig = TIER_CONFIG[comparisonData.tier];
   const isTopPerformer = comparisonData.percentile >= 75;
-  const isTopTen = comparisonData.rank <= 10;
+  const isTopTen = comparisonData.rank != null && comparisonData.rank <= 10;
+  const hasRank = comparisonData.rank != null;
 
   if (compact) {
     return (
@@ -118,11 +164,13 @@ export function PeerComparisonCard({ userId, compact = false }: PeerComparisonCa
             }}
           >
             <Text strong style={{ fontSize: 18, lineHeight: 1 }}>
-              #{comparisonData.rank}
+              {hasRank ? `#${comparisonData.rank}` : `${comparisonData.percentile}%`}
             </Text>
-            <Text type="secondary" style={{ fontSize: 10 }}>
-              of {comparisonData.total_users}
-            </Text>
+            {hasRank && (
+              <Text type="secondary" style={{ fontSize: 10 }}>
+                of {comparisonData.total_users}
+              </Text>
+            )}
           </div>
 
           {/* Quick Stats */}
@@ -197,11 +245,13 @@ export function PeerComparisonCard({ userId, compact = false }: PeerComparisonCa
         >
           <TrophyOutlined style={{ fontSize: 20, marginBottom: 4 }} />
           <Text strong style={{ fontSize: 28, color: '#fff', lineHeight: 1 }}>
-            #{comparisonData.rank}
+            {hasRank ? `#${comparisonData.rank}` : `${comparisonData.percentile}%`}
           </Text>
-          <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>
-            of {comparisonData.total_users}
-          </Text>
+          {hasRank && (
+            <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)' }}>
+              of {comparisonData.total_users}
+            </Text>
+          )}
         </div>
 
         {/* Percentile & Badges */}
@@ -250,9 +300,11 @@ export function PeerComparisonCard({ userId, compact = false }: PeerComparisonCa
         </Text>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {comparisonData.metrics.map((metric) => {
-            const vsAverage = metric.user_value - metric.average_value;
+            const average = metric.average_value;
+            const hasAverage = average != null && average > 0;
+            const vsAverage = hasAverage ? metric.user_value - average : 0;
             const isAboveAverage = vsAverage > 0;
-            const percentOfAverage = Math.round((metric.user_value / metric.average_value) * 100);
+            const percentOfAverage = hasAverage ? Math.round((metric.user_value / average) * 100) : 0;
 
             return (
               <div
@@ -291,17 +343,20 @@ export function PeerComparisonCard({ userId, compact = false }: PeerComparisonCa
                       {metric.user_value}
                       {metric.unit}
                     </Text>
-                    <Text
-                      type={isAboveAverage ? 'success' : 'danger'}
-                      style={{ fontSize: 12 }}
-                    >
-                      ({isAboveAverage ? '+' : ''}
-                      {vsAverage.toFixed(1)}{metric.unit} vs avg)
-                    </Text>
+                    {hasAverage && (
+                      <Text
+                        type={isAboveAverage ? 'success' : 'danger'}
+                        style={{ fontSize: 12 }}
+                      >
+                        ({isAboveAverage ? '+' : ''}
+                        {vsAverage.toFixed(1)}{metric.unit} vs avg)
+                      </Text>
+                    )}
                   </Space>
                 </div>
 
                 {/* Visual Comparison Bar */}
+                {hasAverage && (
                 <div style={{ position: 'relative' }}>
                   <Progress
                     percent={Math.min(percentOfAverage, 150)}
@@ -333,6 +388,7 @@ export function PeerComparisonCard({ userId, compact = false }: PeerComparisonCa
                     Avg: {metric.average_value}{metric.unit}
                   </div>
                 </div>
+                )}
 
                 {/* Percentile badge */}
                 <div style={{ marginTop: 8, textAlign: 'right' }}>

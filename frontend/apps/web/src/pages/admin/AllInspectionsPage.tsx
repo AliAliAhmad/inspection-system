@@ -725,7 +725,7 @@ export default function AllInspectionsPage() {
                   placeholder={t('inspections.anyResult', 'Any result')}
                   allowClear
                   value={resultFilter}
-                  onChange={setResultFilter}
+                  onChange={(v) => { setResultFilter(v); setPage(1); }}
                   options={[
                     { value: 'pass', label: t('inspections.pass', 'Pass') },
                     { value: 'fail', label: t('inspections.fail', 'Fail') },
@@ -740,14 +740,14 @@ export default function AllInspectionsPage() {
                 <RangePicker
                   style={{ width: '100%' }}
                   value={dateRange}
-                  onChange={(val) => setDateRange(val as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null)}
+                  onChange={(val) => { setDateRange(val as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null); setPage(1); }}
                 />
               </Col>
               <Col xs={12} sm={6} md={4}>
                 <div style={{ paddingTop: 20 }}>
                   <Checkbox
                     checked={hasDefects}
-                    onChange={(e) => setHasDefects(e.target.checked ? true : undefined)}
+                    onChange={(e) => { setHasDefects(e.target.checked ? true : undefined); setPage(1); }}
                   >
                     {t('inspections.hasDefects', 'Has Defects')}
                   </Checkbox>

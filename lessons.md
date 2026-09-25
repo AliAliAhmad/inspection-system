@@ -920,3 +920,18 @@ control goes where the user already looks for that kind of thing (the supervisor
 beside the team), not at the bottom where there was room. "It's on the page" is
 not "he can find it" — check the position on a real, long job.
 
+LESSON (2026-09-24): Ali reported filters "not working, I don't know why" — the
+biggest cause was not a filter at all. Flask-Limiter keyed on get_remote_address
+behind Render's proxy with no ProxyFix, so the whole company was ONE client with
+200 requests/minute; any screen 429'd at random and got blamed on whatever the
+person touched. → When a complaint is "random errors across many screens", suspect
+a SHARED resource (rate limit, pool, cache key) before the individual screens.
+Check what request.remote_addr actually is behind the host's proxy.
+
+LESSON (2026-09-24): Three separate server crashes today came from code reading a
+column that does not exist (`User.employee_id`, `equipment.equipment_number`,
+`InspectionAssignment.scheduled_date`). SQLAlchemy only fails when the line RUNS,
+so a filter nobody used, or a list that happened to be empty, hid them for months.
+→ Every filter and serialiser branch needs one test that EXECUTES it with a row
+present; an empty-table test proves nothing about the attribute access.
+

@@ -28,6 +28,16 @@ export interface NotificationListParams extends PaginationParams {
   group_key?: string;
 }
 
+/** One bucket from GET /api/notifications/grouped. */
+export interface NotificationBucket {
+  /** The grouping key: a notification type, priority or ISO date. */
+  id: string;
+  label: string;
+  count: number;
+  unread_count: number;
+  latest: Notification | null;
+}
+
 export interface SnoozePayload {
   snooze_until: string;
 }
@@ -156,10 +166,40 @@ export const notificationsApi = {
   },
 
   // ============ Groups ============
-  listGroups(params?: NotificationListParams) {
-    return getApiClient().get<PaginatedResponse<NotificationGroup>>('/api/notifications/groups', {
-      params,
-    });
+  /**
+   * Notifications grouped by type, in the NotificationGroup shape the web
+   * drawer reads. There is no /api/notifications/groups route — it 404'd, so
+   * the drawer's "grouped" view was always empty (2026-09-24 audit). This reads
+   * the real /grouped route and reshapes each bucket; `notifications` holds the
+   * latest one, and the count says how many there are.
+   */
+  async listGroups(_params?: NotificationListParams): Promise<{ data: PaginatedResponse<NotificationGroup> }> {
+    const r = await getApiClient().get<{ status: string; groups: NotificationBucket[] }>(
+      '/api/notifications/grouped', { params: { group_by: 'type' } });
+    const now = new Date().toISOString();
+    const groups: NotificationGroup[] = (r.data.groups || []).map((b, i) => ({
+      id: i + 1,
+      group_key: b.id,
+      group_type: 'similar',
+      summary_title: b.label,
+      summary_message: b.latest?.message ?? '',
+      notification_count: b.count,
+      notifications: b.latest ? [b.latest] : [],
+      created_at: b.latest?.created_at ?? now,
+      updated_at: b.latest?.created_at ?? now,
+    }));
+    return { data: { status: 'success', data: groups } as unknown as PaginatedResponse<NotificationGroup> };
+  },
+
+  /**
+   * Notifications bucketed server-side (GET /api/notifications/grouped).
+   * The backend has no /groups route; this is the one that exists.
+   */
+  getGrouped(params?: { group_by?: 'type' | 'priority' | 'date' }) {
+    return getApiClient().get<{ status: string; groups: NotificationBucket[] }>(
+      '/api/notifications/grouped',
+      { params },
+    );
   },
 
   getGroup(groupKey: string) {

@@ -6,13 +6,13 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.services.auth_service import AuthService
 from app.exceptions.api_exceptions import ValidationError
-from app.extensions import limiter
+from app.extensions import limiter, login_rate_limit_key
 
 bp = Blueprint('auth', __name__)
 
 
 @bp.route('/login', methods=['POST'])
-@limiter.limit("5 per minute")
+@limiter.limit("5 per minute", key_func=login_rate_limit_key)
 def login():
     """
     User login endpoint.

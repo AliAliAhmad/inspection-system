@@ -18,6 +18,8 @@ import { useTranslation } from 'react-i18next';
 import * as DocumentPicker from 'expo-document-picker';
 import { usersApi } from '@inspection/shared';
 import type { User, UserRole, ImportResult, ImportLog, RoleSwapLog } from '@inspection/shared';
+import { usePagedList } from '../../hooks/usePagedList';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 
 type RoleFilter = UserRole | 'all';
 const ROLE_FILTERS: RoleFilter[] = ['all', 'admin', 'inspector', 'specialist', 'engineer', 'quality_engineer', 'maintenance'];
@@ -42,7 +44,6 @@ export default function AdminUsersScreen() {
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
-  const [page, setPage] = useState(1);
 
   // Edit modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -55,6 +56,9 @@ export default function AdminUsersScreen() {
     shift: '',
     language: '',
     is_active: true,
+    // A NEW password, set by the admin. Empty = unchanged. A password can never
+    // be read back (it is stored hashed), so this is how someone gets back in.
+    password: '',
   });
 
   // Create modal state
@@ -79,19 +83,20 @@ export default function AdminUsersScreen() {
   const [swapHistoryVisible, setSwapHistoryVisible] = useState(false);
   const [swapHistoryUser, setSwapHistoryUser] = useState<User | null>(null);
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
-    queryKey: ['users', roleFilter, search, page],
-    queryFn: () =>
+  // Paging lives under `pagination` in the response; the old read of a
+  // top-level total_pages was always undefined, so load-more never fired.
+  const debouncedSearch = useDebouncedValue(search.trim().normalize('NFC'));
+  const usersList = usePagedList<User>({
+    queryKey: ['users', 'admin-list', roleFilter, debouncedSearch],
+    fetchPage: (page) =>
       usersApi.list({
         ...(roleFilter !== 'all' && { role: roleFilter }),
-        ...(search && { search }),
+        ...(debouncedSearch && { search: debouncedSearch }),
         page,
         per_page: 20,
-      }),
+      } as any),
   });
-
-  const users: User[] = (data?.data as any)?.items ?? (data?.data as any)?.data ?? (data?.data as any) ?? [];
-  const totalPages: number = (data?.data as any)?.total_pages ?? (data?.data as any)?.pages ?? 1;
+  const { items: users, isLoading, isError, refetch, isRefreshing: isRefetching } = usersList;
 
   const createMutation = useMutation({
     mutationFn: (payload: any) => usersApi.create(payload),
@@ -115,8 +120,9 @@ export default function AdminUsersScreen() {
       setEditingUser(null);
       Alert.alert(t('common.success', 'Success'), t('users.updated', 'User updated successfully.'));
     },
-    onError: () => {
-      Alert.alert(t('common.error', 'Error'), t('users.update_failed', 'Failed to update user.'));
+    onError: (err: any) => {
+      Alert.alert(t('common.error', 'Error'),
+        err?.response?.data?.message || t('users.update_failed', 'Failed to update user.'));
     },
   });
 
@@ -266,6 +272,7 @@ export default function AdminUsersScreen() {
       shift: user.shift ?? '',
       language: user.language ?? 'en',
       is_active: user.is_active !== false,
+      password: '',
     });
     setEditModalVisible(true);
   };
@@ -289,6 +296,10 @@ export default function AdminUsersScreen() {
 
   const handleUpdate = () => {
     if (!editingUser) return;
+    if (editForm.password && editForm.password.length < 6) {
+      Alert.alert(t('common.error', 'Error'), t('users.password_min', 'At least 6 characters'));
+      return;
+    }
     updateMutation.mutate({
       userId: editingUser.id,
       payload: {
@@ -299,15 +310,12 @@ export default function AdminUsersScreen() {
         shift: editForm.shift || undefined,
         language: editForm.language || undefined,
         is_active: editForm.is_active,
+        ...(editForm.password ? { password: editForm.password } : {}),
       },
     });
   };
 
-  const handleLoadMore = () => {
-    if (page < totalPages) {
-      setPage((prev) => prev + 1);
-    }
-  };
+  const handleLoadMore = usersList.loadMore;
 
   const renderRoleFilterChips = () => (
     <ScrollView
@@ -320,7 +328,7 @@ export default function AdminUsersScreen() {
         <TouchableOpacity
           key={role}
           style={[styles.filterChip, roleFilter === role && styles.filterChipActive]}
-          onPress={() => { setRoleFilter(role); setPage(1); }}
+          onPress={() => { setRoleFilter(role); }}
         >
           <Text style={[styles.filterChipText, roleFilter === role && styles.filterChipTextActive]}>
             {role === 'all' ? t('common.all', 'All') : t(`roles.${role}`, role)}
@@ -415,7 +423,7 @@ export default function AdminUsersScreen() {
     );
   };
 
-  if (isLoading && page === 1) {
+  if (isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -470,7 +478,7 @@ export default function AdminUsersScreen() {
         <TextInput
           style={styles.searchInput}
           value={search}
-          onChangeText={(val) => { setSearch(val); setPage(1); }}
+          onChangeText={setSearch}
           placeholder={t('common.search', 'Search...')}
           placeholderTextColor="#999"
         />
@@ -485,12 +493,12 @@ export default function AdminUsersScreen() {
         contentContainerStyle={users.length === 0 ? styles.emptyListContainer : styles.listContent}
         ListEmptyComponent={renderEmpty}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => { setPage(1); refetch(); }} />
+          <RefreshControl refreshing={isRefetching} onRefresh={() => { refetch(); }} />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
-          page < totalPages ? (
+          usersList.isFetchingNextPage ? (
             <ActivityIndicator size="small" color="#1976D2" style={{ paddingVertical: 16 }} />
           ) : null
         }
@@ -517,6 +525,20 @@ export default function AdminUsersScreen() {
                 onChangeText={(v) => setEditForm((p) => ({ ...p, email: v }))}
                 keyboardType="email-address"
                 autoCapitalize="none"
+              />
+
+              <Text style={styles.fieldLabel}>{t('users.new_password', 'New Password')}</Text>
+              <TextInput
+                testID="edit-user-new-password"
+                style={styles.input}
+                value={editForm.password}
+                onChangeText={(v) => setEditForm((p) => ({ ...p, password: v }))}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="new-password"
+                textContentType="newPassword"
+                placeholder={t('users.new_password_hint', 'Leave empty to keep the current password')}
               />
 
               <Text style={styles.fieldLabel}>{t('users.role', 'Role')}</Text>

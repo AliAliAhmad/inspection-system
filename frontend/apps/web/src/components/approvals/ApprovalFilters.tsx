@@ -237,27 +237,9 @@ export function ApprovalFilters({
           </Select>
         </Col>
 
-        <Col xs={24} md={8}>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
-            {t('approvals.filterByStatus', 'Status')}
-          </Text>
-          <Select
-            placeholder={t('approvals.selectStatus', 'Select status...')}
-            value={filters.status}
-            onChange={handleStatusChange}
-            style={{ width: '100%' }}
-            allowClear
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <Select.Option key={option.value} value={option.value}>
-                <Tag color={option.color} style={{ marginRight: 0 }}>
-                  {option.label}
-                </Tag>
-              </Select.Option>
-            ))}
-          </Select>
-        </Col>
-
+        {/* No Status picker. Every source this inbox reads is PENDING only
+            (leaves, pauses, bonuses, takeovers, crew changes), so "Approved" and
+            "Rejected" could only ever show an empty list (2026-09-24 audit). */}
         <Col xs={24} md={8}>
           <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
             {t('approvals.filterByDate', 'Date Range')}

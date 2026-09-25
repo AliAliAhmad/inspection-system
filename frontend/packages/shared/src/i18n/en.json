@@ -2050,5 +2050,10 @@
     "status_cancelled": "Withdrawn",
     "status_started": "Cancelled — the job started",
     "failed": "Could not send the request"
+  },
+  "users": {
+    "newPassword": "New Password",
+    "newPasswordHint": "Leave empty to keep the current password.",
+    "passwordMin": "At least 6 characters"
   }
 }

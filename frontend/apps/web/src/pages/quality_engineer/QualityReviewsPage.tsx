@@ -78,11 +78,13 @@ export default function QualityReviewsPage() {
 
   // Fetch reviews
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['quality-reviews', page, perPage, statusFilter],
+    queryKey: ['quality-reviews', page, perPage, statusFilter, viewMode],
     queryFn: () =>
       qualityReviewsApi.list({
-        page,
-        per_page: perPage,
+        // The board shows EVERY job at once: page 1, up to 200. It used to reuse the
+        // table's page and page size, so it showed 10 jobs, or none from page 3.
+        page: viewMode === 'kanban' ? 1 : page,
+        per_page: viewMode === 'kanban' ? 200 : perPage,
         status: statusFilter as ReviewStatus | undefined,
       }),
   });

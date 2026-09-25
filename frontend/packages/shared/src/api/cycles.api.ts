@@ -72,7 +72,11 @@ export const cyclesApi = {
    * List all maintenance cycles
    */
   list(params?: CyclesListParams) {
-    return getApiClient().get<ApiResponse<CyclesListResponse>>('/api/cycles', { params });
+    // GET /api/cycles answers {status, cycles, count} at the TOP level — no
+    // `data` wrapper (app/api/cycles.py). Typed as ApiResponse, three screens read
+    // `.data.data.cycles`, got undefined, and showed no cycles at all (found
+    // 2026-09-24: Cycles page, PM Templates' cycle picker, the Cycle Optimizer).
+    return getApiClient().get<CyclesListResponse & { status: string }>('/api/cycles', { params });
   },
 
   /**

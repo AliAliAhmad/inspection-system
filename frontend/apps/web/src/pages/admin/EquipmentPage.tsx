@@ -54,6 +54,7 @@ import {
   RiskIndicator,
   scoreToRiskLevel,
 } from '../../components/shared';
+import { useDebounce } from '../../hooks/useDebounce';
 
 const STATUSES: EquipmentStatus[] = ['active', 'under_maintenance', 'out_of_service', 'stopped', 'paused'];
 
@@ -74,6 +75,12 @@ export default function EquipmentPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
+  // The machines behind a health card (Critical, Certs Due) — exactly what the
+  // card counted, by id. See high_risk_ids in app/api/equipment.py.
+  const [cardFilter, setCardFilter] = useState<{ label: string; ids: number[] } | null>(null);
+  // Both boxes are free text: ask the server once typing pauses, not per key.
+  const debouncedSearch = useDebounce(search.trim(), 300);
+  const debouncedType = useDebounce(typeFilter?.trim() || undefined, 300);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -100,15 +107,16 @@ export default function EquipmentPage() {
   });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['equipment', page, perPage, search, statusFilter, typeFilter],
+    queryKey: ['equipment', page, perPage, debouncedSearch, statusFilter, debouncedType, cardFilter?.ids.join(',')],
     queryFn: () =>
       equipmentApi.list({
         page,
         per_page: perPage,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: statusFilter,
-        equipment_type: typeFilter,
-      }),
+        equipment_type: debouncedType,
+        ...(cardFilter ? { ids: cardFilter.ids.join(',') || '-1' } : {}),
+      } as any),
   });
 
   const createMutation = useMutation({
@@ -419,15 +427,28 @@ export default function EquipmentPage() {
           loading={healthLoading}
           onCardClick={(type) => {
             // Filter table based on card clicked
+            // Each card shows exactly what it COUNTS (2026-09-24 audit):
+            // Maintenance counts under_maintenance + paused; Critical counts the
+            // high- and critical-risk machines (not "stopped"); Certs Due the
+            // machines whose certificates expire within 30 days.
+            setStatusFilter(undefined);
+            setCardFilter(null);
             if (type === 'active') setStatusFilter('active');
-            else if (type === 'maintenance') setStatusFilter('under_maintenance');
-            else if (type === 'critical') setStatusFilter('stopped');
-            else setStatusFilter(undefined);
+            else if (type === 'maintenance') setStatusFilter('under_maintenance,paused');
+            else if (type === 'critical') setCardFilter({ label: t('equipmentAI.critical', 'Critical'), ids: healthSummaryRaw?.high_risk_ids ?? [] });
+            else if (type === 'certs') setCardFilter({ label: t('equipmentAI.certsDue', 'Certs Due'), ids: healthSummaryRaw?.expiring_cert_equipment_ids ?? [] });
             setPage(1);
           }}
         />
       </div>
 
+      {cardFilter && (
+        <div style={{ marginBottom: 12 }}>
+          <Tag closable color="blue" onClose={() => { setCardFilter(null); setPage(1); }}>
+            {cardFilter.label}: {cardFilter.ids.length}
+          </Tag>
+        </div>
+      )}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}>
           <Input

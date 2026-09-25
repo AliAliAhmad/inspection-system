@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { specialistJobsApi } from '@inspection/shared';
+import { usePagedList } from '../../hooks/usePagedList';
 import type { SpecialistJob, SpecialistJobStats } from '@inspection/shared';
 import { StatCard } from '../../components/shared/StatCard';
 
@@ -236,7 +237,6 @@ export default function AllSpecialistJobsScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
   const [workloadModalVisible, setWorkloadModalVisible] = useState(false);
   const [performersModalVisible, setPerformersModalVisible] = useState(false);
 
@@ -256,9 +256,9 @@ export default function AllSpecialistJobsScreen() {
     staleTime: 60000,
   });
 
-  const jobsQuery = useQuery({
-    queryKey: ['all-specialist-jobs', activeFilter, page],
-    queryFn: () =>
+  const jobsQuery = usePagedList({
+    queryKey: ['all-specialist-jobs', activeFilter],
+    fetchPage: (page) =>
       specialistJobsApi.list({
         page,
         per_page: 20,
@@ -267,33 +267,24 @@ export default function AllSpecialistJobsScreen() {
   });
 
   const stats = statsQuery.data;
-  const responseData = (jobsQuery.data?.data as any) ?? jobsQuery.data;
-  const jobs: SpecialistJob[] = responseData?.data ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
+  const jobs: SpecialistJob[] = jobsQuery.items;
 
   const handleFilterChange = useCallback((value: string | null) => {
     setActiveFilter(value);
-    setPage(1);
   }, []);
 
   const handleRefresh = useCallback(() => {
-    setPage(1);
     jobsQuery.refetch();
     statsQuery.refetch();
   }, [jobsQuery, statsQuery]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !jobsQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
-  }, [hasNextPage, jobsQuery.isFetching]);
+  const handleLoadMore = jobsQuery.loadMore;
 
   const handleJobPress = (job: SpecialistJob) => {
     navigation.navigate('SpecialistJobDetail', { jobId: job.id });
   };
 
-  if (jobsQuery.isLoading && page === 1) {
+  if (jobsQuery.isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -411,14 +402,14 @@ export default function AllSpecialistJobsScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={jobsQuery.isRefetching && page === 1}
+            refreshing={jobsQuery.isRefreshing}
             onRefresh={handleRefresh}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
-          jobsQuery.isFetching && page > 1 ? (
+          jobsQuery.isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#1976D2" />
             </View>

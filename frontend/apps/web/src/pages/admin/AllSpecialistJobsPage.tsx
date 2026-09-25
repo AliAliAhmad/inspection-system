@@ -100,8 +100,12 @@ export default function AllSpecialistJobsPage() {
   });
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['specialist-jobs', page, perPage, statusFilter],
-    queryFn: () => specialistJobsApi.list({ page, per_page: perPage, status: statusFilter }),
+    // The board shows EVERY job at once: page 1, up to 200. It used to reuse the
+    // table's page and page size, so it showed 10 jobs, or none from page 3.
+    queryKey: ['specialist-jobs', viewMode === 'kanban' ? 'board' : page, viewMode === 'kanban' ? 200 : perPage, statusFilter],
+    queryFn: () => specialistJobsApi.list(viewMode === 'kanban'
+      ? { page: 1, per_page: 200, status: statusFilter }
+      : { page, per_page: perPage, status: statusFilter }),
   });
 
   const stats = statsData;

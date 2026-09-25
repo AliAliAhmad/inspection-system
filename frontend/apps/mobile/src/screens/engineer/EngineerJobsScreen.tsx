@@ -45,7 +45,7 @@ export default function EngineerJobsScreen() {
   const filteredJobs = jobs.filter((job) => {
     if (activeFilter === 'all') return true;
     if (activeFilter === 'active')
-      return ['assigned', 'in_progress', 'planned'].includes(job.status);
+      return ['assigned', 'in_progress', 'paused', 'planned'].includes(job.status);
     if (activeFilter === 'completed')
       return ['completed', 'reviewed', 'qc_approved'].includes(job.status);
     return true;

@@ -55,6 +55,7 @@ import {
   NaturalLanguageSearch,
   ServiceAlertNotification,
 } from '../components/equipment';
+import { useDebounce } from '../hooks/useDebounce';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -158,17 +159,6 @@ const riskLevelColors: Record<RiskLevel, string> = {
 };
 
 // Debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-
 export default function EquipmentDashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -284,9 +274,16 @@ export default function EquipmentDashboardPage() {
           // Search filter
           if (filters.search) {
             const searchLower = filters.search.toLowerCase();
+            // Everything the placeholder promises: name (both languages),
+            // serial, type, location. Only the names were searched before.
+            const e = eq as any;
             const matchesSearch =
               eq.name.toLowerCase().includes(searchLower) ||
-              (eq.name_ar && eq.name_ar.includes(filters.search));
+              (eq.name_ar && eq.name_ar.includes(filters.search)) ||
+              (e.serial_number || '').toLowerCase().includes(searchLower) ||
+              (e.equipment_type || '').toLowerCase().includes(searchLower) ||
+              (e.location || '').toLowerCase().includes(searchLower) ||
+              (e.location_ar || '').includes(filters.search);
             if (!matchesSearch) return false;
           }
 
@@ -306,7 +303,11 @@ export default function EquipmentDashboardPage() {
             }
           }
 
-          // Last inspection filter
+          // Last inspection filter. A machine NEVER inspected counts as overdue
+          // and fails the other three choices; it used to slip through all four.
+          if (filters.last_inspection && !eq.last_inspection_date) {
+            if (filters.last_inspection !== 'overdue') return false;
+          }
           if (filters.last_inspection && eq.last_inspection_date) {
             const lastInspection = new Date(eq.last_inspection_date);
             const now = new Date();

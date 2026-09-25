@@ -39,27 +39,75 @@ export interface CoachingTip {
   action_url?: string;
 }
 
+/**
+ * Every optional field is something GET /api/performance/summary/<user_id> does
+ * not provide (or provides only with enough history); its tile is hidden rather
+ * than shown with an invented number.
+ */
 export interface PerformanceSummary {
   user_id: number;
   user_name: string;
-  current_score: number;
-  score_trend: 'up' | 'down' | 'stable';
-  score_change: number;
-  rank: number;
-  total_users: number;
-  percentile: number;
-  tier: string;
+  current_score?: number;
+  score_trend?: 'up' | 'down' | 'stable';
+  /** Average points gained per month. */
+  score_change?: number;
+  rank?: number;
+  total_users?: number;
+  percentile?: number;
+  tier?: string;
   active_goals_count: number;
-  completed_goals_count: number;
+  completed_goals_count?: number;
   recent_achievements: Achievement[];
   coaching_tips: CoachingTip[];
   stats: {
-    jobs_completed: number;
-    jobs_this_month: number;
-    quality_score: number;
-    on_time_rate: number;
-    points_earned: number;
-    current_streak: number;
+    jobs_completed?: number;
+    jobs_this_month?: number;
+    quality_score?: number;
+    on_time_rate?: number;
+    points_earned?: number;
+    current_streak?: number;
+  };
+}
+
+/** What GET /api/performance/summary/<user_id> actually returns. */
+interface SummaryResponse {
+  user_id?: number;
+  trajectory?: {
+    has_sufficient_data?: boolean;
+    user_name?: string;
+    current_rank?: number | null;
+    current_points?: number;
+    trend?: 'improving' | 'declining' | 'stable';
+    avg_monthly_growth?: number;
+  };
+  burnout_risk?: { user_name?: string };
+  goals?: unknown[];
+  coaching_tips?: { category: string; tip: string; priority: CoachingTip['priority']; related_skill?: string | null }[];
+}
+
+const TREND_FROM_TRAJECTORY = { improving: 'up', declining: 'down', stable: 'stable' } as const;
+
+function toPerformanceSummary(raw: SummaryResponse | undefined): PerformanceSummary | null {
+  if (!raw || raw.user_id == null) return null;
+  const trajectory = raw.trajectory ?? {};
+  // The service answers "not enough history" without points, trend or growth.
+  const hasTrajectory = trajectory.has_sufficient_data !== false && trajectory.trend != null;
+  return {
+    user_id: raw.user_id,
+    user_name: trajectory.user_name ?? raw.burnout_risk?.user_name ?? '',
+    rank: trajectory.current_rank ?? undefined,
+    score_trend: hasTrajectory ? TREND_FROM_TRAJECTORY[trajectory.trend!] : undefined,
+    score_change: hasTrajectory ? trajectory.avg_monthly_growth : undefined,
+    active_goals_count: raw.goals?.length ?? 0,
+    recent_achievements: [],
+    coaching_tips: (raw.coaching_tips ?? []).map((tip, i) => ({
+      id: i + 1,
+      title: tip.related_skill || tip.category.replace(/_/g, ' '),
+      content: tip.tip,
+      category: tip.category.replace(/_/g, ' '),
+      priority: tip.priority,
+    })),
+    stats: { points_earned: hasTrajectory ? trajectory.current_points : undefined },
   };
 }
 
@@ -70,8 +118,7 @@ export interface PerformanceDashboardProps {
 }
 
 const performanceApi = {
-  getSummary: (userId?: number) =>
-    apiClient.get('/api/performance/summary', { params: { user_id: userId } }),
+  getSummary: (userId: number) => apiClient.get(`/api/performance/summary/${userId}`),
 };
 
 const TREND_ICON = {
@@ -98,10 +145,11 @@ export function PerformanceDashboard({
 
   const { data, isLoading } = useQuery({
     queryKey: ['performance', 'summary', userId],
-    queryFn: () => performanceApi.getSummary(userId).then((r) => r.data),
+    queryFn: () => performanceApi.getSummary(userId!).then((r) => r.data),
+    enabled: userId != null,
   });
 
-  const summary: PerformanceSummary | null = data?.data || null;
+  const summary = toPerformanceSummary(data?.data);
 
   if (isLoading) {
     return (
@@ -128,7 +176,8 @@ export function PerformanceDashboard({
     );
   }
 
-  const tierColor = TIER_COLORS[summary.tier] || '#1677ff';
+  const tierColor = (summary.tier && TIER_COLORS[summary.tier]) || '#1677ff';
+  const hasScore = summary.current_score != null;
 
   if (compact) {
     return (
@@ -159,9 +208,11 @@ export function PerformanceDashboard({
               value={summary.rank}
               prefix="#"
               suffix={
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  /{summary.total_users}
-                </Text>
+                summary.total_users != null && (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    /{summary.total_users}
+                  </Text>
+                )
               }
             />
           </Col>
@@ -173,7 +224,7 @@ export function PerformanceDashboard({
                 {t('performance.trend', 'Trend')}
               </Text>
               <Space>
-                {TREND_ICON[summary.score_trend]}
+                {summary.score_trend && TREND_ICON[summary.score_trend]}
                 <Text
                   strong
                   style={{
@@ -185,8 +236,9 @@ export function PerformanceDashboard({
                         : '#faad14',
                   }}
                 >
-                  {summary.score_change >= 0 ? '+' : ''}
-                  {summary.score_change}%
+                  {summary.score_change == null
+                    ? '-'
+                    : `${summary.score_change >= 0 ? '+' : ''}${summary.score_change} pts/mo`}
                 </Text>
               </Space>
             </div>
@@ -208,174 +260,192 @@ export function PerformanceDashboard({
       >
         <Row gutter={[24, 24]} align="middle">
           {/* Score Circle */}
-          <Col xs={24} sm={8} md={6}>
-            <div style={{ textAlign: 'center' }}>
-              <Progress
-                type="circle"
-                percent={summary.current_score}
-                size={140}
-                strokeColor={{
-                  '0%': tierColor,
-                  '100%': `${tierColor}80`,
-                }}
-                format={(percent) => (
-                  <div>
-                    <div style={{ fontSize: 36, fontWeight: 700, color: tierColor }}>{percent}</div>
-                    <div style={{ fontSize: 12, color: '#8c8c8c' }}>Performance Score</div>
-                  </div>
-                )}
-              />
-              <Tag
-                color={tierColor}
-                style={{
-                  marginTop: 8,
-                  fontSize: 14,
-                  padding: '4px 16px',
-                  textTransform: 'capitalize',
-                }}
-              >
-                {summary.tier} Tier
-              </Tag>
-            </div>
-          </Col>
+          {hasScore && (
+            <Col xs={24} sm={8} md={6}>
+              <div style={{ textAlign: 'center' }}>
+                <Progress
+                  type="circle"
+                  percent={summary.current_score}
+                  size={140}
+                  strokeColor={{
+                    '0%': tierColor,
+                    '100%': `${tierColor}80`,
+                  }}
+                  format={(percent) => (
+                    <div>
+                      <div style={{ fontSize: 36, fontWeight: 700, color: tierColor }}>{percent}</div>
+                      <div style={{ fontSize: 12, color: '#8c8c8c' }}>Performance Score</div>
+                    </div>
+                  )}
+                />
+                <Tag
+                  color={tierColor}
+                  style={{
+                    marginTop: 8,
+                    fontSize: 14,
+                    padding: '4px 16px',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {summary.tier} Tier
+                </Tag>
+              </div>
+            </Col>
+          )}
 
           {/* Stats Grid */}
-          <Col xs={24} sm={16} md={18}>
+          <Col xs={24} sm={hasScore ? 16 : 24} md={hasScore ? 18 : 24}>
             <Row gutter={[16, 16]}>
               {/* Rank */}
-              <Col xs={12} md={6}>
-                <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
-                  <Statistic
-                    title={
-                      <Space>
-                        <TrophyOutlined style={{ color: '#faad14' }} />
-                        {t('performance.rank', 'Rank')}
-                      </Space>
-                    }
-                    value={summary.rank}
-                    prefix="#"
-                    suffix={
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        of {summary.total_users}
-                      </Text>
-                    }
-                  />
-                </Card>
-              </Col>
+              {summary.rank != null && (
+                <Col xs={12} md={6}>
+                  <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
+                    <Statistic
+                      title={
+                        <Space>
+                          <TrophyOutlined style={{ color: '#faad14' }} />
+                          {t('performance.rank', 'Rank')}
+                        </Space>
+                      }
+                      value={summary.rank}
+                      prefix="#"
+                      suffix={
+                        summary.total_users != null && (
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            of {summary.total_users}
+                          </Text>
+                        )
+                      }
+                    />
+                  </Card>
+                </Col>
+              )}
 
               {/* Trend */}
-              <Col xs={12} md={6}>
-                <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
-                  <Statistic
-                    title={
-                      <Space>
-                        {TREND_ICON[summary.score_trend]}
-                        {t('performance.trend', 'Trend')}
-                      </Space>
-                    }
-                    value={summary.score_change}
-                    prefix={summary.score_change >= 0 ? '+' : ''}
-                    suffix="%"
-                    valueStyle={{
-                      color:
-                        summary.score_trend === 'up'
-                          ? '#52c41a'
-                          : summary.score_trend === 'down'
-                          ? '#ff4d4f'
-                          : '#faad14',
-                    }}
-                  />
-                </Card>
-              </Col>
+              {summary.score_change != null && summary.score_trend && (
+                <Col xs={12} md={6}>
+                  <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
+                    <Statistic
+                      title={
+                        <Space>
+                          {TREND_ICON[summary.score_trend]}
+                          {t('performance.trend', 'Trend')}
+                        </Space>
+                      }
+                      value={summary.score_change}
+                      prefix={summary.score_change >= 0 ? '+' : ''}
+                      suffix=" pts/mo"
+                      valueStyle={{
+                        color:
+                          summary.score_trend === 'up'
+                            ? '#52c41a'
+                            : summary.score_trend === 'down'
+                            ? '#ff4d4f'
+                            : '#faad14',
+                      }}
+                    />
+                  </Card>
+                </Col>
+              )}
 
               {/* Jobs */}
-              <Col xs={12} md={6}>
-                <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
-                  <Statistic
-                    title={
-                      <Space>
-                        <ThunderboltOutlined style={{ color: '#1677ff' }} />
-                        {t('performance.jobs', 'Jobs')}
-                      </Space>
-                    }
-                    value={summary.stats.jobs_this_month}
-                    suffix={
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        this month
-                      </Text>
-                    }
-                  />
-                </Card>
-              </Col>
+              {summary.stats.jobs_this_month != null && (
+                <Col xs={12} md={6}>
+                  <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
+                    <Statistic
+                      title={
+                        <Space>
+                          <ThunderboltOutlined style={{ color: '#1677ff' }} />
+                          {t('performance.jobs', 'Jobs')}
+                        </Space>
+                      }
+                      value={summary.stats.jobs_this_month}
+                      suffix={
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          this month
+                        </Text>
+                      }
+                    />
+                  </Card>
+                </Col>
+              )}
 
               {/* Streak */}
-              <Col xs={12} md={6}>
-                <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
-                  <Statistic
-                    title={
-                      <Space>
-                        <FireOutlined style={{ color: '#fa541c' }} />
-                        {t('performance.streak', 'Streak')}
-                      </Space>
-                    }
-                    value={summary.stats.current_streak}
-                    suffix="days"
-                  />
-                </Card>
-              </Col>
+              {summary.stats.current_streak != null && (
+                <Col xs={12} md={6}>
+                  <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
+                    <Statistic
+                      title={
+                        <Space>
+                          <FireOutlined style={{ color: '#fa541c' }} />
+                          {t('performance.streak', 'Streak')}
+                        </Space>
+                      }
+                      value={summary.stats.current_streak}
+                      suffix="days"
+                    />
+                  </Card>
+                </Col>
+              )}
 
               {/* Quality Score */}
-              <Col xs={12} md={6}>
-                <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
-                  <Statistic
-                    title={
-                      <Space>
-                        <StarOutlined style={{ color: '#faad14' }} />
-                        {t('performance.quality', 'Quality')}
-                      </Space>
-                    }
-                    value={summary.stats.quality_score}
-                    suffix="%"
-                    valueStyle={{
-                      color: summary.stats.quality_score >= 90 ? '#52c41a' : '#faad14',
-                    }}
-                  />
-                </Card>
-              </Col>
+              {summary.stats.quality_score != null && (
+                <Col xs={12} md={6}>
+                  <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
+                    <Statistic
+                      title={
+                        <Space>
+                          <StarOutlined style={{ color: '#faad14' }} />
+                          {t('performance.quality', 'Quality')}
+                        </Space>
+                      }
+                      value={summary.stats.quality_score}
+                      suffix="%"
+                      valueStyle={{
+                        color: summary.stats.quality_score >= 90 ? '#52c41a' : '#faad14',
+                      }}
+                    />
+                  </Card>
+                </Col>
+              )}
 
               {/* On-Time Rate */}
-              <Col xs={12} md={6}>
-                <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
-                  <Statistic
-                    title={
-                      <Space>
-                        <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                        {t('performance.on_time', 'On-Time')}
-                      </Space>
-                    }
-                    value={summary.stats.on_time_rate}
-                    suffix="%"
-                    valueStyle={{
-                      color: summary.stats.on_time_rate >= 90 ? '#52c41a' : '#faad14',
-                    }}
-                  />
-                </Card>
-              </Col>
+              {summary.stats.on_time_rate != null && (
+                <Col xs={12} md={6}>
+                  <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
+                    <Statistic
+                      title={
+                        <Space>
+                          <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                          {t('performance.on_time', 'On-Time')}
+                        </Space>
+                      }
+                      value={summary.stats.on_time_rate}
+                      suffix="%"
+                      valueStyle={{
+                        color: summary.stats.on_time_rate >= 90 ? '#52c41a' : '#faad14',
+                      }}
+                    />
+                  </Card>
+                </Col>
+              )}
 
               {/* Points */}
-              <Col xs={12} md={6}>
-                <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
-                  <Statistic
-                    title={
-                      <Space>
-                        <TrophyOutlined style={{ color: '#722ed1' }} />
-                        {t('performance.points', 'Points')}
-                      </Space>
-                    }
-                    value={summary.stats.points_earned}
-                  />
-                </Card>
-              </Col>
+              {summary.stats.points_earned != null && (
+                <Col xs={12} md={6}>
+                  <Card size="small" style={{ backgroundColor: 'rgba(255,255,255,0.8)' }}>
+                    <Statistic
+                      title={
+                        <Space>
+                          <TrophyOutlined style={{ color: '#722ed1' }} />
+                          {t('performance.points', 'Points')}
+                        </Space>
+                      }
+                      value={summary.stats.points_earned}
+                    />
+                  </Card>
+                </Col>
+              )}
 
               {/* Goals */}
               <Col xs={12} md={6}>

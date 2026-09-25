@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Card,
   Table,
@@ -952,21 +952,24 @@ export default function InspectionAssignmentsPage() {
     return result;
   }, [rawLists]);
 
-  // Get unique values for filters
+  // Choices for the Equipment Type / Berth dropdowns. They are read from the
+  // lists on screen — which are ALREADY filtered — so picking one filter used to
+  // remove every other choice until it was cleared (2026-09-24 audit). Every
+  // value seen is remembered for the life of the page instead.
+  const seenTypes = useRef<Set<string>>(new Set());
+  const seenBerths = useRef<Set<string>>(new Set());
   const equipmentTypes = useMemo(() => {
-    const types = new Set<string>();
     allAssignments.forEach((a) => {
-      if (a.equipment?.equipment_type) types.add(a.equipment.equipment_type);
+      if (a.equipment?.equipment_type) seenTypes.current.add(a.equipment.equipment_type);
     });
-    return Array.from(types).sort();
+    return Array.from(seenTypes.current).sort();
   }, [allAssignments]);
 
   const berths = useMemo(() => {
-    const bs = new Set<string>();
     allAssignments.forEach((a) => {
-      if (a.berth) bs.add(a.berth);
+      if (a.berth) seenBerths.current.add(a.berth);
     });
-    return Array.from(bs).sort();
+    return Array.from(seenBerths.current).sort();
   }, [allAssignments]);
 
   // Build inspector lists from roster availability (used for shift highlighting only)
@@ -1479,9 +1482,15 @@ export default function InspectionAssignmentsPage() {
               value={filters.status}
               onChange={(v) => setFilters({ ...filters, status: v })}
             >
+              {/* Every real status (models/inspection_assignment.py). "In Progress"
+                  covers the half-done states too — one trade finished, both
+                  finished, waiting for the assessment — which matched no option
+                  before and so could not be found at all. The server takes the
+                  comma list. */}
               <Select.Option value="unassigned">Unassigned</Select.Option>
               <Select.Option value="assigned">Assigned</Select.Option>
-              <Select.Option value="in_progress">In Progress</Select.Option>
+              <Select.Option value="in_progress,mech_complete,elec_complete,both_complete">In Progress</Select.Option>
+              <Select.Option value="assessment_pending">Waiting for assessment</Select.Option>
               <Select.Option value="completed">Completed</Select.Option>
             </Select>
           </Col>

@@ -121,15 +121,24 @@ export default function ChannelListScreen() {
   );
 
   // Filter users: search matches name, employee ID, or role. Show all when people mode toggled.
+  // Arabic name, SAP number, username and role id included: a crew searches
+  // by the name and number they actually know.
   const filteredUsers = useMemo(() => {
-    const searchLower = search.toLowerCase().trim();
+    const searchLower = search.normalize('NFC').toLowerCase().trim();
     if (searchLower.length > 0) {
-      return otherUsers.filter((u: User) =>
-        u.full_name.toLowerCase().includes(searchLower) ||
-        (u.employee_id && String(u.employee_id).toLowerCase().includes(searchLower)) ||
-        (u.role && u.role.toLowerCase().includes(searchLower)) ||
-        (u.shift && u.shift.toLowerCase().includes(searchLower)),
-      );
+      return otherUsers.filter((u: User) => {
+        const extra = u as User & { full_name_ar?: string | null };
+        return [
+          u.full_name,
+          extra.full_name_ar,
+          u.employee_id,
+          u.role_id,
+          u.sap_id,
+          u.username,
+          u.role,
+          u.shift,
+        ].some((v) => v != null && String(v).normalize('NFC').toLowerCase().includes(searchLower));
+      });
     }
     if (showUsers) {
       return otherUsers;
@@ -261,7 +270,9 @@ export default function ChannelListScreen() {
 
         {/* Info */}
         <View style={styles.userInfo}>
-          <Text style={styles.userName} numberOfLines={1}>{item.full_name}</Text>
+          <Text style={styles.userName} numberOfLines={1}>
+            {(isAr && (item as User & { full_name_ar?: string | null }).full_name_ar) || item.full_name}
+          </Text>
           <View style={styles.userMeta}>
             {/* Role badge */}
             <View style={[styles.roleBadge, { backgroundColor: badge.color + '18' }]}>

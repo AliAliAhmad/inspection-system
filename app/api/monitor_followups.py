@@ -66,9 +66,15 @@ def list_followups():
         )
 
     # Optional filters
+    # Accepts one status or a comma list: the mobile "Scheduled" tab covers
+    # both 'scheduled' and 'assignment_created'.
     status = request.args.get('status')
     if status:
-        query = query.filter(MonitorFollowup.status == status)
+        statuses = [s.strip() for s in status.split(',') if s.strip()]
+        if len(statuses) == 1:
+            query = query.filter(MonitorFollowup.status == statuses[0])
+        elif statuses:
+            query = query.filter(MonitorFollowup.status.in_(statuses))
 
     equipment_id = request.args.get('equipment_id', type=int)
     if equipment_id:

@@ -47,6 +47,8 @@ export interface UpdateUserPayload {
   shift?: 'day' | 'night';
   language?: 'en' | 'ar';
   is_active?: boolean;
+  /** Set a NEW password (admin only). Omitted or empty = unchanged. */
+  password?: string;
 }
 
 // Import/Export types

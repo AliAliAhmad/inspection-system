@@ -351,6 +351,8 @@ export interface LeaveListParams {
   page?: number;
   per_page?: number;
   status?: LeaveStatus;
+  /** Only the caller's own leaves, even for an admin. */
+  mine?: boolean;
   user_id?: number;
   leave_type?: LegacyLeaveType;
   leave_type_id?: number;

@@ -2,8 +2,11 @@
 Running Hours API
 Equipment service tracking: meter readings, service intervals, alerts, dashboard
 """
+import csv
+import io
+import unicodedata
 from datetime import datetime, timezone
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, Response, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.models.running_hours import RunningHoursReading, ServiceInterval, RunningHoursAlert
@@ -378,14 +381,51 @@ def reset_service(equipment_id):
 # DASHBOARD ENDPOINTS
 # ============================================
 
-@bp.route('/running-hours', methods=['GET'])
-@jwt_required()
-def list_running_hours():
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    status_filter = request.args.get('status')
-    search = request.args.get('search')
-    sort_by = request.args.get('sort_by', 'name')
+def _clean_param(name):
+    """Read a text query param: NFC-normalised, trimmed, None when blank."""
+    value = request.args.get(name)
+    if value is None:
+        return None
+    value = unicodedata.normalize('NFC', value).strip()
+    return value or None
+
+
+def _contains(column, text):
+    """Case-insensitive substring match with LIKE wildcards escaped."""
+    escaped = text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    return column.ilike(f'%{escaped}%', escape='\\')
+
+
+# Sort keys the dashboard sends. `current_hours` is the table column's
+# dataIndex; `hours`/`status` are older aliases kept for other callers.
+_URGENCY_RANK = {'ok': 0, 'approaching': 1, 'overdue': 2}
+_SORT_KEYS = {
+    'urgency': lambda x: _URGENCY_RANK.get(x['service_status'], 0),
+    'status': lambda x: _URGENCY_RANK.get(x['service_status'], 0),
+    'current_hours': lambda x: x['current_hours'] or 0,
+    'hours': lambda x: x['current_hours'] or 0,
+    'name': lambda x: (x['equipment_name'] or '').casefold(),
+}
+# Direction when the caller does not say: most urgent / most hours first, names A-Z.
+_DEFAULT_ORDER = {'urgency': 'desc', 'status': 'desc', 'current_hours': 'desc', 'hours': 'desc', 'name': 'asc'}
+
+
+def _filtered_running_hours():
+    """Equipment running-hours rows filtered and sorted from the request args.
+
+    Shared by the dashboard list and the CSV export so both always show the
+    same rows in the same order.
+    """
+    status_filter = _clean_param('status')
+    search = _clean_param('search')
+    location = _clean_param('location')
+    equipment_type = _clean_param('equipment_type')
+    sort_by = _clean_param('sort_by') or 'name'
+    if sort_by not in _SORT_KEYS:
+        sort_by = 'name'
+    sort_order = (_clean_param('sort_order') or _DEFAULT_ORDER[sort_by]).lower()
+    if sort_order not in ('asc', 'desc'):
+        sort_order = _DEFAULT_ORDER[sort_by]
 
     query = Equipment.query.filter(Equipment.is_scrapped.is_(False))
 
@@ -396,6 +436,17 @@ def list_running_hours():
                 Equipment.serial_number.ilike(f'%{search}%'),
             )
         )
+    if location:
+        query = query.filter(db.or_(
+            _contains(Equipment.location, location),
+            _contains(Equipment.location_ar, location),
+        ))
+    if equipment_type:
+        query = query.filter(db.or_(
+            _contains(Equipment.equipment_type, equipment_type),
+            _contains(Equipment.equipment_type_2, equipment_type),
+            _contains(Equipment.equipment_type_ar, equipment_type),
+        ))
 
     equipment_list = query.all()
     rh_item_ids = get_running_hours_item_ids()
@@ -407,14 +458,20 @@ def list_running_hours():
             continue
         results.append(data)
 
-    # Sort
-    if sort_by == 'urgency':
-        order = {'overdue': 0, 'approaching': 1, 'ok': 2}
-        results.sort(key=lambda x: order.get(x['service_status'], 2))
-    elif sort_by == 'hours':
-        results.sort(key=lambda x: x['current_hours'], reverse=True)
-    else:
-        results.sort(key=lambda x: x['equipment_name'])
+    # Name first as a stable tie-break, then the requested key (sort is stable).
+    results.sort(key=_SORT_KEYS['name'])
+    if sort_by != 'name' or sort_order == 'desc':
+        results.sort(key=_SORT_KEYS[sort_by], reverse=(sort_order == 'desc'))
+    return results
+
+
+@bp.route('/running-hours', methods=['GET'])
+@jwt_required()
+def list_running_hours():
+    page = max(request.args.get('page', 1, type=int), 1)
+    per_page = min(max(request.args.get('per_page', 20, type=int), 1), 200)
+
+    results = _filtered_running_hours()
 
     # Paginate
     total = len(results)
@@ -431,6 +488,56 @@ def list_running_hours():
             'pages': (total + per_page - 1) // per_page,
         }
     })
+
+
+def _csv_safe(value):
+    """Stop a cell being read as a formula by Excel (CSV injection)."""
+    if isinstance(value, str) and value[:1] in ('=', '+', '-', '@', '\t', '\r'):
+        return "'" + value
+    return value
+
+
+@bp.route('/running-hours/export', methods=['GET'])
+@jwt_required()
+def export_running_hours():
+    """CSV of the dashboard list, honouring the same filters and sort.
+
+    UTF-8 with a BOM so Excel opens Arabic names correctly.
+    """
+    results = _filtered_running_hours()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'Equipment', 'Type', 'Location', 'Berth', 'Running Hours',
+        'Service Status', 'Hours Until Service', 'Hours Overdue',
+        'Next Service At', 'Progress %', 'Last Reading At', 'Assigned Engineer',
+    ])
+    for r in results:
+        si = r['service_interval'] or {}
+        last = r['last_reading'] or {}
+        engineer = r['assigned_engineer'] or {}
+        writer.writerow([_csv_safe(v) for v in (
+            r['equipment_name'],
+            r['equipment_type'] or '',
+            r['location'] or '',
+            r['berth'] or '',
+            r['current_hours'],
+            r['service_status'],
+            '' if r['hours_until_service'] is None else r['hours_until_service'],
+            '' if r['hours_overdue'] is None else r['hours_overdue'],
+            si.get('next_service_hours', ''),
+            r['progress_percent'],
+            last.get('recorded_at') or '',
+            engineer.get('full_name') or '',
+        )])
+
+    filename = f"running-hours-{datetime.now(timezone.utc).date().isoformat()}.csv"
+    return Response(
+        '\ufeff' + output.getvalue(),
+        mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 @bp.route('/running-hours/summary', methods=['GET'])

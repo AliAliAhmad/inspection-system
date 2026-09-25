@@ -107,10 +107,12 @@ export function LeaderboardTable({
     },
     {
       title: t('leaderboard.points', 'Points'),
-      dataIndex: 'total_points',
-      key: 'total_points',
+      // The chosen period's points (the server ranks by them); all-time
+      // total_points was shown whatever period was picked.
+      dataIndex: 'points',
+      key: 'points',
       width: 120,
-      sorter: (a, b) => a.total_points - b.total_points,
+      sorter: (a, b) => (a.points ?? a.total_points) - (b.points ?? b.total_points),
       render: (points: number) => (
         <Tooltip title={points.toLocaleString()}>
           <Text strong style={{ color: '#52c41a' }}>

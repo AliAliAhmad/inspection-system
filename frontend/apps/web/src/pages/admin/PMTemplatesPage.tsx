@@ -199,7 +199,7 @@ export default function PMTemplatesPage() {
   });
 
   const templates = templatesData?.data?.data?.templates || [];
-  const cycles = cyclesData?.data?.data?.cycles || [];
+  const cycles = cyclesData?.data?.cycles || [];
   const materials = materialsData?.data?.materials || [];
 
   // Create mutation

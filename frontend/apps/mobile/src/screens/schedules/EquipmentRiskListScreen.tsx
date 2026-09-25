@@ -98,14 +98,30 @@ export default function EquipmentRiskListScreen() {
 
     // Apply search filter
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((item) =>
-        item.equipment_name.toLowerCase().includes(query)
-      );
+      const query = searchQuery.normalize('NFC').toLowerCase().trim();
+      filtered = filtered.filter((item) => {
+        // The service also sends serial/type/berth; name_ar is read if it
+        // is ever added, so an Arabic machine name can match too.
+        const extra = item as typeof item & {
+          name_ar?: string | null;
+          equipment_name_ar?: string | null;
+          serial_number?: string | null;
+          equipment_type?: string | null;
+          berth?: string | null;
+        };
+        return [
+          item.equipment_name,
+          extra.name_ar,
+          extra.equipment_name_ar,
+          extra.serial_number,
+          extra.equipment_type,
+          extra.berth,
+        ].some((v) => v != null && String(v).normalize('NFC').toLowerCase().includes(query));
+      });
     }
 
-    // Sort by risk score (descending)
-    return filtered.sort((a, b) => b.risk_score - a.risk_score);
+    // Sort by risk score (descending) — on a copy, never the query cache
+    return [...filtered].sort((a, b) => b.risk_score - a.risk_score);
   }, [equipmentRiskScores, selectedFilter, searchQuery]);
 
   const handleEquipmentPress = (equipmentId: number) => {

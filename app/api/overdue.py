@@ -56,7 +56,7 @@ def get_aging_buckets():
     """Get aging bucket analysis."""
     entity_type = request.args.get('type', 'all')
     result = overdue_service.get_aging_buckets(entity_type)
-    return jsonify({'status': 'success', 'data': result})
+    return jsonify({'status': 'success', 'data': result.to_dict()})
 
 
 @bp.route('/bulk-reschedule', methods=['POST'])

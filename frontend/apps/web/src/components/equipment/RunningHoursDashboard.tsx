@@ -37,9 +37,14 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { runningHoursApi } from '@inspection/shared';
-import type { RunningHoursData, ServiceStatus, RunningHoursSummary } from '@inspection/shared';
+import type {
+  RunningHoursData,
+  ServiceStatus,
+  RunningHoursSummary,
+  RunningHoursListParams,
+} from '@inspection/shared';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
-import type { FilterValue, SorterResult } from 'antd/es/table/interface';
+import type { FilterValue, SorterResult, TableCurrentDataSource } from 'antd/es/table/interface';
 import ServiceIntervalSettings from './ServiceIntervalSettings';
 import RunningHoursInput from './RunningHoursInput';
 
@@ -101,6 +106,17 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
     staleTime: 2 * 60 * 1000,
   });
 
+  // Filters shared by the list and the export, so both return the same rows
+  const filterParams = {
+    search: search.trim() || undefined,
+    status: statusFilter as RunningHoursListParams['status'],
+    location: locationFilter?.trim() || undefined,
+    equipment_type: typeFilter?.trim() || undefined,
+  };
+
+  // Any filter change goes back to page 1, or a narrowed list can land on an empty page
+  const resetToFirstPage = () => setPagination((p) => ({ ...p, current: 1 }));
+
   // List query
   const { data: listData, isLoading: listLoading, refetch: refetchList } = useQuery({
     queryKey: ['running-hours-list', pagination, search, statusFilter, locationFilter, typeFilter, sortField, sortOrder],
@@ -108,11 +124,8 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
       const response = await runningHoursApi.listRunningHours({
         page: pagination.current,
         per_page: pagination.pageSize,
-        search: search || undefined,
-        status: statusFilter as any,
-        location: locationFilter,
-        equipment_type: typeFilter,
-        sort_by: sortField as any,
+        ...filterParams,
+        sort_by: sortField as RunningHoursListParams['sort_by'],
         sort_order: sortOrder,
       });
       return response.data;
@@ -122,17 +135,33 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
 
   const handleTableChange = (
     paginationConfig: TablePaginationConfig,
-    _filters: Record<string, FilterValue | null>,
-    sorter: SorterResult<RunningHoursData> | SorterResult<RunningHoursData>[]
+    filters: Record<string, FilterValue | null>,
+    sorter: SorterResult<RunningHoursData> | SorterResult<RunningHoursData>[],
+    extra: TableCurrentDataSource<RunningHoursData>
   ) => {
-    setPagination({
-      current: paginationConfig.current || 1,
-      pageSize: paginationConfig.pageSize || 20,
-    });
+    const pageSize = paginationConfig.pageSize || 20;
+    if (extra.action === 'paginate') {
+      setPagination({ current: paginationConfig.current || 1, pageSize });
+      return;
+    }
 
-    if (!Array.isArray(sorter) && sorter.field) {
-      setSortField(sorter.field as string);
-      setSortOrder(sorter.order === 'ascend' ? 'asc' : 'desc');
+    // Sorting or filtering changes the row set/order: start again from page 1
+    setPagination({ current: 1, pageSize });
+
+    if (extra.action === 'filter') {
+      const status = filters.status?.[0];
+      setStatusFilter(status ? String(status) : undefined);
+    }
+
+    if (extra.action === 'sort' && !Array.isArray(sorter)) {
+      if (sorter.order && sorter.field) {
+        setSortField(sorter.field as string);
+        setSortOrder(sorter.order === 'ascend' ? 'asc' : 'desc');
+      } else {
+        // Sort cleared: back to the default, most urgent first
+        setSortField('urgency');
+        setSortOrder('desc');
+      }
     }
   };
 
@@ -145,16 +174,15 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
   const handleExport = async () => {
     try {
       const response = await runningHoursApi.exportReport({
-        format: 'xlsx',
-        status: statusFilter,
+        ...filterParams,
+        sort_by: sortField as RunningHoursListParams['sort_by'],
+        sort_order: sortOrder,
       });
-      const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `running-hours-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.download = `running-hours-report-${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
       window.URL.revokeObjectURL(url);
       message.success('Report exported successfully');
@@ -190,6 +218,7 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
       dataIndex: 'current_hours',
       key: 'hours',
       sorter: true,
+      sortOrder: sortField === 'current_hours' ? (sortOrder === 'asc' ? 'ascend' : 'descend') : null,
       width: 140,
       render: (hours: number) => (
         <Space>
@@ -254,6 +283,8 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
       dataIndex: 'service_status',
       key: 'status',
       width: 120,
+      filteredValue: statusFilter ? [statusFilter] : null,
+      filterMultiple: false,
       filters: [
         { text: 'OK', value: 'ok' },
         { text: 'Approaching', value: 'approaching' },
@@ -385,7 +416,10 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
               placeholder="Search equipment..."
               prefix={<SearchOutlined />}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                resetToFirstPage();
+              }}
               allowClear
             />
           </Col>
@@ -394,7 +428,10 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
               placeholder="Status"
               style={{ width: '100%' }}
               value={statusFilter}
-              onChange={setStatusFilter}
+              onChange={(value) => {
+                setStatusFilter(value);
+                resetToFirstPage();
+              }}
               allowClear
             >
               <Option value="ok">
@@ -422,7 +459,10 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
               placeholder="Location"
               prefix={<EnvironmentOutlined />}
               value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value)}
+              onChange={(e) => {
+                setLocationFilter(e.target.value);
+                resetToFirstPage();
+              }}
               allowClear
             />
           </Col>
@@ -431,7 +471,10 @@ export const RunningHoursDashboard: React.FC<RunningHoursDashboardProps> = ({
               placeholder="Type"
               prefix={<ToolOutlined />}
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                resetToFirstPage();
+              }}
               allowClear
             />
           </Col>

@@ -487,8 +487,10 @@ export const JobsPool: React.FC<JobsPoolProps> = ({
       if (bOverdue !== aOverdue) return bOverdue - aOverdue;
 
       // Then by priority
-      const aPriority = PRIORITY_ORDER[a.priority || 'normal'] || 2;
-      const bPriority = PRIORITY_ORDER[b.priority || 'normal'] || 2;
+      // `?? 2`, not `|| 2`: urgent is 0, and `0 || 2` made every urgent job
+      // sort as normal (2026-09-24 audit).
+      const aPriority = PRIORITY_ORDER[a.priority || 'normal'] ?? 2;
+      const bPriority = PRIORITY_ORDER[b.priority || 'normal'] ?? 2;
       return aPriority - bPriority;
     });
 

@@ -17,6 +17,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import * as DocumentPicker from 'expo-document-picker';
 import { equipmentApi } from '@inspection/shared';
+import { usePagedList } from '../../hooks/usePagedList';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type { Equipment, EquipmentStatus, CreateEquipmentPayload, ImportResult, ImportLog } from '@inspection/shared';
 
 const STATUS_COLORS: Record<EquipmentStatus, string> = {
@@ -91,7 +93,6 @@ export default function EquipmentScreen() {
   const queryClient = useQueryClient();
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState('');
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
@@ -108,15 +109,20 @@ export default function EquipmentScreen() {
     { label: t('equipment.out_of_service', 'Out of Service'), value: 'out_of_service' },
   ];
 
-  const equipmentQuery = useQuery({
-    queryKey: ['equipment', activeFilter, typeFilter, page, search],
-    queryFn: () =>
+  // Both boxes are matched on the server (name/name_ar, partial type), so
+  // wait for the typing to settle instead of one request per keystroke.
+  const debouncedSearch = useDebouncedValue(search.trim().normalize('NFC'));
+  const debouncedType = useDebouncedValue(typeFilter.trim().normalize('NFC'));
+
+  const equipmentQuery = usePagedList({
+    queryKey: ['equipment', activeFilter, debouncedType, debouncedSearch],
+    fetchPage: (page) =>
       equipmentApi.list({
         page,
         per_page: 20,
         ...(activeFilter ? { status: activeFilter } : {}),
-        ...(typeFilter ? { equipment_type: typeFilter } : {}),
-        ...(search ? { search } : {}),
+        ...(debouncedType ? { equipment_type: debouncedType } : {}),
+        ...(debouncedSearch ? { search: debouncedSearch } : {}),
       }),
   });
 
@@ -218,10 +224,7 @@ export default function EquipmentScreen() {
     }
   };
 
-  const responseData = (equipmentQuery.data?.data as any) ?? equipmentQuery.data;
-  const items: Equipment[] = responseData?.data ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
+  const items: Equipment[] = equipmentQuery.items;
 
   const resetForm = () => {
     setFormData({});
@@ -230,19 +233,13 @@ export default function EquipmentScreen() {
 
   const handleFilterChange = useCallback((value: string | null) => {
     setActiveFilter(value);
-    setPage(1);
   }, []);
 
   const handleRefresh = useCallback(() => {
-    setPage(1);
     equipmentQuery.refetch();
   }, [equipmentQuery]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !equipmentQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
-  }, [hasNextPage, equipmentQuery.isFetching]);
+  const handleLoadMore = equipmentQuery.loadMore;
 
   const handleOpenCreate = () => {
     resetForm();
@@ -289,7 +286,7 @@ export default function EquipmentScreen() {
     );
   };
 
-  if (equipmentQuery.isLoading && page === 1) {
+  if (equipmentQuery.isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -333,7 +330,6 @@ export default function EquipmentScreen() {
           value={search}
           onChangeText={(text) => {
             setSearch(text);
-            setPage(1);
           }}
         />
         <TextInput
@@ -342,7 +338,6 @@ export default function EquipmentScreen() {
           value={typeFilter}
           onChangeText={(text) => {
             setTypeFilter(text);
-            setPage(1);
           }}
         />
       </View>
@@ -388,14 +383,14 @@ export default function EquipmentScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={equipmentQuery.isRefetching && page === 1}
+            refreshing={equipmentQuery.isRefreshing}
             onRefresh={handleRefresh}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
-          equipmentQuery.isFetching && page > 1 ? (
+          equipmentQuery.isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#1976D2" />
             </View>

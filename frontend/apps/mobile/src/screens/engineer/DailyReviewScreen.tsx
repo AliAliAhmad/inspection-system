@@ -22,7 +22,12 @@ export default function DailyReviewScreen() {
   const queryClient = useQueryClient();
 
   const [shift, setShift] = useState<ShiftType>('day');
-  const [dateStr] = useState(() => new Date().toISOString().split('T')[0]);
+  // LOCAL calendar date. toISOString() is UTC, so between 00:00 and 03:00 in
+  // Baghdad it named yesterday and the review opened on the wrong day.
+  const [dateStr] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [showCarryModal, setShowCarryModal] = useState(false);
@@ -48,7 +53,10 @@ export default function DailyReviewScreen() {
     if (activeTab === 'all') return true;
     const status = job.tracking?.status;
     if (activeTab === 'completed') return status === 'completed';
-    if (activeTab === 'incomplete') return status === 'incomplete' || status === 'not_started';
+    // A job nobody started has tracking 'pending' — or no tracking row at all.
+    if (activeTab === 'incomplete') {
+      return !status || status === 'incomplete' || status === 'not_started' || status === 'pending';
+    }
     if (activeTab === 'not_reviewed') return !job.ratings || job.ratings.length === 0;
     return true;
   });

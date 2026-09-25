@@ -52,23 +52,37 @@ def list_equipment():
     if current_user.role == 'technician':
         query = query.filter_by(assigned_technician_id=current_user.id)
 
-    # Filter by status
-    status = request.args.get('status')
-    if status:
-        query = query.filter_by(status=status)
+    # Filter by status — one, or a comma list (the Maintenance card counts
+    # under_maintenance AND paused).
+    status_values = [v.strip() for v in (request.args.get('status') or '').split(',') if v.strip()]
+    if status_values:
+        query = query.filter(Equipment.status.in_(status_values))
 
-    # Filter by equipment type
-    equipment_type = request.args.get('equipment_type')
+    # ids: the machines behind a health card (Critical, Certs Due).
+    ids_raw = (request.args.get('ids') or '').strip()
+    if ids_raw:
+        try:
+            wanted = [int(v) for v in ids_raw.split(',') if v.strip()]
+        except ValueError:
+            raise ValidationError("ids must be a comma list of numbers")
+        query = query.filter(Equipment.id.in_(wanted or [-1]))
+
+    # Filter by equipment type — part of the word, any capitals. The page's
+    # box is free text; an exact, case-sensitive match meant "reach" never found
+    # "Reach Stacker" (2026-09-24 filter audit). An exact value still matches.
+    equipment_type = (request.args.get('equipment_type') or '').strip()
     if equipment_type:
-        query = query.filter_by(equipment_type=equipment_type)
+        query = query.filter(Equipment.equipment_type.ilike(f'%{equipment_type}%'))
 
-    # Search by name, serial number, or location
-    search = request.args.get('search')
+    # Search by name (English or Arabic), serial number, or location
+    search = (request.args.get('search') or '').strip()
     if search:
-        search_term = f'%{search}%'
+        import unicodedata
+        search_term = f'%{unicodedata.normalize("NFC", search)}%'
         query = query.filter(
             db.or_(
                 Equipment.name.ilike(search_term),
+                Equipment.name_ar.ilike(search_term),
                 Equipment.serial_number.ilike(search_term),
                 Equipment.location.ilike(search_term)
             )
@@ -717,17 +731,46 @@ def get_equipment_dashboard():
     # Get all equipment
     all_equipment = query.order_by(Equipment.equipment_type, Equipment.berth, Equipment.name).all()
 
+    # The three colour cards count the WHOLE fleet (after the berth filter), not
+    # only the colour already picked — picking red used to make green and yellow
+    # read 0 (2026-09-24 audit).
+    status_counts = {'green': 0, 'yellow': 0, 'red': 0}
+    for eq in all_equipment:
+        status_counts[get_status_color(eq.status)] += 1
+
     # Filter by status color if specified
     if status_color_filter:
         all_equipment = [e for e in all_equipment if get_status_color(e.status) == status_color_filter]
 
+    # Last inspection per machine, in ONE grouped query. The page filters on it
+    # and it was never sent, so that filter silently did nothing.
+    from app.models import Inspection
+    ids = [e.id for e in all_equipment]
+    last_inspected = dict(
+        db.session.query(Inspection.equipment_id, db.func.max(Inspection.started_at))
+        .filter(Inspection.equipment_id.in_(ids)).group_by(Inspection.equipment_id).all()
+    ) if ids else {}
+
+    def risk_level(score):
+        # The app's own thresholds (ai_base_service.calculate_risk_level). The
+        # page's Risk filter compared against a field that was never sent, so ANY
+        # choice hid every machine.
+        if score is None:
+            return None
+        score = float(score)
+        if score <= 25:
+            return 'low'
+        if score <= 50:
+            return 'medium'
+        if score <= 75:
+            return 'high'
+        return 'critical'
+
     # Group by equipment_type and berth
     grouped = {}
-    status_counts = {'green': 0, 'yellow': 0, 'red': 0}
 
     for eq in all_equipment:
         color = get_status_color(eq.status)
-        status_counts[color] += 1
 
         key = f"{eq.equipment_type}|{eq.berth or 'unassigned'}"
         if key not in grouped:
@@ -742,13 +785,20 @@ def get_equipment_dashboard():
         if eq.stopped_at and eq.status in ('stopped', 'out_of_service'):
             days_stopped = (datetime.utcnow() - eq.stopped_at).days
 
+        last = last_inspected.get(eq.id)
         grouped[key]['equipment'].append({
             'id': eq.id,
             'name': eq.name,
             'name_ar': eq.name_ar,
+            'serial_number': eq.serial_number,
+            'equipment_type': eq.equipment_type,
+            'location': eq.location,
+            'location_ar': eq.location_ar,
             'status': eq.status,
             'status_color': color,
             'days_stopped': days_stopped,
+            'risk_level': risk_level(eq.last_risk_score),
+            'last_inspection_date': last.isoformat() if last else None,
         })
 
     return jsonify({
@@ -3493,12 +3543,15 @@ def get_health_summary():
     from datetime import datetime, timedelta
     thirty_days_from_now = datetime.utcnow() + timedelta(days=30)
 
+    expiring_cert_ids = []
     try:
         from app.models import EquipmentCertification
-        expiring_certs = EquipmentCertification.query.filter(
+        expiring_q = EquipmentCertification.query.filter(
             EquipmentCertification.expiry_date <= thirty_days_from_now,
             EquipmentCertification.expiry_date >= datetime.utcnow()
-        ).count()
+        )
+        expiring_certs = expiring_q.count()
+        expiring_cert_ids = sorted({c.equipment_id for c in expiring_q.all() if c.equipment_id})
     except Exception:
         expiring_certs = 0
 
@@ -3516,6 +3569,11 @@ def get_health_summary():
             'status_distribution': status_counts,
             'risk_distribution': risk_counts,
             'high_risk_equipment': equipment_with_issues[:10],
+            # EVERY machine behind the Critical and Certs Due cards, so clicking
+            # a card shows exactly what it counted. It used to show stopped
+            # machines for Critical and everything for Certs (2026-09-24 audit).
+            'high_risk_ids': [e['id'] for e in equipment_with_issues],
+            'expiring_cert_equipment_ids': expiring_cert_ids,
             'health_trend': {
                 'current': avg_health,
                 'trend': 'stable'  # Could be calculated from historical data

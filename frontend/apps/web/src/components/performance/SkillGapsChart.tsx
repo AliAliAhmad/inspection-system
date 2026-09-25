@@ -34,10 +34,53 @@ export interface SkillGapsChartProps {
   compact?: boolean;
 }
 
+/** One entry of GET /api/performance/skill-gaps/<user_id> (a list, levels 0-5). */
+interface SkillGapResponse {
+  skill: string;
+  current_level: number;
+  target_level: number;
+  gap: number;
+  improvement_tips?: string[];
+}
+
+/** The service rates every skill out of 5. */
+const MAX_SKILL_LEVEL = 5;
+
 const performanceApi = {
-  getSkillGaps: (userId?: number) =>
-    apiClient.get('/api/performance/skill-gaps', { params: { user_id: userId } }),
+  getSkillGaps: (userId: number) => apiClient.get(`/api/performance/skill-gaps/${userId}`),
 };
+
+/**
+ * The service lists only skills below target, as a plain array. Priority uses
+ * the same cut the coaching tips use (a gap over 1 is high); the score is how
+ * close those skills are to their targets on average.
+ */
+function toSkillGapsData(raw: unknown): SkillGapsData {
+  const gaps: SkillGapResponse[] = Array.isArray(raw) ? raw : [];
+  const skills: SkillLevel[] = gaps.map((g, i) => ({
+    skill_name: g.skill,
+    skill_id: i,
+    current_level: g.current_level,
+    target_level: g.target_level,
+    max_level: MAX_SKILL_LEVEL,
+    gap: g.gap,
+    priority: g.gap > 1 ? 'high' : g.gap > 0 ? 'medium' : 'low',
+    recommended_training: g.improvement_tips?.[0],
+  }));
+  const overall_score = skills.length
+    ? (skills.reduce(
+        (sum, s) => sum + (s.target_level > 0 ? Math.min(s.current_level / s.target_level, 1) : 1),
+        0,
+      ) /
+        skills.length) *
+      100
+    : 0;
+  return {
+    skills,
+    overall_score,
+    recommendations: gaps.flatMap((g) => g.improvement_tips?.slice(1) ?? []),
+  };
+}
 
 const PRIORITY_CONFIG = {
   high: { color: '#ff4d4f', label: 'High Priority' },
@@ -50,14 +93,11 @@ export function SkillGapsChart({ userId, compact = false }: SkillGapsChartProps)
 
   const { data, isLoading } = useQuery({
     queryKey: ['performance', 'skill-gaps', userId],
-    queryFn: () => performanceApi.getSkillGaps(userId).then((r) => r.data),
+    queryFn: () => performanceApi.getSkillGaps(userId!).then((r) => r.data),
+    enabled: userId != null,
   });
 
-  const skillData: SkillGapsData = data?.data || {
-    skills: [],
-    overall_score: 0,
-    recommendations: [],
-  };
+  const skillData = toSkillGapsData(data?.data);
 
   if (isLoading) {
     return (

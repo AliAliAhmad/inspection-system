@@ -380,12 +380,20 @@ def list_chat_users():
     users = User.query.filter_by(is_active=True).order_by(User.full_name).all()
     return jsonify({
         'status': 'success',
+        # Every identity a person might type into the chat search box: the
+        # Arabic name (typed by a person), the SAP number the crews actually
+        # know, the username, and the role id. employee_id stays = role_id to
+        # match User.to_dict, so existing readers see no change.
         'data': [{
             'id': u.id,
             'full_name': u.full_name,
+            'full_name_ar': u.full_name_ar,
             'role': u.role,
             'shift': u.shift,
             'employee_id': u.role_id,
+            'role_id': u.role_id,
+            'sap_id': u.sap_id,
+            'username': u.username,
             'specialization': getattr(u, 'specialization', None),
         } for u in users],
     }), 200

@@ -11,7 +11,7 @@ import {
   SafetyCertificateOutlined,
   ExperimentOutlined,
 } from '@ant-design/icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@inspection/shared';
 
@@ -22,14 +22,15 @@ export interface Course {
   title: string;
   description: string;
   duration_hours: number;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  /** Not provided by the learning-path endpoint; the tag is hidden without it. */
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
   skills: string[];
   priority: number;
   status: 'not_started' | 'in_progress' | 'completed';
   progress_percent?: number;
   category: string;
   thumbnail_url?: string;
-  points_reward: number;
+  points_reward?: number;
   certification?: boolean;
 }
 
@@ -48,18 +49,50 @@ export interface LearningPathCardProps {
   onStartCourse?: (courseId: number) => void;
 }
 
+/** What GET /api/performance/learning-path/<user_id> actually returns. */
+interface LearningPathResponse {
+  user_id?: number;
+  modules?: { module: string; duration: string; topics?: string[]; skill?: string }[];
+  total_duration?: number;
+}
+
 const performanceApi = {
-  getLearningPath: (userId?: number) =>
-    apiClient.get('/api/performance/learning-path', { params: { user_id: userId } }),
-  startCourse: (courseId: number) =>
-    apiClient.post(`/api/performance/courses/${courseId}/start`),
+  getLearningPath: (userId: number) => apiClient.get(`/api/performance/learning-path/${userId}`),
 };
+
+/**
+ * The service suggests modules from the user's skill gaps; it does not track
+ * progress, so every module is "not started" and ranked by its order.
+ */
+function toLearningPathData(raw: LearningPathResponse | undefined): LearningPathData | null {
+  if (!raw?.modules || raw.user_id == null) return null;
+  const courses: Course[] = raw.modules.map((m, i) => ({
+    id: i + 1,
+    title: m.module,
+    description: (m.topics ?? []).join(', '),
+    duration_hours: parseFloat(m.duration) || 0,
+    skills: m.skill ? [m.skill] : [],
+    priority: i + 1,
+    status: 'not_started',
+    category: 'default',
+  }));
+  return {
+    user_id: raw.user_id,
+    recommended_courses: courses,
+    total_courses: courses.length,
+    completed_courses: 0,
+    in_progress_courses: 0,
+    total_learning_hours: raw.total_duration ?? courses.reduce((sum, c) => sum + c.duration_hours, 0),
+  };
+}
 
 const DIFFICULTY_CONFIG = {
   beginner: { color: '#52c41a', label: 'Beginner', icon: <StarOutlined /> },
   intermediate: { color: '#faad14', label: 'Intermediate', icon: <ThunderboltOutlined /> },
   advanced: { color: '#f5222d', label: 'Advanced', icon: <TrophyOutlined /> },
 };
+
+const NO_DIFFICULTY = { color: '#1677ff', label: '', icon: <BookOutlined /> };
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   technical: <ExperimentOutlined />,
@@ -75,21 +108,14 @@ export function LearningPathCard({
   onStartCourse,
 }: LearningPathCardProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['performance', 'learning-path', userId],
-    queryFn: () => performanceApi.getLearningPath(userId).then((r) => r.data),
+    queryFn: () => performanceApi.getLearningPath(userId!).then((r) => r.data),
+    enabled: userId != null,
   });
 
-  const startCourseMutation = useMutation({
-    mutationFn: (courseId: number) => performanceApi.startCourse(courseId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['performance', 'learning-path'] });
-    },
-  });
-
-  const learningData: LearningPathData | null = data?.data || null;
+  const learningData = toLearningPathData(data?.data);
 
   if (isLoading) {
     return (
@@ -119,12 +145,9 @@ export function LearningPathCard({
     );
   }
 
+  // There is no course-progress endpoint; starting a course is the caller's job.
   const handleStartCourse = (courseId: number) => {
-    if (onStartCourse) {
-      onStartCourse(courseId);
-    } else {
-      startCourseMutation.mutate(courseId);
-    }
+    onStartCourse?.(courseId);
   };
 
   const inProgressCourses = learningData.recommended_courses.filter((c) => c.status === 'in_progress');
@@ -152,7 +175,7 @@ export function LearningPathCard({
           size="small"
           dataSource={topCourses}
           renderItem={(course) => {
-            const difficultyConfig = DIFFICULTY_CONFIG[course.difficulty];
+            const difficultyConfig = course.difficulty ? DIFFICULTY_CONFIG[course.difficulty] : NO_DIFFICULTY;
             const isInProgress = course.status === 'in_progress';
 
             return (
@@ -192,12 +215,14 @@ export function LearningPathCard({
                       <Text type="secondary" style={{ fontSize: 11 }}>
                         {course.duration_hours}h
                       </Text>
-                      <Tag
-                        color={difficultyConfig.color}
-                        style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}
-                      >
-                        {difficultyConfig.label}
-                      </Tag>
+                      {course.difficulty && (
+                        <Tag
+                          color={difficultyConfig.color}
+                          style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}
+                        >
+                          {difficultyConfig.label}
+                        </Tag>
+                      )}
                     </Space>
                   </div>
                   <RightOutlined style={{ color: '#8c8c8c' }} />
@@ -297,7 +322,7 @@ export function LearningPathCard({
             {t('performance.continue_learning', 'Continue Learning')}
           </Text>
           {inProgressCourses.map((course) => {
-            const difficultyConfig = DIFFICULTY_CONFIG[course.difficulty];
+            const difficultyConfig = course.difficulty ? DIFFICULTY_CONFIG[course.difficulty] : NO_DIFFICULTY;
 
             return (
               <Card
@@ -333,9 +358,11 @@ export function LearningPathCard({
                         <Text strong style={{ fontSize: 15 }}>{course.title}</Text>
                         <div style={{ marginTop: 4 }}>
                           <Space size={8}>
-                            <Tag color={difficultyConfig.color} style={{ fontSize: 10 }}>
-                              {difficultyConfig.label}
-                            </Tag>
+                            {course.difficulty && (
+                              <Tag color={difficultyConfig.color} style={{ fontSize: 10 }}>
+                                {difficultyConfig.label}
+                              </Tag>
+                            )}
                             <Text type="secondary" style={{ fontSize: 11 }}>
                               <ClockCircleOutlined /> {course.duration_hours}h
                             </Text>
@@ -374,7 +401,7 @@ export function LearningPathCard({
         <List
           dataSource={notStartedCourses}
           renderItem={(course, index) => {
-            const difficultyConfig = DIFFICULTY_CONFIG[course.difficulty];
+            const difficultyConfig = course.difficulty ? DIFFICULTY_CONFIG[course.difficulty] : NO_DIFFICULTY;
 
             return (
               <List.Item
@@ -422,15 +449,19 @@ export function LearningPathCard({
                     </div>
 
                     <Space size={8} wrap>
-                      <Tag color={difficultyConfig.color} style={{ fontSize: 10 }}>
-                        {difficultyConfig.label}
-                      </Tag>
+                      {course.difficulty && (
+                        <Tag color={difficultyConfig.color} style={{ fontSize: 10 }}>
+                          {difficultyConfig.label}
+                        </Tag>
+                      )}
                       <Text type="secondary" style={{ fontSize: 11 }}>
                         <ClockCircleOutlined /> {course.duration_hours}h
                       </Text>
-                      <Tag icon={<TrophyOutlined />} color="gold" style={{ fontSize: 10 }}>
-                        +{course.points_reward} pts
-                      </Tag>
+                      {course.points_reward != null && (
+                        <Tag icon={<TrophyOutlined />} color="gold" style={{ fontSize: 10 }}>
+                          +{course.points_reward} pts
+                        </Tag>
+                      )}
                       {course.certification && (
                         <Tooltip title={t('performance.grants_certification', 'Grants certification')}>
                           <Tag icon={<SafetyCertificateOutlined />} color="green" style={{ fontSize: 10 }}>
@@ -450,14 +481,15 @@ export function LearningPathCard({
                   </div>
 
                   {/* Start Button */}
-                  <Button
-                    type={index < 2 ? 'primary' : 'default'}
-                    icon={<PlayCircleOutlined />}
-                    onClick={() => handleStartCourse(course.id)}
-                    loading={startCourseMutation.isPending}
-                  >
-                    {t('performance.start', 'Start')}
-                  </Button>
+                  {onStartCourse && (
+                    <Button
+                      type={index < 2 ? 'primary' : 'default'}
+                      icon={<PlayCircleOutlined />}
+                      onClick={() => handleStartCourse(course.id)}
+                    >
+                      {t('performance.start', 'Start')}
+                    </Button>
+                  )}
                 </div>
               </List.Item>
             );

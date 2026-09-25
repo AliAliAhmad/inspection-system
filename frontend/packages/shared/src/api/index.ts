@@ -43,6 +43,7 @@ export type { RateInspectionPayload } from './ratings.api';
 export { notificationsApi } from './notifications.api';
 export type {
   NotificationListParams,
+  NotificationBucket,
   SnoozePayload,
   SchedulePayload,
   UpdatePreferencePayload,

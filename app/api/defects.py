@@ -2,7 +2,7 @@
 Defect management endpoints.
 """
 
-from datetime import datetime
+from datetime import datetime, date
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models import Defect, Inspection, SpecialistJob, User
@@ -13,6 +13,9 @@ from app.utils.decorators import get_current_user, admin_required, role_required
 from app.utils.pagination import paginate
 
 bp = Blueprint('defects', __name__)
+
+# A defect in one of these is no longer waiting on anybody, so it cannot be overdue.
+DEFECT_FINISHED_STATUSES = ('resolved', 'closed', 'false_alarm')
 
 
 def _defect_scheduled_in_active_plan(defect_id):
@@ -61,18 +64,37 @@ def list_defects():
         ).subquery()
         query = query.filter(Defect.id.in_(specialist_defect_ids))
     
-    # Apply filters
+    # Apply filters — status accepts one value or a comma list
     status = request.args.get('status')
     if status:
-        query = query.filter_by(status=status)
+        statuses = [s.strip() for s in status.split(',') if s.strip()]
+        if len(statuses) == 1:
+            query = query.filter(Defect.status == statuses[0])
+        elif statuses:
+            query = query.filter(Defect.status.in_(statuses))
     
     severity = request.args.get('severity')
     if severity:
         query = query.filter_by(severity=severity)
 
+    # A defect's machine comes from its inspection OR, for field/safety
+    # reports that have no inspection, from equipment_id_direct. An inner
+    # join on Inspection silently dropped every field report.
     equipment_id = request.args.get('equipment_id', type=int)
     if equipment_id:
-        query = query.join(Inspection).filter(Inspection.equipment_id == equipment_id)
+        query = query.outerjoin(Inspection, Defect.inspection_id == Inspection.id).filter(
+            db.or_(
+                Defect.equipment_id_direct == equipment_id,
+                Inspection.equipment_id == equipment_id,
+            )
+        )
+
+    # Past its due date and still not finished.
+    if request.args.get('sla_overdue', '').lower() in ('1', 'true', 'yes'):
+        query = query.filter(
+            Defect.due_date < date.today(),
+            Defect.status.notin_(DEFECT_FINISHED_STATUSES),
+        )
 
     query = query.order_by(Defect.due_date, Defect.severity.desc())
     items, pagination = paginate(query)

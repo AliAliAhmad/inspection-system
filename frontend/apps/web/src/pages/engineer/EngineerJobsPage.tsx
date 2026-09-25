@@ -53,14 +53,16 @@ export default function EngineerJobsPage() {
   const pageSize = 10;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['engineer-jobs', statusFilter, page, user?.id],
+    queryKey: ['engineer-jobs', statusFilter, page, user?.id, viewMode],
     queryFn: () =>
       engineerJobsApi
         .list({
           status: statusFilter === 'all' ? undefined : statusFilter,
           engineer_id: user?.id,
-          page,
-          per_page: viewMode === 'kanban' ? 100 : pageSize,
+          // The board shows EVERY job at once: page 1, up to 200. It used to reuse the
+          // table's page and page size, so it showed 10 jobs, or none from page 3.
+          page: viewMode === 'kanban' ? 1 : page,
+          per_page: viewMode === 'kanban' ? 200 : pageSize,
         })
         .then((r) => r.data),
   });

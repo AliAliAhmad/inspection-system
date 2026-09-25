@@ -75,13 +75,16 @@ import {
 
 const { Title, Text } = Typography;
 
+// MUST equal the database's check_material_category (app/models/material.py).
+// 'hydraulic' and 'safety' were offered and are not allowed: filtering by them
+// always showed nothing, and SAVING a material with one was refused by the
+// database. 'hvac' is allowed and was missing (2026-09-24 audit).
 const CATEGORIES = [
   'filter',
   'lubricant',
-  'hydraulic',
   'electrical',
   'mechanical',
-  'safety',
+  'hvac',
   'consumable',
   'spare_part',
   'other',
@@ -858,7 +861,7 @@ export default function MaterialsPage() {
           <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>
             <li><code>code</code> - {t('materials.unique_code', 'Unique material code')}</li>
             <li><code>name</code> - {t('materials.name_english', 'Material name (English)')}</li>
-            <li><code>category</code> - {t('materials.category_hint', 'Category (filter, lubricant, hydraulic, etc.)')}</li>
+            <li><code>category</code> - {t('materials.category_hint', 'Category (filter, lubricant, electrical, mechanical, hvac, consumable, spare_part, other)')}</li>
             <li><code>unit</code> - {t('materials.unit_hint', 'Unit of measure (pcs, liters, kg, etc.)')}</li>
           </ul>
 

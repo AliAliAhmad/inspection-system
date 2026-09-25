@@ -1057,7 +1057,11 @@ def search_checklists():
         )
 
     if equipment_type:
-        query = query.filter(ChecklistTemplate.equipment_type == equipment_type)
+        # Anywhere in the type, any capitals. The page offers plain words (pump,
+        # crane ...) while templates store "STS Crane" or a comma list
+        # ("reach_stacker, empty_handler") — an exact match found neither
+        # (2026-09-24 audit). An exact value still matches.
+        query = query.filter(ChecklistTemplate.equipment_type.ilike(f'%{equipment_type.strip()}%'))
 
     if category:
         # Filter templates that have items with this category

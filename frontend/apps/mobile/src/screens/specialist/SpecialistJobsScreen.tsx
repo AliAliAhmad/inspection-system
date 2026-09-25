@@ -86,12 +86,14 @@ export default function SpecialistJobsScreen() {
 
   const jobs = useMemo(() => {
     const raw = (Array.isArray(allJobs) ? allJobs : []) as SpecialistJob[];
-    // Client-side filter: hide completed jobs older than 1 day (matches backend)
+    // Client-side filter: hide finished jobs older than 1 day. Mirrors the
+    // backend exactly, including keeping a finished job with no completed_at.
     const cutoff = Date.now() - 1 * 24 * 60 * 60 * 1000;
     const doneStatuses = ['completed', 'qc_approved', 'incomplete', 'cancelled'];
     return raw.filter(j =>
       !doneStatuses.includes(j.status) ||
-      (j.completed_at && new Date(j.completed_at).getTime() >= cutoff)
+      !j.completed_at ||
+      new Date(j.completed_at).getTime() >= cutoff
     );
   }, [allJobs]);
 

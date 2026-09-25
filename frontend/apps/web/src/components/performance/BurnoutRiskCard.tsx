@@ -21,7 +21,8 @@ const { Text, Paragraph, Title } = Typography;
 export interface BurnoutIndicator {
   name: string;
   value: number;
-  threshold: number;
+  /** Not provided by the burnout endpoint; the value tag is hidden without it. */
+  threshold?: number;
   status: 'normal' | 'warning' | 'critical';
   description: string;
 }
@@ -41,10 +42,11 @@ export interface BurnoutRiskData {
   risk_score: number;
   indicators: BurnoutIndicator[];
   interventions: BurnoutIntervention[];
-  days_since_last_leave: number;
-  average_weekly_hours: number;
-  overtime_hours_month: number;
-  consecutive_work_days: number;
+  // Not provided by the burnout endpoint; each stat is hidden when absent.
+  days_since_last_leave?: number;
+  average_weekly_hours?: number;
+  overtime_hours_month?: number;
+  consecutive_work_days?: number;
   last_assessment_date: string;
 }
 
@@ -56,9 +58,50 @@ export interface BurnoutRiskCardProps {
   showInterventionButtons?: boolean;
 }
 
+/** What GET /api/performance/burnout-risk/<user_id> actually returns. */
+interface BurnoutRiskResponse {
+  user_id?: number;
+  user_name?: string;
+  risk_score?: number;
+  risk_level?: BurnoutRiskData['risk_level'];
+  factors?: { factor: string; value: unknown; description: string; contribution: number }[];
+  recommendations?: string[];
+  assessed_at?: string;
+}
+
+/** A factor adding this much to the risk score is shown as critical. */
+const CRITICAL_CONTRIBUTION = 20;
+
+/**
+ * The service scores risk from weighted factors plus plain-text recommendations;
+ * those become the card's indicators and interventions.
+ */
+function toBurnoutRiskData(raw: BurnoutRiskResponse | undefined): BurnoutRiskData | null {
+  if (!raw?.risk_level || raw.user_id == null) return null;
+  return {
+    user_id: raw.user_id,
+    user_name: raw.user_name ?? '',
+    risk_level: raw.risk_level,
+    risk_score: raw.risk_score ?? 0,
+    indicators: (raw.factors ?? []).map((f) => ({
+      name: f.factor.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()),
+      value: f.contribution,
+      status: f.contribution >= CRITICAL_CONTRIBUTION ? 'critical' : 'warning',
+      description: f.description,
+    })),
+    interventions: (raw.recommendations ?? []).map((rec, i) => ({
+      id: i + 1,
+      title: rec,
+      description: '',
+      priority: 'recommended',
+      type: 'support',
+    })),
+    last_assessment_date: raw.assessed_at ?? '',
+  };
+}
+
 const performanceApi = {
-  getBurnoutRisk: (userId?: number) =>
-    apiClient.get('/api/performance/burnout-risk', { params: { user_id: userId } }),
+  getBurnoutRisk: (userId: number) => apiClient.get(`/api/performance/burnout-risk/${userId}`),
   suggestLeave: (data: { user_id: number; days: number; reason?: string }) =>
     apiClient.post('/api/performance/interventions/leave', data),
   reduceWorkload: (data: { user_id: number; reduction_percentage: number }) =>
@@ -127,11 +170,11 @@ export function BurnoutRiskCard({
 
   const { data: fetchedData, isLoading } = useQuery({
     queryKey: ['performance', 'burnout-risk', userId],
-    queryFn: () => performanceApi.getBurnoutRisk(userId).then((r) => r.data),
+    queryFn: () => performanceApi.getBurnoutRisk(userId!).then((r) => r.data),
     enabled: !dataProp && !!userId,
   });
 
-  const riskData: BurnoutRiskData | null = dataProp || fetchedData?.data || null;
+  const riskData: BurnoutRiskData | null = dataProp || toBurnoutRiskData(fetchedData?.data);
 
   // Mutation for suggesting leave
   const suggestLeaveMutation = useMutation({
@@ -297,59 +340,65 @@ export function BurnoutRiskCard({
 
           {/* Quick Stats */}
           <div style={{ flex: 1, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <Tooltip title={t('performance.days_since_leave', 'Days since last approved leave')}>
-              <div
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'rgba(255,255,255,0.8)',
-                  borderRadius: 8,
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: 20, fontWeight: 700, color: riskData.days_since_last_leave > 30 ? '#ff4d4f' : '#595959' }}>
-                  {riskData.days_since_last_leave}
+            {riskData.days_since_last_leave != null && (
+              <Tooltip title={t('performance.days_since_leave', 'Days since last approved leave')}>
+                <div
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: 'rgba(255,255,255,0.8)',
+                    borderRadius: 8,
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 20, fontWeight: 700, color: riskData.days_since_last_leave > 30 ? '#ff4d4f' : '#595959' }}>
+                    {riskData.days_since_last_leave}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    Days Since Leave
+                  </Text>
                 </div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  Days Since Leave
-                </Text>
-              </div>
-            </Tooltip>
+              </Tooltip>
+            )}
 
-            <Tooltip title={t('performance.weekly_hours', 'Average hours worked per week')}>
-              <div
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'rgba(255,255,255,0.8)',
-                  borderRadius: 8,
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: 20, fontWeight: 700, color: riskData.average_weekly_hours > 45 ? '#faad14' : '#595959' }}>
-                  {riskData.average_weekly_hours}h
+            {riskData.average_weekly_hours != null && (
+              <Tooltip title={t('performance.weekly_hours', 'Average hours worked per week')}>
+                <div
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: 'rgba(255,255,255,0.8)',
+                    borderRadius: 8,
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 20, fontWeight: 700, color: riskData.average_weekly_hours > 45 ? '#faad14' : '#595959' }}>
+                    {riskData.average_weekly_hours}h
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    Avg Weekly Hours
+                  </Text>
                 </div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  Avg Weekly Hours
-                </Text>
-              </div>
-            </Tooltip>
+              </Tooltip>
+            )}
 
-            <Tooltip title={t('performance.consecutive_days', 'Consecutive working days')}>
-              <div
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: 'rgba(255,255,255,0.8)',
-                  borderRadius: 8,
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: 20, fontWeight: 700, color: riskData.consecutive_work_days > 10 ? '#ff4d4f' : '#595959' }}>
-                  {riskData.consecutive_work_days}
+            {riskData.consecutive_work_days != null && (
+              <Tooltip title={t('performance.consecutive_days', 'Consecutive working days')}>
+                <div
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: 'rgba(255,255,255,0.8)',
+                    borderRadius: 8,
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 20, fontWeight: 700, color: riskData.consecutive_work_days > 10 ? '#ff4d4f' : '#595959' }}>
+                    {riskData.consecutive_work_days}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    Consecutive Days
+                  </Text>
                 </div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  Consecutive Days
-                </Text>
-              </div>
-            </Tooltip>
+              </Tooltip>
+            )}
           </div>
         </div>
 
@@ -395,9 +444,11 @@ export function BurnoutRiskCard({
                       )}
                       <Text strong>{indicator.name}</Text>
                     </Space>
-                    <Tag color={indicator.status === 'critical' ? 'error' : 'warning'}>
-                      {indicator.value} / {indicator.threshold}
-                    </Tag>
+                    {indicator.threshold != null && (
+                      <Tag color={indicator.status === 'critical' ? 'error' : 'warning'}>
+                        {indicator.value} / {indicator.threshold}
+                      </Tag>
+                    )}
                   </div>
                   <Text type="secondary" style={{ fontSize: 11, marginLeft: 22 }}>
                     {indicator.description}

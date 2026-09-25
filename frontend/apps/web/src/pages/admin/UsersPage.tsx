@@ -72,6 +72,7 @@ import {
   type UserDashboardStats,
   type UserWorkload,
 } from '@inspection/shared';
+import { useDebounce } from '../../hooks/useDebounce';
 
 const { Text, Title } = Typography;
 const { TabPane } = Tabs;
@@ -104,6 +105,8 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [search, setSearch] = useState('');
+  // The box shows every key; the list asks the server once you pause.
+  const debouncedSearch = useDebounce(search.trim(), 300);
   const [roleFilter, setRoleFilter] = useState<string | undefined>();
   const [shiftFilter, setShiftFilter] = useState<string | undefined>();
   const [specFilter, setSpecFilter] = useState<string | undefined>();
@@ -136,12 +139,12 @@ export default function UsersPage() {
 
   // Fetch users
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['users', page, perPage, search, roleFilter, shiftFilter, specFilter, statusFilter],
+    queryKey: ['users', page, perPage, debouncedSearch, roleFilter, shiftFilter, specFilter, statusFilter],
     queryFn: () =>
       usersApi.list({
         page,
         per_page: perPage,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         role: roleFilter,
         shift: shiftFilter,
         specialization: specFilter,
@@ -211,8 +214,10 @@ export default function UsersPage() {
       setEditingUser(null);
       editForm.resetFields();
     },
-    onError: () => {
-      message.error(t('users.updateError', 'Failed to update user'));
+    onError: (err: any) => {
+      // The server's reason, e.g. "Password must be at least 6 characters".
+      message.error(err?.response?.data?.message || err?.response?.data?.error
+        || t('users.updateError', 'Failed to update user'));
     },
   });
 
@@ -1014,7 +1019,12 @@ export default function UsersPage() {
         confirmLoading={updateMutation.isPending}
         destroyOnClose
       >
-        <Form form={editForm} layout="vertical" onFinish={(values: UpdateUserPayload) => editingUser && updateMutation.mutate({ id: editingUser.id, payload: values })}>
+        <Form form={editForm} layout="vertical" onFinish={(values: UpdateUserPayload) => {
+          if (!editingUser) return;
+          // An empty New Password box means "leave it alone" — never send it.
+          const { password, ...rest } = values;
+          updateMutation.mutate({ id: editingUser.id, payload: password ? { ...rest, password } : rest });
+        }}>
           <Form.Item name="email" label="Email" rules={[{ type: 'email' }]}>
             <Input />
           </Form.Item>
@@ -1024,6 +1034,18 @@ export default function UsersPage() {
               problem. Blank simply falls back to the English spelling. */}
           <Form.Item name="full_name_ar" label="Full Name (Arabic)">
             <Input dir="rtl" placeholder="اتركه فارغاً لعرض الاسم كما هو" />
+          </Form.Item>
+          {/* A password cannot be looked up — it is stored scrambled (hashed) —
+              so an admin SETS a new one here and tells the person. Empty = no
+              change. autoComplete="new-password" stops the browser pasting the
+              ADMIN's own saved password into someone else's account. */}
+          <Form.Item
+            name="password"
+            label={t('users.newPassword', 'New Password')}
+            extra={t('users.newPasswordHint', 'Leave empty to keep the current password.')}
+            rules={[{ min: 6, message: t('users.passwordMin', 'At least 6 characters') }]}
+          >
+            <Input.Password autoComplete="new-password" />
           </Form.Item>
           <Form.Item name="full_name" label="Full Name">
             <Input />

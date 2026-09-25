@@ -27,8 +27,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/RootNavigator';
 import {
-  inspectionsApi,
   defectsApi,
+  overdueApi,
   qualityReviewsApi,
 } from '@inspection/shared';
 
@@ -77,8 +77,11 @@ export default function OverdueScreen() {
   const { data: inspectionsData, isLoading: loadingInspections, refetch: refetchInspections, isRefetching: refetchingInspections } = useQuery({
     queryKey: ['overdue-inspections'],
     queryFn: async () => {
-      const response = await inspectionsApi.list({ status: 'overdue', per_page: 100 });
-      return (response.data as any)?.data ?? response.data ?? [];
+      // 'overdue' is not an Inspection status (draft/submitted/reviewed) —
+      // overdue work is an inspection ASSIGNMENT past its deadline, which is
+      // exactly what /api/overdue/inspections returns.
+      const response = await overdueApi.getInspections();
+      return (response.data as any)?.data ?? [];
     },
   });
 
@@ -86,7 +89,9 @@ export default function OverdueScreen() {
   const { data: defectsData, isLoading: loadingDefects, refetch: refetchDefects, isRefetching: refetchingDefects } = useQuery({
     queryKey: ['overdue-defects'],
     queryFn: async () => {
-      const response = await defectsApi.list({ status: 'open', sla_overdue: true, per_page: 100 });
+      // sla_overdue = past due_date and not resolved/closed/false alarm,
+      // whether open or already in progress.
+      const response = await defectsApi.list({ sla_overdue: true, per_page: 100 });
       return (response.data as any)?.data ?? response.data ?? [];
     },
   });
@@ -104,11 +109,11 @@ export default function OverdueScreen() {
   const overdueInspections: OverdueItem[] = (inspectionsData ?? []).map((item: any) => ({
     id: item.id,
     type: 'inspections' as TabType,
-    title: item.equipment?.name || `Inspection #${item.id}`,
-    subtitle: item.inspection_type || 'Regular Inspection',
-    dueDate: item.due_date || item.scheduled_date,
-    priority: item.priority,
-    assignedTo: item.assigned_to?.full_name,
+    title: item.equipment_name || `${t('overdue.inspection', 'Inspection')} #${item.id}`,
+    subtitle: item.status ? t(`status.${item.status}`, item.status) : '',
+    dueDate: item.deadline || item.created_at,
+    priority: item.risk_level,
+    assignedTo: [item.mechanical_inspector, item.electrical_inspector].filter(Boolean).join(' / ') || undefined,
   }));
 
   const overdueDefects: OverdueItem[] = (defectsData ?? []).map((item: any) => ({
@@ -116,7 +121,7 @@ export default function OverdueScreen() {
     type: 'defects' as TabType,
     title: item.description?.substring(0, 50) + (item.description?.length > 50 ? '...' : ''),
     subtitle: item.equipment?.name || `Defect #${item.id}`,
-    dueDate: item.sla_deadline || item.created_at,
+    dueDate: item.due_date || item.created_at,
     priority: item.severity,
     assignedTo: item.assigned_to?.full_name,
   }));
@@ -147,7 +152,9 @@ export default function OverdueScreen() {
   const rescheduleMutation = useMutation({
     mutationFn: async ({ item, date, reason }: { item: OverdueItem; date: string; reason: string }) => {
       if (item.type === 'inspections') {
-        return inspectionsApi.reschedule(item.id, { new_date: date, reason });
+        // /api/inspections/<id>/reschedule does not exist; these rows are
+        // assignments, and the overdue API moves an assignment's deadline.
+        return overdueApi.bulkReschedule('inspection', [item.id], date);
       }
       if (item.type === 'defects') {
         return defectsApi.updateSLA(item.id, { new_deadline: date, reason });

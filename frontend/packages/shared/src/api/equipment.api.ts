@@ -389,6 +389,10 @@ export const equipmentApi = {
 };
 
 export interface HealthSummary {
+  /** Every machine behind the Critical card (high + critical risk). */
+  high_risk_ids?: number[];
+  /** Every machine behind the Certs Due card (expiring within 30 days). */
+  expiring_cert_equipment_ids?: number[];
   summary: {
     total_equipment: number;
     average_health_score: number;

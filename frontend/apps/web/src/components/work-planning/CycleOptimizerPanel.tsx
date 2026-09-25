@@ -77,7 +77,7 @@ export default function CycleOptimizerPanel({
     queryKey: ['cycles'],
     queryFn: async () => {
       const res = await cyclesApi.list();
-      return res.data?.data?.cycles || [];
+      return res.data?.cycles || [];
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

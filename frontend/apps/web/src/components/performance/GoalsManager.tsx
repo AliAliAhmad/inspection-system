@@ -41,13 +41,11 @@ export function GoalsManager({ userId, readOnly = false, compact = false }: Goal
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editGoal, setEditGoal] = useState<Goal | null>(null);
 
-  // Fetch goals
+  // Fetch every goal once: the tab badges count each status, so the list
+  // is filtered here rather than re-fetched per tab.
   const { data: goalsData, isLoading } = useQuery({
-    queryKey: ['performance', 'goals', userId, filterStatus],
-    queryFn: () =>
-      performanceApi
-        .getGoals(userId, filterStatus === 'all' ? undefined : filterStatus)
-        .then((r) => r.data),
+    queryKey: ['performance', 'goals', userId],
+    queryFn: () => performanceApi.getGoals(userId).then((r) => r.data),
   });
 
   const goals: Goal[] = goalsData?.data || [];
@@ -108,6 +106,8 @@ export function GoalsManager({ userId, readOnly = false, compact = false }: Goal
   const activeGoals = goals.filter((g) => g.status === 'active');
   const completedGoals = goals.filter((g) => g.status === 'completed');
   const failedGoals = goals.filter((g) => g.status === 'failed');
+  const visibleGoals =
+    filterStatus === 'all' ? goals : goals.filter((g) => g.status === filterStatus);
 
   if (compact) {
     return (
@@ -270,7 +270,7 @@ export function GoalsManager({ userId, readOnly = false, compact = false }: Goal
         <div style={{ textAlign: 'center', padding: 48 }}>
           <Spin size="large" />
         </div>
-      ) : goals.length === 0 ? (
+      ) : visibleGoals.length === 0 ? (
         <Empty
           description={
             filterStatus === 'all'
@@ -286,7 +286,7 @@ export function GoalsManager({ userId, readOnly = false, compact = false }: Goal
         </Empty>
       ) : (
         <Row gutter={[16, 16]}>
-          {goals.map((goal) => (
+          {visibleGoals.map((goal) => (
             <Col key={goal.id} xs={24} md={12} lg={8}>
               <div style={{ position: 'relative' }}>
                 <GoalProgress

@@ -18,7 +18,7 @@ import {
   LayoutAnimation,
   UIManager,
 } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -26,13 +26,15 @@ import {
   notificationsApi,
   Notification,
   NotificationPriority,
-  NotificationGroup,
+  NotificationBucket,
   AISummary,
   getNotificationMobileRoute,
 } from '@inspection/shared';
 import { formatDateTime } from '@inspection/shared';
 import { useAuth } from '../../providers/AuthProvider';
 import * as ExpoNotifications from 'expo-notifications';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { flattenPages, nextPageParam } from '../../utils/pagination';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -54,18 +56,22 @@ const PRIORITY_I18N_KEYS: Record<NotificationPriority, string> = {
   critical: 'notifications.critical',
 };
 
+// Only types the backend actually creates (NotificationService.create_notification
+// callers). 'assessment_submitted' and 'mention' were never sent by anything,
+// so their chips could only ever show an empty list.
 const NOTIFICATION_TYPES = [
   'inspection_assigned',
   'inspection_submitted',
   'leave_requested',
   'specialist_job_assigned',
   'defect_created',
-  'assessment_submitted',
+  'assessment_required',
   'quality_review_assigned',
-  'mention',
 ] as const;
 
-type TabKey = 'all' | 'unread' | 'critical' | 'mentions';
+const PAGE_SIZE = 20;
+
+type TabKey = 'all' | 'unread' | 'critical';
 
 interface TabItem {
   key: TabKey;
@@ -78,7 +84,6 @@ export default function NotificationsScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
-  const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [snoozeModalVisible, setSnoozeModalVisible] = useState(false);
@@ -95,22 +100,39 @@ export default function NotificationsScreen() {
 
   // ============ DATA FETCHING ============
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['notifications', page, activeTab],
-    queryFn: () => {
-      const params: Record<string, unknown> = { page, per_page: 20 };
+  // Search, type and priority are filtered by the SERVER. Filtering the
+  // loaded page on the phone only ever searched the newest 20.
+  const debouncedSearch = useDebouncedValue(searchQuery.trim().normalize('NFC'));
+  const typeParam = [...selectedTypes].sort().join(',');
+  const priorityParam = activeTab === 'critical'
+    ? 'critical'
+    : [...selectedPriorities].sort().join(',');
+
+  const {
+    data,
+    isLoading,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['notifications', 'list', activeTab, debouncedSearch, typeParam, priorityParam],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) => {
+      const params: Record<string, unknown> = { page: pageParam, per_page: PAGE_SIZE };
       if (activeTab === 'unread') params.unread_only = true;
-      if (activeTab === 'critical') params.priority = 'critical';
+      if (priorityParam) params.priority = priorityParam;
+      if (typeParam) params.type = typeParam;
+      if (debouncedSearch) params.search = debouncedSearch;
       return notificationsApi.list(params as any).then(r => r.data);
     },
-    refetchInterval: 30000,
-  });
-
-  // Mentions query
-  const { data: mentionsData } = useQuery({
-    queryKey: ['notifications', 'mentions'],
-    queryFn: () => notificationsApi.getMentions().then(r => r.data),
-    enabled: activeTab === 'mentions',
+    getNextPageParam: (lastPage) => nextPageParam(lastPage),
+    // Keep the current rows on screen while a new filter loads, so the
+    // search box is not unmounted (and the keyboard closed) mid-typing.
+    placeholderData: keepPreviousData,
+    // Poll only while a single page is loaded — polling refetches EVERY
+    // loaded page, so after scrolling it would re-download them all each time.
+    refetchInterval: (q) => (((q.state.data as any)?.pages?.length ?? 1) > 1 ? false : 30000),
   });
 
   // Unread count query
@@ -135,10 +157,10 @@ export default function NotificationsScreen() {
     retry: false,
   });
 
-  // Groups query
+  // Groups query — the backend route is /grouped (there is no /groups).
   const { data: groupsData, isLoading: groupsLoading } = useQuery({
-    queryKey: ['notifications', 'groups'],
-    queryFn: () => notificationsApi.listGroups().then(r => r.data),
+    queryKey: ['notifications', 'grouped'],
+    queryFn: () => notificationsApi.getGrouped({ group_by: 'type' }).then(r => r.data),
     enabled: isGroupedView,
   });
 
@@ -193,33 +215,17 @@ export default function NotificationsScreen() {
     }
   }, [unreadCount]);
 
-  const rawNotifications = activeTab === 'mentions'
-    ? (mentionsData?.data ?? [])
-    : (data?.data ?? []);
+  // Every loaded page, appended in order.
+  const notifications = useMemo(
+    () => flattenPages<Notification>(data?.pages),
+    [data?.pages],
+  );
 
-  // Client-side filter by search, type, and priority
-  const notifications = useMemo(() => {
-    let filtered = rawNotifications;
+  const handleEndReached = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (n: Notification) => n.title.toLowerCase().includes(q) || n.message.toLowerCase().includes(q)
-      );
-    }
-
-    if (selectedTypes.length > 0) {
-      filtered = filtered.filter((n: Notification) => selectedTypes.includes(n.type));
-    }
-
-    if (selectedPriorities.length > 0) {
-      filtered = filtered.filter((n: Notification) => selectedPriorities.includes(n.priority));
-    }
-
-    return filtered;
-  }, [rawNotifications, searchQuery, selectedTypes, selectedPriorities]);
-
-  const groups: NotificationGroup[] = groupsData?.data ?? [];
+  const groups: NotificationBucket[] = groupsData?.groups ?? [];
 
   const activeFilterCount = selectedTypes.length + selectedPriorities.length;
 
@@ -227,7 +233,6 @@ export default function NotificationsScreen() {
     { key: 'all', label: t('notifications.tabAll', 'All') },
     { key: 'unread', label: t('notifications.tabUnread', 'Unread'), badge: unreadCount },
     { key: 'critical', label: t('notifications.tabCritical', 'Critical'), badge: priorityCounts.critical ?? 0 },
-    { key: 'mentions', label: t('notifications.tabMentions', 'Mentions') },
   ];
 
   // ============ HANDLERS ============
@@ -301,7 +306,6 @@ export default function NotificationsScreen() {
 
   const handleStatCardPress = useCallback((filter: TabKey) => {
     setActiveTab(filter);
-    setPage(1);
   }, []);
 
   const toggleFilter = useCallback(() => {
@@ -567,7 +571,6 @@ export default function NotificationsScreen() {
           setSelectedTypes([]);
           setActiveTab('all');
           setShowFilters(true);
-          setPage(1);
         }}
         activeOpacity={0.7}
       >
@@ -582,7 +585,6 @@ export default function NotificationsScreen() {
           setSelectedTypes([]);
           setActiveTab('all');
           setShowFilters(true);
-          setPage(1);
         }}
         activeOpacity={0.7}
       >
@@ -626,7 +628,6 @@ export default function NotificationsScreen() {
           style={[styles.tab, activeTab === tab.key && styles.tabActive]}
           onPress={() => {
             setActiveTab(tab.key);
-            setPage(1);
           }}
         >
           <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
@@ -807,38 +808,46 @@ export default function NotificationsScreen() {
 
   // ============ FEATURE 6: GROUPED VIEW ============
 
-  const renderGroupItem = useCallback(({ item: group }: { item: NotificationGroup }) => (
+  // A bucket is one notification TYPE. Tapping it opens the list filtered to
+  // that type, so every notification in the bucket is reachable, not just one.
+  const renderGroupItem = useCallback(({ item: group }: { item: NotificationBucket }) => (
     <TouchableOpacity
       style={styles.groupItem}
       activeOpacity={0.7}
       onPress={() => {
-        // Navigate to the first notification in the group, or show group details
-        if (group.notifications && group.notifications.length > 0) {
-          handlePress(group.notifications[0]);
-        }
+        setSelectedTypes([group.id]);
+        setSelectedPriorities([]);
+        setActiveTab('all');
+        setIsGroupedView(false);
       }}
     >
       <View style={styles.groupHeader}>
         <View style={styles.groupInfo}>
-          <Text style={styles.groupTitle} numberOfLines={1}>{group.summary_title}</Text>
+          <Text style={styles.groupTitle} numberOfLines={1}>
+            {t(`notifications.${group.id}`, group.label || group.id.replace(/_/g, ' '))}
+          </Text>
           <View style={styles.groupBadge}>
-            <Text style={styles.groupBadgeText}>{group.notification_count}</Text>
+            <Text style={styles.groupBadgeText}>{group.count}</Text>
           </View>
         </View>
-        <Text style={styles.groupTime}>{formatDateTime(group.updated_at)}</Text>
+        {group.latest?.created_at ? (
+          <Text style={styles.groupTime}>{formatDateTime(group.latest.created_at)}</Text>
+        ) : null}
       </View>
-      <Text style={styles.groupMessage} numberOfLines={2}>
-        {group.summary_message}
-      </Text>
-      {group.notifications && group.notifications.length > 0 && (
+      {group.unread_count > 0 && (
+        <Text style={styles.groupMessage} numberOfLines={1}>
+          {t('notifications.unreadInGroup', '{{count}} unread', { count: group.unread_count })}
+        </Text>
+      )}
+      {group.latest && (
         <Text style={styles.groupPreview} numberOfLines={1}>
           {t('notifications.latestInGroup', 'Latest: {{message}}', {
-            message: group.notifications[0].title,
+            message: group.latest.title,
           })}
         </Text>
       )}
     </TouchableOpacity>
-  ), [t, handlePress]);
+  ), [t]);
 
   // ============ SNOOZE MODAL ============
 
@@ -890,8 +899,6 @@ export default function NotificationsScreen() {
       emptyMessage = t('notifications.allCaughtUp', "You're all caught up!");
     } else if (activeTab === 'critical') {
       emptyMessage = t('notifications.noCritical', 'No critical notifications');
-    } else if (activeTab === 'mentions') {
-      emptyMessage = t('notifications.noMentions', 'No mentions');
     } else {
       emptyMessage = t('notifications.no_notifications', 'No notifications');
     }
@@ -982,7 +989,7 @@ export default function NotificationsScreen() {
         <FlatList
           testID="notifications-list"
           data={groups}
-          keyExtractor={(item) => item.group_key || item.id.toString()}
+          keyExtractor={(item) => item.id}
           renderItem={renderGroupItem}
           ListHeaderComponent={renderListHeader}
           ListEmptyComponent={
@@ -1025,6 +1032,13 @@ export default function NotificationsScreen() {
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
           ListHeaderComponent={renderListHeader}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator size="small" color="#1677ff" style={{ marginVertical: 16 }} />
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

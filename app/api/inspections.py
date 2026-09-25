@@ -1149,6 +1149,7 @@ def list_inspections():
             or_(
                 Inspection.inspection_code.ilike(search_term),
                 Equipment.name.ilike(search_term),
+                Equipment.name_ar.ilike(search_term),
                 Equipment.serial_number.ilike(search_term)
             )
         )
@@ -2798,6 +2799,31 @@ def search_inspections():
         query = query.join(Equipment).filter(
             Equipment.equipment_type.ilike(f"%{filters['equipment_type']}%")
         )
+
+    # The words it did NOT recognise are what the person is looking FOR — a
+    # machine name, a serial, a code. Before (2026-09-24 filter audit) they were
+    # thrown away: typing "RS109" returned the latest 50 inspections, unfiltered.
+    # Each leftover word must match one of the fields.
+    known = {'failed', 'fail', 'passed', 'pass', 'submitted', 'reviewed', 'draft',
+             'today', 'yesterday', 'last', 'this', 'week', 'month',
+             'inspection', 'inspections', 'show', 'me', 'all', 'the', 'of', 'for',
+             'in', 'on', 'with', 'and', *equipment_types,
+             *[t + 's' for t in equipment_types]}
+    words = [w for w in query_text.split() if w and w not in known]
+    if words:
+        import unicodedata
+        needs_join = not filters.get('equipment_type')
+        if needs_join:
+            query = query.outerjoin(Equipment, Inspection.equipment_id == Equipment.id)
+        for word in words:
+            term = f'%{unicodedata.normalize("NFC", word)}%'
+            query = query.filter(or_(
+                Inspection.inspection_code.ilike(term),
+                Equipment.name.ilike(term),
+                Equipment.name_ar.ilike(term),
+                Equipment.serial_number.ilike(term),
+            ))
+        filters['text'] = ' '.join(words)
 
     inspections = query.order_by(Inspection.created_at.desc()).limit(50).all()
 

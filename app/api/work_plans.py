@@ -669,17 +669,30 @@ def list_work_plans():
             selectinload(WorkPlan.days)  # Just load days for job counts
         )
 
+    exact_first = None
     if week_start:
         try:
             week_date = datetime.strptime(week_start, '%Y-%m-%d').date()
-            query = query.filter(WorkPlan.week_start == week_date)
         except ValueError:
             raise ValidationError("Invalid date format. Use YYYY-MM-DD")
+        # A plan may start on any weekday: the web planner makes Sunday-start
+        # weeks, the phone asks for the Monday. An exact week_start match
+        # found nothing and the phone showed an empty week. Match the plan
+        # whose range CONTAINS the date, as /my-plan does — an exact match
+        # still wins and comes first.
+        query = query.filter(db.or_(
+            WorkPlan.week_start == week_date,
+            db.and_(WorkPlan.week_start <= week_date, WorkPlan.week_end >= week_date),
+        ))
+        exact_first = db.case((WorkPlan.week_start == week_date, 0), else_=1)
 
     if status:
         query = query.filter(WorkPlan.status == status)
 
-    plans = query.order_by(WorkPlan.week_start.desc()).all()
+    ordering = [WorkPlan.week_start.desc()]
+    if exact_first is not None:
+        ordering.insert(0, exact_first)
+    plans = query.order_by(*ordering).all()
 
     return jsonify({
         'status': 'success',
@@ -3699,6 +3712,18 @@ def get_available_jobs():
                 )
             )
 
+        # The berth picked on the board. SAP orders were filtered by it and
+        # defects were not, so the Defects tab showed both berths' defects
+        # whichever was chosen (2026-09-24 audit). A defect belongs to the berth
+        # of the machine it was found on; a machine at 'both' or with no berth
+        # shows on either side — the same rule the SAP orders use above.
+        if berth and berth != 'both':
+            berth_inspection_ids = db.session.query(Inspection.id).join(
+                Equipment, Inspection.equipment_id == Equipment.id
+            ).filter(db.or_(Equipment.berth == berth, Equipment.berth == 'both',
+                            Equipment.berth == None))  # noqa: E711
+            defect_query = defect_query.filter(Defect.inspection_id.in_(berth_inspection_ids))
+
         defects = defect_query.order_by(Defect.created_at.desc()).all()
         result['defect_jobs'] = [{
             'defect': d.to_dict(language),
@@ -5561,6 +5586,12 @@ def list_equipment_restrictions():
 
     if active_only:
         query = query.filter(EquipmentRestriction.is_active == True)
+
+    # The settings page's "filter by type" sent this and it was ignored
+    # (2026-09-24 audit).
+    restriction_type = (request.args.get('restriction_type') or '').strip()
+    if restriction_type:
+        query = query.filter(EquipmentRestriction.restriction_type == restriction_type)
 
     restrictions = query.all()
 

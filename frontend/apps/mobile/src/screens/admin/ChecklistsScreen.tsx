@@ -13,9 +13,10 @@ import {
   Switch,
   Alert,
 } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { checklistsApi } from '@inspection/shared';
+import { usePagedList } from '../../hooks/usePagedList';
 import type { ChecklistTemplate, ChecklistItem, ChecklistCreateTemplatePayload, CreateChecklistItemPayload } from '@inspection/shared';
 
 const ANSWER_TYPES = [
@@ -111,7 +112,6 @@ function ChecklistItemRow({ item, onEdit }: { item: ChecklistItem; onEdit: (i: C
 export default function ChecklistsScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   // Modal states
@@ -124,9 +124,10 @@ export default function ChecklistsScreen() {
   const [templateForm, setTemplateForm] = useState<Partial<ChecklistCreateTemplatePayload>>({ is_active: true });
   const [itemForm, setItemForm] = useState<Partial<CreateChecklistItemPayload>>({ critical_failure: false });
 
-  const checklistsQuery = useQuery({
-    queryKey: ['checklists', page],
-    queryFn: () => checklistsApi.listTemplates({ page, per_page: 20 }),
+  const checklistsQuery = usePagedList({
+    queryKey: ['checklists'],
+    fetchPage: (page) =>
+      checklistsApi.listTemplates({ page, per_page: 20 }),
   });
 
   const createTemplateMutation = useMutation({
@@ -187,21 +188,13 @@ export default function ChecklistsScreen() {
     },
   });
 
-  const responseData = (checklistsQuery.data?.data as any) ?? checklistsQuery.data;
-  const templates: ChecklistTemplate[] = responseData?.data ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
+  const templates: ChecklistTemplate[] = checklistsQuery.items;
 
   const handleRefresh = useCallback(() => {
-    setPage(1);
     checklistsQuery.refetch();
   }, [checklistsQuery]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !checklistsQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
-  }, [hasNextPage, checklistsQuery.isFetching]);
+  const handleLoadMore = checklistsQuery.loadMore;
 
   const handleTemplatePress = (template: ChecklistTemplate) => {
     setExpandedId(expandedId === template.id ? null : template.id);
@@ -270,7 +263,7 @@ export default function ChecklistsScreen() {
     );
   };
 
-  if (checklistsQuery.isLoading && page === 1) {
+  if (checklistsQuery.isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -313,12 +306,12 @@ export default function ChecklistsScreen() {
         )}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={checklistsQuery.isRefetching && page === 1} onRefresh={handleRefresh} />
+          <RefreshControl refreshing={checklistsQuery.isRefreshing} onRefresh={handleRefresh} />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
-          checklistsQuery.isFetching && page > 1 ? (
+          checklistsQuery.isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#1976D2" />
             </View>

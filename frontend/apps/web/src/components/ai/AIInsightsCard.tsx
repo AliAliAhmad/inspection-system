@@ -70,7 +70,8 @@ export function AIInsightsCard({
   const sortedInsights = [...insights].sort((a, b) => {
     const aSeverity = a.severity || 'low';
     const bSeverity = b.severity || 'low';
-    return (SEVERITY_ORDER[aSeverity] || 3) - (SEVERITY_ORDER[bSeverity] || 3);
+    // `?? 3`, not `|| 3`: critical is 0, and `0 || 3` sorted it with the lows.
+    return (SEVERITY_ORDER[aSeverity] ?? 3) - (SEVERITY_ORDER[bSeverity] ?? 3);
   });
 
   // Count critical/high priority insights

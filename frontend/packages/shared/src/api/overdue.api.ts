@@ -1,8 +1,10 @@
 import { getApiClient } from './client';
 import type {
   OverdueSummary,
-  OverdueItem,
-  AgingBucketData,
+  AgingBucketsResponse,
+  OverdueInspectionRow,
+  OverdueDefectRow,
+  OverdueReviewRow,
   OverduePattern,
   OverdueRiskPrediction,
 } from '../types/overdue.types';
@@ -14,19 +16,19 @@ export const overdueApi = {
   },
 
   getInspections() {
-    return getApiClient().get<ApiResponse<OverdueItem[]>>('/api/overdue/inspections');
+    return getApiClient().get<ApiResponse<OverdueInspectionRow[]>>('/api/overdue/inspections');
   },
 
   getDefects() {
-    return getApiClient().get<ApiResponse<OverdueItem[]>>('/api/overdue/defects');
+    return getApiClient().get<ApiResponse<OverdueDefectRow[]>>('/api/overdue/defects');
   },
 
   getReviews() {
-    return getApiClient().get<ApiResponse<OverdueItem[]>>('/api/overdue/reviews');
+    return getApiClient().get<ApiResponse<OverdueReviewRow[]>>('/api/overdue/reviews');
   },
 
   getAgingBuckets(type?: string) {
-    return getApiClient().get<ApiResponse<AgingBucketData[]>>('/api/overdue/aging', {
+    return getApiClient().get<ApiResponse<AgingBucketsResponse>>('/api/overdue/aging', {
       params: { type },
     });
   },

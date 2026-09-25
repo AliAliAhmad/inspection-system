@@ -273,7 +273,8 @@ export default function MonitorFollowupsScreen() {
         return monitorFollowupsApi.getOverdue().then(r => (r.data as any)?.data as MonitorFollowup[]);
       }
       // For scheduled and completed, use list with status filter
-      const status = Array.isArray(statusFilter) ? statusFilter[0] : statusFilter;
+      // The API takes a comma list — send every status the tab covers.
+      const status = (Array.isArray(statusFilter) ? statusFilter.join(',') : statusFilter) as FollowupStatus;
       return monitorFollowupsApi.list({ status }).then(r => (r.data as any)?.data as MonitorFollowup[]);
     },
     staleTime: 30000,

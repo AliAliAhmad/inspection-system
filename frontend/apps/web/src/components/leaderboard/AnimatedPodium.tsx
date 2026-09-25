@@ -108,7 +108,7 @@ export function AnimatedPodium({ entries, showConfetti = false, onUserClick }: A
             marginTop: 4,
           }}
         >
-          {entry.total_points.toLocaleString()} pts
+          {(entry.points ?? entry.total_points).toLocaleString()} pts
         </Text>
 
         {/* Podium stand */}

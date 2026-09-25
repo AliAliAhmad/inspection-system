@@ -9,20 +9,21 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { engineerJobsApi } from '@inspection/shared';
 import type { EngineerJob } from '@inspection/shared';
 import { scale, vscale, mscale, fontScale } from '../../utils/scale';
+import { usePagedList } from '../../hooks/usePagedList';
 
 const STATUS_COLORS: Record<string, string> = {
   assigned: '#1976D2',
   in_progress: '#2196F3',
   completed: '#4CAF50',
   paused: '#FFC107',
-  verified: '#388E3C',
+  incomplete: '#E65100',
+  qc_approved: '#388E3C',
 };
 
 interface FilterOption {
@@ -87,35 +88,31 @@ export default function AllEngineerJobsScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
 
   const filters: FilterOption[] = [
     { label: t('jobs.all', 'All'), value: null },
     { label: t('jobs.assigned', 'Assigned'), value: 'assigned' },
     { label: t('jobs.in_progress', 'In Progress'), value: 'in_progress' },
+    { label: t('status.paused', 'Paused'), value: 'paused' },
     { label: t('jobs.completed', 'Completed'), value: 'completed' },
-    { label: t('jobs.verified', 'Verified'), value: 'verified' },
+    { label: t('status.incomplete', 'Incomplete'), value: 'incomplete' },
+    // EngineerJob.status allows assigned/in_progress/paused/completed/
+    // incomplete/qc_approved. 'verified' was never a status.
+    { label: t('status.qc_approved', 'QC Approved'), value: 'qc_approved' },
   ];
 
-  const jobsQuery = useQuery({
-    queryKey: ['all-engineer-jobs', activeFilter, page],
-    queryFn: () =>
-      engineerJobsApi.list({ page, per_page: 20, ...(activeFilter ? { status: activeFilter } : {}) }),
+  const jobsQuery = usePagedList<EngineerJob>({
+    queryKey: ['all-engineer-jobs', activeFilter],
+    fetchPage: (page) =>
+      engineerJobsApi.list({ page, per_page: 20, ...(activeFilter ? { status: activeFilter } : {}) } as any),
   });
+  const jobs = jobsQuery.items;
 
-  const responseData = (jobsQuery.data?.data as any) ?? jobsQuery.data;
-  const jobs: EngineerJob[] = responseData?.data ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
-
-  const handleFilterChange = useCallback((value: string | null) => { setActiveFilter(value); setPage(1); }, []);
-  const handleRefresh = useCallback(() => { setPage(1); jobsQuery.refetch(); }, [jobsQuery]);
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !jobsQuery.isFetching) setPage((prev) => prev + 1);
-  }, [hasNextPage, jobsQuery.isFetching]);
+  const handleFilterChange = useCallback((value: string | null) => { setActiveFilter(value); }, []);
+  const handleRefresh = useCallback(() => { jobsQuery.refetch(); }, [jobsQuery]);
   const handleJobPress = (job: EngineerJob) => navigation.navigate('EngineerJobDetail', { jobId: job.id });
 
-  if (jobsQuery.isLoading && page === 1) {
+  if (jobsQuery.isLoading) {
     return <View style={styles.centered}><ActivityIndicator size="large" color="#1976D2" /></View>;
   }
 
@@ -143,10 +140,10 @@ export default function AllEngineerJobsScreen() {
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => <JobCard job={item} onPress={handleJobPress} />}
         contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={jobsQuery.isRefetching && page === 1} onRefresh={handleRefresh} />}
-        onEndReached={handleLoadMore}
+        refreshControl={<RefreshControl refreshing={jobsQuery.isRefreshing} onRefresh={handleRefresh} />}
+        onEndReached={jobsQuery.loadMore}
         onEndReachedThreshold={0.3}
-        ListFooterComponent={jobsQuery.isFetching && page > 1 ? <View style={styles.footerLoader}><ActivityIndicator size="small" color="#1976D2" /></View> : null}
+        ListFooterComponent={jobsQuery.isFetchingNextPage ? <View style={styles.footerLoader}><ActivityIndicator size="small" color="#1976D2" /></View> : null}
         ListEmptyComponent={<View style={styles.emptyContainer}><Text style={styles.emptyText}>{t('jobs.empty', 'No jobs found.')}</Text></View>}
       />
     </View>

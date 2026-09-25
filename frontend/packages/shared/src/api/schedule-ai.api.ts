@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import type { ApiResponse } from '../types/api-response.types';
 import type {
   RiskScoresResponse,
+  EquipmentRiskScore,
   CoverageGapsResponse,
   InspectorScore,
   TeamPerformance,
@@ -20,8 +21,29 @@ import type {
 export const scheduleAIApi = {
   getRiskScores: async (equipmentIds?: number[]): Promise<RiskScoresResponse> => {
     const params = equipmentIds ? { equipment_ids: equipmentIds } : {};
-    const { data } = await apiClient.get<ApiResponse<RiskScoresResponse>>('/api/schedule-ai/risk-scores', { params });
-    return data.data as RiskScoresResponse;
+    const { data } = await apiClient.get<ApiResponse<RiskScoresResponse | EquipmentRiskScore[]>>(
+      '/api/schedule-ai/risk-scores',
+      { params },
+    );
+    // The endpoint answers a PLAIN LIST (ScheduleAIService.calculate_equipment_risk_scores),
+    // but every caller reads `.equipment_risk_scores` / `.summary` — so every
+    // risk list and stat card was empty. Build the envelope here, once.
+    const raw = data.data as RiskScoresResponse | EquipmentRiskScore[] | undefined;
+    if (!Array.isArray(raw)) {
+      return raw ?? { equipment_risk_scores: [], summary: { total_equipment: 0, critical_count: 0, high_count: 0, average_risk_score: 0 } };
+    }
+    const total = raw.length;
+    return {
+      equipment_risk_scores: raw,
+      summary: {
+        total_equipment: total,
+        critical_count: raw.filter((r) => r.risk_level === 'critical').length,
+        high_count: raw.filter((r) => r.risk_level === 'high').length,
+        average_risk_score: total
+          ? Math.round((raw.reduce((sum, r) => sum + (Number(r.risk_score) || 0), 0) / total) * 10) / 10
+          : 0,
+      },
+    };
   },
 
   getCoverageGaps: async (severityFilter?: string): Promise<CoverageGapsResponse> => {

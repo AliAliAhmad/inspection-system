@@ -11,6 +11,9 @@ from app.extensions import db, safe_commit
 
 bp = Blueprint('performance', __name__)
 
+# Mirrors check_valid_goal_status on PerformanceGoal.
+GOAL_STATUSES = ('active', 'completed', 'failed', 'cancelled')
+
 
 @bp.route('/trajectory/<int:user_id>', methods=['GET'])
 @jwt_required()
@@ -122,7 +125,18 @@ def list_goals():
     if current_user.role not in ['admin', 'engineer'] and current_user.id != user_id:
         return jsonify({'status': 'error', 'message': 'Access denied'}), 403
 
-    goals = PerformanceGoal.query.filter_by(user_id=user_id).all()
+    query = PerformanceGoal.query.filter_by(user_id=user_id)
+
+    status = request.args.get('status')
+    if status:
+        if status not in GOAL_STATUSES:
+            return jsonify({
+                'status': 'error',
+                'message': f"Invalid status '{status}'. Allowed: {', '.join(GOAL_STATUSES)}"
+            }), 400
+        query = query.filter_by(status=status)
+
+    goals = query.all()
 
     return jsonify({
         'status': 'success',

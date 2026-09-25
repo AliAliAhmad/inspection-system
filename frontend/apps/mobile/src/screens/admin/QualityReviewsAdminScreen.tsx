@@ -12,9 +12,10 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { qualityReviewsApi, type QualityReview, type ReviewStatus, type ValidatePayload } from '@inspection/shared';
+import { usePagedList } from '../../hooks/usePagedList';
 
 const STATUS_COLORS: Record<ReviewStatus, string> = {
   pending: '#FF9800',
@@ -121,7 +122,6 @@ export default function QualityReviewsAdminScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
   const [validateModalVisible, setValidateModalVisible] = useState(false);
   const [selectedReview, setSelectedReview] = useState<QualityReview | null>(null);
   const [validationResult, setValidationResult] = useState<'valid' | 'wrong' | null>(null);
@@ -134,9 +134,9 @@ export default function QualityReviewsAdminScreen() {
     { label: t('qualityReviews.rejected', 'Rejected'), value: 'rejected' },
   ];
 
-  const reviewsQuery = useQuery({
-    queryKey: ['quality-reviews-admin', activeFilter, page],
-    queryFn: () =>
+  const reviewsQuery = usePagedList({
+    queryKey: ['quality-reviews-admin', activeFilter],
+    fetchPage: (page) =>
       qualityReviewsApi.list({
         page,
         per_page: 20,
@@ -166,26 +166,17 @@ export default function QualityReviewsAdminScreen() {
     },
   });
 
-  const responseData = reviewsQuery.data?.data as any;
-  const reviews: QualityReview[] = responseData?.data ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
+  const reviews: QualityReview[] = reviewsQuery.items;
 
   const handleFilterChange = useCallback((value: string | null) => {
     setActiveFilter(value);
-    setPage(1);
   }, []);
 
   const handleRefresh = useCallback(() => {
-    setPage(1);
     reviewsQuery.refetch();
   }, [reviewsQuery]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !reviewsQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
-  }, [hasNextPage, reviewsQuery.isFetching]);
+  const handleLoadMore = reviewsQuery.loadMore;
 
   const handleValidatePress = (review: QualityReview) => {
     setSelectedReview(review);
@@ -205,7 +196,7 @@ export default function QualityReviewsAdminScreen() {
     });
   };
 
-  if (reviewsQuery.isLoading && page === 1) {
+  if (reviewsQuery.isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -260,14 +251,14 @@ export default function QualityReviewsAdminScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={reviewsQuery.isRefetching && page === 1}
+            refreshing={reviewsQuery.isRefreshing}
             onRefresh={handleRefresh}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
-          reviewsQuery.isFetching && page > 1 ? (
+          reviewsQuery.isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#1976D2" />
             </View>

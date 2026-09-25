@@ -124,9 +124,10 @@ export default function BonusApprovalsScreen() {
     queryFn: () =>
       bonusStarsApi.list().then((r) => {
         const data = (r.data as any).data ?? r.data;
-        // Filter pending requests
+        // Only QE requests still awaiting a decision. BonusStar.to_dict carries
+        // is_qe_request + request_status; direct awards have no request to approve.
         const items = Array.isArray(data) ? data : data?.data ?? [];
-        const pending = items.filter((item: any) => item.status === 'pending' || !item.approved_at);
+        const pending = items.filter((item: any) => item.is_qe_request && item.request_status === 'pending');
         return { data: pending };
       }),
   });

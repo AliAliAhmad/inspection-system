@@ -4,6 +4,7 @@
  */
 import { inspectionAssignmentsApi, inspectionsApi } from '@inspection/shared';
 import { offlineCache } from '../storage/offline-cache';
+import { fetchAllPages } from './pagination';
 
 export async function prefetchAllAssignments(): Promise<number> {
   let cachedCount = 0;
@@ -13,8 +14,9 @@ export async function prefetchAllAssignments(): Promise<number> {
     await offlineCache.evictExpired();
 
     // Fetch all assignments
-    const res = await inspectionAssignmentsApi.getMyAssignments();
-    const allAssignments = (res.data as any)?.data ?? res.data;
+    const allAssignments = await fetchAllPages<any>((page) =>
+      inspectionAssignmentsApi.getMyAssignments({ page, per_page: 200 }),
+    );
     if (!Array.isArray(allAssignments) || allAssignments.length === 0) return 0;
 
     // Cache the assignments list itself

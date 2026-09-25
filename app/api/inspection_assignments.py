@@ -300,46 +300,53 @@ def get_lists():
     if shift:
         query = query.filter(InspectionList.shift == shift)
 
-    lists = query.order_by(InspectionList.target_date.desc()).limit(50).all()
-
     # Assignment-level filters
-    status_filter = request.args.get('status')
+    status_values = [v.strip() for v in (request.args.get('status') or '').split(',') if v.strip()]
     equipment_type_filter = request.args.get('equipment_type')
     berth_filter = request.args.get('berth')
     inspector_id = request.args.get('inspector_id', type=int)
     unassigned_only = request.args.get('unassigned_only', '').lower() == 'true'
 
+    def assignment_conditions():
+        """The same assignment filters, usable both to pick the lists and to
+        pick the rows inside each list."""
+        conds = []
+        if status_values:
+            conds.append(InspectionAssignment.status.in_(status_values))
+        if unassigned_only:
+            conds.append(InspectionAssignment.status == 'unassigned')
+        if berth_filter:
+            conds.append(InspectionAssignment.berth == berth_filter)
+        if inspector_id:
+            conds.append(or_(
+                InspectionAssignment.mechanical_inspector_id == inspector_id,
+                InspectionAssignment.electrical_inspector_id == inspector_id,
+            ))
+        if equipment_type_filter:
+            conds.append(InspectionAssignment.equipment_id.in_(
+                db.session.query(Equipment.id).filter(
+                    Equipment.equipment_type == equipment_type_filter)))
+        return conds
+
+    conds = assignment_conditions()
+    if conds:
+        # Narrow to lists that HAVE a match before taking the newest 50. The
+        # limit used to come first, so a filter only ever searched the 50 newest
+        # lists and an older match was silently missing (2026-09-24 audit).
+        query = query.filter(InspectionList.id.in_(
+            db.session.query(InspectionAssignment.inspection_list_id).filter(*conds)))
+
+    lists = query.order_by(InspectionList.target_date.desc()).limit(50).all()
+
     result = []
     for il in lists:
         assignments_query = il.assignments
-
-        # Apply assignment filters
-        if status_filter:
-            assignments_query = assignments_query.filter(InspectionAssignment.status == status_filter)
-
-        if unassigned_only:
-            assignments_query = assignments_query.filter(InspectionAssignment.status == 'unassigned')
-
-        if berth_filter:
-            assignments_query = assignments_query.filter(InspectionAssignment.berth == berth_filter)
-
-        if inspector_id:
-            assignments_query = assignments_query.filter(
-                or_(
-                    InspectionAssignment.mechanical_inspector_id == inspector_id,
-                    InspectionAssignment.electrical_inspector_id == inspector_id
-                )
-            )
-
-        if equipment_type_filter:
-            assignments_query = assignments_query.join(Equipment).filter(
-                Equipment.equipment_type == equipment_type_filter
-            )
-
+        if conds:
+            assignments_query = assignments_query.filter(*conds)
         assignments = assignments_query.all()
 
         # Only include lists that have matching assignments
-        if assignments or not any([status_filter, equipment_type_filter, berth_filter, inspector_id, unassigned_only]):
+        if assignments or not conds:
             d = il.to_dict()
             d['assignments'] = [a.to_dict(language=language) for a in assignments]
             result.append(d)

@@ -144,7 +144,12 @@ export const leavesApi = {
   },
 
   getPending(params?: LeaveListParams) {
-    return getApiClient().get<PaginatedResponse<Leave>>('/api/leaves/pending', { params });
+    // There is no /api/leaves/pending route — it 404'd, so the Approvals page's
+    // Leave tab showed an error and never a single leave request (found in the
+    // 2026-09-24 filter audit). The list endpoint already filters by status.
+    return getApiClient().get<PaginatedResponse<Leave>>('/api/leaves', {
+      params: { ...params, status: 'pending' },
+    });
   },
 
   // Bulk Operations

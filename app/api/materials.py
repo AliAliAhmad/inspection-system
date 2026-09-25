@@ -382,6 +382,42 @@ def reserve_stock(material_id):
     return jsonify({'status': 'success', 'data': result})
 
 
+def _reservations_payload(query):
+    """Reservations for the list, newest first, with the names the screen
+    shows (StockReservation.to_dict carries only ids)."""
+    from app.models.stock_reservation import StockReservation
+    status = (request.args.get('status') or '').strip()
+    if status:
+        query = query.filter(StockReservation.status == status)
+    rows = query.order_by(StockReservation.reserved_at.desc()).limit(500).all()
+    out = []
+    for r in rows:
+        d = r.to_dict()
+        d['material_name'] = r.material.name if r.material else None
+        d['reserved_by'] = r.reserved_by.full_name if r.reserved_by else None
+        out.append(d)
+    return jsonify({'status': 'success', 'reservations': out, 'count': len(out)})
+
+
+@bp.route('/reservations', methods=['GET'])
+@jwt_required()
+def list_reservations():
+    """Every reservation. The Reservations tab called this and it did not
+    exist — a 404, so the tab was always empty (2026-09-24 audit).
+    ?status=active|fulfilled|cancelled to narrow."""
+    from app.models.stock_reservation import StockReservation
+    return _reservations_payload(StockReservation.query)
+
+
+@bp.route('/<int:material_id>/reservations', methods=['GET'])
+@jwt_required()
+def list_material_reservations(material_id):
+    """Reservations of one material."""
+    from app.models.stock_reservation import StockReservation
+    return _reservations_payload(
+        StockReservation.query.filter(StockReservation.material_id == material_id))
+
+
 @bp.route('/reservations/<int:reservation_id>/fulfill', methods=['POST'])
 @jwt_required()
 def fulfill_reservation(reservation_id):

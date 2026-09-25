@@ -694,7 +694,9 @@
     "snooze30": "30 minutes",
     "snooze3h": "3 hours",
     "snoozeFor": "Snooze for...",
-    "swipeHint": "Swipe left to snooze or delete, right to mark as read"
+    "swipeHint": "Swipe left to snooze or delete, right to mark as read",
+    "assessment_required": "Assessment Required",
+    "unreadInGroup": "{{count}} unread"
   },
   "offline": {
     "clear_failed": "Clear Failed Items",
@@ -719,7 +721,8 @@
     "sync_queue": "Sync Queue"
   },
   "overdue": {
-    "none": "No Overdue Items"
+    "none": "No Overdue Items",
+    "inspection": "Inspection"
   },
   "performance": {
     "analyzing": "Analyzing performance data...",
@@ -926,7 +929,10 @@
     "update_failed": "Failed to update user.",
     "updated": "User updated successfully.",
     "user": "User",
-    "user_id": "User ID"
+    "user_id": "User ID",
+    "new_password": "New Password",
+    "new_password_hint": "Leave empty to keep the current password",
+    "password_min": "At least 6 characters"
   },
   "work_plan": {
     "complete_job": "Complete Job",
@@ -1032,5 +1038,8 @@
     "failed": "Could not add it. Check the connection and try again.",
     "no_permission": "Permission is needed to add a photo",
     "no_mic": "Microphone permission is needed"
+  },
+  "status": {
+    "qc_approved": "QC Approved"
   }
 }

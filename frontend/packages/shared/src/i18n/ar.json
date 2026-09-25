@@ -1852,5 +1852,10 @@
     "status_cancelled": "مسحوب",
     "status_started": "أُلغي — بدأ العمل",
     "failed": "تعذّر إرسال الطلب"
+  },
+  "users": {
+    "newPassword": "كلمة مرور جديدة",
+    "newPasswordHint": "اتركه فارغاً للإبقاء على كلمة المرور الحالية.",
+    "passwordMin": "ستة أحرف على الأقل"
   }
 }

@@ -85,7 +85,7 @@ export default function CyclesPage() {
     queryFn: () => cyclesApi.list(),
   });
 
-  const cycles = cyclesData?.data?.data?.cycles || [];
+  const cycles = cyclesData?.data?.cycles || [];
 
   // Fetch analytics for selected cycle
   const { data: analyticsData, isLoading: analyticsLoading } = useQuery({

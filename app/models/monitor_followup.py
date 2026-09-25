@@ -86,7 +86,10 @@ class MonitorFollowup(db.Model):
             'assessment_id': self.assessment_id,
             'equipment_id': self.equipment_id,
             'equipment_name': self.equipment.name if self.equipment else None,
-            'equipment_number': self.equipment.equipment_number if self.equipment else None,
+            # Equipment has no equipment_number column; reading it raised
+            # AttributeError, so any list holding a follow-up answered 500.
+            # The serial number is the machine's number.
+            'equipment_number': self.equipment.serial_number if self.equipment else None,
             'parent_followup_id': self.parent_followup_id,
             # Scheduling
             'followup_date': self.followup_date.isoformat() if self.followup_date else None,

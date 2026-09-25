@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Table,
   Tag,
@@ -27,6 +27,12 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import type { ColumnsType } from 'antd/es/table';
+import { overdueApi } from '@inspection/shared';
+import type {
+  OverdueInspectionRow,
+  OverdueDefectRow,
+  OverdueReviewRow,
+} from '@inspection/shared';
 
 const { Text } = Typography;
 
@@ -36,7 +42,7 @@ export interface OverdueItem {
   id: number;
   type: OverdueItemType;
   title: string;
-  due_date: string;
+  due_date: string | null;
   days_overdue: number;
   priority: 'low' | 'medium' | 'high' | 'critical';
   assigned_to: {
@@ -89,6 +95,95 @@ const PRIORITY_CONFIG = {
   critical: { color: 'red', label: 'Critical' },
 };
 
+type Priority = OverdueItem['priority'];
+
+const toPriority = (value: string | null | undefined): Priority => {
+  switch (value) {
+    case 'critical':
+    case 'urgent':
+      return 'critical';
+    case 'high':
+      return 'high';
+    case 'low':
+    case 'minimal':
+      return 'low';
+    default:
+      return 'medium';
+  }
+};
+
+const person = (id: number | null, name: string | null) =>
+  id != null && name ? { id, name } : null;
+
+const fromInspection = (r: OverdueInspectionRow): OverdueItem => ({
+  id: r.id,
+  type: 'inspection',
+  title: r.equipment_name || `#${r.id}`,
+  due_date: r.deadline,
+  days_overdue: r.days_overdue,
+  priority: toPriority(r.risk_level),
+  assigned_to:
+    person(r.mechanical_inspector_id, r.mechanical_inspector) ||
+    person(r.electrical_inspector_id, r.electrical_inspector),
+  equipment:
+    r.equipment_id != null
+      ? { id: r.equipment_id, name: r.equipment_name || '', code: '' }
+      : null,
+  status: r.status,
+});
+
+const fromDefect = (r: OverdueDefectRow): OverdueItem => ({
+  id: r.id,
+  type: 'defect',
+  title: r.description,
+  due_date: r.due_date,
+  days_overdue: r.days_overdue,
+  priority: toPriority(r.severity),
+  assigned_to: person(r.assigned_to_id, r.assigned_to),
+  equipment: null,
+  status: r.status,
+});
+
+const fromReview = (r: OverdueReviewRow): OverdueItem => ({
+  id: r.id,
+  type: 'review',
+  title: `${r.job_type} #${r.job_id}`,
+  due_date: r.sla_deadline,
+  days_overdue: r.days_overdue,
+  priority: 'medium',
+  assigned_to: person(r.qe_id, r.quality_engineer),
+  equipment: null,
+  status: r.status,
+});
+
+/**
+ * Real overdue rows for a tab. Each list is fetched independently and a
+ * refused one (e.g. /reviews is not open to engineers) contributes nothing
+ * instead of failing the whole "All" tab. Throws only if every list failed.
+ */
+async function fetchOverdueItems(type?: OverdueItemType): Promise<OverdueItem[]> {
+  const sources: Array<Promise<OverdueItem[]>> = [];
+  if (!type || type === 'inspection') {
+    sources.push(overdueApi.getInspections().then((r) => (r.data?.data ?? []).map(fromInspection)));
+  }
+  if (!type || type === 'defect') {
+    sources.push(overdueApi.getDefects().then((r) => (r.data?.data ?? []).map(fromDefect)));
+  }
+  if (!type || type === 'review') {
+    sources.push(overdueApi.getReviews().then((r) => (r.data?.data ?? []).map(fromReview)));
+  }
+  const results = await Promise.allSettled(sources);
+  const ok = results.filter(
+    (r): r is PromiseFulfilledResult<OverdueItem[]> => r.status === 'fulfilled'
+  );
+  if (ok.length === 0) {
+    throw (results[0] as PromiseRejectedResult).reason;
+  }
+  return ok
+    .flatMap((r) => r.value)
+    .sort((a, b) => b.days_overdue - a.days_overdue);
+}
+
 export function OverdueTable({
   typeFilter,
   bucketFilter,
@@ -105,72 +200,25 @@ export function OverdueTable({
     selectedItems.map((item) => `${item.type}-${item.id}`)
   );
 
-  // Use provided items or fetch from API
+  // Fetch only the list(s) the active tab needs; the bucket is applied locally
+  // so clicking a bucket does not refetch.
   const { data: overdueData, isLoading: dataLoading } = useQuery({
-    queryKey: ['overdue', 'items', typeFilter, bucketFilter],
-    queryFn: async () => {
-      // This would call the overdue API endpoint
-      // For now, return mock data
-      const mockItems: OverdueItem[] = [
-        {
-          id: 1,
-          type: 'inspection',
-          title: 'Monthly Safety Inspection - Crane A',
-          due_date: '2024-01-15',
-          days_overdue: 10,
-          priority: 'high',
-          assigned_to: { id: 1, name: 'John Doe' },
-          equipment: { id: 101, name: 'Crane A', code: 'CR-001' },
-          status: 'pending',
-        },
-        {
-          id: 2,
-          type: 'defect',
-          title: 'Hydraulic leak on Loader B',
-          due_date: '2024-01-10',
-          days_overdue: 15,
-          priority: 'critical',
-          assigned_to: { id: 2, name: 'Jane Smith' },
-          equipment: { id: 102, name: 'Loader B', code: 'LD-002' },
-          status: 'in_progress',
-        },
-        {
-          id: 3,
-          type: 'review',
-          title: 'Quality Review - Inspection #456',
-          due_date: '2024-01-20',
-          days_overdue: 5,
-          priority: 'medium',
-          assigned_to: { id: 3, name: 'Bob Wilson' },
-          equipment: { id: 103, name: 'Excavator C', code: 'EX-003' },
-          status: 'pending_review',
-        },
-      ];
-
-      // Apply filters
-      let filtered = mockItems;
-      if (typeFilter) {
-        filtered = filtered.filter((item) => item.type === typeFilter);
-      }
-      if (bucketFilter) {
-        filtered = filtered.filter((item) => {
-          if (bucketFilter.max_days === null) {
-            return item.days_overdue >= bucketFilter.min_days;
-          }
-          return (
-            item.days_overdue >= bucketFilter.min_days &&
-            item.days_overdue <= bucketFilter.max_days
-          );
-        });
-      }
-
-      return filtered;
-    },
+    queryKey: ['overdue', 'items', typeFilter ?? 'all'],
+    queryFn: () => fetchOverdueItems(typeFilter),
     enabled: !items,
   });
 
+  const data = useMemo(() => {
+    const rows = items || overdueData || [];
+    if (!bucketFilter) return rows;
+    return rows.filter(
+      (item) =>
+        item.days_overdue >= bucketFilter.min_days &&
+        (bucketFilter.max_days === null || item.days_overdue <= bucketFilter.max_days)
+    );
+  }, [items, overdueData, bucketFilter]);
+
   const loading = isLoading || dataLoading;
-  const data = items || overdueData || [];
 
   const getDaysOverdueColor = (days: number) => {
     if (days >= 30) return '#ff4d4f';
@@ -226,13 +274,14 @@ export function OverdueTable({
       dataIndex: 'due_date',
       key: 'due_date',
       width: 120,
-      render: (date: string) => (
+      render: (date: string | null) => (
         <Text type="secondary">
-          {new Date(date).toLocaleDateString()}
+          {date ? new Date(date).toLocaleDateString() : '-'}
         </Text>
       ),
       sorter: (a, b) =>
-        new Date(a.due_date).getTime() - new Date(b.due_date).getTime(),
+        (a.due_date ? new Date(a.due_date).getTime() : 0) -
+        (b.due_date ? new Date(b.due_date).getTime() : 0),
     },
     {
       title: t('overdue.days_overdue', 'Days Overdue'),
@@ -261,7 +310,7 @@ export function OverdueTable({
       key: 'priority',
       width: 100,
       render: (priority: keyof typeof PRIORITY_CONFIG) => {
-        const config = PRIORITY_CONFIG[priority];
+        const config = PRIORITY_CONFIG[priority] ?? PRIORITY_CONFIG.medium;
         return (
           <Tag color={config.color}>
             {priority === 'critical' && (

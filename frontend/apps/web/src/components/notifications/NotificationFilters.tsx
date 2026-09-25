@@ -22,7 +22,8 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs, { Dayjs } from 'dayjs';
-import { NotificationPriority, NotificationFilter } from '@inspection/shared';
+import { NotificationPriority, NotificationFilter, getApiClient } from '@inspection/shared';
+import { useQuery } from '@tanstack/react-query';
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -35,26 +36,11 @@ export interface NotificationFiltersProps {
   defaultCollapsed?: boolean;
 }
 
-const NOTIFICATION_TYPES = [
-  { value: 'equipment_alert', label: 'Equipment Alert' },
-  { value: 'inspection_submitted', label: 'Inspection Submitted' },
-  { value: 'inspection_assigned', label: 'Inspection Assigned' },
-  { value: 'leave_requested', label: 'Leave Requested' },
-  { value: 'leave_approved', label: 'Leave Approved' },
-  { value: 'leave_rejected', label: 'Leave Rejected' },
-  { value: 'defect_created', label: 'Defect Created' },
-  { value: 'defect_assigned', label: 'Defect Assigned' },
-  { value: 'specialist_job_assigned', label: 'Specialist Job Assigned' },
-  { value: 'specialist_job_completed', label: 'Specialist Job Completed' },
-  { value: 'engineer_job_created', label: 'Engineer Job Created' },
-  { value: 'engineer_job_completed', label: 'Engineer Job Completed' },
-  { value: 'quality_review_pending', label: 'Quality Review Pending' },
-  { value: 'assessment_submitted', label: 'Assessment Submitted' },
-  { value: 'bonus_star_requested', label: 'Bonus Star Requested' },
-  { value: 'work_plan_published', label: 'Work Plan Published' },
-  { value: 'mention', label: 'Mention' },
-  { value: 'system', label: 'System' },
-];
+/** A type's name for the picker: 'defect_created' -> 'Defect created'. */
+function typeLabel(type: string): string {
+  const words = type.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 const PRIORITY_OPTIONS: { value: NotificationPriority; label: string; color: string }[] = [
   { value: 'critical', label: 'Critical', color: '#eb2f96' },
@@ -78,6 +64,20 @@ export function NotificationFilters({
   defaultCollapsed = false,
 }: NotificationFiltersProps) {
   const { t } = useTranslation();
+  // Only the types this person actually HAS. The list used to be hard-coded,
+  // and 10 of its 18 types are never created — picking one always showed an
+  // empty page (2026-09-24 audit).
+  const { data: typeRows } = useQuery({
+    queryKey: ['notifications', 'types'],
+    queryFn: () => getApiClient()
+      .get<{ data: { type: string; count: number }[] }>('/api/notifications/types')
+      .then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const typeOptions = (typeRows || []).map((row) => ({
+    value: row.type,
+    label: `${typeLabel(row.type)} (${row.count})`,
+  }));
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
   const quickFilters: QuickFilter[] = [
@@ -246,7 +246,7 @@ export function NotificationFilters({
             placeholder={t('notifications.selectTypes', 'Select types...')}
             value={filters.types || []}
             onChange={handleTypeChange}
-            options={NOTIFICATION_TYPES}
+            options={typeOptions}
             style={{ width: '100%' }}
             maxTagCount={2}
             allowClear

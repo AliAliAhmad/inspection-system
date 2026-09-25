@@ -22,7 +22,7 @@ export interface RunningHoursListParams extends PaginationParams {
   location?: string;
   equipment_type?: string;
   assigned_engineer_id?: number;
-  sort_by?: 'urgency' | 'hours' | 'name' | 'status';
+  sort_by?: 'urgency' | 'hours' | 'current_hours' | 'name' | 'status';
   sort_order?: 'asc' | 'desc';
   search?: string;
 }
@@ -141,9 +141,9 @@ export const runningHoursApi = {
     >('/api/equipment/running-hours/bulk-update', { updates });
   },
 
-  /** Export running hours report */
-  exportReport(params?: { format?: 'csv' | 'xlsx'; status?: string }) {
-    return getApiClient().get('/api/equipment/running-hours/export', {
+  /** Export the dashboard list as CSV (UTF-8 with BOM), same filters and sort as the list */
+  exportReport(params?: Omit<RunningHoursListParams, 'page' | 'per_page'>) {
+    return getApiClient().get<Blob>('/api/equipment/running-hours/export', {
       params,
       responseType: 'blob',
     });

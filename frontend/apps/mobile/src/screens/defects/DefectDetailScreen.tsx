@@ -63,7 +63,7 @@ interface SimilarDefect {
 }
 
 export default function DefectDetailScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ScreenRoute>();
   const queryClient = useQueryClient();
@@ -479,9 +479,13 @@ export default function DefectDetailScreen() {
               autoCapitalize="none"
             />
             <FlatList
-              data={inspectors.filter((ins: any) =>
-                (ins.name || ins.full_name || '').toLowerCase().includes(inspectorSearch.toLowerCase())
-              )}
+              data={inspectors.filter((ins: any) => {
+                // Arabic name and ids too — an Arabic search matched nobody.
+                const q = inspectorSearch.normalize('NFC').toLowerCase().trim();
+                if (!q) return true;
+                return [ins.name, ins.full_name, ins.full_name_ar, ins.role_id, ins.sap_id, ins.username]
+                  .some((v) => v != null && String(v).normalize('NFC').toLowerCase().includes(q));
+              })}
               keyExtractor={(item: any) => String(item.id)}
               style={{ maxHeight: 200 }}
               renderItem={({ item }: { item: any }) => (
@@ -490,7 +494,9 @@ export default function DefectDetailScreen() {
                   onPress={() => assignInspectorMutation.mutate(item.id)}
                   disabled={assignInspectorMutation.isPending}
                 >
-                  <Text style={styles.inspectorItemText}>{item.name || item.full_name}</Text>
+                  <Text style={styles.inspectorItemText}>
+                    {(i18n.language === 'ar' && item.full_name_ar) || item.name || item.full_name}
+                  </Text>
                   <Text style={styles.inspectorItemRole}>{item.role}</Text>
                 </TouchableOpacity>
               )}

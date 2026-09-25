@@ -9,9 +9,10 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { leavesApi } from '@inspection/shared';
+import { usePagedList } from '../../hooks/usePagedList';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: '#FF9800',
@@ -127,16 +128,13 @@ function LeaveCard({
 export default function LeaveApprovalsScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [page, setPage] = useState(1);
   const [actioningId, setActioningId] = useState<number | null>(null);
 
-  const leavesQuery = useQuery({
-    queryKey: ['leave-approvals', page],
-    queryFn: () =>
-      leavesApi.list({ page, per_page: 20, status: 'pending' }).then((r) => {
-        const data = (r.data as any).data ?? r.data;
-        return data;
-      }),
+  // The old code read `.pagination` off the rows array (always undefined),
+  // so there was never a page 2. The envelope is read in usePagedList.
+  const leavesQuery = usePagedList<LeaveRequest>({
+    queryKey: ['leave-approvals'],
+    fetchPage: (page) => leavesApi.list({ page, per_page: 20, status: 'pending' } as any),
   });
 
   const approveMutation = useMutation({
@@ -163,21 +161,13 @@ export default function LeaveApprovalsScreen() {
     onSettled: () => setActioningId(null),
   });
 
-  const responseData = leavesQuery.data;
-  const requests: LeaveRequest[] = responseData?.data ?? responseData ?? [];
-  const pagination = responseData?.pagination ?? null;
-  const hasNextPage = pagination?.has_next ?? false;
+  const requests = leavesQuery.items;
 
   const handleRefresh = useCallback(() => {
-    setPage(1);
     leavesQuery.refetch();
   }, [leavesQuery]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasNextPage && !leavesQuery.isFetching) {
-      setPage((prev) => prev + 1);
-    }
-  }, [hasNextPage, leavesQuery.isFetching]);
+  const handleLoadMore = leavesQuery.loadMore;
 
   const handleApprove = (id: number) => {
     Alert.alert(
@@ -214,7 +204,7 @@ export default function LeaveApprovalsScreen() {
     );
   };
 
-  if (leavesQuery.isLoading && page === 1) {
+  if (leavesQuery.isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#1976D2" />
@@ -241,14 +231,14 @@ export default function LeaveApprovalsScreen() {
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={leavesQuery.isRefetching && page === 1}
+            refreshing={leavesQuery.isRefreshing}
             onRefresh={handleRefresh}
           />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListFooterComponent={
-          leavesQuery.isFetching && page > 1 ? (
+          leavesQuery.isFetchingNextPage ? (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#1976D2" />
             </View>

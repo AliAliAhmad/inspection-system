@@ -1303,9 +1303,6 @@ class OverdueAIService(AIServiceWrapper):
         Returns:
             AgingBuckets analysis
         """
-        from app.models import InspectionAssignment, Defect, QualityReview
-
-        today = date.today()
         buckets = [
             AgingBucket(name='1_3_days', label='1-3 Days', min_days=1, max_days=3, color='#FFC107'),
             AgingBucket(name='4_7_days', label='4-7 Days', min_days=4, max_days=7, color='#FF9800'),
@@ -1313,66 +1310,26 @@ class OverdueAIService(AIServiceWrapper):
             AgingBucket(name='15_plus_days', label='15+ Days', min_days=15, max_days=None, color='#F44336'),
         ]
 
+        # Bucket the SAME rows the lists return, so a bucket showing N filters
+        # the Overdue table to exactly N. (This used to run its own queries —
+        # including one on a non-existent InspectionAssignment.scheduled_date.)
+        sources = {
+            'inspections': ('inspection', self.get_overdue_inspections),
+            'defects': ('defect', self.get_overdue_defects),
+            'reviews': ('review', self.get_overdue_reviews),
+        }
         all_overdue_days = []
-
-        # Process inspections
-        if item_type in ['inspections', 'all']:
-            overdue_assignments = InspectionAssignment.query.filter(
-                InspectionAssignment.status.in_(['pending', 'in_progress']),
-                InspectionAssignment.scheduled_date < today
-            ).all()
-
-            for a in overdue_assignments:
-                days_overdue = (today - a.scheduled_date).days
+        for key, (short_type, fetch) in sources.items():
+            if item_type not in (key, 'all'):
+                continue
+            for row in fetch():
+                days_overdue = row['days_overdue']
                 all_overdue_days.append(days_overdue)
                 self._add_to_bucket(buckets, days_overdue, {
-                    'id': a.id,
-                    'type': 'inspection',
+                    'id': row['id'],
+                    'type': short_type,
                     'days_overdue': days_overdue,
                 })
-
-        # Process defects
-        if item_type in ['defects', 'all']:
-            # Defects overdue based on due_date or creation + severity SLA
-            overdue_defects = Defect.query.filter(
-                Defect.status.in_(['open', 'in_progress'])
-            ).all()
-
-            for d in overdue_defects:
-                sla_status = self.sla_trackers['defect'].get_status(
-                    created_at=d.created_at,
-                    severity=d.severity or 'medium',
-                    completed_at=None
-                )
-                if sla_status['is_breached']:
-                    days_overdue = int(sla_status['elapsed_hours'] / 24)
-                    all_overdue_days.append(days_overdue)
-                    self._add_to_bucket(buckets, days_overdue, {
-                        'id': d.id,
-                        'type': 'defect',
-                        'days_overdue': days_overdue,
-                    })
-
-        # Process reviews
-        if item_type in ['reviews', 'all']:
-            pending_reviews = QualityReview.query.filter(
-                QualityReview.status == 'pending'
-            ).all()
-
-            for r in pending_reviews:
-                sla_status = self.sla_trackers['review'].get_status(
-                    created_at=r.created_at,
-                    severity='normal',
-                    completed_at=None
-                )
-                if sla_status['is_breached']:
-                    days_overdue = int(sla_status['elapsed_hours'] / 24)
-                    all_overdue_days.append(days_overdue)
-                    self._add_to_bucket(buckets, days_overdue, {
-                        'id': r.id,
-                        'type': 'review',
-                        'days_overdue': days_overdue,
-                    })
 
         # Calculate totals and percentages
         total_overdue = len(all_overdue_days)

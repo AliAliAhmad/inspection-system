@@ -41,8 +41,17 @@ const fieldStaffFetcher = async (params?: { period?: LeaderboardPeriod }): Promi
     leaderboardsApi.getInspectors(params).then((r) => r.data.data || []),
     leaderboardsApi.getSpecialists(params).then((r) => r.data.data || []),
   ]);
-  // Merge & re-rank by total_points descending
-  const merged = [...inspectors, ...specialists].sort((a, b) => b.total_points - a.total_points);
+  // Merge, drop duplicates, re-rank by the CHOSEN PERIOD's points.
+  //
+  // It re-ranked by total_points (all time), so the period picker did nothing
+  // on this tab; and an inspector whose minor role is specialist is on BOTH
+  // lists, so he appeared twice (2026-09-24 audit).
+  const byUser = new Map<number, LeaderboardEntry>();
+  [...inspectors, ...specialists].forEach((e) => {
+    if (!byUser.has(e.user_id)) byUser.set(e.user_id, e);
+  });
+  const merged = Array.from(byUser.values())
+    .sort((a, b) => (b.points ?? b.total_points) - (a.points ?? a.total_points));
   return merged.map((entry, idx) => ({ ...entry, rank: idx + 1 }));
 };
 

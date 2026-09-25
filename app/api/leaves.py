@@ -45,8 +45,11 @@ def list_leaves():
     """List leaves. Users see own, admins see all."""
     user = get_current_user()
     status = request.args.get('status')
+    # mine=true: only this user's own leaves, even for an admin. The "My Leaves"
+    # tab showed an admin EVERYONE's leaves under that title (2026-09-24 audit).
+    mine = request.args.get('mine', '').lower() == 'true'
 
-    if user.role == 'admin':
+    if user.role == 'admin' and not mine:
         query = Leave.query
         if status:
             query = query.filter_by(status=status)

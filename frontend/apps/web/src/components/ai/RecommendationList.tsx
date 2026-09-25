@@ -59,7 +59,8 @@ export function RecommendationList({
 
   // Sort by priority
   const sortedRecs = [...recommendations].sort(
-    (a, b) => (PRIORITY_ORDER[a.priority] || 4) - (PRIORITY_ORDER[b.priority] || 4)
+    // `?? 4`, not `|| 4`: critical is 0, and `0 || 4` sorted critical LAST.
+    (a, b) => (PRIORITY_ORDER[a.priority] ?? 4) - (PRIORITY_ORDER[b.priority] ?? 4)
   );
 
   const displayRecs = maxItems ? sortedRecs.slice(0, maxItems) : sortedRecs;
