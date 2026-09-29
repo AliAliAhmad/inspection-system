@@ -935,3 +935,14 @@ so a filter nobody used, or a list that happened to be empty, hid them for month
 → Every filter and serialiser branch needs one test that EXECUTES it with a row
 present; an empty-table test proves nothing about the attribute access.
 
+
+
+LESSON (2026-09-29): A helper widened the plan lookup from "starts on this date"
+to "contains this date" to fix the phone, and I accepted it on the tests it wrote —
+which only had Ali's own plans in them. Production also holds background plans the
+inspection generator creates on a DIFFERENT week convention (Monday), and "contains"
+matched those. Ali saw last week's 24/26/27 as this week. → Before loosening how a
+record is FOUND, list every code path that CREATES that record (grep the model's
+constructor) and test the lookup with all of them present, not just the one the fix
+is about. Loosening a match is a change to every caller, not only the one that asked.
+

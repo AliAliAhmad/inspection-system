@@ -669,30 +669,25 @@ def list_work_plans():
             selectinload(WorkPlan.days)  # Just load days for job counts
         )
 
-    exact_first = None
     if week_start:
         try:
             week_date = datetime.strptime(week_start, '%Y-%m-%d').date()
         except ValueError:
             raise ValidationError("Invalid date format. Use YYYY-MM-DD")
-        # A plan may start on any weekday: the web planner makes Sunday-start
-        # weeks, the phone asks for the Monday. An exact week_start match
-        # found nothing and the phone showed an empty week. Match the plan
-        # whose range CONTAINS the date, as /my-plan does — an exact match
-        # still wins and comes first.
-        query = query.filter(db.or_(
-            WorkPlan.week_start == week_date,
-            db.and_(WorkPlan.week_start <= week_date, WorkPlan.week_end >= week_date),
-        ))
-        exact_first = db.case((WorkPlan.week_start == week_date, 0), else_=1)
+        # EXACT start date only. On 2026-09-24 this was widened to "any plan
+        # whose range CONTAINS the date" so the phone (which asked for Monday)
+        # would find Ali's Sunday-start plans. It broke the web board on
+        # 2026-09-29: the inspection-list generator quietly makes MONDAY-start
+        # plans for its own jobs (inspection_list_service, inspection_assignments),
+        # with days only on the dates lists were made — so asking for Sunday 27
+        # returned the background plan Mon 21 – Sun 27 and the board showed just
+        # 24, 26, 27. The phone now asks for the Sunday, like the web.
+        query = query.filter(WorkPlan.week_start == week_date)
 
     if status:
         query = query.filter(WorkPlan.status == status)
 
-    ordering = [WorkPlan.week_start.desc()]
-    if exact_first is not None:
-        ordering.insert(0, exact_first)
-    plans = query.order_by(*ordering).all()
+    plans = query.order_by(WorkPlan.week_start.desc()).all()
 
     return jsonify({
         'status': 'success',

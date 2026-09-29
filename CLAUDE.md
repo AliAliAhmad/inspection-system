@@ -735,6 +735,17 @@
   the browser does not paste the ADMIN's saved password). Empty = unchanged; min 6 on the server
   too. Not stripped (a space is a real character). 4 tests in `tests/test_admin_sets_password.py`.
 
+### Board showed last week's background plan (24, 26, 27) — FIXED 2026-09-29, NOT PUSHED
+- Ali: "why the current week planning showing only 24,26,27 date?" Caused by the 2026-09-24
+  filter audit: `list_work_plans` was widened to "any plan CONTAINING week_start" so the phone
+  (asking Monday) found Sunday plans. But the inspection-list generator makes background
+  MONDAY-start plans (`inspection_list_service.py:391`, `inspection_assignments.py:30`) with days
+  only on list dates. Web asked Sunday 27 → got the background Mon 21–Sun 27 plan.
+- Fixed: server back to EXACT week_start; the phone now asks for the SUNDAY (as the web does).
+- **⚠️ Still true, untouched:** those background Monday plans exist and hold the inspection jobs.
+  The board hides inspection jobs (InspectionSummaryBar), so they are invisible — but they are
+  real rows in a second "week" nobody sees. Ask Ali before merging or deleting them.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

@@ -205,42 +205,43 @@ class TestMonitorFollowupStatusList:
 
 # ── Work plans ───────────────────────────────────────────────────────────────
 
-class TestWorkPlanListWeekContainment:
-    """The web makes Sunday-start weeks; the phone asks for the Monday. An exact
-    week_start match found nothing and the phone showed an empty week."""
+class TestWorkPlanListWeekIsExact:
+    """A week is found by its EXACT start date, and both screens ask for the
+    Sunday Ali's plans start on.
 
-    def _plan(self, db_session, creator, start):
+    2026-09-24 widened this to "any plan containing the date" so the phone
+    (then asking for Monday) found Sunday plans. On 2026-09-29 Ali: "why the
+    current week planning showing only 24, 26, 27 date?" — the inspection-list
+    generator makes background MONDAY-start plans with days only on the dates
+    lists were made, and "contains" handed one of those to the web board.
+    """
+
+    def _plan(self, db_session, creator, start, days=range(7)):
         wp = WorkPlan(week_start=start, week_end=start + timedelta(days=6),
                       status='draft', created_by_id=creator.id)
         db.session.add(wp)
         db.session.flush()
-        for offset in range(7):
+        for offset in days:
             db.session.add(WorkPlanDay(work_plan_id=wp.id, date=start + timedelta(days=offset)))
         db.session.commit()
         return wp
 
-    def test_monday_request_finds_a_sunday_plan(self, client, admin_user, db_session):
-        sunday = date(2026, 9, 20)
-        wp = self._plan(db_session, admin_user, sunday)
-        resp = client.get('/api/work-plans?week_start=2026-09-21&include_days=true',
+    def test_the_background_monday_plan_is_not_this_weeks_plan(self, client, admin_user,
+                                                               db_session):
+        """THE bug. Asking for Sunday 27 must not return Mon 21 – Sun 27."""
+        self._plan(db_session, admin_user, date(2026, 9, 21), days=(3, 5, 6))  # 24, 26, 27
+        resp = client.get('/api/work-plans?week_start=2026-09-27', headers=_admin(client))
+        assert resp.get_json()['work_plans'] == [], 'no Sunday-27 plan yet → nothing, not last week'
+
+    def test_the_sunday_plan_is_found_even_beside_a_background_plan(self, client, admin_user,
+                                                                   db_session):
+        self._plan(db_session, admin_user, date(2026, 9, 21), days=(3, 5, 6))
+        mine = self._plan(db_session, admin_user, date(2026, 9, 27))
+        resp = client.get('/api/work-plans?week_start=2026-09-27&include_days=true',
                           headers=_admin(client))
-        assert resp.status_code == 200, resp.get_json()
         plans = resp.get_json()['work_plans']
-        assert [p['id'] for p in plans] == [wp.id]
+        assert [p['id'] for p in plans] == [mine.id]
         assert len(plans[0]['days']) == 7
-
-    def test_exact_match_still_wins_and_comes_first(self, client, admin_user, db_session):
-        sunday_plan = self._plan(db_session, admin_user, date(2026, 9, 20))
-        monday_plan = self._plan(db_session, admin_user, date(2026, 9, 21))
-        resp = client.get('/api/work-plans?week_start=2026-09-21', headers=_admin(client))
-        ids = [p['id'] for p in resp.get_json()['work_plans']]
-        assert ids[0] == monday_plan.id
-        assert set(ids) == {monday_plan.id, sunday_plan.id}
-
-    def test_a_date_outside_every_plan_finds_nothing(self, client, admin_user, db_session):
-        self._plan(db_session, admin_user, date(2026, 9, 20))
-        resp = client.get('/api/work-plans?week_start=2026-10-05', headers=_admin(client))
-        assert resp.get_json()['work_plans'] == []
 
     def test_bad_date_is_refused(self, client, admin_user, db_session):
         resp = client.get('/api/work-plans?week_start=21-09-2026', headers=_admin(client))

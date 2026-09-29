@@ -39,11 +39,13 @@ function toLocalDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** The SUNDAY that starts this date's week — the same week the web planner
+ *  makes (dayjs().startOf('week')). The server matches a plan's start date
+ *  exactly. This used to return the Monday, which found either nothing or the
+ *  inspection generator's background Monday plan instead of Ali's. */
 function getWeekStart(date: Date): string {
   const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
+  d.setDate(d.getDate() - d.getDay());
   return toLocalDateString(d);
 }
 
@@ -85,8 +87,7 @@ export default function WorkPlanOverviewScreen() {
     queryFn: () => workPlansApi.list({ week_start: weekStart, include_days: true }),
   });
 
-  // The server now returns the plan whose range CONTAINS weekStart (a web
-  // plan starts on Sunday, this screen asks for Monday), exact match first.
+  // Sunday-start week, matched exactly by the server (see getWeekStart).
   const workPlan: WorkPlan | undefined = data?.data?.work_plans?.[0];
   const allDays = workPlan?.days || [];
 
