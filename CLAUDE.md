@@ -735,7 +735,7 @@
   the browser does not paste the ADMIN's saved password). Empty = unchanged; min 6 on the server
   too. Not stripped (a space is a real character). 4 tests in `tests/test_admin_sets_password.py`.
 
-### Board showed last week's background plan (24, 26, 27) — FIXED 2026-09-29, NOT PUSHED
+### Board showed last week's background plan (24, 26, 27) — DEPLOYED 2026-09-29 (commit `dda791c`, OTA `90b2ad91`)
 - Ali: "why the current week planning showing only 24,26,27 date?" Caused by the 2026-09-24
   filter audit: `list_work_plans` was widened to "any plan CONTAINING week_start" so the phone
   (asking Monday) found Sunday plans. But the inspection-list generator makes background
