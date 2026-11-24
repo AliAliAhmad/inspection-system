@@ -101,8 +101,10 @@ class TestTheDayHasARealSize:
         assert len(days_with_jobs) == 2, 'each TT PM needs its own 16h day'
 
     def test_a_bigger_team_holds_more(self, db_session, admin_user):
-        """4 men = 32 man-hours: three TT PMs (27) fit ONE day."""
-        pm = [_user(db_session, f'b{i}') for i in range(4)]
+        """5 men x 6h ceiling = 30 man-hours: three TT PMs (27) fit ONE day.
+        (Was 4 men x 8h = 32 until 2026-11-25, when Ali set ordinary work to
+        6 real hours a man.)"""
+        pm = [_user(db_session, f'b{i}') for i in range(5)]
         _rule(db_session, 'west', 'regular_pm', pm)
         plan = _plan(db_session, admin_user)
         for i in range(3):
@@ -240,9 +242,9 @@ class TestAFullWeekRefusesEvenUrgentWork:
 
 class TestTheOldRulesAreDead:
     def test_two_pm_families_share_a_day(self, db_session, admin_user):
-        """Trailer PM (3h x 2 = 6) + truck PM (9) = 15 <= 16: SAME day.
-        The old pm_category_locked forbade exactly this."""
-        pm = [_user(db_session, f'w{i}') for i in range(2)]
+        """Trailer PM (3h x 2 = 6) + truck PM (9) = 15 <= 18 (3 men x 6h): SAME
+        day. The old pm_category_locked forbade exactly this."""
+        pm = [_user(db_session, f'w{i}') for i in range(3)]
         _rule(db_session, 'west', 'regular_pm', pm)
         plan = _plan(db_session, admin_user)
         _order(db_session, _machine(db_session, 'TR078', 'trailer'),
@@ -257,9 +259,9 @@ class TestTheOldRulesAreDead:
 
     def test_a_fifth_standalone_fault_machine_is_allowed_if_hours_allow(
             self, db_session, admin_user):
-        """5 standalone COMs on 5 machines cost 5 x 6 = 30 <= 32 (4 spec men).
+        """5 standalone COMs on 5 machines cost 5 x 6 = 30 <= 30 (5 spec men x 6h).
         The old DEFECT_CAPACITY_PER_BERTH = 4 refused the fifth machine."""
-        spec = [_user(db_session, f'x{i}') for i in range(4)]
+        spec = [_user(db_session, f'x{i}') for i in range(5)]
         pm = [_user(db_session, f'y{i}') for i in range(2)]
         _rule(db_session, 'west', 'regular_pm', pm)
         _rule(db_session, 'west', 'defect_mech', spec)
@@ -287,3 +289,41 @@ class TestNoRulesMeansNoWallets:
         jobs = [job for jobs in _jobs_by_day(plan).values() for job in jobs]
         assert len(jobs) == 1
         assert result is not None
+
+
+
+class TestTwoHoursSpareOnANormalDay:
+    """Ali, 2026-11-25: crews were not finishing; a man does "about 6 hours" of
+    real work. Ordinary work fills a day to men x 6, long jobs may use x 8."""
+
+    def test_ordinary_work_stops_at_six_hours_a_man(self, db_session, admin_user):
+        """4 men: 24 under the ceiling. Two TT PMs (18) fit a day; a third (27)
+        fitted the old 4 x 8 = 32 and must now go to another day."""
+        pm = [_user(db_session, f's{i}') for i in range(4)]
+        _rule(db_session, 'west', 'regular_pm', pm)
+        plan = _plan(db_session, admin_user)
+        for i in range(3):
+            _order(db_session, _machine(db_session, f'TT6{i:02d}', 'truck'),
+                   f'70000006600{i}')
+
+        _generate(plan)
+
+        sizes = sorted(len(jobs) for jobs in _jobs_by_day(plan).values() if jobs)
+        assert sizes == [1, 2], sizes
+
+    def test_work_bigger_than_a_normal_day_still_gets_a_day(self, db_session,
+                                                           admin_user):
+        """A pair's ceiling is 12; a TT PM + its riding COM costs 13. It must
+        not fall out of the plan for good — it takes an empty day, full shift."""
+        pm = [_user(db_session, f'z{i}') for i in range(2)]
+        _rule(db_session, 'west', 'regular_pm', pm)
+        plan = _plan(db_session, admin_user)
+        tt = _machine(db_session, 'TT690', 'truck')
+        _order(db_session, tt, '700000069000')
+        _order(db_session, tt, '700000069001', job_type='defect', activity='COM',
+               hours=2.0, description='Horn not working')
+
+        _generate(plan)
+
+        placed = [j for jobs in _jobs_by_day(plan).values() for j in jobs]
+        assert len(placed) == 2

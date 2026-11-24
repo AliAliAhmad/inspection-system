@@ -21,7 +21,7 @@ AC is deliberately absent. The AC team keeps its existing machine-count rules
 from collections import defaultdict
 from datetime import timedelta
 
-from app.services.job_durations import MAN_HOURS_PER_DAY
+from app.services.job_durations import MAN_HOURS_PER_DAY, PLAN_HOURS_PER_MAN
 
 PM_TEAM_TYPES = ('regular_pm',)
 SPEC_TEAM_TYPES = ('defect_mech', 'defect_elec')
@@ -31,10 +31,18 @@ class Wallet:
     def __init__(self, men):
         self.men = set(men)
         self.hours_total = float(len(self.men) * MAN_HOURS_PER_DAY)
+        # The ceiling ordinary placement fills to — 2h a man left spare.
+        self.hours_plannable = float(len(self.men) * PLAN_HOURS_PER_MAN)
         self.hours_spent = 0.0
 
     def remaining(self):
+        """Room left in the FULL shift — long jobs and the Telegram buttons."""
         return self.hours_total - self.hours_spent
+
+    def remaining_for_ordinary(self):
+        """Room left under the 6h-a-man ceiling. Negative once long work has
+        already used the spare hours — then nothing ordinary fits."""
+        return self.hours_plannable - self.hours_spent
 
     def charge(self, hours):
         self.hours_spent += float(hours)

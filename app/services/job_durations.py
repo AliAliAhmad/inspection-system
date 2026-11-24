@@ -109,6 +109,13 @@ URGENT_MAX_CREW = {'reach_stacker': 4, 'ech': 4}
 # counts toward the plan's budget (Ali, 2026-08-24).
 MAN_HOURS_PER_DAY = 8
 
+# How much of that day ORDINARY placement may fill. Ali, 2026-11-25: crews were
+# not finishing — a man does "about 6 hours" of real work after travel between
+# machines, breaks, permits and waiting for parts. He chose to keep the 2 hours
+# spare on normal days while LONG jobs (a reach-stacker PM split over two days,
+# an urgent big crew) may still use the full shift, as before.
+PLAN_HOURS_PER_MAN = 6
+
 # A family nobody has given a number for. Deliberately the smallest PM figure
 # rather than a guess in the middle: an unknown machine that turns out to be big
 # shows up as a day running over, which the carry-over already handles. An

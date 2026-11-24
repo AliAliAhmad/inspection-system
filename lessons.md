@@ -967,3 +967,13 @@ LESSON: (2026-11-25) My guard test for "start.sh sets no password" checked only 
 the live deploy log showed it. → A guard must forbid the DATA being written (the column, the
 table), not one way of writing it. And read the real deploy log after a fix — it catches what
 the test author did not think of.
+
+LESSON: (2026-11-25) In zsh, `for f in $F` does NOT split a space-separated list, so my
+"backup, overwrite, restore" loop backed up nothing and erased three files of my own
+uncommitted work (re-applied from the transcript; nothing was pushed). → Never overwrite a
+file on the strength of a backup I have not VERIFIED exists and matches. Do backup-overwrite-
+restore in one Python script that asserts each copy before touching the original.
+
+LESSON: (2026-11-25) A "proof" test for the 6h ceiling passed on the OLD code too (3 men:
+27 > 24 either way). → A test written to prove a change must be shown to FAIL on the old code
+before it counts as proof; pick numbers where old and new give different answers.

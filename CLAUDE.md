@@ -821,6 +821,21 @@
 - **Not checked:** the older `auto_schedule` and `/ai/auto-schedule` routes in `work_plans.py`
   may have the same habit. Jobs ALREADY placed on past days this week are not moved.
 
+### A day is planned to 6 real hours a man, not 8 — 2026-11-25, NOT PUSHED
+- Ali: "i feel that we are over planing jobs in the day" → crews don't finish; a man does
+  "about 6 hours" after travel, breaks, permits, waiting. Teams are 3-4 men.
+- He chose "keep 2h spare": ORDINARY placement fills to men x `PLAN_HOURS_PER_MAN` (6); LONG
+  jobs (big-PM split, urgent big crew) still use men x `MAN_HOURS_PER_DAY` (8).
+  `Wallet.remaining_for_ordinary()`; `_wallet_fits(..., long_job=)`.
+- **Work bigger than a whole 6h day gets an EMPTY day with the full shift** — without that rule a
+  2-man PM + riding fault (13 > 12) was planned on NO day at all (caught by 2 existing tests).
+- **⚠️ "8" means two things:** the BUDGET (now 6 for ordinary work) and the SHIFT CLOCK (still 8:
+  when a job splits, urgent 3-4 men / 8h). Changing both broke 42 tests — a reach stacker's 8h
+  first day could never fit a pair. Kept apart on purpose.
+- **Not changed:** Telegram urgent / make-room (`place_one`, `urgent_watch`, `day_ripple`) and
+  `crew_free` still use the full 8h. The board's "how full is this day" display still shows x 8.
+- 3 tests re-sized to the new arithmetic (same rule tested); 2 new. 1396 backend tests.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

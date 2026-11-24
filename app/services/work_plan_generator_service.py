@@ -1458,11 +1458,21 @@ def _charge_wallet(wallets, day, berth, wallet_key, hours):
         wallet.charge(hours)
 
 
-def _wallet_fits(wallets, day, berth, wallet_key, cost):
+def _wallet_fits(wallets, day, berth, wallet_key, cost, long_job=False):
+    """Ordinary work fits under the 6h-a-man ceiling; a LONG job (big-PM split,
+    urgent big crew) may use the full shift (Ali, 2026-11-25)."""
     wallet = _wallet_for(wallets, day, berth, wallet_key)
     if wallet is None:
         return True
-    return cost <= wallet.remaining() + 1e-6
+    # Work bigger than a whole day's 6h ceiling would otherwise fit NO day and
+    # never be planned. It gets an EMPTY day to itself with the full shift —
+    # the same allowance long jobs have.
+    too_big_for_a_normal_day = cost > wallet.hours_plannable + 1e-6
+    if long_job or (too_big_for_a_normal_day and wallet.hours_spent == 0):
+        room = wallet.remaining()
+    else:
+        room = wallet.remaining_for_ordinary()
+    return cost <= room + 1e-6
 
 
 def _consume_ac_capacity(bundle, day, berth, capacity_tracker):
@@ -1560,6 +1570,7 @@ def _check_capacity(
     allow_urgent_override: bool = False,
     wallets: Dict = None,
     cost: float = None,
+    long_job: bool = False,
 ) -> bool:
     """
     Does this bundle fit this day?
@@ -1592,7 +1603,8 @@ def _check_capacity(
         if cost is None:
             cost = bundle_man_hours(bundle)
         wallet_key = _bundle_wallet_key(bundle)
-        if wallet_key and not _wallet_fits(wallets, day, berth, wallet_key, cost):
+        if wallet_key and not _wallet_fits(wallets, day, berth, wallet_key, cost,
+                                           long_job=long_job):
             return False
 
     return True
@@ -1756,7 +1768,7 @@ def _place_big_pm(
             cost_n = hours_n * crew_n + others_cost
             for day in days:  # earliest first — urgent buys position
                 if _check_capacity(bundle, day, capacity_tracker,
-                                   wallets=wallets, cost=cost_n):
+                                   wallets=wallets, cost=cost_n, long_job=True):
                     pm['estimated_hours'] = hours_n
                     pm['crew'] = crew_n
                     return [(day, members, wallet_key, cost_n)]
@@ -1779,9 +1791,9 @@ def _place_big_pm(
     for i in range(len(days) - 1):
         day1, day2 = days[i], days[i + 1]
         if (_check_capacity(bundle1, day1, capacity_tracker,
-                            wallets=wallets, cost=cost1)
+                            wallets=wallets, cost=cost1, long_job=True)
                 and _check_capacity(bundle2, day2, capacity_tracker,
-                                    wallets=wallets, cost=cost2)):
+                                    wallets=wallets, cost=cost2, long_job=True)):
             return [(day1, [part1], wallet_key, cost1),
                     (day2, [part2] + others, wallet_key, cost2)]
     return None
