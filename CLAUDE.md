@@ -793,9 +793,24 @@
 - **Residual, not fixed:** an already-logged-in session is not cut when an account is disabled —
   `get_current_user()` does not check `is_active`. `flask seed-admin` (manual only) still makes
   `admin@inspection.com / Admin1234`. `run.py` / `seed_data.py` are local-dev only.
-- **Knot 4 (split `work_plans.py`)** — decision kept open; plan in this conversation's map
-  (16 route files + rules to services).
+- **Knot 4 (split `work_plans.py`) — OPTION C, Ali 2026-11-25.** New work-plan features go in
+  their OWN file; before changing a topic still in `work_plans.py`, MOVE it out first as its own
+  checked step, then change it. Never move and change together. **After every move, tell Ali the
+  progress** (topics / routes out of 122 / lines left). Map, checks and progress table:
+  `tasks/split-work-plans.md` — READ IT before touching `work_plans.py`.
 - 1390 backend tests pass; web 61 + web/mobile tsc clean.
+
+### SAP order number on the board and in Job Details — 2026-11-25
+- Ali: "why the SAP order number is not showing in the PRM orders ... even the defect from sap",
+  then "when i double click over the job on pool or day its card shows No SAP order number".
+- **Job Details read only `sap_order_number`; a pool order carries `order_number`** — so EVERY
+  pool order said "No SAP Order Number". Now `sapOrderNumber()` (`utils/sap-order-number.ts`)
+  reads either, and the window says WHY there is none: hand-typed / inspection defect (grey)
+  vs really missing (red).
+- Pool card lost the number in the 2026-02-09 sidebar redesign (`193ab97`); the day card never
+  had it. Both now show a grey `#7000…` line for every SAP order, faults included.
+- A day job with no number is real: "Copy from previous week" drops it ON PURPOSE
+  (`work_plans.py:4398`). Not changed. Web only; `work_plans.py` untouched (knot 4: 0/14).
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
