@@ -946,3 +946,18 @@ record is FOUND, list every code path that CREATES that record (grep the model's
 constructor) and test the lookup with all of them present, not just the one the fix
 is about. Loosening a match is a change to every caller, not only the one that asked.
 
+
+LESSON: (2026-11-25) The Edit tool on a .py file in this repo triggers a formatter hook that
+rewrote ALL of `place_one.py` (quotes, wrapping) — a 353-line diff for a 4-line change,
+against the surgical-changes rule. → After every edit to a .py file, run `git diff --stat`
+before moving on; if the count is far above the change, rebuild the file from
+`git show HEAD:<path>` plus only the intended lines.
+
+LESSON: (2026-11-25) A copied rule had a TEST guarding the copy (`JobsPool.filters.test.ts`
+tested the web's own MAN- rule). → When moving a rule to its single home, move its test cases
+with it; the old caller's test should then check only that it reads the result.
+
+LESSON: (2026-11-25) start.sh held a one-time go-live step ("set every user's password to
+their SAP id") that ran on EVERY boot for 9 months, wiping every password people chose. →
+Anything meant to run once goes in a `flask <command>` run by hand, never in start.sh. A
+boot script may only build schema; it must never set a password or create a user.
