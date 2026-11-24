@@ -812,6 +812,15 @@
 - A day job with no number is real: "Copy from previous week" drops it ON PURPOSE
   (`work_plans.py:4398`). Not changed. Web only; `work_plans.py` untouched (knot 4: 0/14).
 
+### Generator placed work on days already over — FIXED 2026-11-25, NOT PUSHED
+- Ali: "today i start a new plan but the plan schedule jobs for the past days it is unlogical".
+  `_step_distribute` took EVERY day of the week. Now only days >= `first_placeable_date()`
+  (Baghdad today; today itself still counts). Test fails on the old line (verified).
+- Tests plan fixed past weeks, so `tests/conftest.py` freezes `first_placeable_date` to
+  2000-01-01 for every test; a test about past days sets its own date.
+- **Not checked:** the older `auto_schedule` and `/ai/auto-schedule` routes in `work_plans.py`
+  may have the same habit. Jobs ALREADY placed on past days this week are not moved.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

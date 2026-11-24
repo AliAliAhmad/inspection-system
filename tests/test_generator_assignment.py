@@ -210,3 +210,38 @@ class TestANightManIsNotStaffedOntoDayWork:
         assert jobs, 'the job must still be placed and staffed by the day men'
         assert all(_workers_of(job) for job in jobs)
         assert all(night_lead.id not in _workers_of(job) for job in jobs)
+
+
+class TestNothingIsPlacedOnADayThatIsOver:
+    """Ali, 2026-11-25: "today i start a new plan but the plan schedule jobs
+    for the past days it is unlogical"."""
+
+    def _generate_on(self, monkeypatch, db_session, admin_user, today, orders=6):
+        from app.services import work_plan_generator_service
+        monkeypatch.setattr(work_plan_generator_service, 'first_placeable_date',
+                            lambda: today)
+        _rule(db_session, 'west', 'regular_pm',
+              [_user(db_session, f'P{today.day}{i}') for i in range(4)])
+        plan = _plan(db_session, admin_user)
+        for i in range(orders):
+            _order(db_session, _machine(db_session, f'TP{today.day}{i}', 'truck'),
+                   f'70000077{today.day:02d}{i:02d}')
+        WorkPlanGeneratorService.generate_plan(plan_id=plan.id)
+        return _all_jobs(plan)
+
+    def test_a_midweek_plan_uses_only_today_and_later(self, monkeypatch, db_session,
+                                                      admin_user):
+        wednesday = MONDAY + timedelta(days=2)
+
+        jobs = self._generate_on(monkeypatch, db_session, admin_user, wednesday)
+
+        assert jobs, 'work must still be placed on the days that are left'
+        assert all(job.day.date >= wednesday for job in jobs), \
+            [str(job.day.date) for job in jobs]
+
+    def test_today_itself_still_counts(self, monkeypatch, db_session, admin_user):
+        last_day = MONDAY + timedelta(days=6)
+
+        jobs = self._generate_on(monkeypatch, db_session, admin_user, last_day, orders=1)
+
+        assert jobs and all(job.day.date == last_day for job in jobs)

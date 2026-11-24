@@ -1296,6 +1296,16 @@ def _is_urgent_bundle(bundle: Dict[str, Any]) -> bool:
 
 # ── Workforce capacity helpers ──────────────────────────────────────────
 
+def first_placeable_date():
+    """The earliest day the generator may put work on: today, in Baghdad.
+
+    One named function so the tests can freeze it — they plan fixed past weeks
+    (2026-08-24), and without a frozen clock every one of their days is over.
+    """
+    from app.utils.decorators import planning_today
+    return planning_today()
+
+
 def _step_distribute(
     plan: WorkPlan,
     bundles: List[Dict[str, Any]],
@@ -1314,7 +1324,12 @@ def _step_distribute(
     Returns:
         (day_map, unscheduled, capacity_utilization)
     """
-    days = sorted(plan.days, key=lambda d: d.date)
+    # Only days that are not over yet. Ali, 2026-11-25: "today i start a new
+    # plan but the plan schedule jobs for the past days it is unlogical". A
+    # plan generated on a Wednesday used to spread work over Sunday-Tuesday
+    # too — days no crew can go back to. Today itself still counts.
+    first = first_placeable_date()
+    days = sorted((d for d in plan.days if d.date >= first), key=lambda d: d.date)
     if not days:
         return {}, [m for b in bundles for m in b['members']], {}
 

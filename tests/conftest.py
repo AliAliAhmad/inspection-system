@@ -29,6 +29,18 @@ def db_session(app):
         _db.drop_all()
 
 
+@pytest.fixture(autouse=True)
+def generator_clock_frozen_in_the_past(monkeypatch):
+    """The generator skips days that are already over (2026-11-25). Tests plan
+    fixed weeks like 2026-08-24, so with the real clock every one of their days
+    would be "over" and nothing would be placed. Freeze the generator's "today"
+    far in the past; a test about past days sets its own date over this."""
+    from datetime import date
+    from app.services import work_plan_generator_service
+    monkeypatch.setattr(work_plan_generator_service, 'first_placeable_date',
+                        lambda: date(2000, 1, 1))
+
+
 @pytest.fixture
 def client(app):
     """Flask test client."""
