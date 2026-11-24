@@ -23,13 +23,9 @@ from datetime import timedelta
 from app.extensions import db
 from app.models import WorkPlan, WorkPlanDay
 from app.utils.decorators import planning_today
+from app.utils.roles import PLANNING_ROLES
 
 logger = logging.getLogger(__name__)
-
-# Same two roles the web planner enforces. Stated here rather than assumed from
-# the allowlist: the allowlist says who may TALK to the bot, which is a
-# different question from who may plan.
-PLANNING_ROLES = ('admin', 'engineer')
 
 RECIPES = ('priority_first', 'travel_optimized', 'team_balanced',
            'pm_compliance', 'copy_last_week')

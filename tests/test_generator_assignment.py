@@ -179,3 +179,34 @@ class TestOneCrewOneVisit:
         crews = [_workers_of(job) for job in jobs]
         assert crews[0] == crews[1]
         assert len(crews[0]) == 2
+
+
+class TestANightManIsNotStaffedOntoDayWork:
+    """Ali, 2026-11-25: "No because he is in the night and the day work is for
+    the morning shift." The day budget and place_one already treated a night
+    man as away; the generator's assigner skipped only 'off' and 'leave', so it
+    could book him onto day work the wallet had given no hours for. One rule
+    now: `day_budget.unavailable_by_date`."""
+
+    def test_the_lead_on_nights_all_week_is_never_assigned(self, db_session,
+                                                           admin_user):
+        from app.models.roster import RosterEntry
+        night_lead = _user(db_session, 'NightLead')
+        pair = [_user(db_session, 'DayA'), _user(db_session, 'DayB')]
+        rule = _rule(db_session, 'west', 'regular_pm', pair)
+        rule.primary_mech_lead_id = night_lead.id
+        db_session.session.commit()
+        plan = _plan(db_session, admin_user)
+        for offset in range(7):
+            db_session.session.add(RosterEntry(
+                user_id=night_lead.id, date=MONDAY + timedelta(days=offset),
+                shift='night'))
+        db_session.session.commit()
+        _order(db_session, _machine(db_session, 'TT090', 'truck'), '700000009000')
+
+        WorkPlanGeneratorService.generate_plan(plan_id=plan.id)
+
+        jobs = _all_jobs(plan)
+        assert jobs, 'the job must still be placed and staffed by the day men'
+        assert all(_workers_of(job) for job in jobs)
+        assert all(night_lead.id not in _workers_of(job) for job in jobs)

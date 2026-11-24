@@ -24,7 +24,7 @@ from app.models import TelegramProposal
 from app.services.telegram.ask import edit_everyone, keyboard
 from app.services.telegram.client import TelegramClient
 from app.services.telegram.dispatcher import language_for
-from app.services.telegram.generate import PLANNING_ROLES
+from app.utils.roles import PLANNING_ROLES
 
 logger = logging.getLogger(__name__)
 

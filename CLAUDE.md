@@ -746,6 +746,43 @@
   The board hides inspection jobs (InspectionSummaryBar), so they are invisible — but they are
   real rows in a second "week" nobody sees. Ask Ali before merging or deleting them.
 
+### Knot report fixes 1, 2, 3, 5 — 2026-11-25, branch `knot-fix/knots-1-2-3-5`, NOT PUSHED
+- **Knot 1 FIXED — a night man is never staffed onto day work** (Ali: "he is in the night and
+  the day work is for the morning shift"). The generator had its own 70-line copy that skipped
+  only off/leave. Now ONE rule, `day_budget.unavailable_by_date`, used by the wallet, the
+  generator and place_one. Test fails on the old code (verified).
+- **Knot 2 FIXED — role lists written once** in `app/utils/roles.py` (`PLANNING_ROLES`,
+  `SUPERVISOR_ROLES`, `CREW_ROLES`); `/users/for-assignment` uses `CREW_ROLES`. The web's two
+  copies became one `SUPERVISOR_ROLES`. `tests/test_roles_single_source.py` fails on a 5th copy
+  or a web/server mismatch (verified by breaking both).
+- **Knot 3 FIXED — "hand-typed job" decided by the server only.** `app/utils/manual_jobs.py`;
+  every job (full AND compact) and pool order carries `is_manual`; the web reads it.
+- **Knot 5 — guard only.** `tests/test_schema_is_built_somewhere.py`: a model table/column that
+  no migration and no start.sh line creates fails the build. Moving start.sh into migrations
+  stays a later decision.
+- **✅ FIXED — 7 model columns nothing created** (all from commit `b977943`, 2026-02-10):
+  `inspection_routines.frequency`, `job_template_checklists.question_ar/fail_action/fail_action_ar`,
+  `equipment_restrictions.is_permanent`, `scheduling_conflicts.resolution/is_ignored`. Migration
+  `u1v2w3x4y5z6` adds each ONLY if missing (production may hold some); flags default FALSE so old
+  rows stay in `is_ignored == False`; `frequency` left NULL (web reads it as 'daily'). Downgrade is
+  a no-op on purpose. `KNOWN_GAPS` is now empty. 5 tests in `tests/test_migration_seven_columns.py`.
+  **⚠️ Run on SQLite only — not yet on Postgres.** After deploy, check the log for `... ADDED` /
+  `already present` lines, and that `flask db upgrade` printed no WARNING.
+- **✅ FIXED (Ali chose A + C) — SECURITY: `start.sh` reset every user's password to their SAP id
+  on EVERY boot** (since commit `00317b9`, 2026-02-21, a one-time go-live step never removed),
+  and recreated `admin@company.com / admin123`. Now start.sh sets no password and creates no
+  user; the sample admin is DISABLED on boot only while it still has `admin123`. New staff
+  unaffected: `import_team` already gives SAP id + must_change_password. 5 tests in
+  `tests/test_start_sh_never_touches_passwords.py` run the REAL boot block; 4 fail on the old one.
+  The deploy that carries this boots with the NEW start.sh, so the old reset never runs again.
+  Passwords already reset to SAP ids stay that way until each person changes theirs.
+- **Residual, not fixed:** an already-logged-in session is not cut when an account is disabled —
+  `get_current_user()` does not check `is_active`. `flask seed-admin` (manual only) still makes
+  `admin@inspection.com / Admin1234`. `run.py` / `seed_data.py` are local-dev only.
+- **Knot 4 (split `work_plans.py`)** — decision kept open; plan in this conversation's map
+  (16 route files + rules to services).
+- 1390 backend tests pass; web 61 + web/mobile tsc clean.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
@@ -765,9 +802,6 @@
 - **`schedule_sap_order` diverges from the generator**: no re-pricing, no capacity check,
   staffs nobody. `place_one` replaces that behaviour for the bot; the endpoint is otherwise
   untouched. **Berth IS now handled** (fixed 2026-09-13, see below).
-- **Night shift disagrees with itself:** `day_budget._unavailable_by_date` excludes `night`,
-  `_step_assign`'s own lookup does not — so a man giving the wallet zero hours can still be
-  staffed onto day work.
 - **The 2000HR has its own price: 18h with 2 men** (Ali, 2026-09-12). `PM_BY_PACKAGE`
   in `job_durations.py`. RS109 with both open: **48 man-hours → 36**, and the same
   36 whether or not the 250HR order happens to be open. The crew curve is NOT stretched

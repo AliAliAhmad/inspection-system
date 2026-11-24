@@ -13,10 +13,9 @@ from app.extensions import db
 from app.models import TelegramProposal, TelegramProposalMessage, User
 from app.services.telegram.auth import allowlist
 from app.services.telegram.client import TelegramClient
+from app.utils.roles import PLANNING_ROLES
 
 logger = logging.getLogger(__name__)
-
-PLANNING_ROLES = ('admin', 'engineer')
 
 
 def recipients():

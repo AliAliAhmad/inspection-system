@@ -22,7 +22,7 @@ from app.models import SAPWorkOrder, WorkPlanJob  # noqa: F401
 from app.models.work_plan_assignment import WorkPlanAssignment
 from app.models.worker_assignment_rule import WorkerAssignmentRule
 from app.models.user import User
-from app.services.day_budget import _unavailable_by_date
+from app.services.day_budget import unavailable_by_date
 from app.services.job_durations import (MAN_HOURS_PER_DAY, MIN_CREW,
                                         pm_hours, urgent_max_crew)
 
@@ -148,7 +148,7 @@ def _free_by_discipline(order, day):
         return (0, 0)
 
     plan = day.work_plan
-    gone = _unavailable_by_date(plan.week_start, plan.week_end).get(day.date, set())
+    gone = unavailable_by_date(plan.week_start, plan.week_end).get(day.date, set())
 
     def free(ids):
         ids = {i for i in ids if i}
@@ -388,11 +388,9 @@ def staff_one_job(job, day, crew_needed=None, rule=None):
     structures that only `_step_assign` builds. This rebuilds them for a single
     day, which is cheap, and returns the user ids assigned.
 
-    Night shift: a man on nights is treated as UNAVAILABLE here, following
-    `day_budget._unavailable_by_date`. The generator's own assigner disagrees
-    (it only excludes 'off' and 'leave'), and that inconsistency is real and
-    recorded in the spec — but a wallet that gives a night man no hours must not
-    then have him staffed onto day work.
+    Night shift: a man on nights is UNAVAILABLE, by `day_budget.unavailable_by_date`
+    — the same rule the generator's assigner uses, so a wallet that gives a night
+    man no hours never has him staffed onto day work.
     """
     from app.services.work_plan_generator_service import (
         _assign_from_rule, _determine_team_type, _get_category, _normalize_berth)
@@ -426,7 +424,7 @@ def staff_one_job(job, day, crew_needed=None, rule=None):
         return []
 
     plan = day.work_plan
-    unavailable = _unavailable_by_date(plan.week_start, plan.week_end)
+    unavailable = unavailable_by_date(plan.week_start, plan.week_end)
     day_unavailable = set(unavailable.get(day.date, set()))
 
     # _assign_from_rule mutates these with `+=` on keys it hasn't seen yet

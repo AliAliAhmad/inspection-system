@@ -91,7 +91,7 @@ def team_pools():
     return pools
 
 
-def _unavailable_by_date(week_start, week_end):
+def unavailable_by_date(week_start, week_end):
     """user_ids with no plan-money that day: roster off/leave/NIGHT, or on leave."""
     gone = defaultdict(set)
     try:
@@ -128,7 +128,7 @@ def build_week_wallets(plan, days):
     if not any(pool['pm'] or pool['spec'] for pool in pools.values()):
         return {}
 
-    gone = _unavailable_by_date(plan.week_start, plan.week_end)
+    gone = unavailable_by_date(plan.week_start, plan.week_end)
     wallets = {}
     for day in days:
         wallets[day.id] = {}

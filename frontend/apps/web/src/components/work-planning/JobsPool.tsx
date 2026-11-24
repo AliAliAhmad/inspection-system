@@ -31,9 +31,9 @@ const PRIORITY_ORDER: Record<string, number> = {
 const HOURS_CYCLES = [4000, 3000, 2000, 1500, 1000, 500, 250];
 
 /** True for the placeholder the app mints when a hand-typed job goes back to
- *  the pool. Mirrors is_manual_order_number() on the server. */
-export const isHandTypedOrder = (job: any): boolean =>
-  String(job?.order_number || '').startsWith('MAN-') || job?.order_type === 'MANUAL';
+ *  the pool. The server decides (`is_manual_order()` in app/utils/manual_jobs.py)
+ *  and sends `is_manual` on each pool order. */
+export const isHandTypedOrder = (job: any): boolean => job?.is_manual === true;
 
 // A defect carries a SEVERITY; the pool filters on PRIORITY. Same idea, two
 // vocabularies, and nothing was translating between them.

@@ -165,6 +165,8 @@ export interface WorkPlanJob {
   inspection_assignment_id: number | null;
   inspection_assignment: any | null;
   sap_order_number: string | null;
+  /** Typed in by a planner (incl. `MAN-` placeholders). Decided by the server. */
+  is_manual?: boolean;
   description: string | null;
   cycle_id: number | null;
   cycle: MaintenanceCycle | null;
@@ -494,6 +496,8 @@ export interface SAPWorkOrder {
   work_plan_id: number;
   order_number: string;
   order_type: string;
+  /** A `MAN-` placeholder the app minted, not an order SAP sent. */
+  is_manual?: boolean;
   job_type: JobType;
   equipment_id: number;
   equipment: Equipment | null;

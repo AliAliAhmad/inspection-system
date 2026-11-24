@@ -4,6 +4,7 @@ Supports PM, defect repair, and inspection job types.
 """
 
 from app.extensions import db
+from app.utils.manual_jobs import is_manually_added
 from datetime import datetime
 
 
@@ -211,6 +212,7 @@ class WorkPlanJob(db.Model):
                 'inspection_assignment_id': _insp_assignment_id,
                 'sap_order_number': self.sap_order_number,
                 'sap_order_type': self.sap_order_type,
+                'is_manual': is_manually_added(self),
                 'description': self.description,
                 'overdue_value': self.overdue_value,
                 'overdue_unit': self.overdue_unit,
@@ -257,6 +259,7 @@ class WorkPlanJob(db.Model):
             'inspection_assignment': self.inspection_assignment.to_dict() if self.inspection_assignment else None,
             'sap_order_number': self.sap_order_number,
             'sap_order_type': self.sap_order_type,
+            'is_manual': is_manually_added(self),
             'description': self.description,
             'cycle_id': self.cycle_id,
             'cycle': self.cycle.to_dict(language) if self.cycle else None,

@@ -33,15 +33,15 @@ describe('a defect severity is translated into the priority the filter uses', ()
 });
 
 describe('a hand-typed job parked in the pool is recognised as such', () => {
-  it('spots the placeholder by number or by type', () => {
-    expect(isHandTypedOrder({ order_number: 'MAN-6-9' })).toBe(true);
-    expect(isHandTypedOrder({ order_number: 'MAN-6-9-P2' })).toBe(true);  // split part
-    expect(isHandTypedOrder({ order_type: 'MANUAL' })).toBe(true);
+  // The rule itself (MAN- prefix, split parts, order_type MANUAL) is tested on
+  // the server, which owns it: tests/test_manual_jobs_single_source.py.
+  it('trusts the flag the server sends', () => {
+    expect(isHandTypedOrder({ order_number: 'MAN-6-9', is_manual: true })).toBe(true);
   });
 
-  it('leaves real SAP orders alone', () => {
-    expect(isHandTypedOrder({ order_number: '4000123456' })).toBe(false);
-    expect(isHandTypedOrder({ order_number: 'PRM-100' })).toBe(false);
+  it('does not re-derive it from the number', () => {
+    expect(isHandTypedOrder({ order_number: 'MAN-6-9' })).toBe(false);
+    expect(isHandTypedOrder({ order_number: '4000123456', is_manual: false })).toBe(false);
     expect(isHandTypedOrder({})).toBe(false);
     expect(isHandTypedOrder(null)).toBe(false);
   });

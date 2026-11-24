@@ -519,6 +519,12 @@ type PendingAssignment =
 // Jobs live ONLY in the three per-berth arrays — the API deliberately sends no
 // flat `jobs` list (it doubled the payload). Patch all three and recompute
 // total_jobs from them.
+/** Who may be named a job's SUPERVISOR. A copy of SUPERVISOR_ROLES in
+ *  app/utils/roles.py — `tests/test_roles_single_source.py` fails if they drift,
+ *  because offering a man the save would refuse is the bug that cost a morning
+ *  on the inspection assignment page. */
+const SUPERVISOR_ROLES: readonly string[] = ['engineer', 'admin', 'specialist', 'maintenance'];
+
 const JOB_ARRAY_KEYS = ['jobs_east', 'jobs_west', 'jobs_both'] as const;
 
 const berthArrayKey = (job: any): 'jobs_east' | 'jobs_west' | 'jobs_both' =>
@@ -1114,6 +1120,7 @@ export default function WorkPlanningPage() {
         equipment: src.equipment || (src.equipment_name ? { id: src.equipment_id, name: src.equipment_name } : null),
         equipment_name: src.equipment_name || src.equipment?.name,
         sap_order_number: src.order_number,
+        is_manual: !!src.is_manual,
         description: src.description || '',
         estimated_hours: src.estimated_hours || 4,
         priority: src.priority || 'normal',
@@ -1573,19 +1580,15 @@ export default function WorkPlanningPage() {
    * Who may be named as a job's SUPERVISOR.
    *
    * Ali, 2026-09-23: a supervisor "watches over it — not one of the workers",
-   * and any senior person may do it, not only an engineer. Must match
-   * SUPERVISOR_ROLES on the server, or the dropdown offers people the save will
-   * refuse — which is the exact bug that cost a morning on the inspection
-   * assignment page.
+   * and any senior person may do it, not only an engineer. See SUPERVISOR_ROLES.
    *
    * Inspectors are left out: they inspect, they do not run jobs.
    */
   const engineersList = useMemo(() => {
     if (!assignableUsersData) return [];
     const users = (assignableUsersData as any)?.data || assignableUsersData;
-    const allowed = ['engineer', 'admin', 'specialist', 'maintenance'];
     return (Array.isArray(users) ? users : [])
-      .filter((u: any) => allowed.includes(u.role));
+      .filter((u: any) => SUPERVISOR_ROLES.includes(u.role));
   }, [assignableUsersData]);
 
   // Manual add job mutation
@@ -2288,22 +2291,11 @@ export default function WorkPlanningPage() {
   };
 
   // useCallback so memoized BundleCards don't re-render on every parent render
-  /** A job a planner typed in, with no origin outside this plan.
-   *
-   *  Mirrors is_manually_added() in app/api/work_plans.py — the server is the
-   *  authority, this only decides whether to offer the button.
-   *
-   *  A `MAN-...` number counts as hand-typed. It is not a SAP order: the server
-   *  mints it when a hand-typed job is returned to the pool, so the job can sit
-   *  there like anything else. Treating it as SAP is what made the button
-   *  disappear from jobs Ali had added himself, and made them show an order
-   *  number he never created. `MAN-6-9-P2` (a split part) still matches. */
-  const isManuallyAddedJob = (job: WorkPlanJob | null): boolean => {
-    if (!job || job.defect_id || job.inspection_assignment_id) return false;
-    if (!job.sap_order_number) return true;
-    return job.sap_order_number.startsWith('MAN-')
-      || (job as any).sap_order_type === 'MANUAL';
-  };
+  /** A job a planner typed in, with no origin outside this plan — `MAN-...`
+   *  placeholders included. The SERVER decides (`is_manually_added()` in
+   *  app/utils/manual_jobs.py) and sends `is_manual`; the board never re-derives
+   *  it, because a copy that drifted is what once hid the delete button. */
+  const isManuallyAddedJob = (job: WorkPlanJob | null): boolean => !!job?.is_manual;
 
   const handleJobClick = useCallback((job: WorkPlanJob) => {
     setSelectedJob(job);
@@ -3877,10 +3869,8 @@ export default function WorkPlanningPage() {
                 As Member
               </Button>
               {(() => {
-                // Same roles as the Job Details dropdown and SUPERVISOR_ROLES
-                // on the server — never offer what the save would refuse.
                 const role = pendingAssignment.user.role;
-                const allowedRole = ['engineer', 'admin', 'specialist', 'maintenance'].includes(role);
+                const allowedRole = SUPERVISOR_ROLES.includes(role);
                 const jobs = supervisableJobs(pendingAssignment);
                 const total = pendingAssignment.kind === 'bundle' ? pendingAssignment.jobs.length : 1;
                 const why = !allowedRole
@@ -4793,7 +4783,7 @@ export default function WorkPlanningPage() {
               </Col>
               <Col span={12}>
                 {/* The field is `engineer_id` for historical reasons — see
-                    SUPERVISOR_ROLES in app/api/work_plans.py. Only the label
+                    SUPERVISOR_ROLES in app/utils/roles.py. Only the label
                     changed; the wire contract did not, so the phone keeps
                     working without an OTA. */}
                 <Form.Item name="engineer_id" label="Supervisor">

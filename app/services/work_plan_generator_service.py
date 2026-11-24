@@ -27,7 +27,7 @@ from app.models.equipment import Equipment
 from app.models.inspection import Inspection
 from app.services.job_durations import (MAN_HOURS_PER_DAY, MIN_CREW,
                                         hours_for, pm_hours, urgent_max_crew)
-from app.services.day_budget import build_week_wallets
+from app.services.day_budget import build_week_wallets, unavailable_by_date
 from app.models.inspection_assignment import InspectionAssignment
 from app.models.inspection_list import InspectionList
 from app.models.pm_template import PMTemplate
@@ -1931,55 +1931,13 @@ def _step_assign(
         logger.warning("assign | no available workers found — %d jobs unassigned", total_jobs)
         return {'workers_assigned': 0, 'jobs_without_worker': total_jobs}
 
-    # ── Load roster + approved leaves for per-day availability ──
-    # roster_by_day_user[day_id][user_id] = 'day'|'night'|'off'|'leave'|None
-    # A user is AVAILABLE on a day if their roster shift is 'day' or 'night'
-    # (or no roster entry exists — default assume available).
-    roster_by_day_user: Dict[int, Dict[int, str]] = defaultdict(dict)
-    try:
-        from app.models.roster import RosterEntry
-        roster_entries = (
-            RosterEntry.query
-            .filter(
-                RosterEntry.date >= plan.week_start,
-                RosterEntry.date <= plan.week_end,
-            )
-            .all()
-        )
-        # Build a map by (date → day.id) for quick lookup
-        date_to_day_id = {d.date: d.id for d in plan.days}
-        for e in roster_entries:
-            day_id = date_to_day_id.get(e.date)
-            if day_id:
-                roster_by_day_user[day_id][e.user_id] = e.shift
-        logger.info("assign | loaded %d roster entries for plan week", len(roster_entries))
-    except Exception as e:
-        logger.warning("assign | could not load roster: %s", e)
-
-    # Load approved leaves covering the plan week
-    # leaves_by_user_day[user_id] = set of date strings when they're on leave
-    leaves_by_user_day: Dict[int, set] = defaultdict(set)
-    try:
-        from app.models.leave import Leave
-        from datetime import timedelta as _td
-        approved_leaves = (
-            Leave.query
-            .filter(
-                Leave.status == 'approved',
-                Leave.date_from <= plan.week_end,
-                Leave.date_to >= plan.week_start,
-            )
-            .all()
-        )
-        for lv in approved_leaves:
-            d = lv.date_from
-            while d <= lv.date_to:
-                if plan.week_start <= d <= plan.week_end:
-                    leaves_by_user_day[lv.user_id].add(d)
-                d += _td(days=1)
-        logger.info("assign | loaded %d approved leaves", len(approved_leaves))
-    except Exception as e:
-        logger.warning("assign | could not load leaves: %s", e)
+    # Who is away from DAY work on each date: roster off/leave/NIGHT, or an
+    # approved leave. ONE rule, shared with the day budget and place_one —
+    # nights are for breakdowns (Ali), so a night man gives the day no hours
+    # and must not be staffed onto it either.
+    away_by_date = unavailable_by_date(plan.week_start, plan.week_end)
+    unavailable_by_day: Dict[int, set] = {
+        day.id: away_by_date.get(day.date, set()) for day in plan.days}
 
     prev_assignments = _get_previous_week_assignments(plan)
 
@@ -1996,19 +1954,6 @@ def _step_assign(
 
     workers_assigned = 0
     jobs_without_worker = 0
-
-    # Build a set of (day_id, user_id) that are NOT available due to roster/leave
-    unavailable_by_day: Dict[int, set] = defaultdict(set)
-    for day in plan.days:
-        # Roster: anyone marked 'off' or 'leave' is unavailable
-        day_roster = roster_by_day_user.get(day.id, {})
-        for user_id, shift in day_roster.items():
-            if shift in ('off', 'leave'):
-                unavailable_by_day[day.id].add(user_id)
-        # Approved leaves: add all users on leave that day
-        for user_id, leave_dates in leaves_by_user_day.items():
-            if day.date in leave_dates:
-                unavailable_by_day[day.id].add(user_id)
 
     # Track team rotation per (day_id, berth, team_type, cat) for multi-team load balancing
     team_rotation_counter: Dict[Tuple[int, str, str, str], int] = defaultdict(int)

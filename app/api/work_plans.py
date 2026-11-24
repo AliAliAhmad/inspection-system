@@ -29,6 +29,9 @@ from app.exceptions.api_exceptions import ValidationError, NotFoundError, Forbid
 from app.utils.decorators import (get_current_user, get_language,
                                   planning_today as get_planning_today,
                                   admin_required as admin_decorator)
+from app.utils.manual_jobs import (MANUAL_ORDER_PREFIX, is_manual_order_number,
+                                   is_manually_added)
+from app.utils.roles import PLANNING_ROLES, SUPERVISOR_ROLES
 from app.services.notification_service import NotificationService
 from app.services.work_plan_ai_service import WorkPlanAIService
 from datetime import datetime, timedelta, date
@@ -36,14 +39,6 @@ from io import BytesIO
 import json
 
 bp = Blueprint('work_plans', __name__)
-
-
-# Roles allowed to touch work planning. Deliberately NOT quality_engineer:
-# QEs review work, they do not author plans. Nobody holds it as a primary role
-# today (it exists only as the auto-paired minor role of engineer, see
-# User.get_minor_role), so removing it locks nobody out — but _log_excluded_roles()
-# at startup will shout if that ever stops being true.
-PLANNING_ROLES = ('admin', 'engineer')
 
 
 def engineer_or_admin_required():
@@ -1392,38 +1387,8 @@ def assert_job_removable(job):
     )
 
 
-# A hand-typed job that has been returned to the pool comes back wearing one of
-# these. It is NOT a SAP order — _delete_job_record mints it so the job can sit
-# in the pool like anything else. `MAN-{plan_id}-{job_id}`, and split_job may
-# append `-P2`, so this is a PREFIX test.
-MANUAL_ORDER_PREFIX = 'MAN-'
-
-
-def is_manual_order_number(order_number):
-    return bool(order_number) and str(order_number).startswith(MANUAL_ORDER_PREFIX)
-
-
-def is_manually_added(job):
-    """True when a planner typed this job in by hand.
-
-    A manual job has no origin outside the plan: no defect, no inspection, and
-    no SAP order — or an order number the app minted for it ITSELF.
-
-    That last clause is the whole of Ali's 2026-09-09 report: "SOME have the
-    option some do not have, and the do not have app gives them a sap order i do
-    not know why". Removing a hand-typed job parks it in the pool as
-    `MAN-<plan>-<job>` so the work is not lost. When it is scheduled again — by
-    hand, or by _auto_group_equipment_jobs sweeping up everything pending for
-    that machine — the new row carries that number, and a plain "has a
-    sap_order_number" test then calls it a SAP job. It stopped being deletable
-    and it displayed an order Ali never created.
-    """
-    if job.defect_id or job.inspection_assignment_id:
-        return False
-    if not job.sap_order_number:
-        return True
-    return (is_manual_order_number(job.sap_order_number)
-            or job.sap_order_type == 'MANUAL')
+# The hand-typed-job rule (MAN- placeholders included) lives in
+# app/utils/manual_jobs.py, so the web reads `is_manual` instead of copying it.
 
 
 def assert_removable_from_published(job):
@@ -1542,7 +1507,7 @@ def _delete_job_record(plan_id, job, discard=False):
     # instead of vanishing. Skipped entirely when discarding.
     elif (not discard and job.job_type in ('pm', 'corrective')
           and not job.defect_id and job.equipment_id):
-        manual_order_number = f"MAN-{plan_id}-{job_id}"
+        manual_order_number = f"{MANUAL_ORDER_PREFIX}{plan_id}-{job_id}"
         existing_manual = SAPWorkOrder.query.filter_by(
             work_plan_id=plan_id, order_number=manual_order_number
         ).first()
@@ -1574,21 +1539,8 @@ def _delete_job_record(plan_id, job, discard=False):
 # (production) enforced the FK and raised IntegrityError -> 500 with the job not
 # removed; SQLite (tests, foreign_keys=0) deleted the job anyway and left the
 # rating row dangling.
-SUPERVISOR_ROLES = ('engineer', 'admin', 'specialist', 'maintenance')
-"""Who may be named as a job's supervisor.
-
-Ali, 2026-09-23: "we need to have the option to have supervisor for the job".
-He chose a watcher rather than a worker — responsible for the job, doing none of
-its lines — and chose that ANY senior person may do it, not only an engineer.
-SAP's 685 MES-SUPV operations say supervision is real yard work.
-
-THE FIELD IS STILL CALLED engineer_id, AND DELIBERATELY SO. Nothing in the
-backend ever read it — it was set, stored and displayed — so it was free to
-become this rather than earn a second column beside it. Two records of one fact
-is what this codebase keeps refusing. Renaming the wire contract would buy
-nothing and break the mobile payload until an OTA; only the DISPLAY says
-"Supervisor".
-"""
+# SUPERVISOR_ROLES — who may supervise, and why the field is still
+# `engineer_id` — lives in app/utils/roles.py.
 
 
 def _validate_supervisor(engineer_id):
@@ -6800,7 +6752,8 @@ def crew_change_options(job_id):
     leave on the JOB's day. The supervisor cannot read /users/for-assignment
     (planners only), so this is his list."""
     from app.models import Leave
-    from app.services.crew_change import CREW_ROLES, job_has_started
+    from app.services.crew_change import job_has_started
+    from app.utils.roles import CREW_ROLES
     user = get_current_user()
     language = get_language(user)
     job = _crew_job_for(user, job_id)

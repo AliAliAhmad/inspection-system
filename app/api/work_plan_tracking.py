@@ -100,8 +100,8 @@ def notify_engineers_for_job(job, notification_type, title, message, priority='i
 
     Ali, 2026-09-23, on what a supervisor is: he "watches over it — not one of
     the workers", and should "be told when it starts and finishes". The field is
-    still called `engineer_id` for the reason written above SUPERVISOR_ROLES in
-    work_plans.py.
+    still called `engineer_id` for the reason written under SUPERVISOR_ROLES in
+    app/utils/roles.py.
 
     DEDUPED, and that is not tidiness. The supervisor is very often the same
     person who built the plan, and being told twice that one job started teaches

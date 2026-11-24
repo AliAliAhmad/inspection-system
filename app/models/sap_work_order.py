@@ -4,6 +4,7 @@ Orders are stored here until scheduled to a specific day.
 """
 
 from app.extensions import db
+from app.utils.manual_jobs import is_manual_order
 from datetime import datetime
 
 
@@ -149,6 +150,7 @@ class SAPWorkOrder(db.Model):
             'work_plan_id': self.work_plan_id,
             'order_number': self.order_number,
             'order_type': self.order_type,
+            'is_manual': is_manual_order(self.order_number, self.order_type),
             'job_type': self.job_type,
             'equipment_id': self.equipment_id,
             'equipment': self.equipment.to_dict() if self.equipment else None,

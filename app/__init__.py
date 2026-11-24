@@ -2157,7 +2157,7 @@ def create_app(config_name='development'):
         app._planning_roles_checked = True
         try:
             from app.models import User
-            from app.api.work_plans import PLANNING_ROLES
+            from app.utils.roles import PLANNING_ROLES
             blocked = User.query.filter(
                 User.is_active.is_(True),
                 User.role.notin_(PLANNING_ROLES),

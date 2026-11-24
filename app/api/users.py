@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models import User, Leave, ImportLog, RoleSwapLog
 from app.extensions import db, safe_commit
 from app.exceptions.api_exceptions import ValidationError, NotFoundError
+from app.utils.roles import CREW_ROLES
 from app.utils.decorators import admin_required, role_required
 from app.utils.pagination import paginate
 
@@ -82,7 +83,7 @@ def get_users_for_assignment():
         User.query
         .filter(
             User.is_active == True,
-            User.role.in_(['inspector', 'specialist', 'engineer', 'admin', 'maintenance'])
+            User.role.in_(CREW_ROLES)
         )
         .order_by(User.full_name)
         .all()

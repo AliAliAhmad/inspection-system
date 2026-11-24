@@ -369,7 +369,7 @@ def test_removing_without_discard_still_parks_it(db_session, engineer, client,
 def test_a_parked_job_is_still_recognised_as_hand_typed(db_session, engineer,
                                                         client, plan):
     """A job back from the pool wears MAN-…; it is still Ali's, not SAP's."""
-    from app.api.work_plans import is_manually_added
+    from app.utils.manual_jobs import is_manually_added
 
     eq = make_equipment(db_session, serial='RS109')
     job = WorkPlanJob(work_plan_day_id=_day(plan).id, job_type='pm',

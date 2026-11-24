@@ -24,12 +24,7 @@ from app.models import (Leave, User, WorkPlan, WorkPlanAssignment,
                         WorkPlanCrewChangeRequest, WorkPlanDay, WorkPlanJob)
 from app.services.notification_service import NotificationService
 
-# The people the board lets a planner drag onto a job. Kept equal to
-# /users/for-assignment — offering a man the save would refuse is the bug that
-# cost a morning on the inspection assignment page.
-CREW_ROLES = ('inspector', 'specialist', 'maintenance', 'engineer', 'admin')
-
-PLANNING_ROLES = ('admin', 'engineer')
+from app.utils.roles import CREW_ROLES, PLANNING_ROLES
 
 
 # ─── "Has this job started?" — the one answer ──────────────────────────────
