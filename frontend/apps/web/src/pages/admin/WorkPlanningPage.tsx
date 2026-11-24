@@ -109,6 +109,7 @@ import VoiceTextArea from '../../components/VoiceTextArea';
 import { InputNumber } from 'antd';
 import { getOverdueInfo, isJobOverdue, computeOverdueMax, getOverdueHeat } from '../../utils/overdue';
 import { shortName } from '../../utils/short-name';
+import { sapOrderNumber } from '../../utils/sap-order-number';
 
 dayjs.extend(isoWeek);
 
@@ -4111,11 +4112,25 @@ export default function WorkPlanningPage() {
               </Row>
             </Card>
 
-            {/* SAP Order */}
-            {selectedJob.sap_order_number ? (
+            {/* SAP Order. A job on a day carries `sap_order_number`, a pool order
+                `order_number` — reading only the first said "No SAP Order Number"
+                on EVERY pool order (Ali, 2026-11-25). Red is kept for the one case
+                that is really missing; a hand-typed job or an inspection defect
+                never had an order, and saying so is not an alarm. */}
+            {sapOrderNumber(selectedJob) ? (
               <Card size="small" style={{ marginBottom: 16 }}>
                 <Text type="secondary">SAP Order</Text>
-                <div style={{ fontWeight: 600 }}>{selectedJob.sap_order_number}</div>
+                <div style={{ fontWeight: 600, fontFamily: 'monospace', direction: 'ltr' }}>
+                  {sapOrderNumber(selectedJob)}
+                </div>
+              </Card>
+            ) : (selectedJob as any).is_manual ? (
+              <Card size="small" style={{ marginBottom: 16 }}>
+                <Text type="secondary">✎ Typed in by hand — no SAP order</Text>
+              </Card>
+            ) : (selectedJob.defect_id || selectedJob.inspection_assignment_id) ? (
+              <Card size="small" style={{ marginBottom: 16 }}>
+                <Text type="secondary">From an inspection in the app — no SAP order</Text>
               </Card>
             ) : (
               <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fff2f0', borderColor: '#ffccc7' }}>

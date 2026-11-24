@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { workPlansApi, type AvailablePMJob, type AvailableDefectJob, type SAPWorkOrder } from '@inspection/shared';
 import { getOverdueInfo, isJobOverdue, getOverdueHeat, computeOverdueMax, type OverdueMax } from '../../utils/overdue';
 import { useLanguage } from '../../providers/LanguageProvider';
+import { sapOrderNumber } from '../../utils/sap-order-number';
 
 // Priority order for sorting
 const PRIORITY_ORDER: Record<string, number> = {
@@ -209,6 +210,13 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
       {description && (
         <div style={{ fontSize: 13, fontWeight: 700, fontStyle: 'italic', color: '#262626', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {description.substring(0, 60)}{description.length > 60 ? '…' : ''}
+        </div>
+      )}
+      {/* The SAP order number, for PRM and SAP faults alike (Ali, 2026-11-25).
+          It was the card's subtitle until the 2026-02-09 sidebar redesign. */}
+      {sapOrderNumber(job) && (
+        <div title={`SAP ${sapOrderNumber(job)}`} style={{ fontSize: 11, color: '#8c8c8c', fontFamily: 'monospace', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+          #{sapOrderNumber(job)}
         </div>
       )}
       {/* Row 3: Tags */}

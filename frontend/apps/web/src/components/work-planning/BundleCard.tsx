@@ -7,6 +7,7 @@ import type { JobSubTask, WorkPlanJob } from '@inspection/shared';
 import { getOverdueInfo, isJobOverdue, getOverdueHeat, type OverdueMax } from '../../utils/overdue';
 import { JobSubTasks } from './JobSubTasks';
 import { shortName } from '../../utils/short-name';
+import { sapOrderNumber } from '../../utils/sap-order-number';
 
 const { Text } = Typography;
 
@@ -249,6 +250,14 @@ const IndividualJobRow: React.FC<IndividualJobRowProps> = ({ job, dayId, onJobCl
         >
           {jobName || (job.job_type === 'defect' ? 'Defect repair' : job.job_type === 'corrective' ? 'Corrective work' : 'Preventive maintenance')}
         </Text>
+
+        {/* The SAP order number — the one the planner types into SAP. Numbers
+            read left-to-right in Arabic too, hence direction: ltr. */}
+        {sapOrderNumber(job) && (
+          <div title={`SAP ${sapOrderNumber(job)}`} style={{ fontSize: 9, color: '#8c8c8c', fontFamily: 'monospace', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            #{sapOrderNumber(job)}
+          </div>
+        )}
 
         {/* Materials chips */}
         {(job.materials || []).length > 0 && (
