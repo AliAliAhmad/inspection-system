@@ -2951,47 +2951,34 @@ with app.app_context():
     print('Schema patches complete.')
 "
 
-echo "Ensuring admin user exists..."
+echo "Checking the sample admin account..."
 python -c "
 from app import create_app
 from app.extensions import db
 from app.models.user import User
 app = create_app('production')
 with app.app_context():
+    # Nothing here creates users or sets passwords any more (2026-11-25).
+    #
+    # This block used to (1) create admin@company.com with the password admin123
+    # -- a sample account whose password is in the code -- and (2) reset EVERY
+    # user's password to their SAP id on EVERY boot. (2) was a one-time go-live
+    # step from 2026-02-21 that was never taken out: each deploy wiped every
+    # password people had chosen. New staff are unaffected by its removal: the
+    # team import (app/api/users.py, import_team) already gives each new user
+    # their SAP id as a first password with must_change_password on.
+    #
+    # The sample admin is disabled ONLY while it still has its published
+    # password. If someone changed it, it is in deliberate use: left alone.
     admin = User.query.filter_by(email='admin@company.com').first()
-    if not admin:
-        admin = User(
-            email='admin@company.com',
-            full_name='Ahmad Al-Rashid',
-            role='admin',
-            role_id='ADM001',
-            phone='+966501234567',
-            language='en',
-            is_active=True
-        )
-        admin.set_password('admin123')
-        db.session.add(admin)
+    if admin is None:
+        print('Sample admin admin@company.com: not present.')
+    elif admin.is_active and admin.check_password('admin123'):
+        admin.is_active = False
         db.session.commit()
-        print('Admin user created: admin@company.com / admin123')
+        print('Sample admin admin@company.com DISABLED: it still had the published password.')
     else:
-        print('Admin user already exists.')
-
-    # Set default passwords for all imported users (password = sap_id)
-    imported_users = User.query.filter(db.or_(User.email.is_(None), User.email != 'admin@company.com')).all()
-    updated = 0
-    for u in imported_users:
-        if u.sap_id:
-            try:
-                u.set_password(u.sap_id)
-                u.must_change_password = True
-                updated += 1
-            except Exception as e:
-                print(f'Error setting password for {u.username}: {e}')
-    if updated:
-        db.session.commit()
-        print(f'Set default passwords (sap_id) for {updated} imported users')
-    else:
-        print('No users needed password update.')
+        print('Sample admin admin@company.com: password changed or already inactive, left as is.')
 "
 
 echo "Starting gunicorn..."
