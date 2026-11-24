@@ -746,7 +746,9 @@
   The board hides inspection jobs (InspectionSummaryBar), so they are invisible — but they are
   real rows in a second "week" nobody sees. Ask Ali before merging or deleting them.
 
-### Knot report fixes 1, 2, 3, 5 — 2026-11-25, branch `knot-fix/knots-1-2-3-5`, NOT PUSHED
+### Knot report fixes 1, 2, 3, 5 — DEPLOYED 2026-11-25 (main `4c60f6c`, 3 commits from `aaaa742`)
+- Live check: /health 502 at 00:53, 200 at 00:54, database connected; login + work-plans routes answer.
+  **Not yet seen:** the Render log lines for the 7 columns and the sample admin. No OTA needed.
 - **Knot 1 FIXED — a night man is never staffed onto day work** (Ali: "he is in the night and
   the day work is for the morning shift"). The generator had its own 70-line copy that skipped
   only off/leave. Now ONE rule, `day_budget.unavailable_by_date`, used by the wallet, the
