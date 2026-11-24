@@ -45,8 +45,16 @@ def _user(email, password, sap_id=None, role='maintenance', active=True):
 
 
 def test_start_sh_sets_no_password_and_creates_no_user():
+    """Every form, not just the ORM one: a raw `UPDATE users SET password_hash`
+    reset sara@company.com to sara123 on every boot and slipped past the first
+    version of this test, which looked only for set_password( and User(."""
     assert 'set_password(' not in START_SH
     assert 'User(' not in START_SH
+    assert 'password_hash' not in START_SH
+    assert 'generate_password_hash' not in START_SH
+    assert not re.search(r'UPDATE\s+"?users"?\s', START_SH, re.I), \
+        'start.sh must not rewrite user rows on boot'
+    assert not re.search(r'INSERT\s+INTO\s+"?users"?\s', START_SH, re.I)
 
 
 def test_a_password_a_worker_chose_survives_a_boot(db_session):

@@ -961,3 +961,9 @@ LESSON: (2026-11-25) start.sh held a one-time go-live step ("set every user's pa
 their SAP id") that ran on EVERY boot for 9 months, wiping every password people chose. →
 Anything meant to run once goes in a `flask <command>` run by hand, never in start.sh. A
 boot script may only build schema; it must never set a password or create a user.
+
+LESSON: (2026-11-25) My guard test for "start.sh sets no password" checked only the ORM forms
+(set_password, User), and a raw-SQL `UPDATE users SET password_hash` reset sailed past it;
+the live deploy log showed it. → A guard must forbid the DATA being written (the column, the
+table), not one way of writing it. And read the real deploy log after a fix — it catches what
+the test author did not think of.

@@ -778,6 +778,17 @@
   `tests/test_start_sh_never_touches_passwords.py` run the REAL boot block; 4 fail on the old one.
   The deploy that carries this boots with the NEW start.sh, so the old reset never runs again.
   Passwords already reset to SAP ids stay that way until each person changes theirs.
+- **Deploy log 2026-11-25 confirmed:** 6 of the 7 columns were really MISSING in production
+  (`frequency` already present) — conflicts, restrictions and template checklists had been
+  failing. `admin@company.com` still had `admin123` and was DISABLED on boot.
+- **Second reset found in that log, FIXED (not yet pushed):** `start.sh:404` set
+  `sara@company.com` to `sara123` by raw SQL on every boot (since `daa22ef`, 2026-02-07). It
+  slipped past the guard, which checked only `set_password(`/`User(`. Removed; the guard now
+  also refuses `password_hash`, `generate_password_hash`, `UPDATE users`, `INSERT INTO users`.
+  The account itself was NOT disabled — Ali's call.
+- **Noticed, not fixed:** every `python -c` step in start.sh builds the full app and starts the
+  31-job scheduler (4 times per boot); "Created <table> table" prints on every boot even when
+  the table exists.
 - **Residual, not fixed:** an already-logged-in session is not cut when an account is disabled —
   `get_current_user()` does not check `is_active`. `flask seed-admin` (manual only) still makes
   `admin@inspection.com / Admin1234`. `run.py` / `seed_data.py` are local-dev only.
