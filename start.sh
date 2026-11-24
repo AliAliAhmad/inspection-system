@@ -2940,7 +2940,7 @@ with app.app_context():
     print('Schema patches complete.')
 "
 
-echo "Checking the sample admin account..."
+echo "Checking the sample accounts..."
 python -c "
 from app import create_app
 from app.extensions import db
@@ -2957,17 +2957,21 @@ with app.app_context():
     # team import (app/api/users.py, import_team) already gives each new user
     # their SAP id as a first password with must_change_password on.
     #
-    # The sample admin is disabled ONLY while it still has its published
-    # password. If someone changed it, it is in deliberate use: left alone.
-    admin = User.query.filter_by(email='admin@company.com').first()
-    if admin is None:
-        print('Sample admin admin@company.com: not present.')
-    elif admin.is_active and admin.check_password('admin123'):
-        admin.is_active = False
-        db.session.commit()
-        print('Sample admin admin@company.com DISABLED: it still had the published password.')
-    else:
-        print('Sample admin admin@company.com: password changed or already inactive, left as is.')
+    # Sample accounts whose passwords are in this repository. Each is disabled
+    # ONLY while it still has that password; if someone changed it, it is in
+    # deliberate use and is left alone. sara@company.com is not a real person
+    # (Ali, 2026-11-25); an old boot step reset her to sara123 on every start.
+    for email, published in (('admin@company.com', 'admin123'),
+                             ('sara@company.com', 'sara123')):
+        account = User.query.filter_by(email=email).first()
+        if account is None:
+            print(f'Sample account {email}: not present.')
+        elif account.is_active and account.check_password(published):
+            account.is_active = False
+            db.session.commit()
+            print(f'Sample account {email} DISABLED: it still had the published password.')
+        else:
+            print(f'Sample account {email}: password changed or already inactive, left as is.')
 "
 
 echo "Starting gunicorn..."

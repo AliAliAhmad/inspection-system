@@ -23,7 +23,7 @@ START_SH = (ROOT / 'start.sh').read_text(encoding='utf-8')
 
 def _boot_block():
     blocks = re.findall(r'python -c "\n(.*?)\n"\n', START_SH, re.S)
-    block = next(b for b in blocks if 'admin@company.com' in b)
+    block = next(b for b in blocks if 'Sample account' in b)
     block = block.replace('\\"', '"').replace('\\$', '$')
     # Same code, test app instead of production; reuse the test's app context.
     block = block.replace("app = create_app('production')\nwith app.app_context():",
@@ -92,3 +92,23 @@ def test_no_sample_admin_means_none_is_created(db_session):
     _run_boot_block()
 
     assert User.query.filter_by(email='admin@company.com').first() is None
+
+
+def test_sara_with_her_published_password_is_disabled(db_session):
+    """Not a real person (Ali, 2026-11-25); her password is in the code."""
+    sara = _user('sara@company.com', 'sara123')
+
+    _run_boot_block()
+
+    db.session.refresh(sara)
+    assert sara.is_active is False
+
+
+def test_one_sample_account_missing_does_not_stop_the_other(db_session):
+    sample = _user('admin@company.com', 'admin123', role='admin')
+
+    _run_boot_block()
+
+    db.session.refresh(sample)
+    assert sample.is_active is False
+    assert User.query.filter_by(email='sara@company.com').first() is None

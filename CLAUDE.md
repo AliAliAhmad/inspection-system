@@ -785,7 +785,8 @@
   `sara@company.com` to `sara123` by raw SQL on every boot (since `daa22ef`, 2026-02-07). It
   slipped past the guard, which checked only `set_password(`/`User(`. Removed; the guard now
   also refuses `password_hash`, `generate_password_hash`, `UPDATE users`, `INSERT INTO users`.
-  The account itself was NOT disabled — Ali's call.
+  Ali: sara is not a real person — start.sh now disables it on boot while it still has
+  `sara123`, the same rule as the sample admin (one loop over both sample accounts).
 - **Noticed, not fixed:** every `python -c` step in start.sh builds the full app and starts the
   31-job scheduler (4 times per boot); "Created <table> table" prints on every boot even when
   the table exists.
