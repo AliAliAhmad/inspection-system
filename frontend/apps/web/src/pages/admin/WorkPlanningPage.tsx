@@ -108,6 +108,7 @@ import InspectionSummaryBar, { InspectionCountBadge } from '../../components/wor
 import VoiceTextArea from '../../components/VoiceTextArea';
 import { InputNumber } from 'antd';
 import { getOverdueInfo, isJobOverdue, computeOverdueMax, getOverdueHeat } from '../../utils/overdue';
+import { PrmOverdueButton, PrmOverdueTag } from '../../components/work-planning/PrmOverdue';
 import { shortName } from '../../utils/short-name';
 import { sapOrderNumber } from '../../utils/sap-order-number';
 
@@ -2502,6 +2503,9 @@ export default function WorkPlanningPage() {
           {/* Right side: primary actions only */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
 
+            {/* The planner's PRM overdue list (courier file PRM_Overdue.xlsx) */}
+            <PrmOverdueButton />
+
             {/* Smart Plan Generator */}
             {currentPlan && isDraft && (
               <GeneratePlanButton
@@ -4038,6 +4042,7 @@ export default function WorkPlanningPage() {
               {selectedJob?.job_type === 'pm' ? 'PM' : selectedJob?.job_type === 'defect' ? 'Defect' : selectedJob?.job_type === 'corrective' ? 'Corrective' : 'Inspection'}
             </span>
             <span style={{ color: getOverdueHeat(selectedJob as any, overdueMax).active ? getOverdueHeat(selectedJob as any, overdueMax).stripe : undefined }}>Job Details</span>
+            <PrmOverdueTag equipmentName={(selectedJob as any)?.equipment?.name || (selectedJob as any)?.equipment_name} />
           </Space>
         }
         open={jobDetailsModalOpen}

@@ -167,6 +167,8 @@ def create_app(config_name='development'):
         quick_reports,
         # Unplanned Jobs
         unplanned_jobs,
+        # The planner's PRM overdue list (courier file PRM_Overdue.xlsx)
+        prm_overdue,
         # Smart Plan Generator — Worker Assignment Rules
         worker_assignment_rules,
         # Data Cleanup (admin tooling — red-tenths typo correction etc.)
@@ -288,6 +290,9 @@ def create_app(config_name='development'):
 
     # Unplanned Jobs
     app.register_blueprint(unplanned_jobs.bp, url_prefix='/api/unplanned-jobs')
+
+    # The planner's PRM overdue list
+    app.register_blueprint(prm_overdue.bp, url_prefix='/api/prm-overdue')
 
     # Data Cleanup (admin tooling)
     app.register_blueprint(data_cleanup.bp, url_prefix='/api/admin/cleanup')

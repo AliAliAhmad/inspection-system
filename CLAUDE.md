@@ -871,6 +871,21 @@
   higher. Watch: the sample export is "YTD" — on 1 January every plan would lose its last finish.
 - 25 tests in `tests/test_due_point_rule.py`; the 5 behaviour tests fail on the old code. 1424 pass.
 
+### The planner's PRM overdue list — BUILT 2026-11-25, NOT PUSHED
+- Courier file `Source file / PRM_Overdue.xlsx` (planner's PM-MES-WEEK mail; spec
+  `SERVER_PRM_OVERDUE.md`, delivered through the courier the same day). `app/services/prm_overdue.py`
+  parses it (exact folder+name, NEVER `LIKE`: `_` is a wildcard, so `%PRM_Overdue%` matched the
+  spec .md); `GET /api/prm-overdue` in its own `app/api/prm_overdue.py`, PLANNING_ROLES only.
+  New upload REPLACES the list; header-only = nothing overdue; `available:false` = never delivered.
+  Parsed once per file (in-memory, keyed by id+sha), stamps `parsed_at`. No schema change.
+- Web: header button "PRM overdue (n)" → list with "Plan mail received …" + stale warning (> 8 days);
+  red "PRM overdue 91 h" tag on pool cards, day cards and Job Details (`PrmOverdue.tsx`), matched
+  by the plant code at the start of the equipment name. Ali: BOTH numbers side by side — the
+  app's own badge is untouched. Phone: later (needs an OTA).
+- **Section 5 (spec):** on 2026-11-25 the endpoint must return TT058 91, TT059 51, TT055 47,
+  TT054 20, TT021 6. Proven in tests with a built file; **must still be checked on production.**
+- 14 tests `tests/test_prm_overdue.py`, 3 `PrmOverdue.test.ts`. 1438 backend, 72 web, 98 shared.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

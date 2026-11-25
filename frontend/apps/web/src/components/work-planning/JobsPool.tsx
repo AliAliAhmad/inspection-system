@@ -17,6 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { workPlansApi, type AvailablePMJob, type AvailableDefectJob, type SAPWorkOrder } from '@inspection/shared';
 import { getOverdueInfo, isJobOverdue, getOverdueHeat, computeOverdueMax, type OverdueMax } from '../../utils/overdue';
+import { PrmOverdueTag } from './PrmOverdue';
 import { useLanguage } from '../../providers/LanguageProvider';
 import { sapOrderNumber } from '../../utils/sap-order-number';
 
@@ -205,6 +206,8 @@ const DraggableJobItemInner: React.FC<DraggableJobItemProps> = ({ job, jobType, 
             {heat.isWorst ? '🔥 ' : ''}{overdue.amount}{overdue.shortUnit}
           </span>
         )}
+        {/* The planner's number, beside the app's own (Ali, 2026-11-25). */}
+        <PrmOverdueTag equipmentName={equipmentName} />
       </div>
       {/* Row 2: Description (single line, truncated) */}
       {description && (
