@@ -956,6 +956,12 @@ def _resolve_overdue(
     """
     if _is_performance_pm(job_type, maintenance_base):
         return stored_value, (stored_unit or 'hours')
+    # A calendar PM whose number the nightly sync worked out from the plan's
+    # last finish date and its interval (Ali, 2026-11-25). Only the sync knows
+    # those, so the stored value wins — including a stored 0, "not due yet".
+    if (job_type == 'pm' and (maintenance_base or '').lower() == 'calendar'
+            and stored_value is not None and (stored_unit or 'days') == 'days'):
+        return stored_value, 'days'
     if required_date is not None:
         return max(0, (today - required_date).days), 'days'
     # No date to compute from — fall back to whatever was imported

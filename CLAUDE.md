@@ -853,6 +853,24 @@
 - **⚠️ Not checked against production data:** an hourly order whose meter cannot be read is stored
   with NO overdue figure, so it shows no badge by design. Old Excel imports (if any) used negative.
 
+### One due rule for both PM clocks — 2026-11-25, NOT PUSHED
+- Ali: overdue = (since last service) − (interval − 10% compliance range). Hourly = hours run
+  (IK17 since the plan's last IW39 finish date), due at **225h**. Calendar = days since the plan's
+  last finish, due at **interval × 0.9** (3-week → day 19, monthly → day 27). Never mixed: one
+  plan, one clock. `due_point()`, `calendar_interval_days()`, `calendar_days_overdue()` in
+  `sap_order_parser.py`; used in `_priority_for`.
+- Calendar intervals are read from the NAME (SAP does not export IP24; plan file's Interval is
+  empty): 3-Week(s) → 21, Inspection AC System → 30, MECHANICAL INSPECTION on TR → 30. Anything
+  else keeps the OLD number. A known-not-due calendar order stores **0**, not None.
+- Generator now KEEPS the sync's stored number for calendar PMs (was: today − Basic start date).
+  Priority tiers unchanged — a badge and a priority can now disagree.
+- **Not done, Ali's answers:** SV "MECHANICAL KM SERVICE" is by KILOMETRES (needs km readings +
+  interval); WBO "MECHANICAL RH SERVICE" is running hours but **IK17 has NO WBO readings** — do
+  not flip it to hourly in the plan file until the courier exports them.
+- **Courier (planned, not built):** per order, SAP's own overdue + unit + sign; app takes the
+  higher. Watch: the sample export is "YTD" — on 1 January every plan would lose its last finish.
+- 25 tests in `tests/test_due_point_rule.py`; the 5 behaviour tests fail on the old code. 1424 pass.
+
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

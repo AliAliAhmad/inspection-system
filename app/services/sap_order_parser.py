@@ -847,6 +847,67 @@ CALENDAR_HIGH_AGE_DAYS = 5
 CALENDAR_URGENT_SINCE_LAST_PM_DAYS = 60
 
 
+# ---------------------------------------------------------------------------
+# WHEN a service falls due — the same rule for both clocks (Ali, 2026-11-25).
+#
+#   overdue = (since the last service) − (interval − 10%)
+#
+# Hourly plans count HOURS RUN (IK17 meter readings since the plan's last
+# finish date); calendar plans count DAYS PASSED since the plan's last finish
+# date. The two are never mixed: one plan is one clock. The 10% is SAP's
+# compliance range — the service is called that much BEFORE the interval.
+# ---------------------------------------------------------------------------
+
+DUE_COMPLIANCE_MARGIN = 0.10
+
+
+def due_point(interval):
+    """The hours or days after the last service at which this one falls due."""
+    return interval * (1 - DUE_COMPLIANCE_MARGIN)
+
+
+_THREE_WEEKS = re.compile(r'\b3\s*-?\s*weeks?\b', re.IGNORECASE)
+
+
+def calendar_interval_days(description, plant_code):
+    """How many days a calendar service repeats every, or None if not known.
+
+    SAP does not export the plan's cycle (IP24), and Ali's plan file leaves its
+    Interval column empty, so the interval is read from the order's name. Each
+    line below is an answer Ali gave on 2026-11-25; anything else returns None
+    and keeps its old day badge until he names it.
+
+      RS109-3-Week INSPECTION_RS / 3-Weeks / ECH...  -> 21 days
+      TT031-Inspection AC System                     -> 30 days (monthly)
+      TR...-MECHANICAL INSPECTION (trailers only)    -> 30 days (monthly)
+
+    Deliberately NOT here: MECHANICAL KM SERVICE (SV) is due by kilometres, and
+    MECHANICAL RH SERVICE (WBO) by running hours — neither is a day clock.
+    """
+    text = description or ''
+    if _THREE_WEEKS.search(text):
+        return 21
+    upper = text.upper()
+    if 'INSPECTION AC SYSTEM' in upper:
+        return 30
+    if 'MECHANICAL INSPECTION' in upper and (plant_code or '').upper().startswith('TR'):
+        return 30
+    return None
+
+
+def calendar_days_overdue(days_since_last_pm, interval_days):
+    """Whole days past the due point; 0 when not due yet; None when unknowable.
+
+    0 is stored on purpose for "known and not due": None would send the
+    generator back to its date fallback and show overdue days on an order the
+    pool says is fine. Never negative — other readers count any non-zero value
+    as overdue.
+    """
+    if interval_days is None or days_since_last_pm is None:
+        return None
+    return max(0, days_since_last_pm - round(due_point(interval_days)))
+
+
 def calendar_pm_priority(age_days, days_since_last_pm):
     """Priority for a calendar-based PM.
 

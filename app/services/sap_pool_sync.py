@@ -35,7 +35,10 @@ from app.services.sap_order_parser import (
     load_iw39,
     build_last_completion_index,
     build_meter_index,
+    calendar_days_overdue,
+    calendar_interval_days,
     corrective_priority,
+    due_point,
     hourly_pm_priority,
     hours_run_since,
     load_maintenance_plan_types,
@@ -43,6 +46,7 @@ from app.services.sap_order_parser import (
     parse_operation_hours,
     parse_operations,
     pm_interval_hours,
+    PM_SERVICE_INTERVAL_HOURS,
 )
 from app.services.sap_removal_rules import _Reporter, reconcile_scheduled_orders
 from app.utils.decorators import planning_today
@@ -1094,9 +1098,18 @@ def _priority_for(candidate, meters, last_completion, breakdowns, cluster):
     basis = candidate['pm_basis']
 
     if basis == 'calendar':
-        # Ali's rule counts days since the order was created, with days since
-        # this service last finished as the overriding second signal. The larger
-        # of the two is what the card should run hot on.
+        # Ali, 2026-11-25: the same rule as the hourly clock, in days — days
+        # since this plan was last done, minus (interval − 10%). The priority
+        # tiers are unchanged (calendar_pm_priority); only the number moves.
+        days_late = calendar_days_overdue(
+            candidate.get('days_since_last_pm'),
+            calendar_interval_days(candidate.get('description'),
+                                   candidate.get('plant_code')))
+        if days_late is not None:
+            return candidate['priority'], days_late, 'days'
+        # Interval or last finish not known: the old reading, unchanged —
+        # days since the order was created, or since this service last
+        # finished, whichever is larger.
         overdue = max(candidate.get('age_days') or 0,
                       candidate.get('days_since_last_pm') or 0)
         return candidate['priority'], (overdue or None), ('days' if overdue else None)
@@ -1104,7 +1117,9 @@ def _priority_for(candidate, meters, last_completion, breakdowns, cluster):
     if basis == 'hourly':
         hours_run = hours_run_since(meters, candidate['plant_code'],
                                     last_completion.get(candidate['maintenance_plan']))
-        priority, hours_past_due = hourly_pm_priority(hours_run)
+        # Due at 250h − 10% = 225h (Ali, 2026-11-25). The tiers move with it.
+        priority, hours_past_due = hourly_pm_priority(
+            hours_run, interval=due_point(PM_SERVICE_INTERVAL_HOURS))
         # None means the meter was replaced and the figure is unknowable. Leave
         # it at normal rather than guessing — reported, not hidden.
         if priority is None:
