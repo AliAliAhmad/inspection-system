@@ -1,8 +1,10 @@
 /**
  * The planner's PRM overdue list on the board (SERVER_PRM_OVERDUE.md, 2026-11-25).
  *
- *  - <PrmOverdueButton/>  header button + the list, most overdue first.
- *  - <PrmOverdueTag/>     red "PRM overdue 91 h" on any card of a listed machine.
+ *  - <PrmOverdueButton/>  header button + the list, most overdue first, then due soon.
+ *  - <PrmOverdueTag/>     red "PRM -91 h" on a late machine, amber "PRM due +12.82 h"
+ *                         on one still to go. Numbers use SAP's sign (Ali, 2026-11-26:
+ *                         "Like SAP: -91 = overdue").
  *
  * ONE request for the whole board: every tag calls usePrmOverdue(), and React
  * Query shares the answer under one key. These are the PLANNER's numbers; the
@@ -24,6 +26,12 @@ export function machineCode(name: string | null | undefined): string | null {
   return match ? match[0] : null;
 }
 
+/** SAP's sign, always shown: -91 -> '-91', 12.82 -> '+12.82', 0 -> '0'. */
+export function formatDue(due: number | null | undefined): string {
+  if (due == null) return '?';
+  return due > 0 ? `+${due}` : `${due}`;
+}
+
 export function usePrmOverdue() {
   const query = useQuery({
     queryKey: ['prm-overdue'],
@@ -34,7 +42,7 @@ export function usePrmOverdue() {
   const byMachine = useMemo(() => {
     const map = new Map<string, PrmOverdueRow>();
     (query.data?.rows || []).forEach((row) => {
-      // Rows arrive most overdue first; keep the worst if a machine repeats.
+      // Rows arrive most overdue first; keep the most urgent if a machine repeats.
       if (!map.has(row.equipment)) map.set(row.equipment, row);
     });
     return map;
@@ -48,16 +56,18 @@ export const PrmOverdueTag: React.FC<{ equipmentName?: string | null }> = ({ equ
   const code = machineCode(equipmentName);
   const row = code ? byMachine.get(code) : undefined;
   if (!row) return null;
+  const due = formatDue(row.due_hours);
   return (
     <Tooltip title={t('prm_overdue.tag_tooltip', {
       week: data?.plan_week ?? '?', order: row.order ?? '—',
-      cycle: row.cycle_hours ?? '?', hours: row.hours_overdue ?? '?',
+      cycle: row.cycle_hours ?? '?', due,
     })}>
-      <span style={{
-        fontSize: 9, fontWeight: 800, color: '#fff', background: '#cf1322',
+      <span dir="ltr" style={{
+        fontSize: 9, fontWeight: 800, color: '#fff',
+        background: row.is_overdue ? '#cf1322' : '#d48806',
         padding: '0 5px', borderRadius: 8, whiteSpace: 'nowrap', flexShrink: 0,
       }}>
-        {t('prm_overdue.tag', { hours: row.hours_overdue ?? '?' })}
+        {t(row.is_overdue ? 'prm_overdue.tag' : 'prm_overdue.tag_soon', { due })}
       </span>
     </Tooltip>
   );
@@ -68,15 +78,20 @@ export const PrmOverdueButton: React.FC = () => {
   const [open, setOpen] = useState(false);
   const { data, isLoading, isError } = usePrmOverdue();
   if (isError) return null;   // not a planner, or the server is down — no button
-  const count = data?.rows.length ?? 0;
+  const count = data?.overdue_count ?? 0;   // the badge counts LATE machines only
 
   const columns = [
     { title: t('prm_overdue.equipment'), dataIndex: 'equipment', key: 'equipment',
       render: (v: string) => <Text strong>{v}</Text> },
     { title: t('prm_overdue.cycle'), dataIndex: 'cycle_hours', key: 'cycle',
       render: (v: number | null) => (v == null ? '—' : `${v}h`) },
-    { title: t('prm_overdue.hours_overdue'), dataIndex: 'hours_overdue', key: 'hours',
-      render: (v: number | null) => <Text strong style={{ color: '#cf1322' }}>{v ?? '—'}</Text> },
+    { title: <Tooltip title={t('prm_overdue.due_hint')}>{t('prm_overdue.due')}</Tooltip>,
+      dataIndex: 'due_hours', key: 'due',
+      render: (v: number | null, r: PrmOverdueRow) => (
+        <Text strong dir="ltr" style={{ color: r.is_overdue ? '#cf1322' : '#d48806' }}>
+          {v == null ? '—' : formatDue(v)}
+        </Text>
+      ) },
     { title: t('prm_overdue.order'), dataIndex: 'order', key: 'order',
       render: (v: string | null) => <Text copyable={!!v}>{v ?? '—'}</Text> },
     { title: t('prm_overdue.sap_status'), dataIndex: 'sap_status', key: 'sap',
@@ -101,6 +116,9 @@ export const PrmOverdueButton: React.FC = () => {
                 <Tag style={{ marginInlineStart: 8 }}>{t('prm_overdue.plan_week', { week: data.plan_week })}</Tag>
               )}
             </div>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+              {t('prm_overdue.summary', { overdue: data.overdue_count, total: data.rows.length })}
+            </Text>
             {data.is_stale && (
               <Alert type="warning" showIcon style={{ marginBottom: 8 }}
                      message={t('prm_overdue.stale', { days: Math.floor(data.plan_received_age_days ?? 0) })} />

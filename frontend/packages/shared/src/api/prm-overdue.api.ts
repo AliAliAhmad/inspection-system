@@ -14,7 +14,9 @@ export interface PrmOverdueRow {
   functional_location: string | null;
   order: string | null;         // 12 digits, always text
   cycle_hours: number | null;   // service size, e.g. 500
-  hours_overdue: number | null; // positive = hours past due
+  due_hours: number | null;     // SAP's sign: -91 = 91h overdue, 12.82 = 12.82h to go
+  hours_overdue: number | null; // the same lateness as a positive number; null = not late
+  is_overdue: boolean;
   planned_rh: number | null;
   sap_status: string | null;
   plan_week: number | null;
@@ -28,7 +30,8 @@ export interface PrmOverdueList {
   plan_received_age_days: number | null;
   is_stale: boolean;            // mail older than 8 days
   file_received_at: string | null;
-  rows: PrmOverdueRow[];        // most overdue first
+  overdue_count: number;        // rows with due_hours < 0
+  rows: PrmOverdueRow[];        // most overdue first, then soonest due
 }
 
 export const prmOverdueApi = {

@@ -15,6 +15,9 @@ Rules from the spec, each one load-bearing:
   * A file with only the header row is valid and means "nothing overdue".
   * Headers are read by NAME, not position. Rows with no Equipment are skipped.
   * The order number stays text — 12 digits must not become a float.
+  * v2 (2026-11-26) carries EVERY hourly row of the mail, not only the late
+    ones, plus "Due (h)" signed like SAP. A v1 file (no "Due (h)") still works:
+    every row in it is overdue, so due = -hours_overdue.
 """
 
 import io
@@ -51,6 +54,9 @@ _COLUMNS = {
     "sap status": "sap_status",
     "plan week": "plan_week",
     "plan mail received": "plan_received",
+    # v2 (2026-11-26): the mail's DUE exactly as written. Negative = overdue
+    # (TT058 -91), positive = hours still to go (FL302 12.82). SAP's own sign.
+    "due (h)": "due_hours",
 }
 
 # One parse per delivered file: (record id, sha256) -> rows. The file is
@@ -88,11 +94,15 @@ def _number(value):
         number = float(str(value).strip())
     except ValueError:
         return None
-    return int(number) if number.is_integer() else round(number, 1)
+    return int(number) if number.is_integer() else round(number, 2)
+
+
+def _abs(number):
+    return None if number is None else abs(number)
 
 
 def parse(xlsx_bytes):
-    """Rows of the sheet, most overdue first. Pure — no database."""
+    """Rows of the sheet, most overdue first, then soonest due. Pure — no database."""
     from openpyxl import load_workbook
 
     book = load_workbook(io.BytesIO(xlsx_bytes), read_only=True, data_only=True)
@@ -100,7 +110,9 @@ def parse(xlsx_bytes):
     lines = sheet.iter_rows(values_only=True)
     header = next(lines, None) or ()
     keys = [_COLUMNS.get(" ".join(str(h or "").lower().split())) for h in header]
-    missing = {"equipment", "order", "hours_overdue"} - set(keys)
+    missing = {"equipment", "order"} - set(keys)
+    if not {"hours_overdue", "due_hours"} & set(keys):
+        missing.add("due_hours")
     if missing:
         book.close()
         raise ValueError(
@@ -114,13 +126,25 @@ def parse(xlsx_bytes):
         equipment = _text(raw.get("equipment"))
         if not equipment:
             continue
+        late = _abs(_number(raw.get("hours_overdue")))
+        due = _number(raw.get("due_hours"))
+        if due is None and late:
+            due = -late  # v1 file, or a v2 row with J left empty
+        if due is not None:
+            # "Due (h)" is the fact; "Hours overdue" only repeats it for late rows.
+            late = -due if due < 0 else None
         rows.append(
             {
                 "equipment": equipment.upper(),
                 "functional_location": _text(raw.get("functional_location")),
                 "order": _text(raw.get("order")),
                 "cycle_hours": _number(raw.get("cycle_hours")),
-                "hours_overdue": _number(raw.get("hours_overdue")),
+                # Two views of one fact. due_hours is SAP's sign (Ali: "Like SAP:
+                # -91 = overdue"); hours_overdue is the same lateness as a positive
+                # number, None when the machine is not late yet.
+                "due_hours": due,
+                "hours_overdue": late,
+                "is_overdue": due is not None and due < 0,
                 "planned_rh": _number(raw.get("planned_rh")),
                 "sap_status": _text(raw.get("sap_status")),
                 "plan_week": _number(raw.get("plan_week")),
@@ -128,7 +152,8 @@ def parse(xlsx_bytes):
             }
         )
     book.close()
-    rows.sort(key=lambda r: r["hours_overdue"] or 0, reverse=True)
+    # Most overdue first (most negative), then soonest due; unknown last.
+    rows.sort(key=lambda r: (r["due_hours"] is None, r["due_hours"] or 0))
     return rows
 
 
@@ -155,6 +180,7 @@ def build_payload(rows, now=None):
         "plan_received": received,
         "plan_received_age_days": age_days,
         "is_stale": age_days is not None and age_days > STALE_AFTER_DAYS,
+        "overdue_count": sum(1 for r in rows if r["is_overdue"]),
         "rows": rows,
     }
 

@@ -871,7 +871,7 @@
   higher. Watch: the sample export is "YTD" — on 1 January every plan would lose its last finish.
 - 25 tests in `tests/test_due_point_rule.py`; the 5 behaviour tests fail on the old code. 1424 pass.
 
-### The planner's PRM overdue list — BUILT 2026-11-25, NOT PUSHED
+### The planner's PRM overdue list — ✅ DEPLOYED + VERIFIED 2026-11-25 (commit `40da84a`)
 - Courier file `Source file / PRM_Overdue.xlsx` (planner's PM-MES-WEEK mail; spec
   `SERVER_PRM_OVERDUE.md`, delivered through the courier the same day). `app/services/prm_overdue.py`
   parses it (exact folder+name, NEVER `LIKE`: `_` is a wildcard, so `%PRM_Overdue%` matched the
@@ -883,8 +883,14 @@
   by the plant code at the start of the equipment name. Ali: BOTH numbers side by side — the
   app's own badge is untouched. Phone: later (needs an OTA).
 - **Section 5 (spec):** on 2026-11-25 the endpoint must return TT058 91, TT059 51, TT055 47,
-  TT054 20, TT021 6. Proven in tests with a built file; **must still be checked on production.**
+  TT054 20, TT021 6. ✅ **Passed on production** 2026-11-25 18:21 UTC via `current_list()` in the
+  Render shell: available, week 46, mail 2026-11-22 22:27, not stale, exactly those 5 rows.
 - 14 tests `tests/test_prm_overdue.py`, 3 `PrmOverdue.test.ts`. 1438 backend, 72 web, 98 shared.
+- **v2 file (2026-11-26, NOT PUSHED):** PC now sends EVERY hourly row of the mail + column J
+  `Due (h)` in SAP's sign (-91 = overdue, +12.82 = to go). Rows carry `due_hours`,
+  `is_overdue`; payload `overdue_count`; sorted most negative first. J wins over E; a v1 file
+  (no J) still reads as all overdue. Board: red `PRM -91 h`, amber `PRM due +12.82 h`, badge
+  counts late only. PC's check: week 46 = 16 rows, 5 overdue. 20 backend tests, 5 web.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).

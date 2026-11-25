@@ -2057,20 +2057,23 @@
     "passwordMin": "At least 6 characters"
   },
   "prm_overdue": {
-    "button": "PRM overdue",
-    "title": "PRM overdue — planner's list",
+    "button": "PRM due",
+    "title": "PRM due — planner's list",
     "plan_received": "Plan mail received {{date}}",
     "plan_week": "Week {{week}}",
     "stale": "This list is {{days}} days old — the planner's mail may be missing.",
-    "none": "Nothing overdue in the planner's latest list.",
+    "none": "No hourly services in the planner's latest list.",
     "not_delivered": "No list yet — the courier has not delivered PRM_Overdue.xlsx.",
     "equipment": "Equipment",
     "cycle": "Cycle",
-    "hours_overdue": "Hours overdue",
     "order": "Order",
     "sap_status": "SAP status",
-    "tag": "PRM overdue {{hours}} h",
-    "tag_tooltip": "Planner's list (week {{week}}): order {{order}}, {{cycle}}h service, {{hours}} h overdue",
-    "source": "From the planner's PM-MES-WEEK mail. The card's own overdue badge is the app's figure and may differ."
+    "tag": "PRM {{due}} h",
+    "tag_tooltip": "Planner's list (week {{week}}): order {{order}}, {{cycle}}h service, due {{due}} h (minus = overdue)",
+    "source": "From the planner's PM-MES-WEEK mail. The card's own overdue badge is the app's figure and may differ.",
+    "due": "Due (h)",
+    "due_hint": "Minus = overdue, like SAP",
+    "tag_soon": "PRM due {{due}} h",
+    "summary": "{{overdue}} overdue · {{total}} services this week"
   }
 }

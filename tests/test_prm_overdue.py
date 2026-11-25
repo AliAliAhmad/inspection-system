@@ -129,8 +129,85 @@ class TestTheSpecsRules:
         assert [r['equipment'] for r in rows] == ['TT054']
 
     def test_a_file_missing_a_column_says_which(self):
-        with pytest.raises(ValueError, match='hours_overdue'):
+        with pytest.raises(ValueError, match='due_hours'):
             prm_overdue.parse(_xlsx([], header=['Equipment', 'Order']))
+
+
+class TestTheSign:
+    def test_the_mails_negative_number_means_hours_late(self, client, admin_user):
+        """Ali, 2026-11-25: in the planner's mail -31 means ran 31h past the
+        service. Today the PC sends +31; if it ever sends the raw -31, the list
+        must still say 31 hours overdue, not 'not due'."""
+        raw = [r[:4] + [-r[4]] + r[5:] for r in SECTION_5]
+        _deliver(client, _xlsx(raw))
+        rows = _get(client).get_json()['data']['rows']
+        assert [(r['equipment'], r['hours_overdue']) for r in rows] == [
+            ('TT058', 91), ('TT059', 51), ('TT055', 47), ('TT054', 20), ('TT021', 6)]
+
+
+# v2 (2026-11-26): every hourly row of the mail + column J "Due (h)", SAP's sign.
+# The PC's own check: week 46 = 16 rows, 5 overdue. Overdue rows first, then the
+# 11 not yet due, deliberately shuffled so the sort is tested.
+HEADER_V2 = HEADER + ['Due (h)']
+_WHEN = [46, '2026-11-22 22:27']
+SECTION_5_V2 = [r[:4] + [r[4]] + r[5:] + [-r[4]] for r in SECTION_5]
+DUE_SOON = [
+    [code, None, f'70000197{n:04d}', 250, None, 1000, 'REL', *_WHEN, due]
+    for n, (code, due) in enumerate([
+        ('FL302', 12.82), ('RS109', 140), ('TT030', 3.5), ('ECH02', 88),
+        ('TT061', 200), ('RS110', 0.4), ('TT040', 55), ('FL301', 230),
+        ('TT012', 19), ('RS101', 101.25), ('TT033', 7)])
+]
+
+
+class TestVersion2:
+    def _rows(self, client):
+        _deliver(client, _xlsx(DUE_SOON[:6] + SECTION_5_V2 + DUE_SOON[6:], header=HEADER_V2))
+        return _get(client).get_json()['data']
+
+    def test_week_46_is_16_rows_and_5_overdue(self, client, admin_user):
+        data = self._rows(client)
+        assert len(data['rows']) == 16
+        assert data['overdue_count'] == 5
+        assert [r['equipment'] for r in data['rows'] if r['is_overdue']] == [
+            'TT058', 'TT059', 'TT055', 'TT054', 'TT021']
+
+    def test_due_keeps_sap_sign_and_two_decimals(self, client, admin_user):
+        rows = {r['equipment']: r for r in self._rows(client)['rows']}
+        assert rows['TT058']['due_hours'] == -91 and rows['TT058']['hours_overdue'] == 91
+        assert rows['FL302']['due_hours'] == 12.82
+        assert rows['FL302']['hours_overdue'] is None
+        assert rows['FL302']['is_overdue'] is False
+
+    def test_most_overdue_first_then_soonest_due(self, client, admin_user):
+        dues = [r['due_hours'] for r in self._rows(client)['rows']]
+        assert dues == sorted(dues)
+        assert dues[:5] == [-91, -51, -47, -20, -6]
+        assert dues[5] == 0.4
+
+    def test_next_week_replaces_week_46_with_its_own_numbers(self, client, admin_user):
+        """Nothing is tied to week 46: week 47's file is read the same way."""
+        self._rows(client)
+        week_47 = [['TT099', None, '700001999001', 500, None, 1, 'REL', 47, '2026-11-29 21:05', -14],
+                   ['FL302', None, '700001999002', 250, None, 1, 'REL', 47, '2026-11-29 21:05', 33.5]]
+        _deliver(client, _xlsx(week_47, header=HEADER_V2))
+        data = _get(client).get_json()['data']
+        assert data['plan_week'] == 47 and data['plan_received'] == '2026-11-29 21:05'
+        assert [(r['equipment'], r['due_hours']) for r in data['rows']] == [
+            ('TT099', -14), ('FL302', 33.5)]
+        assert data['overdue_count'] == 1
+
+    def test_column_j_wins_over_a_stale_hours_overdue(self):
+        """J is the fact. If E says late but J says 12h to go, the row is not late."""
+        rows = prm_overdue.parse(_xlsx(
+            [['TT070', None, '700000000001', 250, 30, None, None, *_WHEN, 12]],
+            header=HEADER_V2))
+        assert rows[0]['is_overdue'] is False and rows[0]['hours_overdue'] is None
+
+    def test_a_v1_file_still_reads_as_all_overdue(self):
+        rows = prm_overdue.parse(_xlsx(SECTION_5))
+        assert all(r['is_overdue'] for r in rows)
+        assert rows[0]['due_hours'] == -91
 
 
 class TestStaleness:

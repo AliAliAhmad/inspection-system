@@ -979,3 +979,5 @@ LESSON: (2026-11-25) A "proof" test for the 6h ceiling passed on the OLD code to
 before it counts as proof; pick numbers where old and new give different answers.
 
 LESSON (2026-11-25): Hourly overdue was stored positive by the sync but read as negative by the web and the generator, so badges never showed and tests pinned the wrong sign → when a number has a sign convention, test the READER with the value the real WRITER produces (feed the writer output into the reader), not with hand-typed values.
+
+LESSON (2026-11-25): `git stash push -- <file>` on a file with NO changes stashes nothing, and the following `git stash pop` popped an OLD unrelated stash (backup-before-pdf-redesign) into the tree → never use stash as a scratch backup; copy the file to the scratchpad and check `test -s` before reverting it.
