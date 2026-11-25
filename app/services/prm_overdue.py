@@ -185,6 +185,29 @@ def build_payload(rows, now=None):
     }
 
 
+def late_hours_by_order():
+    """{order number: hours late} from the planner's list, for the generator.
+
+    Ali, 2026-11-26 (choice A): the generator ranks an hourly PM by whichever
+    number is MORE late — the app's own or the planner's. Only late rows count,
+    so the list can raise a machine, never lower one. A stale list (> 8 days)
+    or a broken file gives {} — an old mail must not keep pushing machines up,
+    and a bad file must never stop a plan from being generated.
+    """
+    try:
+        data = current_list()
+    except Exception:  # noqa: BLE001 — a bad file must not break generation
+        logger.warning("PRM overdue: list unreadable, generator ignores it", exc_info=True)
+        return {}
+    if not data["available"] or data["is_stale"]:
+        return {}
+    return {
+        r["order"]: r["hours_overdue"]
+        for r in data["rows"]
+        if r["is_overdue"] and r["order"] and r["hours_overdue"]
+    }
+
+
 def current_list():
     """The payload for the newest delivered file.
 

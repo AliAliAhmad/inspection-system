@@ -231,3 +231,128 @@ class TestPlannersOnly:
 
     def test_no_login_no_list(self, client):
         assert client.get('/api/prm-overdue').status_code == 401
+
+
+# ── Choice A (Ali, 2026-11-26): the generator ranks an hourly PM by whichever
+# number is MORE late — the app's own or the planner's. Never lower.
+class TestTheGeneratorTakesTheMoreLate:
+    def _populate(self, db_session, admin_user, app_value, base='running_hours',
+                  number='700001975022'):
+        from datetime import date, timedelta
+        from app.models import Equipment, SAPWorkOrder, WorkPlan
+        from app.services.work_plan_generator_service import _step_populate
+        eq = Equipment(name='TT058', serial_number=f'SN-TT058-{number}',
+                       equipment_type='terminal tractor', berth='west')
+        db_session.session.add(eq)
+        db_session.session.flush()
+        db_session.session.add(SAPWorkOrder(
+            order_number=number, order_type='PRM', job_type='pm',
+            equipment_id=eq.id, description='TT058 500HR SERVICE',
+            estimated_hours=4.0, priority='urgent', status='pending',
+            maintenance_base=base, overdue_value=app_value,
+            overdue_unit='hours' if base == 'running_hours' else 'days'))
+        monday = date(2026, 11, 23)
+        plan = WorkPlan(week_start=monday, week_end=monday + timedelta(days=6),
+                        status='draft', created_by_id=admin_user.id)
+        db_session.session.add(plan)
+        db_session.session.commit()
+        return next(c for c in _step_populate(plan) if c.get('sap_order_number') == number)
+
+    def test_the_planners_91_beats_the_apps_56(self, db_session, admin_user, monkeypatch):
+        monkeypatch.setattr(prm_overdue, 'late_hours_by_order',
+                            lambda: {'700001975022': 91})
+        assert self._populate(db_session, admin_user, 56.0)['overdue_value'] == 91
+
+    def test_the_apps_150_is_never_lowered_to_the_planners_47(
+            self, db_session, admin_user, monkeypatch):
+        monkeypatch.setattr(prm_overdue, 'late_hours_by_order',
+                            lambda: {'700001975022': 47})
+        assert self._populate(db_session, admin_user, 150.1)['overdue_value'] == 150.1
+
+    def test_no_app_number_takes_the_planners(self, db_session, admin_user, monkeypatch):
+        monkeypatch.setattr(prm_overdue, 'late_hours_by_order',
+                            lambda: {'700001975022': 91})
+        assert self._populate(db_session, admin_user, None)['overdue_value'] == 91
+
+    def test_a_calendar_pm_is_never_given_hours(self, db_session, admin_user, monkeypatch):
+        monkeypatch.setattr(prm_overdue, 'late_hours_by_order',
+                            lambda: {'700001975022': 91})
+        c = self._populate(db_session, admin_user, 3, base='calendar')
+        assert (c['overdue_value'], c['overdue_unit']) == (3, 'days')
+
+
+class TestLateHoursByOrder:
+    def test_only_late_rows_by_order_number(self, client, admin_user, monkeypatch):
+        rows = DUE_SOON[:3] + SECTION_5_V2
+        _deliver(client, _xlsx(rows, header=HEADER_V2))
+        monkeypatch.setattr(prm_overdue, 'datetime', _FrozenNov25)
+        assert prm_overdue.late_hours_by_order() == {
+            '700001975022': 91, '700001975023': 51, '700001975024': 47,
+            '700001975030': 20, '700001975041': 6}
+
+    def test_a_stale_list_pushes_nothing_up(self, client, admin_user):
+        _deliver(client, _xlsx(SECTION_5_V2, header=HEADER_V2))   # mail of 22 Nov, today is later
+        prm_overdue._cache.clear()
+        from unittest import mock
+        with mock.patch.object(prm_overdue, 'datetime', _FrozenDec5):
+            assert prm_overdue.late_hours_by_order() == {}
+
+    def test_no_file_and_a_broken_file_give_nothing(self, app, monkeypatch):
+        with app.app_context():
+            assert prm_overdue.late_hours_by_order() == {}
+            monkeypatch.setattr(prm_overdue, 'current_list',
+                                lambda: (_ for _ in ()).throw(OSError('gone')))
+            assert prm_overdue.late_hours_by_order() == {}
+
+
+class _FrozenNov25(datetime):
+    @classmethod
+    def utcnow(cls):
+        return datetime(2026, 11, 25, 12, 0)
+
+
+class _FrozenDec5(datetime):
+    @classmethod
+    def utcnow(cls):
+        return datetime(2026, 12, 5, 12, 0)
+
+
+# ── Ali, 2026-11-26: same machine, hourly + calendar PRM. Both go on the same
+# day; the winner leads. Overdue hourly always wins; otherwise the more overdue.
+class TestWinnerFirst:
+    @staticmethod
+    def _order(*members):
+        from app.services.work_plan_generator_service import _winner_first
+        return [m['name'] for m in _winner_first(list(members))]
+
+    HOURLY = dict(job_type='pm', maintenance_base='running_hours', overdue_unit='hours')
+    CAL = dict(job_type='pm', maintenance_base='calendar', overdue_unit='days')
+
+    def test_an_overdue_hourly_beats_a_more_urgent_calendar(self):
+        assert self._order(
+            dict(self.CAL, name='3-week', overdue_value=20, score=95),
+            dict(self.HOURLY, name='250h', overdue_value=5, score=60),
+        ) == ['250h', '3-week']
+
+    def test_hourly_not_due_then_the_more_overdue_wins(self):
+        assert self._order(
+            dict(self.HOURLY, name='250h', overdue_value=-30, score=40),
+            dict(self.CAL, name='3-week', overdue_value=4, score=70),
+        ) == ['3-week', '250h']
+
+    def test_two_overdue_hourlies_most_late_first(self):
+        assert self._order(
+            dict(self.HOURLY, name='250h', overdue_value=6, score=100),
+            dict(self.HOURLY, name='2000h', overdue_value=91, score=100),
+        ) == ['2000h', '250h']
+
+    def test_the_day_is_still_set_by_the_most_urgent(self):
+        from app.services.work_plan_generator_service import _step_bundle
+        bundle = _step_bundle([
+            dict(self.CAL, name='3-week', overdue_value=20, score=95, equipment_id=7,
+                 source='sap', estimated_hours=2, description='3-WEEK INSPECTION'),
+            dict(self.HOURLY, name='250h', overdue_value=5, score=60, equipment_id=7,
+                 source='sap', estimated_hours=4, description='250HR SERVICE'),
+        ])[0]
+        assert bundle['score'] == 95
+        assert [m['name'] for m in bundle['members']] == ['250h', '3-week']

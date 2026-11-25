@@ -886,11 +886,19 @@
   TT054 20, TT021 6. ✅ **Passed on production** 2026-11-25 18:21 UTC via `current_list()` in the
   Render shell: available, week 46, mail 2026-11-22 22:27, not stale, exactly those 5 rows.
 - 14 tests `tests/test_prm_overdue.py`, 3 `PrmOverdue.test.ts`. 1438 backend, 72 web, 98 shared.
-- **v2 file (2026-11-26, NOT PUSHED):** PC now sends EVERY hourly row of the mail + column J
+- **v2 file (2026-11-26) ✅ DEPLOYED + VERIFIED, commit `70326c0` — prod returned `True 46 16 5`:** PC now sends EVERY hourly row of the mail + column J
   `Due (h)` in SAP's sign (-91 = overdue, +12.82 = to go). Rows carry `due_hours`,
   `is_overdue`; payload `overdue_count`; sorted most negative first. J wins over E; a v1 file
   (no J) still reads as all overdue. Board: red `PRM -91 h`, amber `PRM due +12.82 h`, badge
   counts late only. PC's check: week 46 = 16 rows, 5 overdue. 20 backend tests, 5 web.
+- **Generator uses the MORE LATE number (Ali chose A, 2026-11-26, NOT PUSHED).** Hourly PM:
+  `max(app's overdue_value, planner's hours late)`, matched by ORDER NUMBER
+  (`prm_overdue.late_hours_by_order()`). Can only raise, never lower. A stale (> 8 days) or
+  broken list gives nothing. Calendar PMs never touched.
+- **Winner leads the machine's day (Ali, 2026-11-26, NOT PUSHED).** Hourly + calendar PRM on one
+  machine still go on the same day; `_winner_first` orders them: an OVERDUE hourly PRM first
+  (most hours late first), otherwise the higher score (= the more overdue). Order only — the
+  group's day is still set by its most urgent member. 32 tests in `test_prm_overdue.py`.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).

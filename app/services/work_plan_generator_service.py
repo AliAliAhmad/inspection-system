@@ -601,7 +601,9 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
     ).options(joinedload(SAPWorkOrder.equipment)).all()
 
     from app.utils.decorators import planning_today
+    from app.services.prm_overdue import late_hours_by_order
     today = planning_today()
+    planner_late = late_hours_by_order()
     for sap in sap_orders:
         eq = sap.equipment
         # Compute day-based overdue (today - order date) for everything except
@@ -610,6 +612,11 @@ def _step_populate(plan: WorkPlan) -> List[Dict[str, Any]]:
             sap.job_type, sap.maintenance_base, sap.required_date,
             sap.overdue_value, sap.overdue_unit, today,
         )
+        # The planner's mail may say this hourly PM is later than we think
+        # (TT058: app 56h, planner 91h). The more late one wins — choice A.
+        if (_is_performance_pm(sap.job_type, sap.maintenance_base)
+                and ov_unit == 'hours' and sap.order_number in planner_late):
+            ov_value = max(ov_value or 0, planner_late[sap.order_number])
         candidates.append({
             'source': 'sap',
             'job_type': sap.job_type,
@@ -994,6 +1001,7 @@ def _step_bundle(
     bundles: List[Dict[str, Any]] = []
 
     for eq_id, members in groups.items():
+        members = _winner_first(members)
         max_score = max(m.get('score', 0) for m in members)
         # Resolve berth: pick the most common non-null berth in the group
         berths = [m.get('berth') for m in members if m.get('berth')]
@@ -1029,6 +1037,25 @@ def _step_bundle(
 
     return bundles
 
+
+
+def _winner_first(members: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Order one machine's jobs for its day: the winner leads (position 1).
+
+    Ali, 2026-11-26: when a machine has an hourly PRM and a calendar PRM open,
+    an OVERDUE hourly PRM always wins — most hours late first. If the hourly
+    one is not overdue, whichever job is more overdue wins, which is what the
+    score already measures (it carries the overdue bonus for days and hours).
+
+    Order only. Both jobs still go on the same day, and the group's day is
+    still set by its most urgent member (max score), so nothing moves later.
+    """
+    def key(m):
+        hours_late = m.get('overdue_value') or 0
+        overdue_hourly = (_is_performance_pm(m.get('job_type'), m.get('maintenance_base'))
+                          and m.get('overdue_unit') == 'hours' and hours_late > 0)
+        return (0, -hours_late) if overdue_hourly else (1, -(m.get('score') or 0))
+    return sorted(members, key=key)   # stable: ties keep their old order
 
 
 def _price_bundle(bundle: Dict[str, Any]) -> None:
