@@ -1028,7 +1028,7 @@ def _step_bundle(
         bundles.append(bundle)
 
     # Sort descending by score for downstream distribution
-    bundles.sort(key=lambda b: b['score'], reverse=True)
+    bundles.sort(key=_urgency_key, reverse=True)
 
     logger.info(
         "bundle | total_bundles=%d equipment_bundles=%d orphan_bundles=%d",
@@ -1051,11 +1051,33 @@ def _winner_first(members: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     still set by its most urgent member (max score), so nothing moves later.
     """
     def key(m):
-        hours_late = m.get('overdue_value') or 0
-        overdue_hourly = (_is_performance_pm(m.get('job_type'), m.get('maintenance_base'))
-                          and m.get('overdue_unit') == 'hours' and hours_late > 0)
-        return (0, -hours_late) if overdue_hourly else (1, -(m.get('score') or 0))
+        hours_late = _hours_late(m)
+        return (0, -hours_late) if hours_late else (1, -(m.get('score') or 0))
     return sorted(members, key=key)   # stable: ties keep their old order
+
+
+def _hours_late(member: Dict[str, Any]) -> float:
+    """Hours past due for an hourly PRM, else 0."""
+    late = member.get('overdue_value') or 0
+    if (_is_performance_pm(member.get('job_type'), member.get('maintenance_base'))
+            and member.get('overdue_unit') == 'hours' and late > 0):
+        return late
+    return 0
+
+
+def _urgency_key(bundle: Dict[str, Any]):
+    """Sort key, biggest first: score, then the tie-break (Ali, 2026-11-26).
+
+    The score stops at 100, and every urgent hourly PRM reaches 100 the moment
+    it is due — so TT058 at 91h late tied with TT021 at 6h, and ties fell back
+    to database order. On a tie: an overdue hourly PRM comes first, most hours
+    late first; then the rest, most days late first.
+    """
+    members = bundle.get('members', [])
+    hours = max((_hours_late(m) for m in members), default=0)
+    days = max((m.get('overdue_value') or 0 for m in members
+                if m.get('overdue_unit') != 'hours'), default=0)
+    return (bundle.get('score', 0), 1 if hours > 0 else 0, hours if hours > 0 else days)
 
 
 def _price_bundle(bundle: Dict[str, Any]) -> None:
@@ -1604,7 +1626,7 @@ def _apply_recipe_ordering(
         if recipe == 'travel_optimized':
             return sorted(bundle_list, key=lambda b: (b.get('berth') or 'zzz', -b['score']))
         # priority_first, team_balanced, copy_last_week, pm_compliance: by score desc
-        return sorted(bundle_list, key=lambda b: -b['score'])
+        return sorted(bundle_list, key=_urgency_key, reverse=True)
 
     return order_within_pass(pm_bundles) + order_within_pass(defect_bundles)
 

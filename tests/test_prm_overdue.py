@@ -356,3 +356,50 @@ class TestWinnerFirst:
         ])[0]
         assert bundle['score'] == 95
         assert [m['name'] for m in bundle['members']] == ['250h', '3-week']
+
+
+# ── Ali, 2026-11-26: "why not tomorrow as it wins over all". The score stops at
+# 100, so every urgent overdue hourly PRM tied. Ties now break by lateness.
+class TestTiesBreakByLateness:
+    HOURLY = dict(job_type='pm', maintenance_base='running_hours', overdue_unit='hours',
+                  source='sap', estimated_hours=4, description='250HR SERVICE')
+    FAULT = dict(job_type='defect', overdue_unit='days', source='sap',
+                 estimated_hours=2, description='COM FAULT')
+
+    def _order(self, *candidates):
+        from app.services.work_plan_generator_service import _step_bundle
+        return [b['members'][0]['name'] for b in _step_bundle(list(candidates))]
+
+    def test_tt058_at_91h_beats_tt021_at_6h_on_the_same_score(self):
+        assert self._order(
+            dict(self.HOURLY, name='TT021', equipment_id=21, overdue_value=6, score=100),
+            dict(self.HOURLY, name='TT058', equipment_id=58, overdue_value=91, score=100),
+            dict(self.HOURLY, name='TT059', equipment_id=59, overdue_value=51, score=100),
+        ) == ['TT058', 'TT059', 'TT021']
+
+    def test_an_overdue_hourly_beats_a_tied_fault_however_old(self):
+        assert self._order(
+            dict(self.FAULT, name='fault', equipment_id=1, overdue_value=30, score=100),
+            dict(self.HOURLY, name='TT021', equipment_id=21, overdue_value=6, score=100),
+        ) == ['TT021', 'fault']
+
+    def test_the_score_still_comes_first(self):
+        assert self._order(
+            dict(self.HOURLY, name='late-but-normal', equipment_id=2, overdue_value=91, score=60),
+            dict(self.FAULT, name='urgent', equipment_id=3, overdue_value=1, score=95),
+        ) == ['urgent', 'late-but-normal']
+
+    def test_other_ties_go_most_days_late_first(self):
+        assert self._order(
+            dict(self.FAULT, name='3 days', equipment_id=4, overdue_value=3, score=100),
+            dict(self.FAULT, name='20 days', equipment_id=5, overdue_value=20, score=100),
+        ) == ['20 days', '3 days']
+
+    def test_the_distribute_order_keeps_the_tie_break(self):
+        from app.services.work_plan_generator_service import _apply_recipe_ordering
+        bundles = [
+            {'score': 100, 'members': [dict(self.HOURLY, name='TT021', overdue_value=6)]},
+            {'score': 100, 'members': [dict(self.HOURLY, name='TT058', overdue_value=91)]},
+        ]
+        ordered = _apply_recipe_ordering(bundles, [], 'priority_first')
+        assert [b['members'][0]['name'] for b in ordered] == ['TT058', 'TT021']

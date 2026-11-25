@@ -899,6 +899,10 @@
   machine still go on the same day; `_winner_first` orders them: an OVERDUE hourly PRM first
   (most hours late first), otherwise the higher score (= the more overdue). Order only — the
   group's day is still set by its most urgent member. 32 tests in `test_prm_overdue.py`.
+- **Score ties break by lateness (Ali OK, 2026-11-26, NOT PUSHED).** The score caps at 100 and every
+  urgent hourly PRM hits 100 once due, so TT058 (91h) tied TT021 (6h) and ties fell to DB order.
+  `_urgency_key`: score, then overdue hourly PRM first (most hours late), then most days late. Used
+  by `_step_bundle` AND `_apply_recipe_ordering` (it re-sorted by score alone). 37 tests.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
