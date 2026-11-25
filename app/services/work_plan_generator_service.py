@@ -872,7 +872,7 @@ def _step_score(
             base = _SAP_PRIORITY_SCORE.get(c.get('priority', 'normal'), 40)
             mb = c.get('maintenance_base') or ''
             if 'running_hours' in mb.lower():
-                # Performance-based PM: more negative overdue_value = more urgent
+                # Performance-based PM: more positive overdue_value = more urgent
                 overdue_bonus = _overdue_bonus_hours(c.get('overdue_value'))
             else:
                 # Calendar-based PM
@@ -911,9 +911,15 @@ def _overdue_bonus_hours(overdue_hours: Optional[float]) -> float:
     Bonus for running-hours (performance PM) overdue.
 
     overdue_hours = hours relative to the cycle trigger:
-      POSITIVE = hours still remaining before due,
+      POSITIVE = hours PAST the trigger (overdue),
       ZERO     = exactly at the trigger,
-      NEGATIVE = hours past the trigger (overdue).
+      NEGATIVE = hours still remaining before due.
+
+    The sign matches what the nightly SAP sync writes (`_priority_for` in
+    `sap_pool_sync.py` stores hours_past_due as a positive number), what the
+    phone shows and what every other server reader treats as overdue. Until
+    2026-11-25 this function read the OPPOSITE sign, so a reach stacker 400h
+    past its service scored as "400h still to go" and got no bonus at all.
 
     Priority starts to accrue once the order is within _PERF_LEAD_HOURS of the
     trigger (a 24h early flag) and ramps up FAST, reaching the max bonus about a
@@ -922,7 +928,7 @@ def _overdue_bonus_hours(overdue_hours: Optional[float]) -> float:
     """
     if overdue_hours is None:
         return 0.0
-    effective = _PERF_LEAD_HOURS - overdue_hours   # > 0 once within the window/past due
+    effective = _PERF_LEAD_HOURS + overdue_hours   # > 0 once within the window/past due
     if effective <= 0:
         return 0.0
     return min(effective / _PERF_FULL_HOURS, 1.0) * _MAX_OVERDUE_BONUS
@@ -943,7 +949,7 @@ def _resolve_overdue(
 ):
     """Return (overdue_value, overdue_unit) used for scoring.
 
-    Performance PMs keep their imported hours value (negative = past trigger).
+    Performance PMs keep their stored hours value (positive = past the trigger).
     Everything else (calendar PMs, COM, DAM, INS, ...) is day-based and computed
     by the system as today - order date, so it never relies on a manually-typed
     column. Orders only appear after generation, so the result is clamped at >= 0.
@@ -1297,13 +1303,19 @@ def _is_urgent_bundle(bundle: Dict[str, Any]) -> bool:
 # ── Workforce capacity helpers ──────────────────────────────────────────
 
 def first_placeable_date():
-    """The earliest day the generator may put work on: today, in Baghdad.
+    """The earliest day the generator may put work on: TOMORROW, in Baghdad.
+
+    Ali, 2026-11-25: "when i generate an automatic plan, it start from today he
+    should start from tomorrow". Today's crews were sent out this morning; a
+    plan made during the day is for the days still ahead. Placing one job for
+    today by hand (or by the Telegram urgent path) is a different door and is
+    not limited by this.
 
     One named function so the tests can freeze it — they plan fixed past weeks
     (2026-08-24), and without a frozen clock every one of their days is over.
     """
     from app.utils.decorators import planning_today
-    return planning_today()
+    return planning_today() + timedelta(days=1)
 
 
 def _step_distribute(
@@ -1327,7 +1339,8 @@ def _step_distribute(
     # Only days that are not over yet. Ali, 2026-11-25: "today i start a new
     # plan but the plan schedule jobs for the past days it is unlogical". A
     # plan generated on a Wednesday used to spread work over Sunday-Tuesday
-    # too — days no crew can go back to. Today itself still counts.
+    # too — days no crew can go back to. Today does not count either: the
+    # automatic plan starts tomorrow (Ali, same day).
     first = first_placeable_date()
     days = sorted((d for d in plan.days if d.date >= first), key=lambda d: d.date)
     if not days:

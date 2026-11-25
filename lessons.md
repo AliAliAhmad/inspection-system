@@ -977,3 +977,5 @@ restore in one Python script that asserts each copy before touching the original
 LESSON: (2026-11-25) A "proof" test for the 6h ceiling passed on the OLD code too (3 men:
 27 > 24 either way). → A test written to prove a change must be shown to FAIL on the old code
 before it counts as proof; pick numbers where old and new give different answers.
+
+LESSON (2026-11-25): Hourly overdue was stored positive by the sync but read as negative by the web and the generator, so badges never showed and tests pinned the wrong sign → when a number has a sign convention, test the READER with the value the real WRITER produces (feed the writer output into the reader), not with hand-typed values.

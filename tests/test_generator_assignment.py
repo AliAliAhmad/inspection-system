@@ -212,6 +212,11 @@ class TestANightManIsNotStaffedOntoDayWork:
         assert all(night_lead.id not in _workers_of(job) for job in jobs)
 
 
+# The real rule, taken at import time — conftest.py replaces it for every test.
+from app.services.work_plan_generator_service import (  # noqa: E402
+    first_placeable_date as REAL_FIRST_PLACEABLE_DATE)
+
+
 class TestNothingIsPlacedOnADayThatIsOver:
     """Ali, 2026-11-25: "today i start a new plan but the plan schedule jobs
     for the past days it is unlogical"."""
@@ -239,9 +244,27 @@ class TestNothingIsPlacedOnADayThatIsOver:
         assert all(job.day.date >= wednesday for job in jobs), \
             [str(job.day.date) for job in jobs]
 
-    def test_today_itself_still_counts(self, monkeypatch, db_session, admin_user):
+    def test_the_first_placeable_day_itself_counts(self, monkeypatch, db_session,
+                                                    admin_user):
         last_day = MONDAY + timedelta(days=6)
 
         jobs = self._generate_on(monkeypatch, db_session, admin_user, last_day, orders=1)
 
         assert jobs and all(job.day.date == last_day for job in jobs)
+
+    def test_the_automatic_plan_starts_tomorrow_not_today(self, monkeypatch):
+        """Ali, 2026-11-25: "it start from today he should start from tommorrow"."""
+        from app.utils import decorators
+        wednesday = MONDAY + timedelta(days=2)
+        monkeypatch.setattr(decorators, 'planning_today', lambda: wednesday)
+
+        assert REAL_FIRST_PLACEABLE_DATE() == wednesday + timedelta(days=1)
+
+    def test_generating_on_the_last_day_places_nothing_and_does_not_crash(
+            self, monkeypatch, db_session, admin_user):
+        after_the_week = MONDAY + timedelta(days=7)
+
+        jobs = self._generate_on(monkeypatch, db_session, admin_user,
+                                 after_the_week, orders=2)
+
+        assert jobs == []

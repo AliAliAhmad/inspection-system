@@ -3,11 +3,14 @@
  *
  * - Calendar / day-based orders (unit = 'days'): POSITIVE value = overdue.
  * - Running-hours (performance) PMs (unit = 'hours'): the value is hours
- *   relative to the cycle trigger — NEGATIVE = past the trigger (overdue),
- *   POSITIVE = hours still remaining before due (NOT overdue).
+ *   relative to the cycle trigger — POSITIVE = hours PAST the trigger (overdue),
+ *   NEGATIVE = hours still remaining before due (NOT overdue).
  *
- * Use this everywhere the plan decides "is overdue?" or shows the amount, so a
- * not-yet-due performance PM (e.g. +58h remaining) is never mislabelled overdue.
+ * Both units now share one rule: positive = overdue. That is what the nightly
+ * SAP sync stores, what the phone shows and what the server scores. Until
+ * 2026-11-25 the hours branch read the OPPOSITE sign, so every overdue hourly
+ * PM from SAP showed no badge at all (Ali: "the PRM overdue hrs for the hourly
+ * base service is not showing").
  */
 export interface OverdueLike {
   overdue_value?: number | null;
@@ -25,11 +28,7 @@ export function getOverdueInfo(job: OverdueLike | null | undefined): OverdueInfo
   const value = job?.overdue_value ?? 0;
   const unit = job?.overdue_unit || 'days';
   const shortUnit = unit === 'hours' ? 'h' : 'd';
-  if (unit === 'hours') {
-    // performance PM: overdue only when past the trigger (negative)
-    return { isOverdue: value < 0, amount: value < 0 ? Math.abs(value) : 0, unit, shortUnit };
-  }
-  // day-based: overdue when positive
+  // hours past the trigger, or days past the order date: overdue when positive
   return { isOverdue: value > 0, amount: value > 0 ? value : 0, unit, shortUnit };
 }
 

@@ -1,7 +1,9 @@
 """
 Tests for overdue computation in work-plan priority scoring:
 - day-based overdue computed as (today - order date) for all non-performance orders
-- performance PMs keep hours, and POSITIVE (hours remaining) = not overdue = 0 bonus
+- performance PMs keep hours: POSITIVE = hours past the trigger (overdue),
+  NEGATIVE = hours still remaining. Re-signed 2026-11-25 to match the nightly
+  SAP sync, which is the only real writer and has always stored positive.
 """
 
 from datetime import date, timedelta
@@ -37,8 +39,8 @@ class TestResolveOverdue:
         assert val == 0 and unit == 'days'
 
     def test_performance_pm_keeps_hours_value(self):
-        assert _resolve_overdue('pm', 'running_hours', None, -20, 'hours', TODAY) == (-20, 'hours')
-        assert _resolve_overdue('pm', 'running_hours', None, 100, 'hours', TODAY) == (100, 'hours')
+        assert _resolve_overdue('pm', 'running_hours', None, 20, 'hours', TODAY) == (20, 'hours')
+        assert _resolve_overdue('pm', 'running_hours', None, -100, 'hours', TODAY) == (-100, 'hours')
 
     def test_is_performance_pm(self):
         assert _is_performance_pm('pm', 'running_hours') is True
@@ -49,22 +51,32 @@ class TestResolveOverdue:
 class TestOverdueBonus:
     def test_before_lead_window_is_zero(self):
         # more than 24 hrs before the trigger → no points yet
-        assert _overdue_bonus_hours(100) == 0.0
-        assert _overdue_bonus_hours(30) == 0.0
-        assert _overdue_bonus_hours(24) == 0.0   # exactly at the start line
+        assert _overdue_bonus_hours(-100) == 0.0
+        assert _overdue_bonus_hours(-30) == 0.0
+        assert _overdue_bonus_hours(-24) == 0.0   # exactly at the start line
 
     def test_points_start_inside_lead_window(self):
         # within 24 hrs of the trigger → starts accruing
         assert _overdue_bonus_hours(0) == 10.0          # at the trigger
-        assert _overdue_bonus_hours(10) > 0             # 10 hrs before due
+        assert _overdue_bonus_hours(-10) > 0            # 10 hrs before due
 
     def test_fast_ramp_reaches_max_about_one_day_past(self):
-        assert _overdue_bonus_hours(-24) == 20.0        # ~1 day past → max
-        assert _overdue_bonus_hours(-200) == 20.0       # capped
-        assert abs(_overdue_bonus_hours(-20) - (44 / 48 * 20)) < 1e-9  # ~18.3
+        assert _overdue_bonus_hours(24) == 20.0         # ~1 day past → max
+        assert _overdue_bonus_hours(200) == 20.0        # capped
+        assert abs(_overdue_bonus_hours(20) - (44 / 48 * 20)) < 1e-9  # ~18.3
 
     def test_overdue_ranks_above_not_due(self):
-        assert _overdue_bonus_hours(-20) > _overdue_bonus_hours(100)
+        assert _overdue_bonus_hours(20) > _overdue_bonus_hours(-100)
+
+    def test_what_the_nightly_sync_stores_earns_the_bonus(self):
+        """The bug of 2026-11-25: the sync stores hours PAST due as a positive
+        number, and this rule read positive as hours still to go — so every
+        overdue hourly PM from SAP scored as not due at all."""
+        from app.services.sap_order_parser import (hourly_pm_priority,
+                                                   PM_SERVICE_INTERVAL_HOURS)
+        priority, past = hourly_pm_priority(PM_SERVICE_INTERVAL_HOURS + 150)
+        assert priority == 'urgent' and past == 150   # what the sync stores
+        assert _overdue_bonus_hours(past) == 20.0
 
     def test_calendar_days_unchanged(self):
         assert _overdue_bonus_days(20) == 20.0    # min(20/14,1)*20 capped
@@ -102,14 +114,14 @@ class TestEndToEndCandidates:
         # normal(40) + full overdue(20) = 60 -> high
         assert cand['priority'] == 'high'
 
-    def test_performance_pm_positive_scores_as_not_overdue(self, db_session, admin_user):
+    def test_performance_pm_still_to_go_scores_as_not_overdue(self, db_session, admin_user):
         eq = make_equipment(db_session, 'OD Crane', 'OD-2')
         plan = self._plan(db_session, admin_user)
         db_session.session.add(SAPWorkOrder(
             work_plan_id=plan.id, order_number='OD200', order_type='PRM',
             job_type='pm', equipment_id=eq.id, estimated_hours=3.0,
             maintenance_base='running_hours', priority='normal',
-            overdue_value=100, overdue_unit='hours',   # 100 hrs still remaining
+            overdue_value=-100, overdue_unit='hours',  # 100 hrs still remaining
             required_date=date.today(), status='pending',
         ))
         db_session.session.commit()
@@ -117,7 +129,7 @@ class TestEndToEndCandidates:
         result = WorkPlanGeneratorService.get_candidates(plan.id)
         cand = next(c for c in result['candidates'] if c['equipment_id'] == eq.id)
         # keeps hours value, but contributes no overdue bonus -> stays normal(40)
-        assert cand['overdue_value'] == 100
+        assert cand['overdue_value'] == -100
         assert cand['overdue_unit'] == 'hours'
         assert cand['priority'] == 'normal'
 
@@ -128,7 +140,7 @@ class TestEndToEndCandidates:
             work_plan_id=plan.id, order_number='OD300', order_type='PRM',
             job_type='pm', equipment_id=eq.id, estimated_hours=3.0,
             maintenance_base='running_hours', priority='normal',
-            overdue_value=-24, overdue_unit='hours',   # 24 hrs past the 250 trigger
+            overdue_value=24, overdue_unit='hours',    # 24 hrs past the 250 trigger
             required_date=date.today(), status='pending',
         ))
         db_session.session.commit()

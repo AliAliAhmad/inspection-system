@@ -816,6 +816,10 @@
 - Ali: "today i start a new plan but the plan schedule jobs for the past days it is unlogical".
   `_step_distribute` took EVERY day of the week. Now only days >= `first_placeable_date()`
   (Baghdad today; today itself still counts). Test fails on the old line (verified).
+- **Changed same day: the automatic plan starts TOMORROW** (Ali: "it start from today he should
+  start from tommorrow"). `first_placeable_date()` = Baghdad today + 1. Only the generator uses it;
+  Telegram urgent / place_one can still put work on today. Generating on the last day of the week
+  places nothing (tested, no crash).
 - Tests plan fixed past weeks, so `tests/conftest.py` freezes `first_placeable_date` to
   2000-01-01 for every test; a test about past days sets its own date.
 - **Not checked:** the older `auto_schedule` and `/ai/auto-schedule` routes in `work_plans.py`
@@ -835,6 +839,19 @@
 - **Not changed:** Telegram urgent / make-room (`place_one`, `urgent_watch`, `day_ripple`) and
   `crew_free` still use the full 8h. The board's "how full is this day" display still shows x 8.
 - 3 tests re-sized to the new arithmetic (same rule tested); 2 new. 1396 backend tests.
+
+### Overdue hours never showed on hourly PMs — FIXED 2026-11-25, NOT PUSHED
+- Ali: "the PRM overdue hrs for the hourly base service is not showing".
+- **Two opposite signs.** The nightly SAP sync (`_priority_for`) stores hours PAST the service as a
+  POSITIVE number; the phone and 4 server readers agree. The web (`utils/overdue.ts`) and the
+  generator's `_overdue_bonus_hours` read positive hours as "still to go". So the board hid every
+  hourly badge, and the generator gave a PM 400h past due NO overdue bonus.
+- Fixed the two readers, not the writer: positive = overdue for days AND hours. The 24h lead
+  window is kept, mirrored (negative = hours still to go; the sync never stores those today).
+- `tests/test_work_plan_overdue.py` was re-signed (it pinned the old sign); new
+  `utils/overdue.test.ts`. Both new tests fail on the old code (verified).
+- **⚠️ Not checked against production data:** an hourly order whose meter cannot be read is stored
+  with NO overdue figure, so it shows no badge by design. Old Excel imports (if any) used negative.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
