@@ -921,6 +921,16 @@
   Plan: `tasks/rule1-oldest-last-pm.md`. Rule 2 (availability mail): PC note `tasks/pc-note-eqt-availability.md`.
 
 ### Still open
+- **SAP sync is at 97% of server memory (2026-11-27).** Render Starter = 512 MB (limit 537 MB).
+  The 14:06 UTC in-process sync peaked at 519 MB. `flask rebuild-pool` in the shell starts a SECOND
+  app copy (+141 MB) and is OOM-killed silently (prints `starting`, no `status:`). Do NOT use it
+  until fixed; the nightly 02:02 in-process run still fits. Fix = bigger plan (Ali's call) or a
+  leaner IW39 read.
+  **Ali chose the leaner read (no extra cost), plan `tasks/bites-reader-plan.md`.** Step 0 (BUILT,
+  NOT PUSHED): `_MemoryLog` marks memory now/peak after each sync step -> log lines
+  `SAP pool sync memory:` + report key `memory_steps`. Read the 02:02 log to find the heavy step.
+  Suspect: openpyxl loads the whole shared-strings list of all 144 columns; IW49 is opened twice.
+  PC note for missing/stale SAP files: `tasks/pc-note-missing-sap-files.md` (ME5K new; MB51 etc daily).
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
   commit now, so his work is safe and the transaction is closed, but the phone still

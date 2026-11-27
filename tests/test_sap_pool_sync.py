@@ -565,3 +565,23 @@ class TestWhichServiceThisIs:
         sync_pool_from_delivered_files(today='2026-08-23')
         order = SAPWorkOrder.query.filter_by(order_number='700000000906').one()
         assert order.cycle_id is None
+
+
+class TestTheMemoryLog:
+    """Step 0 of tasks/bites-reader-plan.md: every step of the sync leaves a
+    memory mark, so the nightly log shows which step costs memory."""
+
+    def test_every_step_is_marked_in_order(self, client, db_session):
+        db_session.session.add(Equipment(name='TT001', serial_number='SN-TT001',
+                                         equipment_type='tractor'))
+        db_session.session.commit()
+        _deliver(client, _iw39([_open_order()]))
+        report = sync_pool_from_delivered_files(today='2026-08-23')
+        steps = [m['step'] for m in report['memory_steps']]
+        assert steps[0] == 'start'
+        assert steps[-1] == 'operations stored, report built'
+        for step in ('iw39 parsed', 'iw49 hours parsed', 'ik17 meters built',
+                     'iw39 history indexes', 'open orders parsed'):
+            assert step in steps
+        assert all(m['peak_mb'] is None or m['peak_mb'] > 0
+                   for m in report['memory_steps'])

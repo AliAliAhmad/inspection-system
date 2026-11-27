@@ -133,6 +133,34 @@ def _rss_mb():
         return None
 
 
+def _now_mb():
+    """Memory in use RIGHT NOW (Linux), unlike _rss_mb() which is the peak so far."""
+    try:
+        with open('/proc/self/status') as handle:
+            for line in handle:
+                if line.startswith('VmRSS:'):
+                    return round(int(line.split()[1]) / 1e3)
+    except Exception:  # noqa: BLE001 — not on Linux (tests on a Mac)
+        pass
+    return None
+
+
+class _MemoryLog:
+    """Step 0 of tasks/bites-reader-plan.md: which step of the sync costs memory.
+
+    One log line per step, with memory now and the peak so far. The step whose
+    PEAK jumps is the one to fix. Measuring only — changes nothing the sync does.
+    """
+
+    def __init__(self):
+        self.steps = []
+
+    def mark(self, step):
+        now, peak = _now_mb(), _rss_mb()
+        self.steps.append({'step': step, 'now_mb': now, 'peak_mb': peak})
+        logger.info('SAP pool sync memory: %-28s now=%s MB peak=%s MB', step, now, peak)
+
+
 def _app_work_state_for(plan_id, order_number):
     """What the APP recorded a worker doing on this order, or None.
 
@@ -188,8 +216,11 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     change gets inspected before it touches a live pool.
     """
     logger.info('SAP pool sync: starting (dry_run=%s, rss=%s MB)', dry_run, _rss_mb())
+    memory = _MemoryLog()
+    memory.mark('start')
 
     iw39, iw39_record = _current_file_bytes(sheet_name='IW39')
+    memory.mark('iw39 bytes loaded')
     if not iw39:
         # This return used to save nothing, so /pool reported "never run" — the
         # same words a crash produces. A rebuild that decided not to run has a
@@ -207,13 +238,16 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     # re-reading a 10 MB, 144-column workbook four times dominated the runtime.
     iw39_frame = load_iw39(iw39)
     del iw39
+    memory.mark('iw39 parsed')
 
     # Each raw workbook is 10-25 MB and is needed only until it is parsed.
     # Holding all four for the whole run added ~50 MB of dead weight to a
     # process with a 512 MB ceiling, so each is released as soon as it is read.
     iw49, _ = _current_file_bytes(sheet_name='IW49')
     had_iw49 = bool(iw49)
+    memory.mark('iw49 bytes loaded')
     hours_by_order, _ = parse_operation_hours(iw49) if iw49 else ({}, {})
+    memory.mark('iw49 hours parsed')
     # The same file, read a second time for the individual operations.
     #
     # Ali, 2026-09-10: "user should see the operations inside the order and he
@@ -227,18 +261,23 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     operations_by_order, operations_report = (
         parse_operations(iw49) if iw49 else ({}, {}))
     del iw49
+    memory.mark('iw49 operations parsed')
 
     ik17, _ = _current_file_bytes(sheet_name='IK17')
     had_ik17 = bool(ik17)
+    memory.mark('ik17 bytes loaded')
     meters = build_meter_index(ik17) if ik17 else {}
     del ik17
+    memory.mark('ik17 meters built')
 
     plan_file, _ = _current_file_bytes(filename_contains=MAINTENANCE_PLAN_FILENAME_HINT)
     had_plan_file = bool(plan_file)
     plan_types = load_maintenance_plan_types(plan_file) if plan_file else {}
     del plan_file
+    memory.mark('plan file read')
 
     gc.collect()
+    memory.mark('after gc')
     last_completion = build_last_completion_index(iw39_frame)
     # Rule 1 (Ali, 2026-11-27): among tied jobs, the machine with the oldest
     # finished PM goes first. Saved for the generator and the board.
@@ -246,6 +285,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
     if not dry_run:
         last_pm.save(last_pm_by_machine)
     breakdowns = build_breakdown_index(iw39_frame, today=today)
+    memory.mark('iw39 history indexes')
     # No duration index any more. It learned medians from SAP's PLANNED hours in
     # IW49 — which exist for 5,539 of 5,548 FINISHED orders and for NONE of the
     # open ones, so every job in the pool was priced by a median of a figure that
@@ -254,6 +294,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
 
     candidates, parse_report = parse_open_orders(
         iw39_frame, hours_by_order, plan_types, last_completion, today=today)
+    memory.mark('open orders parsed')
 
     # Cluster count feeds the corrective rule: a machine carrying many open
     # faults is in a different condition from one with a single broken window.
@@ -541,6 +582,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         dry_run=dry_run,
     )
 
+    memory.mark('pool written + removal rules')
     logger.info('SAP pool sync: parse done (peak rss=%s MB)', _rss_mb())
     # Counted directly rather than by subtraction: `codes` also holds the
     # retired machines, so `len(codes) - len(unmatched_codes)` would quietly
@@ -581,8 +623,12 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         # `oldest` says how far back IW39 reaches — a year-to-date export
         # makes every machine look unserviced on 1 January.
         'last_pm': last_pm.summary(last_pm_by_machine),
+        # Step 0 of tasks/bites-reader-plan.md. 'operations' (above) has already
+        # stored the IW49 lines when this list is read, so its last mark covers it.
+        'memory_steps': memory.steps,
         'parse': parse_report,
     }
+    memory.mark('operations stored, report built')
     logger.info('SAP pool sync: %s',
                 {k: v for k, v in report.items() if k not in ('parse', 'removal_rules')})
     _save_report(report)
