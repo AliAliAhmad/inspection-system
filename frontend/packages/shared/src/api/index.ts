@@ -214,6 +214,8 @@ export type {
 } from './materials.api';
 export { prmOverdueApi } from './prm-overdue.api';
 export type { PrmOverdueRow, PrmOverdueList } from './prm-overdue.api';
+export { lastPmApi } from './last-pm.api';
+export type { LastPmList } from './last-pm.api';
 export { cyclesApi } from './cycles.api';
 export type {
   CyclesListParams,

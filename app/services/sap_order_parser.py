@@ -993,6 +993,39 @@ def build_last_completion_index(iw39_bytes):
     return index
 
 
+def build_last_pm_by_machine(iw39_bytes):
+    """Newest finished PM per machine: {plant code: 'YYYY-MM-DD'}.
+
+    Ali, 2026-11-27 (Rule 1): a machine that has not had a service for a long
+    time may be hiding damage, so among jobs with the SAME score the machine
+    with the oldest last PM goes first. Only a finished PRM counts as a visit —
+    a one-hour fault fix is not a proper look at the machine.
+
+    Keyed by machine, not by maintenance plan (build_last_completion_index):
+    the question is "when did anyone last service THIS machine".
+    """
+    import pandas as pd
+
+    frame = _read_excel(iw39_bytes, ['MaintActivityType', 'Main work center', 'System status',
+                                     'Functional Location', 'Actual Order Finish Date'])
+    mes = frame[frame['Main work center'].fillna('').str.upper().str.startswith(MES_PREFIX)]
+    pms = mes[mes['MaintActivityType'] == 'PRM']
+    # astype(bool): with no PM rows the mask is an EMPTY object Series, which
+    # pandas reads as a list of column names and returns a frame with none.
+    finished = pms[~pms['System status'].map(is_plannable_status).astype(bool)]
+
+    dates = pd.to_datetime(finished['Actual Order Finish Date'], errors='coerce')
+    index = {}
+    for location, finished_on in zip(finished['Functional Location'], dates):
+        code = extract_plant_code(location)
+        if not code or pd.isna(finished_on):
+            continue
+        day = finished_on.date().isoformat()
+        if day > index.get(code, ''):
+            index[code] = day
+    return index
+
+
 # ---------------------------------------------------------------------------
 # Hourly PM priority
 # ---------------------------------------------------------------------------

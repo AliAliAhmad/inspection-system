@@ -1027,6 +1027,8 @@ def _step_bundle(
         _price_bundle(bundle)
         bundles.append(bundle)
 
+    _stamp_last_pm(bundles)
+
     # Sort descending by score for downstream distribution
     bundles.sort(key=_urgency_key, reverse=True)
 
@@ -1072,12 +1074,74 @@ def _urgency_key(bundle: Dict[str, Any]):
     it is due — so TT058 at 91h late tied with TT021 at 6h, and ties fell back
     to database order. On a tie: an overdue hourly PRM comes first, most hours
     late first; then the rest, most days late first.
+
+    Last of all (Rule 1, Ali 2026-11-27): the machine whose last finished PM is
+    oldest. It only ever splits jobs still tied after everything above, so an
+    overdue or urgent job can never lose to it.
     """
     members = bundle.get('members', [])
     hours = max((_hours_late(m) for m in members), default=0)
     days = max((m.get('overdue_value') or 0 for m in members
                 if m.get('overdue_unit') != 'hours'), default=0)
-    return (bundle.get('score', 0), 1 if hours > 0 else 0, hours if hours > 0 else days)
+    return (bundle.get('score', 0), 1 if hours > 0 else 0, hours if hours > 0 else days,
+            bundle.get('last_pm_rank', 0))
+
+
+def _stamp_last_pm(bundles: List[Dict[str, Any]]) -> None:
+    """Give every bundle `last_pm` (date or None) and `last_pm_rank` (bigger = first).
+
+    Rule 1, Ali 2026-11-27, in order:
+      * a machine with NO finished PM on record ranks first — the most forgotten;
+      * then the oldest last PM;
+      * a job with no machine, or a name with no plant code, ranks last — there
+        is no machine to have forgotten.
+    With no list at all (never built, unreadable) every rank is 0: everything
+    ties and the order is exactly what it was before this rule.
+    """
+    from app.services import last_pm
+    from datetime import date as _date
+
+    data = last_pm.load()
+    by_machine = data['by_machine']
+
+    def name_of(bundle):
+        return next((m.get('equipment_name') for m in bundle.get('members', [])
+                     if m.get('equipment_name')), None)
+
+    # The nightly sync matches a plant code to a machine by NAME or SERIAL
+    # (`_equipment_lookup`). A machine matched by serial whose name holds no code
+    # would otherwise read as "no machine" and sink to the bottom of every tie.
+    serials = {}
+    no_code_ids = {b['equipment_id'] for b in bundles
+                   if data['available'] and b.get('equipment_id')
+                   and not last_pm.machine_code(name_of(b))}
+    if no_code_ids:
+        try:
+            serials = {eq_id: serial for eq_id, serial in db.session.query(
+                Equipment.id, Equipment.serial_number).filter(
+                    Equipment.id.in_(no_code_ids)).all()}
+        except Exception:  # noqa: BLE001 — never stop a plan for a tie-break
+            logger.warning('last PM: serial lookup failed', exc_info=True)
+
+    for bundle in bundles:
+        bundle['last_pm'] = None
+        bundle['last_pm_rank'] = 0
+        if not data['available']:
+            continue
+        eq_id = bundle.get('equipment_id')
+        code = (last_pm.machine_code(name_of(bundle))
+                or last_pm.machine_code(serials.get(eq_id))) if eq_id else None
+        if not code:
+            bundle['last_pm_rank'] = float('-inf')
+            continue
+        day = by_machine.get(code)
+        try:
+            bundle['last_pm'] = day
+            bundle['last_pm_rank'] = (-_date.fromisoformat(day).toordinal()
+                                      if day else float('inf'))
+        except (TypeError, ValueError):
+            bundle['last_pm'] = None   # a broken date reads as "no PM on record"
+            bundle['last_pm_rank'] = float('inf')
 
 
 def _price_bundle(bundle: Dict[str, Any]) -> None:

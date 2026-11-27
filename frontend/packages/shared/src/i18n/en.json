@@ -2056,6 +2056,11 @@
     "newPasswordHint": "Leave empty to keep the current password.",
     "passwordMin": "At least 6 characters"
   },
+  "last_pm": {
+    "line": "Last PM: {{days}} days ago ({{date}})",
+    "none": "Last PM: none on record",
+    "tooltip": "Among jobs with the same score, the machine with the oldest last PM is planned first."
+  },
   "prm_overdue": {
     "button": "PRM due",
     "title": "PRM due — planner's list",

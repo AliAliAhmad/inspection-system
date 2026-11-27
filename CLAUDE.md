@@ -891,18 +891,34 @@
   `is_overdue`; payload `overdue_count`; sorted most negative first. J wins over E; a v1 file
   (no J) still reads as all overdue. Board: red `PRM -91 h`, amber `PRM due +12.82 h`, badge
   counts late only. PC's check: week 46 = 16 rows, 5 overdue. 20 backend tests, 5 web.
-- **Generator uses the MORE LATE number (Ali chose A, 2026-11-26, NOT PUSHED).** Hourly PM:
+- **Generator uses the MORE LATE number (Ali chose A, 2026-11-26, DEPLOYED `d770e9c`).** Hourly PM:
   `max(app's overdue_value, planner's hours late)`, matched by ORDER NUMBER
   (`prm_overdue.late_hours_by_order()`). Can only raise, never lower. A stale (> 8 days) or
   broken list gives nothing. Calendar PMs never touched.
-- **Winner leads the machine's day (Ali, 2026-11-26, NOT PUSHED).** Hourly + calendar PRM on one
+- **Winner leads the machine's day (Ali, 2026-11-26, DEPLOYED `d770e9c`).** Hourly + calendar PRM on one
   machine still go on the same day; `_winner_first` orders them: an OVERDUE hourly PRM first
   (most hours late first), otherwise the higher score (= the more overdue). Order only — the
   group's day is still set by its most urgent member. 32 tests in `test_prm_overdue.py`.
-- **Score ties break by lateness (Ali OK, 2026-11-26, NOT PUSHED).** The score caps at 100 and every
+- **Score ties break by lateness (Ali OK, 2026-11-26, DEPLOYED `a3dbc06`).** The score caps at 100 and every
   urgent hourly PRM hits 100 once due, so TT058 (91h) tied TT021 (6h) and ties fell to DB order.
   `_urgency_key`: score, then overdue hourly PRM first (most hours late), then most days late. Used
   by `_step_bundle` AND `_apply_recipe_ordering` (it re-sorted by score alone). 37 tests.
+
+### Rule 1 — oldest last PM breaks ties — BUILT 2026-11-27, NOT PUSHED
+- Ali (grilled): fewer breakdowns, no machine forgotten, the APP decides. Among jobs with the SAME
+  score, the machine with the OLDEST last FINISHED PM (PRM only; a fault fix is not a visit) goes
+  first. LAST tie-break, after hours-late and days-late, so overdue/urgent can never lose to it.
+  No PM on record -> first; no machine / no plant code -> last; no list at all -> old order.
+- `build_last_pm_by_machine` (IW39) -> nightly sync saves `uploads/sap_sync/last_pm.json`
+  (`app/services/last_pm.py`, persistent disk, no schema change); report key `last_pm.oldest`
+  shows how far back IW39 reaches. Generator `_stamp_last_pm` + 4th element of `_urgency_key`.
+  Also reaches `crew_free` (it uses `_step_bundle`). `GET /api/last-pm`; grey line in Job Details.
+- **Left open:** machines with NOTHING open (app-made check visits = a later decision); no day limit.
+- Code from the equipment NAME, else its SERIAL (the sync matches by either).
+- **Effect not measured yet:** real ties are mostly not-overdue jobs of one priority. After deploy +
+  one sync, count tied bundles and which pool machines have NO PM on record (they go first).
+- 16 tests `tests/test_last_pm_rule.py` (4 fail on the old generator; 1 guards an IW39 with no PMs, which crashed the sync), 4 `LastPm.test.ts`.
+  Plan: `tasks/rule1-oldest-last-pm.md`. Rule 2 (availability mail): PC note `tasks/pc-note-eqt-availability.md`.
 
 ### Still open
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).

@@ -109,6 +109,7 @@ import VoiceTextArea from '../../components/VoiceTextArea';
 import { InputNumber } from 'antd';
 import { getOverdueInfo, isJobOverdue, computeOverdueMax, getOverdueHeat } from '../../utils/overdue';
 import { PrmOverdueButton, PrmOverdueTag } from '../../components/work-planning/PrmOverdue';
+import { LastPmLine } from '../../components/work-planning/LastPm';
 import { shortName } from '../../utils/short-name';
 import { sapOrderNumber } from '../../utils/sap-order-number';
 
@@ -4043,6 +4044,7 @@ export default function WorkPlanningPage() {
             </span>
             <span style={{ color: getOverdueHeat(selectedJob as any, overdueMax).active ? getOverdueHeat(selectedJob as any, overdueMax).stripe : undefined }}>Job Details</span>
             <PrmOverdueTag equipmentName={(selectedJob as any)?.equipment?.name || (selectedJob as any)?.equipment_name} />
+            <LastPmLine equipmentName={(selectedJob as any)?.equipment?.name || (selectedJob as any)?.equipment_name} />
           </Space>
         }
         open={jobDetailsModalOpen}

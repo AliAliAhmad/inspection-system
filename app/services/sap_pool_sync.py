@@ -34,6 +34,7 @@ from app.services.sap_order_parser import (
     build_order_status_index,
     load_iw39,
     build_last_completion_index,
+    build_last_pm_by_machine,
     build_meter_index,
     calendar_days_overdue,
     calendar_interval_days,
@@ -48,6 +49,7 @@ from app.services.sap_order_parser import (
     pm_interval_hours,
     PM_SERVICE_INTERVAL_HOURS,
 )
+from app.services import last_pm
 from app.services.sap_removal_rules import _Reporter, reconcile_scheduled_orders
 from app.utils.decorators import planning_today
 
@@ -238,6 +240,11 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
 
     gc.collect()
     last_completion = build_last_completion_index(iw39_frame)
+    # Rule 1 (Ali, 2026-11-27): among tied jobs, the machine with the oldest
+    # finished PM goes first. Saved for the generator and the board.
+    last_pm_by_machine = build_last_pm_by_machine(iw39_frame)
+    if not dry_run:
+        last_pm.save(last_pm_by_machine)
     breakdowns = build_breakdown_index(iw39_frame, today=today)
     # No duration index any more. It learned medians from SAP's PLANNED hours in
     # IW49 — which exist for 5,539 of 5,548 FINISHED orders and for NONE of the
@@ -571,6 +578,9 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
                            pool_coverage=pool_operation_coverage()),
         'delivered': _delivered_summary(),
         'removal_rules': removal,
+        # `oldest` says how far back IW39 reaches — a year-to-date export
+        # makes every machine look unserviced on 1 January.
+        'last_pm': last_pm.summary(last_pm_by_machine),
         'parse': parse_report,
     }
     logger.info('SAP pool sync: %s',

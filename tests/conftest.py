@@ -41,6 +41,15 @@ def generator_clock_frozen_in_the_past(monkeypatch):
                         lambda: date(2000, 1, 1))
 
 
+@pytest.fixture(autouse=True)
+def last_pm_file_in_a_temp_folder(monkeypatch, tmp_path):
+    """The last-PM list (Rule 1) lives in the real uploads folder, shared by every
+    test run. Point it at a fresh folder so one test's list never reorders
+    another test's plan."""
+    from app.services import last_pm
+    monkeypatch.setattr(last_pm, '_path', lambda: str(tmp_path / 'last_pm.json'))
+
+
 @pytest.fixture
 def client(app):
     """Flask test client."""
