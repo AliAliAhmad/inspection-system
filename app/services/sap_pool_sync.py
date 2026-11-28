@@ -49,7 +49,7 @@ from app.services.sap_order_parser import (
     pm_interval_hours,
     PM_SERVICE_INTERVAL_HOURS,
 )
-from app.services import last_pm
+from app.services import last_pm, parts_feed
 from app.services.sap_removal_rules import _Reporter, reconcile_scheduled_orders
 from app.utils.decorators import planning_today
 
@@ -584,6 +584,11 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
 
     memory.mark('pool written + removal rules')
     logger.info('SAP pool sync: parse done (peak rss=%s MB)', _rss_mb())
+    # tasks/parts-hold-plan.md steps 1-2: which orders wait for parts. SHADOW ONLY —
+    # saved and reported, nothing holds work on it yet. run() never raises.
+    parts_report = parts_feed.run(operations_by_order, _orders_the_app_knows(),
+                                  dry_run=dry_run)
+    memory.mark('parts status built')
     # Counted directly rather than by subtraction: `codes` also holds the
     # retired machines, so `len(codes) - len(unmatched_codes)` would quietly
     # count a sold machine as successfully matched.
@@ -623,6 +628,7 @@ def sync_pool_from_delivered_files(today=None, dry_run=False):
         # `oldest` says how far back IW39 reaches — a year-to-date export
         # makes every machine look unserviced on 1 January.
         'last_pm': last_pm.summary(last_pm_by_machine),
+        'parts': parts_report,
         # Step 0 of tasks/bites-reader-plan.md. 'operations' (above) has already
         # stored the IW49 lines when this list is read, so its last mark covers it.
         'memory_steps': memory.steps,

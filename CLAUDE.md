@@ -933,6 +933,16 @@
   Wiring waits for the bites reader (ME2L ~27k lines, ME5A ~23k). Memory: courier-parts-files.
 - Tests: 12 `test_eqt_availability.py`, 26 `test_parts_status.py`.
 
+### Parts hold, steps 1-2 (SHADOW) — BUILT 2026-11-28, NOT PUSHED
+- Plan `tasks/parts-hold-plan.md`; Ali OK'd a/b/c/d all YES. `app/services/parts_feed.py` reads ME5K
+  (by name), ME5A, ME2L row by row from disk, keeping only PRs/POs of known orders. Chain: IW49
+  operation PR+item (parser now keeps `requisition_item`) + ME5K (remembered in `parts_links.json`,
+  400 days) -> ME5A PO/deleted -> ME2L still-to-deliver. Decision c = `whole_po_state` (no PO item ->
+  any open line keeps it waiting). Saves `parts_status.json`; report key `parts` + memory mark
+  `parts status built`. NOTHING reads it yet — steps 3 (board) and 4 (generator hold) wait for one
+  night's shadow numbers: `me5k_prs_not_on_iw49`, `pos_by_line_count`, waiting/check/clear.
+- 24 tests `tests/test_parts_feed.py`. 1544 backend.
+
 ### Still open
 - **SAP sync is at 97% of server memory (2026-11-27).** Render Starter = 512 MB (limit 537 MB).
   The 14:06 UTC in-process sync peaked at 519 MB. `flask rebuild-pool` in the shell starts a SECOND

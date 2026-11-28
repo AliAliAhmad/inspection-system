@@ -598,6 +598,9 @@ def parse_operations(iw49_bytes):
                 'planned_hours': hours,
                 # Present = this operation is waiting on a part.
                 'purchase_requisition': requisition or None,
+                # The ITEM of that request, for the parts rule (tasks/parts-hold-plan.md).
+                # Not stored on the operation row; read during the sync only.
+                'requisition_item': (cell(row, 'requisition_item') or '').strip() or None,
                 'material_text': material or None,
             })
             if requisition:

@@ -78,29 +78,55 @@ def po_key(po, po_item):
     return (_text(po), _item(po_item))
 
 
-def part_state(link, cancelled_prs, po_lines):
-    """The state of ONE requested part.
-
-    link          {'pr', 'pr_item', 'po', 'po_item', 'in_me5k_today'} — the newest
-                  thing ever seen for this request (ME5K today, or remembered from
-                  earlier days). in_me5k_today False + no PO ever seen = UNKNOWN.
-    cancelled_prs set of part_key()s with ME5A's Deletion Indicator set
-    po_lines      {po_key(): {'still_to_deliver': qty, 'deleted': bool}} from ME2L
-    """
-    if part_key(link.get("pr"), link.get("pr_item")) in cancelled_prs:
-        return CANCELLED
-    po = _text(link.get("po"))
-    if not po:
-        return REQUESTED if link.get("in_me5k_today", True) else UNKNOWN
-    line = po_lines.get(po_key(po, link.get("po_item")))
-    if line is None:
-        return UNKNOWN
+def _line_state(line):
     if line.get("deleted"):
         return CANCELLED
     still = _number(line.get("still_to_deliver"))
     if still is None:
         return UNKNOWN
     return RECEIVED if still <= 0 else ORDERED
+
+
+def whole_po_state(lines):
+    """Decision c (Ali, 2026-11-28): when the PO ITEM is not known (ME5A carries
+    the PO number but not its item), judge the PO as a whole. Any live line still
+    open -> ORDERED; every live line delivered -> RECEIVED; every line deleted ->
+    CANCELLED. A PO that holds other jobs' parts can only HOLD a job a little
+    longer, never plan it blind."""
+    if not lines:
+        return UNKNOWN
+    states = {_line_state(line) for line in lines} - {CANCELLED}
+    if not states:
+        return CANCELLED
+    if ORDERED in states:
+        return ORDERED
+    if UNKNOWN in states:
+        return UNKNOWN
+    return RECEIVED
+
+
+def part_state(link, cancelled_prs, po_lines, lines_by_po=None):
+    """The state of ONE requested part.
+
+    link          {'pr', 'pr_item', 'po', 'po_item', 'in_me5k_today'} — the newest
+                  thing known about this request. `in_me5k_today` means "the
+                  request was seen open TODAY" (in ME5K or ME5A); False + no PO
+                  ever seen = UNKNOWN (decision d: never a silent block).
+    cancelled_prs set of part_key()s with ME5A's Deletion Indicator set
+    po_lines      {po_key(): {'still_to_deliver': qty, 'deleted': bool}} from ME2L
+    lines_by_po   {po: [line, ...]} from ME2L, for a PO whose item is unknown
+    """
+    if part_key(link.get("pr"), link.get("pr_item")) in cancelled_prs:
+        return CANCELLED
+    po = _text(link.get("po"))
+    if not po:
+        return REQUESTED if link.get("in_me5k_today", True) else UNKNOWN
+    if _item(link.get("po_item")) is None:
+        return whole_po_state((lines_by_po or {}).get(po))
+    line = po_lines.get(po_key(po, link.get("po_item")))
+    if line is None:
+        return UNKNOWN
+    return _line_state(line)
 
 
 def order_status(part_states):
