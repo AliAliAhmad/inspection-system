@@ -2056,6 +2056,20 @@
     "newPasswordHint": "Leave empty to keep the current password.",
     "passwordMin": "At least 6 characters"
   },
+  "eqt_availability": {
+    "button": "Not available",
+    "title": "Equipment availability — planning team's mail",
+    "mail_received": "Mail received {{date}}",
+    "summary": "{{stopped}} not available · {{total}} machines",
+    "stale": "This list is {{days}} days old — today's mail may be missing.",
+    "not_delivered": "No list yet — the courier has not delivered EQT_Availability.xlsx.",
+    "none": "Every machine is available.",
+    "equipment": "Equipment",
+    "reason": "Reason",
+    "tag": "Not available",
+    "tag_tooltip": "Planning team's mail ({{date}}): {{reason}}",
+    "source": "From the planning team's daily mail. Shown only — the planner does not skip these machines yet."
+  },
   "last_pm": {
     "line": "Last PM: {{days}} days ago ({{date}})",
     "none": "Last PM: none on record",

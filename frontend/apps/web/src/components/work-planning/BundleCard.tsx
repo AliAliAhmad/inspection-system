@@ -6,6 +6,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { JobSubTask, WorkPlanJob } from '@inspection/shared';
 import { getOverdueInfo, isJobOverdue, getOverdueHeat, type OverdueMax } from '../../utils/overdue';
 import { PrmOverdueTag } from './PrmOverdue';
+import { EqtAvailabilityTag } from './EqtAvailability';
 import { JobSubTasks } from './JobSubTasks';
 import { shortName } from '../../utils/short-name';
 import { sapOrderNumber } from '../../utils/sap-order-number';
@@ -582,6 +583,7 @@ const BundleCardInner: React.FC<BundleCardProps> = ({
             }}
           >
             <PrmOverdueTag equipmentName={equipmentName} />
+            <EqtAvailabilityTag equipmentName={equipmentName} />
             {pmCount > 0 && (
               <Tag
                 color="cyan"

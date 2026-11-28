@@ -920,6 +920,19 @@
 - 16 tests `tests/test_last_pm_rule.py` (4 fail on the old generator; 1 guards an IW39 with no PMs, which crashed the sync), 4 `LastPm.test.ts`.
   Plan: `tasks/rule1-oldest-last-pm.md`. Rule 2 (availability mail): PC note `tasks/pc-note-eqt-availability.md`.
 
+### Availability on the board + the parts rule's brain — BUILT 2026-11-28, NOT PUSHED
+- **Rule 2, shown only:** `app/services/eqt_availability.py` reads `Source file / EQT_Availability.xlsx`
+  (courier, daily from the planners' mail; first file 2026-11-27: 185 machines, 11 not available,
+  every reason OTHER — the mail gives status only). Parked = available (Ali). Stale > 3 days.
+  `GET /api/eqt-availability` (PLANNING_ROLES). Web: dark "Not available" tag on pool/day cards +
+  Job Details, header button with the stopped list (`EqtAvailability.tsx`). Planner skips NOTHING yet.
+- **Parts rule, decisions only:** `app/services/parts_status.py` — pure functions, NOT connected.
+  ME5K order->PR->PO, ME5A PR Deletion Indicator, ME2L `Still to be delivered (qty)`=0 -> received.
+  Stopped (mail) + waiting -> hold the MACHINE; working + waiting -> hold the ORDER; no fresh mail ->
+  order only; PR vanished with no PO seen / PO not in ME2L -> UNKNOWN (never a silent block).
+  Wiring waits for the bites reader (ME2L ~27k lines, ME5A ~23k). Memory: courier-parts-files.
+- Tests: 12 `test_eqt_availability.py`, 26 `test_parts_status.py`.
+
 ### Still open
 - **SAP sync is at 97% of server memory (2026-11-27).** Render Starter = 512 MB (limit 537 MB).
   The 14:06 UTC in-process sync peaked at 519 MB. `flask rebuild-pool` in the shell starts a SECOND
@@ -930,6 +943,11 @@
   NOT PUSHED): `_MemoryLog` marks memory now/peak after each sync step -> log lines
   `SAP pool sync memory:` + report key `memory_steps`. Read the 02:02 log to find the heavy step.
   Suspect: openpyxl loads the whole shared-strings list of all 144 columns; IW49 is opened twice.
+  **MEASURED 2026-11-28 (3 runs): peak 332 / 367 / 309 MB, all ok.** Fresh worker: IW39 +69 MB,
+  IW49 +31, IK17 +8. The 519 MB was a worker already swollen by a day of requests, not the sync.
+  Bites reader is no longer urgent; build it with the parts files (ME2L would add ~80 MB).
+  Seen in the same log, NOT fixed: `check_daily_completion` fails (`work_plan_days` has no
+  `plan_date`); `send_review_reminders` fails (`timedelta` not defined).
   PC note for missing/stale SAP files: `tasks/pc-note-missing-sap-files.md` (ME5K new; MB51 etc daily).
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the

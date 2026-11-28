@@ -1,54 +1,46 @@
-COURIER: SAP FILES THE SERVER NEEDS (missing or not fresh enough)
+COURIER: SAP FILES - ONE NEW FILE, AND SOME MUST COME DAILY
 
-The server's planner will use SAP's parts data to know when a job is waiting
-for a part and when the part has arrived. Some files are missing, some arrive
-too rarely. Do the steps in order. Change nothing else in the courier.
+The server already receives these files from you (last arrival on the server):
+  IW39 YTD.XLSX    2026-11-26     IW49 YTD.XLSX   2026-11-24
+  IK17 YTD.XLSX    2026-11-22     Backlog.XLSX    2026-11-27
+  ME5A ytd.XLSX    2026-11-24     ME2L ytd.XLSX   2026-11-24
+  mb52.XLSX        2026-11-24     mb51 ytd.XLSX   2026-11-15
+Keep sending all of them exactly as today (same folder sap_import, same
+names, same columns). Only the changes below.
 
-STEP 1 - CHECK WHAT YOU SEND TODAY (change nothing)
-For each file below, tell Ali: does the courier send it, how often, from
-which SAP transaction/layout, and how many rows it has on a normal day.
-  IW39 YTD.XLSX, IW49 YTD.XLSX, IK17 YTD.XLSX, Backlog.XLSX,
-  ME5A ytd.XLSX, ME2L ytd.XLSX, mb51 ytd.XLSX, mb52.XLSX
+1. NEW FILE: ME5K (purchase requisitions by account assignment)
+   The server needs to know WHICH WORK ORDER each requested part is for.
+   - Transaction ME5K, account assignment category F (order), plant as today.
+   - Columns (keep SAP's own header text, do not rename):
+       Purchase Requisition, Item of Requisition, Order, Material,
+       Short Text, Quantity Requested, Unit of Measure, Requisition Date,
+       Delivery Date, Purchase Order, Purchase Order Item,
+       Processing status, Deletion Indicator, Release Indicator
+   - Open AND closed requisitions of the last 12 months.
+   - Upload as: sap_import / ME5K.XLSX, sheet_name ME5K. Daily.
 
-STEP 2 - NEW FILE: ME5K (purchase requisitions by account assignment)
-- Transaction ME5K, account assignment category F (order), plant as today.
-- Layout must include at least these columns (SAP names may differ a little,
-  keep SAP's own header text, do not rename):
-    Purchase Requisition, Item of Requisition, Order (work order number),
-    Material, Short Text, Quantity Requested, Unit of Measure,
-    Requisition Date, Delivery Date, Purchase Order, Purchase Order Item,
-    Processing status, Deletion Indicator, Release Indicator
-- Open AND closed requisitions of the last 12 months (closed ones tell the
-  server a part was already bought/received).
-- File: sap_import / ME5K.XLSX   sheet_name for the upload: ME5K
-- Daily, after the other SAP files.
+2. MAKE THESE DAILY (on the server some are 3 to 12 days old)
+   mb51, ME2L, ME5A, mb52, IW49, IK17 - every working day, like IW39.
+   mb51 matters most: it is how the server sees a part ARRIVE (movement
+   101) or be GIVEN TO A JOB (261).
+   If a file did not change, upload it anyway - an old date on the server
+   looks the same as "the courier stopped".
 
-STEP 3 - MAKE THESE DAILY (today some are days old)
-- mb51 ytd.XLSX (goods movements) - DAILY. Must include: Material,
-  Movement Type, Posting Date, Quantity, Order, Purchase Order, Item,
-  Plant, Storage Location, Material Document. This is how the server
-  knows a part ARRIVED (movement 101) or was GIVEN TO A JOB (261).
-- ME2L ytd.XLSX (purchase orders, still to be delivered) - DAILY.
-- mb52.XLSX (stock on hand) - DAILY.
-- ME5A ytd.XLSX - DAILY.
-- Backlog.XLSX - DAILY (it already arrived today 20:10; keep it daily).
+3. IW39: 12 MONTHS, NOT THIS YEAR ONLY
+   Export a rolling 12 months (today minus 365 days to today). Same
+   columns, same file name. Otherwise on 1 January every machine looks
+   like it was never serviced.
 
-STEP 4 - IW39 MUST REACH BACK 12 MONTHS
-- Today the file is "IW39 YTD" (this year only). On 1 January every machine
-  would look like it was never serviced. Export a ROLLING 12 months
-  (today minus 365 days to today) instead. Keep the same columns and the
-  same file name, so nothing on the server breaks.
+4. STOP SENDING PRIVATE HR FILES
+   Salaries, staff ratings and biometric attendance files are not used by
+   the server. Do not upload them any more.
 
-RULES (each one matters)
+RULES
 - Keep SAP's own column headers. Never rename, never reorder by hand.
-- Keep order and document numbers as TEXT (12 digits must not become
-  7.00001896146E+11).
-- Keep the same folder (sap_import) and the same file names, so the server
-  finds them. A new upload replaces the old copy.
-- Excel (.XLSX) is fine. Do not split one export into several files.
-- Do NOT send private HR files to the server unless Ali asks (salaries,
-  ratings, biometric attendance).
+- Order and document numbers stay TEXT (no 7.00001896146E+11).
 
-STEP 5 - REPORT TO ALI
-For each file: sent yes/no, how often, row count today, and the header row
-of ME5K and mb51 exactly as exported.
+REPORT TO ALI
+- The header row of ME5K exactly as exported, and its row count.
+- The header row of mb51 exactly as exported (check it has Order and
+  Movement Type; if not, add them to the layout).
+- The time each file will be uploaded every day.
