@@ -169,7 +169,7 @@ def init_scheduler(app):
         from app.extensions import db
         from app.models.work_plan_daily_review import WorkPlanDailyReview
         from app.services.notification_service import NotificationService
-        from datetime import date, datetime
+        from datetime import date, datetime, timedelta
         logger.info("Running: send_review_reminders")
 
         now = datetime.utcnow()
@@ -865,23 +865,27 @@ def init_scheduler(app):
         from app.models.work_plan_day import WorkPlanDay
         from app.models.work_plan_assignment import WorkPlanAssignment
 
-        days = WorkPlanDay.query.filter_by(plan_date=yesterday).all()
+        days = WorkPlanDay.query.filter_by(date=yesterday).all()
         day_ids = [d.id for d in days]
 
         if day_ids:
+            # Inspection jobs are the inspectors' lists, already counted above —
+            # counting them here too would pay an inspector the bonus twice.
             jobs = WorkPlanJob.query.filter(
-                WorkPlanJob.day_id.in_(day_ids)
+                WorkPlanJob.work_plan_day_id.in_(day_ids),
+                WorkPlanJob.job_type != 'inspection',
             ).all()
 
             specialist_totals = {}
             for job in jobs:
-                job_assignments = WorkPlanAssignment.query.filter_by(job_id=job.id).all()
+                job_assignments = WorkPlanAssignment.query.filter_by(work_plan_job_id=job.id).all()
                 for wa in job_assignments:
                     uid = wa.user_id
                     if uid not in specialist_totals:
                         specialist_totals[uid] = {'total': 0, 'done': 0}
                     specialist_totals[uid]['total'] += 1
-                    if job.status in ('completed', 'verified'):
+                    # A job keeps its status on its tracking row, not on itself.
+                    if job.tracking is not None and job.tracking.status == 'completed':
                         specialist_totals[uid]['done'] += 1
 
             for uid, counts in specialist_totals.items():

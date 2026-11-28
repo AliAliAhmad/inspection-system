@@ -946,8 +946,12 @@
   **MEASURED 2026-11-28 (3 runs): peak 332 / 367 / 309 MB, all ok.** Fresh worker: IW39 +69 MB,
   IW49 +31, IK17 +8. The 519 MB was a worker already swollen by a day of requests, not the sync.
   Bites reader is no longer urgent; build it with the parts files (ME2L would add ~80 MB).
-  Seen in the same log, NOT fixed: `check_daily_completion` fails (`work_plan_days` has no
-  `plan_date`); `send_review_reminders` fails (`timedelta` not defined).
+  **Both log errors FIXED 2026-11-28, NOT PUSHED** (`tests/test_scheduler_two_fixes.py`, 4 tests, fail
+  on the old code with the exact production errors): `send_review_reminders` night half lacked the
+  `timedelta` import (night reminders never sent); `check_daily_completion` work-plan half had FIVE
+  wrong names (plan_date, day_id, job_id, job.status, 'verified') — specialists/maintenance never got
+  the 3-pt daily bonus since March. Inspection jobs skipped there (inspectors paid once, from lists).
+  Past days NOT back-paid.
   PC note for missing/stale SAP files: `tasks/pc-note-missing-sap-files.md` (ME5K new; MB51 etc daily).
 - **Watch these two first when Stage 2 goes live** (final review, knowingly not fixed).
   (1) A worker's Finish still waits on Telegram — one 15s POST per planner, after the
